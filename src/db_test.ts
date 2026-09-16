@@ -8,9 +8,6 @@ Deno.env.set('DB_PATH', ':memory:')
 let { link, moves, typeOf, unlink } = await import('./edge.ts')
 let {
   apply,
-  backfillLineage,
-  backfillOpened,
-  backfillVia,
   bodies,
   componentCounts,
   correct,
@@ -21,7 +18,6 @@ let {
   epochOf,
   findEid,
   hasCol,
-  healInboundDeliver,
   historicalWorked,
   human,
   journalBy,
@@ -29,14 +25,8 @@ let {
   journalSince,
   lastBatch,
   locate,
-  mendCalls,
   buried,
   migrate,
-  migrateBoardsToProjects,
-  migrateConflict,
-  migrateEmbedding,
-  migrateErrors,
-  migrateTombstone,
   mintEpoch,
   mutate,
   projectReachability,
@@ -44,7 +34,6 @@ let {
   refsOf,
   rowChanges,
   resolveId,
-  retireMemoryType,
   search,
   schemaVersion,
   senderActor,
@@ -1445,27 +1434,6 @@ Deno.test('session.parent mirrors to a delegates edge; rewrite and clear unlink 
   assertEquals(lineage(), [])
 })
 
-Deno.test('backfillLineage lifts stored parent columns into delegates edges once', () => {
-  let d = fresh()
-  let p = uid(), child = uid()
-  apply(d, [
-    { eid: p, name: 'session', comp: { id: uid() } },
-    { eid: child, name: 'session', comp: { id: uid(), parent: p } },
-  ])
-  // Simulate a pre-edge store: drop the mirrored edge, keep the column.
-  apply(d, unlink(p, 'delegates', child))
-  assertEquals(
-    snapshot(d).deps.some((x) => x.type == 'delegates' && x.child == child),
-    false,
-  )
-  backfillLineage(d)
-  let edges = () =>
-    snapshot(d).deps.filter((x) => x.type == 'delegates' && x.child == child)
-  assertEquals(edges().length, 1)
-  backfillLineage(d) // settled: re-fires as a no-op
-  assertEquals(edges().length, 1)
-})
-
 Deno.test('canonical null wins either session-facet batch order', () => {
   let d = fresh()
   for (let canonicalFirst of [false, true]) {
@@ -2407,311 +2375,6 @@ Deno.test('proposed: any entity wears the authored, server-signed stamp', () => 
   )
 })
 
-// memory.type → the `feedback` tag (T-12585). Only `feedback` becomes a row:
-// `project` said what scope says, `reference` was the absence of anything
-// else, and `user` was worn by nothing. The source is NOT inferred —
-// created.by names the recorder, and 81 of the live graph's 87 feedback rows
-// were recorded by a venture rather than a person.
-slow('retireMemoryType: feedback becomes a tag, the column goes', () => {
-  let d = fresh()
-  let mk = (title: string) => {
-    let eid = uid()
-    apply(d, [
-      { eid, name: 'doc', comp: { title } },
-      { eid, name: 'memory', comp: {} },
-    ])
-    return eid
-  }
-  let says = mk('a correction'), holds = mk('a fact'), points = mk('a pointer')
-  // The pre-migration shape: the enum column, still carrying all of it.
-  d.exec(`alter table memory add column type text not null default 'project'`)
-  let typed = d.prepare(`update memory set type = ? where ${OWNED}`)
-  typed.run('feedback', says)
-  typed.run('project', holds)
-  typed.run('reference', points)
-  let tagged = () =>
-    (d.prepare(
-      'select o.eid as eid from feedback c join entity o on o.id = c.entity',
-    ).all() as { eid: string }[]).map((r) => r.eid)
-
-  retireMemoryType(d)
-  assertEquals(tagged(), [says]) // one value carried a fact; three did not
-  assertEquals(
-    d.prepare(`select "by" from feedback where ${OWNED}`).get(says),
-    { by: null }, // never inferred from created.by
-  )
-  assertEquals(hasCol(d, 'memory', 'type'), false) // the drop makes it true
-  // Every row still exists — the retirement moves a fact, it never sheds one.
-  assertEquals(d.prepare('select count(*) as n from memory').get(), { n: 3 })
-  // Idempotent: a second boot has no column left to read and does nothing.
-  retireMemoryType(d)
-  assertEquals(tagged(), [says])
-})
-
-// The read→opened migration (T-7006): the backfill seeds `opened` from
-// every already-read letter, so no mail flickers unread when the readers
-// flip to NOT opened. Insert-or-ignore on the pk makes it a no-op on
-// re-boot. A fresh graph has no read_at at all, so the pre-migration
-// column is planted here — that IS the only shape the backfill is for.
-slow('backfill: mail.read_at seeds opened, idempotently', () => {
-  let d = fresh()
-  let m = uid()
-  apply(d, [
-    { eid: m, name: 'doc', comp: { title: 'old letter' } },
-    { eid: m, name: 'mail', comp: {} },
-    { eid: m, name: 'deliver', comp: { to: 'jeff@x.test' } },
-  ])
-  d.exec('alter table mail add column read_at text')
-  d.prepare(`update mail set read_at = ? where ${OWNED}`)
-    .run('2026-07-01T00:00:00Z', m)
-  let openedAt = () =>
-    (d.prepare(`select at from opened where ${OWNED}`).get(m) as
-      | { at: string }
-      | undefined)?.at
-  assertEquals(openedAt(), undefined) // the legacy column alone stamps nothing
-  backfillOpened(d)
-  assertEquals(openedAt(), '2026-07-01T00:00:00Z')
-  // idempotent: a re-run never moves an existing stamp
-  d.prepare(`update opened set at = ? where ${OWNED}`).run('MOVED', m)
-  backfillOpened(d)
-  assertEquals(openedAt(), 'MOVED')
-  // and once the column is dropped the pass is a quiet no-op, not a crash
-  d.exec('alter table mail drop column read_at')
-  backfillOpened(d)
-  assertEquals(openedAt(), 'MOVED')
-})
-
-slow('migrateErrors: carries every diagnosis, verifies, then contracts', () => {
-  let d = fresh()
-  let role = uid(), session = uid()
-  apply(d, [
-    { eid: role, name: 'role', comp: { state: 'held' } },
-    { eid: session, name: 'session', comp: { id: uid() } },
-  ])
-  d.exec('alter table role add column error text')
-  d.exec('alter table session add column error text')
-  let finished = '2026-08-07T12:00:00Z'
-  d.prepare(`update role set error = ? where ${OWNED}`).run('bad role', role)
-  d.prepare(
-    `update session set status = 'failed', finished_at = ?, error = ?
-     where ${OWNED}`,
-  ).run(finished, 'bad session', session)
-
-  migrateErrors(d)
-  assertEquals(
-    d.prepare(`select at, message from error where ${OWNED}`).get(role),
-    { at: null, message: 'bad role' },
-  )
-  assertEquals(
-    d.prepare(`select at, message from error where ${OWNED}`).get(session),
-    { at: finished, message: 'bad session' },
-  )
-  assertEquals(hasCol(d, 'role', 'error'), false)
-  assertEquals(hasCol(d, 'session', 'error'), false)
-  migrateErrors(d) // a contracted graph is already done
-})
-
-slow('open backfills every pre-spawn session, once', () => {
-  let path = Deno.makeTempFileSync({ prefix: 'tasks-spawn-', suffix: '.db' })
-  let legacy = uid(), external = uid()
-  let d = open(path)
-  apply(d, [
-    {
-      eid: legacy,
-      name: 'session',
-      comp: {
-        id: uid(),
-        provider: 'fake',
-        model: 'fake-fast',
-        effort: 'low',
-      },
-    },
-    { eid: external, name: 'session', comp: { id: uid(), cwd: '/tmp' } },
-  ])
-  d.exec('drop table spawn')
-  d.close()
-
-  d = open(path)
-  assertEquals(
-    (d.prepare('select count(*) as n from spawn').get() as { n: number }).n,
-    (d.prepare('select count(*) as n from session').get() as { n: number }).n,
-  )
-  assertEquals(compOf(d, legacy, 'spawn')?.model, 'fake-fast')
-  assertEquals(compOf(d, external, 'spawn')?.provider, null)
-  d.prepare(
-    `update spawn set provider = null, model = 'canonical' where ${OWNED}`,
-  ).run(legacy)
-  d.close()
-
-  d = open(path)
-  assertEquals(compOf(d, legacy, 'spawn')?.model, 'canonical')
-  assertEquals(compOf(d, legacy, 'session')?.provider, null)
-  assertEquals(compOf(d, legacy, 'session')?.model, 'canonical')
-  apply(d, [{ eid: legacy, name: 'spawn', comp: null }])
-  d.close()
-
-  d = open(path)
-  assertEquals(compOf(d, legacy, 'spawn')?.provider, null)
-  assertEquals(compOf(d, legacy, 'spawn')?.model, null)
-  assertEquals(compOf(d, legacy, 'session')?.provider, null)
-  assertEquals(compOf(d, legacy, 'session')?.model, null)
-  d.close()
-  Deno.removeSync(path)
-})
-
-slow('open backfills optional session facets without reviving nulls', () => {
-  let path = Deno.makeTempFileSync({
-    prefix: 'tasks-session-facets-',
-    suffix: '.db',
-  })
-  let legacy = uid(), canonical = uid()
-  let d = open(path)
-  apply(d, [
-    { eid: legacy, name: 'session', comp: { id: uid() } },
-    { eid: canonical, name: 'session', comp: { id: uid() } },
-  ])
-  d.exec('drop table worktree')
-  d.exec('drop table runtime')
-  d.prepare(`
-    update session set cwd = '/old', branch = 'session/old',
-      base_revision = 'abc', pid = 17, pane = '%17',
-      transcript = '/tmp/old.jsonl', provider_session_id = 'thread-old',
-      serving_model = 'model-old' where ${OWNED}
-  `).run(legacy)
-  d.close()
-
-  d = open(path)
-  assertEquals(
-    d.prepare(
-      `select o.eid as eid, w.cwd, w.branch, w.base_revision
-       from worktree w join entity o on o.id = w.entity where o.eid = ?`,
-    ).get(legacy),
-    {
-      eid: legacy,
-      cwd: '/old',
-      branch: 'session/old',
-      base_revision: 'abc',
-    },
-  )
-  assertEquals(
-    d.prepare(
-      `select o.eid as eid, r.pid, r.pane, r.transcript,
-              r.provider_session_id, r.serving_model
-       from runtime r join entity o on o.id = r.entity where o.eid = ?`,
-    ).get(legacy),
-    {
-      eid: legacy,
-      pid: 17,
-      pane: '%17',
-      transcript: '/tmp/old.jsonl',
-      provider_session_id: 'thread-old',
-      serving_model: 'model-old',
-    },
-  )
-  d.prepare(
-    `insert into worktree (entity, cwd, branch, base_revision)
-     values (${idOf}, null, null, null)`,
-  ).run(canonical)
-  d.prepare(`update session set cwd = '/stale' where ${OWNED}`).run(canonical)
-  d.close()
-
-  d = open(path)
-  assertEquals(compOf(d, canonical, 'worktree')?.cwd, null)
-  assertEquals(compOf(d, canonical, 'session')?.cwd, null)
-  d.close()
-  Deno.removeSync(path)
-})
-
-slow('open drops a retired acked_at, and keeps the session', () => {
-  let path = Deno.makeTempFileSync({ prefix: 'tasks-acked-', suffix: '.db' })
-  let sess = uid()
-  let d = open(path)
-  apply(d, [{ eid: sess, name: 'session', comp: { id: 'probe', cwd: '/tmp' } }])
-  // A database written before the stamp replaced the cursor.
-  d.exec('alter table session add column acked_at text')
-  d.prepare(`update session set acked_at = ? where ${OWNED}`)
-    .run('2026-01-01T00:00:00.000Z', sess)
-  d.close()
-
-  let cols = (db: ReturnType<typeof open>) =>
-    (db.prepare("select name from pragma_table_info('session')")
-      .all() as { name: string }[]).map((c) => c.name)
-  d = open(path)
-  assertEquals(cols(d).includes('acked_at'), false)
-  assertEquals(compOf(d, sess, 'session')?.cwd, '/tmp') // the row survives
-  d.close()
-
-  d = open(path) // idempotent: a second boot has nothing to drop
-  assertEquals(cols(d).includes('acked_at'), false)
-  d.close()
-  Deno.removeSync(path)
-})
-
-slow('backfill: comment instruments move into created.via', () => {
-  let d = fresh()
-  let target = uid(), author = uid(), comment = uid()
-  apply(d, [
-    { eid: target, name: 'doc', comp: { title: 'target' } },
-    { eid: author, name: 'session', comp: { id: uid() } },
-    { eid: comment, name: 'doc', comp: { title: '', body: 'old words' } },
-    { eid: comment, name: 'comment', comp: { target: target } },
-  ])
-  // a pre-migration graph: the retired column, still naming the author
-  d.exec('alter table comment add column author_eid text')
-  d.prepare(`update comment set author_eid = ? where ${OWNED}`)
-    .run(author, comment)
-  assertEquals(
-    snapshot(d).changes.find((c) => c.eid == comment && c.name == 'comment')
-      ?.comp,
-    { eid: comment, target: target },
-  ) // dormant migration input never rides graph-out
-  d.prepare(`update created set via = null where ${OWNED}`).run(comment)
-  backfillVia(d)
-  let via = snapshot(d).changes.find((c) =>
-    c.eid == comment && c.name == 'created'
-  )?.comp?.via
-  assertEquals(via, author)
-  backfillVia(d)
-  assertEquals(
-    snapshot(d).changes.find((c) => c.eid == comment && c.name == 'created')
-      ?.comp?.via,
-    author,
-  )
-})
-
-slow('backfill: memory instruments move into created.via', () => {
-  let d = fresh()
-  let source = uid(), memory = uid()
-  apply(d, [
-    { eid: source, name: 'session', comp: { id: uid() } },
-    { eid: memory, name: 'doc', comp: { title: 'old fact' } },
-    { eid: memory, name: 'memory', comp: {} },
-  ])
-  // a pre-migration graph: the retired column, still naming the source
-  d.exec('alter table memory add column source_eid text')
-  d.prepare(`update memory set source_eid = ? where ${OWNED}`)
-    .run(source, memory)
-  d.prepare(`update created set via = null where ${OWNED}`).run(memory)
-  assertEquals(
-    snapshot(d).changes.find((c) => c.eid == memory && c.name == 'memory')
-      ?.comp,
-    { eid: memory, scope: null, last_confirmed_at: null },
-  )
-  backfillVia(d)
-  let via = snapshot(d).changes.find((c) =>
-    c.eid == memory && c.name == 'created'
-  )?.comp?.via
-  assertEquals(via, source)
-  d.prepare(`update memory set source_eid = ? where ${OWNED}`)
-    .run(uid(), memory)
-  backfillVia(d)
-  assertEquals(
-    snapshot(d).changes.find((c) => c.eid == memory && c.name == 'created')
-      ?.comp?.via,
-    source,
-  )
-})
-
 Deno.test('fts: search finds, follows edits, forgets the dead', () => {
   let t = uid(), c = uid()
   apply(db, [
@@ -2885,35 +2548,6 @@ Deno.test('mail survives its subject: death keeps the reference', () => {
   assertEquals(comp(m, 'mail')?.target, t) // history stands
 })
 
-// The same frozen-check disease on tool_call: a live db's source list can
-// predate a new producer, and a dropped row is the one report nobody else was
-// going to make. This fixture already knows `srv` but not the newer `cli`.
-slow('mendCalls: widens the frozen source list, keeps the rows', () => {
-  let d = fresh()
-  d.exec('drop table tool_call')
-  d.exec(`create table tool_call (
-    ts text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-    source text not null check (source in ('mcp','http','web','srv')),
-    name text not null, session_id text, ok integer not null,
-    ms integer, error text, detail text)`)
-  d.exec(`insert into tool_call (source, name, ok) values ('mcp', 'kept', 1)`)
-  let put = () =>
-    d.exec(`insert into tool_call (source, name, ok) values ('cli', 'x', 0)`)
-  assertThrows(put)
-  mendCalls(d)
-  put()
-  let names = () => d.prepare('select name from tool_call order by rowid').all()
-  assertEquals(names(), [{ name: 'kept' }, { name: 'x' }])
-  let ddl = () =>
-    d.prepare(`select sql from sqlite_master where name = 'tool_call'`).get()
-  let healed = ddl()
-  mendCalls(d) // already-widened: a no-op
-  assertEquals(ddl(), healed)
-})
-
-// Every soft-detach rides the RETURN — a cache that misses one keeps a
-// ghost (a lease with no holder, a task homed to a gone project) until
-// reload. Casualties are excluded: their entity-null says everything.
 Deno.test('death broadcasts its soft-detaches: no ghost claims', async () => {
   let { trace } = await import('./effects.ts')
   let s = uid(), t = uid(), p = uid(), t2 = uid(), who = uid(), t3 = uid()
@@ -3399,24 +3033,6 @@ Deno.test('recalled: the sentence carries the clock, the entry the marker', () =
   assertEquals(comp(rid, 'recalled')?.at, null)
 })
 
-// The retired row store (T-23821). A live graph carried its rows over to the
-// sentence entities before the drop shipped; migrate() takes the table itself,
-// and a fresh graph never plants one.
-Deno.test('edge: the retired dependency table is gone from every graph', () => {
-  let d = fresh()
-  assertEquals(
-    d.prepare(
-      `select 1 from sqlite_schema where type = 'table' and name = ?`,
-    ).get('dependency'),
-    undefined,
-  )
-})
-
-// Supersession is a plain edge, but the invariant is its own: the replaced
-// entity stays VISIBLE and MARKED (never hidden or aged out), and either end
-// answers "what is current?" — the successor via its refs, the superseded via
-// its backrefs. gone unlinks; deleting the successor leaves the survivor
-// coherent (the edge prunes, the old entity remains).
 Deno.test('edges: supersedes marks the old, never hides it; both ends answer', () => {
   let old = uid(), cur = uid()
   apply(db, [
@@ -4992,74 +4608,6 @@ Deno.test('precondition: a guard on an unknown column is refused', () => {
   assertEquals(comp(m, 'doc')?.body, 'ONE')
 })
 
-slow(
-  'healInboundDeliver: a stranded inbound letter mends; outbound is left alone',
-  () => {
-    open()
-    // A venue that wears its fleet address, and the two mails that name it.
-    let venue = uid()
-    apply(db, [
-      { eid: venue, name: 'doc', comp: { title: 'CafeCar' } },
-      { eid: venue, name: 'email', comp: { address: 'cafecar@bot.test' } },
-    ])
-    // An INBOUND letter migrated wrongly: recipient stranded in deliver{to},
-    // to_addr empty. received_at set + sent_id null is what marks it inbound.
-    let inb = uid()
-    apply(db, [
-      { eid: inb, name: 'doc', comp: { title: 'a letter' } },
-      { eid: inb, name: 'mail', comp: {} },
-      { eid: inb, name: 'deliver', comp: { to: venue } },
-    ])
-    db.prepare(
-      `update mail set received_at = ?, message_id = ? where ${OWNED}`,
-    ).run('2026-01-01T00:00:00Z', 'm-in', inb)
-    // An OUTBOUND letter legitimately carries deliver{to}: sent_id set excludes
-    // it from the heal even though it too came home (received_at set).
-    let out = uid()
-    apply(db, [
-      { eid: out, name: 'doc', comp: { title: 'a reply' } },
-      { eid: out, name: 'mail', comp: {} },
-      { eid: out, name: 'deliver', comp: { to: venue } },
-    ])
-    db.prepare(
-      `update mail set sent_id = ?, received_at = ? where ${OWNED}`,
-    ).run('sent-out', '2026-01-02T00:00:00Z', out)
-
-    healInboundDeliver(db)
-
-    // The inbound letter now names its venue by address, and sheds the deliver.
-    assertEquals(
-      (db.prepare(`select to_addr from mail where ${OWNED}`).get(inb) as {
-        to_addr: string
-      }).to_addr,
-      'cafecar@bot.test',
-    )
-    assertEquals(
-      db.prepare(`select count(*) c from deliver where ${OWNED}`).get(inb),
-      { c: 0 },
-    )
-    // The outbound letter is untouched.
-    assertEquals(
-      db.prepare(`select count(*) c from deliver where ${OWNED}`).get(out),
-      { c: 1 },
-    )
-    // Idempotent: a second pass finds nothing to mend.
-    healInboundDeliver(db)
-    assertEquals(
-      (db.prepare(`select to_addr from mail where ${OWNED}`).get(inb) as {
-        to_addr: string
-      }).to_addr,
-      'cafecar@bot.test',
-    )
-    assertEquals(
-      db.prepare(`select count(*) c from deliver where ${OWNED}`).get(out),
-      { c: 1 },
-    )
-  },
-)
-
-// ── T-3684: num is a nullable, kind-driven label ───────────────────────────
-
 Deno.test('num moved off first-touch: a new task still mints the next number', () => {
   let a = uid(), b = uid()
   apply(db, [{ eid: a, name: 'doc', comp: { title: 'first' }, $num: true }])
@@ -5076,125 +4624,6 @@ Deno.test('the wire cannot set num — it stays server-owned', () => {
     { eid: e, name: 'entity', comp: { num: 999999 } }, // dropped by admitted()
   ])
   assertNotEquals(Number(comp(e, 'entity')?.num), 999999)
-})
-
-Deno.test('the grave keys on the spine; a legacy eid-keyed one is rebuilt', () => {
-  let d = bareDb()
-  let a = uid(), b = uid()
-  apply(d, [
-    { eid: a, name: 'doc', comp: { title: 'to bury' } },
-    { eid: b, name: 'doc', comp: { title: 'stays' } },
-  ])
-  apply(d, [{ eid: a, name: 'entity', comp: null }])
-  // The row IS the spine's int id — no eid, no num of its own.
-  assertEquals(hasCol(d, 'tombstone', 'entity'), true)
-  assertEquals(hasCol(d, 'tombstone', 'eid'), false)
-  assertEquals(buried(d, a), true)
-  assertEquals(buried(d, b), false)
-  // A legacy table (eid, num, deleted_at) rebuilds to that shape; a grave that
-  // names no spine cannot be keyed and is dropped, not invented.
-  d.exec('drop table tombstone')
-  d.exec(
-    `create table tombstone (eid text primary key, num integer, deleted_at text not null);
-     insert into tombstone values ('${a}', 7, '2026-01-01T00:00:00Z'),
-       ('${uid()}', 8, '2026-01-01T00:00:00Z')`,
-  )
-  migrateTombstone(d)
-  assertEquals(hasCol(d, 'tombstone', 'entity'), true)
-  assertEquals(
-    d.prepare('select count(*) as n from tombstone').get(),
-    { n: 1 },
-  )
-  assertEquals(buried(d, a), true)
-  migrateTombstone(d) // idempotent
-  assertEquals(buried(d, a), true)
-  d.close()
-})
-
-Deno.test('vectors key on the spine; a legacy eid-keyed table is rebuilt', () => {
-  let d = bareDb()
-  let a = uid()
-  apply(d, [{ eid: a, name: 'doc', comp: { title: 'embedded' } }])
-  assertEquals(hasCol(d, 'embedding', 'entity'), true)
-  d.exec(`
-    drop table embedding;
-    create table embedding (eid text primary key, model text not null,
-      hash text not null, vec blob not null, at text not null);
-    insert into embedding values ('${a}', 'm', 'h', x'00', '2026-01-01'),
-      ('${uid()}', 'm', 'h', x'00', '2026-01-01');
-    insert or replace into embedding_index (id, dirty) values (1, 0)`)
-  migrateEmbedding(d)
-  // Carried onto the spine's int id (the orphan cannot be keyed and goes);
-  // the ANN data named the old rowids, so the index is owed a rebuild.
-  assertEquals(
-    d.prepare(
-      `select o.eid as eid, e.model as model from embedding e
-       join entity o on o.id = e.entity`,
-    ).all(),
-    [{ eid: a, model: 'm' }],
-  )
-  assertEquals(
-    d.prepare('select dirty from embedding_index where id = 1').get(),
-    { dirty: 1 },
-  )
-  // The dirty fence survived the rebuild: a write still marks the index.
-  d.prepare('update embedding_index set dirty = 0 where id = 1').run()
-  d.prepare('delete from embedding').run()
-  assertEquals(
-    d.prepare('select dirty from embedding_index where id = 1').get(),
-    { dirty: 1 },
-  )
-  migrateEmbedding(d) // idempotent
-  assertEquals(hasCol(d, 'embedding', 'entity'), true)
-  d.close()
-})
-
-Deno.test('a conflict names its sides on the spine; legacy labels resolve', () => {
-  let d = bareDb()
-  let t = uid(), a = uid(), b = uid()
-  applyNumbered(d, [
-    { eid: t, name: 'doc', comp: { title: 'contested' } },
-    { eid: a, name: 'session', comp: { id: 'sess-a' } },
-    { eid: b, name: 'session', comp: { id: 'sess-b' } },
-  ])
-  let idOf = (
-    eid: string,
-  ) => (d.prepare('select id, num from entity where eid = ?').get(eid) as {
-    id: number
-    num: number
-  })
-  // The legacy table held display strings: a session's label, an eid, a
-  // human id, or a name nothing resolves.
-  d.exec(`
-    drop table conflict;
-    create table conflict (entity integer primary key references entity(id),
-      target integer not null, loser text not null, holder text not null,
-      at text not null default '2026-01-01')`)
-  let row = (loser: string, holder: string) => {
-    let c = uid()
-    d.prepare('insert into entity (eid) values (?)').run(c)
-    d.prepare(
-      'insert into conflict (entity, target, loser, holder) values (?, ?, ?, ?)',
-    ).run(idOf(c).id, idOf(t).id, loser, holder)
-  }
-  row('sess-b', 'sess-a')
-  row(b, `S-${idOf(a).num}`)
-  row('S-6076-gone', 'nobody')
-  migrateConflict(d)
-  assertEquals(
-    d.prepare(
-      `select (select eid from entity where id = loser) as loser,
-              (select eid from entity where id = holder) as holder
-       from conflict order by entity`,
-    ).all(),
-    [{ loser: b, holder: a }, { loser: b, holder: a }, {
-      loser: null,
-      holder: null,
-    }],
-  )
-  migrateConflict(d) // idempotent
-  assertEquals(d.prepare('select count(*) as n from conflict').get(), { n: 3 })
-  d.close()
 })
 
 Deno.test('a deleted number is never reused — remint is strictly higher', () => {
@@ -5239,84 +4668,6 @@ Deno.test('num order is preserved: T-3 and a bare num still resolve', () => {
   let n = Number(comp(t, 'entity')?.num)
   assertEquals(resolveId(db, `T-${n}`), t) // prefixed num
   assertEquals(resolveId(db, String(n)), t) // bare num, never shadowed by hex
-})
-
-// T-17322: a project SHOULD BE its own board. migrateBoardsToProjects folds a
-// legacy separate `.project=<uuid>` board into its project, repoints any
-// card/fold that viewed it, and tombstones the board — leaving real filtered
-// views alone, and a re-run a no-op.
-slow(
-  'migrateBoardsToProjects: a whole-project board collapses into its project',
-  () => {
-    let d = fresh()
-    let project = uid()
-    applyNumbered(d, [
-      { eid: project, name: 'doc', comp: { title: 'Widgets', body: '' } },
-      { eid: project, name: 'project', comp: {} },
-    ])
-    let board = uid()
-    applyNumbered(d, [
-      { eid: board, name: 'doc', comp: { title: 'widgets', body: '' } },
-      { eid: board, name: 'board', comp: { query: `.project=${project}` } },
-    ])
-    let card = uid()
-    applyNumbered(d, [
-      { eid: card, name: 'card', comp: { target: board, view: 'Board' } },
-    ])
-
-    migrateBoardsToProjects(d)
-
-    // the project now IS the board, carrying the same query
-    assertEquals(compOf(d, project, 'board')?.query, `.project=${project}`)
-    // the card was repointed onto the project — view preserved (patch, not rebuild)
-    assertEquals(compOf(d, card, 'card')?.target, project)
-    assertEquals(compOf(d, card, 'card')?.view, 'Board')
-    // the redundant board entity is tombstoned
-    assertEquals(compOf(d, board, 'board'), undefined)
-    assertEquals(
-      !!d.prepare(
-        `select 1 from tombstone t join entity e on e.id = t.entity
-         where e.eid = ?`,
-      ).get(board),
-      true,
-    )
-
-    // idempotent: a second run finds no mirror and changes nothing
-    let before = snapshot(d).changes.length
-    migrateBoardsToProjects(d)
-    assertEquals(snapshot(d).changes.length, before)
-  },
-)
-
-slow('migrateBoardsToProjects: a filtered board is left alone', () => {
-  let d = fresh()
-  let project = uid()
-  applyNumbered(d, [
-    { eid: project, name: 'doc', comp: { title: 'Widgets', body: '' } },
-    { eid: project, name: 'project', comp: {} },
-  ])
-  // a real filtered view: project AND a status — not a whole-project mirror
-  let filtered = uid()
-  applyNumbered(d, [
-    { eid: filtered, name: 'doc', comp: { title: 'open widgets', body: '' } },
-    {
-      eid: filtered,
-      name: 'board',
-      comp: { query: `.project=${project}&.status=open` },
-    },
-  ])
-  // a whole-project board whose target isn't a live project: also left alone
-  let orphan = uid()
-  applyNumbered(d, [
-    { eid: orphan, name: 'doc', comp: { title: 'ghost', body: '' } },
-    { eid: orphan, name: 'board', comp: { query: `.project=${uid()}` } },
-  ])
-
-  migrateBoardsToProjects(d)
-
-  assertEquals(compOf(d, project, 'board'), undefined) // project untouched
-  assertEquals(!!compOf(d, filtered, 'board'), true) // filtered survives
-  assertEquals(!!compOf(d, orphan, 'board'), true) // orphan survives
 })
 
 // Build a malformed WAL deterministically. Checkpoint a healthy main (T1),
@@ -5696,110 +5047,4 @@ Deno.test('apply answer: a birth deleted in its own batch has no surviving echoe
     ]).filter((c) => c.eid == eid),
     [{ eid, name: 'entity', comp: null }],
   )
-})
-
-Deno.test('open backfills filing once without replacing task identities or owner data', () => {
-  let dir = Deno.makeTempDirSync({ prefix: 'tasks-filed-' })
-  let path = `${dir}/owner.db`
-  let d = open(path)
-  try {
-    let project = uid(), person = uid(), task = uid(), board = uid()
-    apply(d, [
-      { eid: project, name: 'project', comp: {} },
-      { eid: person, name: 'person', comp: {} },
-      {
-        eid: task,
-        name: 'doc',
-        comp: { title: 'Owner task', body: 'Keep these bytes' },
-      },
-      { eid: task, name: 'task', comp: {} },
-      {
-        eid: task,
-        name: 'filed',
-        comp: { priority: 2.5, project, assignee: person, domain: 'Ops' },
-      },
-      { eid: task, name: 'completed', comp: {} },
-      {
-        eid: board,
-        name: 'board',
-        comp: { query: '.project=P-19 .priority<=P2' },
-      },
-    ])
-    let identity = d.prepare('select id, eid, num from entity order by id')
-      .all()
-    let filing = d.prepare('select * from filed order by entity').all()
-    // Reconstruct the old deployed shape on this disposable owner-data fixture.
-    d.exec(`alter table task add column priority real not null default 0;
-      alter table task add column project integer references entity(id);
-      alter table task add column assignee integer references entity(id);
-      alter table task add column domain text;
-      update task set (priority, project, assignee, domain) =
-        (select priority, project, assignee, domain from filed where filed.entity = task.entity);
-      create index task_project on task(project);
-      drop table filed;`)
-    // A retained trigger makes DROP COLUMN fail *after* the backfill, proving
-    // that open's transaction rolls back both the data move and additive DDL.
-    d.exec(
-      `create trigger block_filing before update on task begin select new.priority; end`,
-    )
-    d.close()
-    assertThrows(() => open(path), Error)
-    d = connect(path)
-    assertEquals(hasCol(d, 'task', 'priority'), true)
-    assertEquals(
-      d.prepare("select name from sqlite_master where name='filed'").get(),
-      undefined,
-    )
-    assertEquals(
-      d.prepare('select id, eid, num from entity order by id').all().slice(
-        0,
-        identity.length,
-      ),
-      identity,
-    )
-    d.exec('drop trigger block_filing')
-    d.close()
-    d = open(path)
-    assertEquals(d.prepare('select * from filed order by entity').all(), filing)
-    assertEquals(
-      d.prepare("select name from pragma_table_info('task')").all(),
-      [{ name: 'entity' }],
-    )
-    assertEquals(
-      d.prepare('select id, eid, num from entity order by id').all().slice(
-        0,
-        identity.length,
-      ),
-      identity,
-    )
-    let before = snapshot(d)
-    let bag = Object.fromEntries(
-      before.changes.filter((c) => c.eid == task).map((c) => [c.name, c.comp]),
-    )
-    assertEquals(bag.doc?.body, 'Keep these bytes')
-    assertEquals(!!bag.completed, true)
-    assertEquals(
-      before.changes.find((c) => c.eid == board && c.name == 'board')?.comp
-        ?.query,
-      '.project=P-19 .priority<=P2',
-    )
-    apply(d, [{ eid: task, name: 'filed', comp: { priority: 9 } }])
-    d.close()
-    d = open(path)
-    assertEquals(
-      snapshot(d).changes.find((c) => c.eid == task && c.name == 'filed')?.comp
-        ?.priority,
-      9,
-    )
-    assertEquals(
-      d.prepare('select id, eid, num from entity order by id').all().slice(
-        0,
-        identity.length,
-      ),
-      identity,
-    )
-  } finally {
-    d.close()
-    Deno.removeSync(dir, { recursive: true })
-  }
 })

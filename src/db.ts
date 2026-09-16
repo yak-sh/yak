@@ -95,8 +95,6 @@ import { type LifecycleHost } from './store/fleet_lifecycle.ts'
 import { type FleetGraph, fleetGraph } from './store/fleet_graph.ts'
 import { fleetNormalizers } from './store/fleet_normalize.ts'
 import {
-  cameraEid,
-  cursorEid,
   edgeEid,
   link,
   links,
@@ -200,8 +198,7 @@ export let readDriver = (db: Sql): Driver => {
 
 // The grave keys on the retained spine (D-18866): a dead entity's row IS its
 // int id, and its num still lives on that spine, so the table carries only
-// when. Named apart from `schema` because open() rebuilds a legacy eid-keyed
-// grave table to this shape (migrateTombstone).
+// when.
 let tombstoneDdl = `create table if not exists tombstone (
     entity     integer primary key references entity(id),
     deleted_at text not null
@@ -212,8 +209,7 @@ let tombstoneDdl = `create table if not exists tombstone (
 // entity id the ANN scan hands back. hash names the exact text embedded (skip
 // unchanged), model names the embedder (a model upgrade just re-sweeps). Never
 // on the wire, never in snapshot(); a stale or missing row costs recall, never
-// correctness. Named apart from `schema` because open() rebuilds a legacy
-// eid-keyed table to this shape (migrateEmbedding).
+// correctness.
 let embeddingDdl = `create table if not exists embedding (
     entity integer primary key references entity(id),
     model  text not null,
@@ -226,9 +222,7 @@ let embeddingDdl = `create table if not exists embedding (
 // SQLite statement; vector.ts clears it only after a successful rebuild.
 // A bounced claim's audit row. Both sides reference the retained spine; a
 // loser whose session was born in the very batch that rolled back has no spine
-// row, so loser (and holder, symmetrically) admit null. Named apart from
-// `schema` because open() rebuilds a legacy label-keyed table to this shape
-// (migrateConflict).
+// row, so loser (and holder, symmetrically) admit null.
 let conflictDdl = `create table if not exists conflict (
     entity integer primary key references entity(id),
     target integer not null,
@@ -261,10 +255,7 @@ let shedOrd = (d: Dep): Dep =>
 // The send OUTCOME moved off the row to the shared delivered/error
 // components (D-14945), and WHERE it goes to the shared `deliver {to}` — an
 // outbound mail wears one, an inbound arrival keeps its recipient in to_addr.
-// to_addr/sent_id/received_at stay as envelope DATA. mendMail's rebuild copies
-// by column NAME over the shape common to the FK-era table and this ddl, so a
-// column added here (or dropped by migrateDelivery()/migrateDeliver()) no
-// longer has to line up positionally (T-18475).
+// to_addr/sent_id/received_at stay as envelope DATA.
 let mailDdl = `create table if not exists mail (
     entity         integer primary key references entity(id),
     "from"      text,
@@ -891,10 +882,7 @@ let schema = `
   -- with no field rows) or remove (comp == null -- a component removal, or
   -- entity death when component = 'entity'). component is the wire component
   -- name, entity its spine id. A spine row outlives its entity (a death is
-  -- retained, D-18866), so every change names one; history whose spine an
-  -- out-of-band purge removed was given a retained spine and a grave when the
-  -- journal was keyed (migrateJournalKeys), so the reference never goes
-  -- unmet.
+  -- retained, D-18866), so every change names one.
   create table if not exists journal_change (
     id        integer primary key,
     tx        integer not null references journal_tx(id),
@@ -930,6 +918,7 @@ let schema = `
   create index if not exists journal_change_tx on journal_change(tx, ordinal);
   create index if not exists journal_change_ent on journal_change(entity, component);
   create index if not exists journal_field_change on journal_field(change, ordinal);
+  create index if not exists journal_field_ref on journal_field(ref) where ref is not null;
   -- Server-local key/value, not graph: no eid, no components, so snapshot()
   -- (which walks the comps vocabulary) never carries it, and apply() never
   -- writes it. Holds the durable sync epoch (epochOf): the cursor-lineage
@@ -1489,48 +1478,18 @@ let seed = (db: Sql) => {
   ) mintNum(db, eid)
 }
 
-// A baked constraint can't be changed in place: rebuild the table around
-// its current ddl, rows copied by NAME over the columns common to both
-// shapes (see rebuild() below), so a widened or trimmed ddl never has to
-// line up positionally.
 // Does this table still carry that column? The one question both schema
 // guards ask, and the gate on every backfill that reads a retired column:
 // once the drop lands, the read that fed it must stop compiling away.
 export let hasCol = (db: Sql, table: string, col: string) =>
   (prep(db, `select name from pragma_table_info('${table}')`)
     .all() as { name: string }[]).some((c) => c.name == col)
-// Is the column declared NOT NULL? The guard a tightening migration reads.
-let colNotNull = (db: Sql, table: string, col: string) =>
-  (prep(db, `select name, "notnull" as nn from pragma_table_info('${table}')`)
-    .all() as { name: string; nn: number }[]).some((c) =>
-      c.name == col && c.nn == 1
-    )
-
 // A table's column names in declaration order — what rebuild() copies BY NAME
 // rather than by position, so a shape change never relies on `select *` lining
 // up value for value (T-18475).
 let colNames = (db: Sql, table: string) =>
   (prep(db, 'select name from pragma_table_info(?)')
     .all(table) as { name: string }[]).map((c) => c.name)
-
-// `instruction` used to be the empty marker on a Session's assembled prompt.
-// The evaluator now needs that name for executable instructions, so migrate
-// the marker TABLE before the current schema is planted. Shape is the guard:
-// a future executable instruction table has contract columns and must never be
-// mistaken for this retired one-column marker. The two-table arm makes an
-// interrupted/rolling migration idempotent without keeping two writable names.
-export let migratePrompt = (db: Sql) => {
-  let legacy = colNames(db, 'instruction')
-  if (legacy.length != 1 || legacy[0] != 'entity') return
-  if (!colNames(db, 'prompt').length) {
-    db.exec('alter table instruction rename to prompt')
-    return
-  }
-  db.exec(`
-    insert or ignore into prompt (entity) select entity from instruction;
-    drop table instruction;
-  `)
-}
 
 // The index twin of hasCol: is this named index already present? A bare
 // `create index if not exists` on an existing index opens an empty write
@@ -1540,851 +1499,6 @@ export let migratePrompt = (db: Sql) => {
 export let hasIdx = (db: Sql, name: string) =>
   !!prep(db, `select 1 from sqlite_master where type = 'index' and name = ?`)
     .get(name)
-
-let ddlOf = (db: Sql, name: string) =>
-  (prep(db, `select sql from sqlite_master where type = 'table' and name = ?`)
-    .get(name) as { sql: string } | undefined)?.sql
-let rebuild = (db: Sql, name: string, ddl: string) => {
-  db.transaction(() => {
-    db.exec(`alter table ${name} rename to ${name}_stale`)
-    db.exec(ddl)
-    // Copy BY NAME, over the columns common to both shapes — never `select *`.
-    // A rebuild whose new ddl adds a column (T-14133 added mail's 11th) leaves
-    // the fresh table wider than the stale one, so a positional `select *`
-    // supplies too few values ("N columns but M values"); one that drops a
-    // column supplies too many. Naming the intersection lets an added column
-    // take its default and a dropped one fall away, so widening the vocabulary
-    // never breaks the FK-era migration again (T-18475).
-    let fresh = new Set(colNames(db, name))
-    let cols = colNames(db, `${name}_stale`).filter((c) => fresh.has(c))
-    let list = cols.map(sqlName).join(', ')
-    db.exec(`insert into ${name} (${list}) select ${list} from ${name}_stale`)
-    db.exec(`drop table ${name}_stale`)
-  })
-}
-
-// A legacy grave table keyed by eid becomes the spine-keyed one (tombstoneDdl).
-// Every grave's spine row is retained (migrateToIdKeys carries even pre-flip
-// deaths onto it), so the copy is a join; a grave naming no spine at all is a
-// record nothing can key and is reported, not invented. `num` falls away: the
-// retained spine already carries it. No-op once the table wears `entity`.
-export let migrateTombstone = (db: Sql) => {
-  if (!hasCol(db, 'tombstone', 'eid')) return
-  db.transaction(() => {
-    db.exec('alter table tombstone rename to tombstone_stale')
-    db.exec(tombstoneDdl)
-    db.exec(
-      `insert or ignore into tombstone (entity, deleted_at)
-       select e.id, t.deleted_at from tombstone_stale t
-       join entity e on e.eid = t.eid`,
-    )
-    let { n } = prep(
-      db,
-      `select count(*) as n from tombstone_stale t
-       where not exists (select 1 from entity e where e.eid = t.eid)`,
-    ).get() as { n: number }
-    if (n) console.warn(`tombstone: ${n} grave(s) named no spine — dropped`)
-    db.exec('drop table tombstone_stale')
-  })
-}
-
-// Key the vectors by spine id. Every doc's spine row exists (a vector without
-// one is an orphan the sweep would prune anyway), so the copy is a join. The
-// rowids the persisted ANN data names are the OLD table's, so the index is
-// marked dirty for the sweep's next rebuild. No-op once the table wears
-// `entity`.
-export let migrateEmbedding = (db: Sql) => {
-  if (!hasCol(db, 'embedding', 'eid')) return
-  db.transaction(() => {
-    for (let t of ['ai', 'au', 'ad']) {
-      db.exec(`drop trigger if exists embedding_index_${t}`)
-    }
-    db.exec('alter table embedding rename to embedding_stale')
-    db.exec(embeddingDdl)
-    db.exec(
-      `insert or ignore into embedding (entity, model, hash, vec, at)
-       select e.id, s.model, s.hash, s.vec, s.at from embedding_stale s
-       join entity e on e.eid = s.eid`,
-    )
-    db.exec('drop table embedding_stale')
-    db.exec(embeddingTriggers)
-    db.exec('update embedding_index set dirty = 1 where id = 1')
-  })
-}
-
-// A column's declared type, for a migration that keys on a SHAPE change
-// rather than a column's presence.
-let colType = (db: Sql, table: string, col: string) =>
-  (prep(db, `select type from pragma_table_info('${table}') where name = ?`)
-    .get(col) as { type: string } | undefined)?.type
-
-// Point a conflict's sides at the spine. The legacy rows carried display
-// strings — a session's chosen label when it had one, else its eid, else a
-// human id — so each resolves through those doors in turn; what none of them
-// names (a session that rolled back with the batch, a hand-typed label) is
-// reported and left null. No-op once the sides are integers.
-export let migrateConflict = (db: Sql) => {
-  if (colType(db, 'conflict', 'loser') != 'TEXT') return
-  let side = (col: string) =>
-    `coalesce(
-       (select s.entity from session s where s.id = c.${col}),
-       (select e.id from entity e where e.eid = c.${col}),
-       (select e.id from entity e
-        where c.${col} glob '[A-Z]*-[0-9]*'
-          and substr(c.${col}, instr(c.${col}, '-') + 1) not glob '*[^0-9]*'
-          and e.num = cast(substr(c.${col}, instr(c.${col}, '-') + 1) as integer))
-     )`
-  db.transaction(() => {
-    db.exec('alter table conflict rename to conflict_stale')
-    db.exec(conflictDdl)
-    db.exec(
-      `insert into conflict (entity, target, loser, holder, at)
-       select c.entity, c.target, ${side('loser')}, ${side('holder')}, c.at
-       from conflict_stale c`,
-    )
-    let { losers, holders } = prep(
-      db,
-      `select count(*) filter (where loser is null) as losers,
-              count(*) filter (where holder is null) as holders from conflict`,
-    ).get() as { losers: number; holders: number }
-    if (losers || holders) {
-      console.warn(
-        `conflict: ${losers} loser(s) and ${holders} holder(s) named no spine — left null`,
-      )
-    }
-    db.exec('drop table conflict_stale')
-  })
-}
-
-// The same shape for tool_call's source list: a row the CHECK doesn't know
-// is dropped with a warning, and record() is by contract silent about its
-// own failures — so an unwidened live table would swallow the very reports
-// nobody else makes. No-ops once healed.
-export let mendCalls = (db: Sql) => {
-  if (!ddlOf(db, 'tool_call')?.includes("'cli'")) {
-    rebuild(db, 'tool_call', callDdl)
-  }
-}
-
-// The hosted graph_apply once persisted a single serialized Change; it now
-// persists the whole atomic Change[] batch (T-16716). Wrap each existing
-// single-object body into a one-element array and rename the column, so a
-// legacy row and a batch read back under one name. Guarded on the old
-// column, so it runs once and no-ops thereafter.
-export let mendApply = (db: Sql) => {
-  if (!hasCol(db, 'apply', 'change')) return
-  db.transaction(() => {
-    db.exec('update apply set change = json_array(json(change))')
-    db.exec('alter table apply rename column change to changes')
-  })
-}
-
-// The read→opened migration (T-7006): seed `opened` from every letter the
-// old mail.read_at column already marked read. `insert or ignore` on the pk
-// is idempotent, so a re-boot never moves an existing stamp. A no-op once
-// the column is gone — the stamp has been the only read-state since.
-export let backfillOpened = (db: Sql) => {
-  if (!hasCol(db, 'mail', 'read_at')) return
-  db.exec(
-    `insert or ignore into opened (entity, at)
-       select entity, read_at from mail where read_at is not null`,
-  )
-}
-
-// Lift component-specific instruments into the universal register once
-// (T-7113). Each half is guarded on its own source column: the register is
-// the only home, and these reads are the last thing the columns are for.
-export let backfillVia = (db: Sql) => {
-  if (hasCol(db, 'comment', 'author_eid')) {
-    db.exec(
-      `update created set via = (
-         select e.id from comment c join entity e on e.eid = c.author_eid
-         where c.entity = created.entity
-       )
-       where via is null and exists (
-         select 1 from comment
-         where comment.entity = created.entity and author_eid is not null
-       )`,
-    )
-  }
-  if (hasCol(db, 'memory', 'source_eid')) {
-    db.exec(
-      `update created set via = (
-         select e.id from memory m join entity e on e.eid = m.source_eid
-         where m.entity = created.entity
-       )
-       where via is null and exists (
-         select 1 from memory
-         where memory.entity = created.entity and source_eid is not null
-       )`,
-    )
-  }
-}
-
-// Is the journal keyed by spine id, every change naming one? The guard both
-// migrate()'s pragma and the rebuild below read: a text `eid` column on
-// journal_change is the old shape (journal_tx's text actor/via arrived and
-// leave with it), and a nullable `entity` is the interim keyed shape.
-let journalKeyed = (db: Sql) =>
-  !tableExists(db, 'journal_change') ||
-  (!hasCol(db, 'journal_change', 'eid') &&
-    colNotNull(db, 'journal_change', 'entity'))
-
-// Give every eid the journal names and no spine carries a RETAINED spine row
-// and a grave, so the keyed journal can reference each one (D-18866's
-// representation of a death, applied to history whose deletion predates it:
-// session entries purged out of band, an actor slug that never was an entity).
-// num stays null -- these never carried one -- and the grave's deleted_at is
-// the ts of the last transaction that named the eid, the latest moment it is
-// known to have existed. The grave is written in whichever shape the table
-// wears. Returns how many were buried.
-let buryJournalOrphans = (db: Sql) => {
-  db.exec(
-    `create temp table __orphan as
-     select eid, max(ts) as last from (
-       select jc.eid as eid, jt.ts as ts
-         from journal_change jc join journal_tx jt on jt.id = jc.tx
-       union all select actor, ts from journal_tx where actor is not null
-       union all select via, ts from journal_tx where via is not null
-     ) where eid not in (select eid from entity) group by eid`,
-  )
-  db.exec('insert into entity (eid, num) select eid, null from __orphan')
-  db.exec(
-    hasCol(db, 'tombstone', 'entity')
-      ? `insert or ignore into tombstone (entity, deleted_at)
-         select e.id, o.last from __orphan o join entity e on e.eid = o.eid`
-      : `insert or ignore into tombstone (eid, deleted_at)
-         select eid, last from __orphan`,
-  )
-  let { n } = db.prepare('select count(*) as n from __orphan').get() as {
-    n: number
-  }
-  db.exec('drop table __orphan')
-  return n
-}
-
-// The legacy reshapes read a table's target DDL off a fresh, migrated,
-// throwaway graph, so they reuse the one schema definition instead of
-// reconstructing it. Only the adapter can mint that sibling handle, so
-// migrate() takes it as `fresh`; a backend without one never holds a legacy
-// graph to reshape, and says so if it somehow does.
-let scratchOf = (fresh?: () => Sql) => {
-  if (!fresh) throw new Error('legacy reshape needs a scratch database')
-  return migrate(fresh())
-}
-
-// Key the journal by spine id (T-18883). journal_change.eid and
-// journal_tx.actor/via were eid TEXT; every other reference in the graph is an
-// integer into entity(id), and now so are these -- entity NOT NULL, since
-// every eid the journal names has a spine once the orphans are buried above;
-// actor and via stay nullable for the unowned write. SQLite cannot retype a
-// column, so each table is rebuilt beside itself from the fresh DDL and
-// swapped in, keeping every id (journal_field points at journal_change ids,
-// journal_change at journal_tx ids). Runs with foreign keys OFF (migrate()
-// lifts them before BEGIN): the drops would otherwise cascade-check the child
-// rows being kept. The interim keyed shape (nullable entity, no eid column)
-// tightens in place when nothing names no entity; a row that does has lost
-// its eid and must be restored from a backup before the rebuild -- reported,
-// never invented.
-let migrateJournalKeys = (db: Sql, fresh?: () => Sql) => {
-  if (journalKeyed(db)) return
-  let count = (sql: string) => (db.prepare(sql).get() as { n: number }).n
-  let text = hasCol(db, 'journal_change', 'eid')
-  if (!text) {
-    let lost = count(
-      'select count(*) as n from journal_change where entity is null',
-    )
-    if (lost) {
-      console.warn(
-        `journal: ${lost} change(s) name no entity and carry no eid — restore them before the journal can be keyed NOT NULL`,
-      )
-      return
-    }
-  }
-  let scratch = scratchOf(fresh)
-  let ddlOf = (t: string) =>
-    (scratch.prepare(
-      `select sql from sqlite_master where type = 'table' and name = ?`,
-    ).get(t) as { sql: string }).sql.replace(t, `__mig_${t}`)
-  let txDdl = ddlOf('journal_tx'), changeDdl = ddlOf('journal_change')
-  scratch.close()
-
-  let buried = text ? buryJournalOrphans(db) : 0
-  let txs = count('select count(*) as n from journal_tx')
-  let changes = count('select count(*) as n from journal_change')
-  if (text) {
-    db.exec(txDdl)
-    db.exec(
-      `insert into __mig_journal_tx (id, ts, actor, via, trace)
-       select jt.id, jt.ts, a.id, v.id, jt.trace from journal_tx jt
-         left join entity a on a.eid = jt.actor
-         left join entity v on v.eid = jt.via`,
-    )
-    db.exec('drop table journal_tx')
-    db.exec('alter table __mig_journal_tx rename to journal_tx')
-  }
-  db.exec(changeDdl)
-  db.exec(
-    `insert into __mig_journal_change (id, tx, ordinal, entity, component, operation)
-     select jc.id, jc.tx, jc.ordinal, ${
-      text ? 'e.id' : 'jc.entity'
-    }, jc.component, jc.operation
-       from journal_change jc${text ? ' join entity e on e.eid = jc.eid' : ''}`,
-  )
-  db.exec('drop table journal_change')
-  db.exec('alter table __mig_journal_change rename to journal_change')
-  db.exec(
-    `create index journal_change_tx on journal_change(tx, ordinal);
-     create index journal_change_ent on journal_change(entity, component);`,
-  )
-  console.warn(
-    `journal: keyed ${txs} transactions and ${changes} changes by spine id — ` +
-      `${buried} purged eid(s) given a retained spine and a grave`,
-  )
-}
-
-// The components whose history the journal keeps (T-18883). Everything else
-// is mechanical -- the role heartbeat, the session log partition, UI state,
-// delivery marks, lifecycle stamps -- and is collected below. `entity` and
-// `blob` stay only where a kept component's history names the entity, so a
-// kept birth stays a birth and nothing else's does.
-let JOURNAL_KEEP = [
-  'doc',
-  'task',
-  'comment',
-  'memory',
-  'design',
-  'goal',
-  'commit',
-  'project',
-  'persona',
-  'edge',
-  ...natures,
-  'claim',
-  'decided',
-  'proposed',
-  'completed',
-  'cancelled',
-  'created',
-  'updated',
-  'mail',
-  'deliver',
-  'person',
-  'feedback',
-  'review',
-  'quarantined',
-  'accept',
-  'verifier',
-  'noverify',
-  'finding',
-  'bug',
-  'notice',
-  'brief',
-  'patch',
-  'alias',
-]
-
-// Collect the journal once (T-18883): drop every change of a component the
-// journal does not keep, every `eid` field (the row's own identity, already
-// the change's entity), the births of entities nothing kept ever named, the
-// no-op writes (a field equal to its previous present value, then the upsert
-// left with no fields and no presence change), and finally the transactions
-// left with no changes. Marked in server_meta so a later open is a pure read;
-// the SQL itself is idempotent. The `lost_and_found` tables an old .recover
-// left behind go with it. Children before parents, so foreign keys hold.
-let gcJournal = (db: Sql) => {
-  if (
-    !tableExists(db, 'journal_change') ||
-    prep(db, `select 1 from server_meta where k = 'journal_gc'`).get()
-  ) return
-  let count = (sql: string) => (db.prepare(sql).get() as { n: number }).n
-  let before = {
-    tx: count('select count(*) as n from journal_tx'),
-    change: count('select count(*) as n from journal_change'),
-    field: count('select count(*) as n from journal_field'),
-  }
-  let keep = JOURNAL_KEEP.map((c) => `'${c}'`).join(', ')
-  db.exec(`
-    delete from journal_field where change in
-      (select id from journal_change where component not in (${keep}, 'entity', 'blob'));
-    delete from journal_change where component not in (${keep}, 'entity', 'blob');
-    delete from journal_field where field = 'eid';
-    delete from journal_field where change in
-      (select id from journal_change jc where jc.component in ('entity', 'blob')
-        and not exists (select 1 from journal_change o
-          where o.entity = jc.entity and o.component not in ('entity', 'blob')));
-    delete from journal_change where component in ('entity', 'blob')
-      and not exists (select 1 from journal_change o
-        where o.entity = journal_change.entity
-          and o.component not in ('entity', 'blob'));
-    delete from journal_field where id in (
-      select id from (
-        select jf.id as id, jf.present as present, jf.value as value,
-               lag(jf.value) over (
-                 partition by jc.entity, jc.component, jf.field
-                 order by jc.tx, jc.ordinal, jf.ordinal) as prev
-          from journal_field jf join journal_change jc on jc.id = jf.change)
-       where present = 1 and value = prev);
-    delete from journal_change where id in (
-      select id from (
-        select jc.id as id, jc.operation as op,
-               lag(jc.operation) over (
-                 partition by jc.entity, jc.component
-                 order by jc.tx, jc.ordinal) as prev,
-               (select count(*) from journal_field jf where jf.change = jc.id) as n
-          from journal_change jc)
-       where op = 'upsert' and n = 0 and prev = 'upsert');
-    delete from journal_tx where not exists
-      (select 1 from journal_change jc where jc.tx = journal_tx.id);
-    drop table if exists lost_and_found;
-    drop table if exists lost_and_found_0;
-    insert or ignore into server_meta (k, v) values ('journal_gc', '1');
-  `)
-  let after = {
-    tx: count('select count(*) as n from journal_tx'),
-    change: count('select count(*) as n from journal_change'),
-    field: count('select count(*) as n from journal_field'),
-  }
-  if (before.tx != after.tx || before.field != after.field) {
-    console.warn(
-      `journal: collected — tx ${before.tx} → ${after.tx}, ` +
-        `changes ${before.change} → ${after.change}, ` +
-        `fields ${before.field} → ${after.field}`,
-    )
-  }
-}
-
-// Share the graph's bytes with its history (T-18883): a journaled doc.body
-// that still carries its text is pointed at the content blob that text hashes
-// to (minted through textBlob if the graph no longer holds it -- content-
-// addressed, so this is idempotent) and the copy is dropped, and every `eid`
-// field row goes (the row's own identity, never a field). Guarded on the ref
-// column, so a later open is a pure read; the ref index is realized here on
-// every shape, since the schema template cannot name a column an old table
-// lacks.
-let migrateJournalRefs = (db: Sql) => {
-  if (!tableExists(db, 'journal_field')) return
-  if (!hasCol(db, 'journal_field', 'ref')) {
-    db.exec(
-      'alter table journal_field add column ref integer references entity(id)',
-    )
-    let rows = prep(
-      db,
-      `select jf.id as id, jf.value as value
-         from journal_field jf join journal_change jc on jc.id = jf.change
-        where jc.component = 'doc' and jf.field = 'body'
-          and jf.present = 1 and jf.value is not null`,
-    ).all() as { id: number; value: string }[]
-    let point = prep(
-      db,
-      'update journal_field set ref = ?, value = null where id = ?',
-    )
-    let moved = 0
-    for (let r of rows) {
-      let text = JSON.parse(r.value)
-      if (typeof text != 'string') continue
-      point.run(textBlob(db, text), r.id)
-      moved++
-    }
-    let gone = prep(db, `delete from journal_field where field = 'eid'`).run()
-      .changes
-    console.warn(
-      `journal: ${moved} body after-image(s) now ref their content, ${gone} eid field(s) dropped`,
-    )
-  }
-  if (!hasIdx(db, 'journal_field_ref')) {
-    db.exec(
-      'create index journal_field_ref on journal_field(ref) where ref is not null;',
-    )
-  }
-}
-
-// memory.type → the `feedback` tag (T-12585). The enum said four things the
-// graph already knew: `project` restated scope, `user` had zero rows,
-// `reference` was the absence of anything else. Only `feedback` carried a
-// fact, so only `feedback` becomes a row — with a NULL source, because
-// `created.by` names the recorder (a venture, in 81 of 87 rows), not who
-// gave the feedback, and an inferred author that is wrong is worse than an
-// absent one. The drop is what makes the retirement true: a column that
-// lingers keeps teaching a vocabulary the code no longer has.
-export let retireMemoryType = (db: Sql) => {
-  if (!hasCol(db, 'memory', 'type')) return
-  db.exec(
-    `insert or ignore into feedback (entity)
-       select entity from memory where type = 'feedback'`,
-  )
-  db.exec('alter table memory drop column type')
-}
-
-// task.proposal → the universal proposal stamp. The old boolean had no
-// provenance of its own, so its filing stamp is the only authored fact it can
-// preserve. The board rewrite is independently guarded: a database interrupted
-// between old deployments may have lost the column while retaining its query.
-export let retireProposal = (db: Sql) => {
-  let legacy = hasCol(db, 'task', 'proposal')
-  let stale = prep(
-    db,
-    "select 1 from board where instr(query, '.proposal=true') > 0 limit 1",
-  ).get()
-  if (!legacy && !stale) return
-  db.transaction(() => {
-    if (legacy) {
-      db.exec(`
-        insert or ignore into proposed (entity, at, "by", via)
-        select t.entity,
-          coalesce(c.at, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-          c."by", c.via
-        from task t left join created c on c.entity = t.entity
-        where t.proposal != 0
-      `)
-    }
-    db.exec(`update board
-      set query = replace(query, '.proposal=true', '.proposed~=')
-      where instr(query, '.proposal=true') > 0`)
-    if (legacy) db.exec('alter table task drop column proposal')
-  })
-}
-
-// task.status dissolves into components (D-24102): status=done mints
-// `completed`, status=cancelled mints `cancelled`, status=wip is DROPPED (wip
-// is derived from a live claim — a stuck wip with no claim becomes open, the
-// intended fix), status=open needs nothing. The status column then goes. Idempotent:
-// the column-presence guard skips a db already past the drop, and `insert or
-// ignore` heals a partial run. No board rewrite — `.status=` still parses and
-// answers as the derived predicate, so saved queries keep working untouched. The
-// close moment and its actor come from `updated` (the done/cancel write was the
-// last edit for a settled task), falling back to `created`, then to now.
-export let retireTaskStatus = (db: Sql) => {
-  if (!hasCol(db, 'task', 'status')) return
-  let mint = (status: string, table: string) =>
-    db.exec(`
-      insert or ignore into ${table} (entity, at, "by", via)
-      select t.entity,
-        coalesce(u.at, c.at, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-        coalesce(u."by", c."by"), null
-      from task t
-      left join updated u on u.entity = t.entity
-      left join created c on c.entity = t.entity
-      where t.status = '${status}'
-    `)
-  db.transaction(() => {
-    mint('done', 'completed')
-    mint('cancelled', 'cancelled')
-    db.exec('alter table task drop column status')
-  })
-}
-
-// A project's end is the same archived fact every entity can wear. Preserve
-// its clock exactly; authorship was never recorded, so invent none. The board
-// rewrite is independently guarded for a database interrupted after the drop.
-let retireFilter = (query: string) => {
-  let key = /(^|[&\s])\.(?:project\.)?retired_at(?=[.!<>=~])/g
-  return (query.match(/"[^"]*"|[^"]+/g) ?? [])
-    .map((part) =>
-      part.startsWith('"') ? part : part.replace(key, '$1.archived.at')
-    )
-    .join('')
-}
-
-export let retireProjectRetiredAt = (db: Sql) => {
-  let legacy = hasCol(db, 'project', 'retired_at')
-  let boards = prep(
-    db,
-    `select o.eid as eid, query from board b join entity o on o.id = b.entity
-     where query is not null`,
-  )
-    .all() as { eid: string; query: string }[]
-  let stale = boards.map((r) => ({ ...r, next: retireFilter(r.query) }))
-    .filter((r) => r.next != r.query)
-  if (!legacy && !stale.length) return
-  db.transaction(() => {
-    if (legacy) {
-      db.exec(`insert or ignore into archived (entity, at)
-        select entity, retired_at from project where retired_at is not null`)
-    }
-    let write = prep(
-      db,
-      'update board set query = ? where entity = (select id from entity where eid = ?)',
-    )
-    for (let r of stale) write.run(r.next, r.eid)
-    if (legacy) db.exec('alter table project drop column retired_at')
-  })
-}
-
-// Give every session its canonical launch facet before graph-out can observe
-// the handle, then mirror canonical values back for a rollback process. An
-// existing canonical row wins — including explicit null — on every open.
-export let backfillSpawn = (db: Sql) => {
-  let cols = ['provider', 'model', 'effort', 'persona']
-  db.transaction(() => {
-    db.exec(
-      `insert or ignore into spawn (entity, provider, model, effort, persona)
-         select entity, provider, model, effort, persona from session`,
-    )
-    // Only the sessions that actually DIFFER from their spawn row — so once the
-    // backfill has settled, this update matches nothing and writes nothing.
-    // Without the difference guard the copy re-fires identically every open;
-    // that was an invisible no-op page write until session's {eid} refs
-    // (persona, …) gained indexes (T-17678), which turn each redundant UPDATE
-    // into index maintenance that bumps the file change counter every boot.
-    let differ = cols.map((col) =>
-      `session.${sqlName(col)} is not spawn.${sqlName(col)}`
-    ).join(' or ')
-    db.exec(
-      `update session set ${
-        cols.map((col) =>
-          `${sqlName(col)} = (select ${sqlName(col)} from spawn
-            where spawn.entity = session.entity)`
-        ).join(', ')
-      } where exists (
-        select 1 from spawn where spawn.entity = session.entity and (${differ})
-      )`,
-    )
-    let different = cols.map((col) =>
-      `s.${sqlName(col)} is not p.${sqlName(col)}`
-    ).join(' or ')
-    let missed = prep(
-      db,
-      `
-      select 1 from session s join spawn p on p.entity = s.entity
-      where ${different} limit 1
-    `,
-    ).get()
-    if (missed) throw new Error('spawn backfill did not verify')
-  })
-}
-
-// Lineage rides an edge (T-16412, D-16328): `parent delegates child` is the
-// canonical form of session.parent; the column is its rolling alias. Boot
-// backfills the edge from every stored column value, live parents only, and it
-// goes through apply() rather than straight into the row store — the sentence
-// entity is what readers read now, and a door that writes only one of the two
-// stores is a divergence (T-23824). The anti-join is what keeps the promise
-// `insert or ignore` used to: a settled backfill re-fires as a true no-op.
-export let backfillLineage = (db: Sql) => {
-  let rows = prep(
-    db,
-    `select p.eid as parent, e.eid as child
-       from session s
-       join entity p on p.id = s.parent
-       join entity e on e.id = s.entity
-       left join (${sentences('delegates')}) d
-         on d.parent = s.parent and d.child = s.entity
-      where s.parent is not null and d.parent is null`,
-  ).all() as { parent: string; child: string }[]
-  for (let i = 0; i < rows.length; i += 2000) {
-    apply(
-      db,
-      rows.slice(i, i + 2000).flatMap(({ parent, child }) =>
-        link(parent, 'delegates', child)
-      ),
-    )
-  }
-}
-
-// Lift the remaining Session aspects without inventing facets for rows that
-// never carried them. An existing canonical row wins — including its nulls —
-// so an interrupted rolling deploy can never revive a cleared legacy alias.
-export let backfillSessionFacets = (db: Sql) => {
-  db.transaction(() => {
-    db.exec(`
-      insert or ignore into worktree (entity, cwd, branch, base_revision)
-      select entity, cwd, branch, base_revision from session
-      where cwd is not null or branch is not null or base_revision is not null
-    `)
-    db.exec(`
-      insert or ignore into runtime (
-        entity, pid, pane, transcript, provider_session_id, serving_model
-      )
-      select entity, pid, pane, transcript, provider_session_id, serving_model
-      from session
-      where pid is not null or pane is not null or transcript is not null
-        or provider_session_id is not null or serving_model is not null
-    `)
-    db.exec(`
-      insert or ignore into run (
-        entity, status, started_at, stop_requested_at, input_at
-      )
-      select entity, status, started_at, stop_requested_at, input_at
-      from session
-      where finished_at is null and (
-        status in ('starting', 'running', 'stopping')
-        or started_at is not null or stop_requested_at is not null
-        or input_at is not null
-      )
-    `)
-    db.exec(`
-      insert or ignore into settled (
-        entity, at, status, exit_code, stop_reason
-      )
-      select entity, finished_at, status, exit_code, stop_reason
-      from session
-      where finished_at is not null
-        or status in ('completed', 'failed', 'interrupted', 'lost')
-    `)
-    db.exec(`
-      insert or ignore into "yield" (entity, final_text, usage_json, stderr)
-      select entity, final_text, usage_json, stderr from session
-      where final_text is not null or usage_json is not null or stderr is not null
-    `)
-    let facets: Record<string, Record<string, string>> = {
-      worktree: {
-        cwd: 'cwd',
-        branch: 'branch',
-        base_revision: 'base_revision',
-      },
-      runtime: {
-        pid: 'pid',
-        pane: 'pane',
-        transcript: 'transcript',
-        provider_session_id: 'provider_session_id',
-        serving_model: 'serving_model',
-      },
-      run: {
-        status: 'status',
-        started_at: 'started_at',
-        stop_requested_at: 'stop_requested_at',
-        input_at: 'input_at',
-      },
-      settled: {
-        at: 'finished_at',
-        status: 'status',
-        exit_code: 'exit_code',
-        stop_reason: 'stop_reason',
-      },
-      yield: {
-        final_text: 'final_text',
-        usage_json: 'usage_json',
-        stderr: 'stderr',
-      },
-    }
-    for (let [table, mapping] of Object.entries(facets)) {
-      let cols = Object.keys(mapping)
-      // Difference-guarded like backfillSpawn: touch only the sessions whose
-      // columns still disagree with the facet, so a settled backfill re-fires as
-      // a true no-op — no page write, and none of the per-boot index maintenance
-      // session's {eid} refs would otherwise incur (T-17678).
-      let differ = cols.map((col) =>
-        `session.${sqlName(mapping[col])} is not ${sqlName(table)}.${
-          sqlName(col)
-        }`
-      ).join(' or ')
-      db.exec(
-        `update session set ${
-          cols.map((col) =>
-            `${sqlName(mapping[col])} = (select ${sqlName(col)} from ${
-              sqlName(table)
-            }
-            where ${sqlName(table)}.entity = session.entity)`
-          ).join(', ')
-        } where exists (
-          select 1 from ${sqlName(table)}
-          where ${sqlName(table)}.entity = session.entity and (${differ})
-        )`,
-      )
-      let different = cols.map((col) =>
-        `s.${sqlName(mapping[col])} is not f.${sqlName(col)}`
-      ).join(' or ')
-      let missed = prep(
-        db,
-        `
-        select 1 from session s join ${sqlName(table)} f on f.entity = s.entity
-        where ${different} limit 1
-      `,
-      ).get()
-      if (missed) throw new Error(`${table} backfill did not verify`)
-    }
-  })
-}
-
-// D-14945 phase 4: role/session diagnostics become the shared error facet.
-// Add every component first, verify the legacy messages all arrived, and only
-// then contract the old columns. A mismatch rolls the transaction back with
-// both sources intact rather than teaching two health vocabularies.
-export let migrateErrors = (db: Sql) => {
-  let tables = ['role', 'session'].filter((table) => hasCol(db, table, 'error'))
-  if (!tables.length) return
-  let at: Record<string, string> = {
-    role: 'null',
-    session: `case when status in
-      ('completed', 'failed', 'interrupted', 'lost') then finished_at end`,
-  }
-  db.transaction(() => {
-    for (let table of tables) {
-      db.exec(
-        `insert into error (entity, at, message)
-           select entity, ${at[table]}, error from ${table}
-           where error is not null
-         on conflict(entity) do update set
-           at = coalesce(excluded.at, error.at),
-           message = excluded.message`,
-      )
-    }
-    for (let table of tables) {
-      let missed = prep(
-        db,
-        `select 1 from ${table} source
-         left join error target on target.entity = source.entity
-         where source.error is not null
-           and target.message is not source.error limit 1`,
-      ).get()
-      if (missed) throw new Error(`${table} error migration did not verify`)
-    }
-    for (let table of tables) db.exec(`alter table ${table} drop column error`)
-  })
-}
-
-// D-14945 phase 1: the per-type delivery receipts become two shared
-// server-owned components. knock (acted_at/delivery/error), wake
-// (acted_at/error), mail (acted_at/error) and stop_request (acted_at) carried
-// the same aspects under different names — carry every settled row across to
-// delivered {at, via} / error {at, message}, then drop the columns (a
-// lingering column keeps teaching a mechanism the code no longer has). Runs
-// BEFORE mendMail so any mail rebuild sees the already-trimmed shape.
-// Idempotent: insert-or-ignore on the eid pk, each read guarded on its source
-// column, so a re-open after the drop is a no-op. Success and failure split
-// on an `error` value being present — the resolver's fail() always set one,
-// its done() never did.
-export let migrateDelivery = (db: Sql) => {
-  let win = (table: string, via: string) => {
-    if (!hasCol(db, table, 'acted_at')) return
-    db.exec(
-      `insert or ignore into delivered (entity, at, via)
-         select entity, acted_at, ${via} from ${table}
-         where acted_at is not null` +
-        (hasCol(db, table, 'error') ? ` and error is null` : ``),
-    )
-    if (hasCol(db, table, 'error')) {
-      db.exec(
-        `insert or ignore into error (entity, at, message)
-           select entity, acted_at, error from ${table} where error is not null`,
-      )
-    }
-  }
-  win('knock', 'delivery') // delivery -> delivered.via
-  win('wake', 'null') //       the timer fired; no delivery detail to keep
-  // a sent mail's via is the native Message-ID, or 'local' for an in-graph
-  // hand-off; inbound rows never ran the send effect (acted_at null) and so
-  // carry no delivered — arrival lives on as received_at DATA.
-  win(
-    'mail',
-    `coalesce(sent_id, case when message_id like 'local:%' then 'local' end)`,
-  )
-  win('stop_request', `'signalled'`) // acted_at was the signal-sent receipt
-  let drop = (table: string, col: string) => {
-    if (hasCol(db, table, col)) {
-      db.exec(`alter table ${table} drop column ${col}`)
-    }
-  }
-  drop('knock', 'acted_at')
-  drop('knock', 'delivery')
-  drop('knock', 'error')
-  drop('wake', 'acted_at')
-  drop('wake', 'error')
-  drop('mail', 'acted_at')
-  drop('mail', 'error')
-  drop('stop_request', 'acted_at')
-}
 
 // One resolver for read/write doors. Nums, whole eids, sigilled fragments,
 // aliases. Fragment resolution uses PK ranges, never replace(eid) or LIKE.
@@ -2501,7 +1615,6 @@ export let human = (db: Sql, eid: string): string => {
 }
 
 let ADDR = /@/
-let UUIDRE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // A blob's eid IS its content hash, so the same bytes are one entity.
 let CONTENT_EID = /^[0-9a-f]{64}$/i
 
@@ -2564,173 +1677,6 @@ export let addressEntity = (db: Sql, addr: string): string => {
     'insert into email (entity, address) values ((select id from entity where eid = ?), ?)',
   ).run(eid, a)
   return eid
-}
-
-// D-14945 phase 2: the per-type recipient columns become the shared
-// `deliver {to}`. knock/wake carried an eid (`to_eid`) — carry it straight.
-// mail carried a `to` that is an eid, an @-address, an alias slug, or bare
-// junk ('jeff', 'holdco', 'S-11310@<fleet>'); since `deliver.to` is
-// strict-{eid}, resolve EVERY row or the wire would later refuse it — never
-// drop one. The ladder: a valid eid stays; an @-address find-or-mints an
-// `email` entity; else `ident()` (an alias/human-id/num); else the raw string
-// becomes an address, minting an `email` for it. Runs BEFORE mendMail so a
-// mail rebuild sees the trimmed shape; idempotent (insert-or-ignore on the
-// deliver pk, each source column guarded by hasCol, dedup by address on mint).
-export let migrateDeliver = (db: Sql) => {
-  // The knock/wake/mail bodies below run ONLY on a legacy db that still carries
-  // the pre-facet columns (to_eid / mail.to); after the eid→id reshape those
-  // columns are long gone, so every hasCol guard is false and none of this SQL
-  // compiles. The eid-shaped statements are correct for that legacy shape and
-  // stay as they are.
-  for (let table of ['knock', 'wake']) {
-    if (!hasCol(db, table, 'to_eid')) continue
-    db.exec(
-      `insert or ignore into deliver (eid, "to")
-         select eid, to_eid from ${table} where to_eid is not null`,
-    )
-    db.exec(`alter table ${table} drop column to_eid`)
-  }
-  if (hasCol(db, 'mail', 'to')) {
-    let ins = prep(
-      db,
-      'insert or ignore into deliver (eid, "to") values (?, ?)',
-    )
-    let rows = prep(
-      db,
-      `select eid, "to", to_addr, received_at, sent_id from mail
-         where "to" is not null and "to" != ''`,
-    ).all() as {
-      eid: string
-      to: string
-      to_addr: string | null
-      received_at: string | null
-      sent_id: string | null
-    }[]
-    for (let r of rows) {
-      // An INBOUND letter is a record of arrival, not an outbound ask — its
-      // recipient is the address it was delivered TO (to_addr), never a
-      // deliver{to}. received_at is the arrival mark; sent_id null excludes an
-      // echoed outbound, which also carries a received_at. Migrating an inbound
-      // recipient into deliver{to} strands it: the inbox matches inbound by
-      // to_addr, so it goes invisible (T-15110). Runtime already stamps to_addr
-      // with no deliver — this keeps a fresh migration matching that.
-      if (r.received_at != null && r.sent_id == null) {
-        if (!r.to_addr) {
-          prep(db, 'update mail set to_addr = ? where eid = ?')
-            .run(r.to, r.eid)
-        }
-        continue
-      }
-      let raw = String(r.to)
-      let ref = UUIDRE.test(raw)
-        ? raw.toLowerCase()
-        : ADDR.test(raw)
-        ? addressEntity(db, raw)
-        : ident(db, raw) ?? addressEntity(db, raw)
-      ins.run(r.eid, ref)
-    }
-    db.exec('alter table mail drop column "to"')
-  }
-}
-
-// T-17322: a project SHOULD BE its own main board. A board whose query is
-// exactly a single `.project=<uuid>` is a whole-project mirror — redundant
-// with the project it names. Give that project the board comp, repoint every
-// card/fold that viewed the board onto the project, then bury the board. A
-// board with ANY other predicate is a real filtered view and is left alone.
-// Raw SQL, not apply(): this runs from open() during module evaluation, before
-// apply() is initialized (the other migrations use raw SQL for the same
-// reason). Cards are repointed FIRST, so the board has no cascade victims when
-// it is buried — the same reaper shape (drop every comp row, sever edges, keep
-// the num in the grave). Idempotent: a project already carrying a board comp is
-// skipped, so once every mirror is folded in a re-run finds nothing (this also
-// skips P-19, already board+project via `.project=<own eid>`).
-export let migrateBoardsToProjects = (db: Sql) => {
-  let boards = prep(
-    db,
-    'select o.eid as eid, query from board b join entity o on o.id = b.entity',
-  ).all() as {
-    eid: string
-    query: string | null
-  }[]
-  let now = new Date().toISOString()
-  db.transaction(() => {
-    for (let { eid, query } of boards) {
-      if (!query) continue
-      let preds
-      try {
-        preds = parseQuery(query, vocabOf(db))
-      } catch {
-        continue // an unparseable query is not a clean project mirror
-      }
-      if (preds.length != 1) continue
-      let p = preds[0]
-      // op '' is equality (query.ts OPS['=']); a list/range value or a deref
-      // path is not a single whole-project mirror.
-      if (p.comp != 'filed' || p.prop != 'project' || p.op != '' || !p.value) {
-        continue
-      }
-      if (p.at || p.value.includes(',')) continue
-      let project = p.value
-      let pid = toId(db, project)
-      let bid = toId(db, eid)
-      if (
-        !pid ||
-        !prep(db, 'select 1 from project where entity = ?').get(pid)
-      ) {
-        continue
-      }
-      if (prep(db, 'select 1 from board where entity = ?').get(pid)) continue
-      // (1) the project becomes the board
-      prep(db, 'insert into board (entity, query) values (?, ?)')
-        .run(pid, query)
-      // (2) repoint every view BEFORE the bury, so nothing cascades
-      prep(db, 'update card set target = ? where target = ?')
-        .run(pid, bid)
-      prep(db, 'update fold set board = ? where board = ?').run(pid, bid)
-      // (3) bury the now-unreferenced board — the reaper's shape, spine
-      // RETAINED (D-18866): a tombstone marks it dead, the id never recycles.
-      for (let c of Object.keys(comps)) {
-        prep(db, `delete from ${sqlName(c)} where entity = ?`).run(bid)
-      }
-      prep(
-        db,
-        'insert or ignore into tombstone (entity, deleted_at) values (?, ?)',
-      ).run(bid, now)
-    }
-  })
-}
-
-// The heal for the graphs migrateDeliver already stranded before the split
-// above existed (T-15110): every inbound letter migrated then wears a
-// deliver{to} naming the venue it ARRIVED at, with to_addr empty — invisible
-// to the inbox, which matches inbound by to_addr, while the runtime stamps
-// to_addr with no deliver. So migrated history disagreed with live behaviour.
-// For each such inbound mail (received_at set, sent_id null so an echo is
-// excluded) whose to_addr is empty but which wears a deliver{to} resolving to
-// an address, set to_addr from that address and drop the stray deliver row.
-// Guarded by the data shape — no-ops the moment every stranded row is mended,
-// the mendMail/backfillOpened idiom.
-export let healInboundDeliver = (db: Sql) => {
-  let rows = prep(
-    db,
-    `select mo.eid as eid, em.address as address from mail m
-       join deliver d on d.entity = m.entity
-       join email em on em.entity = d."to"
-       join entity mo on mo.id = m.entity
-     where m.received_at is not null and m.sent_id is null
-       and (m.to_addr is null or m.to_addr = '')`,
-  ).all() as { eid: string; address: string }[]
-  for (let { eid, address } of rows) {
-    prep(
-      db,
-      'update mail set to_addr = ? where entity = (select id from entity where eid = ?)',
-    ).run(address, eid)
-    prep(
-      db,
-      'delete from deliver where entity = (select id from entity where eid = ?)',
-    ).run(eid)
-  }
 }
 
 // A pre-normalize apply() rule (D-14945): a wire-written `deliver.to` bearing
@@ -2946,24 +1892,6 @@ let tableExists = (db: Sql, t: string) =>
 // on the spine through their own guarded steps.
 let graphTables = () => ['entity', ...Object.keys(comps)]
 
-// The envelope joined the projection (T-32657): a doc_value without `addr`,
-// and the two-column doc_fts built from it, predate the change. Both are
-// DERIVED from doc and mail, so the migration is to drop them and let schema
-// and ftsSchema recreate the current shape; migrate() refills the emptied
-// index in the same transaction. A view that already carries addr, or a graph
-// too fresh to have one, is left alone.
-let migrateDocAddr = (db: Sql) => {
-  if (!hasCol(db, 'doc_value', 'entity')) return
-  if (hasCol(db, 'doc_value', 'addr')) return
-  db.exec(`
-    drop trigger if exists doc_fts_ai;
-    drop trigger if exists doc_fts_ad;
-    drop trigger if exists doc_fts_au;
-    drop table if exists doc_fts;
-    drop view if exists doc_value;
-  `)
-}
-
 // The app-plane-only boot switch (TASKS_PLANE=app, D-22804 §8 strangler). When
 // set, this Deno process opens the graph read-only and forwards writes. This is
 // retained for disposable parity copies; live_db.ts refuses it on owner data.
@@ -2989,43 +1917,6 @@ export let mintEpoch = (db: Sql) =>
     `insert or ignore into server_meta (k, v) values ('epoch', '${crypto.randomUUID()}')`,
   )
 
-// T-36727: rekey client singletons in open()'s one transaction. Keep the
-// integer spine id: component owners and ALL graph references (including
-// card.target and pin.canvas) already name that id, so they follow the new
-// public eid without copying or deleting any rows. Journal after-images are
-// historical evidence and stay untouched. The equality guard makes reopening
-// read-only; a conflicting derived eid refuses the whole migration, not data.
-let deriveClientRows = (db: Sql) => {
-  let changed = false
-  for (let table of ['camera', 'cursor']) {
-    let rows = prep(
-      db,
-      `
-      select e.id, e.eid, c.eid as client${
-        table == 'camera' ? ', v.eid as canvas' : ''
-      }
-      from ${table} r join entity e on e.id = r.entity
-      join entity c on c.id = r.client
-      ${table == 'camera' ? 'join entity v on v.id = r.canvas' : ''}
-    `,
-    ).all<{ id: number; eid: string; client: string; canvas: string }>()
-    for (let row of rows) {
-      let eid = table == 'camera'
-        ? cameraEid(row.client, row.canvas)
-        : cursorEid(row.client)
-      if (eid == row.eid) continue
-      prep(db, 'update entity set eid = ? where id = ?').run(eid, row.id)
-      changed = true
-    }
-  }
-  // Old UUIDs may survive in a returning browser's durable cache. This is a
-  // non-journaled identity rewrite: require a fresh snapshot, not a delta.
-  if (changed) {
-    prep(db, `insert or replace into server_meta (k, v) values ('epoch', ?)`)
-      .run(uuid())
-  }
-}
-
 // Bumped with every serving-schema change. Guards remain idempotent for
 // expand/contract upgrades; the version makes a newer database fail closed in
 // an older binary instead of letting that binary infer compatibility.
@@ -3042,44 +1933,16 @@ let writableVersion = (db: Sql) => {
   return stored
 }
 
-// Move portfolio filing without changing task identity or touching owner data.
-// The old column is the one-time marker; open() owns the surrounding transaction.
-export let migrateFiled = (db: Sql) => {
-  if (!hasCol(db, 'task', 'priority')) return
-  db.exec(tableDdl('filed'))
-  let cols = ['priority', 'project', 'assignee', 'domain']
-  let select = cols.map((c) => hasCol(db, 'task', c) ? c : 'null')
-  db.exec(`insert into filed (entity, ${cols.join(', ')})
-    select entity, ${select.join(', ')} from task`)
-  // The old reference indexes must go before SQLite will drop their columns.
-  for (
-    let { name } of prep(
-      db,
-      "select name from pragma_index_list('task') where origin = 'c'",
-    ).all() as { name: string }[]
-  ) {
-    db.exec(`drop index ${sqlName(name)}`)
-  }
-  for (let c of cols) {
-    if (hasCol(db, 'task', c)) db.exec(`alter table task drop column ${c}`)
-  }
-}
-
 // Migrate a connected handle in place: the hand + derived schema, the additive
 // column/index fills, and the vector index.
 // The schema work runs under one BEGIN IMMEDIATE and is idempotent: concurrent
 // openers serialize in SQLite, and a waiter rechecks every guard after the
 // winner commits. Returns the same handle for the one-line open() below.
-export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
+export let migrate = <D extends Sql>(db: D): D => {
   // Migrations ALTER tables; a cached statement would strand against an
   // intermediate schema. Compile raw until the schema is final, then restore.
   let wasCaching = caching
   caching = false
-  // The journal rekey drops parent tables whose children it keeps. This pragma
-  // must be set before BEGIN; SQLite deliberately ignores foreign_keys changes
-  // inside a transaction. Every other migration keeps FK enforcement enabled.
-  let legacy = !journalKeyed(db)
-  if (legacy) db.exec('pragma foreign_keys = off')
   try {
     let migrated = db.transaction(() => {
       // One SQLite transaction owns the schema transition. Concurrent openers
@@ -3088,10 +1951,6 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       // The version check belongs after that wait: reading it before BEGIN lets
       // an older waiter overwrite a newer migrator's version after it commits.
       let stored = writableVersion(db)
-      migratePrompt(db)
-      // Retire a doc_value/doc_fts pair that predates the mail envelope; the
-      // schema below recreates both carrying it.
-      migrateDocAddr(db)
       // A mirror about to be CREATED is born empty, and the boot integrity
       // check below cannot see that: count(*) over an external-content table
       // reads the content table, not the index. So whoever just dropped one —
@@ -3120,70 +1979,17 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
         }
       }
       addCol('result', 'ms', 'ms real')
-      // The mirror of addCol, for a column whose mechanism is gone. A retired
-      // column that lingers still answers a schema read, so it keeps teaching a
-      // mechanism the code no longer has — the drop is what makes removal true.
-      let dropCol = (table: string, col: string) => {
-        if (hasCol(db, table, col)) {
-          db.exec(`alter table ${table} drop column ${col}`)
-        }
-      }
-      // Retire an index whose name the derivation no longer spells — a hand-written
-      // `create index` line that has been superseded by its derived twin under a
-      // different name (subscription_one → subscription_actor_target). Guarded, so
-      // it runs once and a fresh db (which never had the legacy name) is a no-op.
-      let dropIdx = (name: string) => {
-        db.exec(`drop index if exists ${name}`)
-      }
       // The DERIVED component tables (T-12764), planted beside the hand-written
       // `schema` above from the same vocabulary `cmps`/`readable` read. Tables
       // first — a fresh db gets them; then the additive column fill, the SAME alter
       // path addCol runs for the hand tables, so a live db that predates a
       // vocabulary edit grows the new column in place; then the indexes, which may
-      // name a column that fill just added. `migrateDelivery`/`migrateErrors` below
-      // pour into deliver/delivered/error, so those tables must already stand here.
+      // name a column that fill just added.
       for (let comp of derived) db.exec(tableDdl(comp) + ';')
       for (let comp of derived) {
         for (let { prop, ddl } of derivedCols(comp)) addCol(comp, prop, ddl)
       }
       addCol('entity', 'archetype', 'archetype integer references entity(id)')
-      // Favorite predates its clock. The insertion moment is unavailable for
-      // rows already standing, so preserve their relative age with the entity's
-      // creation stamp; anonymous legacy rows fall back to migration time.
-      db.exec(
-        `update favorite set at = coalesce(
-        (select at from created where created.entity = favorite.entity),
-        strftime('%Y-%m-%dT%H:%M:%fZ','now')
-      ) where at is null`,
-      )
-      // num is a UI label, not identity (T-3684): a cheap/bulk entity (T-3683)
-      // needs none, so the spine's num goes NULLABLE. One in-place ALTER on SQLite
-      // 3.53+ (ALTER COLUMN landed in 3.53.0), guarded on the notnull flag so it
-      // runs once. UNIQUE stays — SQLite treats NULLs as distinct, so num-less
-      // entities coexist. No rebuild, no backfill: existing nums are untouched.
-      if (
-        (prep(
-          db,
-          `select "notnull" as nn from pragma_table_info('entity') where name = 'num'`,
-        ).get() as { nn: number } | undefined)?.nn
-      ) {
-        db.exec('alter table entity alter column num drop not null')
-      }
-      // The same in-place ALTER for a live graph's `exit` (T-35323): a process
-      // whose ending was seen but whose code was not is `exit{}`. Every
-      // transcript exit already standing carries one, so nothing is rewritten.
-      if (
-        (prep(
-          db,
-          `select "notnull" as nn from pragma_table_info('exit') where name = 'code'`,
-        ).get() as { nn: number } | undefined)?.nn
-      ) {
-        db.exec('alter table exit alter column code drop not null')
-      }
-      // Retired by per-item human notification state; agents derive attention
-      // from claims and transcript references instead of this session cursor.
-      dropCol('session', 'acked_at')
-      migrateFiled(db)
       addCol('repo', 'url', 'url text')
       // Off for every checkout the graph already knows: the permission to push
       // is the owner's to grant per venture, never something a migration hands
@@ -3248,9 +2054,9 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
         addCol(table, 'via', 'via integer')
       }
       // The managed-session lifecycle (src/sessions.ts): what it is doing and
-      // how it ended. The old launch aliases are planted before backfillSpawn()
-      // for live databases, then stay dormant as rollback input. The rest is
-      // server-owned and rides OUT in the snapshot.
+      // how it ended. The launch columns are the rolling aliases of the spawn
+      // and lifecycle facets (dualSpawn below). The rest is server-owned and
+      // rides OUT in the snapshot.
       // Listed once, planted in place; each ddl leads with its column name.
       for (
         let ddl of [
@@ -3282,18 +2088,6 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
           'stderr text',
         ]
       ) addCol('session', ddl.split(' ')[0], ddl)
-      // Managed prompts have always occupied seq 1. Materialize the facet for
-      // existing logs so deploy-time UI behavior matches newly appended runs.
-      db.exec(`
-      insert or ignore into prompt (entity)
-      select e.entity from entry e
-      join message m on m.entity = e.entity
-      join session s on s.entity = e.session
-      where e.seq = 1 and m.role = 'user' and s.origin = 'managed'
-    `)
-      backfillSpawn(db)
-      backfillSessionFacets(db)
-      backfillLineage(db)
       // The identity chain (types.ts): instruments point at who they act for.
       addCol('client', 'actor', 'actor integer references entity(id)')
       // Inbound provenance (inbound.ts): the fleet sweep's idempotency key
@@ -3308,52 +2102,12 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       addCol('mail', 'reply_to', 'reply_to integer')
       addCol('mail', 'sent_id', 'sent_id text')
       addCol('mail', 'in_reply_to', 'in_reply_to text')
-      // The narrow routing-header set (T-14133) — last mail column, so it lands
-      // at the tail in both a fresh mailDdl and a live db, keeping mendMail's
-      // positional `insert select *` aligned. See stamped.mail in types.ts.
+      // The narrow routing-header set (T-14133). See stamped.mail in types.ts.
       addCol('mail', 'headers', 'headers text')
       addCol('session', 'actor', 'actor integer references entity(id)')
       // board.query, project.color and the hook request columns (method/path/
       // headers/sig_ok) were planted here before their tables were derived
       // (T-12764); the addDerivedCols pass above now fills them from the vocabulary.
-      // The retired edge row store (T-23821). Every edge is an entity now —
-      // `edge{from, to}` wearing its nature — and the rows were carried over
-      // before this drop shipped, so a live graph loses nothing and a fresh one
-      // never had the table.
-      db.exec('drop table if exists dependency;')
-      // The per-type delivery receipts become the shared delivered/error
-      // components, and the per-type recipient columns the shared deliver.to.
-      migrateErrors(db)
-      migrateDelivery(db)
-      migrateDeliver(db)
-      // Mend the inbound letters an earlier migrateDeliver stranded in deliver{to}
-      // (T-15110).
-      healInboundDeliver(db)
-      mendCalls(db)
-      mendApply(db)
-      // A legacy separate project-main-board collapses into its project — the
-      // project becomes its own board (T-17322). Idempotent; a no-op once every
-      // mirror is folded in.
-      migrateBoardsToProjects(db)
-      // A mail was briefly a 'send_request' (the intent idiom over-applied —
-      // the artifact deserved its name). Adopt the old table's rows once;
-      // `create if not exists mail` above already made the empty successor,
-      // so copy across and drop the stale name.
-      let sr = prep(
-        db,
-        `select 1 from sqlite_master where type = 'table' and name = 'send_request'`,
-      ).get()
-      if (sr) {
-        db.transaction(() => {
-          db.exec('insert into mail select * from send_request')
-          db.exec('drop table send_request')
-        })
-      }
-      // The grave table keys on the spine's int id; a legacy eid-keyed one is
-      // rebuilt to that shape (its num already rides the retained spine).
-      migrateTombstone(db)
-      migrateEmbedding(db)
-      migrateConflict(db)
       // All mirrors follow their source by trigger. Out-of-band writes and
       // shadow-table damage show up as a failed integrity check or actual
       // membership drift. Docs heal inline; the much larger transcript indexes
@@ -3468,48 +2222,6 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       // The spawn catalog is graph data, so every graph carries it: a fresh
       // one, the live one, and a test's :memory: alike (T-35023).
       seedCatalog(db)
-      // Provenance components (T-6670), now the ONLY home: birth and last-edit
-      // moved off the spine, and this is the last pass that reads the old
-      // columns before they go. Runs AFTER seed so the demo entities (direct
-      // inserts, not apply) get provenance too; insert-or-ignore keeps it a
-      // no-op once healed.
-      //
-      // `updated` is deliberately NOT re-derived. A minted entity took its
-      // created_at from spine()'s clock and its modified_at from apply()'s, a
-      // few ms later — so `modified_at <> created_at` reads a birth as an edit
-      // and would mint provenance for entities nothing ever touched (61 such
-      // rows in the live graph). apply() has stamped the component directly
-      // since T-6670 shipped, so there is nothing left for a derivation to
-      // recover and nothing but noise for it to invent.
-      if (hasCol(db, 'entity', 'created_at')) {
-        db.exec(`insert or ignore into created (eid, at, "by")
-      select eid, created_at, null from entity`)
-      }
-      backfillVia(db)
-      backfillOpened(db)
-      migrateJournalKeys(db, fresh)
-      gcJournal(db)
-      migrateJournalRefs(db)
-      deriveClientRows(db)
-      // The dormant columns are migration INPUT, and every one of them has now
-      // been read for the last time (T-6670, T-7113, T-7006). A retired column
-      // that lingers still answers a schema read, so it keeps teaching a
-      // mechanism the code no longer has.
-      dropCol('entity', 'created_at')
-      dropCol('entity', 'modified_at')
-      dropCol('comment', 'author_eid')
-      // Machine comments are not a species of their own: the sweep noise that
-      // wanted marking is deleted, and everything else was always someone's
-      // words (T-7018). Nothing reads the mark now, so the column goes.
-      dropCol('comment', 'event')
-      dropCol('memory', 'source_eid')
-      dropCol('mail', 'read_at')
-      // Reads memory.type and drops it in the same breath, so it belongs with
-      // the retirements rather than the backfills above.
-      retireMemoryType(db)
-      retireProposal(db)
-      retireProjectRetiredAt(db)
-      retireTaskStatus(db)
       // healStored re-parses every stored cell of every component table (6.6s
       // of a 15s boot on the live graph) for what an older vocabulary let in.
       // The vocabulary decides validity, so one pass per vocabulary is the
@@ -3530,9 +2242,8 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
       // the table (the browser is unaffected: index.ts builds the reverse map in
       // memory). indexDdl is the one vocabulary's index set (index.ts indexesFor),
       // so this is the SQL realization the design always anticipated. Placed after
-      // every addCol/rebuild above: a ref column may be added by migration
-      // (filed.project, role.checkout, mail.reply_to) and a table rebuild (mendMail,
-      // migrateDelivery) drops and recreates its rows without indexes. Guarded by
+      // every addCol above, since a ref column may arrive by addCol
+      // (role.checkout, mail.reply_to). Guarded by
       // hasIdx — a bare `create index if not exists` still opens an empty write
       // transaction that bumps the file change counter (breaking open()'s byte-
       // idempotency), so the guard makes a re-open pure reads, the SAME shape addCol
@@ -3545,12 +2256,6 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
           if (!hasIdx(db, name)) db.exec(indexDdlOne(comp, i) + ';')
         }
       }
-      // The one hand index whose name diverges from its derived twin: `schema` used
-      // to name subscription(actor,target) `subscription_one`, but indexDdl derives
-      // `subscription_actor_target` from the columns, so both would coexist. Retire
-      // the legacy name once — the derived unique index above already holds the
-      // (actor,target) uniqueness the drop would otherwise lose.
-      dropIdx('subscription_one')
       // Mint the durable sync epoch (T-20299) if the graph lacks it. After first
       // boot the row stands, so every later epochOf() is a pure SELECT.
       mintEpoch(db)
@@ -3561,7 +2266,6 @@ export let migrate = <D extends Sql>(db: D, fresh?: () => Sql): D => {
     }, true)
     return migrated
   } finally {
-    if (legacy) db.exec('pragma foreign_keys = on')
     // Runtime caches; a throwing or recursively opened migration restores the
     // state it inherited instead of enabling caching in its outer migration.
     caching = wasCaching

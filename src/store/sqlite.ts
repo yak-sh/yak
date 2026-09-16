@@ -444,11 +444,10 @@ let wal = (db: DatabaseSync) => {
 
 // Open the file, migrate it transactionally in place, plant missing schema,
 // and seed once if the graph is empty. SQLite serializes concurrent openers.
-// The scratch handle is for a legacy reshape that reads target DDL off a
-// fresh graph (db.ts scratchOf). Planner statistics are refreshed after the
-// migration commits (db.ts freshStats), never inside the DDL it records.
+// Planner statistics are refreshed after the migration commits (db.ts
+// freshStats), never inside the DDL it records.
 export let open = (path = file, vector = false) => {
-  let db = migrate(wal(connect(path, vector)), () => connect(':memory:'))
+  let db = migrate(wal(connect(path, vector)))
   freshStats(db)
   db.backfillFts(path)
   return db
