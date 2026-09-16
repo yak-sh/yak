@@ -168,6 +168,12 @@ let objects = (db: Driver) =>
        and name not like '%_gram_%' order by name`,
     [],
   )
+// SQLite's own count of how many times this database's schema has changed. A
+// drop-and-raise of an identical view leaves sqlite_master reading the same,
+// so only this tells a no-op pass from one that rewrote the schema — and a
+// host that adopts at every boot pays a file write for each rewrite.
+let cookie = (db: Driver) =>
+  Number(db.query('pragma schema_version', [])[0].schema_version)
 let triggers = (db: Driver) =>
   db.query(`select name from sqlite_master where type = 'trigger'`, [])
     .map((r) => String(r.name)).sort()
@@ -222,20 +228,22 @@ Deno.test('adopt keeps an index whose columns match, re-cuts one that does not, 
 Deno.test('a second adopt changes nothing', () => {
   let db = mailbox()
   adopt(db, fields(post), stashed)
-  let before = objects(db)
+  let before = objects(db), cut = cookie(db)
   assertEquals(adopt(db, fields(post), stashed), {
     recut: [],
     dropped: [],
     healed: [],
   })
   assertEquals(objects(db), before)
+  assertEquals(cookie(db), cut)
 })
 
 Deno.test('a fresh schema is already adopted', () => {
   let db = shelf()
-  let before = objects(db)
+  let before = objects(db), cut = cookie(db)
   assertEquals(adopt(db, fields(shop)), { recut: [], dropped: [], healed: [] })
   assertEquals(objects(db), before)
+  assertEquals(cookie(db), cut)
 })
 
 Deno.test('membership counts what the index holds, not what its table does', () => {

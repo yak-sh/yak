@@ -282,17 +282,9 @@ let schema = `
     entity integer primary key references blob(entity),
     value text not null
   );
-  -- The doc projection ordinary reads take: title and body, resolved through
-  -- the blob backend. What the SEARCH index reads back through is @yaks/fts's
-  -- own doc_text view, cut beside this one.
-  -- DROPPED and raised again rather than left standing: a create-if-not-exists
-  -- keeps whatever an older boot cut, so a view that lost a column would stand
-  -- at its old shape forever. A view holds no rows, so re-cutting it every boot
-  -- costs nothing.
-  drop view if exists doc_value;
-  create view doc_value as
-    select d.entity as rowid, d.entity, d.title, b.value as body
-    from doc d join blob_text b on b.entity = d.body;
+  -- doc_value, the projection ordinary reads take, is cut beside this string
+  -- by recut() in migrate(): it names its columns, so it must follow a doc
+  -- that changed shape, and only a comparison tells that from a plain re-open.
   create table if not exists task (
     entity    integer primary key references entity(id)
   );
@@ -1314,6 +1306,24 @@ export let hasIdx = (db: Sql, name: string) =>
   !!prep(db, `select 1 from sqlite_master where type = 'index' and name = ?`)
     .get(name)
 
+// Cut a view to this definition, and only when it is not already what stands.
+// A view holds no rows, so the naive spelling is to drop and raise it every
+// boot — but a DROP is a schema WRITE, and open() must be able to run twice
+// over the same file without touching a byte (hasIdx above keeps the same rule
+// for the indexes). SQLite stores the statement it was handed minus any
+// `if not exists`, so the two are compared from the view's name onward.
+let recut = (db: Sql, name: string, sql: string) => {
+  let tail = (s: string) =>
+    s.slice(s.toLowerCase().indexOf(name) + name.length).trim()
+  let stood = prep(
+    db,
+    `select sql from sqlite_master where type = 'view' and name = ?`,
+  ).get(name) as { sql: string } | undefined
+  if (stood && tail(stood.sql) == tail(sql)) return
+  if (stood) db.exec(`drop view ${sqlName(name)}`)
+  db.exec(sql)
+}
+
 // One resolver for read/write doors. Nums, whole eids, sigilled fragments,
 // aliases. Fragment resolution uses PK ranges, never replace(eid) or LIKE.
 let succ = (p: string) =>
@@ -1765,6 +1775,19 @@ export let migrate = <D extends Sql>(db: D): D => {
       // an older waiter overwrite a newer migrator's version after it commits.
       let stored = writableVersion(db)
       db.exec(schema)
+      // The doc projection ordinary reads take: title and body, resolved
+      // through the blob backend. It names its columns rather than starring
+      // them (a star cannot resolve one), so it must follow a `doc` that
+      // changed shape — recut() raises it again only when it differs from
+      // what stands. What the SEARCH index reads back through is @yaks/fts's
+      // own doc_text view, cut beside this one by adopt() below.
+      recut(
+        db,
+        'doc_value',
+        `create view if not exists doc_value as
+    select d.entity as rowid, d.entity, d.title, b.value as body
+    from doc d join blob_text b on b.entity = d.body`,
+      )
       // The tables the storage packages own, planted from what THEY declare:
       // the tool_call log and its source CHECK (@yaks/telemetry), the vector
       // table with its model index and the one-row mark its triggers set

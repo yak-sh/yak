@@ -229,6 +229,21 @@ let source = (db: Driver, fts: string): string | undefined => {
   return row ? /content='([^']*)'/.exec(String(row.sql ?? ''))?.[1] : undefined
 }
 
+// A view's declaration with its `create view [if not exists]` preamble off.
+// SQLite stores the statement it was handed minus the `if not exists`, so the
+// tail from the name onward is the part two spellings can be compared by.
+let body = (sql: string, name: string): string =>
+  sql.slice(sql.indexOf(q(name)) + q(name).length).trim()
+
+// The text view as it stands, or undefined when none does.
+let standing = (db: Driver, view: string): string | undefined => {
+  let row = db.query(
+    `select sql from sqlite_master where type = 'view' and name = ?`,
+    [view],
+  )[0]
+  return row ? String(row.sql ?? '') : undefined
+}
+
 // The triggers that write into an index, by name, other than the three of
 // this package's own.
 let strays = (db: Driver, fts: string): string[] => {
@@ -248,13 +263,16 @@ let strays = (db: Driver, fts: string): string[] => {
 // intact; one that is missing or declares other columns is dropped and cut
 // again from the schema, then rebuilt from its table (an external-content
 // index is born empty). Any trigger writing into the index that is not one of
-// the package's three is dropped, and the three are (re)created. A text view is
-// always re-cut, since it holds no rows and must follow a table that grew.
-// Finally `heal` checks membership, so an index kept whole but missing rows —
-// one that predates some of its table — is rebuilt too.
+// the package's three is dropped, and the three are (re)created. A text view
+// holds no rows, so it is re-cut whenever what stands differs from what
+// `schema()` says — but only then: dropping a view is a schema WRITE, and a
+// host that calls `adopt()` at every boot has a right to a boot that writes
+// nothing. Finally `heal` checks membership, so an index kept whole but
+// missing rows — one that predates some of its table — is rebuilt too.
 //
-// Everything runs through `if not exists`/`if exists`, so a second call on the
-// same database changes nothing and answers empty lists.
+// Everything else runs through `if not exists`/`if exists`, so a second call
+// on the same database changes nothing, touches no byte, and answers empty
+// lists.
 export let adopt = (
   db: Driver,
   fields: Field[],
@@ -275,7 +293,14 @@ export let adopt = (
       db.exec(`drop trigger if exists ${q(t)}`)
       dropped.push(t)
     }
-    db.exec(`drop view if exists ${q(textName(comp))}`)
+    let view = textName(comp)
+    let want = stmts.find((s) =>
+      s.startsWith(`create view if not exists ${q(view)}`)
+    )
+    let stood = standing(db, view)
+    if (stood && (!want || body(stood, view) != body(want, view))) {
+      db.exec(`drop view if exists ${q(view)}`)
+    }
     if (!same) {
       for (let s of ['insert', 'delete', 'update']) {
         db.exec(`drop trigger if exists ${q(`${fts}_${s}`)}`)
