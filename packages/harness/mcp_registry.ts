@@ -1,8 +1,8 @@
 /** Graph-owned definitions; runtime handles are refreshed before discovery or authorization. */
 import type { Graph } from '@yaks/graph'
 import type { Tool } from '@yaks/graph'
-import type { Server } from '@yaks/mcp-client'
-import { graphToolName, serverOf } from '@yaks/mcp-client/graph'
+import { checkNamespaces, checkToolNames, type Server } from '@yaks/mcp-client'
+import { graphToolEid, graphToolName, serverOf } from '@yaks/mcp-client/graph'
 import {
   authorizedMCP,
   type MCPAuthAction,
@@ -22,6 +22,16 @@ export const graphMCP = (g: Graph) => {
     const next = tail.then(async () => {
       if (closed) throw new Error('MCP registry is closed')
       const rows = await g.read('.mcp_server')
+      // Validate the complete configured namespace set before opening transports.
+      const valid = rows.flatMap((row) => {
+        try {
+          const c = serverOf(row)
+          return c ? [c.server] : []
+        } catch {
+          return []
+        }
+      })
+      checkNamespaces(valid)
       const wanted = new Set<string>()
       const existing = new Set(rows.map((row) => row.entity.eid))
       for (const id of errors.keys()) if (!existing.has(id)) errors.delete(id)
@@ -73,12 +83,16 @@ export const graphMCP = (g: Graph) => {
     refresh,
     tools: async (): Promise<Tool[]> => {
       await refresh()
-      return (await Promise.all([...live].map(async ([id, item]) => {
+      const result = (await Promise.all([...live].map(async ([id, item]) => {
         try {
           const tools = await item.handle.tools()
           errors.delete(id)
           return await Promise.all(tools.map(async (tool) => ({
             ...tool,
+            meta: {
+              ...tool.meta,
+              eid: graphToolEid(id, item.server, String(tool.meta?.remoteName)),
+            },
             name: await graphToolName(
               id,
               item.server,
@@ -97,6 +111,8 @@ export const graphMCP = (g: Graph) => {
           return []
         }
       }))).flat()
+      checkToolNames(result)
+      return result
     },
     control: async (
       action: MCPAuthAction,

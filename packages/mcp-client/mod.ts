@@ -30,6 +30,10 @@ const schemas: jsonSchemaValidator = {
 /** Host-wide trusted server configuration. Credentials are resolved separately. */
 export type Server = {
   name: string
+  /** Friendly display label; defaults to name. */
+  label?: string
+  /** Local namespace for public tool names; defaults to name. */
+  namespace?: string
   url: string
   /** Exact remote names; omission exposes all discovered tools. */
   allow?: string[]
@@ -64,15 +68,52 @@ export class MCPAuthorizationRequired extends MCPError {
     super('MCP sign-in required; open authorization in the host', server)
   }
 }
-/** Encode opaque remote names without collisions or inferring noun/verb semantics. */
-export const nameOf = async (server: string, name: string): Promise<string> => {
-  const hash = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(JSON.stringify([server, name])),
-  )
-  return 'mcp_' +
-    Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, '0'))
-      .join('').slice(0, 60)
+/** Normalize only the local namespace, never the server's opaque tool name. */
+export const namespaceOf = (name: string): string => {
+  const namespace = name.trim().replace(/[^a-zA-Z0-9_-]+/g, '_')
+  if (!namespace || !/[a-zA-Z0-9]/.test(namespace)) {
+    throw new Error('MCP server name needs a readable alphanumeric namespace')
+  }
+  return namespace
+}
+
+/** A provider-safe name with the exact remote name retained after the separator. */
+export const nameOf = (server: string, name: string): string => {
+  const namespace = namespaceOf(server)
+  if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+    throw new Error('MCP remote tool name cannot be exposed unchanged: ' + name)
+  }
+  const exposed = namespace + '__' + name
+  if (exposed.length > 64) {
+    throw new Error(
+      'MCP tool name exceeds 64 characters: ' + exposed +
+        '. Use a shorter server name or ask the server for a shorter tool name.',
+    )
+  }
+  return exposed
+}
+
+/** Refuse normalized namespace collisions rather than hiding them behind hashes. */
+export const checkNamespaces = (servers: readonly Server[]): void => {
+  const used = new Set<string>()
+  for (const server of servers) {
+    const namespace = namespaceOf(server.namespace ?? server.name)
+    if (used.has(namespace)) {
+      throw new Error('Duplicate MCP namespace: ' + namespace)
+    }
+    used.add(namespace)
+  }
+}
+
+/** Separators in opaque remote names can also create a cross-server collision. */
+export const checkToolNames = (tools: readonly Tool[]): void => {
+  const names = new Set<string>()
+  for (const tool of tools) {
+    if (names.has(tool.name!)) {
+      throw new Error('Duplicate MCP tool name: ' + tool.name)
+    }
+    names.add(tool.name!)
+  }
 }
 
 export type Connection = {
@@ -233,10 +274,16 @@ export const connect = (server: Server, options: Options = {}): Connection => {
       generation++
       listing = undefined
     },
-    tools: async (): Promise<Tool[]> =>
-      Promise.all((await list()).map(async (t) => ({
-        name: await nameOf(server.name, t.name),
-        description: `[${server.name}] ${t.description ?? t.name}`,
+    tools: async (): Promise<Tool[]> => {
+      const listed = await list()
+      if (new Set(listed.map((t) => t.name)).size !== listed.length) {
+        throw new Error('Duplicate remote MCP tool name')
+      }
+      return Promise.all(listed.map(async (t) => ({
+        name: await nameOf(server.namespace ?? server.name, t.name),
+        description: `[${server.label ?? server.name}] ${
+          t.description ?? t.name
+        }`,
         inputSchema: t.inputSchema,
         output: t.outputSchema,
         readOnly: t.annotations?.readOnlyHint,
@@ -245,7 +292,8 @@ export const connect = (server: Server, options: Options = {}): Connection => {
         openWorld: t.annotations?.openWorldHint,
         meta: { server: server.name, remoteName: t.name },
         run: (args) => call(t.name, args),
-      }))),
+      })))
+    },
     close: (): Promise<void> =>
       closePromise ??= (async () => {
         closed = true
@@ -264,6 +312,7 @@ export const clients = (
   servers: readonly Server[],
   options: Options = {},
 ): Clients => {
+  checkNamespaces(servers)
   const names = new Set<string>()
   for (const s of servers) {
     if (!s.name || names.has(s.name)) {
@@ -273,8 +322,11 @@ export const clients = (
   }
   const all = servers.map((s) => connect(s, options))
   return {
-    tools: async (): Promise<Tool[]> =>
-      (await Promise.all(all.map((c) => c.tools()))).flat(),
+    tools: async (): Promise<Tool[]> => {
+      const tools = (await Promise.all(all.map((c) => c.tools()))).flat()
+      checkToolNames(tools)
+      return tools
+    },
     close: async () => {
       await Promise.all(all.map((c) => c.close()))
     },

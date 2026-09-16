@@ -1,0 +1,43 @@
+{
+  "title": "mcp-client",
+  "$defs": {
+    "mcp_server": {
+      "type": "object",
+      "description": "A shared remote MCP server. Entity identity and tool display names are separate.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Display name; normalized into a readable local tool namespace."
+        },
+        "url": {
+          "type": "string",
+          "description": "Streamable HTTP endpoint without embedded credentials."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "False disables discovery; omission enables it."
+        },
+        "credential": {
+          "type": "string",
+          "description": "Optional host credential-store reference, never a token."
+        },
+        "allow": {
+          "type": "string",
+          "description": "Optional JSON array of exact remote tool names; [] exposes none."
+        },
+        "redirect_url": {
+          "type": "string"
+        },
+        "client_id": {
+          "type": "string"
+        },
+        "client_metadata_url": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

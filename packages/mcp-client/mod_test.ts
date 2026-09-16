@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-import { assert, assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { clients, connect, nameOf } from './mod.ts'
 
 import { fixture } from './testing.ts'
@@ -45,12 +45,22 @@ Deno.test('portable client initializes, exposes unchanged schema and invokes exa
     await c.close()
   }
 })
-Deno.test('names are stable, bounded, distinct across servers and opaque underscores', async () => {
-  const a = await nameOf('a', 'x_y'.repeat(200))
-  assertEquals(a.length, 64)
-  assert(a !== await nameOf('b', 'x_y'.repeat(200)))
-  assert(a !== await nameOf('a_x', 'y'.repeat(200)))
-  assertEquals(a, await nameOf('a', 'x_y'.repeat(200)))
+Deno.test('names expose readable server namespace and exact opaque remote name', async () => {
+  assertEquals(await nameOf('yaks.app', 'app_list'), 'yaks_app__app_list')
+  assertEquals(await nameOf('Other', 'app_list'), 'Other__app_list')
+  assertThrows(() => nameOf('a', 'x'.repeat(64)))
+  assertThrows(() => nameOf('a', 'remote.name'))
+})
+Deno.test('normalized namespace collisions are rejected before connecting', () => {
+  assertThrows(
+    () =>
+      clients([
+        { name: 'yaks.app', url: 'https://example.test/mcp' },
+        { name: 'yaks_app', url: 'https://example.test/other' },
+      ]),
+    Error,
+    'Duplicate MCP namespace',
+  )
 })
 Deno.test('allowlists restrict list and invocation; errors are not mutation retries', async () => {
   const f = fixture()
@@ -262,4 +272,17 @@ Deno.test('about tool accepts declared draft-07 input and output through SDK val
   } finally {
     await c.close()
   }
+})
+
+
+Deno.test('opaque separators cannot silently collide across distinct server namespaces', async () => {
+  const { checkToolNames } = await import('./mod.ts')
+  const a = await nameOf('a', 'b__c'), b = await nameOf('a__b', 'c')
+  assertEquals(a, b)
+  const tool = { description: '', run: () => 'ok' }
+  assertThrows(
+    () => checkToolNames([{ ...tool, name: a }, { ...tool, name: b }]),
+    Error,
+    'Duplicate MCP tool name',
+  )
 })

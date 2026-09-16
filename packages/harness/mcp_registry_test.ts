@@ -1,5 +1,6 @@
-import { assert, assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { open } from './store.ts'
+import { agent } from './run.ts'
 import { graphMCP } from './mcp_registry.ts'
 import { fixture } from '../mcp-client/testing.ts'
 import { graphToolName } from '@yaks/mcp-client/graph'
@@ -16,7 +17,7 @@ Deno.test('graph MCP definitions persist; rename keeps identity, edits and remov
   try {
     assertEquals(await registry.tools(), [])
     await h.g.apply([{
-      entity: { eid: 'remote' },
+      entity: { eid: '0c300000-0000-4000-8000-000000000001' },
       mcp_server: {
         name: 'Website',
         url: `http://127.0.0.1:${server.addr.port}/mcp`,
@@ -25,20 +26,26 @@ Deno.test('graph MCP definitions persist; rename keeps identity, edits and remov
     const [original] = await registry.tools()
     assertEquals(
       original.name,
-      await graphToolName('remote', {
-        name: 'remote',
+      await graphToolName('0c300000-0000-4000-8000-000000000001', {
+        name: 'Website',
         url: `http://127.0.0.1:${server.addr.port}/mcp`,
       }, 'publish_mockup'),
     )
     assert(original.description.includes('Website'))
+    assertMatch(
+      String(original.meta?.eid),
+      /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/,
+    )
     await h.g.apply([{
-      entity: { eid: 'remote' },
+      entity: { eid: '0c300000-0000-4000-8000-000000000001' },
       mcp_server: { name: 'Renamed' },
     }])
-    assertEquals((await registry.tools())[0].name, original.name)
-    assertEquals((await registry.control('list')).servers, ['Renamed [remote]'])
+    assertEquals((await registry.tools())[0].name, 'Renamed__publish_mockup')
+    assertEquals((await registry.control('list')).servers, [
+      'Renamed [0c300000-0000-4000-8000-000000000001]',
+    ])
     await h.g.apply([{
-      entity: { eid: 'remote' },
+      entity: { eid: '0c300000-0000-4000-8000-000000000001' },
       mcp_server: { allow: '[]' },
     }])
     assertEquals(await registry.tools(), [])
@@ -51,20 +58,23 @@ Deno.test('graph MCP definitions persist; rename keeps identity, edits and remov
     })
     assert(JSON.stringify(value).includes('mockup/1'))
     await h.g.apply([{
-      entity: { eid: 'remote' },
+      entity: { eid: '0c300000-0000-4000-8000-000000000001' },
       mcp_server: { allow: null, enabled: false },
     }])
     assertEquals((await registry.control('list')).servers, [])
     await h.g.apply([{
-      entity: { eid: 'remote' },
+      entity: { eid: '0c300000-0000-4000-8000-000000000001' },
       mcp_server: { enabled: true },
     }])
     await registry.close()
     h.close()
     h = open(dir + '/graph.db')
     registry = graphMCP(h.g)
-    assertEquals((await registry.tools())[0].name, original.name)
-    await h.g.apply([{ entity: { eid: 'remote' }, mcp_server: null }])
+    assertEquals((await registry.tools())[0].name, 'Renamed__publish_mockup')
+    await h.g.apply([{
+      entity: { eid: '0c300000-0000-4000-8000-000000000001' },
+      mcp_server: null,
+    }])
     assertEquals(await registry.tools(), [])
   } finally {
     await registry.close()
@@ -84,18 +94,18 @@ Deno.test('bad MCP definitions and transport failures do not block other servers
   try {
     await h.g.apply([
       {
-        entity: { eid: 'bad' },
+        entity: { eid: '0c300000-0000-4000-8000-000000000003' },
         mcp_server: { name: 'Bad', url: 'file:///secret' },
       },
       {
-        entity: { eid: 'good' },
+        entity: { eid: '0c300000-0000-4000-8000-000000000004' },
         mcp_server: {
           name: 'Good',
           url: `http://127.0.0.1:${server.addr.port}/mcp`,
         },
       },
       {
-        entity: { eid: 'broken' },
+        entity: { eid: '0c300000-0000-4000-8000-000000000005' },
         mcp_server: {
           name: 'Broken',
           url: `http://127.0.0.1:${server.addr.port}/mcp`,
@@ -105,11 +115,13 @@ Deno.test('bad MCP definitions and transport failures do not block other servers
     ])
     assertEquals((await registry.tools()).length, 1)
     const reply = await registry.control('list')
-    assert(reply.message?.includes('bad:'))
-    assert(reply.message?.includes('broken:'))
-    await assertRejects(() => registry.control('begin', 'bad'))
+    assert(reply.message?.includes('0c300000-0000-4000-8000-000000000003:'))
+    assert(reply.message?.includes('0c300000-0000-4000-8000-000000000005:'))
+    await assertRejects(() =>
+      registry.control('begin', '0c300000-0000-4000-8000-000000000003')
+    )
     await h.g.apply([{
-      entity: { eid: 'good' },
+      entity: { eid: '0c300000-0000-4000-8000-000000000004' },
       mcp_server: { url: 'https://user:password@example.test' },
     }])
     assertEquals(await registry.tools(), [])
@@ -147,7 +159,7 @@ Deno.test('an already-running agent discovers graph additions on its next ask an
     await a.idle(session)
     assertEquals(offered[0], [])
     await h.g.apply([{
-      entity: { eid: 'stable' },
+      entity: { eid: '0c300000-0000-4000-8000-000000000002' },
       mcp_server: {
         name: 'site',
         url: `http://127.0.0.1:${server.addr.port}/mcp`,
@@ -156,13 +168,13 @@ Deno.test('an already-running agent discovers graph additions on its next ask an
     await a.send(session, 'two')
     await a.idle(session)
     assertEquals(offered[1], [
-      await graphToolName('stable', {
-        name: 'stable',
+      await graphToolName('0c300000-0000-4000-8000-000000000002', {
+        name: 'site',
         url: `http://127.0.0.1:${server.addr.port}/mcp`,
       }, 'publish_mockup'),
     ])
     await h.g.apply([{
-      entity: { eid: 'stable' },
+      entity: { eid: '0c300000-0000-4000-8000-000000000002' },
       mcp_server: { enabled: false },
     }])
     await a.send(session, 'three')
@@ -187,7 +199,7 @@ Deno.test('reconfiguration changes tool identity without retargeting previously 
   const h = open(':memory:'), registry = graphMCP(h.g)
   try {
     await h.g.apply([{
-      entity: { eid: 'remote' },
+      entity: { eid: '0c300000-0000-4000-8000-000000000001' },
       mcp_server: {
         name: 'site',
         url: `http://127.0.0.1:${one.addr.port}/mcp`,
@@ -195,11 +207,12 @@ Deno.test('reconfiguration changes tool identity without retargeting previously 
     }])
     const [old] = await registry.tools()
     await h.g.apply([{
-      entity: { eid: 'remote' },
+      entity: { eid: '0c300000-0000-4000-8000-000000000001' },
       mcp_server: { url: `http://127.0.0.1:${two.addr.port}/mcp` },
     }])
     const [next] = await registry.tools()
-    assert(old.name !== next.name)
+    assertEquals(old.name, next.name)
+    assert(old.meta?.eid !== next.meta?.eid)
     const ctx = {
       graph: h.g,
       actor: null,
@@ -213,6 +226,98 @@ Deno.test('reconfiguration changes tool identity without retargeting previously 
   } finally {
     await registry.close()
     h.close()
+    await one.shutdown()
+    await two.shutdown()
+  }
+})
+
+Deno.test('graph MCP namespace collisions fail explicitly without opening duplicate connections', async () => {
+  const h = open(':memory:'), registry = graphMCP(h.g)
+  try {
+    await h.g.apply(['yaks.app', 'yaks_app'].map((name) => ({
+      entity: { eid: crypto.randomUUID() },
+      mcp_server: { name, url: 'https://example.test/mcp' },
+    })))
+    await assertRejects(
+      () => registry.tools(),
+      Error,
+      'Duplicate MCP namespace: yaks_app',
+    )
+  } finally {
+    await registry.close()
+    h.close()
+  }
+})
+
+Deno.test('issued calls keep their UUID handler when another ask refreshes the same public name', async () => {
+  const first = fixture(), second = fixture()
+  const one = Deno.serve(
+    { port: 0, hostname: '127.0.0.1', onListen() {} },
+    (r) => first.fetcher(r),
+  )
+  const two = Deno.serve(
+    { port: 0, hostname: '127.0.0.1', onListen() {} },
+    (r) => second.fetcher(r),
+  )
+  const h = open(':memory:')
+  const serverId = crypto.randomUUID()
+  await h.g.apply([{
+    entity: { eid: serverId },
+    mcp_server: { name: 'site', url: `http://127.0.0.1:${one.addr.port}/mcp` },
+  }])
+  const started = Promise.withResolvers<void>(),
+    release = Promise.withResolvers<void>()
+  let asks = 0
+  const a = agent({
+    h,
+    tools: [],
+    name: 'fake',
+    model: async (req) => {
+      if (++asks === 1) {
+        started.resolve()
+        await release.promise
+        return {
+          id: 'old',
+          model: 'fake',
+          items: [{
+            kind: 'call',
+            id: 'old-call',
+            name: req.tools[0].name,
+            args: '{"html":"old"}',
+          }],
+        }
+      }
+      return {
+        id: 'done-' + asks,
+        model: 'fake',
+        items: [{ kind: 'assistant', text: 'done' }],
+      }
+    },
+  })
+  try {
+    const original = await a.start('old request')
+    await started.promise
+    await h.g.apply([{
+      entity: { eid: serverId },
+      mcp_server: { url: `http://127.0.0.1:${two.addr.port}/mcp` },
+    }])
+    const other = await a.start('refresh tools')
+    await a.idle(other)
+    release.resolve()
+    await a.idle(original)
+    assertEquals(first.calls.filter((c) => c.method === 'tools/call').length, 1)
+    assertEquals(
+      second.calls.filter((c) => c.method === 'tools/call').length,
+      0,
+    )
+    const entry = (await a.transcript(original)).find((b) => b.call)!
+    assertMatch(
+      String((entry.call as { to: string }).to),
+      /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/,
+    )
+  } finally {
+    release.resolve()
+    await a.close()
     await one.shutdown()
     await two.shutdown()
   }

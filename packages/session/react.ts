@@ -65,6 +65,8 @@ import { took } from './timing.ts'
 
 /** A tool the model may call: its declaration, and how to run it. */
 export type Tool = Declared & {
+  /** Optional stable entity identity, independent of the displayed/provider name. */
+  eid?: Eid
   run: (
     args: Record<string, unknown>,
     ctx?: ToolContext,
@@ -212,7 +214,9 @@ export let react = async (
     : deps.tools
   let toolEntities = new Map<Eid, Tool>()
   for (let b of await g.read(`.${TOOL}`)) {
-    let t = tools.find((t) => t.name == comp(b, TOOL)?.name)
+    let t = tools.find((t) =>
+      t.eid ? t.eid == b.entity.eid : t.name == comp(b, TOOL)?.name
+    )
     if (t) toolEntities.set(b.entity.eid, t)
   }
 

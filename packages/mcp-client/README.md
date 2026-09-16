@@ -37,12 +37,18 @@ is no session dependency and no extra invocation/result vocabulary. Existing
 executors own call/result records; this client owns only the protocol
 connection.
 
-Remote tool names remain opaque. Local names are deterministic `mcp_` plus a
-hash of the server name and exact remote name (64 characters total). The
-`meta.server` and `meta.remoteName` fields retain readable identity. Remote
-schemas are preserved, including references and annotations; no conversion to
-Zod or inference of nouns/verbs from underscores is performed. Runtime argument
-validation is the server's responsibility; consumer adapters may validate too.
+Remote tool names remain opaque and unchanged in `tools/call`. Exposed names
+combine a readable local namespace and the exact remote name: `yaks.app` +
+`app_list` becomes `yaks_app__app_list`. Namespace punctuation is replaced with
+underscores. Duplicate normalized namespaces or resulting tool names are
+rejected. Unsupported remote characters or names exceeding the provider's
+64-character limit produce an actionable error, not a hash. `Server.namespace`
+can choose a shorter local namespace; `label` controls human-facing
+descriptions. `meta.server` and `meta.remoteName` retain connection identity and
+the exact protocol name. Remote schemas are preserved, including references and
+annotations; no conversion to Zod or inference of nouns/verbs from underscores
+is performed. Runtime argument validation is the server's responsibility;
+consumer adapters may validate too.
 
 `clients(servers, options)` composes several named connections. An optional
 `allow` array restricts discovery and calls to exact remote names. Discovered
@@ -149,21 +155,21 @@ vocabulary and store shared server definitions as `mcp_server` components:
 
 ```ts
 await graph.apply([{
-  entity: { eid: 'my-server' },
+  entity: { eid: '$server' },
   mcp_server: { name: 'Example', url: 'https://example.org/mcp' },
 }])
 ```
 
 `serverOf` validates an enabled row and returns its display label, entity ID,
-and portable `Server` configuration. `graphToolName` derives a provider-safe
-name from the entity, connection configuration, and opaque remote tool name;
-hosts can retain handlers for previous configurations without name collisions.
-The entity ID is the tool namespace; renaming the display label does not rename
-tools. `enabled: false` disables the row. `allow` is optional JSON text
-containing an array of exact remote names. OAuth configuration uses
-`redirect_url`, `client_id`, `client_metadata_url`, and `scope`; `credential` is
-a host-interpreted reference, never a bearer token. Credentials and open
-transports remain outside the graph.
+and portable `Server` configuration. The `$server` alias above asks the graph to
+mint a UUID. `graphToolName` creates the readable namespace/name spelling;
+`graphToolEid` derives a UUID from the server EID and configuration revision.
+Use that UUID for retained handler dispatch, not the displayed name. Renaming
+the label changes future exposed tools. `enabled: false` disables the row.
+`allow` is optional JSON text containing an array of exact remote names. OAuth
+configuration uses `redirect_url`, `client_id`, `client_metadata_url`, and
+`scope`; `credential` is a host-interpreted reference, never a bearer token.
+Credentials and open transports remain outside the graph.
 
 Low-level `connect(server)` and `clients(servers)` remain usable without a
 graph. The harness reads the shared graph instead of maintaining an

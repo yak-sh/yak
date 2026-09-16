@@ -6,7 +6,7 @@ Deno.test('MCP graph vocabulary is portable, with endpoint identity independent 
   const vocab = loadVocab([mcpDoc])
   assert(vocab.comp('mcp_server'))
   const row = {
-    entity: { eid: 'server-a' },
+    entity: { eid: 'edba2000-0000-4000-8000-000000000001' },
     mcp_server: {
       name: 'Display',
       url: 'https://example.test/mcp',
@@ -15,7 +15,8 @@ Deno.test('MCP graph vocabulary is portable, with endpoint identity independent 
     },
   }
   const server = serverOf(row)!
-  assertEquals(server.server.name, 'server-a')
+  assertEquals(server.server.name, row.entity.eid)
+  assertEquals(server.server.namespace, 'Display')
   assertEquals(server.label, 'Display')
   assertEquals(server.server.allow, ['publish'])
   assertEquals(server.server.oauth, { clientId: 'public' })

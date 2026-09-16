@@ -674,7 +674,7 @@ server with `graph_apply` (or ask an agent to add it):
 ```json
 [
   {
-    "entity": { "eid": "mcp-yaks" },
+    "entity": { "eid": "$server" },
     "mcp_server": { "name": "yaks.app", "url": "https://yaks.app/mcp" }
   }
 ]
@@ -685,10 +685,16 @@ restarts; configuration changes take effect on the next ask, without restarting.
 The panel identifies each server by display name and EID and reports invalid
 definitions. Query `.mcp_server` to list them. Set `mcp_server.enabled` to
 `false` to disable a server, patch its URL or options to edit it, or remove its
-`mcp_server` component to remove it. A rename preserves tool identity: the
-entity EID, not its display name, supplies the namespace. Tool names also
-include a configuration revision so changing an endpoint cannot retarget calls
-already issued by a model.
+`mcp_server` component to remove it. The `$server` batch alias above asks the
+graph to mint a UUID; use the returned EID for later edits. The server name
+supplies a readable tool namespace: `yaks.app` exposes `app_list` as
+`yaks_app__app_list`. Renaming changes future exposed names, not the server
+entity or its OAuth credentials. Distinct configuration revisions have derived
+UUID tool entities, so changing an endpoint cannot retarget already-issued calls
+even when their exposed names are identical. Names that normalize to the same
+namespace are rejected. Remote names are passed unchanged to `tools/call`; names
+that cannot fit the provider's 64-character alphanumeric/underscore/hyphen
+format are reported rather than hashed.
 
 Optional fields are `credential` (a hostname reference into the existing yak
 bearer store), `allow` (a JSON-encoded array of exact remote tool names), and

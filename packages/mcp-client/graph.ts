@@ -1,46 +1,11 @@
 /** Persisted MCP server definitions. Connections and credentials are not graph data. */
-import type { Bundle, Comp } from '@yaks/graph'
+import { type Bundle, type Comp, derivedEid } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
-import { nameOf, type Server } from './mod.ts'
+import { nameOf, namespaceOf, type Server } from './mod.ts'
 
-export const mcpDoc: VocabDoc = {
-  title: 'mcp-client',
-  $defs: {
-    mcp_server: {
-      type: 'object',
-      description:
-        'A shared remote MCP server; its entity ID is its tool namespace.',
-      properties: {
-        name: {
-          type: 'string',
-          description: 'Display name, not credential identity.',
-        },
-        url: {
-          type: 'string',
-          description: 'Streamable HTTP endpoint without embedded credentials.',
-        },
-        enabled: {
-          type: 'boolean',
-          description: 'False disables discovery; omission enables it.',
-        },
-        credential: {
-          type: 'string',
-          description:
-            'Optional host credential-store reference, never a token.',
-        },
-        allow: {
-          type: 'string',
-          description:
-            'Optional JSON array of exact remote tool names; [] exposes none.',
-        },
-        redirect_url: { type: 'string' },
-        client_id: { type: 'string' },
-        client_metadata_url: { type: 'string' },
-        scope: { type: 'string' },
-      },
-    },
-  },
-}
+import doc from './vocab.json' with { type: 'json' }
+
+export const mcpDoc: VocabDoc = doc
 
 export type GraphServer = { id: string; label: string; server: Server }
 
@@ -86,6 +51,8 @@ export const serverOf = (row: Bundle): GraphServer | undefined => {
     label: c.name,
     server: {
       name: row.entity.eid,
+      label: c.name,
+      namespace: namespaceOf(c.name),
       url: url.href,
       ...allow ? { allow } : {},
       ...c.credential ? { credential: String(c.credential) } : {},
@@ -94,15 +61,23 @@ export const serverOf = (row: Bundle): GraphServer | undefined => {
   }
 }
 
-/** Connection revisions prevent a later edit from retargeting already-issued calls. */
+/** Public names are readable; identity and connection revisions are separate. */
 export const graphToolName = (
+  _id: string,
+  server: Server,
+  remote: string,
+): string => nameOf(server.namespace ?? server.name, remote)
+
+/** A distinct entity per server/configuration/name revision, not a provider name. */
+export const graphToolEid = (
   id: string,
   server: Server,
   remote: string,
-): Promise<string> =>
-  nameOf(
-    id,
-    JSON.stringify([
+): string =>
+  derivedEid(
+    'mcp-tool|' + JSON.stringify([
+      id,
+      server.namespace ?? server.name,
       server.url,
       server.credential ?? null,
       server.allow ?? null,

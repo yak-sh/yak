@@ -86,7 +86,7 @@ export let seed = (
       [MODEL]: { name: model, provider: idOf(PROVIDER, provider) },
     },
     ...(o.tools ?? []).map((t) => ({
-      entity: { eid: idOf(TOOL, t.name) },
+      entity: { eid: t.eid ?? idOf(TOOL, t.name) },
       [TOOL]: { name: t.name, description: t.description },
     })),
   ]
@@ -240,13 +240,15 @@ export let agent = (opts: Opts = {}): Agent => {
           ]
         }
         const remote = await mcp.snapshot()
-        for (const tool of remote) remoteHandlers.set(tool.name, tool)
+        for (const tool of remote) {
+          remoteHandlers.set(tool.eid ?? tool.name, tool)
+        }
         const all = [...tools, ...remote]
         if (
           new Set(all.map((t) => t.name)).size !== all.length
         ) throw new Error('Duplicate local/MCP tool name')
         const signature = JSON.stringify(
-          remote.map((t) => [t.name, t.description, t.parameters]),
+          remote.map((t) => [t.eid, t.name, t.description, t.parameters]),
         )
         if (signature !== remoteSignature) {
           await h.g.apply(seed({ model: name, tools: remote }), {
