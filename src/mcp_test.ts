@@ -1210,7 +1210,20 @@ slow(
     let mounted = stdioIO(wire, path)
     try {
       assert(mounted.io.reader)
-      assertEquals(await mounted.io.query('.title~=stdio local'), expected)
+      // A text hit's rank.score carries a recency term off julianday('now')
+      // (db.ts search), so two searches of the same row at two moments differ
+      // in its last digits. Everything else is the answer under test.
+      let scoreless = (rs: Row[]) =>
+        rs.map((r) =>
+          !r.comps?.rank ? r : {
+            ...r,
+            comps: { ...r.comps, rank: { ...r.comps.rank, score: 0 } },
+          }
+        )
+      assertEquals(
+        scoreless(await mounted.io.query('.title~=stdio local')),
+        scoreless(expected),
+      )
       assertEquals((await mounted.io.get([id]))[0].eid, eid)
       assertEquals(await mounted.io.deps([eid]), [])
       assert(rows(await mounted.io.read()).some((r) => r.eid == eid))
