@@ -139,6 +139,12 @@ export let minted = (rows: Row[]): Entity | undefined =>
  *
  * An INSERT…SELECT is what makes the owner a subquery: no owner row, no
  * inserted row. Its WHERE is also what lets SQLite parse the upsert clause.
+ *
+ * A tag insert is `or ignore` in both forms: existence is the whole fact it
+ * asserts, so a component whose table demands a column the tag cannot supply
+ * is a no-op rather than a failed batch. That is what keeps a server-minted
+ * audit — a row a host writes with its own columns — un-mintable from the
+ * wire without the wire being able to break the batch by naming it.
  */
 export let upsertSql = (
   v: Vocab,
@@ -150,7 +156,7 @@ export let upsertSql = (
   let cols = Object.keys(patch).filter((c) => v.column(comp, c)?.persist)
   if (!cols.length) {
     return {
-      sql: `insert ${absent ? '' : 'or ignore '}into "${comp}" (entity)
+      sql: `insert or ignore into "${comp}" (entity)
               select id from entity e where eid = ?${
         absent
           ? ` and not exists (select 1 from "${comp}" where entity = e.id)`
