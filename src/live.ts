@@ -449,20 +449,20 @@ export let predsToQuery = (preds: Pred[]): string | undefined => {
   return undefined
 }
 
-// Never queries are locally empty by definition. Every other browser query
-// must round-trip or carry its original source, never infer a partial answer.
-let serverLine = (preds: Pred[]): string | undefined => {
-  if (preds.some((p) => p.op === NEVER)) return undefined
-  let line = predsToQuery(preds)
-  if (!line && preds.length && config.host) {
-    throw new Error(
-      `This query requires its original server source; a partial cache cannot answer it: ${
-        qkey(preds)
-      }`,
-    )
-  }
-  return line
-}
+// The line a query rides, or nothing. Never queries are locally empty by
+// definition; a shape the grammar cannot spell back has no sub to open.
+let serverLine = (preds: Pred[]): string | undefined =>
+  preds.some((p) => p.op === NEVER) ? undefined : predsToQuery(preds)
+
+// ...and having no line is a cache MISS, not an error. Over a partial cache the
+// local resolver still answers, best-effort, but the answer is not the graph's:
+// it is reported unready through the same door a loading subscription uses, so
+// a view tells loading from absent and repaints when the rows land. Jeff,
+// 2026-09-16, verbatim: "why would a cache be throwing if it can't resolve a
+// value? isn't it typical for a cache to not resolve a value? how would the
+// caller know not to seek the cache for certain queries?"
+let unserved = (preds: Pred[]): boolean =>
+  !!config.host && preds.length > 0 && !preds.some((p) => p.op === NEVER)
 
 // A LOCAL write must paint through a server-backed set immediately: between
 // applyLocal and the sub's echo (or with the socket down — a test, an offline
@@ -2466,15 +2466,21 @@ export let subscriptionState = (sub: string): SubscriptionState => {
 
 export type SubscriptionRead = { sub: string; state: SubscriptionState }
 
-// The addressed state beside a direct query's result signal. A query shape
-// that cannot ride the server has no remote failure to report; server-backed
-// shapes share the exact ServerSet that queryEids reads.
+// The addressed state beside a direct query's result signal. Server-backed
+// shapes share the exact ServerSet that queryEids reads; a shape with no line
+// to ride has no remote failure to report, but over a PARTIAL cache its local
+// answer is a miss (`unserved`), so it reads as loading rather than as the
+// server's own "nothing matches".
 export let querySubscription = (
   preds: Pred[],
   source?: string,
 ): SubscriptionRead | undefined => {
   let line = source?.trim() || serverLine(preds)
-  if (!line) return undefined
+  if (!line) {
+    return unserved(preds)
+      ? { sub: '', state: { status: 'loading' } }
+      : undefined
+  }
   let set = serverSet(preds, line)
   return { sub: set.sub, state: subscriptionState(set.sub) }
 }

@@ -51,6 +51,7 @@ import {
   pinned,
   predsToQuery,
   projects,
+  queryEids,
   querySubscription,
   references,
   relations,
@@ -2692,6 +2693,39 @@ Deno.test('a hand-built query and its parsed spelling are one server set', () =>
     dropQuery(hand)
   } finally {
     config.host = prior
+  }
+})
+
+// A shape the dotted grammar cannot spell back — an OR group, which rides the
+// wire only as its authored source — has no sub of its own to open. That is a
+// cache MISS, not an error: the read answers from the rows this tab holds and
+// reports itself unready, so a view tells loading from absent and the rows
+// landing later resolve it. Jeff, 2026-09-16, verbatim: "why would a cache be
+// throwing if it can't resolve a value? isn't it typical for a cache to not
+// resolve a value? how would the caller know not to seek the cache for certain
+// queries?"
+Deno.test('an unspellable query is a miss, and resolves when its rows land', () => {
+  let prior = config.host
+  let T = 'eeee0000-0000-4000-8000-000000000001'
+  let preds = resolveRefs(parseQuery('.task!|.board!'), findEid)
+  config.host = 'browser.test'
+  try {
+    cache.value = {}
+    resetSignals()
+    assertEquals(predsToQuery(preds), undefined)
+    let ids = queryEids(preds)
+    assertEquals(ids.value, [])
+    // Unready — never the server's own "nothing matches".
+    assertEquals(querySubscription(preds)?.state.status, 'loading')
+    applyLocal([
+      { eid: T, name: 'entity', comp: { eid: T, num: 1 } },
+      { eid: T, name: 'task', comp: {} },
+    ])
+    assertEquals(ids.value, [T])
+  } finally {
+    config.host = prior
+    cache.value = {}
+    resetSignals()
   }
 })
 
