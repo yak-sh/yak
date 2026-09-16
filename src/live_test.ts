@@ -51,6 +51,7 @@ import {
   pinned,
   predsToQuery,
   projects,
+  querySubscription,
   references,
   relations,
   repoUrl,
@@ -85,7 +86,6 @@ import {
 } from './live.ts'
 import { edgeEid, link } from './edge.ts'
 import { EXISTS, parseQuery, PROJECT, resolveRefs } from './query.ts'
-import type { Tag } from '@yaks/sql'
 import { type Ent } from './types.ts'
 import { effect } from '@preact/signals'
 import {
@@ -2578,23 +2578,21 @@ Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => 
     [F]: { entity: { eid: F, num: 52 } },
   }
   resetSignals()
-  // A bound pred carries its column's TAG (query.ts), and the round-trip
-  // verifies the re-parsed line matches the preds exactly — so these stand-ins
-  // spell the tag the binder would stamp.
-  let eq = (comp: string, prop: string, value: string, tag: Tag) => ({
+  // These are live.ts's own builders, verbatim: a pred built by hand carries no
+  // `tag` (the binder stamps that, and it is no part of what a query selects),
+  // and the round-trip must still spell each one.
+  let eq = (comp: string, prop: string, value: string) => ({
     comp,
     prop,
     op: '',
     value,
-    tag,
   })
   let has = (comp: string) => ({ comp, prop: '', op: EXISTS, value: '' })
-  let contains = (comp: string, prop: string, value: string, tag: Tag) => ({
+  let contains = (comp: string, prop: string, value: string) => ({
     comp,
     prop,
     op: '~',
     value,
-    tag,
   })
   let refsTo = (value: string) => ({
     comp: '',
@@ -2605,11 +2603,11 @@ Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => 
   })
   assertEquals(predsToQuery([has('project')]), '.project!')
   assertEquals(
-    predsToQuery([eq('comment', 'target', E, 'eid')]),
+    predsToQuery([eq('comment', 'target', E)]),
     `.comment.target=${E}`,
   )
   assertEquals(
-    predsToQuery([contains('board', 'query', E, 'query')]),
+    predsToQuery([contains('board', 'query', E)]),
     `.board.query~=${E}`,
   )
   assertEquals(predsToQuery([refsTo(E)]), `.refs=${E}`)
@@ -2621,8 +2619,8 @@ Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => 
   )
   assertEquals(
     predsToQuery([
-      eq('fold', 'client', E, 'eid'),
-      eq('fold', 'board', F, 'eid'),
+      eq('fold', 'client', E),
+      eq('fold', 'board', F),
     ]),
     `.fold.client=${E}&.fold.board=${F}`,
   )
@@ -2635,7 +2633,7 @@ Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => 
   )
   assertEquals(
     predsToQuery([
-      eq('pin', 'canvas', E, 'eid'),
+      eq('pin', 'canvas', E),
       {
         comp: '',
         prop: '',
@@ -2651,6 +2649,50 @@ Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => 
   )
   // An empty query has no line.
   assertEquals(predsToQuery([]), undefined)
+})
+
+// The canvas asks for its pins with a query it BUILDS (live.ts pinsOn), where a
+// board asks with one it parsed. bindClause stamps a `tag` on a parsed pred and
+// on no hand-built one, so an identity that counted the tag made those two
+// different queries: the hand-built shape could not be spelled back, and the
+// read door refused the canvas its pins on every render. One query, one set.
+Deno.test('a hand-built query and its parsed spelling are one server set', () => {
+  let prior = config.host
+  let C = 'cccc0000-0000-4000-8000-000000000001'
+  let hand = [
+    { comp: 'pin', prop: 'canvas', op: '', value: C },
+    { comp: 'card', prop: '', op: EXISTS, value: '' },
+    {
+      comp: '',
+      prop: '',
+      op: PROJECT,
+      value: '',
+      fields: [
+        { comp: 'pin', prop: 'x', wake: true },
+        { comp: 'pin', prop: 'z', wake: false },
+        { comp: 'card', prop: 'target', wake: true },
+      ],
+    },
+  ]
+  let line = `.pin.canvas=${C}&.card!&.fields=pin.x,pin.z~,card.target`
+  config.host = 'browser.test'
+  try {
+    cache.value = {}
+    resetSignals()
+    let read = querySubscription(hand)
+    assertEquals(read?.sub.startsWith('q:'), true)
+    assertEquals(read?.state.status, 'loading')
+    // Its parsed twin — tags and all — is the SAME subscription.
+    assertEquals(
+      querySubscription(resolveRefs(parseQuery(line), findEid))?.sub,
+      read?.sub,
+    )
+    // And the call site that threw answers instead.
+    assertEquals(pinned(C), [])
+    dropQuery(hand)
+  } finally {
+    config.host = prior
+  }
 })
 
 // T-17126: with the flag on, a held membership query is backed by a SERVER

@@ -340,7 +340,14 @@ type ServerSet = {
 }
 let queryUses = new Map<string, ServerSet>() // canonical preds key -> set
 let querySignals = new Map<string, Signal<string[]>>() // sub name -> its signal
-let qkey = (preds: Pred[]) => JSON.stringify(preds)
+// A query's identity is what it SELECTS, never how it was bound: bindClause
+// stamps each pred with its column's `tag` (query.ts) to type the value test,
+// and a pred built by hand in this file carries none. So the tag is dropped
+// here — otherwise a hand-built shape never equals its own parsed spelling,
+// the round-trip below refuses every one of them, and the same filter under
+// two bindings would open two server sets.
+let qkey = (preds: Pred[]) =>
+  JSON.stringify(preds, (k, v) => k == 'tag' ? undefined : v)
 
 // Programmatic queries must round-trip through the Tasks grammar. The browser
 // transports the result opaquely; FTS, semantic ranking and graph-wide walks
