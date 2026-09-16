@@ -70,9 +70,11 @@ journaled when the journal plugin is composed in.
 
 Use `g.apply()` for ongoing writes; low-level storage patch is intentionally
 still a byte-writing primitive. A later boot catches its unclassified births,
-not an arbitrary out-of-band rewrite of an already-classified entity. Arbitrary
-SQL and component-table drops require reopening/installing before graph writes
-resume.
+not an arbitrary out-of-band rewrite of an already-classified entity. A host
+that must write a facet row past the graph calls `@yaks/sqlite`'s
+`reclassify(driver, eids)` in that same transaction; there is no trigger or
+queue to keep. Arbitrary SQL and component-table drops require
+reopening/installing before graph writes resume.
 
 ## Compatibility
 

@@ -235,6 +235,12 @@ Readers with a smaller vocabulary ignore unknown tables without changing the
 descriptor. Table-set content is cached, never component values or database id
 assignments, so rollback, another writer, and boot retirement remain visible.
 
+A host that writes a facet row past the graph (raw SQL into a component table,
+inside its own transaction) calls `reclassify(driver, eids)` there: the same
+physical-presence rule as boot, scoped to those owners, no queue and no
+triggers. It returns the pointers that moved and any descriptor it minted, as
+bundles the host can echo; descriptors and unknown eids are left alone.
+
 Stores without the archetype vocabulary, and unclassified rows written through
 the low-level `patch()` API before backfill, retain the existing census
 fallback. A partial catalog declines presence optimization rather than hide such

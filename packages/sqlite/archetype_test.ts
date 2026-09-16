@@ -3,7 +3,13 @@ import { archetypeDoc, archetypes, eidOf } from '@yaks/archetype'
 import { type Bundle, graph, type Plugin } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { journal, journalDoc } from '@yaks/journal'
-import { backfill, componentTables, schema, storage } from './mod.ts'
+import {
+  backfill,
+  componentTables,
+  reclassify,
+  schema,
+  storage,
+} from './mod.ts'
 import { mem } from './harness.ts'
 
 let domain = {
@@ -351,4 +357,36 @@ Deno.test('one-archetype paged reads use the compound ordering index', async () 
       r.name == 'entity_archetype_num'
     ),
   )
+})
+
+Deno.test('archetype: reclassify classifies rows written past the graph, no triggers', () => {
+  let { driver, g, get } = setup()
+  g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
+  assertEquals(get('a').entity.archetype, eidOf(['doc']))
+  let id = driver.query('select id from entity where eid = ?', ['a'])[0].id
+  driver.exec(`insert into task(entity) values (${id})`)
+  assertEquals(get('a').entity.archetype, eidOf(['doc']))
+  let echoes = reclassify(driver, ['a'])
+  assertEquals(echoes.at(-1), {
+    entity: { eid: 'a', archetype: eidOf(['doc', 'task']) },
+  })
+  assertEquals(echoes[0].archetype, { tables: '["doc","task"]' })
+  assertEquals(get('a').entity.archetype, eidOf(['doc', 'task']))
+  assertEquals(reclassify(driver, ['a']), [])
+  driver.exec(`delete from doc where entity = ${id}`)
+  let moved = reclassify(driver, ['a', 'a', 'nobody'])
+  assertEquals(moved.length, 2) // The {task} descriptor is born here.
+  assertEquals(moved[1], { entity: { eid: 'a', archetype: eidOf(['task']) } })
+  assertEquals(reclassify(driver, [eidOf(['task']), eidOf(['archetype'])]), [])
+  assertEquals(get(eidOf(['task'])).entity.archetype, eidOf(['archetype']))
+  // A table raised after the first call is seen: the facet list follows the
+  // schema version, not the first look.
+  driver.exec(
+    `create table hidden(entity integer primary key references entity(id));
+     insert into hidden values (${id})`,
+  )
+  assertEquals(get('a').entity.archetype, eidOf(['task']))
+  reclassify(driver, ['a'])
+  assertEquals(get('a').entity.archetype, eidOf(['hidden', 'task']))
+  assertEquals(backfill(driver), { entities: 0, archetypes: 0, retired: 0 })
 })
