@@ -130,9 +130,13 @@ slow('the store on Durable Object SQLite serves the live wire', async () => {
     // after HTTP commits. The owner identity itself may carry a doc, so the
     // working set names tasks, with their docs explicitly requested.
     b.told({ subscribe: '.task!&.doc?', id: 'notes' })
+    // transientReset names the eids this answer re-states, so a returning
+    // reader forgets what it held for them (@yaks/api subs.ts) — empty here,
+    // because the answer is.
     assertEquals(await b.hears((f) => f.id == 'notes'), {
       id: 'notes',
       bundles: [],
+      transientReset: [],
     })
     let note = crypto.randomUUID()
     await applied([{
