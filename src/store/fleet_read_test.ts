@@ -25,6 +25,7 @@ let { evalGraph } = await import('../graph_query.ts')
 let { parseQuery } = await import('../query.ts')
 let { where } = await import('../sql.ts')
 let { toSql } = await import('../relation.ts')
+let { classify } = await import('./fleet_archetype.ts')
 let uid = () => crypto.randomUUID()
 
 Deno.test('fleet read: explicit wire columns, stored stamps, refs and body layouts', () => {
@@ -44,6 +45,9 @@ Deno.test('fleet read: explicit wire columns, stored stamps, refs and body layou
     "insert or replace into updated(entity,at) values ((select id from entity where eid=?),'2000-01-01T00:00:00.000Z')",
   )
     .run(eid)
+  // A row written past the graph names its owner, or the pointer the gather
+  // reads still describes the entity as it was.
+  classify(db, [eid])
   let expected = eager(db, eid)
   let [got] = rowsOf(db, [eid, eid, 'missing'])
   assertEquals(got, { eid, comps: expected })

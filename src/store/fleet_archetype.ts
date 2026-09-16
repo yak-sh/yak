@@ -1,148 +1,83 @@
-// Fleet SQL policy still writes physical facets outside the composed graph
-// (recall, lifecycle, blob_text and embeddings). Capture presence transitions,
-// not values, in the same transaction. The queue retains the first pre-image;
-// nulling the pointer makes an interrupted/foreign writer fall back safely.
-// Flush uses @yaks/archetype's immutable sets and hash-free transition cache,
-// never a per-entity component census. Queue rows are storage, not facets.
-import { type Archetype, Archetypes, tablesOf } from '@yaks/archetype'
-import { componentTables, type Driver } from '@yaks/sqlite'
+// The fleet's half of archetype classification. @yaks/sqlite's `reclassify()`
+// does the work — presence read from the physical file, inside the caller's
+// transaction — and this file owns only what the fleet adds to it: the driver
+// that classification runs through, and the wire shape its bundles take as
+// fleet Changes.
+//
+// THE CONTRACT. There is no queue and there are no triggers: a row written
+// past the graph (a server stamp, a redaction, an embedding, a recall) must
+// NAME the owners it touched, or the owner keeps a pointer that no longer
+// describes it — and both the read door and the query planner trust that
+// pointer. The eids are never news: `record()` names the batch it journals,
+// which is the same list a raw writer already owes the journal.
+import { type Driver, reclassify } from '@yaks/sqlite'
+import { STOCK } from '@yaks/sql'
 import type { Change } from '../types.ts'
 import type { Sql, Statement } from './sql.ts'
 
-let quote = (s: string) => `"${s.replaceAll('"', '""')}"`
-let text = (s: string) => `'${s.replaceAll("'", "''")}'`
-let caches = new WeakMap<Sql, {
-  sets: Archetypes
-  text: Map<string, Archetype>
-  statements: Map<string, Statement>
-}>()
-
-// Queue cardinality, not graph cardinality, bounds every flush. Without CROSS
-// JOIN SQLite chooses a covering scan of the spine even for an empty queue.
-export const pendingSql = `select p.owner, p.prior, e.eid, a.tables
-    from archetype_pending p cross join entity e on e.id = p.owner
-    left join archetype a on a.entity = p.prior`
-
-export function watchArchetypes(db: Sql, driver: Driver): void {
-  db.exec(`create table if not exists archetype_pending (
-    owner integer primary key, prior integer
-  );
-  create table if not exists archetype_delta (
-    owner integer, name text, present integer, primary key(owner, name)
-  );
-  create trigger if not exists archetype_birth after insert on entity begin
-    insert or ignore into archetype_pending(owner, prior) values (new.id, null);
-  end;`)
-  for (let name of componentTables(driver)) {
-    for (
-      let [event, row, present] of [
-        ['insert', 'new', 1],
-        ['delete', 'old', 0],
-      ] as const
-    ) {
-      db.exec(
-        `create trigger if not exists ${quote(`archetype_${name}_${event}`)}
-        after ${event} on ${quote(name)} begin
-        insert or ignore into archetype_pending(owner, prior)
-          select id, archetype from entity where id = ${row}.entity;
-        insert into archetype_delta(owner, name, present)
-          values (${row}.entity, ${text(name)}, ${present})
-          on conflict(owner, name) do update set present = excluded.present;
-        update entity set archetype = null where id = ${row}.entity;
-      end;`,
-      )
-    }
-  }
-}
-
-/** Called inside the writer's transaction; returns descriptor and spine echoes. */
-export function flushArchetypes(db: Sql): Change[] {
+// One driver per handle, with its own prepared statements: @yaks/sqlite caches
+// the facet-table list against the driver object, so a fresh one per write
+// would re-read the schema every time. The statements stay out of db.ts's
+// cache on purpose — a presence probe per facet table is not an N+1 the
+// request's hop tally should report.
+let caches = new WeakMap<
+  Sql,
+  { driver: Driver; prep: (s: string) => Statement }
+>()
+let cacheFor = (db: Sql) => {
   let held = caches.get(db)
   if (!held) {
-    held = { sets: new Archetypes(), text: new Map(), statements: new Map() }
-    caches.set(db, held)
-  }
-  let { sets: cache, text, statements } = held
-  let prep = (sql: string) => {
-    let stmt = statements.get(sql)
-    if (!stmt) statements.set(sql, stmt = db.prepare(sql))
-    return stmt
-  }
-  let decode = (value: string) => {
-    let set = text.get(value)
-    if (!set) text.set(value, set = cache.intern(tablesOf(value)))
-    return set
-  }
-  let pending = prep(pendingSql).all<{
-    owner: number
-    prior: number | null
-    eid: string
-    tables: string | null
-  }>()
-  if (!pending.length) {
-    db.exec('delete from archetype_delta; delete from archetype_pending')
-    return []
-  }
-  let owners = new Map(pending.map((p) => [p.owner, {
-    ...p,
-    set: p.tables == null ? cache.intern([]) : decode(p.tables),
-  }]))
-  for (
-    let d of prep('select owner, name, present from archetype_delta').all<{
-      owner: number
-      name: string
-      present: number
-    }>()
-  ) {
-    let owner = owners.get(d.owner)
-    if (owner) owner.set = cache.move(owner.set, d.name, !!d.present)
-  }
-  let out: Change[] = []
-  let meta = cache.intern(['archetype'])
-  let ids = new Map<string, number>()
-  let made = new Set<number>()
-  let mint = (eid: string): number => {
-    let id = ids.get(eid)
-    if (id != null) return id
-    let found = prep(`select e.id, a.tables from entity e
-      left join archetype a on a.entity = e.id where e.eid = ?`).get<{
-      id: number
-      tables: string | null
-    }>(eid)
-    if (found?.tables != null) {
-      if (decode(found.tables).eid != eid) {
-        throw new Error(`Invalid archetype identity: ${eid}`)
-      }
-      ids.set(eid, found.id)
-      return found.id
+    let statements = new Map<string, Statement>()
+    let prep = (sql: string) => {
+      let stmt = statements.get(sql)
+      if (!stmt) statements.set(sql, stmt = db.prepare(sql))
+      return stmt
     }
-    if (found && owners.get(found.id)?.set.tables.length !== 0) {
-      throw new Error(`Archetype identity is occupied: ${eid}`)
-    }
-    if (!found) prep('insert into entity(eid) values (?)').run(eid)
-    id = found?.id ?? Number(db.lastInsertRowId)
-    ids.set(eid, id)
-    made.add(id)
-    let tables = JSON.stringify(cache.get(eid)!.tables)
-    prep('insert into archetype(entity, tables) values (?, ?)').run(id, tables)
-    let target = eid == meta.eid ? id : mint(meta.eid)
-    prep('update entity set archetype = ? where id = ?').run(target, id)
-    out.push(
-      { eid, name: 'entity', comp: { eid, num: null, archetype: meta.eid } },
-      { eid, name: 'archetype', comp: { tables } },
+    caches.set(
+      db,
+      held = {
+        prep,
+        driver: {
+          query: (sql, params) => prep(sql).all(...params),
+          exec: (sql) => db.exec(sql),
+          // Classification runs inside the caller's write transaction — that is
+          // the contract — and a failure must roll THAT batch back, so the
+          // package's unit() needs no savepoint of its own here. A caller
+          // without a transaction gets one.
+          tx: (body) => db.inTransaction ? body() : db.transaction(body, true),
+          arms: STOCK,
+        },
+      },
     )
-    return id
   }
-  let targets = [...owners.values()].map((p) => [p, mint(p.set.eid)] as const)
-  for (let [p, id] of targets) {
-    if (made.has(p.owner)) continue
-    prep('update entity set archetype = ? where id = ?').run(id, p.owner)
+  return held
+}
+
+/**
+ * Classify the named owners from their physical presence, inside the caller's
+ * transaction: the pointer moves and any descriptor born, as the changes the
+ * journal and the live cast carry. An owner already wearing the right
+ * descriptor costs a presence probe and nothing else.
+ */
+export let classify = (db: Sql, eids: Iterable<string>): Change[] => {
+  let named = [...new Set(eids)]
+  if (!named.length) return []
+  let { driver, prep } = cacheFor(db)
+  let gone = prep(
+    'select 1 from tombstone where entity = (select id from entity where eid = ?)',
+  )
+  // Fleet numbers explicitly (the numbers plugin), so a descriptor is born bare.
+  return reclassify(driver, named, false).flatMap((b): Change[] => {
+    let eid = b.entity.eid
+    let archetype = b.entity.archetype as string
+    if (b.archetype) {
+      return [
+        { eid, name: 'entity', comp: { eid, num: null, archetype } },
+        { eid, name: 'archetype', comp: b.archetype as Change['comp'] },
+      ]
+    }
     // The physical tombstone is classified, but its wire event remains a
     // deletion. A later metadata patch would resurrect it during delta replay.
-    if (id != p.prior && !p.set.tables.includes('tombstone')) {
-      out.push({ eid: p.eid, name: 'entity', comp: { archetype: p.set.eid } })
-    }
-  }
-  db.exec('delete from archetype_delta; delete from archetype_pending')
-  return out
+    return gone.get(eid) ? [] : [{ eid, name: 'entity', comp: { archetype } }]
+  })
 }

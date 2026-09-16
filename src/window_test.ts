@@ -25,6 +25,7 @@ let { freshDb } = await import('./testdb.ts')
 let { evalGraph, evalSub } = await import('./graph_query.ts')
 let { subserve } = await import('./subserve.ts')
 let { adopt, matchQuery, parseQuery, windowOf } = await import('./query.ts')
+let { classify } = await import('./store/fleet_archetype.ts')
 
 // Thirty tasks, minted oldest-first so num order IS creation order. The schema
 // seeds a starter graph, so everything below is scoped by a domain of its own —
@@ -68,6 +69,9 @@ db.prepare('insert into "updated" (entity, at) values (?, ?)')
 // ids[2]: made today, last touched in 2020 — OUT of it, for the same reason.
 db.prepare('insert into "updated" (entity, at) values (?, ?)')
   .run(idOf(ids[2]).id, old)
+// Rows written past the graph name their owners, or their pointers keep
+// describing an entity that has since grown a facet (store/fleet_archetype.ts).
+classify(db, [ids[1], ids[2]])
 // num rides the spine, so read the order back rather than assuming it.
 let numOf = new Map(
   (db.prepare('select eid, num from entity').all() as {

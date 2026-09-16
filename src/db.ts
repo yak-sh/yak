@@ -87,7 +87,7 @@ import {
   meta,
   read as sqliteRead,
 } from '@yaks/sqlite'
-import { flushArchetypes, watchArchetypes } from './store/fleet_archetype.ts'
+import { classify } from './store/fleet_archetype.ts'
 import { and as queryAnd, every, order } from '@yaks/query'
 import { type Derived, raw, STOCK } from '@yaks/sql'
 import { blobRead } from '@yaks/blob'
@@ -2025,12 +2025,6 @@ export let migrate = <D extends Sql>(db: D): D => {
 // Additive boot maintenance owns the only full-file census. Descriptors are
 // ordinary content-addressed entities; minting them is journaled, assignments
 // themselves are derived and do not manufacture half a million user edits.
-export let archetypeBoots = new WeakMap<Sql, {
-  entities: number
-  archetypes: number
-  retired: number
-  ms: number
-}>()
 export let migrateArchetypes = (db: Sql) =>
   db.transaction(() => {
     let before = new Set(
@@ -2045,24 +2039,26 @@ export let migrateArchetypes = (db: Sql) =>
       ...readDriver(db),
       exec: (sql) => db.exec(sql),
     }
-    let start = performance.now()
     // Schema growth can arrive with populated tables (a graft/import), while
-    // their owners already have non-null pointers. The descriptor catalog alone
-    // cannot tell us which physical tables this file classified on its last boot.
+    // their owners already have non-null pointers. A table NO descriptor names
+    // has never been classified in this file, so its rows are the ones whose
+    // owners may be wearing a set that predates it — and a table some
+    // descriptor names was classified by definition. The catalog is its own
+    // census; nothing needs to be remembered in server_meta.
     let names = componentTables(driver)
-    let signature = JSON.stringify(names)
-    let previous = prep(
-      db,
-      "select v from server_meta where k = 'archetype:tables'",
+    let classified = new Set(
+      prep(
+        db,
+        'select distinct value as name from archetype a, json_each(a.tables)',
+      )
+        .all<{ name: string }>().map((r) => r.name),
     )
-      .get<{ v: string }>()?.v
-    let known = new Set<string>(previous ? JSON.parse(previous) : [])
     let reclassified = new Map<number, number>()
     let remember = (rows: { id: number; archetype: number }[]) => {
       for (let row of rows) reclassified.set(row.id, row.archetype)
     }
-    if (before.size && previous != signature) {
-      for (let name of names.filter((n) => !known.has(n))) {
+    if (before.size) {
+      for (let name of names.filter((n) => !classified.has(n))) {
         remember(
           prep(
             db,
@@ -2154,23 +2150,34 @@ export let migrateArchetypes = (db: Sql) =>
     if (changes.length) {
       journalWrite(db, new Date().toISOString(), null, null, null, changes)
     }
-    watchArchetypes(db, driver)
-    db.exec('delete from archetype_delta; delete from archetype_pending')
-    if (previous != signature) {
-      prep(
+    // T-37511: the presence queue and its per-component triggers are gone —
+    // classification reads presence directly, where a raw writer names it.
+    for (
+      let t of prep(
         db,
-        "insert into server_meta(k, v) values ('archetype:tables', ?) on conflict(k) do update set v = excluded.v",
-      )
-        .run(signature)
+        `select name from sqlite_schema where type = 'trigger'
+         and name like 'archetype\\_%' escape '\\'`,
+      ).all<{ name: string }>()
+    ) {
+      db.exec(`drop trigger if exists ${sqlName(t.name)}`)
     }
-    let measured = { ...result, ms: performance.now() - start }
-    archetypeBoots.set(db, measured)
-    return measured
+    db.exec(
+      'drop table if exists archetype_pending; drop table if exists archetype_delta',
+    )
+    prep(db, "delete from server_meta where k = 'archetype:tables'").run()
+    return result
   }, true)
 
-/** Drain physical presence moves under the caller's write transaction. */
-export let settleArchetypes = (db: Sql): Change[] => {
-  let changes = flushArchetypes(db)
+/**
+ * Classify what a raw writer touched and journal the moves. Its own batch is
+ * already logged, so these changes need a batch of their own; a writer whose
+ * batch has NOT been journaled yet folds `classify()` into it instead.
+ */
+export let settleArchetypes = (
+  db: Sql,
+  eids: Iterable<string>,
+): Change[] => {
+  let changes = classify(db, eids)
   if (changes.length) {
     journalWrite(db, new Date().toISOString(), null, null, null, changes)
   }
@@ -2498,8 +2505,8 @@ export let fleetGraphOf = (db: Sql): FleetGraph => {
           : fleetRefusal(db, err),
       number: (eid) => mintNum(db, eid),
       component: (eid, name) => readComp(db, eid, name),
-      archetypes: (journal) =>
-        journal ? settleArchetypes(db) : flushArchetypes(db),
+      archetypes: (eids, journal) =>
+        journal ? settleArchetypes(db, eids) : classify(db, eids),
     })
     fleetGraphs.set(db, held)
   }
@@ -2536,7 +2543,6 @@ export let plantVocab = (db: Sql, vocab: Vocab): void => {
   fleetGraphs.delete(db)
   learnKinds(Object.keys(vocab))
   teaches(FILTERS)
-  watchArchetypes(db, readDriver(db))
 }
 
 // This store's whole writable vocabulary at one name: the platform's, then its
@@ -4247,6 +4253,17 @@ let journalFields = (comp: Record<string, unknown>) =>
 let casField = (name: string, field: string, v: unknown): v is string =>
   name == 'doc' && field == 'body' && typeof v == 'string'
 
+// The blob entities a journal batch mints for itself: each content-addressed
+// body lands through textBlob, past the graph, so their owners are the ones
+// the writer must name for classification after journalWrite returns.
+let casBlobs = (logged: Change[]): string[] =>
+  logged.flatMap((c) =>
+    c.comp
+      ? journalFields(c.comp).filter(([field, v]) => casField(c.name, field, v))
+        .map(([, v]) => sha(v as string))
+      : []
+  )
+
 // The journal write (D-18860/D-18861): journal_tx keeps the batch's provenance
 // and mints the transaction id -- an integer primary key, so the next rowid,
 // which is the log's monotonic total order and the cursor delta clients hold;
@@ -4344,7 +4361,9 @@ export let record = (
   let via = writerVia(db, writer)
   // Most stamps carry no trace; the few effect-bearing lifecycle stamps pass
   // the process driver's trace so split ownership is preserved.
-  changes.push(...flushArchetypes(db))
+  // A stamp's rows are written past the graph, and the batch it owes the
+  // journal is the same list of owners classification needs.
+  changes.push(...classify(db, changes.map((c) => c.eid)))
   journalWrite(
     db,
     now,
@@ -4360,7 +4379,7 @@ export let record = (
   )
   // Journaling inline bodies can itself materialize physical blob_text rows.
   // Include their descriptors on both replay and the caller's live cast.
-  changes.push(...settleArchetypes(db))
+  changes.push(...settleArchetypes(db, casBlobs(changes)))
 }
 
 // Server-owned SQL and its replay batch commit together. Keep casts and effects
@@ -4563,12 +4582,16 @@ export let redact = (
     let scrubRef = prep(db, 'update journal_field set ref = ? where id = ?')
     let txs = new Set<number>()
     let stranded = new Set<string>()
+    // Every blob this act lands or collects: content-addressed rows written
+    // past the graph, so redaction names them for classification below.
+    let blobs = new Set<string>()
     let replacements = 0
     let firstSeen: string | undefined
     for (let h of hits) {
       let clean = h.decoded.replaceAll(value, REDACTED)
       if (h.blob) {
         scrubRef.run(textBlob(db, clean), h.id)
+        blobs.add(sha(clean))
         stranded.add(h.blob)
       } else scrubField.run(JSON.stringify(clean), h.id)
       replacements += h.decoded.split(value).length - 1
@@ -4576,7 +4599,9 @@ export let redact = (
       firstSeen ??= h.ts
     }
     let journalRows = txs.size
-    if (stranded.size) collectBlobText(db, [...stranded])
+    if (stranded.size) {
+      for (let eid of collectBlobText(db, [...stranded])) blobs.add(eid)
+    }
 
     let docChange: Change | undefined
     if (doc) {
@@ -4586,12 +4611,13 @@ export let redact = (
         if (column == 'body') {
           prep(db, 'update doc set body = ? where entity = ?')
             .run(textBlob(db, clean), targetId)
+          blobs.add(sha(clean))
           // Repointing doc.body at the clean blob can strand the old content in
           // its content-addressed backend (D-18862): the doc's UPDATE trigger has
           // just repaired FTS/gram off the still-present old blob_text, so collect
           // it now — but only if no other doc or attachment shares that value.
           // Same transaction, so the referrer test sees this doc already moved.
-          collectBlobText(db, [sha(old)])
+          for (let eid of collectBlobText(db, [sha(old)])) blobs.add(eid)
         } else {
           prep(db, 'update doc set title = ? where entity = ?')
             .run(clean, targetId)
@@ -4636,7 +4662,7 @@ export let redact = (
       if (comp) updated = { eid: target, name: 'updated', comp }
     }
 
-    let archetypes = flushArchetypes(db)
+    let archetypes = classify(db, [audit, target, ...blobs])
     let redaction = {
       eid: audit,
       name: 'redaction',
@@ -4676,7 +4702,7 @@ export let redact = (
 
     let changes: Change[] = [
       ...logged,
-      ...settleArchetypes(db),
+      ...settleArchetypes(db, casBlobs(logged)),
       created,
       ...(updated ? [updated] : []),
     ]
@@ -5469,7 +5495,7 @@ export let touch = (
         })
       }
     }
-    return [...out, ...settleArchetypes(db)]
+    return [...out, ...settleArchetypes(db, out.map((c) => c.eid))]
   }, true)
 
 // Full-text search over docs and content — including doc-less transcript

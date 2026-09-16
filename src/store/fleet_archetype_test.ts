@@ -1,5 +1,11 @@
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertNotEquals,
+  assertThrows,
+} from '@std/assert'
 import { eidOf, tablesOf } from '@yaks/archetype'
+import { sha256 } from '@yaks/graph'
 import { componentTables } from '@yaks/sqlite'
 import {
   apply,
@@ -22,19 +28,8 @@ import { where } from '../sql.ts'
 import { bareDb } from '../testdb.ts'
 import type { Sql } from './sql.ts'
 import { open } from './sqlite.ts'
-import { pendingSql } from './fleet_archetype.ts'
 
 let quote = (s: string) => `"${s.replaceAll('"', '""')}"`
-
-Deno.test('archetype flush scans the queue, never the entity spine', () => {
-  let db = bareDb()
-  let plan = db.prepare(`explain query plan ${pendingSql}`)
-    .all<{ detail: string }>().map((r) => r.detail)
-  assert(plan.some((step) => /^SCAN p\b/.test(step)))
-  assert(plan.some((step) => /^SEARCH e\b/.test(step)))
-  assert(!plan.some((step) => /^SCAN e\b/.test(step)))
-  db.close()
-})
 
 // T-37310: the reported collision now succeeds through Fleet's real writer.
 for (let blobsFirst of [true, false]) {
@@ -44,18 +39,17 @@ for (let blobsFirst of [true, false]) {
       let writes = [
         () => {
           textBlob(db, '')
+          return [sha256('')]
         },
         () => {
           db.prepare(
             "insert into entity(eid) values ('cccccccc-cccc-4ccc-8ccc-cccccccccccc')",
           ).run()
+          return ['cccccccc-cccc-4ccc-8ccc-cccccccccccc']
         },
       ]
       for (let write of blobsFirst ? writes : writes.reverse()) {
-        db.transaction(() => {
-          write()
-          settleArchetypes(db)
-        })
+        db.transaction(() => settleArchetypes(db, write()))
       }
       let empty = eidOf([])
       assertEquals(
@@ -400,16 +394,27 @@ Deno.test('query/catalog and snapshot carry the current archetype, with raw-writ
     comp: {},
   }])
   assertEquals(evalAgg(db, '.task! .count!')?.values.get(''), 1)
+  let first =
+    readComp(db, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'entity')!.archetype
   db.prepare(
     `insert into completed(entity) select id from entity where eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'`,
   ).run()
-  // Out-of-band SQL makes the pointer NULL rather than retaining a stale set.
-  assertEquals(
-    readComp(db, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'entity')!.archetype,
-    null,
-  )
+  // An unclassified spine keeps every plan on the legacy presence predicates,
+  // so a row a raw writer has not named yet is never hidden by the catalog.
+  db.prepare("insert into entity(eid) values ('unclassified')").run()
+  assertEquals(readComp(db, 'unclassified', 'entity')!.archetype, null)
   assertEquals(evalAgg(db, '.task! .completed! .count!')?.values.get(''), 1)
-  db.transaction(() => settleArchetypes(db))
+  // A raw writer names the owners it touched, inside its own transaction.
+  db.transaction(() =>
+    settleArchetypes(db, [
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      'unclassified',
+    ])
+  )
+  assertNotEquals(
+    readComp(db, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'entity')!.archetype,
+    first,
+  )
   parity(db)
   assert(evalGraph(db, '.task!'))
   let snap = snapshot(db)

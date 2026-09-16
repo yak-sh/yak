@@ -146,12 +146,13 @@ export let stale = (db: Sql, limit = Infinity) =>
 // table can never keep a vector the sweep would never refresh.
 export let prune = (db: Sql) =>
   db.transaction(() => {
-    let result = db.prepare(
+    let gone = db.prepare(
       `delete from embedding
-     where entity not in (select doc.entity from doc_value doc where ${ELIGIBLE})`,
-    ).run(WS)
-    settleArchetypes(db)
-    return result
+     where entity not in (select doc.entity from doc_value doc where ${ELIGIBLE})
+     returning (select o.eid from entity o where o.id = entity) as eid`,
+    ).all<{ eid: string }>(WS)
+    settleArchetypes(db, gone.map((r) => r.eid))
+    return gone.length
   }, true)
 
 let put = (db: Sql, eid: string, text: string, vec: Float32Array) =>
@@ -163,7 +164,7 @@ let put = (db: Sql, eid: string, text: string, vec: Float32Array) =>
        model = excluded.model, hash = excluded.hash, vec = excluded.vec,
        at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
     ).run(eid, MODEL, hash(text), new Uint8Array(vec.buffer), DIM)
-    settleArchetypes(db)
+    settleArchetypes(db, [eid])
     return result
   }, true)
 

@@ -48,7 +48,7 @@ export type FleetGraphHost = {
   patchRefusal: (b: Bundle, err: unknown) => unknown
   number: (eid: string) => void
   component: (eid: string, name: string) => Comp | undefined
-  archetypes: (journal: boolean) => Change[]
+  archetypes: (eids: string[], journal: boolean) => Change[]
 }
 
 export type FleetGraph = Graph & {
@@ -72,6 +72,12 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
   })
   let row = (sql: string, ...params: string[]) => driver.query(sql, params)[0]
   let owner = '(select id from entity where eid = ?)'
+  // Whose physical presence this batch may have moved — the owners
+  // classification is owed. Held per handle rather than per transaction, the
+  // way the trigger queue it replaces was: writes here are serialized, and a
+  // nested flush draining an outer batch's owners classifies them early, which
+  // is correct at that moment and re-derived if they move again.
+  let touched = new Set<string>()
 
   // The driver owns transactions (including Durable Object transactionSync).
   // Storage never numbers implicitly. The numbers plugin handles explicit
@@ -271,6 +277,9 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
         `insert or ignore into blob_text (entity, value) values (${owner}, ?)`,
         [eid, decode(bytes)],
       )
+      // The bytes land past the graph; the entity wearing them is still an
+      // owner whose facets just changed.
+      touched.add(eid)
     },
   }, {
     columns,
@@ -368,28 +377,30 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
       {
         name: 'fleet/archetypes',
         track: (tx) => {
-          let wrote = false
           let journaled = false
           return {
             tx: {
               ...tx,
               patch: (bundles) => {
-                wrote ||= bundles.length > 0
+                for (let b of bundles) touched.add(b.entity.eid)
                 return tx.patch(bundles)
               },
               remove: (entities) => {
-                wrote ||= entities.length > 0
+                for (let e of entities) touched.add(e.eid)
                 return tx.remove(entities)
               },
             },
             flush: (bundles) => {
-              if (!wrote) return bundles
-              let changes = host.archetypes(journaled)
+              let owners = [...touched]
+              touched.clear()
               // The first flush is before lifecycle commit: descriptors and
               // pointers belong to that same journal batch. Only bytes minted
               // BY journaling need a subsequent storage-only batch.
-              if (!journaled) lifecycle.derived(changes)
+              let logged = journaled
               journaled = true
+              if (!owners.length) return bundles
+              let changes = host.archetypes(owners, logged)
+              if (!logged) lifecycle.derived(changes)
               return [...bundles, ...changes.map(asBundle)]
             },
           }

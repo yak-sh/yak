@@ -69,7 +69,7 @@ export let enqueue = (
       `insert into effect (entity, jrow, handler, state, attempts)
        values (?, ?, ?, 'pending', 0)`,
     ).run(id, jrow, handler)
-    settleArchetypes(db)
+    settleArchetypes(db, [eid])
     return id
   })
 

@@ -772,8 +772,6 @@ Deno.test('graph-out carries declared columns only', () => {
 // This list IS the contract — an addition to it is a decision, so each entry
 // says why it is not a component.
 let outsideVocabulary: Record<string, string> = {
-  archetype_pending: 'transactional queue of physical presence pre-images',
-  archetype_delta: 'transactional final presence moves, not graph facets',
   tombstone: 'death record: the eid is dead, nothing reads a component back',
   journal_tx: 'the journal: one row per applied batch, log data',
   journal_change: 'the journal: one ordered operation per Change',
