@@ -10,6 +10,8 @@
 // resolves lazily inside loadVector, and twin.ts carries the pieces the client
 // shares so nothing drags this loader across the wire (T-19451).
 
+import { clean, dirty } from '@yaks/embedding'
+import { driverOf } from './store/driver.ts'
 import type { Sql } from './store/sql.ts'
 import type { DatabaseSync } from './store/sqlite.ts'
 import { createRequire } from 'node:module'
@@ -111,9 +113,7 @@ let any = (db: Sql) =>
 
 export let refreshVector = (db: Sql) => {
   if (!ready.has(db) || !owns) return 0
-  let row = db.prepare('select dirty from embedding_index where id = 1')
-    .get() as { dirty: number } | undefined
-  if (!row?.dirty) return 0
+  if (!dirty(driverOf(db))) return 0
   let n = count(db)
   if (n) {
     db.prepare(
@@ -121,7 +121,7 @@ export let refreshVector = (db: Sql) => {
     ).get()
     db.prepare("select vector_quantize_preload('embedding','vec')").get()
   }
-  db.prepare('update embedding_index set dirty = 0 where id = 1').run()
+  clean(driverOf(db))
   return n
 }
 
@@ -191,9 +191,5 @@ export let initVector = (db: Sql) => {
       'type=FLOAT32,dimension=${DIM},distance=COSINE'
     )`,
   ).get()
-  let state = db.prepare('select id from embedding_index where id = 1').get()
-  if (!state) {
-    db.prepare('insert into embedding_index (id, dirty) values (1, 1)').run()
-  }
   refreshVector(db)
 }

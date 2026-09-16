@@ -12,6 +12,7 @@
 // `num` is the server-minted human number (T-7 in the UI, one global counter).
 import { IdError } from './types.ts'
 import { ownsSessionBranch } from './session_worktree.ts'
+import { driverOf } from './store/driver.ts'
 import type { SchemaOp, Sql, SqlValue, Statement } from './store/sql.ts'
 import { SEED } from './catalog.ts'
 import { asBundle, asChanges } from './store/wire.ts'
@@ -19,6 +20,7 @@ import type { FleetWrite } from './store/fleet_stamps.ts'
 export type { SchemaOp } from './store/sql.ts'
 import { initVector } from './vector.ts'
 import { schema as telemetrySchema } from '@yaks/telemetry'
+import { schema as embeddingSchema, state as indexState } from '@yaks/embedding'
 import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { sha } from './sha.ts'
@@ -205,22 +207,6 @@ let tombstoneDdl = `create table if not exists tombstone (
     deleted_at text not null
   )`
 
-// Derived data, not graph (like doc_fts): a doc's semantic vector, written
-// only by embed.ts's sweep, keyed by the doc's spine id — so its rowid IS the
-// entity id the ANN scan hands back. hash names the exact text embedded (skip
-// unchanged), model names the embedder (a model upgrade just re-sweeps). Never
-// on the wire, never in snapshot(); a stale or missing row costs recall, never
-// correctness.
-let embeddingDdl = `create table if not exists embedding (
-    entity integer primary key references entity(id),
-    model  text not null,
-    hash   text not null,
-    vec    blob not null,
-    at     text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-  )`
-// The extension's ANN data is derived from embedding. These triggers are the
-// crash fence: any raw-vector write dirties the persisted index in the same
-// SQLite statement; vector.ts clears it only after a successful rebuild.
 // A bounced claim's audit row. Both sides reference the retained spine; a
 // loser whose session was born in the very batch that rolled back has no spine
 // row, so loser (and holder, symmetrically) admit null.
@@ -231,14 +217,6 @@ let conflictDdl = `create table if not exists conflict (
     holder integer references entity(id),
     at     text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   )`
-let embeddingTriggers = `
-  create trigger if not exists embedding_index_ai after insert on embedding
-  begin update embedding_index set dirty = 1 where id = 1; end;
-  create trigger if not exists embedding_index_au after update on embedding
-  begin update embedding_index set dirty = 1 where id = 1; end;
-  create trigger if not exists embedding_index_ad after delete on embedding
-  begin update embedding_index set dirty = 1 where id = 1; end;`
-
 // The edge read carries `ord` so persona materialization can order tied tier
 // members; null is the common case (every edge that never declared one), so
 // drop the key rather than ride `ord: null` on every Dep — an edge without a
@@ -288,11 +266,13 @@ let addrAt = (entity: string) =>
 // The star: an entity spine plus one component table per kind, plus the edge
 // table. `if not exists` makes this idempotent — safe to run every boot.
 // A canvas is an entity with no component (yet) — its geometry lives in `pin`.
-// This holds the HAND-written tables: the spine, the non-component logs (journal,
-// tool_call, embedding), the FTS/gram virtual tables, and every component whose
-// shape exceeds PropType (a NOT NULL, a default, a CHECK, a non-entity key). The
-// plain per-component tables are DERIVED from the vocabulary instead — see
-// `derived` below, generated in open() beside this string.
+// This holds the HAND-written tables: the spine, the journal, the FTS/gram
+// virtual tables, and every component whose shape exceeds PropType (a NOT NULL,
+// a default, a CHECK, a non-entity key). The plain per-component tables are
+// DERIVED from the vocabulary instead — see `derived` below, generated in
+// open() beside this string — and the log/derived tables a storage package owns
+// (tool_call, embedding) are planted in migrate() from what the package
+// declares.
 let schema = `
   create table if not exists entity (
     id          integer primary key,
@@ -919,15 +899,6 @@ let schema = `
     k text primary key,
     v text not null
   );
-  -- Log data, not graph: no eid, no components, so snapshot() (which walks
-  -- the comps vocabulary) never carries it. The tool_call log is the same kind
-  -- of thing and @yaks/telemetry plants it beside this, in migrate().
-  ${embeddingDdl};
-  create table if not exists embedding_index (
-    id    integer primary key check (id = 1),
-    dirty integer not null
-  );
-  ${embeddingTriggers}
 `
 
 // A letter's envelope arrives AFTER its doc — the batch writes doc, then mail —
@@ -1946,10 +1917,14 @@ export let migrate = <D extends Sql>(db: D): D => {
       let contentUnbuilt = db.can.fts &&
         contentIndexes.some((t) => !tableExists(db, t))
       db.exec(schema)
-      // The tool_call log: @yaks/telemetry owns the table and its source
-      // CHECK, so the fleet plants what the package declares. Recorded by
-      // schemaDdl() like every other create, so a fresh backend gets it too.
+      // The tables the storage packages own, planted from what THEY declare:
+      // the tool_call log and its source CHECK (@yaks/telemetry), the vector
+      // table with its model index and the one-row mark its triggers set
+      // (@yaks/embedding). Both are log/derived data, outside the comps
+      // vocabulary, so snapshot() never walks them. Recorded by schemaDdl()
+      // like every other create, so a fresh backend gets them too.
       for (let stmt of telemetrySchema()) db.exec(stmt)
+      for (let stmt of embeddingSchema()) db.exec(stmt)
       if (db.can.fts) {
         db.exec(ftsSchema)
         db.exec(contentFtsSchema)
@@ -6423,16 +6398,10 @@ export let scanAnomalies = (db: Sql): Anomalies => {
 // dirty mark that OUTLIVES the sweep interval means nobody is quantizing —
 // either no process claimed ownVector(), or the owner's connection never ran
 // vector_init and every rebuild throws "Vector context not found".
-let vectorState = (db: Sql): Anomalies['vector'] => {
-  if (!tableExists(db, 'embedding') || !tableExists(db, 'embedding_index')) {
-    return undefined
-  }
-  let mark = prep(db, 'select dirty from embedding_index where id = 1')
-    .get() as { dirty: number } | undefined
-  let head = prep(db, 'select count(*) n, max(at) newest from embedding')
-    .get() as { n: number; newest: string | null }
-  return { dirty: !!mark?.dirty, rows: head.n, newest: head.newest }
-}
+let vectorState = (db: Sql): Anomalies['vector'] =>
+  tableExists(db, 'embedding') && tableExists(db, 'embedding_index')
+    ? indexState(driverOf(db))
+    : undefined
 
 // One entity's one component, projected exactly as snapshot() would (same
 // select()), read by primary key instead of walking the whole graph. The
