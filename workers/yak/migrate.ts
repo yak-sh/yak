@@ -1197,6 +1197,21 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // across would say every app answers to a name nobody wrote. They go to
   // `former` below.
   let renamed = new Set(Object.values(RENAMED))
+  // The roster. @yaks/member's seat is `owner|member` and a level is a `grant`;
+  // the directory's own `member` declares the three seats itself, so it copies
+  // whole and nothing splits.
+  let seats = o.vocab.column('member', 'role')?.values ?? []
+  let splits = words.includes('grant') && !seats.includes('editor')
+  // The one column the copy cannot take at its word. Where the seat splits
+  // below, the old roster's level ('editor') is no longer a seat the new
+  // `member` admits, and the column now CHECKs its enum (@yaks/sqlite `ddl`) —
+  // so the seat lands as the seat it is here, and the level it was becomes the
+  // grant minted from the row set aside.
+  let value = (comp: string, col: string) =>
+    comp == 'member' && col == 'role' && splits
+      ? `case when ${q(col)} is null or ${q(col)} = 'owner' then ${q(col)} ` +
+        `else 'member' end`
+      : q(col)
   for (let comp of words) {
     if (comp == 'doc' || comp == FORMERLY) continue
     if (renamed.has(comp) || !there(comp)) continue
@@ -1205,7 +1220,8 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
     let lost = columns(d, aside(comp)).filter((c) => !want.has(c))
     d.exec(
       `insert into ${q(comp)} (${have.map(q).join(', ')}) ` +
-        `select ${have.map(q).join(', ')} from ${q(aside(comp))}`,
+        `select ${have.map((c) => value(comp, c)).join(', ')} ` +
+        `from ${q(aside(comp))}`,
     )
     carried.add(comp)
     moved.push({
@@ -1407,11 +1423,7 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
     })
   }
 
-  // The roster. @yaks/member's seat is `owner|member` and a level is a `grant`;
-  // the directory's own `member` declares the three seats itself, so it copies
-  // whole and nothing splits.
-  let seats = o.vocab.column('member', 'role')?.values ?? []
-  let splits = words.includes('grant') && !seats.includes('editor')
+  // The levels the copy above set aside, as grants.
   let grants = 0
   let stranded = 0
   // Spine rows the pass MINTED rather than found: a grant is a new entity, and
@@ -1420,16 +1432,13 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   let minted = { n: 0 }
   if (splits && carried.has('member')) {
     let rows = d.query(
-      `select m.entity as id, p.eid as person, m.role as role ` +
+      `select p.eid as person, m.role as role ` +
         `from ${q(aside('member'))} m left join entity p on p.id = m.person`,
       [],
     )
     for (let r of rows) {
       let was = String(r.role ?? '')
       if (was == 'owner' || !was) continue
-      ins(d, `update ${q('member')} set role = 'member' where entity = ?`, [
-        Number(r.id),
-      ])
       if (!o.app || r.person == null) {
         stranded++
         continue
