@@ -13,7 +13,10 @@ let { db } = await import('./live_db.ts')
 let { configureEffects } = await import('./effects.ts')
 let { hash, MODEL } = await import('./embed.ts')
 let { recallEntry, recallFrom } = await import('./recall.ts')
-let { vectorDb } = await import('./testdb.ts')
+// applyNumbered, not apply: the real writers ask for a human number per
+// entity (client.ts), and an entity minted without that request reads back as
+// a short-eid handle rather than the M-/T- id a floater names itself by.
+let { applyNumbered, vectorDb } = await import('./testdb.ts')
 let { refreshVector } = await import('./vector.ts')
 let { axes } = await import('./testvec.ts')
 let { slow } = await import('./testing.ts')
@@ -42,11 +45,12 @@ let put = (d: Sql, eid: string, text: string, v: Float32Array) => {
   refreshVector(d)
 }
 
-// Graph parts through apply() (the real writer mints the spine); the vector
-// beside it through put() (embeddings come from the sweep, never a patch).
+// Graph parts through applyNumbered() (the real writer mints the spine and
+// asks for the human number); the vector beside it through put() (embeddings
+// come from the sweep, never a patch).
 let mem = (d: Sql, title: string, v: Float32Array, scope?: string) => {
   let e = uid()
-  apply(d, [
+  applyNumbered(d, [
     { eid: e, name: 'doc', comp: { title, body: '' } },
     { eid: e, name: 'memory', comp: scope ? { scope } : {} },
   ])
@@ -55,7 +59,7 @@ let mem = (d: Sql, title: string, v: Float32Array, scope?: string) => {
 }
 let proj = (d: Sql) => {
   let e = uid()
-  apply(d, [{ eid: e, name: 'project', comp: {} }])
+  applyNumbered(d, [{ eid: e, name: 'project', comp: {} }])
   return e
 }
 let taskIn = (
@@ -65,7 +69,7 @@ let taskIn = (
   project: string,
 ) => {
   let e = uid()
-  apply(d, [
+  applyNumbered(d, [
     { eid: e, name: 'doc', comp: { title, body: '' } },
     { eid: e, name: 'task', comp: {} },
     { eid: e, name: 'filed', comp: { project } },
@@ -77,7 +81,7 @@ let taskIn = (
 // `doc` bucket): titled + embedded but neither task nor memory.
 let plain = (d: Sql, title: string, v: Float32Array) => {
   let e = uid()
-  apply(d, [{ eid: e, name: 'doc', comp: { title, body: '' } }])
+  applyNumbered(d, [{ eid: e, name: 'doc', comp: { title, body: '' } }])
   put(d, e, title, v)
   return e
 }
