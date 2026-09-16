@@ -6,12 +6,12 @@ import { sha as hash } from './sha.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
 Deno.env.set('HOME', await Deno.makeTempDir())
-let { imageSize, landBlob, serveBlob } = await import('./blob.ts')
+let { landBlob, serveBlob } = await import('./blob.ts')
 let { apply, snapshot } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
 
 // A minimal PNG: 8-byte signature, IHDR length+tag, then width/height as
-// big-endian u32 at offsets 16 and 20 — all imageSize reads.
+// big-endian u32 at offsets 16 and 20 — all @yaks/blob's sizeOf reads.
 let png = (w: number, h: number) => {
   let b = new Uint8Array(24)
   b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
@@ -22,35 +22,6 @@ let png = (w: number, h: number) => {
 }
 
 let blobsDir = `${Deno.env.get('HOME')}/.tasks/blobs`
-
-Deno.test('imageSize reads PNG, GIF and JPEG headers', () => {
-  assertEquals(imageSize(png(120, 80)), { w: 120, h: 80 })
-  // GIF87a, 4x2: width/height little-endian u16 at 6/8.
-  let gif = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x37, 0x61, 4, 0, 2, 0])
-  assertEquals(imageSize(gif), { w: 4, h: 2 })
-  // JPEG: FFD8, one APP0 segment, then an SOF0 whose payload holds h then w.
-  let jpg = new Uint8Array([
-    0xff,
-    0xd8, // SOI
-    0xff,
-    0xe0,
-    0,
-    4,
-    0,
-    0, // APP0, length 4
-    0xff,
-    0xc0,
-    0,
-    0x11,
-    8,
-    0,
-    9,
-    0,
-    16, // SOF0: h=9, w=16
-  ])
-  assertEquals(imageSize(jpg), { w: 16, h: 9 })
-  assertEquals(imageSize(new Uint8Array([1, 2, 3])), null)
-})
 
 Deno.test('landBlob makes one content entity and one attachment', async () => {
   let eid = crypto.randomUUID()

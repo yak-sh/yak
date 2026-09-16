@@ -368,7 +368,7 @@ Deno.test('view metadata leaves portable sandbox selection to the host', () => {
 
 // How many round trips a deploy took, on its own answer (timing.ts, hops.ts):
 // `hops` is the store doors it went through (door.ts) and `r2` the bucket
-// operations it made (blobs.ts `counted`), both counted where they are made.
+// operations it made (store/blobs.ts `counted`), both counted where they are made.
 // The numbers are asserted EXACTLY, and that is the point of the test: a
 // duration says a deploy got slower, and only a count says it got slower
 // because something started asking one file at a time. Read back through the

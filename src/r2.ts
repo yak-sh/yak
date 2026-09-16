@@ -6,7 +6,7 @@
 // programs name it: blobs_r2.ts, which adapts a bucket to the blob seam, and
 // the kernel's `Env`, which only declares that a binding of this shape exists.
 // While the two shared a file, naming the binding dragged the seam's Deno-side
-// implementation (blobs.ts) into the type graph of everything that reads
+// implementation (blobs_r2.ts) into the type graph of everything that reads
 // `Env` — including the Store object, which is checked with no Deno anywhere
 // in its graph (workers/yak/conform.ts).
 export type R2 = {

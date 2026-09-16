@@ -1,6 +1,6 @@
 // The blob seam's hosted adapter (D-32318 §Storage): an R2 bucket behind
-// blobs.ts's Blobs, key for key, so the kernel worker serves an app's files
-// through the same three verbs the local directory answers. The bucket is
+// store/blobs.ts's Blobs, key for key, so the kernel worker serves an app's
+// files through the seam's verbs. The bucket is
 // typed structurally — the slice this adapter touches, mirroring
 // @cloudflare/workers-types — so src/ carries no Cloudflare dependency. Under
 // `wrangler dev` the same binding is a local simulation, which is the dev
@@ -28,7 +28,7 @@ let walk = async (bucket: R2, prefix: string) => {
   return at
 }
 
-// Counted (blobs.ts `counted`): every trip to the bucket lands on the
+// Counted (store/blobs.ts `counted`): every trip to the bucket lands on the
 // request's tally, and the request reports the total as `r2;dur=<n>`.
 export let r2Blobs = (bucket: R2): Blobs =>
   counted({

@@ -75,6 +75,8 @@ export * from './sqlite.ts'
 export * from './hydrate.ts'
 export * from './file.ts'
 export * from './object.ts'
+export * from './image.ts'
+export * from './serve.ts'
 
 export { VALUE_LIMIT, type ValueTool, valueTools } from './value.ts'
 export {

@@ -9,7 +9,6 @@ import { type Change } from './types.ts'
 import { stamp, textBlob } from './db.ts'
 import { db } from './live_db.ts'
 import { errored, healthChange } from './deliver.ts'
-import { dirBlobs } from './blobs.ts'
 
 // Freeze a pasted URL: monolith fetches the page and inlines every asset
 // into ONE self-contained, script-free, network-isolated HTML file. It
@@ -17,12 +16,17 @@ import { dirBlobs } from './blobs.ts'
 // stay lean), the entity's web comp gets frozen_at (server-stamped; the
 // wire allowlist doesn't carry it, so clients can't fake an archive), the
 // page <title> becomes the entity's doc, and everyone hears over the ws.
-// frozenDir stays a bare path only for monolith's -o argument, which needs
-// a real filesystem target the external binary writes to directly; every
-// read and write WE do goes through the frozen store.
+// An archive is a file named by its entity under frozenDir, which monolith's
+// -o argument also writes to directly.
 let frozenDir = `${Deno.env.get('HOME')}/.tasks/frozen`
-let frozen = dirBlobs(frozenDir)
 let htmlOf = (eid: string) => `${eid}.html`
+let frozen = {
+  get: (key: string) => Deno.readFile(`${frozenDir}/${key}`),
+  put: async (key: string, bytes: Uint8Array) => {
+    await Deno.mkdir(frozenDir, { recursive: true })
+    await Deno.writeFile(`${frozenDir}/${key}`, bytes)
+  },
+}
 let encoder = new TextEncoder()
 let decoder = new TextDecoder()
 

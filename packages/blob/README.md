@@ -157,6 +157,8 @@ text column holding a hash, and the store is a table of hashes and text.
 | `hydrate(v, store, bundles)`          | the read side for a non-SQL backend         |
 | `fileBlobs(dir)`                      | the directory backend                       |
 | `objectBlobs(bucket, prefix?)`        | the bucket backend                          |
+| `sizeOf(bytes)`                       | an image's `{w, h}`, off its own header     |
+| `served(bytes, {mime, name})`         | a stored object as a fenced HTTP response   |
 
 ## Composition
 
@@ -214,8 +216,12 @@ searching it; bounded output is not a streaming storage API.
 `{address, media_type, size}` after storage verification. Use `fileBlobs` or
 `objectBlobs` for image and other binary bytes, not the SQLite text backend.
 Identical bytes share a SHA-256 address. Existing corrupt or partial objects are
-rewritten before a descriptor is returned. Configure access permissions and
-retention on the external store; it is not part of the SQLite transaction.
+rewritten before a descriptor is returned. `sizeOf(bytes)` reads a picture's
+`{w, h}` off its header (png, jpeg, gif, webp) without decoding it, and
+`served(bytes, {mime, name})` answers stored bytes over HTTP: immutable, under a
+no-script sandbox CSP, named by an inline disposition. Configure access
+permissions and retention on the external store; it is not part of the SQLite
+transaction.
 
 `artifactDoc` declares generic `artifact` and `attachment` components. Artifact
 entities describe stored bytes; attachment entries refer to them and can record

@@ -13,7 +13,7 @@
 //
 // Two entries carry a COUNT in `dur` rather than milliseconds: `hops`, the
 // round trips this request made to a store (door.ts), and `r2`, the operations
-// it made against the bucket (blobs.ts `counted`). Server-Timing has no unit
+// it made against the bucket (store/blobs.ts `counted`). Server-Timing has no unit
 // but time, and a count is worth more than the field's tidiness: a duration
 // cannot tell one slow wait from forty fast ones, and forty fast ones is the
 // bug we keep writing. `hops;dur=7` is an N+1 read straight off a curl.

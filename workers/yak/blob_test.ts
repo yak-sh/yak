@@ -20,7 +20,7 @@ let served = async (k: Awaited<ReturnType<typeof kernel>>, dir: string) => {
 
 // A tiny PNG and a tiny JPEG: header bytes a picture would really open with,
 // so the mime a page sends is a mime a page means and the door can read the
-// size out of them the way it reads one out of a phone's photo (image.ts).
+// size out of them the way it reads one out of a phone's photo (@yaks/blob).
 let bytes = (...xs: (number | number[] | string)[]) =>
   new Uint8Array(
     xs.flatMap((x) =>

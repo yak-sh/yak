@@ -55,7 +55,7 @@ import {
   refusedSell,
   selling,
 } from './sell.ts'
-import { type Size, sizeOf } from './image.ts'
+import { served as fenced, type Size, sizeOf } from '@yaks/blob'
 import { asking, listed, type Row } from './listing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import { batched, lined, lowered } from './wire.ts'
@@ -652,7 +652,7 @@ let nameSent = (req: Request) => {
  *
  * Two rows, the way the fleet shapes a file (src/blob.ts): the CONTENT,
  * addressed by its sha and carrying what is true of the bytes — how many they
- * are, and what they measure (image.ts `sizeOf`, off the file's own header) —
+ * are, and what they measure (@yaks/blob `sizeOf`, off the file's own header) —
  * and the USE of it, carrying what it is called and what it is. They stay
  * apart because they are two things, and because a component may not point at
  * its own entity. The use is addressed off the content, so the same bytes sent
@@ -733,11 +733,9 @@ let took = async (
   })
 }
 
-// The bytes back, at the address the upload answered. Content-addressed, so
-// they can never change: they cache forever. The mime and the name come off
-// the attachment row the upload wrote; a sandbox CSP plus nosniff keeps an
-// uploaded page or SVG inert when someone opens it in a tab, the way the
-// fleet's own blob door does (src/blob.ts serveBlob).
+// The bytes back, at the address the upload answered. The mime and the name
+// come off the attachment row the upload wrote; the fenced, immutable answer
+// is @yaks/blob's `served`, the same one the fleet's blob door gives.
 let gave = async (
   env: Env,
   space: Space,
@@ -758,21 +756,7 @@ let gave = async (
   ).query(`.eid=${await useOf(sha)}`)
   let file = (rows as { attachment?: { mime?: string; name?: string } }[])
     .find((r) => r.attachment)?.attachment
-  return new Response(bytes, {
-    headers: {
-      'content-type': file?.mime || 'application/octet-stream',
-      'cache-control': 'public, max-age=31536000, immutable',
-      'content-security-policy': "sandbox; script-src 'none'",
-      'x-content-type-options': 'nosniff',
-      ...(file?.name
-        ? {
-          'content-disposition': `inline; filename="${
-            file.name.replace(/["\\\r\n]/g, '')
-          }"`,
-        }
-        : {}),
-    },
-  })
+  return fenced(bytes, file)
 }
 
 // What to call this person, for the store to write beside their rows: the

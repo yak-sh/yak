@@ -1,9 +1,9 @@
-// What a picture measures, read off its own first bytes. A wall of photos
-// wants to reserve each one's space before the bytes arrive, so the file door
-// (apps.ts) writes `image{w, h}` beside the file it just took — from the
-// header, never by decoding: the size is written down in the first few dozen
-// bytes of every format that has one, and a worker has no business unpacking
-// 20 MB of pixels to learn a number the file already states.
+// What a picture measures, read off its own first bytes. A page wants to
+// reserve a photo's space before the bytes arrive, so whoever stores one
+// writes `{w, h}` beside it — from the header, never by decoding: the size is
+// written down in the first few dozen bytes of every format that has one, and
+// nobody has business unpacking 20 MB of pixels to learn a number the file
+// already states.
 //
 // Four formats state it — png, jpeg, gif, webp — and anything else gets no
 // `image` at all. A guess would be worse than silence: a page can ask the
@@ -70,8 +70,17 @@ let jpeg = (b: Uint8Array) => {
   }
 }
 
-// The size a file states about itself, or nothing — including for a header
-// that states a zero, which is a broken file and not a picture of no width.
+/**
+ * The size a file states about itself, or nothing — including for a header
+ * that states a zero, which is a broken file and not a picture of no width.
+ *
+ * ```ts
+ * import { sizeOf } from '@yaks/blob'
+ *
+ * sizeOf(pngBytes) // { w: 1600, h: 900 }
+ * sizeOf(pdfBytes) // undefined
+ * ```
+ */
 export let sizeOf = (b: Uint8Array): Size | undefined => {
   let s = png(b) ?? jpeg(b) ?? gif(b) ?? webp(b)
   return s && s.w > 0 && s.h > 0 ? s : undefined

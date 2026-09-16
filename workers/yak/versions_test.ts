@@ -7,7 +7,7 @@
 // last hop is proved here against the same stubbed account API dispatch_test.ts
 // uses.
 import { assert, assertEquals } from '@std/assert'
-import type { Blobs } from '../../src/blobs.ts'
+import type { Blobs } from '../../src/store/blobs.ts'
 import { counted } from '../../src/store/blobs.ts'
 import type { Tally } from '../../src/hops.ts'
 import type { App, Directory } from './directory.ts'
@@ -49,7 +49,7 @@ let ONE: Pinner[] = [{ prefix: PREFIX, app: APP }]
 // each object landed, which the sweep's grace period reads — `clock` moves it,
 // so a test can put bytes that look a day old.
 //
-// It is COUNTED by the platform's own counter (blobs.ts `counted`), told this
+// It is COUNTED by the platform's own counter (store/blobs.ts `counted`), told this
 // test's tally rather than a request's, so what the numbers below assert is
 // what a deploy reports as `r2;dur=<n>` on its Server-Timing — one truth, and
 // not a second tally that can drift from it. `trips()` is a snapshot, so a
