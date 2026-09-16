@@ -42,7 +42,7 @@
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps } from '@yaks/graph'
-import type { Driver, Param, Row } from './driver.ts'
+import { type Driver, effect, type Param, type Row } from './driver.ts'
 import { componentTables } from './physical.ts'
 
 /** One statement of a write: the SQL, and the parameters it binds. This file
@@ -55,10 +55,7 @@ export type Sql = { sql: string; params: Param[] }
 let OWNER = '(select id from entity where eid = ?)'
 
 // Run a built statement for effect, discarding any rows.
-let run = (driver: Driver, s: Sql): void => {
-  if (driver.run) driver.run(s.sql, s.params)
-  else driver.query(s.sql, s.params)
-}
+let run = (driver: Driver, s: Sql): void => effect(driver, s.sql, s.params)
 
 // The value a column stores, coerced to what SQLite holds: a boolean becomes
 // 0/1 (a bool column has integer affinity), everything else passes through. A

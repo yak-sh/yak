@@ -204,10 +204,12 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
   assertEquals(
     tablesOf(sql),
     [
-      // the spine @yaks/sqlite raises for every layout
+      // the spine @yaks/sqlite raises for every layout, and the store's own
+      // key/value beside it
       'entity',
       'entity_sequence',
       'tombstone',
+      'server_meta',
       // core and derived component-set descriptors
       'archetype',
       'retired',

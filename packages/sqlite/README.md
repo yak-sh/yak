@@ -152,7 +152,8 @@ storage(driver, vocab, base?) // bind a store to a driver + vocabulary
 returns a `Store` — @yaks/graph's `Storage`, answered synchronously:
 
 - `ddl(): string[]` — the schema statements the vocabulary implies.
-- `install(): void` — run them (create-if-not-exists, so it is idempotent).
+- `install(): void` — run them (create-if-not-exists, so it is idempotent); it
+  also mints the store's epoch (see the key/value section below).
 - `read(query, opts?): Bundle[]` — a query → matching entities as bundles.
 - `rows(query, opts?): Row[]` — a query → the compiled statement's raw rows (for
   counts, tallies, and field projections).
@@ -208,11 +209,39 @@ SQLite connection wants.
 - one index per `unique`/`index` a component declares, named after the columns
   it covers (`app_space_slug`) — a unique one is the constraint a race is
   decided by, and the losing insert is refused by the engine;
-- a `doc_value` read view when the vocabulary declares a `doc` component.
+- a `doc_value` read view when the vocabulary declares a `doc` component;
+- a `server_meta` key/value table — the store's own, described below.
 
 Full-text search is opt-in: the application runs `schema(fields)` from
 `@yaks/fts` after installing storage, and passes `{ extend: [search(fields)] }`
 to `storage()`. SQLite does not depend on FTS or create its indexes.
+
+### The store's own key/value
+
+Some facts belong to the STORE, not to anything in it: the epoch a returning
+client checks its cursor against, a sweep's high-water mark, the marker saying a
+one-shot repair already ran. They live in `server_meta`, beside the graph — a
+row there has no entity and no component, so no read, no bundle and no client
+cache can ever carry it.
+
+```ts
+import { EPOCH, epoch, meta } from '@yaks/sqlite'
+
+let m = meta(driver)
+m.set('sweep', at) // text in, text out — the host spells its own values
+m.get('sweep') // string | undefined
+m.del('sweep')
+
+epoch(driver) // the store's lineage id: minted once, read back forever
+```
+
+`install()` mints the epoch, and `epoch()` is idempotent, so a store that has
+one keeps it. It WRITES; a read-only path asks `meta(driver).get(EPOCH)` and
+treats an absent one as a store no cursor can be trusted against.
+
+The table is spelled `server_meta` (exported as `META`) so it can never collide
+with a `meta` COMPONENT, and `create table if not exists` means installing over
+a host's existing one adopts it rather than raising a second.
 
 ## License
 

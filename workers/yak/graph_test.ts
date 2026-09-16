@@ -407,10 +407,11 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       // the object's own memory, and @yaks/blob's store
       'yak_kv',
       'blob_text',
-      // the spine
+      // the spine, and the store's own key/value beside it
       'entity',
       'entity_sequence',
       'tombstone',
+      'server_meta',
       // core and derived component-set descriptors
       'archetype',
       'retired',

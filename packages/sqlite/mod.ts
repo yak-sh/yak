@@ -30,6 +30,10 @@
 // delete takes with it, provenance). Point `graph()` at a store from here and
 // the two halves are the whole thing.
 //
+// Beside the graph it keeps one thing of its own: `server_meta`, the key/value
+// a store writes about ITSELF — its lineage epoch, a sweep's mark — read and
+// written through ./meta.ts, and carried by no bundle.
+//
 // The adapter is bound to a driver and a vocabulary once, by `storage()`, and
 // speaks bundles from then on. The driver is any object with `query`/`exec`
 // (see ./driver.ts) — an in-process SQLite for a test, a pooled handle for a
@@ -41,6 +45,7 @@ import type { Bundle, Doom, Entity, ReadOpts } from '@yaks/graph'
 import type { Driver, Row } from './driver.ts'
 import type { Query } from './read.ts'
 import { grown, indexed, schema, tabled, type Text } from './ddl.ts'
+import { epoch } from './meta.ts'
 import { doom, read, rows } from './read.ts'
 import { keyed } from './keyed.ts'
 import { unit } from './unit.ts'
@@ -51,7 +56,8 @@ export * from './driver.ts'
 export * from './archetype.ts'
 export { catalog } from './catalog.ts'
 export * from './bundle.ts'
-export { grown, indexed, schema, tabled, type Text } from './ddl.ts'
+export { grown, indexed, META, schema, tabled, type Text } from './ddl.ts'
+export { EPOCH, epoch, type Meta, meta } from './meta.ts'
 export {
   compSql,
   doom,
@@ -177,6 +183,9 @@ export let storage = (
       for (let stmt of grown(driver, vocab)) driver.exec(stmt)
       // The indexes last: one may name a column this boot just added.
       for (let stmt of indexed(vocab)) driver.exec(stmt)
+      // The store's lineage identity, minted on the first install and read
+      // back on every one after (meta.ts `epoch`).
+      epoch(driver)
       if (vocab.comp('archetype')) {
         backfill(
           driver,

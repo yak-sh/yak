@@ -48,3 +48,18 @@ export type Driver = {
    */
   arms?: number
 }
+
+/**
+ * Run a parameterized statement for EFFECT over either driver shape: `run`
+ * where the driver has one, otherwise `query` with the rows thrown away.
+ * `exec` cannot serve here — it takes no parameters, and a value always rides
+ * as a bind.
+ */
+export let effect = (
+  driver: Driver,
+  sql: string,
+  params: Param[] = [],
+): void => {
+  if (driver.run) driver.run(sql, params)
+  else driver.query(sql, params)
+}

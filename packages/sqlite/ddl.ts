@@ -21,6 +21,9 @@
 //   doc_value     a view over the `doc` component (when the vocabulary declares
 //                 one): its columns read as TEXT, plus a `rowid` alias. It is
 //                 what @yaks/sql reads a `doc` row through.
+//   server_meta   the store's own key/value, beside the graph: what the store
+//                 knows about itself (its epoch, a sweep's mark), never about
+//                 an entity. ./meta.ts is the seam that reads and writes it.
 //
 // Columns are nullable by default: a patch may create a row from any subset of
 // its columns (that is what PATCH means), so a column demands a value only
@@ -34,8 +37,16 @@
 import type { Column, Index, Vocab } from '@yaks/vocab'
 import type { Driver } from './driver.ts'
 
-// The identity table and the graveyard. Fixed shape — every layout has exactly
-// this spine, whatever components ride on it.
+/**
+ * The key/value table's name. Spelled `server_meta`, not `meta`, because a
+ * vocabulary may well declare a `meta` component and the two must never collide
+ * — and because that is the name the fleet's live table already carries, so
+ * installing over one adopts it instead of raising a second.
+ */
+export let META = 'server_meta'
+
+// The identity table, the graveyard, and the store's own key/value. Fixed
+// shape — every layout has exactly this spine, whatever components ride on it.
 let SPINE = [
   `create table if not exists entity (
     id   integer primary key,
@@ -53,6 +64,12 @@ let SPINE = [
   `create table if not exists tombstone (
     entity     integer primary key references entity(id),
     deleted_at text not null
+  )`,
+  // Keyed by `k`, valued by `v`, and nothing else: whatever a host keeps here
+  // it keeps as text under a name it chose (./meta.ts).
+  `create table if not exists ${META} (
+    k text primary key,
+    v text not null
   )`,
 ]
 
