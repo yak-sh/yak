@@ -9,7 +9,8 @@ import {
   spineProps,
   stamped,
 } from './types.ts'
-import { instant, local } from './time.ts'
+import { timeInstant } from '@yaks/query'
+import { local } from './time.ts'
 import { normalize } from './url.ts'
 
 export type PropContext = {
@@ -149,7 +150,7 @@ let time = (p: Prop, v: unknown, ctx: PropContext): string => {
   if (typeof v != 'string') {
     return fail(p, 'a time (today, 1 hour ago, in 60m, or ISO stamp)', v)
   }
-  let at = instant(v, ctx.now)
+  let at = timeInstant(v, ctx.now)
   if (at == null || !Number.isFinite(at)) {
     return fail(p, 'a time (today, 1 hour ago, in 60m, or ISO stamp)', v)
   }

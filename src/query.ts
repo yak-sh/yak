@@ -72,10 +72,16 @@ import {
   stamped,
   statusOf,
 } from './types.ts'
-import { type Span, span } from './time.ts'
 import type { Vocab } from './store/vocab.ts'
 import { term as ftsTerm } from '@yaks/fts'
-import { type Clause, parse, parseDot, type Value } from '@yaks/query'
+import {
+  type Clause,
+  parse,
+  parseDot,
+  type Span,
+  timeSpan,
+  type Value,
+} from '@yaks/query'
 export { ftsTerm }
 export { WALK_DEPTH, WALK_LIMIT } from '@yaks/query'
 
@@ -901,12 +907,12 @@ let kind = (p: Prop) =>
     ? 'eid'
     : 'text'
 
-// Time phrases stay authored: a saved `today` must advance tomorrow. span()
+// Time phrases stay authored: a saved `today` must advance tomorrow. timeSpan()
 // validates that language without freezing it; every other scalar becomes its
 // canonical comparison string through the same parser writes use.
 let atom = (p: Prop, value: string): string => {
   if (!value) return value
-  if (kind(p) == 'time' && span(value)) return value
+  if (kind(p) == 'time' && timeSpan(value)) return value
   if (kind(p) == 'eid') {
     try {
       return String(parseProp(p, value))
@@ -1325,12 +1331,12 @@ let test = (v: unknown, p: Pred, now?: number): boolean => {
   let target = leafOf(p)
   let type = typed(target.comp, target.prop)
   if (p.op != '~' && type && kind(type) == 'time' && typeof v == 'string') {
-    let spans = p.value.split(',').map((value) => span(value, now))
+    let spans = p.value.split(',').map((value) => timeSpan(value, now))
     if (spans.every((s) => s)) {
       let hit = spans.some((s) => inTime(v, { ...p, op: '' }, s!))
       if (p.op == '' || p.op == '!') return p.op == '' ? hit : !hit
     }
-    let s = span(p.value, now)
+    let s = timeSpan(p.value, now)
     if (s) return inTime(v, p, s)
   }
   switch (p.op) {

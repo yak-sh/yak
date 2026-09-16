@@ -45,7 +45,7 @@ import {
 } from './client.ts'
 import type { WorkClaimMutation } from './mutation.ts'
 import { adopt, matchQuery, parseQuery, selected } from './query.ts'
-import { instant } from './time.ts'
+import { timeInstant } from '@yaks/query'
 import { type Arg, id, slotsOf, text } from './verb.ts'
 
 // A `:` command's argument, built terse: `a('id', 'T-42', { kind: id })`. The
@@ -812,7 +812,7 @@ export let commands: Record<string, Command> = {
       let last = more.length > 1 ? g.find(more[more.length - 1]) : undefined
       if (last) more = more.slice(0, -1)
       let when = more.join(' ')
-      let at = instant(when)
+      let at = timeInstant(when)
       if (at == null) {
         throw new Error(
           `wake: when is "${when}"? (in 60m, 9am tomorrow, 2026-07-25T09:00)`,
@@ -867,7 +867,7 @@ export let commands: Record<string, Command> = {
       let m = rest.match(/^([\s\S]*?)\s+--\s+([\s\S]+)$/)
       let head = (m ? m[1] : rest).trim()
       let note = m ? m[2].trim() : ''
-      let at = instant(head || 'in 12h')
+      let at = timeInstant(head || 'in 12h')
       if (at == null) {
         throw new Error(`park: when is "${head}"? (in 12h, 6am tomorrow)`)
       }

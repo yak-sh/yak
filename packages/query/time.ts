@@ -44,6 +44,13 @@ let unit = (w: string): string | undefined =>
       ? w.replace(/s$/, '')
       : undefined)
 
+// The fixed size of a unit word (`m`, `hours`, `d`), or undefined for a word
+// that is no unit or a calendar one (`mo`, `y`): what a cadence grid steps by.
+export let unitMs = (w: string): number | undefined => {
+  let u = unit(w)
+  return u ? UNIT_MS[u] : undefined
+}
+
 // A clock time carries its precision: a named hour spans its hour, a named
 // minute spans its minute.
 let clock = (s: string): { h: number; m: number; exact: boolean } | null => {

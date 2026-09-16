@@ -13,7 +13,7 @@ import { db } from './live_db.ts'
 import { delivered, errored, PENDING } from './deliver.ts'
 import { commitEffects } from './effects.ts'
 import { type Change, uuid } from './types.ts'
-import { instant } from './time.ts'
+import { timeInstant } from '@yaks/query'
 
 type Cast = (changes: Change[]) => void
 type Row = {
@@ -101,7 +101,7 @@ export let arm = (cast: Cast) => {
   timer = undefined
   let next: number | undefined
   for (let r of pending()) {
-    let at = instant(r.at, Date.parse(r.minted ?? '') || Date.now())
+    let at = timeInstant(r.at, Date.parse(r.minted ?? '') || Date.now())
     if (at == null) {
       errored(r.eid, `unreadable at: ${r.at}`, cast)
       continue

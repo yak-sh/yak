@@ -13,7 +13,7 @@
 import { typeOf } from './edge.ts'
 import { bodyCols, propAt } from './props.ts'
 import { type Field, leafOf, type Pred } from './query.ts'
-import { span } from './time.ts'
+import { timeSpan } from '@yaks/query'
 import { type Change } from './types.ts'
 
 // The five outcomes of testing one touched eid against one subscription
@@ -152,7 +152,7 @@ let moving = (p: Pred): boolean => {
   if (p.rev) return p.rev.preds.some(moving)
   let target = leafOf(p)
   if (propAt(target.comp, target.prop)?.type != 'time') return false
-  return atoms(p.value).some((v) => !fixed(v) && !!span(v))
+  return atoms(p.value).some((v) => !fixed(v) && !!timeSpan(v))
 }
 
 export let gaps = (preds: Pred[]): Gap[] => [
