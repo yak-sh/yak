@@ -142,6 +142,13 @@ export let refreshVector = (db: Sql) => {
 // scan, so a window where many scanned rows are the old space returns fewer than
 // k; the caller over-fetches (embed.ts STALE_SLACK) and the window self-heals as
 // the sweep completes (D-22781).
+//
+// CROSS JOIN, which in SQLite means "keep this order": the ANN scan names the
+// k candidates and the two tables beside it are per-candidate lookups. Given an
+// index on embedding.model (@yaks/embedding plants one) the planner would
+// otherwise drive the whole statement from that index instead, and the scan —
+// a table-valued function whose k applies to what it produces, not to what
+// survives — stops answering.
 export let knn = (
   db: Sql,
   q: Float32Array,
@@ -155,8 +162,8 @@ export let knn = (
     return (db.prepare(
       `select o.eid as eid, v.distance as distance
        from vector_quantize_scan('embedding', 'vec', ?, ?) v
-       join embedding e on e.entity = v.id
-       join entity o on o.id = e.entity
+       cross join embedding e on e.entity = v.id
+       cross join entity o on o.id = e.entity
        ${model == null ? '' : 'where e.model = ?'}`,
     ).all(...(model == null ? [bytes, k] : [bytes, k, model])) as {
       eid: string
