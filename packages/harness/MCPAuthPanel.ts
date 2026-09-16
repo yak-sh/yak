@@ -149,12 +149,14 @@ export const MCPAuthPanel = (
     h(
       'div',
       { class: 'Panel_Title' },
-      'MCP authorization · j/k server · Enter select/submit · Esc cancel',
+      'Authorization · j/k connection · Enter select/submit · Esc cancel',
     ),
     ...s.servers.map((name, i) =>
       h('div', { class: i === s.index ? 'Session_Selected' : '' }, name)
     ),
-    !s.servers.length ? h('div', null, 'No MCP servers configured.') : null,
+    !s.servers.length
+      ? h('div', null, 'No authorizable connections configured.')
+      : null,
     s.url ? h('div', { wrap: '1' }, h('a', { href: s.url }, s.url)) : null,
     s.redirect
       ? h(

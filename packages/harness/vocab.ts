@@ -1,3 +1,4 @@
+import { openrouterDoc } from '@yaks/openrouter'
 import { mcpDoc } from '@yaks/mcp-client/graph'
 import { blobKeywords } from '@yaks/blob'
 import { docDoc } from '@yaks/doc'
@@ -26,6 +27,7 @@ export let vocab: Vocab = loadVocab([
   sessionDoc,
   modelDoc,
   openaiDoc,
+  openrouterDoc,
   processDoc,
   taskDoc,
 ], [edgeKeywords, blobKeywords])

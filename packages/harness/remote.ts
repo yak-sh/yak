@@ -22,6 +22,8 @@ import { diagnostics } from './diagnostics.ts'
 
 export let remote = async (
   options: {
+    provider?: string
+    name?: string
     db?: string
     cwd?: string
     web?: boolean

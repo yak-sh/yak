@@ -80,6 +80,8 @@ export type Deps = {
   /** Minimum interval between durable stream checkpoints; zero disables. */
   checkpointMs?: number
   model: Model
+  /** Choose a provider adapter from the model and request configuration. */
+  resolveModel?: (using: Comp | undefined, model: Bundle) => Promise<Model>
   tools: Tool[]
   /** Resolve a stable tool registry for one execution step. */
   toolSnapshot?: (phase: 'ask' | 'call') => Promise<Tool[]>
@@ -288,6 +290,9 @@ export let react = async (
       line({ [ERROR]: { code: 'no_model' } }, 'no model in force'),
     ])
   }
+  const providerModel = deps.resolveModel
+    ? await deps.resolveModel(using, modelEntity!)
+    : deps.model
   // Only completed responses can supply provider continuation state. A partial
   // response remains ordinary visible history after the last completed anchor.
   asked = newestAsk(
@@ -295,8 +300,10 @@ export let react = async (
       !b.attempt || (b.attempt as Comp).state == 'completed'
     ),
   )
-  let anchorId = deps.model.anchor && asked
-    ? deps.model.anchor(asked)
+  const sameModel = asked && comp(asked, ASK)?.to === modelEid &&
+    comp(asked, 'using')?.provider === using?.provider
+  let anchorId = providerModel.anchor && asked && sameModel
+    ? providerModel.anchor(asked)
     : undefined
   let boundary = asked &&
     entries.find((b) => b.entity.eid == comp(asked!, ASK)?.through)
@@ -417,7 +424,7 @@ export let react = async (
     if (!deps.streaming && deps.contextItems) {
       req.items.push(...await deps.contextItems(window, entries))
     }
-    reply = await deps.model(req)
+    reply = await providerModel(req)
     accepting = false
     await tail
     if (streamFailure) throw streamFailure
@@ -454,7 +461,7 @@ export let react = async (
   }
   const finalAsk: Bundle = {
     ...ask,
-    ...deps.model.mark?.(reply) ?? {},
+    ...providerModel.mark?.(reply) ?? {},
     ...reply.usage ? { usage: reply.usage } : {},
     ...deps.streaming ? { attempt: { state: 'completed' } } : {},
   }

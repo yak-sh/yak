@@ -43,6 +43,8 @@ async function handle(method: string, value: unknown): Promise<unknown> {
   if (method == 'init') {
     if (a) throw new Error('Already initialized')
     let options = args[0] as {
+      provider?: string
+      name?: string
       db?: string
       cwd?: string
       web?: boolean
@@ -58,6 +60,8 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       cwd: options.cwd,
       streaming: options.streaming,
       instructions: options.instructions,
+      provider: options.provider,
+      name: options.name,
       migrationPollMs: options.migrationPollMs,
       images: options.images,
       web: options.web,

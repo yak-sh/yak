@@ -31,6 +31,7 @@ let said = (c: Ctx) => {
 let running = (c: Ctx, name?: string): Agent => {
   let a: Agent = agent({
     name,
+    provider: said(c).opt('provider'),
     each: (step) => step.added.forEach((b) => c.out('  ' + a.line(b))),
   })
   return a

@@ -165,8 +165,11 @@ let delegation = (
       if (args.model != null) {
         let name = String(args.model)
         let existing = await row(g, name)
-        if (existing?.model) using.model = existing.entity.eid
-        else {
+        if (existing?.model) {
+          using.model = existing.entity.eid
+          const provider = comp(existing, 'model')?.provider
+          if (provider != null) using.provider = provider
+        } else {
           using.model = `model:${name}`
           models.push({
             entity: { eid: String(using.model) },

@@ -800,3 +800,57 @@ Programmatic hosts can call
 'cancel', serverName?, returnUrl?)`.
 These calls are host controls, not agent instructions. Never paste a return URL
 into the ordinary conversation input.
+
+## OpenRouter
+
+OpenAI remains the default. OpenRouter is a separate provider, selected through
+ordinary graph model configuration—not by pointing OpenAI credentials at a new
+URL. Add configuration (the `$` names mint entities in this batch):
+
+```json
+[
+  { "entity": { "eid": "$router" }, "provider": { "name": "openrouter" } },
+  {
+    "entity": { "eid": "$model" },
+    "model": { "name": "anthropic/claude-sonnet-4", "provider": "$router" }
+  }
+]
+```
+
+Choose a model identifier available to your OpenRouter account. Then press
+**Esc, A**, select **OpenRouter (model provider)**, open the authorization URL,
+and paste the full return URL into the private authorization input. No callback
+listener runs: a browser connection-error page is expected; copy its address
+bar. The API key goes to `~/.yaks/openrouter-auth.json` (or
+`OPENROUTER_AUTH_FILE`), not the graph, transcript, or draft. This is a separate
+account from MCP servers and OpenAI; existing credentials are never borrowed. No
+model request is sent merely by configuring or authorizing the provider.
+
+To select that model for a session, append an entry containing `using` with the
+returned provider/model EIDs. This selects the next request intentionally:
+
+```json
+{
+  "entity": { "eid": "$message" },
+  "entry": { "session": "<session UUID>" },
+  "using": { "provider": "<provider UUID>", "model": "<model UUID>" },
+  "content": { "body": "Continue using the selected OpenRouter model." }
+}
+```
+
+An existing model EID can also be passed to `fork` or `spawn`; its provider is
+inherited with it. A bare model name retains the parent's provider. The command
+`harness new --provider openrouter --model vendor/model 'message'` creates a new
+session under that provider; authorize beforehand in the TUI. Embedded hosts can
+use `agent({provider: 'openrouter', name: 'vendor/model'})`; configuration is
+recorded in the graph. Tests can inject `providers: {openrouter: fakeModel}`.
+
+OpenRouter Responses is stateless: full applicable context is sent on every
+request, including forks. Provider/model switches don't reuse another model's
+continuation anchor. Native OpenAI image generation and web search are omitted;
+regular function tools and explicit image inputs remain model-dependent.
+
+This first implementation doesn't add a model catalog picker or OpenRouter's
+provider-routing options. The shared graph `provider`/`model` records are the
+configuration source. Credential files are private plaintext, not encrypted;
+PKCE completion has been tested against mocks, not a live account.

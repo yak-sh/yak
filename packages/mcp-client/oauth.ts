@@ -1,3 +1,8 @@
+import {
+  type Attempt,
+  attempt,
+  type AuthorizationStore as Store,
+} from '@yaks/oauth'
 /** Browser authorization with a pasted callback. No UI, filesystem, or session dependency. */
 import {
   auth,
@@ -16,13 +21,7 @@ export type AuthorizationRecord = {
   expiresAt?: number
 }
 /** Implementations serialize update for the whole read/refresh/write operation. */
-export type AuthorizationStore = {
-  read(key: string): Promise<AuthorizationRecord | undefined>
-  update<T>(
-    key: string,
-    fn: (record: AuthorizationRecord) => Promise<T>,
-  ): Promise<T>
-}
+export type AuthorizationStore = Store<AuthorizationRecord>
 export type AuthorizationOptions = {
   serverUrl: string
   redirectUrl?: string
@@ -77,7 +76,7 @@ export const authorization = (options: AuthorizationOptions): Authorization => {
     options.clientMetadataUrl ?? '',
     options.scope ?? '',
   ])
-  let pending: { state: string; verifier?: string; until: number } | undefined
+  let pending: Attempt | undefined
   let discovery: OAuthDiscoveryState | undefined
   let tail: Promise<unknown> = Promise.resolve()
   const serialized = <T>(fn: () => Promise<T>): Promise<T> => {
@@ -159,10 +158,7 @@ export const authorization = (options: AuthorizationOptions): Authorization => {
     begin: (challenge) =>
       serialized(() =>
         options.store.update(key, async (record) => {
-          pending = {
-            state: crypto.randomUUID(),
-            until: now() + 10 * 60 * 1000,
-          }
+          pending = attempt(now())
           let url = ''
           const p = provider(record, (u) => {
             if (

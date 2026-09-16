@@ -191,6 +191,8 @@
     "./packages/process",
     "./packages/model",
     "./packages/openai",
+    "./packages/openrouter",
+    "./packages/oauth",
     "./packages/wake",
     "./packages/canvas",
     "./packages/mail",

@@ -1,3 +1,6 @@
+import { responses as openrouter } from '@yaks/openrouter'
+import { OPENROUTER_AUTH, providerAuthorization } from './provider_auth.ts'
+import { modelEid, providerEid, providerResolver } from './providers.ts'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 import { type EntrySource, entrySource, type SourceRequest } from './detail.ts'
 import { mcpTools } from './mcp.ts'
@@ -78,12 +81,12 @@ export let seed = (
   let model = o.model ?? ASTRA
   return [
     {
-      entity: { eid: idOf(PROVIDER, provider) },
+      entity: { eid: providerEid(provider) },
       [PROVIDER]: { name: provider },
     },
     {
-      entity: { eid: idOf(MODEL, model) },
-      [MODEL]: { name: model, provider: idOf(PROVIDER, provider) },
+      entity: { eid: modelEid(provider, model) },
+      [MODEL]: { name: model, provider: providerEid(provider) },
     },
     ...(o.tools ?? []).map((t) => ({
       entity: { eid: t.eid ?? idOf(TOOL, t.name) },
@@ -107,6 +110,10 @@ export type Opts = ChildLimits & NotHarness & {
   model?: Model
   /** the model to ask for by name (default `gpt-6-astra`) */
   name?: string
+  /** Default provider for new sessions; model selection remains graph data. */
+  provider?: string
+  /** Host implementations keyed by provider.name, for embedding and testing. */
+  providers?: Record<string, Model>
   /** Enable native OpenAI image generation with durable external blobs. */
   web?: boolean
   images?: ImageOptions | false
@@ -212,6 +219,10 @@ export let agent = (opts: Opts = {}): Agent => {
   }
   let h = opts.h ?? open()
   let detachDiagnostics = diagnostics().attach(h.g)
+  const provider = opts.provider ?? 'openai'
+  if (provider !== 'openai' && !opts.name) {
+    throw new Error('Choose an explicit model name for a non-default provider')
+  }
   let name = opts.name ?? ASTRA
   let model = opts.model ??
     responses({
@@ -219,18 +230,25 @@ export let agent = (opts: Opts = {}): Agent => {
       images: configuredImages(opts.images),
       web: opts.web ?? Deno.env.get('HARNESS_WEB') != '0',
     })
+  const providerAuth = providerAuthorization(h.g)
+  const resolveModel = providerResolver(h.g, {
+    openai: model,
+    openrouter: openrouter({ key: providerAuth.key }),
+    ...opts.providers,
+  }, opts.model)
   let tools = opts.tools ?? harnessTools(h.g, opts)
   let remoteSignature = ''
   const remoteHandlers = new Map<string, Tool>()
   const mcp = mcpTools(h.g)
   h.fx.created('mcp_server', mcp.refresh).changed('mcp_server', mcp.refresh)
     .removed('mcp_server', mcp.refresh)
-  h.g.apply(seed({ model: name, tools }), { trusted: true })
+  h.g.apply(seed({ provider, model: name, tools }), { trusted: true })
   let d = daemon(
     h.g,
     h.fx,
     {
       model,
+      resolveModel,
       tools,
       toolSnapshot: async (phase) => {
         if (phase === 'call' && remoteHandlers.size) {
@@ -251,7 +269,7 @@ export let agent = (opts: Opts = {}): Agent => {
           remote.map((t) => [t.eid, t.name, t.description, t.parameters]),
         )
         if (signature !== remoteSignature) {
-          await h.g.apply(seed({ model: name, tools: remote }), {
+          await h.g.apply(seed({ provider, model: name, tools: remote }), {
             trusted: true,
           })
           remoteSignature = signature
@@ -278,12 +296,12 @@ export let agent = (opts: Opts = {}): Agent => {
   )
 
   let names: Record<string, string> = {
-    [idOf(MODEL, name)]: name,
+    [modelEid(provider, name)]: name,
     ...Object.fromEntries(tools.map((t) => [idOf(TOOL, t.name), t.name])),
   }
   let using = {
-    provider: idOf(PROVIDER, 'openai'),
-    model: idOf(MODEL, name),
+    provider: providerEid(provider),
+    model: modelEid(provider, name),
   }
   let entries = (session: Eid) => transcript(h.g, session)
 
@@ -297,7 +315,7 @@ export let agent = (opts: Opts = {}): Agent => {
     d,
     tools,
     names,
-    model: idOf(MODEL, name),
+    model: modelEid(provider, name),
     start: (prompt, o = {}) =>
       admit(h.g, undefined, opts, async () => {
         let home = await homeAt(h.g, opts.cwd ?? Deno.cwd())
@@ -322,8 +340,16 @@ export let agent = (opts: Opts = {}): Agent => {
         ])
         return session
       }),
-    authorizeMCP: (action, name, callback) =>
-      mcp.authorize(action, name, callback),
+    authorizeMCP: async (action, name, callback) => {
+      if (name === OPENROUTER_AUTH) {
+        return providerAuth.control(action, callback)
+      }
+      const reply = await mcp.authorize(action, name, callback)
+      if (action === 'list' && await providerAuth.listed()) {
+        reply.servers = [...reply.servers ?? [], OPENROUTER_AUTH]
+      }
+      return reply
+    },
     send: async (session, text) => {
       // Admission is independent of the provider/tool execution queue. The
       // session plugin assigns seq inside this write's transaction.
@@ -428,6 +454,7 @@ export let agent = (opts: Opts = {}): Agent => {
     close: () =>
       shutdown ??= (async () => {
         closing = true
+        providerAuth.cancel()
         let drained = d.stop()
         await Promise.allSettled([...operations])
         await drained
