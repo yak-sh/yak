@@ -46,6 +46,9 @@ In dependency order:
 - **[@yaks/embedding](./embedding)** — the other kind of search: a vector per
   entity, kept current by a sweep, and the `@yaks/sql` extension that compiles
   `.near=<entity>` and `.order=similar` into a nearest-neighbour ranking.
+- **[@yaks/telemetry](./telemetry)** — the tool-call log beside a graph: every
+  call through a door, recorded without ever throwing, read back newest-first
+  with repeated errors folded into counted cohorts, plus the MCP classifier.
 - **[@yaks/match](./match)** — the other evaluator of the same grammar: a
   `@yaks/query` AST run as a predicate over bundles held in memory, with no
   database. Tested query by query for parity with `@yaks/sql`.

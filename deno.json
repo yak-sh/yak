@@ -181,6 +181,7 @@
     "./packages/blob",
     "./packages/fts",
     "./packages/embedding",
+    "./packages/telemetry",
     "./packages/api",
     "./packages/mcp",
     "./packages/cli",
