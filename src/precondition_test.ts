@@ -75,7 +75,14 @@ let num = async (eid: string) => (await row(eid))?.entity.num
 // wrote TWO, so ONE's hash is stale and a guard naming it must refuse.
 let stale = async () => {
   let eid = uid()
-  await post([{ eid, name: 'doc', comp: { title: 'guard', body: 'ONE' } }])
+  await post([{
+    eid,
+    name: 'doc',
+    comp: { title: 'guard', body: 'ONE' },
+    // A human number is a per-entity REQUEST (T-37071), so a fixture that
+    // wants the refusal to speak D-<num> asks for one the way `task new` does.
+    $num: true,
+  }])
   await post([{ eid, name: 'doc', comp: { body: 'TWO' } }])
   return { eid, was: { body: sha('ONE') } }
 }
@@ -350,7 +357,12 @@ let subscribe = async (name: string, q: string) => {
 // sub frame must carry the addressed entity among its changes.
 slow('a bare id= /ws sub carries the addressed entity', alone, async () => {
   let eid = uid()
-  await post([{ eid, name: 'doc', comp: { title: 'addressed', body: 'BODY' } }])
+  await post([{
+    eid,
+    name: 'doc',
+    comp: { title: 'addressed', body: 'BODY' },
+    $num: true, // addressing BY NUMBER needs a number asked for
+  }])
   let n = await num(eid)
   let frame = await subscribe(`s-${uid()}`, `id=${n}`)
   let changes = (frame.changes ?? []) as { eid: string }[]

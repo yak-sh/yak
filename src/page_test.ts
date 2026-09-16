@@ -6,6 +6,7 @@
 // campaign-tagged address, a fragment, a trailing slash) and asserts the
 // two halves meet.
 import { assertEquals, assertMatch } from '@std/assert'
+import { idOf } from './types.ts'
 import { slow } from './testing.ts'
 
 // A temp HOME before the import: freeze.ts fixes ~/.tasks/frozen at load,
@@ -69,7 +70,10 @@ slow(
   alone,
   async () => {
     let one = await file({ url: PAGE, title: 'The Article', line: 'Read this' })
-    assertMatch(one.page, /^W-\d+$/)
+    // A page asks for no human number — only the doors a person authors
+    // through do (T-37071) — so the door names it by the short eid form,
+    // while the task the line filed is born through `new`, which asks.
+    assertMatch(one.page, /^W#[0-9a-f]+$/)
     assertEquals(one.url, PAGE)
     assertEquals(one.filed.length, 1)
     assertMatch(one.filed[0], /^T-\d+$/)
@@ -85,7 +89,7 @@ slow(
 
     let hits = await badge(`${PAGE}#somewhere-else`)
     assertEquals(hits.length, 1)
-    assertEquals(`W-${hits[0].entity.num}`, one.page)
+    assertEquals(idOf({ ...hits[0].entity, kind: 'web' }), one.page)
     assertEquals(hits[0].web?.url, PAGE)
     // One query answers the whole panel: who points here, how, and what
     // they are called.

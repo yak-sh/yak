@@ -1,7 +1,7 @@
 // Verification's HTTP boundaries against a disposable server. The policy
 // tests exercise in-process actions; this file proves remote telemetry and
 // the completion → verifier → independent-review lifecycle through /apply.
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertMatch } from '@std/assert'
 import type { Sql } from './store/sql.ts'
 import { slow, until } from './testing.ts'
 import { statusOf } from './types.ts'
@@ -180,7 +180,9 @@ slow(
     }
     assertEquals(result.state, 'spawned')
     assertEquals(result.target, taskId)
-    assert(result.verifier.startsWith('S-'))
+    // The verifier is a spawned session, and no session door asks for a human
+    // number (T-37071), so the envelope names it by the short eid form.
+    assertMatch(result.verifier, /^S#[0-9a-f]+$/)
 
     let telemetry = await (await fetch(`http://${U}/telemetry`))
       .json() as Call[]

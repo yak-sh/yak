@@ -2,6 +2,7 @@
 // policy tests own each predicate and race; this file composes one happy path
 // through the same stateless JSON-RPC door a Desktop host uses.
 import { assert, assertEquals, assertMatch } from '@std/assert'
+import { idOf } from './types.ts'
 import { slow, until } from './testing.ts'
 
 Deno.env.set('DB_PATH', ':memory:')
@@ -60,8 +61,10 @@ let json = async <T>(name: string, args: Record<string, unknown> = {}) => {
   return JSON.parse(body) as T
 }
 
+// A session asks for no human number (T-37071), so the handle it reports is
+// the short eid form — one every door resolves, as the lookups below do.
 let identity = (body: string) => {
-  let session = body.match(/^session: (S-\d+)$/m)?.[1]
+  let session = body.match(/^session: (S#[0-9a-f]+)$/m)?.[1]
   let sid = body.match(/^sid: ([^\n]+)$/m)?.[1]
   assert(session && sid)
   return { session, sid }
@@ -107,6 +110,7 @@ slow(
         entities: [
           {
             key: 'project',
+            $num: true,
             comps: {
               doc: { title: 'Worker canary' },
               project: {},
@@ -115,6 +119,7 @@ slow(
           },
           {
             key: 'prerequisite',
+            $num: true,
             comps: {
               doc: { title: 'Settled prerequisite', body: '' },
               task: {},
@@ -124,6 +129,7 @@ slow(
           },
           {
             key: 'target',
+            $num: true,
             comps: {
               doc: { title: 'Executable proposal', body: 'draft' },
               task: {},
@@ -133,6 +139,7 @@ slow(
           },
           {
             key: 'design',
+            $num: true,
             comps: {
               doc: {
                 title: 'Worker canary design',
@@ -324,7 +331,11 @@ slow(
       completionState.comments as Record<string, unknown>[]
     ).find((c) => (c.doc as { body: string }).body == completion)
     assert(batchedComment)
-    let commentId = `C-${(batchedComment.entity as { num: number }).num}`
+    // An agent's comment through a session tool asks for no handle — only
+    // the comments a person writes through the CLI or web do (T-37071) — so
+    // it is addressed by the short eid form, like any num-less entity.
+    let commented = batchedComment.entity as { eid: string; num: number }
+    let commentId = idOf({ ...commented, kind: 'comment' })
     let taskHistory = await ok('history', {
       id: targetId,
       limit: 1,
@@ -435,7 +446,10 @@ slow(
       let row = sessions.find((s) => s.session.id == who.sid)
       assert(row)
       assertEquals(row.kind, 'session')
-      assertEquals(`S-${row.entity.num}`, who.session)
+      assertEquals(
+        idOf({ eid: row.entity.eid, kind: row.kind, num: row.entity.num }),
+        who.session,
+      )
       return row.entity.eid
     }
     let builderEid = correlate(builder)

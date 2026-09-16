@@ -36,7 +36,10 @@ slow(
       'before [redacted] after',
     )
     assertEquals(JSON.stringify(out).includes(secret), false)
-    assertMatch(out.audit, /^X-\d+$/)
+    // The audit is minted by the server's own redact pass, which asks for no
+    // human number (T-37071: a handle is requested, never implied), so it is
+    // named by the short eid form — resolvable in every door just the same.
+    assertMatch(out.audit, /^X#[0-9a-f]+$/)
     assertEquals(
       db.prepare(
         `select count(*) as n from journal_field jf

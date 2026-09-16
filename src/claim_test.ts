@@ -8,6 +8,7 @@
 import { fileURLToPath } from 'node:url'
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import { query } from './client.ts'
+import { idOf } from './types.ts'
 import type { Sql } from './store/sql.ts'
 import { slow } from './testing.ts'
 import type { Change } from './types.ts'
@@ -54,20 +55,23 @@ let post = async (changes: Change[]) => {
   if (!res.ok) throw new Error(`apply ${res.status}: ${await res.text()}`)
 }
 
+// Each fixture entity asks for a human number the way the doors a person
+// authors through ask (`task new`, `task design`, a CLI comment): a num is a
+// per-entity REQUEST since T-37071, and `entity.num` is server-owned, so a
+// number written as a column is dropped and the id reads as a short eid.
 let ent = (
   eid: string,
-  num: number,
   comps: Record<string, Record<string, unknown>>,
 ): Change[] => [
-  { eid, name: 'entity', comp: { eid, num } },
+  { eid, name: 'entity', comp: {}, $num: true },
   ...Object.entries(comps).map(([name, comp]) => ({ eid, name, comp })),
 ]
 
 let uid = (n: number) =>
   `cccccccc-0000-4000-8000-${String(n).padStart(12, '0')}`
 let P = uid(1) // the project the session stands in
-let S = uid(2) // the real session, external id 'sess-real', human id S-2
-let T = uid(3) // the task to claim, human id T-3
+let S = uid(2) // the real session, external id 'sess-real'
+let T = uid(3) // the task to claim
 
 let run = (...args: string[]) =>
   new Deno.Command(Deno.execPath(), {
@@ -91,12 +95,12 @@ slow(
   alone,
   async () => {
     await post([
-      ...ent(P, 1, { doc: { title: 'Home', body: '' }, project: {} }),
-      ...ent(S, 2, {
+      ...ent(P, { doc: { title: 'Home', body: '' }, project: {} }),
+      ...ent(S, {
         doc: { title: 'Work session', body: '' },
         session: { id: 'sess-real', cwd: '/w', actor: P },
       }),
-      ...ent(T, 3, {
+      ...ent(T, {
         doc: { title: 'A task', body: '' },
         task: {},
         filed: { project: P },
@@ -135,22 +139,22 @@ slow(
     // cannot carry a second write shape through the named mutation.
     let guarded = uid(5), wrongTask = uid(6), design = uid(7), comment = uid(8)
     await post([
-      ...ent(guarded, 5, {
+      ...ent(guarded, {
         doc: { title: 'Guarded task', body: '' },
         task: {},
         filed: { project: P },
         decided: {},
       }),
-      ...ent(wrongTask, 6, {
+      ...ent(wrongTask, {
         doc: { title: 'Wrong task identity', body: '' },
         task: {},
         filed: { project: P },
       }),
-      ...ent(design, 7, {
+      ...ent(design, {
         doc: { title: 'Wrong design identity', body: '' },
         design: {},
       }),
-      ...ent(comment, 8, {
+      ...ent(comment, {
         doc: { title: 'Wrong comment identity', body: '' },
         comment: { target: guarded },
       }),
@@ -221,19 +225,19 @@ slow(
     // claims point at that same eid.
     let sourceFailed = uid(10), sourceA = uid(11), sourceB = uid(12)
     await post([
-      ...ent(sourceFailed, 10, {
+      ...ent(sourceFailed, {
         doc: { title: 'Source refusal', body: '' },
         task: {},
         filed: { project: P },
         proposed: {},
       }),
-      ...ent(sourceA, 11, {
+      ...ent(sourceA, {
         doc: { title: 'Source claim A', body: '' },
         task: {},
         filed: { project: P },
         decided: {},
       }),
-      ...ent(sourceB, 12, {
+      ...ent(sourceB, {
         doc: { title: 'Source claim B', body: '' },
         task: {},
         filed: { project: P },
@@ -295,7 +299,9 @@ slow(
       row.eid == sourceEid
     )!
     assertEquals(sourceSession.comps.session?.id, sourceSid)
-    assertEquals(typeof sourceSession.num, 'number')
+    // A session asks for no human number (T-37071): graduation leaves it the
+    // short eid form, which every door resolves the same way.
+    assertMatch(idOf(sourceSession), /^S#[0-9a-f]+$/)
     assertEquals(
       sql.prepare(
         `select count(*) as n from session
@@ -306,18 +312,15 @@ slow(
     let replay = await sourceAttempt(sourceA, sourceSid)
     assertEquals(replay.status, 200)
     assertEquals((await replay.json()).changes, [])
-    let humanReplay = await sourceAttempt(
-      sourceA,
-      `S-${sourceSession.num}`,
-    )
-    assertEquals(humanReplay.status, 200)
+    let humanReplay = await sourceAttempt(sourceA, idOf(sourceSession))
+    assertEquals(humanReplay.status, 200, await humanReplay.clone().text())
     assertEquals((await humanReplay.json()).changes, [])
 
     // Two worker takes arriving together serialize at the writer transaction:
     // exactly one claims, the loser leaves no Session, and the existing
     // conflict audit records the collision.
     let racing = uid(4)
-    await post(ent(racing, 4, {
+    await post(ent(racing, {
       doc: { title: 'Racing task', body: '' },
       task: {},
       filed: { project: P },

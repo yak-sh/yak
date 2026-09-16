@@ -442,7 +442,15 @@ let task = (comp: Record<string, unknown>) => {
     eid,
     session,
     born: [
-      { eid, name: 'doc', comp: { title: `probe ${eid.slice(0, 8)}` } },
+      {
+        eid,
+        name: 'doc',
+        comp: { title: `probe ${eid.slice(0, 8)}` },
+        // A filed task is born through a door a person authors with, and
+        // those ask for a human number (T-37071) — the id these probes then
+        // address it by. Its session asks for none, as no session door does.
+        $num: true,
+      },
       { eid, name: 'task', comp: {} },
       { eid, name: 'filed', comp: { priority: 3, ...stored } },
       { eid: session, name: 'session', comp: { id: `sub-${session}` } },
@@ -1117,6 +1125,7 @@ slow(
         eid: target,
         name: 'doc',
         comp: { title: 'HTTP candidate', body: secretTaskBody },
+        $num: true, // a filed task carries the handle its author asked for
       },
       { eid: target, name: 'task', comp: {} },
       { eid: target, name: 'filed', comp: { project, priority: 0 } },
