@@ -2459,7 +2459,7 @@ slow('code_run throws and rejected batches are MCP errors', async () => {
       let rejected = await client.callTool({
         name: 'code_run',
         arguments: {
-          js: `applyNumbered({
+          js: `apply({
             eid: '40000000-0000-4000-8000-000000000001',
             name: 'task',
             comp: {
