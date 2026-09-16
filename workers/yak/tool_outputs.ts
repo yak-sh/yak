@@ -99,7 +99,11 @@ const fields: Record<string, z.ZodRawShape> = {
     version: count.optional(),
     errors: z.array(error).optional(),
   },
-  domain_attach: domain.shape,
+  // An attach that never reached Cloudflare — the free tier's upsell, which
+  // answers plan settings and no domain at all (tools.ts `domain_attach`) — is
+  // the same tool answering, so the domain itself is what it has where it has
+  // it, never a field the reply is refused for missing.
+  domain_attach: domain.partial().shape,
   domain_status: { domains: z.array(domain).optional() },
   // `command` dispatches app-defined query/apply operations. Rows depend on
   // the app vocabulary; do not manufacture a fixed shape for their fields.

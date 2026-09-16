@@ -48,10 +48,18 @@ Deno.test('narrative structured result preserves the exact text and existing vie
   })
   assertEquals(structuredOutput('', { rows: [] }), { text: '', rows: [] })
   assert(!platformOutput('app_new').safeParse({}).success)
+  // domain_attach answers either an attached domain or the free tier's upsell
+  // (tools.ts), so what it says about the domain is optional — and still typed.
+  assert(
+    platformOutput('domain_attach').safeParse({
+      text: 'Custom domains require Plus.',
+      code: 'plan_required',
+    }).success,
+  )
   assert(
     !platformOutput('domain_attach').safeParse({
       text: 'attached',
-      records: [],
+      records: 'CNAME',
     }).success,
   )
 })

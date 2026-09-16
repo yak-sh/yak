@@ -724,6 +724,36 @@ export let hostnames = () => {
 }
 
 /**
+ * A space on Plus, the one way a space gets there: Stripe says its
+ * subscription is active and the webhook moves the plan (billing.ts). `plan`
+ * is stamped, so no door a test can reach writes it — the kernel is leased
+ * with this `STRIPE_WEBHOOK_SECRET` and the event is signed with it.
+ */
+export let plus = async (k: Kernel, secret: string, space: string) => {
+  let at = Math.floor(Date.now() / 1000)
+  let raw = JSON.stringify({
+    id: `evt_plus_${space}`,
+    type: 'customer.subscription.updated',
+    created: at,
+    data: {
+      object: {
+        id: `sub_plus_${space}`,
+        customer: `cus_plus_${space}`,
+        status: 'active',
+        metadata: { space },
+      },
+    },
+  })
+  let paid = await k.at('yaks.app', '/stripe/webhook', {
+    method: 'POST',
+    body: raw,
+    headers: { 'stripe-signature': await signed(secret, raw, at) },
+  })
+  let said = await paid.text()
+  if (!paid.ok) throw new Error(`plus: ${paid.status} ${said}`)
+}
+
+/**
  * A `Stripe-Signature` header over exactly these bytes: HMAC-SHA256 of
  * `<timestamp>.<raw body>`, keyed by the endpoint's signing secret. The scheme
  * is Stripe's own and identical for the platform endpoint and the Connect one —

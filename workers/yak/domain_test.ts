@@ -13,7 +13,15 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { client, connector, hostnames, kernel, meta, seed } from './probe.ts'
+import {
+  client,
+  connector,
+  hostnames,
+  kernel,
+  meta,
+  plus,
+  seed,
+} from './probe.ts'
 
 slow('a hostname finds its app, and only one app', async () => {
   let k = await kernel()
@@ -251,14 +259,28 @@ slow('a domain on the space opens the space, apps and all', async () => {
 // the thing that is missing. The Cloudflare exchange itself is held in
 // domains_test.ts against the bytes the live zone answered.
 slow('attaching a domain: what it refuses, and what it says', async () => {
-  let k = await kernel()
+  let k = await kernel({ STRIPE_WEBHOOK_SECRET: 'domain-refusals-test' })
   try {
-    let { cookie } = await seed(k, [{
+    let { cookie, eids } = await seed(k, [{
       slug: 'jeff',
       apps: ['recipes', 'garden'],
     }])
     let agent = connector(k, cookie)
     let said = (p: Promise<string>) => p.then((t) => t, (e: Error) => e.message)
+
+    // A custom domain is Plus's (meter.ts `ceilings`). Free, the tool answers
+    // the upsell and nothing about a domain — which is an ANSWER, so the
+    // fields it has none of are not fields its reply is refused for missing
+    // (tool_outputs.ts). The rest of the refusals are the ones a space that
+    // may have a domain still meets.
+    assertStringIncludes(
+      await said(agent.tool('domain_attach', {
+        app: 'recipes',
+        hostname: 'herbusiness.com',
+      })),
+      'Custom domains require Plus',
+    )
+    await plus(k, 'domain-refusals-test', eids.jeff)
 
     // A space with none is told where it does answer, not just "none".
     let empty = await agent.tool('domain_status', { space: 'jeff' })
@@ -349,12 +371,14 @@ slow(
       CF_ZONE: 'zone',
       CF_HOSTNAMES_TOKEN: 'a-token',
       HOSTNAMES_API: cf.url,
+      STRIPE_WEBHOOK_SECRET: 'domain-forms-test',
     })
     try {
-      let { cookie } = await seed(k, [{
+      let { cookie, eids } = await seed(k, [{
         slug: 'jeff',
         apps: ['site', 'recipes'],
       }])
+      await plus(k, 'domain-forms-test', eids.jeff)
       let agent = connector(k, cookie)
       await agent.tool('app_set', { space: 'jeff', app: 'site', home: true })
 
