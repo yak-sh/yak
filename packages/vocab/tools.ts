@@ -1,5 +1,5 @@
 /** JSON Schema validation for portable tool arguments. Compiled once per schema. */
-import { Ajv } from 'ajv'
+import { Ajv, type ValidateFunction } from 'ajv'
 import { Ajv2019 } from 'ajv/dist/2019.js'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 
@@ -70,7 +70,7 @@ const outputValidators = new WeakMap<
 /** Compile a non-mutating validator using the schema's declared dialect. */
 export const toolOutputValidator = (
   schema: Record<string, unknown>,
-): ReturnType<typeof outputAjv.compile> => {
+): ValidateFunction => {
   let validate = outputValidators.get(schema)
   if (!validate) {
     validate = outputDialect(schema).compile(schema)
