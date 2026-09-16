@@ -267,14 +267,21 @@ let ordered = (heard: Heard[]) => {
 // each answer is, and `.book!&.loan?` must not call the same row something
 // else. Clause order used to decide it, which made one entity a book or a
 // loan by where the caller happened to type the word (C-32800 item 3).
+// The answer also speaks AS that store: `at` is the one whose own word won,
+// and the spine it holds for the row — its archetype — is the one a composed
+// bundle carries, so the fan-out says about an entity what the store the word
+// belongs to says about it.
 let kindFrom = (
-  kinds: string[],
+  kinds: [string, string][],
   comps: Record<string, unknown>,
   must: string[] = [],
-) => {
-  let own = kinds.filter((k) => k && !CORE.kinds.includes(k))
-  return own.find((k) => must.includes(k)) ?? own[0] ??
-    CORE.kinds.find((k) => k in comps) ?? 'entity'
+): { kind: string; at?: string } => {
+  let own = kinds.filter(([, k]) => k && !CORE.kinds.includes(k))
+  let said = own.find(([, k]) => must.includes(k)) ?? own[0]
+  return {
+    kind: said?.[1] ?? CORE.kinds.find((k) => k in comps) ?? 'entity',
+    at: said?.[0] ?? kinds[0]?.[0],
+  }
 }
 
 // One component's columns as its schema spells them: column → the type word,
@@ -316,11 +323,15 @@ let apartIn = (vocabs: { r: Reach; doc: VocabDoc }[]) => {
 
 type Held = {
   // The spine as the first store that answered spelled it: the eid is what the
-  // entity is called everywhere, the num is that store's own counter.
+  // entity is called everywhere, and the num is that store's own counter.
   entity: Entity
   comps: Record<string, unknown>
   // The kind each store called the row, by the store that said it.
   kinds: Record<string, string>
+  // The archetype each store assigned the row, by the store that assigned it:
+  // a pointer at the tables THAT store holds, so the composition can only
+  // answer one of them, never a merge of them.
+  arch: Record<string, string>
   home: Record<string, string>
   // A word two SPACES mean two things by (`apartIn`), held per space instead
   // of merged: space → the store that has it and what it holds.
@@ -356,11 +367,16 @@ let gathered = async (
     for (let row of bundles) {
       let eid = eidOf(row)
       if (!eid) continue
-      let one = held.get(eid) ??
-        { entity: row.entity, comps: {}, kinds: {}, home: {}, split: {} }
+      // The spine is held once, here, rather than as a component of its own:
+      // its archetype is the answering store's and is chosen with the kind
+      // below, so no merge of the components may spell it a second time.
+      let { archetype, ...spine } = row.entity
+      let one: Held = held.get(eid) ??
+        { entity: spine, comps: {}, kinds: {}, arch: {}, home: {}, split: {} }
       held.set(eid, one)
+      if (archetype != null) one.arch[at] ??= archetype
       for (let [name, comp] of Object.entries(row)) {
-        if (name == 'kind') continue
+        if (name == 'kind' || name == 'entity') continue
         if (apart.has(name)) {
           one.split[name] ??= {}
           one.split[name][spaceOf(at)] ??= { at, comp }
@@ -368,7 +384,7 @@ let gathered = async (
         }
         if (name in one.comps) continue
         one.comps[name] = comp
-        if (name != 'entity') one.home[name] = at
+        one.home[name] = at
       }
       one.kinds[at] ??= String(row.kind ?? '')
     }
@@ -379,7 +395,10 @@ let gathered = async (
 // One bundle per eid, out of every store that holds a piece of it. One home
 // per component, so the first store that answers a component owns it here
 // too; `entity` keeps the first store's num, since a num is a store's own
-// counter and the eid is what the entity is called everywhere.
+// counter and the eid is what the entity is called everywhere. Its archetype
+// is the one thing on the spine that is a CLAIM — the tables a store holds for
+// the row — so it comes from the store whose word named the kind, and a
+// fan-out says what that store alone would say (C-32800 item 2).
 //
 // `_stores` says which app holds which component, and rides only on a bundle
 // that actually spans two — where the composition is the news, and where a
@@ -412,21 +431,23 @@ export let composed = async (
     space?: string,
   ): Bundle => {
     let comps = Object.fromEntries([
-      ...Object.entries(one.comps).filter(([n]) => n == 'entity' || keeps(n)),
+      ...Object.entries(one.comps).filter(([n]) => keeps(n)),
       ...Object.entries(extra).filter(([n]) => keeps(n)),
     ])
     let where = Object.fromEntries(
       Object.entries({ ...one.home, ...home }).filter(([n]) => keeps(n)),
     )
-    return {
-      kind: kindFrom(
-        Object.entries(one.kinds)
-          .filter(([at]) => !space || spaceOf(at) == space)
-          .map(([, k]) => k),
-        comps,
-        must,
+    let said = kindFrom(
+      Object.entries(one.kinds).filter(([at]) =>
+        !space || spaceOf(at) == space
       ),
-      entity: one.entity,
+      comps,
+      must,
+    )
+    let archetype = said.at ? one.arch[said.at] : undefined
+    return {
+      kind: said.kind,
+      entity: archetype ? { ...one.entity, archetype } : one.entity,
       // Two spaces mean two things by this word, so the row says which one it
       // is answering for (T-32728).
       ...(space ? { space } : {}),
