@@ -1,7 +1,7 @@
 // The schema a vocabulary implies: one identity table, one graveyard, one table
 // per component, and the doc view (search indexes belong to @yaks/fts).
 
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
 import { compile } from '@yaks/sql'
@@ -216,4 +216,118 @@ Deno.test('reference indexes are installed on new and existing member stores', (
       )
     }
   }
+})
+
+// What the vocabulary can say about a table beyond its columns' types, with
+// native JSON Schema where it has a word: `required` is NOT NULL, `default` is
+// the row's fallback (the clock spelled `{now: true}`), `enum` is a CHECK,
+// `integer` keeps its affinity, and a composite may be partial.
+let strict = loadVocab({
+  $defs: {
+    entity: { type: 'object', wire: false, properties: {} },
+    created: {
+      type: 'object',
+      required: ['at'],
+      properties: {
+        at: { type: 'string', format: 'date-time', default: { now: true } },
+        by: { type: 'string', ref: 'entity', death: 'keep' },
+      },
+    },
+    repo: {
+      type: 'object',
+      required: ['base', 'push'],
+      properties: {
+        base: { type: 'string', default: 'main' },
+        push: { type: 'boolean', default: false },
+        seq: { type: 'integer' },
+        state: { enum: ['stopped', 'running'], aliases: { on: 'running' } },
+      },
+    },
+    output: {
+      type: 'object',
+      unique: [{ cols: ['key'], present: ['key'] }],
+      properties: { key: { type: 'string' }, source: { type: 'integer' } },
+    },
+  },
+})
+
+Deno.test('constraints emit as the vocabulary said them', () => {
+  let ddl = schema(strict).join('\n')
+  assert(
+    ddl.includes(
+      `"at" text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    ),
+    ddl,
+  )
+  assert(ddl.includes(`"base" text not null default 'main'`), ddl)
+  assert(ddl.includes(`"push" integer not null default 0`), ddl)
+  assert(ddl.includes(`"seq" integer,`), ddl)
+  assert(
+    ddl.includes(`"state" text check("state" in ('stopped', 'running', 'on'))`),
+    ddl,
+  )
+  assert(
+    ddl.includes(
+      `create unique index if not exists output_key on "output" ("key") where "key" is not null`,
+    ),
+    ddl,
+  )
+})
+
+Deno.test('the engine holds what the vocabulary said', () => {
+  let d = mem()
+  storage(d, strict).install()
+  d.exec(`insert into entity (id, eid) values (1, 'a'), (2, 'b'), (3, 'c')`)
+  // A default fills what the writer omitted; the clock stamps an instant.
+  d.exec(`insert into created (entity) values (1)`)
+  d.exec(`insert into repo (entity) values (1)`)
+  let [row] = d.query(`select base, push from repo where entity = 1`, [])
+  assertEquals(row, { base: 'main', push: 0 })
+  let [at] = d.query(`select at from created where entity = 1`, [])
+  assert(/^\d{4}-\d\d-\d\dT.*Z$/.test(String(at.at)), String(at.at))
+  // NOT NULL and CHECK refuse at the engine.
+  assertThrows(() =>
+    d.exec(`insert into created (entity, at) values (2, null)`)
+  )
+  assertThrows(() =>
+    d.exec(`insert into repo (entity, state) values (2, 'flying')`)
+  )
+  d.exec(`insert into repo (entity, state) values (2, 'on')`)
+  // A partial unique lets keyless rows be many and keyed rows be one.
+  d.exec(`insert into output (entity) values (1), (2)`)
+  d.exec(`insert into output (entity, key) values (3, 'k')`)
+  assertThrows(() => d.exec(`update output set key = 'k' where entity = 2`))
+})
+
+Deno.test('a grown column keeps a literal default, takes the clock only ahead', () => {
+  let d = mem()
+  let was = loadVocab({
+    $defs: {
+      entity: { type: 'object', wire: false, properties: {} },
+      created: { type: 'object', properties: {} },
+      repo: { type: 'object', properties: {} },
+    },
+  })
+  storage(d, was).install()
+  d.exec(`insert into entity (id, eid) values (1, 'a')`)
+  d.exec(`insert into repo (entity) values (1)`)
+  d.exec(`insert into created (entity) values (1)`)
+  let grew = storage(d, strict)
+  let stmts = grew.grown()
+  // A NOT NULL with a literal default is added as such (the literal fills the
+  // rows already there); the clock is not a constant SQLite can add, so that
+  // column arrives nullable and unstamped for the rows already written.
+  assert(
+    stmts.includes(
+      `alter table "repo" add column "base" text not null default 'main'`,
+    ),
+    stmts.join('\n'),
+  )
+  assert(
+    stmts.includes(`alter table "created" add column "at" text`),
+    stmts.join('\n'),
+  )
+  grew.install()
+  assertEquals(d.query(`select base from repo`, []), [{ base: 'main' }])
+  assertEquals(d.query(`select at from created`, []), [{ at: null }])
 })

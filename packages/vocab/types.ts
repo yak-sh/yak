@@ -57,8 +57,17 @@ export type Column = {
   identity: boolean
   affinity: 'text' | 'real' | 'integer' // the SQLite column affinity it stores as
   fk: boolean // a reference carrying a foreign key to entity(id)
+  /** the component's `required` list names it: a row may not hold it null */
+  required: boolean
+  /** what a row holds when the writer said nothing — see {@link Default} */
+  default?: Default
   keywords: Record<string, unknown> // registered extension keywords, verbatim
 }
+
+// A column's default, from native `default`: a literal the row takes, or the
+// clock — `{"now": true}` is the one spelling JSON has no literal for, so it is
+// an object no scalar column could hold and never mistaken for a value.
+export type Default = { now: true } | { value: string | number | boolean }
 
 // A component, interrogated: its columns split writable/stamped, its display
 // facts, and whatever extension keywords a caller registered (keywords.ts) —
@@ -81,8 +90,14 @@ export type Identity = string[]
 // One index over a component's table: the columns it covers, in order, and
 // whether it also promises uniqueness. Derived from the `unique`/`index`
 // keywords (a column's own flag, plus the component's composite lists), identity,
-// and automatic reference indexes — see `Vocab.indexes`.
-export type Index = { cols: string[]; unique: boolean }
+// and automatic reference indexes — see `Vocab.indexes`. A PARTIAL index names
+// the columns a row must hold for the index to see it (`present`): a unique
+// over an optional key, where absent rows may be many and present ones one.
+export type Index = { cols: string[]; unique: boolean; present?: string[] }
+
+// One entry of a component's composite `unique`/`index` list: the column names
+// alone, or an object that also says which columns must be present.
+export type Composite = string[] | { cols: string[]; present?: string[] }
 
 // One deref step of a dotted path: the component a segment landed in and the
 // column it named. `.comment.target.doc.title` → [{comment,target},{doc,title}].
@@ -138,8 +153,10 @@ export type PropSchema = {
   // On a COLUMN a boolean (this column alone); on a COMPONENT the composite
   // column lists. `Vocab.indexes` merges the two spellings. Stored references
   // are always indexed: index: true is redundant and false does not opt out.
-  unique?: boolean | string[][]
-  index?: boolean | string[][]
+  unique?: boolean | Composite[]
+  index?: boolean | Composite[]
+  // native: the columns a row must hold (NOT NULL), on the COMPONENT
+  required?: string[]
   // What the entity's id is DERIVED from. On a COLUMN, true; on a COMPONENT,
   // the column list a composite identity is spelled across. One tuple, not a
   // list of them: an entity has one id. `Vocab.identity` merges the spellings.

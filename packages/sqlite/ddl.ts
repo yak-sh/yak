@@ -22,11 +22,14 @@
 //                 one): its columns read as TEXT, plus a `rowid` alias. It is
 //                 what @yaks/sql reads a `doc` row through.
 //
-// Columns are nullable by design: a patch may create a row from any subset of
-// its columns (that is what PATCH means), so no column may demand a value an
-// insert might omit. A reference carries a foreign key so a dangling id is
-// refused at the engine, except a `keep` reference, which outlives the row it
-// points at and stays key-free.
+// Columns are nullable by default: a patch may create a row from any subset of
+// its columns (that is what PATCH means), so a column demands a value only
+// where the vocabulary said so — a `required` column is NOT NULL, and the row
+// that omits it is refused at the engine unless a `default` fills it. An `enum`
+// is a CHECK, so a spelling outside the set is refused where it is written. A
+// reference carries a foreign key so a dangling id is refused at the engine,
+// except a `keep` reference, which outlives the row it points at and stays
+// key-free.
 
 import type { Column, Index, Vocab } from '@yaks/vocab'
 import type { Driver } from './driver.ts'
@@ -54,13 +57,70 @@ let SPINE = [
 ]
 
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
+let lit = (s: string): string => `'${s.replaceAll("'", "''")}'`
+
+// The clock, as SQLite spells the instant a row is written — the same ISO
+// form every `at` column carries, so a defaulted stamp reads like a stamped one.
+export let NOW = `(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`
+
+// A column's default as SQL: the clock, or a literal a row takes when the
+// writer said nothing. A boolean stores as the integer it reads back as.
+let defaultSql = (c: Column): string | undefined => {
+  let d = c.default
+  if (!d) return undefined
+  if ('now' in d) return NOW
+  let v = d.value
+  return typeof v == 'string'
+    ? lit(v)
+    : typeof v == 'boolean'
+    ? (v ? '1' : '0')
+    : String(v)
+}
+
+// A closed set's CHECK. Every spelling the vocabulary admits on the way in is
+// admitted here too (an alias is an input spelling), so the engine never
+// refuses what the loader accepted.
+let checkSql = (c: Column): string | undefined =>
+  c.category == 'enum'
+    ? `check(${q(c.prop)} in (${
+      [...c.values!, ...Object.keys(c.aliases ?? {})].map(lit).join(', ')
+    }))`
+    : undefined
 
 // A stored column's DDL fragment. Affinity comes straight off the interrogated
 // column; a foreign key rides a reference unless it is a `keep` reference,
-// which must survive its target's tombstone and so carries none.
+// which must survive its target's tombstone and so carries none. `required`
+// is NOT NULL, `default` and `enum` ride as written above.
 let colDdl = (c: Column): string => {
-  let fk = c.category == 'ref' && c.fk ? ' references entity(id)' : ''
-  return `${q(c.prop)} ${c.affinity}${fk}`
+  let d = defaultSql(c)
+  let parts = [
+    q(c.prop),
+    c.affinity,
+    c.required ? 'not null' : '',
+    d ? `default ${d}` : '',
+    checkSql(c) ?? '',
+    c.category == 'ref' && c.fk ? 'references entity(id)' : '',
+  ]
+  return parts.filter(Boolean).join(' ')
+}
+
+// The same column ADDED to a standing table. SQLite refuses `add column` a
+// NOT NULL without a constant default and any default that is an expression,
+// so a grown column keeps its literal default and its CHECK, arrives NOT NULL
+// only when a literal fills the rows already there, and takes the clock only
+// on rows written from now on (the writer stamps them; ddl.ts NOW is for the
+// row that omits it).
+let grownDdl = (c: Column): string => {
+  let d = c.default && 'value' in c.default ? defaultSql(c) : undefined
+  let parts = [
+    q(c.prop),
+    c.affinity,
+    c.required && d ? 'not null' : '',
+    d ? `default ${d}` : '',
+    checkSql(c) ?? '',
+    c.category == 'ref' && c.fk ? 'references entity(id)' : '',
+  ]
+  return parts.filter(Boolean).join(' ')
 }
 
 // Which of a component's declared columns are STORED: everything the vocabulary
@@ -87,9 +147,14 @@ let tableDdl = (v: Vocab, comp: string): string => {
 // install finds its own index already standing. `if not exists` is what makes a
 // re-install a no-op; a UNIQUE one is the constraint a race is decided by (the
 // loser's insert is refused, and it re-reads to find the winner).
+// A partial one covers only the rows that hold its `present` columns: the
+// rows without them are as many as they like, the rows with them are one.
 let indexDdl = (comp: string, i: Index): string =>
   `create ${i.unique ? 'unique ' : ''}index if not exists ` +
-  `${comp}_${i.cols.join('_')} on ${q(comp)} (${i.cols.map(q).join(', ')})`
+  `${comp}_${i.cols.join('_')} on ${q(comp)} (${i.cols.map(q).join(', ')})` +
+  (i.present
+    ? ` where ${i.present.map((p) => `${q(p)} is not null`).join(' and ')}`
+    : '')
 
 // How a stored document column reads as text. @yaks/blob swaps a body for
 // its address; the doc_value view resolves it for ordinary document reads.
@@ -165,8 +230,7 @@ export let indexed = (vocab: Vocab): string[] => [
 //
 // Additive only, and deliberately: nothing is dropped and nothing is retyped,
 // because rows are already written under the words the table has. A column
-// arrives nullable with no default, which is the one form SQLite accepts an
-// `add column` carrying a foreign key in.
+// arrives in the form SQLite accepts an `add column` in (grownDdl above).
 export let grown = (driver: Driver, vocab: Vocab): string[] => [
   ...(driver.query('pragma table_info(entity)', []).some((r) =>
       r.name == 'archetype'
@@ -184,6 +248,6 @@ export let grown = (driver: Driver, vocab: Vocab): string[] => [
       )
       return stored(vocab, comp)
         .filter((c) => !has.has(c.prop))
-        .map((c) => `alter table ${q(comp)} add column ${colDdl(c)}`)
+        .map((c) => `alter table ${q(comp)} add column ${grownDdl(c)}`)
     }),
 ]

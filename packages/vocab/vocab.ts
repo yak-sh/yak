@@ -13,7 +13,9 @@ import type {
   Assoc,
   Column,
   CompInfo,
+  Composite,
   Death,
+  Default,
   Hop,
   Identity,
   Index,
@@ -74,15 +76,28 @@ let jsonText = (value: unknown): boolean => {
   }
 }
 
+// A number stores as real unless the schema said `integer`, which is native
+// JSON Schema saying the value has no fraction — so the store keeps it as one.
 let affinityOf = (
   category: Column['category'],
   scalar: Scalar | undefined,
+  type: string | undefined,
 ): Column['affinity'] =>
-  category == 'ref' || scalar == 'bool'
+  category == 'ref' || scalar == 'bool' || type == 'integer'
     ? 'integer'
     : scalar == 'number' || scalar == 'priority'
     ? 'real'
     : 'text'
+
+// Native `default`, read as the two things a row can take: the clock, spelled
+// `{"now": true}`, or a scalar literal. Anything else is no default — the
+// storable check is what refuses it.
+let defaultOf = (d: unknown): Default | undefined =>
+  d != null && typeof d == 'object' && (d as { now?: unknown }).now === true
+    ? { now: true }
+    : typeof d == 'string' || typeof d == 'number' || typeof d == 'boolean'
+    ? { value: d }
+    : undefined
 
 // A death word, narrowed honestly — anything outside the four is undefined
 // here and refused by the storable check.
@@ -96,6 +111,7 @@ let columnOf = (
   prop: string,
   s: PropSchema,
   extra: Set<string>,
+  required: boolean,
 ): Column => {
   let category: Column['category'] = s.ref != null
     ? 'ref'
@@ -117,10 +133,12 @@ let columnOf = (
     stamped: !!s.stamped,
     persist: s.persist !== false,
     identity: s.identity === true,
-    affinity: affinityOf(category, scalar),
+    affinity: affinityOf(category, scalar, s.type),
     // A reference carries an FK to entity(id) unless its death is 'keep' — a
     // kept ref outlives its target's tombstone, so it stays FK-free (ddl.ts).
     fk: category == 'ref' && death != 'keep',
+    required,
+    default: defaultOf(s.default),
     keywords: carried(s, extra),
   }
 }
@@ -161,10 +179,15 @@ export type Vocab = {
   ) => string[]
 }
 
-// The composite lists a component declares under one keyword. A boolean there
-// is the COLUMN spelling misplaced, and means nothing about the whole table, so
-// it reads as no list rather than a refusal the meta-schema already makes.
-let lists = (v: unknown): string[][] => Array.isArray(v) ? v as string[][] : []
+// The composite lists a component declares under one keyword, each entry read
+// to its columns and the columns it needs present. A boolean there is the
+// COLUMN spelling misplaced, and means nothing about the whole table, so it
+// reads as no list rather than a refusal the meta-schema already makes.
+export let composite = (
+  c: Composite,
+): { cols: string[]; present?: string[] } => Array.isArray(c) ? { cols: c } : c
+let lists = (v: unknown): { cols: string[]; present?: string[] }[] =>
+  Array.isArray(v) ? (v as Composite[]).map(composite) : []
 
 // The columns a component's entities are identified BY, from the two spellings
 // that declare them: a column's own `identity` flag, or the component's list
@@ -195,11 +218,16 @@ let indexesOf = (
 ): Index[] => {
   if (!comp) return []
   let out = new Map<string, Index>()
-  let add = (names: string[], unique: boolean) => {
+  let add = (names: string[], unique: boolean, present?: string[]) => {
     if (!names.length) return
     let key = names.join(',')
     let had = out.get(key)
-    out.set(key, { cols: names, unique: unique || !!had?.unique })
+    let index: Index = { cols: names, unique: unique || !!had?.unique }
+    // The narrower spelling wins: an index asked for over present rows only
+    // stays partial even where the plain tuple was also declared.
+    let where = present ?? had?.present
+    if (where) index.present = where
+    out.set(key, index)
   }
   for (let [prop, s] of Object.entries(comp.properties ?? {})) {
     // A computed column has no cell to index.
@@ -207,8 +235,8 @@ let indexesOf = (
     if (s.unique === true) add([prop], true)
     else if (s.index === true) add([prop], false)
   }
-  for (let names of lists(comp.unique)) add(names, true)
-  for (let names of lists(comp.index)) add(names, false)
+  for (let c of lists(comp.unique)) add(c.cols, true, c.present)
+  for (let c of lists(comp.index)) add(c.cols, false, c.present)
   // An identity is unique by construction — two rows sharing the value would
   // be one entity — so the index says out loud what the derivation already
   // guarantees, and a store that somehow held two says so at the row.
@@ -275,7 +303,8 @@ export let loadVocab = (
     if (cols.has(key)) return cols.get(key)
     let s = props(comp)[prop]
     if (!s) return undefined
-    let c = columnOf(comp, prop, s, colWords)
+    let required = !!defs[comp].required?.includes(prop)
+    let c = columnOf(comp, prop, s, colWords, required)
     cols.set(key, c)
     return c
   }

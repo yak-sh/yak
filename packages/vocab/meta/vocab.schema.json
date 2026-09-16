@@ -29,7 +29,22 @@
   "$defs": {
     "cols": {
       "type": "array",
-      "items": { "type": "array", "items": { "type": "string" } }
+      "items": { "$ref": "#/$defs/composite" }
+    },
+    "composite": {
+      "description": "One composite index entry: the column names, or an object naming them plus the columns a row must hold for the index to see it (a partial index).",
+      "anyOf": [
+        { "type": "array", "items": { "type": "string" } },
+        {
+          "type": "object",
+          "properties": {
+            "cols": { "type": "array", "items": { "type": "string" } },
+            "present": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["cols"],
+          "additionalProperties": false
+        }
+      ]
     },
     "component": {
       "type": "object",
@@ -45,6 +60,7 @@
           },
           "additionalProperties": { "$ref": "#/$defs/column" }
         },
+        "required": { "type": "array", "items": { "type": "string" } },
         "kind": { "type": "boolean" },
         "before": { "type": "array", "items": { "type": "string" } },
         "wire": { "type": "boolean" },

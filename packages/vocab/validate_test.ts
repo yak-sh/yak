@@ -3,7 +3,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { grow, loadVocab, reserved, storable } from './mod.ts'
-import type { VocabDoc } from './mod.ts'
+import type { PropSchema, VocabDoc } from './mod.ts'
 import slice from './fleet/slice.schema.json' with { type: 'json' }
 
 let doc = (defs: VocabDoc['$defs']): VocabDoc => ({ $defs: defs })
@@ -163,4 +163,41 @@ Deno.test('text cannot become JSON after rows were written', () => {
     ],
   })
   assertEquals(grow(vocab('json'), vocab('json')), { added: [], errors: [] })
+})
+
+Deno.test('storable refuses a required or present column that is not there', () => {
+  let errs = storable(doc({
+    output: {
+      type: 'object',
+      required: ['key', 'rank'],
+      unique: [{ cols: ['key'], present: ['ghost'] }],
+      properties: {
+        key: { type: 'string' },
+        rank: { type: 'number', persist: false },
+      },
+    },
+  }))
+  assertEquals(errs, [
+    'output indexes ghost, which is no column of output',
+    'output.rank is computed — it cannot be required',
+  ])
+})
+
+Deno.test('storable admits a literal or clock default and refuses the rest', () => {
+  let one = (props: Record<string, PropSchema>) =>
+    storable(doc({ row: { type: 'object', properties: props } }))
+  assertEquals(one({ a: { type: 'string', default: 'x' } }), [])
+  assertEquals(one({ a: { type: 'boolean', default: true } }), [])
+  assertEquals(
+    one({
+      at: { type: 'string', format: 'date-time', default: { now: true } },
+    }),
+    [],
+  )
+  assertEquals(one({ a: { type: 'string', default: { now: true } } }), [
+    'row.a defaults to now but is no date-time column',
+  ])
+  assertEquals(one({ a: { type: 'string', default: ['x'] } }), [
+    'row.a has a default no column can hold (a literal, or {"now": true})',
+  ])
 })

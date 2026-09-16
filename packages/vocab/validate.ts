@@ -11,8 +11,8 @@
 // This is not a new security story: a hosted store lowers only its own words,
 // and these refusals are what a person's agent reads when a deploy is rejected.
 
-import type { PropSchema, VocabDoc } from './types.ts'
-import type { Vocab } from './vocab.ts'
+import type { Composite, PropSchema, VocabDoc } from './types.ts'
+import { composite, type Vocab } from './vocab.ts'
 
 let NAME = /^[a-z][a-z0-9_]{0,39}$/
 
@@ -56,8 +56,27 @@ let storableProp = (
 // The composite index lists a component declares, both keywords together. An
 // index over a column the component never declares would emit DDL no table can
 // take, so the names are checked here where a refusal can still teach.
-let composites = (s: PropSchema): string[][] =>
-  [s.unique, s.index].flatMap((v) => Array.isArray(v) ? v as string[][] : [])
+let composites = (s: PropSchema): { cols: string[]; present?: string[] }[] =>
+  [s.unique, s.index].flatMap((v) =>
+    Array.isArray(v) ? (v as Composite[]).map(composite) : []
+  )
+
+// A default a row can take: a scalar literal, or the clock on a time column.
+let storableDefault = (comp: string, prop: string, s: PropSchema): string[] => {
+  let d = s.default
+  if (d === undefined) return []
+  if (typeof d == 'string' || typeof d == 'number' || typeof d == 'boolean') {
+    return []
+  }
+  if (object(d) && (d as { now?: unknown }).now === true) {
+    return s.format == 'date-time' ? [] : [
+      `${comp}.${prop} defaults to now but is no date-time column`,
+    ]
+  }
+  return [
+    `${comp}.${prop} has a default no column can hold (a literal, or {"now": true})`,
+  ]
+}
 
 // The columns an identity is spelled across, both spellings together — the
 // component's list, or the columns that flagged themselves.
@@ -86,12 +105,23 @@ export let storable = (doc: VocabDoc): string[] => {
         errs.push(`${comp}.${JSON.stringify(prop)} is not a column name`)
       }
       errs.push(...storableProp(comp, prop, s))
+      if (object(s)) errs.push(...storableDefault(comp, prop, s))
     }
-    for (let cols of composites(schema)) {
-      for (let col of cols) {
+    for (let c of composites(schema)) {
+      for (let col of [...c.cols, ...(c.present ?? [])]) {
         if (!(schema.properties ?? {})[col]) {
           errs.push(`${comp} indexes ${col}, which is no column of ${comp}`)
         }
+      }
+    }
+    // A required column is one every row holds: it has to be a stored column,
+    // and a computed one has no cell to hold anything.
+    for (let col of schema.required ?? []) {
+      let c = (schema.properties ?? {})[col]
+      if (!c) {
+        errs.push(`${comp} requires ${col}, which is no column of ${comp}`)
+      } else if (c.persist === false) {
+        errs.push(`${comp}.${col} is computed — it cannot be required`)
       }
     }
     // An id is derived from what the WRITER states, at the moment the entity is

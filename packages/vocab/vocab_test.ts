@@ -31,6 +31,8 @@ Deno.test('columns interrogate to their whole shape', () => {
     identity: false,
     affinity: 'real',
     fk: false,
+    required: false,
+    default: undefined,
     keywords: {},
   })
   // What a schema SAYS about a word rides with it, so a door that hands an
@@ -423,4 +425,63 @@ Deno.test('only the leading reference is covered by a composite index', () => {
       { cols: ['to'], unique: false },
     ])
   }
+})
+
+Deno.test('native constraints interrogate: integer, required, default', () => {
+  let w = loadVocab({
+    $defs: {
+      created: {
+        type: 'object',
+        required: ['at'],
+        properties: {
+          at: { type: 'string', format: 'date-time', default: { now: true } },
+          by: { type: 'string', ref: 'entity', death: 'keep' },
+        },
+      },
+      repo: {
+        type: 'object',
+        required: ['base'],
+        properties: {
+          base: { type: 'string', default: 'main' },
+          push: { type: 'boolean', default: false },
+          seq: { type: 'integer' },
+          score: { type: 'number' },
+        },
+      },
+    },
+  })
+  let at = w.column('created', 'at')!
+  assertEquals([at.required, at.default, at.scalar], [
+    true,
+    { now: true },
+    'time',
+  ])
+  assertEquals(w.column('created', 'by')!.required, false)
+  assertEquals(w.column('repo', 'base')!.default, { value: 'main' })
+  assertEquals(w.column('repo', 'push')!.default, { value: false })
+  // `integer` is native JSON Schema saying the value has no fraction, and the
+  // store keeps it that way; a plain number stores as real.
+  assertEquals(w.column('repo', 'seq')!.affinity, 'integer')
+  assertEquals(w.column('repo', 'score')!.affinity, 'real')
+  assertEquals(w.column('repo', 'seq')!.default, undefined)
+})
+
+Deno.test('a composite entry may be partial: the columns a row must hold', () => {
+  let w = loadVocab({
+    $defs: {
+      output: {
+        type: 'object',
+        unique: [{ cols: ['key'], present: ['key'] }],
+        index: [['source']],
+        properties: {
+          key: { type: 'string' },
+          source: { type: 'integer' },
+        },
+      },
+    },
+  })
+  assertEquals(w.indexes('output'), [
+    { cols: ['key'], unique: true, present: ['key'] },
+    { cols: ['source'], unique: false },
+  ])
 })

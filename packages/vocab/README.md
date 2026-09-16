@@ -24,10 +24,20 @@ vocabulary (declared via JSON Schema's own `$vocabulary` mechanism,
 | `bare`     | both   | `false` = never claims its bare filter spelling; qualified only   |
 | `unique`   | both   | column: no two rows share it. comp: `[["space","slug"]]`          |
 | `index`    | both   | the same two spellings, without the uniqueness                    |
+| `required` | comp   | native: the columns every row holds (NOT NULL)                    |
+| `default`  | column | native: the row's fallback; `{"now": true}` is the clock          |
 | `identity` | both   | the entity's id is DERIVED from this. comp: `["space","slug"]`    |
 | `kind`     | comp   | this component names a display kind                               |
 | `before`   | comp   | kinds this kind sorts before (feeds the derived kindOrder)        |
 | `wire`     | comp   | `false` = readable-not-writable component (entity metadata)       |
+
+Native keywords reach the table as written: `type: integer` stores with integer
+affinity where a plain `number` stores real, `enum` is a CHECK on the column,
+`required` is NOT NULL, and `default` fills the row that omits the column. A
+composite `unique`/`index` entry may be partial —
+`{"cols": ["key"], "present":
+["key"]}` covers only the rows that hold a key, so
+keyless rows are many and keyed ones are one.
 
 Every stored `ref` column is indexed automatically, including stamped refs and
 refs with `death: "keep"`. No `index: true` is needed, and `index: false` does

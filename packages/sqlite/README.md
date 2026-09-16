@@ -70,6 +70,13 @@ let store = storage(driver, vocab)
 store.install() // create the tables, the doc view, the declared indexes
 ```
 
+A table is what its component says: `required` columns are NOT NULL, a `default`
+fills the row that omits one (`{"now": true}` stamps the clock), an `enum` is a
+CHECK, `type: integer` keeps integer affinity, and a partial `unique` covers
+only the rows that hold its `present` columns. `install()` is additive on a
+standing database: a grown column keeps a literal default and its CHECK, and
+takes the clock only on rows written from then on.
+
 ### Write
 
 A write is a batch of bundles, patched in inside a transaction. Clients mint the
