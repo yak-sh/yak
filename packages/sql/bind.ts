@@ -535,19 +535,28 @@ let inRefs = (ctx: Ctx, cols: [string, string][], value: string): Cond => {
 // of spine ids, and the outer statement seeks those ids. The joins are the
 // tables touched so far, which after compiling the alternatives is every table
 // they name; an extra left join on the spine key is a probe, never a scan.
+//
+// Cut to {@link ARMS} and OR'd, the same way inRefs above is: workerd refuses a
+// sixth term (./compound.ts), and the tray's own seven-way OR is what asked for
+// this shape. Each group is still one indexed `in`, so the cut costs nothing
+// the scan it replaced did not.
 let union = (ctx: Ctx, alts: Clause[]): Cond => {
   let conds = alts.map((x) => clause(ctx, x))
   let joins = joinsOf(ctx)
   // Over the spine alone (archetype facets, spine columns) a disjunction is
   // already index-driven, and a presence tree keeps its boolean shape.
   if (!joins.length) return or(...conds)
-  let arms = conds.map((where) =>
+  let picks = conds.map((where) =>
     render(rel(ctx.d.spine, { cols: ['"entity"."id"'], joins, where }))
   )
-  return raw({
-    sql: `"entity"."id" in (${arms.map((a) => a.sql).join(' union ')})`,
-    params: arms.flatMap((a) => a.params),
-  })
+  return or(
+    ...cut(picks, ARMS).map((group) =>
+      raw({
+        sql: `"entity"."id" in (${group.map((a) => a.sql).join(' union ')})`,
+        params: group.flatMap((a) => a.params),
+      })
+    ),
+  )
 }
 
 // The LEFT joins for the tables a bind touched, keyed on the row they hang off:

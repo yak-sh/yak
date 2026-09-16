@@ -285,6 +285,21 @@ Deno.test('an OR compiles as a union of indexed selections of spine ids', () => 
   assertEquals(either.params, ['a', 1])
 })
 
+Deno.test('a wide OR is cut into compounds workerd will take', () => {
+  // Six alternatives is a sixth term, which workerd refuses (compound.ts) —
+  // the tray's own OR is seven. Each group stays one indexed `in`.
+  let wide = compile(
+    parse(
+      '.doc.title=a|.doc.body=b|.task.priority=1|.note.stars=2|.doc.title=c|.task.priority=3',
+    ),
+    v,
+  )
+  let groups = wide.sql.split('"entity"."id" in (').slice(1)
+  assertEquals(groups.length, 2)
+  for (let g of groups) assert(g.split(/\bunion\b/).length <= ARMS, g)
+  assertEquals(wide.params, ['a', 'b', 1, 2, 'c', 3])
+})
+
 Deno.test('a spine value that is no operand list keeps the column road', () => {
   // an empty value is still absence grammar, and a range is a comparison the
   // spine's untyped column declines exactly as it did before
