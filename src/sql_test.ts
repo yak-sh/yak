@@ -404,8 +404,8 @@ let COMPILES = [
   '.filed.priority=01',
   // comparisons on a numeric column
   '.filed.priority<=1',
-  // a text column against a non-numeric operand is a string compare for every
-  // row, since cmp() only goes numeric when BOTH sides parse
+  // a text column compares as TEXT, whatever the operand looks like — the
+  // column's declared type decides, never the shape of the two operands
   '.doc.title>=alpha',
   '.doc.title<gamma',
   '.filed.priority<1',
@@ -620,6 +620,18 @@ let DECLINES = [
 for (let q of DECLINES) {
   Deno.test(`sql declines rather than guesses: ${q}`, () => {
     assertEquals(bySql(q), null, `${q} should have declined`)
+  })
+}
+
+// The other half of a type-mismatched comparison: the matcher declines it too,
+// as an empty selection. Both readers now type a value against the COLUMN
+// (@yaks/match check()), so neither guesses that a text column holding digits
+// compares as a number — SQL by refusing to compile, the matcher by selecting
+// nothing. Before, SQL declined and the matcher quietly answered as if `>=1`
+// over a domain meant something.
+for (let q of ['.filed.domain>=1', '.doc.title>5', '.doc.title=1..3']) {
+  Deno.test(`the matcher declines the same mismatch: ${q}`, () => {
+    assertEquals(byJs(q), [])
   })
 }
 

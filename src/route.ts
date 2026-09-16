@@ -17,6 +17,7 @@ import {
   stamped,
 } from './types.ts'
 import type { Vocab } from './store/vocab.ts'
+import type { Tag } from '@yaks/sql'
 import type { Hop } from './query.ts'
 
 // Query-result-only components speak the same component grammar as stored
@@ -334,6 +335,18 @@ export let kind = (p: Prop) =>
     : 'eid' in p.type
     ? 'eid'
     : 'text'
+
+// What a column is to a VALUE comparison: the word @yaks/match and the SQL
+// dialect both switch on, so the in-memory answer and the lowered one agree on
+// which columns compare as numbers and which read a time phrase. Both
+// vocabularies were emitted from the same manifests, so the spellings already
+// line up — a body is the one fleet word @yaks/sql has no Scalar for, and it is
+// text. A column the vocabulary cannot type is text too, which compares the way
+// the wire carries every value.
+export let tagOf = (p?: Prop): Tag => {
+  let k = p ? kind(p) : 'text'
+  return (k == 'body' ? 'text' : k) as Tag
+}
 
 // Dotted segments to the hops they name, applying ONE rule at each step: a
 // segment that names a COMPONENT with another segment behind it is the explicit

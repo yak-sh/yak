@@ -17,7 +17,10 @@
 //   .prop~=v         contains, case-insensitive
 //   .prop~=          present — an empty needle asks for the COLUMN, the same
 //                    thing `.prop!` asks (never "every row contains ''")
-//   .prop<v <=v >v >=v   comparisons (numeric when both sides are numbers)
+//   .prop<v <=v >v >=v   comparisons — a number column compares numerically,
+//                    everything else as text (an ISO stamp compares right as
+//                    text); an operand the column's type cannot hold selects
+//                    nothing, the same mismatch @yaks/sql declines to compile
 //
 //   .limit=200       a WINDOW: 200 matches, not the whole set
 //   .after=13882     continue that window past one entity, named by its spine
@@ -70,19 +73,15 @@ import {
   reverseAssocs,
   routed,
   routes,
+  tagOf,
   taught,
   typeAt,
   typed,
 } from './route.ts'
 import { term as ftsTerm } from '@yaks/fts'
-import {
-  type Clause,
-  parse,
-  parseDot,
-  type Span,
-  timeSpan,
-  type Value,
-} from '@yaks/query'
+import { check } from '@yaks/match'
+import type { Tag } from '@yaks/sql'
+import { type Clause, parse, parseDot, timeSpan, type Value } from '@yaks/query'
 export { ftsTerm }
 export { WALK_DEPTH, WALK_LIMIT } from '@yaks/query'
 
@@ -108,6 +107,11 @@ export type Pred = {
   // is one deref, the depth-1 path `.assignee.title`; `.comment.target.doc.title`
   // is that same deref spelled with explicit `comp.prop` on both sides.
   at?: Hop[]
+  // What the LEAF column is, so the value rules (@yaks/match check()) compare a
+  // number as a number and read a time phrase only where a time is stored. The
+  // binder stamps it because only the binder holds the asking store's own
+  // vocabulary; a pred built by hand is typed against the platform's.
+  tag?: Tag
   // An OR (`.a=1|.b=2&.c=3`, op OR): alternatives, each an AND list, and no
   // comp/prop/value of its own. Only filters live inside — a directive (order,
   // fields, tally, edges, window) rides the top level, where every reader of
@@ -852,6 +856,7 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
       name: leaf.prop,
       type: typeAt(leaf.comp, leaf.prop, vocab)!,
     })
+  if (type) p.tag = tagOf(type)
   if (type && p.op != '~' && p.value != '') p.value = typedValue(type, p.value)
   return [p]
 }
@@ -918,99 +923,26 @@ export let never = (): Pred => ({ comp: '', prop: '', op: NEVER, value: '' })
 export let parseQuery = (q: string, vocab: Vocab = NONE): Pred[] =>
   bindClause(parse(q), vocab)
 
-let asNum = (v: unknown) =>
-  typeof v == 'number'
-    ? v
-    : /^-?\d+(\.\d+)?$/.test(String(v))
-    ? Number(v)
-    : null
-
-// v vs s, numerically when both sides are numbers, else as strings.
-let cmp = (v: unknown, s: string) => {
-  let n = asNum(v), m = asNum(s)
-  return n != null && m != null
-    ? Math.sign(n - m)
-    : String(v) < s
-    ? -1
-    : String(v) > s
-    ? 1
-    : 0
+// The column's declared type, as the value rules read it. A BOUND pred carries
+// the tag its binder resolved, which is the only way a hosted store's own
+// columns are typed at all (bindClause holds that vocabulary; nothing here
+// does). A pred built by hand falls back to the platform vocabulary.
+let tagAt = (p: Pred): Tag => {
+  if (p.tag) return p.tag
+  let leaf = leafOf(p)
+  return tagOf(typed(leaf.comp, leaf.prop))
 }
 
-// The '=' forms: '' is null/absent, 'a,b' any-of, 'x..y' a range.
-let eq = (v: unknown, value: string): boolean => {
-  if (value == '') return v == null || v === ''
-  let r = value.match(/^(.*?)\.\.(\.?)(.*)$/s)
-  if (r) {
-    if (v == null) return false
-    let [, lo, excl, hi] = r
-    return cmp(v, lo) >= 0 && (excl ? cmp(v, hi) < 0 : cmp(v, hi) <= 0)
-  }
-  if (value.includes(',')) {
-    return value.split(',').some((part) => eq(v, part))
-  }
-  return String(v) == value
-}
-
-// A timestamp against a time phrase: the phrase names a range, the op
-// picks its edge — = within, >= from the start, <= until the end, > and <
-// strictly outside. Only time-typed columns take this road (a domain
-// literally named 'today' stays text).
-let inTime = (v: string, p: Pred, s: Span): boolean => {
-  let t = Date.parse(v)
-  switch (p.op) {
-    case '':
-      return t >= s.start && (t < s.end || t == s.start)
-    case '!':
-      return !(t >= s.start && (t < s.end || t == s.start))
-    case '<':
-      return t < s.start
-    case '<=':
-      return t < s.end || t == s.start
-    case '>':
-      return t >= s.end && t != s.start
-    default: // >=
-      return t >= s.start
-  }
-}
-
+// One value against one predicate. Equality and its absent/list/range forms,
+// not-equals, contains, the comparisons and the time phrases all belong to
+// @yaks/match, which answers them exactly as the SQL lowering does — by the
+// column's DECLARED type, never by whether both sides happen to look numeric.
+// A question the type cannot answer (`.priority>soon`, `.title>5`) selects
+// nothing: @yaks/sql declines the same compile, and a board mid-render is no
+// place to throw.
 let test = (v: unknown, p: Pred, now?: number): boolean => {
-  if (p.op == EXISTS) return v != null
-  let target = leafOf(p)
-  let type = typed(target.comp, target.prop)
-  if (p.op != '~' && type && kind(type) == 'time' && typeof v == 'string') {
-    let spans = p.value.split(',').map((value) => timeSpan(value, now))
-    if (spans.every((s) => s)) {
-      let hit = spans.some((s) => inTime(v, { ...p, op: '' }, s!))
-      if (p.op == '' || p.op == '!') return p.op == '' ? hit : !hit
-    }
-    let s = timeSpan(p.value, now)
-    if (s) return inTime(v, p, s)
-  }
-  switch (p.op) {
-    case '':
-      return eq(v, p.value)
-    case '!':
-      return !eq(v, p.value)
-    case '~':
-      // An empty needle asks PRESENCE — what `.prop~=` means everywhere else
-      // in this grammar (a bare component, a reverse hop, the completion that
-      // labels it 'present'). `''.includes('')` said the opposite: a filter
-      // NAMING a column selected every entity in the graph, including the
-      // store's own content-addressed rows, which wear no doc at all (T-32503).
-      return p.value == ''
-        ? v != null
-        : String(v ?? '').toLowerCase().includes(p.value.toLowerCase())
-    default: // < <= > >=
-      if (v == null) return false
-      return p.op == '<'
-        ? cmp(v, p.value) < 0
-        : p.op == '<='
-        ? cmp(v, p.value) <= 0
-        : p.op == '>'
-        ? cmp(v, p.value) > 0
-        : cmp(v, p.value) >= 0
-  }
+  let hit = check(p.op, p.value, tagAt(p), now ?? Date.now())
+  return !!hit && hit(v ?? null)
 }
 
 // The sugar's other half: a board-stored query carries values as typed
@@ -1141,23 +1073,6 @@ let eidOf = (c: Comps): string | undefined => {
   }
 }
 
-// A child count against the outer op/value — the cardinality half of a reverse
-// hop. Mirrors test()'s comparison ops; '' is '=', '!' is '!='.
-let cmpCount = (n: number, op: string, value: string): boolean => {
-  let m = Number(value)
-  return op == ''
-    ? n == m
-    : op == '!'
-    ? n != m
-    : op == '<'
-    ? n < m
-    : op == '<='
-    ? n <= m
-    : op == '>'
-    ? n > m
-    : n >= m
-}
-
 export let matchQuery = (
   c: Comps,
   preds: Pred[],
@@ -1211,7 +1126,11 @@ export let matchQuery = (
       // sub-filter (`not` flips that to NONE). No accessor → no children.
       let self = eidOf(c)
       let children = self && kids ? kids(self, p.rev.comp, p.rev.prop) : []
-      if (p.rev.count) return cmpCount(children.length, p.op, p.value)
+      // The cardinality half: the same value road, over a count — which is a
+      // number whatever the reference column it counts happens to be.
+      if (p.rev.count) {
+        return test(children.length, { ...p, tag: 'number' }, now)
+      }
       let hit = children.some((k) =>
         !!k && matchQuery(k, p.rev!.preds, ent, now, kids, walk, fts)
       )

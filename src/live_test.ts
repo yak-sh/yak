@@ -85,6 +85,7 @@ import {
 } from './live.ts'
 import { edgeEid, link } from './edge.ts'
 import { EXISTS, parseQuery, PROJECT, resolveRefs } from './query.ts'
+import type { Tag } from '@yaks/sql'
 import { type Ent } from './types.ts'
 import { effect } from '@preact/signals'
 import {
@@ -2577,18 +2578,23 @@ Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => 
     [F]: { entity: { eid: F, num: 52 } },
   }
   resetSignals()
-  let eq = (comp: string, prop: string, value: string) => ({
+  // A bound pred carries its column's TAG (query.ts), and the round-trip
+  // verifies the re-parsed line matches the preds exactly — so these stand-ins
+  // spell the tag the binder would stamp.
+  let eq = (comp: string, prop: string, value: string, tag: Tag) => ({
     comp,
     prop,
     op: '',
     value,
+    tag,
   })
   let has = (comp: string) => ({ comp, prop: '', op: EXISTS, value: '' })
-  let contains = (comp: string, prop: string, value: string) => ({
+  let contains = (comp: string, prop: string, value: string, tag: Tag) => ({
     comp,
     prop,
     op: '~',
     value,
+    tag,
   })
   let refsTo = (value: string) => ({
     comp: '',
@@ -2599,11 +2605,11 @@ Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => 
   })
   assertEquals(predsToQuery([has('project')]), '.project!')
   assertEquals(
-    predsToQuery([eq('comment', 'target', E)]),
+    predsToQuery([eq('comment', 'target', E, 'eid')]),
     `.comment.target=${E}`,
   )
   assertEquals(
-    predsToQuery([contains('board', 'query', E)]),
+    predsToQuery([contains('board', 'query', E, 'query')]),
     `.board.query~=${E}`,
   )
   assertEquals(predsToQuery([refsTo(E)]), `.refs=${E}`)
@@ -2614,7 +2620,10 @@ Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => 
     '"widget alpha"&.task!',
   )
   assertEquals(
-    predsToQuery([eq('fold', 'client', E), eq('fold', 'board', F)]),
+    predsToQuery([
+      eq('fold', 'client', E, 'eid'),
+      eq('fold', 'board', F, 'eid'),
+    ]),
     `.fold.client=${E}&.fold.board=${F}`,
   )
   // A PROJECTION rides the wire now (D-22567 §3): the eids-only form, and named
@@ -2626,7 +2635,7 @@ Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => 
   )
   assertEquals(
     predsToQuery([
-      eq('pin', 'canvas', E),
+      eq('pin', 'canvas', E, 'eid'),
       {
         comp: '',
         prop: '',

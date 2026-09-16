@@ -155,8 +155,9 @@ swaps one for the other and nothing else changes.
     .recipe.cuisine=              the column is empty or absent
     .recipe.cuisine~=             the column is there at all
 
-Comparisons are numeric when both sides are numbers and lexicographic otherwise,
-which is why an ISO stamp compares correctly as text.
+A number column compares numerically and every other column as text, which is
+why an ISO stamp compares correctly as text. A comparison a column's type cannot
+answer — `.recipe.serves>many` — is refused rather than guessed at.
 
 A list and a range are values, not extra syntax: `.recipe.cuisine!=thai,indian`
 is "neither", and `.recipe.minutes!=20..35` is "outside that band".

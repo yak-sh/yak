@@ -148,6 +148,7 @@ Deno.test('query: a real prop wins over a same-named scope', () => {
       prop: 'status',
       op: '',
       value: 'open',
+      tag: 'enum',
     })
     assertEquals(hit('.status=open'), true)
   } finally {
@@ -208,6 +209,19 @@ Deno.test('query: comparisons never match an absent prop', () => {
   )
 })
 
+// The COLUMN's declared type decides how a value compares — never the shape of
+// the two operands. A number column compares numerically (10 comes after 9); a
+// text column compares as text, and an operand its type cannot hold selects
+// nothing, which is the same refusal @yaks/sql answers a mismatch with.
+Deno.test('query: a comparison goes by the column type, not by looking numeric', () => {
+  assert(matchQuery({ entity: { eid: 'e1', num: 10 } }, parseQuery('.num>9')))
+  assert(!matchQuery({ entity: { eid: 'e1', num: 8 } }, parseQuery('.num>9')))
+  assert(!matchQuery({ doc: { title: '10' } }, parseQuery('.doc.title>9')))
+  assert(!matchQuery({ doc: { title: 'ten' } }, parseQuery('.doc.title>9')))
+  // a text column still compares as text against a text operand
+  assert(matchQuery({ doc: { title: 'beta' } }, parseQuery('.doc.title>alpha')))
+})
+
 Deno.test('query: trailing bang tests property presence', () => {
   let p = pred('.proposed.at!')!
   assertEquals(p, {
@@ -215,6 +229,7 @@ Deno.test('query: trailing bang tests property presence', () => {
     prop: 'at',
     op: 'exists',
     value: '',
+    tag: 'time',
   })
   assertEquals(matchQuery({}, [p]), false)
   assertEquals(matchQuery({ proposed: { at: null } }, [p]), false)
@@ -280,6 +295,7 @@ Deno.test('query: a trailing bang names a facet before its namesake prop', () =>
     prop: 'persona',
     op: 'exists',
     value: '',
+    tag: 'eid',
   }])
 })
 
@@ -471,7 +487,7 @@ Deno.test('reverse hop: a hop parses to a rev pred, not a column', () => {
     comp: 'comment',
     prop: 'target',
     not: false,
-    preds: [{ comp: 'created', prop: 'by', op: '', value: 'jeff' }],
+    preds: [{ comp: 'created', prop: 'by', op: '', value: 'jeff', tag: 'eid' }],
   })
   // a singular component name is still the forward path, untouched
   assert(!preds('.comment.target.doc.title~=x')![0].rev)
@@ -606,6 +622,7 @@ Deno.test('.count! parses to an AGG over the selection, naming no column', () =>
     prop: 'count',
     op: '>',
     value: '3',
+    tag: 'number',
   })
   assertEquals(preds('.recall.count!')![0].comp, 'recall')
 })
@@ -828,6 +845,7 @@ Deno.test('query: pred routes and normalizes ops', () => {
     prop: 'status',
     op: '',
     value: 'open',
+    tag: 'enum',
   })
   assertEquals(pred('.priority<=1')?.op, '<=')
   assertEquals(pred('.title~=x')?.op, '~')
@@ -1042,6 +1060,7 @@ Deno.test('mail arrival columns route bare and filter (the mail door)', () => {
     prop: 'verified',
     op: '',
     value: '0',
+    tag: 'bool',
   })
   assertEquals(route('message_id'), { comp: 'mail', prop: 'message_id' })
   let ps = parseQuery('.verified=0')
@@ -1059,6 +1078,7 @@ Deno.test('venture columns route qualified; incumbents keep bare', () => {
     prop: 'phase',
     op: '',
     value: 'live',
+    tag: 'enum',
   })
   assertEquals(route('run_mode'), { comp: 'venture', prop: 'run_mode' })
   // the incumbents venture deliberately dodged are unchanged: three still
@@ -1078,6 +1098,7 @@ Deno.test('references route and filter by their own names', () => {
     prop: 'assignee',
     op: '',
     value: 'u1',
+    tag: 'eid',
   })
   assert(hit('.assignee=u1', { assignee: 'u1' }))
   assert(!hit('.assignee=u1', { assignee: 'u2' }))
@@ -1125,6 +1146,7 @@ Deno.test('session compatibility fields filter across both homes', () => {
     prop: 'provider_session_id',
     op: '',
     value: 'thread-1',
+    tag: 'text',
   })
   assert(
     matchQuery({ runtime: { provider_session_id: 'thread-1' } }, providerId),
@@ -1140,6 +1162,7 @@ Deno.test('paths: a component first segment stays the explicit spelling', () => 
     prop: 'x',
     op: '',
     value: '12',
+    tag: 'number',
   })
 })
 
@@ -1150,6 +1173,7 @@ Deno.test('paths: .assignee.title walks the reference', () => {
     op: '~',
     value: 'jeff',
     at: [{ comp: 'doc', prop: 'title' }],
+    tag: 'text',
   })
   assertThrows(() => pred('.status.title=x'), Error, 'not a reference')
   assertThrows(() => pred('.assignee.eels=x'), Error, 'unknown prop')
@@ -1179,6 +1203,7 @@ Deno.test('paths: an explicit comp.prop.comp.prop chain parses to one deref', ()
     op: '~',
     value: 'foo',
     at: [{ comp: 'doc', prop: 'title' }],
+    tag: 'text',
   })
 })
 
@@ -1332,6 +1357,7 @@ Deno.test('.archived.at is filterable, and = means live', () => {
     prop: 'at',
     op: '',
     value: '',
+    tag: 'time',
   })
   assert(matchQuery({ project: {} }, ps)) // a live project
   assert(!matchQuery({ project: {}, archived: { at: 'x' } }, ps))
@@ -1367,6 +1393,7 @@ Deno.test('fork.from yields the bare .from spelling to mail.from', () => {
     prop: 'from',
     op: '',
     value: 'jeff@yak.sh',
+    tag: 'text',
   })
   let qualified = ps('.fork.from=E-9')[0]
   assertEquals(qualified.comp, 'fork')
