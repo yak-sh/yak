@@ -3,7 +3,7 @@ import type { Model, Request } from '@yaks/model'
 import { agent, seed } from './run.ts'
 import { modelEid } from './providers.ts'
 import { open } from './store.ts'
-import { usingBefore } from '@yaks/session'
+import { sessionTools, usingBefore } from '@yaks/session'
 
 Deno.test('model selection derives provider, does not ask, and applies only to selected session', async () => {
   const h = open(':memory:')
@@ -127,6 +127,55 @@ Deno.test('passive model controls do not add invented user text to the next requ
       ['first', 'second'],
     )
   } finally {
+    await a.close()
+  }
+})
+
+Deno.test('late nonstream ask does not override an explicitly selected model', async () => {
+  const h = open(':memory:')
+  let release!: () => void, started!: () => void
+  const begun = new Promise<void>((r) => started = r)
+  const held = new Promise<void>((r) => release = r)
+  const a = agent({
+    h,
+    streaming: false,
+    model: async (req) => {
+      started()
+      await held
+      return {
+        id: 'old',
+        model: req.model,
+        items: [{ kind: 'assistant', text: 'ok' }],
+      }
+    },
+  })
+  try {
+    await h.g.apply(seed({ provider: 'openrouter', model: 'next/model' }))
+    const s = await a.start('start')
+    await begun
+    const chosen = modelEid('openrouter', 'next/model')
+    await a.selectModel(s, chosen)
+    release()
+    await a.idle(s)
+    const entries = await a.transcript(s)
+    assertEquals(usingBefore(entries)?.model, chosen)
+    const fork = sessionTools(h.g).find((t) => t.name == 'fork')!
+    const call = {
+      entity: { eid: crypto.randomUUID() },
+      call: {},
+      entry: { session: s },
+      notice: {},
+    }
+    await h.g.apply([call])
+    const child = await fork.run({ prompt: 'fork assignment' }, {
+      session: s,
+      entries,
+      call,
+    })
+    await a.idle(String(child))
+    assertEquals(usingBefore(await a.transcript(String(child)))?.model, chosen)
+  } finally {
+    release()
     await a.close()
   }
 })

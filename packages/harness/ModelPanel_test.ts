@@ -78,3 +78,50 @@ Deno.test('m chooses a model for a new draft; existing choice is passive, Esc pr
     await a.close()
   }
 })
+
+Deno.test('model row mouse selection preserves INSERT and does not submit a draft', async () => {
+  const hnd = open(':memory:')
+  let requests = 0
+  const a = agent({
+    h: hnd,
+    model: (req) => {
+      requests++
+      return Promise.resolve({ id: 'r', model: req.model, items: [] })
+    },
+  })
+  const ui = frontend()
+  const terminal = await mount(
+    () => h(App, { agent: a, subscribe: changes(a), frontend: ui }),
+    110,
+    30,
+  )
+  try {
+    await terminal.send('keep me')
+    ui.keys({ models: true })
+    await until(
+      () => terminal.text().includes('○ ') || terminal.text().includes('● '),
+      'choices',
+    )
+    const lines = terminal.text().split('\n')
+    const y = lines.findIndex((l) =>
+      l.includes('gpt-6-astra') && (l.includes('○ ') || l.includes('● '))
+    )
+    assert(y >= 0)
+    const x = Math.max(0, lines[y].indexOf('gpt-6-astra'))
+    await terminal.send(
+      '\x1b[<0;' + (x + 1) + ';' + (y + 1) + 'M\x1b[<0;' + (x + 1) + ';' +
+        (y + 1) + 'm',
+    )
+    await until(
+      () => !(ui.client.ent('keyboard')!.keyboard as Comp).models,
+      'clicked',
+    )
+    assertEquals((ui.client.ent('draft')!.draft as Comp).text, 'keep me')
+    assertEquals((ui.client.ent('keyboard')!.keyboard as Comp).mode, 'INSERT')
+    assertEquals(requests, 0)
+  } finally {
+    terminal.free()
+    await ui.close()
+    await a.close()
+  }
+})

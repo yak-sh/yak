@@ -854,3 +854,24 @@ This first implementation doesn't add a model catalog picker or OpenRouter's
 provider-routing options. The shared graph `provider`/`model` records are the
 configuration source. Credential files are private plaintext, not encrypted;
 PKCE completion has been tested against mocks, not a live account.
+
+### Choosing a model in the TUI
+
+Press **Esc, m** to open the model selector. It lists configured graph models,
+with their provider displayed for clarity. Use **j/k** or arrows and **Enter**,
+or click a row. **Esc** cancels without changing the draft. Provider selection
+is automatic from the chosen model's `provider` reference.
+
+With **New session** selected, the choice applies when that draft is submitted;
+it does not change the host default or another session. For an existing session,
+the choice appends a passive `notice` + `using` configuration entry. It does not
+send an invented chat message or start a model request. The `Model (next)` label
+shows the choice for future requests; any request already running keeps its
+original model. Historical ask configuration remains unchanged. Forks inherit
+the effective configuration.
+
+The selector reads the configured catalog when opened; it does not fetch a
+provider's model catalog or prices. Authorize the provider with **A** first.
+Selection itself neither performs authentication nor contacts the model; an
+unauthorized request reports the provider error rather than falling back to a
+different provider. This is a local selection UI, not automatic model routing.
