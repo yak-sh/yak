@@ -69,6 +69,18 @@
         },
         "runtimeFeedback": {
           "type": "string"
+        },
+        "models": {
+          "type": "boolean"
+        },
+        "modelIndex": {
+          "type": "number"
+        },
+        "modelBusy": {
+          "type": "boolean"
+        },
+        "modelFeedback": {
+          "type": "string"
         }
       }
     },
@@ -92,6 +104,15 @@
         },
         "showArchived": {
           "type": "boolean"
+        },
+        "newModel": {
+          "type": "string"
+        },
+        "currentModel": {
+          "type": "string"
+        },
+        "modelChoices": {
+          "type": "string"
         }
       }
     },

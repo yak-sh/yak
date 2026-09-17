@@ -100,6 +100,7 @@ export const shortcuts = [
   ['Enter', 'inspect selected entry source; [/] chunks; Esc returns'],
   ['? / Esc', 'show / dismiss help'],
   ['A', 'authorize a connection (private return-URL input)'],
+  ['m', 'choose model (provider follows the model)'],
   ['r', 'runtime panel: j/k select, x interrupt/cancel queued, c continue'],
   ['Ctrl+U', 'INSERT / VISUAL: cut entire draft'],
   ['Alt+p', 'insert saved local yank into draft'],
@@ -182,6 +183,7 @@ export let Keyboard = ({ ui, action }: {
         )}
       return true
     }
+    if (s.models) return false
     if (key.name == 'escape') {
       const session = (ui.client.ent('view')!.frontend as Comp).selected ??
         'new'
@@ -250,6 +252,10 @@ export let Keyboard = ({ ui, action }: {
             ? { focus: 'sidebar' }
             : {}),
         })
+        return true
+      }
+      if (text == 'm') {
+        ui.keys({ models: true, modelIndex: 0, modelFeedback: '' })
         return true
       }
       if (text == 'r') {

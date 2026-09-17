@@ -163,9 +163,26 @@ export let statusOf = (entries: Bundle[]): TranscriptStatus => {
 export let usingBefore = (
   entries: Bundle[],
   seq = Infinity,
-): Comp | undefined =>
-  ordered(entries).filter((b) => seqOf(b) <= seq && USING in b)
-    .at(-1)?.[USING] as Comp | undefined
+): Comp | undefined => effectiveUsing(entries, seq)
+
+// An ask records what was served, not a new configuration choice. A selection
+// made after its context boundary must survive a late response/ask record.
+const effectiveUsing = (entries: Bundle[], seq: number): Comp | undefined => {
+  const orderedUsing = ordered(entries).filter((b) =>
+    seqOf(b) <= seq && USING in b
+  )
+  const explicit = orderedUsing.filter((b) => !b.ask).at(-1)
+  const latest = orderedUsing.at(-1)
+  if (latest?.ask && explicit) {
+    const boundary = entries.find((b) =>
+      b.entity.eid == (latest.ask as Comp).through
+    )
+    if (!boundary || seqOf(explicit) > seqOf(boundary)) {
+      return explicit[USING] as Comp
+    }
+  }
+  return latest?.[USING] as Comp | undefined
+}
 
 /**
  * The same rule as SQL, for @yaks/sqlite's derived-column registry

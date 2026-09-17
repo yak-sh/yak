@@ -1,0 +1,132 @@
+import { assert, assertEquals, assertRejects } from '@std/assert'
+import type { Model, Request } from '@yaks/model'
+import { agent, seed } from './run.ts'
+import { modelEid } from './providers.ts'
+import { open } from './store.ts'
+import { usingBefore } from '@yaks/session'
+
+Deno.test('model selection derives provider, does not ask, and applies only to selected session', async () => {
+  const h = open(':memory:')
+  const seen: [string, Request][] = []
+  const fake = (provider: string): Model => (request) => {
+    seen.push([provider, request])
+    return Promise.resolve({
+      id: 'r' + seen.length,
+      model: request.model,
+      items: [{ kind: 'assistant', text: 'ok' }],
+    })
+  }
+  const a = agent({
+    h,
+    providers: { openai: fake('openai'), openrouter: fake('openrouter') },
+  })
+  try {
+    await h.g.apply(seed({ provider: 'openrouter', model: 'vendor/model' }))
+    const model = modelEid('openrouter', 'vendor/model')
+    const first = await a.start('first', { model })
+    await a.idle(first)
+    const other = await a.start('other')
+    await a.idle(other)
+    assertEquals(seen.map(([p]) => p), ['openrouter', 'openai'])
+    await a.selectModel(other, model)
+    await a.idle(other)
+    assertEquals(seen.length, 2)
+    assertEquals((await a.models(other)).current, model)
+    await a.send(other, 'next')
+    await a.idle(other)
+    assertEquals(seen.map(([p]) => p), ['openrouter', 'openai', 'openrouter'])
+    assertEquals(seen[2][1].anchor, undefined)
+    assert(seen[2][1].items.some((i) => i.kind == 'user' && i.text == 'other'))
+    await assertRejects(
+      () => a.selectModel(other, crypto.randomUUID()),
+      Error,
+      'Unknown model',
+    )
+    await assertRejects(
+      () => a.selectModel(crypto.randomUUID(), model),
+      Error,
+      'Unknown session',
+    )
+  } finally {
+    await a.close()
+  }
+})
+
+Deno.test('inflight model is unchanged; a passive selection survives its completion and later ask', async () => {
+  const h = open(':memory:')
+  let release!: () => void, started!: () => void
+  const begun = new Promise<void>((resolve) => started = resolve)
+  const held = new Promise<void>((resolve) => release = resolve)
+  const seen: string[] = []
+  const a = agent({
+    h,
+    providers: {
+      openai: async (req) => {
+        seen.push(req.model)
+        started()
+        await held
+        return {
+          id: 'old',
+          model: req.model,
+          items: [{ kind: 'assistant', text: 'old response' }],
+        }
+      },
+      openrouter: (req) => {
+        seen.push(req.model)
+        return Promise.resolve({
+          id: 'new',
+          model: req.model,
+          items: [{ kind: 'assistant', text: 'new response' }],
+        })
+      },
+    },
+  })
+  try {
+    await h.g.apply(seed({ provider: 'openrouter', model: 'vendor/new' }))
+    const session = await a.start('initial')
+    await begun
+    const model = modelEid('openrouter', 'vendor/new')
+    await a.selectModel(session, model)
+    assertEquals(seen.length, 1)
+    release()
+    await a.idle(session)
+    assertEquals(seen.length, 1)
+    assertEquals(usingBefore(await a.transcript(session))?.model, model)
+    await a.send(session, 'continue')
+    await a.idle(session)
+    assertEquals(seen.at(-1), 'vendor/new')
+  } finally {
+    release()
+    await a.close()
+  }
+})
+
+Deno.test('passive model controls do not add invented user text to the next request', async () => {
+  const seen: Request[] = []
+  const h = open(':memory:')
+  const a = agent({
+    h,
+    model: (req) => {
+      seen.push(req)
+      return Promise.resolve({
+        id: 'r',
+        model: req.model,
+        items: [{ kind: 'assistant', text: 'ok' }],
+      })
+    },
+  })
+  try {
+    const s = await a.start('first')
+    await a.idle(s)
+    await h.g.apply(seed({ provider: 'openrouter', model: 'another/model' }))
+    await a.selectModel(s, modelEid('openrouter', 'another/model'))
+    await a.send(s, 'second')
+    await a.idle(s)
+    assertEquals(
+      seen[1].items.filter((i) => i.kind == 'user').map((i) => i.text),
+      ['first', 'second'],
+    )
+  } finally {
+    await a.close()
+  }
+})

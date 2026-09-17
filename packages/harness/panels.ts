@@ -24,6 +24,8 @@ export type UIAgent =
   & Partial<
     Pick<
       Agent,
+      | 'models'
+      | 'selectModel'
       | 'archive'
       | 'authorizeMCP'
       | 'runtime'

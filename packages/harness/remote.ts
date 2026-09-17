@@ -286,7 +286,15 @@ export let remote = async (
     return pending
   }
   let agent: UIAgent = {
-    start: async (text) => await request('start', [text]) as string,
+    start: async (text, options) =>
+      await request('start', [text, options]) as string,
+    models: async (session) =>
+      await request('models', [
+        session,
+      ]) as import('./model_selection.ts').ModelSelection,
+    selectModel: async (session, model) => {
+      await request('selectModel', [session, model])
+    },
     send: async (id, text) => await request('send', [id, text]) as string,
     taskEntry: async (id, text) =>
       await request('taskEntry', [id, text]) as { task: string; child: string },

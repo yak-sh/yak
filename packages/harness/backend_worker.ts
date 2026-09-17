@@ -147,8 +147,15 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       )
     case 'image':
       return await a.image(String(args[0]))
+    case 'models':
+      return a.models(args[0] == null ? undefined : String(args[0]))
+    case 'selectModel':
+      return a.selectModel(String(args[0]), String(args[1]))
     case 'start':
-      return a.start(String(args[0]))
+      return a.start(
+        String(args[0]),
+        args[1] as { effort?: string; model?: string } | undefined,
+      )
     case 'send':
       return a.send(String(args[0]), String(args[1]))
     case 'taskEntry':

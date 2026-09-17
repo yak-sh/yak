@@ -1,3 +1,4 @@
+import { ModelPanel } from './ModelPanel.ts'
 import { MCPAuthPanel } from './MCPAuthPanel.ts'
 import { ShuttingDown } from './shutdown.ts'
 import { RuntimePanel } from './RuntimePanel.ts'
@@ -411,7 +412,11 @@ export let App = (
       ? previous.then(send)
       : s.id
       ? send(s.id)
-      : a.start(text)
+      : a.start(text, {
+        model: (ui.client.ent('view')!.frontend as Comp).newModel as
+          | string
+          | undefined,
+      })
     pending.set(key, write)
     void write.then((id) => {
       receipt.accepted(id)
@@ -492,6 +497,7 @@ export let App = (
     ),
     h(EntryDetail, { ui, agent: a }),
     h(Keyboard, { ui, action }),
+    h(ModelPanel, { ui, agent: a, session: selection.id }),
     h(RuntimePanel, { ui, agent: a, session: selection.id, subscribe }),
     h(MCPAuthPanel, { ui, agent: a }),
     h(Feedback, { ui }),

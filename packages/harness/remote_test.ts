@@ -376,3 +376,32 @@ Deno.test('new reads during graceful shutdown are typed expected refusals', asyn
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+Deno.test('worker model selection is database-backed, passive, and forwarded on start', async () => {
+  const dir = await Deno.makeTempDir()
+  const { open } = await import('./store.ts')
+  const { seed } = await import('./run.ts')
+  const { modelEid } = await import('./providers.ts')
+  const path = dir + '/model-picker.db'
+  const h = open(path)
+  await h.g.apply(seed({ provider: 'openrouter', model: 'test/model' }))
+  h.close()
+  const r = await remote({ db: path, cwd: dir, fake: true })
+  try {
+    const id = modelEid('openrouter', 'test/model')
+    assert((await r.agent.models!()).choices.some((b) => b.entity.eid == id))
+    const s = await r.agent.start('selected', { model: id })
+    const initial = await r.agent.transcript(s)
+    assertEquals(
+      (initial.find((b) => b.using)?.using as { model: string }).model,
+      id,
+    )
+    await r.agent.selectModel!(s, id)
+    assertEquals((await r.agent.models!(s)).current, id)
+    const entries = await r.agent.transcript(s)
+    assert(entries.some((b) => b.notice && b.using && !b.content))
+  } finally {
+    await r.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})

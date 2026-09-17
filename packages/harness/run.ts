@@ -1,3 +1,9 @@
+import {
+  type ModelSelection,
+  modelSelection,
+  modelUsing,
+  selectedUsing,
+} from './model_selection.ts'
 import { responses as openrouter } from '@yaks/openrouter'
 import { OPENROUTER_AUTH, providerAuthorization } from './provider_auth.ts'
 import { modelEid, providerEid, providerResolver } from './providers.ts'
@@ -149,8 +155,10 @@ export type Agent = {
   /** what to call a model or tool entity, for the views */
   names: Record<string, string>
   /** start a transcript with one instruction; the daemon takes it from there */
-  start: (prompt: string, o?: { effort?: string }) => Promise<Eid>
+  start: (prompt: string, o?: { effort?: string; model?: Eid }) => Promise<Eid>
   /** say something more to a transcript that is already going */
+  models: (session?: Eid) => Promise<ModelSelection>
+  selectModel: (session: Eid, model: Eid) => Promise<void>
   send: (session: Eid, text: string) => Promise<Eid>
   /** mint and delegate unfiled work under an existing session */
   taskEntry: (session: Eid, text: string) => Promise<{ task: Eid; child: Eid }>
@@ -316,8 +324,22 @@ export let agent = (opts: Opts = {}): Agent => {
     tools,
     names,
     model: modelEid(provider, name),
+    models: (session) => modelSelection(h.g, session, modelEid(provider, name)),
+    selectModel: async (session, model) => {
+      const [owner] = await h.g.storage.tx((tx) => tx.get([session]))
+      if (!owner?.session) throw new Error('Unknown session')
+      const chosen = await modelUsing(h.g, model)
+      const prior = await selectedUsing(h.g, session)
+      await h.g.apply([{
+        entity: { eid: crypto.randomUUID() },
+        entry: { session },
+        notice: {},
+        using: { ...using, ...prior, ...chosen },
+      }])
+    },
     start: (prompt, o = {}) =>
       admit(h.g, undefined, opts, async () => {
+        const chosen = o.model ? await modelUsing(h.g, o.model) : {}
         let home = await homeAt(h.g, opts.cwd ?? Deno.cwd())
         let session = crypto.randomUUID() as Eid
         let files = await instructionFiles(opts.cwd ?? Deno.cwd())
@@ -335,7 +357,11 @@ export let agent = (opts: Opts = {}): Agent => {
             entity: { eid: crypto.randomUUID() as Eid },
             [ENTRY]: { session, seq: context.length + 1 },
             [CONTENT]: { body: prompt },
-            using: { ...using, ...o.effort ? { effort: o.effort } : {} },
+            using: {
+              ...using,
+              ...chosen,
+              ...o.effort ? { effort: o.effort } : {},
+            },
           },
         ])
         return session
