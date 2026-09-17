@@ -23,7 +23,8 @@
         "provider": {
           "type": "string",
           "ref": "provider",
-          "death": "cascade"
+          "death": "keep",
+          "description": "who serves it — kept when the provider entity is deleted, because every past ask names this model and a model with no provider still says which one answered"
         },
         "effort": {
           "type": "string",

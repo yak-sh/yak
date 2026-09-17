@@ -162,6 +162,33 @@ Deno.test('entries omit human numbers, including migrated entries after reopen',
   }
 })
 
+Deno.test('a deleted provider leaves past entries saying what answered', () => {
+  let dir = Deno.makeTempDirSync()
+  let h = open(dir + '/history.db')
+  try {
+    h.g.apply([
+      { entity: { eid: 'p' }, provider: { name: 'openai' } },
+      { entity: { eid: 'm' }, model: { name: 'astra', provider: 'p' } },
+      { entity: { eid: 's' }, session: {} },
+      {
+        entity: { eid: 'e' },
+        entry: { session: 's' },
+        using: { provider: 'p', model: 'm' },
+      },
+    ])
+    h.g.apply([{ entity: { eid: 'p' }, tombstone: {} }])
+    assertEquals(h.store.read('.entry')[0].using, {
+      provider: 'p',
+      model: 'm',
+      effort: null,
+      instructions: null,
+    })
+  } finally {
+    h.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
 Deno.test('legacy completion actors become authors once, including anonymous marks', () => {
   let dir = Deno.makeTempDirSync()
   let path = dir + '/legacy.db'

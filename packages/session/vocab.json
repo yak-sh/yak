@@ -123,12 +123,14 @@
         "provider": {
           "type": "string",
           "ref": "provider",
-          "death": "detach"
+          "death": "keep",
+          "description": "the provider asked — kept as history when that entity is deleted, so a past ask still says what answered it"
         },
         "model": {
           "type": "string",
           "ref": "model",
-          "death": "detach"
+          "death": "keep",
+          "description": "the model asked — kept as history when that entity is deleted, so a past ask still says what answered it"
         },
         "effort": {
           "type": "string"
