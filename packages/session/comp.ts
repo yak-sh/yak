@@ -14,11 +14,11 @@ import { contextDoc } from '@yaks/context'
 //   conflict{target, loser, holder, at}
 //                            two sessions wanted one thing (stamped: audit)
 //   entry{session, seq}      one line; the comp beside it says what kind
-//     + content{body, source}
-//                            its prose, when it has any. Alone, an INPUT: an
-//                            instruction (the first one is the request). With
-//                            a source, an OUTPUT: what a model said, from that
-//                            ask. Beside a result, error or exception, theirs
+//     + content{body}        its prose, when it has any. Alone, an INPUT: an
+//                            instruction (the first one is the request).
+//                            Beside a result, error or exception, theirs
+//     + output{source}       what produced the prose beside it: the ask, for
+//                            what a model said
 //     + using{provider, model, effort, instructions}
 //                            set or switch on an input; served on an ask
 //     + ask{to, through}     the model was asked, from the prefix at `through`
@@ -33,9 +33,8 @@ import { contextDoc } from '@yaks/context'
 // model, the other the model reaching a tool. What a provider keeps about an
 // ask — OpenAI's response id, say — is that provider's own comp on the same
 // entry (`@yaks/openai` declares `openai{response_id}`), never a column here.
-// There is no `input` or `output` comp either: both are inferred from
-// `content` — one direction has a source, the other has none — so the invalid
-// state "input and output at once" cannot be written.
+// There is no `input` comp: prose with no `output` beside it is one, so the
+// invalid state "input and output at once" cannot be written.
 //
 // What a `using` names — `provider`, `model` — and what a `call.to` reaches —
 // a `tool` — are @yaks/model's entities, loaded beside this document.

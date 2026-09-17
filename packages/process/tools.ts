@@ -7,7 +7,7 @@
 // exits is a session wedged forever; one that kills the child at the budget
 // can only ever run short commands. Handing back the process entity does
 // neither: the child keeps running, its lines keep arriving as
-// `content{body, source}`, the same rows a supervisor's boot reconcile picks
+// `content{body}` + `output{source}`, the same rows a supervisor's boot picks
 // up, and the session (or an operator reading the same graph) reaches it again
 // by id.
 //
@@ -17,7 +17,7 @@
 // ending on the same row these tools poll.
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { CONTENT, type Tool } from '@yaks/session'
+import { CONTENT, OUTPUT, type Tool } from '@yaks/session'
 import { EXIT, type Exit, PROCESS, type Process } from './comp.ts'
 import { launch, type Opts } from './run.ts'
 import { store } from './store.ts'
@@ -57,7 +57,7 @@ let row = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
 
 /** What a process said, newest `n` lines. */
 let tailOf = async (g: Graph, eid: string, n: number) => {
-  let said = (await g.read(`.${CONTENT}.source=${eid}`))
+  let said = (await g.read(`.${OUTPUT}.source=${eid}`))
     .map((b) => String(comp(b, CONTENT)?.body ?? ''))
   return said.slice(-n)
 }

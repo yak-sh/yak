@@ -24,9 +24,9 @@
 // A turn lands as ONE batch — the ask, the prose, and the calls together — so
 // no reader ever sees the prose without the calls that came with it.
 //
-// There is no `input` or `output` comp. Prose is `content{body}`; alone it is
-// an input, with a `source` (the ask it came from) it is what a model said.
-// A result, error or exception carries its prose the same way and is itself.
+// Prose is `content{body}`; alone it is an input, and an `output{source}`
+// beside it says what produced it — the ask, for what a model said. A result,
+// error or exception carries its prose the same way and is itself.
 
 import type { Bundle, Comp } from '@yaks/graph'
 import {
@@ -35,13 +35,14 @@ import {
   CONTENT,
   ERROR,
   EXCEPTION,
+  OUTPUT,
   RESULT,
   STOP_ENTRY,
   USING,
 } from './native.ts'
 
 /** The kinds of entry: the comp an entry wears beside `entry`, or for prose,
- * `input` without a source and `output` with one. */
+ * `output` when an `output` rides beside it and `input` when none does. */
 export type Kind =
   | 'input'
   | 'ask'
@@ -78,7 +79,7 @@ let content = (b: Bundle) => b[CONTENT] as Comp | undefined
 
 /** The ask an entry's prose came from, when a model said it. */
 export let sourceOf = (b: Bundle): string | undefined => {
-  let s = content(b)?.source
+  let s = (b[OUTPUT] as Comp | undefined)?.source
   return s == null ? undefined : String(s)
 }
 
@@ -86,7 +87,7 @@ export let sourceOf = (b: Bundle): string | undefined => {
  * kind comps and carrying no prose. */
 export let kindOf = (b: Bundle): Kind | undefined =>
   KINDS.find(([comp]) => comp in b)?.[1] ??
-    (content(b) ? sourceOf(b) ? 'output' : 'input' : undefined)
+    (OUTPUT in b ? 'output' : content(b) ? 'input' : undefined)
 
 /** The seq of an entry bundle. */
 export let seqOf = (b: Bundle): number => Number((b.entry as Comp)?.seq ?? 0)
@@ -218,7 +219,8 @@ export let sessionStatus = {
           select 1 from "${RESULT}" r where r."call" = c.entity))`
     let unread = `exists (select 1 from "entry" u
       join "content" uc on uc.entity = u.entity
-      where u."session" = ${owner} and uc."source" is null
+      where u."session" = ${owner}
+        and not exists (select 1 from "output" o where o.entity = u.entity)
         and u.seq > (select boundary.seq from "ask" a
           join "entry" boundary on boundary.entity = a."through"
           where a.entity = ${ask})
@@ -238,7 +240,7 @@ export let sessionStatus = {
       when ${wears(ERROR, " and k.code = 'interrupted'")} then case
         when exists (select 1 from entry u join content c on c.entity = u.entity
           where u.session = ${owner} and u.seq > (select seq from entry where entity = ${ask})
-          and c.source is null
+          and not exists (select 1 from output o where o.entity = u.entity)
           and not exists (select 1 from notice n where n.entity = u.entity)
           and not exists (select 1 from error n where n.entity = u.entity)
           and not exists (select 1 from exception n where n.entity = u.entity)
@@ -256,7 +258,7 @@ export let sessionStatus = {
     } and exists (select 1 from attempt a where a.entity = ${newest} and a.state = 'completed') then 'settled'
       when ${wears(ASK)} or ${wears(CALL)} then 'running'
       when ${wears(RESULT)} then 'pending'
-      when ${wears(CONTENT, ' and k."source" is not null')} then
+      when ${wears(OUTPUT)} then
         case when ${unread} then 'pending' else 'settled' end
       else 'pending' end`
   },

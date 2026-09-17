@@ -25,10 +25,8 @@ Deno.test('transcript dims sequence and tool prose and colors each entry kind', 
       entry: { session: 's', seq: 7 },
     }
     if (kind == 'input' || kind == 'output') {
-      entry.content = {
-        body: 'first line\nsecond line',
-        ...(kind == 'output' ? { source: 'ask' } : {}),
-      }
+      entry.content = { body: 'first line\nsecond line' }
+      if (kind == 'output') entry.output = { source: 'ask' }
     } else {
       entry.content = { body: 'first line\nsecond line' }
       if (kind != 'entry') entry[kind] = {}
@@ -68,7 +66,8 @@ Deno.test('queries outrank generic rows; overlapping facets use declared tie ord
   let entry: Bundle = {
     entity: { eid: 'e' },
     entry: { seq: 1 },
-    content: { body: 'text', source: 'ask' },
+    content: { body: 'text' },
+    output: { source: 'ask' },
   }
   // Put the generic row first: only specificity can beat it.
   let registry = define([
@@ -80,7 +79,7 @@ Deno.test('queries outrank generic rows; overlapping facets use declared tie ord
     transcriptViews.renderers.find((r) =>
       r.match !== true &&
       r.match.clauses.length == 2 &&
-      r.match.clauses.some((c) => JSON.stringify(c).includes('source'))
+      r.match.clauses.some((c) => JSON.stringify(c).includes('output'))
     ),
   )
   // Production order resolves equally specific facets deliberately, not kindOf.
@@ -113,7 +112,8 @@ Deno.test('message markdown is semantic ANSI while tool results remain literal',
     let entry: Bundle = {
       entity: { eid: 'md' },
       entry: { session: 's', seq: 1 },
-      content: { body: source, source: 'ask' },
+      content: { body: source },
+      output: { source: 'ask' },
       ...(result ? { result: { call: 'call' } } : {}),
     }
     let ui = await mount(
@@ -142,7 +142,7 @@ Deno.test('user inputs share composer borders, machine entries do not', async ()
   for (
     let [extra, boxed] of [
       [{}, true],
-      [{ content: { body: 'hello', source: 'ask' } }, false],
+      [{ content: { body: 'hello' }, output: { source: 'ask' } }, false],
       [{ notice: {} }, false],
       [{ result: { call: 'c' } }, false],
       [{ using: { model: 'm' } }, true],

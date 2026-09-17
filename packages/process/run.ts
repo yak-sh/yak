@@ -35,7 +35,7 @@
 // needs a per-stream cursor on the row, and nothing asks for one yet.
 
 import type { Bundle } from '@yaks/graph'
-import { CONTENT, STOP_ENTRY } from '@yaks/session'
+import { CONTENT, OUTPUT, STOP_ENTRY } from '@yaks/session'
 import {
   EXIT,
   type Exit,
@@ -331,7 +331,11 @@ let drain = async (
   let bundles: Bundle[] = []
   for (let t of tails) {
     for (let body of lines(t, final)) {
-      bundles.push({ entity: { eid: mint() }, [CONTENT]: { body, source } })
+      bundles.push({
+        entity: { eid: mint() },
+        [CONTENT]: { body },
+        [OUTPUT]: { source },
+      })
     }
   }
   if (bundles.length) await store.apply(bundles)

@@ -32,9 +32,9 @@ second entity to reap, no reference to type, and the row stays — the wanting i
 recorded as over rather than forgotten.
 
 Output is not a component of this package. A line a process wrote is
-`content{body, source}` from [@yaks/session](../session), `source` naming the
-process — the same word a tool result and a model's own words wear, so anything
-that can read a transcript can read a log.
+`content{body}` + `output{source}` from [@yaks/session](../session), `source`
+naming the process — the same words a tool result and a model's own words wear,
+so anything that can read a transcript can read a log.
 
 Process files live in `opts.dir`, then `$PROCESS_DIR`, then
 `$TASKS_HOME/processes`, then `~/.tasks/processes` (in precedence order). For

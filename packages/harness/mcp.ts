@@ -73,10 +73,8 @@ export const mcpTools = (g: Graph) => {
               audience: 'user',
               call: call.call.entity.eid,
             },
-            content: {
-              body: `MCP artifact: ${eid}`,
-              source: call.call.entity.eid,
-            },
+            content: { body: `MCP artifact: ${eid}` },
+            output: { source: call.call.entity.eid },
           }])
         }
         parts.push(

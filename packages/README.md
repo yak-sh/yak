@@ -126,8 +126,8 @@ In dependency order:
   needs one points at it instead of keeping a pid: `process{pid, command, cwd}`
   for the one that is running, `service{command, cwd, restart, attempts}` for
   the one that should be, `exit{code}`, and its output as @yaks/session's
-  `content{body, source}`. Four entry points over one loop — launch a child
-  detached, adopt one by pid, re-adopt every unfinished row at boot, and
+  `content{body}` + `output{source}`. Four entry points over one loop — launch a
+  child detached, adopt one by pid, re-adopt every unfinished row at boot, and
   supervise the wanted ones from a host's tick — plus the same rows as a
   session's `shell`, `wait` and `stop` tools, so a long tool call answers with
   the process instead of blocking on it.

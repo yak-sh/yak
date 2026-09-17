@@ -40,6 +40,7 @@ import {
   ERROR,
   EXCEPTION,
   FORK,
+  OUTPUT,
   RESULT,
   USING,
 } from './native.ts'
@@ -397,7 +398,10 @@ export let react = async (
         let active = stream.get(key)
         if (!active) {
           const [entry] = await g.apply([
-            line({ [CONTENT]: { body: '', source: ask.entity.eid } }),
+            line({
+              [CONTENT]: { body: '' },
+              [OUTPUT]: { source: ask.entity.eid },
+            }),
           ], { trusted: true })
           active = {
             entry,
@@ -479,9 +483,13 @@ export let react = async (
           ? {
             entity: active.entry.entity,
             $was: { [CONTENT]: { body: active.writer.expected() } },
-            [CONTENT]: { body: item.text, source: ask.entity.eid },
+            [CONTENT]: { body: item.text },
+            [OUTPUT]: { source: ask.entity.eid },
           }
-          : line({ [CONTENT]: { body: item.text, source: ask.entity.eid } }),
+          : line({
+            [CONTENT]: { body: item.text },
+            [OUTPUT]: { source: ask.entity.eid },
+          }),
       )
     } else if (item.kind == 'call') {
       added.push(line({
@@ -512,8 +520,8 @@ export let react = async (
           ? { revised_prompt: artifact.revised_prompt }
           : {},
       },
+      [OUTPUT]: { source: ask.entity.eid },
       [CONTENT]: {
-        source: ask.entity.eid,
         body: 'Generated image: ' + eid + ' (' + artifact.media_type + ', ' +
           artifact.size + ' bytes)',
       },

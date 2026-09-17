@@ -27,7 +27,7 @@ let entry = (n: number, kind: Record<string, unknown>): Bundle => ({
 })
 let input = (n: number) => entry(n, { content: { body: 'hi' } })
 let said = (n: number, source: string) =>
-  entry(n, { content: { body: 'done', source } })
+  entry(n, { content: { body: 'done' }, output: { source } })
 
 // Every shape, as the entries that make it.
 let shapes: [string, Bundle[], TranscriptStatus][] = [
@@ -163,7 +163,7 @@ Deno.test('a turn that uses a tool is running until its last output', () => {
   }
 })
 
-Deno.test('kindOf: prose alone is an input, prose with a source is an output', () => {
+Deno.test('kindOf: prose alone is an input, prose with an output is one', () => {
   assertEquals(kindOf(input(1)), 'input')
   assertEquals(kindOf(said(2, 'e1')), 'output')
   assertEquals(

@@ -29,7 +29,7 @@ kind of line it is:
 | beside `entry`                   | it is                                                            |
 | -------------------------------- | ---------------------------------------------------------------- |
 | `content{body}`                  | an **input**: prose from a person or a system                    |
-| `content{body, source}`          | an **output**: what a model said, `source` the ask it came from  |
+| `content` + `output{source}`     | an **output**: what a model said, `source` the ask it came from  |
 | `ask{to, through}`               | the daemon asked model `to`, from the prefix ending at `through` |
 | `call{to, id, args, source}`     | a tool the model asked for, from that ask                        |
 | `result{call}` + `content`       | what the tool answered                                           |
@@ -38,14 +38,13 @@ kind of line it is:
 | `error{code}` + `content`        | an outcome the code expected                                     |
 | `exception` + `content`          | one it did not: a defect report                                  |
 
-There is no `input` or `output` comp — the two directions are one comp, told
-apart by `source` — and no status column anywhere. `statusOf(entries)` says what
-is owed: a call the newest ask made that no result answers is `running` whatever
-landed after it, and otherwise the newest entry decides (`input`/`result` →
-pending, `ask`/`call` → running, output → settled, `stop` → stopped, `exception`
-or three errors → failed). `sessionDerived` is the same rule as SQL, so
-`.session.status=running` filters through a @yaks/sqlite index without a stored
-word to keep in sync.
+There is no `input` comp — prose with no `output` beside it is one — and no
+status column anywhere. `statusOf(entries)` says what is owed: a call the newest
+ask made that no result answers is `running` whatever landed after it, and
+otherwise the newest entry decides (`input`/`result` → pending, `ask`/`call` →
+running, output → settled, `stop` → stopped, `exception` or three errors →
+failed). `sessionDerived` is the same rule as SQL, so `.session.status=running`
+filters through a @yaks/sqlite index without a stored word to keep in sync.
 
 What a provider keeps about an ask is the provider's own comp on the ask entry:
 [@yaks/openai](../openai) declares `openai{response_id}` and stamps it through

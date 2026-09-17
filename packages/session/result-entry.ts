@@ -2,12 +2,12 @@
 import { type Bundle, type Comp, type Hook, then } from '@yaks/graph'
 
 /** Add transcript membership only when absent. Sequencing is a separate rule.
- * Execution diagnostics use content.source to identify the same call.
+ * Execution diagnostics use output.source to identify the same call.
  */
 export const resultEntries: Hook = (bundles, tx) => {
   const source = (b: Bundle) => {
     if (b.result) return (b.result as Comp).call
-    if (b.error || b.exception) return (b.content as Comp | undefined)?.source
+    if (b.error || b.exception) return (b.output as Comp | undefined)?.source
   }
   const candidates = bundles.filter((b) => !('entry' in b) && source(b) != null)
   if (!candidates.length) return bundles

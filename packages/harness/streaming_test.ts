@@ -58,7 +58,7 @@ Deno.test('streaming records ask before dispatch, projects text without durable 
     const before = writes
     const entries = await a.transcript(id)
     assertEquals(statusOf(entries), 'running')
-    const output = entries.find((b) => (b.content as Comp)?.source)
+    const output = entries.find((b) => b.output)
     assert(output)
     assertEquals((output.content as Comp).body, 'x'.repeat(100))
     const [raw] = await h.g.storage.tx((tx) => tx.get([output.entity.eid]))
@@ -66,7 +66,7 @@ Deno.test('streaming records ask before dispatch, projects text without durable 
     release()
     await a.idle(id)
     const final = await a.transcript(id)
-    assertEquals(final.filter((b) => (b.content as Comp)?.source).length, 1)
+    assertEquals(final.filter((b) => b.output).length, 1)
     assertEquals((final.find((b) => b.ask)!.attempt as Comp).state, 'completed')
     assertEquals(statusOf(final), 'settled')
     assert(writes - before < 10)
@@ -100,7 +100,7 @@ Deno.test('partial failure preserves text and does not automatically retry ambig
       'interrupted',
     )
     assertEquals(
-      (entries.find((b) => (b.content as Comp)?.source)!.content as Comp).body,
+      (entries.find((b) => b.output)!.content as Comp).body,
       'partial',
     )
   } finally {
@@ -219,7 +219,8 @@ Deno.test('restart of dispatched attempt is interrupted, never resent', async ()
       {
         entity: { eid: 'partial' },
         entry: { session: 'interrupted-session' },
-        content: { body: 'checkpoint', source: 'request' },
+        content: { body: 'checkpoint' },
+        output: { source: 'request' },
       },
     ], { trusted: true })
     await a.resume()
@@ -258,7 +259,8 @@ Deno.test('fork admission cannot capture mutable in-flight output', async () => 
       {
         entity: { eid: 'partial' },
         entry: { session: 'parent' },
-        content: { body: '', source: 'request' },
+        content: { body: '' },
+        output: { source: 'request' },
       },
     ], { trusted: true })
     await assertRejects(

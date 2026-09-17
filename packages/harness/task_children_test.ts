@@ -175,7 +175,8 @@ Deno.test('task completion receipt is idempotent, keeps final message, and incom
     {
       entity: { eid: 'final' },
       entry: { session: child, seq: 2 },
-      content: { body: 'Final answer', source: 'call' },
+      content: { body: 'Final answer' },
+      output: { source: 'call' },
     },
   ])
   await deliverChild(h.g, child)
@@ -209,7 +210,8 @@ for (let finish of ['complete', 'unlink']) {
       {
         entity: { eid: 'final' },
         entry: { session: child, seq: 2 },
-        content: { body: 'Finished my part', source: 'call' },
+        content: { body: 'Finished my part' },
+        output: { source: 'call' },
       },
     ])
     await deliverChild(h.g, child) // incomplete task still reports the child settling
@@ -314,7 +316,8 @@ Deno.test('cancelled task returns cancelled; stopped parents do not receive deli
     {
       entity: { eid: 'final' },
       entry: { session: child, seq: 2 },
-      content: { body: 'Cancelled safely', source: 'call' },
+      content: { body: 'Cancelled safely' },
+      output: { source: 'call' },
     },
   ])
   await deliverChild(h.g, child)
@@ -345,7 +348,8 @@ for (let writer of ['p', 'child', 'other', 'external']) {
       await h.g.apply([{
         entity: { eid: 'answer' },
         entry: { session: child, seq: 2 },
-        content: { body: 'Finished', source: 'call' },
+        content: { body: 'Finished' },
+        output: { source: 'call' },
       }])
       await deliverChild(h.g, child)
       // Close the original tool call so any new receipt would wake the parent.
@@ -423,7 +427,8 @@ Deno.test('parent completion does not suppress a later child response', async ()
   await h.g.apply([{
     entity: { eid: 'later-answer' },
     entry: { session: child, seq: 2 },
-    content: { body: 'New response', source: 'call' },
+    content: { body: 'New response' },
+    output: { source: 'call' },
   }])
   await deliverChild(h.g, child)
   let entries = await transcript(h.g, 'p')
@@ -448,7 +453,8 @@ Deno.test('completion author survives database reopen; another parent still rece
       {
         entity: { eid: 'final' },
         entry: { session: 'c', seq: 1 },
-        content: { body: 'Finished', source: 'source' },
+        content: { body: 'Finished' },
+        output: { source: 'source' },
       },
     ])
     await deliverChild(h.g, 'c')
@@ -505,7 +511,8 @@ Deno.test('existing fork receipts do not read inherited transcript bodies on res
     {
       entity: { eid: 'answer' },
       entry: { session: 'parent' },
-      content: { body: 'large history', source: 'source' },
+      content: { body: 'large history' },
+      output: { source: 'source' },
     },
     {
       entity: { eid: 'child' },
@@ -517,12 +524,14 @@ Deno.test('existing fork receipts do not read inherited transcript bodies on res
     {
       entity: { eid: 'child-answer' },
       entry: { session: 'child' },
-      content: { body: 'done', source: 'source' },
+      content: { body: 'done' },
+      output: { source: 'source' },
     },
     {
       entity: { eid: 'delivery:child:child-answer' },
       entry: { session: 'parent' },
-      content: { body: 'delivered', source: 'source' },
+      content: { body: 'delivered' },
+      output: { source: 'source' },
     },
   ])
   let reads: string[] = []
@@ -584,7 +593,8 @@ Deno.test('receipt fast-path refreshes its tail when a child finishes between re
         {
           entity: { eid: 'final' },
           entry: { session: 'c' },
-          content: { body: 'final answer', source: 'attempt' },
+          content: { body: 'final answer' },
+          output: { source: 'attempt' },
         },
       ])
     }

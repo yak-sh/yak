@@ -19,8 +19,8 @@ import { processDoc } from './comp.ts'
  * // let g = graph({ storage, vocab, plugins: [processes()] })
  * ```
  *
- * Output rides `content{body, source}` from @yaks/session, so a host that
- * streams a process's stdout loads that document too.
+ * Output rides `content{body}` + `output{source}` from @yaks/session, so a
+ * host that streams a process's stdout loads that document too.
  */
 export let processes = (): Plugin => ({
   name: '@yaks/process',

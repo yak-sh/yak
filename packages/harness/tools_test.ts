@@ -64,7 +64,8 @@ Deno.test('the merged wait preserves process output and child status alongside t
       },
       {
         entity: { eid: 'output' },
-        content: { source: 'command', body: 'process output' },
+        content: { body: 'process output' },
+        output: { source: 'command' },
       },
     ])
     let wait = harnessTools(h.g).find((t) => t.name == 'wait')!

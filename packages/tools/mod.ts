@@ -131,7 +131,8 @@ export const executeCall = (
       output = 'tool failed: ' + String(error)
       added.push({
         entity: { eid: mint() },
-        content: { body: String(error), source: id },
+        content: { body: String(error) },
+        output: { source: id },
         ...error instanceof CallError
           ? { error: { code: error.code } }
           : { exception: {} },

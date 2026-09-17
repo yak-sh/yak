@@ -24,8 +24,8 @@ try {
         entry: { session: 's' + i, seq: j + 1 },
         content: {
           body: (j ? 'body ' : 'title ') + i + ' ' + 'x'.repeat(1000),
-          ...(j ? { source: 'e' + i + '-0' } : {}),
         },
+        ...(j ? { output: { source: 'e' + i + '-0' } } : {}),
       })
     }
     await h.g.apply(changes)

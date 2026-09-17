@@ -127,7 +127,8 @@ Deno.test('an input is asked, a tool call is run, the transcript settles', async
   let [, ask, call, , , output] = entries
   assertEquals(ask.fake, { reply: 'r1' })
   assertEquals((call.call as Record<string, unknown>).source, ask.entity.eid)
-  assertEquals(output.content, { body: 'done', source: entries[4].entity.eid })
+  assertEquals(output.content, { body: 'done' })
+  assertEquals(output.output, { source: entries[4].entity.eid })
   // the first ask replayed the whole transcript; the second anchored on r1
   assertEquals(asked[0].anchor, undefined)
   assertEquals(asked[0].model, 'fake-1')

@@ -217,7 +217,8 @@ Deno.test('completion answers an open delegation call; wait rejects foreign chil
     {
       entity: { eid: 'out' },
       entry: { session: 'c', seq: 1 },
-      content: { body: 'final', source: 'ask' },
+      content: { body: 'final' },
+      output: { source: 'ask' },
     },
   ]
   h.g.apply(entries)
@@ -280,7 +281,8 @@ Deno.test('tool admission serializes competing parents, replays a call once, and
   h.g.apply([{
     entity: { eid: 'done' },
     entry: { session: eid, seq: 2 },
-    content: { body: 'done', source: 'call1' },
+    content: { body: 'done' },
+    output: { source: 'call1' },
   }])
   assertEquals(await spawn.run({ prompt: 'two' }, ctx(2)), 'child:call2')
   h.close()

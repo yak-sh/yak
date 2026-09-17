@@ -32,7 +32,7 @@ Deno.test('recorded execution survives SQLite reopen and needs no session', asyn
     const result = await executeCall(h.g, 'call', opts)
     assertEquals(runs, 1)
     assertEquals(result[0].entry, undefined)
-    assertEquals(result[0].content, { body: 'hello', source: null })
+    assertEquals(result[0].content, { body: 'hello' })
     await assertRejects(
       () => executeCall(h.g, 'unfinished', opts),
       UnfinishedCall,

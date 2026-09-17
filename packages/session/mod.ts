@@ -9,9 +9,9 @@
  * one line, `{session, seq}`, and the comp beside it says what kind:
  *
  * - `content{body}` — prose. Alone it is an INPUT, an instruction from a
- *   person or a system; with a `source` (the ask it came from) it is what a
- *   model said. A `result`, `error` or `exception` carries its prose the same
- *   way.
+ *   person or a system; with an `output{source}` beside it (the ask it came
+ *   from) it is what a model said. A `result`, `error` or `exception` carries
+ *   its prose the same way.
  * - `ask{to, through}` — the daemon asked a model, from the prefix ending at
  *   `through`. What the provider keeps about it is the provider's own comp on
  *   the same entry (`@yaks/openai` declares `openai{response_id}`).

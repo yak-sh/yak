@@ -8,7 +8,8 @@
  * - `process{pid, command, cwd}` — a program on a host; `command`/`cwd` are
  *   present exactly when we launched it.
  * - `exit{code}` — it is over, and how. Absent means running.
- * - output is `content{body, source}` (@yaks/session), `source` the process.
+ * - output is `content{body}` + `output{source}` (@yaks/session), `source`
+ *   the process.
  *
  * ```ts
  * import { launch, store, supervise, watch } from '@yaks/process'

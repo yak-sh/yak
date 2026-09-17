@@ -28,10 +28,8 @@ try {
       rows.push({
         entity: { eid: 's' + i + '-e' + j },
         entry: { session: 's' + i },
-        content: {
-          body: 'message ' + 'x'.repeat(1000),
-          ...(j ? { source: 's' + i + '-e0' } : {}),
-        },
+        content: { body: 'message ' + 'x'.repeat(1000) },
+        ...(j ? { output: { source: 's' + i + '-e0' } } : {}),
       })
     }
     await seed.g.apply(rows)
@@ -39,7 +37,8 @@ try {
       await seed.g.apply([{
         entity: { eid: 'delivery:s' + i + ':s' + i + '-e9' },
         entry: { session: 's0' },
-        content: { body: 'delivered', source: 's0-e0' },
+        content: { body: 'delivered' },
+        output: { source: 's0-e0' },
       }])
     }
   }

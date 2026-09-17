@@ -214,7 +214,8 @@ Deno.test('taskEntry references the stable prefix without copying later inputs',
       {
         entity: { eid: 'partial' },
         entry: { session: 'p' },
-        content: { body: 'unfinished', source: 'active' },
+        content: { body: 'unfinished' },
+        output: { source: 'active' },
       },
       {
         entity: { eid: 'latest' },
@@ -273,7 +274,8 @@ Deno.test('taskEntry inherits completed output and tool results with recent inpu
       {
         entity: { eid: 'output' },
         entry: { session: 'p' },
-        content: { body: 'full answer', source: 'ask' },
+        content: { body: 'full answer' },
+        output: { source: 'ask' },
       },
       {
         entity: { eid: 'call' },

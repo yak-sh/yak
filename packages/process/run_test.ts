@@ -22,7 +22,7 @@ Deno.test('a launched child streams both its streams and stamps its exit', async
   }, { dir: dir(), poll: 5 })
   assertEquals(await run.done, 3)
 
-  let said = (await g.read(`.content.source=${run.eid}`))
+  let said = (await g.read(`.output.source=${run.eid}`))
     .map((b) => String(comp(b, 'content')?.body)).sort()
   assertEquals(said, ['err', 'out'])
 
@@ -69,7 +69,7 @@ Deno.test('a command keeps every dollar the caller wrote', async () => {
   }, { dir: dir(), poll: 5 })
   assertEquals(await run.done, 0)
   assertEquals(
-    (await g.read(`.content.source=${run.eid}`))
+    (await g.read(`.output.source=${run.eid}`))
       .map((b) => String(comp(b, 'content')?.body)),
     ['${backend} $defs $$ $'],
   )

@@ -223,6 +223,30 @@ export let open = (path: string = dbPath()): Harness => {
     db.close()
     throw error
   }
+  // Provenance moved off the prose it describes: a model's words were
+  // `content{body, source}`, and direction was read from whether `source` was
+  // set. It is `output{source}` now, worn only by an output. The old column is
+  // the migration's own guard — once it is gone the pass is over.
+  sql.exec('begin immediate')
+  try {
+    if (
+      sql.query('pragma table_info(content)', []).some((c) =>
+        c.name == 'source'
+      )
+    ) {
+      sql.exec(
+        'insert or ignore into "output" (entity, "source")' +
+          ' select entity, "source" from "content" where "source" is not null',
+      )
+      sql.exec('drop index if exists content_source')
+      sql.exec('alter table "content" drop column "source"')
+    }
+    sql.exec('commit')
+  } catch (error) {
+    sql.exec('rollback')
+    db.close()
+    throw error
+  }
   // Sequence high-water was captured by install before clearing historical
   // entry numbers. No remaining human identifier is renumbered or reused.
   sql.exec(

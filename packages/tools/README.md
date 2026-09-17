@@ -14,8 +14,8 @@ contract or require an agent, session, provider, or MCP connection.
 - `execution{state}`: `started` before the handler runs, `completed` with its
   result.
 - `result{call, ms}`: a result's call reference and execution duration.
-- `content{body, source?}`, `error{code}`, and `exception`: output and
-  diagnostics.
+- `content{body}`, `output{source}`, `error{code}`, and `exception`: prose, what
+  produced it, and diagnostics.
 
 `callDoc` omits `tool`, and `toolDoc` contains only `tool`, for applications
 that compose existing vocabularies. Import `@yaks/tools/vocab` when only
@@ -83,7 +83,7 @@ single scheduling owner; the executor does not provide a distributed scheduler.
 shutdown/drain handling. Its own precommit rule adds `entry{session}` to results
 whose calls belong to a transcript. A separate sequencing rule assigns `seq`.
 Results of non-session calls remain ordinary graph entities. Tool failure
-diagnostics reference their call through `content.source` and receive the same
+diagnostics reference their call through `output.source` and receive the same
 session association when applicable.
 
 The session adapter supplies trusted session context for tools such as fork and

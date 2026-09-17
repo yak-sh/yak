@@ -45,17 +45,23 @@
     },
     "content": {
       "type": "object",
-      "description": "Text content with an optional source entity.",
+      "description": "Text content.",
       "properties": {
         "body": {
           "type": "string",
           "store": "blob"
-        },
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "description": "what produced the prose beside it: the ask, for a model’s own words, the call whose failure this reports, or the stream it came off (@yaks/process). Worn only by an output; prose a person or a system wrote has none",
+      "properties": {
         "source": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "description": "what said it \u2014 the ask, for a model's own words, or the stream it came off (@yaks/process); absent on prose a person or a system wrote"
+          "description": "the entry or run that produced it"
         }
       }
     },

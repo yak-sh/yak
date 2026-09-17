@@ -33,8 +33,8 @@
 // stale ending. An unsupervised process keeps its stamp forever, and a new run
 // of it is a new entity.
 //
-// Output is not declared here. A line a process wrote is `content{body,
-// source}` with `source` naming the process — the same word @yaks/session uses
+// Output is not declared here. A line a process wrote is `content{body}` with
+// an `output{source}` naming the process — the same words @yaks/session uses
 // for a tool result and for what a model said, so anything that can read a
 // transcript can read a log.
 
