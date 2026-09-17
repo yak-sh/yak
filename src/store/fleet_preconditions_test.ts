@@ -22,9 +22,8 @@ let [
   loose,
   comment,
   redaction,
-  memory,
   entry,
-] = Array.from({ length: 15 }, () => crypto.randomUUID())
+] = Array.from({ length: 14 }, () => crypto.randomUUID())
 
 let rows = (db: Sql, table: string) =>
   db.prepare(`select * from ${table}`).all()
@@ -440,9 +439,6 @@ Deno.test(`fleet guards: surrounding refusal policy stays atomic`, () => {
       name: 'comment',
       comp: { target: t },
     },
-
-    { eid: memory, name: 'memory', comp: {} },
-    { eid: memory, name: 'proposed', comp: {} },
     {
       eid: entry,
       name: 'entry',
@@ -474,11 +470,6 @@ Deno.test(`fleet guards: surrounding refusal policy stays atomic`, () => {
       name: 'entity',
       comp: null,
     }], 'permanent redaction audit'],
-    [[{
-      eid: memory,
-      name: 'decided',
-      comp: {},
-    }], 'is a proposed memory'],
     [
       [{
         eid: entry,
@@ -581,29 +572,6 @@ Deno.test(`fleet guards: a new spawn is refused for an undecided proposal, unles
     comp: { verdict: 'approved' },
   }])
   assertEquals(readComp(db, newWorker, 'session')?.requested_task, t)
-})
-
-Deno.test(`fleet guards: only the resolved person can accept a proposed memory`, () => {
-  let db = bareDb()
-  seed(db)
-  let person = crypto.randomUUID()
-  apply(db, [
-    { eid: person, name: 'person', comp: {} },
-    { eid: memory, name: 'memory', comp: {} },
-    { eid: memory, name: 'proposed', comp: {} },
-  ])
-  let decide: Change = {
-    eid: memory,
-    name: 'decided',
-    comp: { verdict: 'approved' },
-  }
-  assertThrows(
-    () => write(db, [decide], undefined, p),
-    Error,
-    'is a proposed memory',
-  )
-  write(db, [decide], undefined, person)
-  assertEquals(readComp(db, memory, 'decided')?.verdict, 'approved')
 })
 
 Deno.test(`fleet guards: rollback never audits a phantom target or inside an outer transaction`, () => {

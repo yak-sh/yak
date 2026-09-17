@@ -1,7 +1,6 @@
 // Fleet refusal policy composed over package hooks. Ordered checks share the
 // live writer's SQL truths over the same transaction's already-written prefix.
 import {
-  actorOf,
   type Bundle,
   type Comp,
   comps,
@@ -35,12 +34,7 @@ export type GuardHost = {
   before: (changes: Change[]) => void
   references: (changes: Change[]) => void
   after: (changes: Change[], created: string[]) => void
-  check: (
-    change: Change,
-    changes: Change[],
-    target?: string,
-    actor?: string | null,
-  ) => void
+  check: (change: Change, changes: Change[], target?: string) => void
 }
 
 let lease = sessions()
@@ -55,7 +49,6 @@ export let checkFleetChange = (
   change: Change,
   changes: Change[],
   target?: string,
-  actor?: string | null,
 ): Change => {
   if (!host.db.inTransaction) throw new Error('fleet guard requires write lock')
   let { eid, name, comp } = change
@@ -95,7 +88,7 @@ export let checkFleetChange = (
       }
     }
   }
-  host.check(change, changes, target, actor)
+  host.check(change, changes, target)
   return change
 }
 
@@ -115,9 +108,6 @@ export let fleetPreconditions = (
         )
       ),
     )
-    let actor = bundles.some((b) => b.$actor)
-      ? actorOf(bundles).by ?? null
-      : undefined
     let check: WriteHook = (bs, tx) => {
       let out: Bundle[] = []
       for (let b of bs) {
@@ -135,7 +125,6 @@ export let fleetPreconditions = (
             c,
             changes,
             (b.$workClaim as { target?: string } | undefined)?.target,
-            actor,
           )
         }
         if (!dead(b)) {

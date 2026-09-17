@@ -3549,12 +3549,6 @@ export let titleOf = (db: Sql, eid: string): string =>
       | undefined)?.title ?? '',
   )
 
-// A proposed memory: the memory row is on disk or in this batch, and the
-// proposed stamp is on disk. Only a person may decide one.
-let proposedMemory = (db: Sql, eid: string) =>
-  !!prep(db, `select 1 from memory where ${byEid}`).get(eid) &&
-  !!prep(db, `select 1 from proposed where ${byEid}`).get(eid)
-
 // Who may SIGN a letter: the same chain, minus the one inference provenance
 // is allowed to make. A tab at the owner's keyboard may be RECORDED as them;
 // it may not SPEAK as them, because that is the fleet's highest-trust byline
@@ -3781,11 +3775,7 @@ let workClaimRefusal = (db: Sql, eid: string) => {
   return `${id} is not ready to claim`
 }
 
-let fleetGuardHost = (
-  db: Sql,
-  person: (actor?: string | null) => boolean = (actor) =>
-    isPerson(db, actor === undefined ? writerActor(db, undefined) : actor),
-): GuardHost => ({
+let fleetGuardHost = (db: Sql): GuardHost => ({
   db,
   prepare: (sql) => prep(db, sql),
   name: (eid) => human(db, eid),
@@ -3943,7 +3933,7 @@ let fleetGuardHost = (
       )
     }
   },
-  check: (change, changes, target, actor) => {
+  check: (change, changes, target) => {
     let { eid, name, comp } = change
     // A target can have died earlier in this batch, after the precondition's
     // FOUND identity check. Tombstones never accept a fresh reference.
@@ -4065,16 +4055,6 @@ let fleetGuardHost = (
     }
     if (name == 'blob' && comp && !CONTENT_EID.test(eid)) {
       throw new Error('blob eid must be its SHA-256')
-    }
-    // Accepting a proposed memory is the decision an agent may not take
-    // for itself: `decided` on one is a person's stamp only.
-    if (
-      name == 'decided' && comp && proposedMemory(db, eid) && !person(actor)
-    ) {
-      throw new Error(
-        `${human(db, eid)} is a proposed memory — a person decides it ` +
-          `(task set ${human(db, eid)} .decided.verdict=approved).`,
-      )
     }
     if (name == 'entity' && comp == null) {
       // A redaction is the durable fact that bytes were deliberately

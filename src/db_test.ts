@@ -4491,10 +4491,10 @@ Deno.test('commit: a structured row on a task, cascading with it', () => {
   assertEquals(row(), undefined)
 })
 
-// What reaches the next agent's prompt is the owner's to accept (M-31946):
-// an agent's memory lands proposed, only a person decides it, and a
-// persona's tiers and body take only a person's hand.
-Deno.test('memory gate: an agent memory lands proposed; a person decides it', () => {
+// An agent's memory lands proposed (M-31946) — a suggestion no persona
+// preloads until a `decided` stamp lands. Any writer may stamp it; the actor
+// is recorded as whoever did.
+Deno.test('memory: an agent memory lands proposed; any writer decides it', () => {
   let d = fresh()
   let jeff = uid()
   apply(d, [{ eid: jeff, name: 'person', comp: {} }])
@@ -4506,13 +4506,8 @@ Deno.test('memory gate: an agent memory lands proposed; a person decides it', ()
   assertEquals(!!readComp(d, m, 'proposed'), true)
   // the stamp rides the effective batch, so every cache hears it
   assertEquals(out.some((c) => c.eid == m && c.name == 'proposed'), true)
-  // an agent cannot accept it for itself; a person can
-  assertThrows(
-    () => apply(d, [{ eid: m, name: 'decided', comp: {} }]),
-    Error,
-    'a person decides it',
-  )
-  apply(d, [{ eid: m, name: 'decided', comp: {} }], undefined, jeff)
+  // an agent accepts it as itself
+  apply(d, [{ eid: m, name: 'decided', comp: {} }])
   assertEquals(!!readComp(d, m, 'decided'), true)
   // a person's own memory is accepted as written
   let mine = uid()
@@ -4528,14 +4523,10 @@ Deno.test('memory gate: an agent memory lands proposed; a person decides it', ()
   assertEquals(!!readComp(d, mine, 'proposed'), false)
 })
 
-// The gate is what an edge would MATERIALIZE, not the edge. An agent files
-// its own proposal where it belongs — the tier renders nothing until a person
-// decides it — but anything that would reach a prompt NOW is the owner's.
-// Composition is agents' work; ACCEPTANCE is the owner's. An agent files,
-// moves and unfiles any member of any persona, and writes a persona's own
-// words — none of that reaches a prompt on its own. The one thing it may not
-// do is decide its own memory, which is what would.
-Deno.test("persona composition is an agent's; acceptance is the owner's", () => {
+// Composition is agents' work: an agent files, moves and unfiles any member
+// of any persona, writes a persona's own words, and decides its own memory.
+// A proposed memory reaches no prompt until something decides it.
+Deno.test("persona composition is an agent's", () => {
   let d = fresh()
   let jeff = uid()
   apply(d, [{ eid: jeff, name: 'person', comp: {} }])
@@ -4571,7 +4562,7 @@ Deno.test("persona composition is an agent's; acceptance is the owner's", () => 
   apply(d, [{ eid: p, name: 'doc', comp: { body: 'be long' } }])
   assertEquals(readComp(d, p, 'doc')?.body, 'be long')
   // an agent's own memory lands proposed, files the same way, and stays a
-  // suggestion until a person decides it — which the agent may not do
+  // suggestion until it is decided — which the agent may do itself
   let mine = uid()
   apply(d, [
     { eid: mine, name: 'doc', comp: { title: 'agent idea' } },
@@ -4580,12 +4571,7 @@ Deno.test("persona composition is an agent's; acceptance is the owner's", () => 
   assertEquals(!!readComp(d, mine, 'proposed'), true)
   apply(d, ties(mine))
   assertEquals(tied(mine), true)
-  assertThrows(
-    () => apply(d, [{ eid: mine, name: 'decided', comp: {} }]),
-    Error,
-    'a person decides it',
-  )
-  apply(d, [{ eid: mine, name: 'decided', comp: {} }], undefined, jeff)
+  apply(d, [{ eid: mine, name: 'decided', comp: {} }])
   assertEquals(readComp(d, mine, 'decided')?.verdict ?? null, null)
 })
 

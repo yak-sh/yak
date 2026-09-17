@@ -454,7 +454,7 @@ export let mcpServer = (io: IO) => {
   let got = async (id: string) => find(await io.get([id]), id)
   // A persona tier tied in through the generic door earns the same note the
   // edge sentence prints: an unaccepted memory sits in the tier saying nothing
-  // until a person decides it (client.ts tierNote). Reads the EFFECTIVE batch,
+  // until it is decided (client.ts tierNote). Reads the EFFECTIVE batch,
   // where dualEdge has already lowered every spelling into edge{from,to} — one
   // shape to scan, and real eids rather than whatever the caller typed.
   let tierHint = async (changes: Change[]) => {

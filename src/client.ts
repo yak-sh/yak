@@ -4800,10 +4800,10 @@ export let feedbackChange = (
 // kind of thing to re-read than a fact. The SOURCE stays off the line: it
 // is one word on the row (`.feedback.by`) and naming it here would cost a
 // graph lookup in both renderers to repeat what `task show` already says.
-// A memory counts once a person has accepted it. An agent's memory lands
+// A memory counts once it has been accepted. An agent's memory lands
 // proposed (db.ts apply) and stays a suggestion — indexed with a `?`, never
 // preloaded — until `decided` lands on it without a declined verdict. A
-// memory with no proposed stamp predates the gate and reads as accepted.
+// memory with no proposed stamp was born accepted.
 export let accepted = (r: Row) =>
   !r.comps.proposed ||
   (!!r.comps.decided && r.comps.decided.verdict != 'declined')
@@ -4812,13 +4812,13 @@ export let memoryHead = (r: Row) =>
 
 // An agent MAY tie an unaccepted memory into a persona — that is filing a
 // suggestion where it belongs, and apply() admits it (db.ts). But persona.ts
-// renders only ACCEPTED members, so the tier stays silent until a person
-// decides. Say that at the door that did the tying, or the writer walks away
+// renders only ACCEPTED members, so the tier stays silent until the memory is
+// decided. Say that at the door that did the tying, or the writer walks away
 // believing it changed what the fleet boots into.
 export let tierNote = (parent: Row, child: Row) =>
   parent.comps.persona && !accepted(child)
     ? `${idOf(child)} is not accepted — it sits in ${idOf(parent)} and ` +
-      `reaches no prompt until a person decides it: task set ${
+      `reaches no prompt until it is decided: task set ${
         idOf(child)
       } .decided.verdict=approved`
     : ''

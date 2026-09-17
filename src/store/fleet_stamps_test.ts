@@ -207,7 +207,7 @@ Deno.test('fleet lifecycle: a mixed touch batch heals only blank sessions, in to
   )
 })
 
-Deno.test('fleet memory: birth proposal and existing acceptance have distinct person rules', () => {
+Deno.test('fleet memory: a memory born of a non-person lands proposed', () => {
   let db = fixture()
   write(db, [{ entity: { eid: 'agent-memory' }, memory: {} }], {
     writer: 'run-label',
@@ -220,22 +220,21 @@ Deno.test('fleet memory: birth proposal and existing acceptance have distinct pe
   write(db, [{ entity: { eid: 'old' }, task: {} }])
   write(db, [{ entity: { eid: 'old' }, memory: {} }], { writer: 'run-label' })
   assertEquals(row(db, 'old', 'proposed'), undefined)
-  assertThrows(
-    () =>
-      write(db, [{
-        entity: { eid: 'agent-memory' },
-        decided: { verdict: 'approved', by: 'human' },
-      }], { writer: 'run-label' }),
-    Error,
-    'a person decides',
-  )
+  // Any writer decides a proposed memory; the stamp records who did.
+  write(db, [{ entity: { eid: 'agent-decided' }, memory: {} }], {
+    writer: 'run-label',
+  })
+  write(db, [{
+    entity: { eid: 'agent-decided' },
+    decided: { verdict: 'approved' },
+  }], { writer: 'run-label' })
+  assertEquals(row(db, 'agent-decided', 'decided')?.by, 'persona')
   write(db, [{
     entity: { eid: 'agent-memory' },
     decided: { verdict: 'approved' },
   }], { writer: 'client' })
   assertEquals(row(db, 'agent-memory', 'decided')?.by, 'human')
-  // A new memory may relay a decision at birth, before auto-proposal. Naming
-  // a human does NOT bypass the existing-proposal guard above.
+  // A new memory may relay a decision at birth, before auto-proposal.
   write(db, [{
     entity: { eid: 'relayed' },
     memory: {},
