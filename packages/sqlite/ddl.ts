@@ -151,10 +151,19 @@ let stored = (v: Vocab, comp: string): Column[] =>
 // One component's table. The `entity` owner is the primary key, so a component
 // is worn at most once per entity. A tag component (no stored columns) is just
 // the owner column — its row's existence is the whole fact.
-let tableDdl = (v: Vocab, comp: string): string => {
+let tableDdl = (
+  v: Vocab,
+  comp: string,
+  as = comp,
+  extra: string[] = [],
+): string => {
   let cols = stored(v, comp).map(colDdl)
-  let body = ['entity integer primary key references entity(id)', ...cols]
-  return `create table if not exists ${q(comp)} (\n    ${
+  let body = [
+    'entity integer primary key references entity(id)',
+    ...cols,
+    ...extra,
+  ]
+  return `create table if not exists ${q(as)} (\n    ${
     body.join(',\n    ')
   }\n  )`
 }
@@ -236,6 +245,71 @@ export let indexed = (vocab: Vocab): string[] => [
     .filter((name) => name != 'entity')
     .flatMap((name) => vocab.indexes(name).map((i) => indexDdl(name, i))),
 ]
+
+// The reference columns a component's table carries a foreign key FOR: the
+// stored references the vocabulary says are constrained (a `keep` reference
+// outlives its target's tombstone, so it never is), plus the owner column
+// every component table is keyed by.
+let bound = (v: Vocab, comp: string): Set<string> =>
+  new Set([
+    'entity',
+    ...stored(v, comp).filter((c) => c.category == 'ref' && c.fk).map((c) =>
+      c.prop
+    ),
+  ])
+
+/**
+ * What `grown()` cannot say either: a reference whose DEATH moved after its
+ * table was raised. A death word is what decides whether a column is
+ * constrained, so changing one changes the table's foreign keys — and SQLite
+ * has no `alter table drop constraint`. The table is rebuilt instead: a fresh
+ * one beside it, the rows copied across the columns both have, the old one
+ * dropped and the new one renamed into its place.
+ *
+ * Only a table whose keys DISAGREE with the vocabulary is touched, so this is
+ * a no-op on every boot but the one after the vocabulary moved. It must run
+ * before `indexed()`, which raises the indexes the drop took with it.
+ */
+export let refit = (driver: Driver, vocab: Vocab): string[] =>
+  vocab.all.filter((name) => name != 'entity').flatMap((comp) => {
+    let want = bound(vocab, comp)
+    let has = new Set(
+      driver.query(`pragma foreign_key_list(${q(comp)})`, [])
+        .map((r) => String(r.from)),
+    )
+    if (want.size == has.size && [...want].every((c) => has.has(c))) return []
+    let held = driver.query(`pragma table_info(${q(comp)})`, [])
+    if (!held.length) return []
+    // Every column the table HAS comes across, not every column the vocabulary
+    // knows: a word the vocabulary has since dropped is still a word this
+    // table's rows were written under, and a constraint change is no reason to
+    // take one away. Its declaration is copied off the standing table, minus
+    // whatever key it carried.
+    let said = new Set(stored(vocab, comp).map((c) => c.prop))
+    let extra = held.filter((r) =>
+      r.name != 'entity' && !said.has(String(r.name))
+    )
+    let fresh = `${comp}__refit`
+    let cols = held.map((r) => q(String(r.name))).join(', ')
+    return [
+      tableDdl(
+        vocab,
+        comp,
+        fresh,
+        extra.map((r) =>
+          [
+            q(String(r.name)),
+            String(r.type || ''),
+            r.notnull ? 'not null' : '',
+            r.dflt_value == null ? '' : `default ${r.dflt_value}`,
+          ].filter(Boolean).join(' ')
+        ),
+      ),
+      `insert into ${q(fresh)} (${cols}) select ${cols} from ${q(comp)}`,
+      `drop table ${q(comp)}`,
+      `alter table ${q(fresh)} rename to ${q(comp)}`,
+    ]
+  })
 
 // What `schema()` alone cannot say: the columns a component GREW after its
 // table was already raised. `create table if not exists` is silent about a

@@ -44,7 +44,7 @@ import type { BindOpts } from '@yaks/sql'
 import type { Bundle, Doom, Entity, ReadOpts } from '@yaks/graph'
 import type { Driver, Row } from './driver.ts'
 import type { Query } from './read.ts'
-import { grown, indexed, schema, tabled, type Text } from './ddl.ts'
+import { grown, indexed, refit, schema, tabled, type Text } from './ddl.ts'
 import { epoch } from './meta.ts'
 import { doom, read, rows } from './read.ts'
 import { keyed } from './keyed.ts'
@@ -56,7 +56,15 @@ export * from './driver.ts'
 export * from './archetype.ts'
 export { catalog } from './catalog.ts'
 export * from './bundle.ts'
-export { grown, indexed, META, schema, tabled, type Text } from './ddl.ts'
+export {
+  grown,
+  indexed,
+  META,
+  refit,
+  schema,
+  tabled,
+  type Text,
+} from './ddl.ts'
 export { EPOCH, epoch, type Meta, meta } from './meta.ts'
 export {
   compSql,
@@ -181,6 +189,20 @@ export let storage = (
       // `create table if not exists` cannot say (ddl.ts `grown`), read after
       // the creates so a brand-new table is already there to interrogate.
       for (let stmt of grown(driver, vocab)) driver.exec(stmt)
+      // Then the tables whose foreign keys the vocabulary has since changed
+      // its mind about (ddl.ts `refit`). A rebuild drops the table, so it runs
+      // OUTSIDE the enforcement — a copy that re-checks every key it is
+      // dropping would refuse the rows it exists to keep — and before the
+      // indexes, which the drop took with the old table.
+      let rebuilt = refit(driver, vocab)
+      if (rebuilt.length) {
+        driver.exec('pragma foreign_keys = off')
+        try {
+          for (let stmt of rebuilt) driver.exec(stmt)
+        } finally {
+          driver.exec('pragma foreign_keys = on')
+        }
+      }
       // The indexes last: one may name a column this boot just added.
       for (let stmt of indexed(vocab)) driver.exec(stmt)
       // The store's lineage identity, minted on the first install and read

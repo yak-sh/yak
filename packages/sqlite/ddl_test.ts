@@ -331,3 +331,37 @@ Deno.test('a grown column keeps a literal default, takes the clock only ahead', 
   assertEquals(d.query(`select base from repo`, []), [{ base: 'main' }])
   assertEquals(d.query(`select at from created`, []), [{ at: null }])
 })
+
+Deno.test('a death word that moved rebuilds its table without the key', () => {
+  let d = mem()
+  storage(d, shop).install()
+  d.exec(`insert into entity (id, eid) values (1, 'm'), (2, 'p')`)
+  d.exec(`insert into product (entity, maker) values (2, 1)`)
+  // A column the vocabulary has since forgotten still holds its rows.
+  d.exec(`alter table product add column colour text`)
+  d.exec(`update product set colour = 'red'`)
+  let kept = loadVocab({
+    $defs: {
+      ...(shop.docs[0].$defs as Record<string, never>),
+      product: {
+        ...(shop.docs[0].$defs!.product as Record<string, never>),
+        properties: {
+          ...(shop.docs[0].$defs!.product.properties as Record<string, never>),
+          // the maker outlives the product's memory of it
+          maker: { type: 'string', ref: 'entity', death: 'keep' },
+        },
+      },
+    },
+  })
+  let keys = () =>
+    d.query(`pragma foreign_key_list("product")`, []).map((r) => r.from).sort()
+  assertEquals(keys(), ['entity', 'maker'])
+  storage(d, kept).install()
+  assertEquals(keys(), ['entity'])
+  assertEquals(d.query(`select maker, colour from product`, []), [
+    { maker: 1, colour: 'red' },
+  ])
+  // and the maker can go without taking the record of it
+  d.exec(`delete from entity where id = 1`)
+  assertEquals(d.query(`select maker from product`, []), [{ maker: 1 }])
+})
