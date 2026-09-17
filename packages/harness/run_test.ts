@@ -43,6 +43,16 @@ Deno.test('a started transcript runs to settled and reads back', async () => {
   await a.close()
 })
 
+Deno.test('a turn is signed: the model wrote it, through this transcript', async () => {
+  let a = started()
+  let s = await a.start('ping')
+  await a.idle(s)
+  let out = (await a.transcript(s)).at(-1)!
+  assertEquals((out.created as Comp).by, a.model)
+  assertEquals((out.created as Comp).via, s)
+  await a.close()
+})
+
 Deno.test('send appends to a transcript and the daemon answers it', async () => {
   let a = started()
   let s = await a.start('one')
