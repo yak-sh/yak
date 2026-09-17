@@ -70,7 +70,7 @@ let entry = (seq: number, kind: string, text = ''): Row =>
     ...kind == 'input'
       ? { content: { body: text } }
       : kind == 'output'
-      ? { content: { body: text, source: 'e101' } }
+      ? { content: { body: text }, output: { source: 'e101' } }
       : { [kind]: {} },
   }, 100 + seq)
 
