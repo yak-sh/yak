@@ -71,13 +71,13 @@ g.apply([
 ])
 ```
 
-Finish one by writing the mark, never the word:
+Finish one by writing the mark, never the word. The mark is written BARE: when
+it happened, who did it and what it came through are the graph's to sign, from
+the batch's clock and its `$actor` (@yaks/graph stamp.ts), and a client that
+states them is ignored.
 
 ```ts
-g.apply([{
-  entity: { eid: 't2' },
-  completed: { at: new Date().toISOString(), by: dana },
-}])
+g.apply([{ entity: { eid: 't2' }, completed: {}, $actor: { by: dana } }])
 ```
 
 ## The status rule is said once

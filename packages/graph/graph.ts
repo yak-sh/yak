@@ -56,7 +56,13 @@ import { guard } from './guard.ts'
 import { mutate } from './mutate.ts'
 import { ordered } from './ordered.ts'
 import { cascade } from './cascade.ts'
-import { actorOf, births, provenance, type StampPolicy } from './stamp.ts'
+import {
+  actorOf,
+  births,
+  marks,
+  provenance,
+  type StampPolicy,
+} from './stamp.ts'
 import { fire, registry, type Resource, type Rule, stands } from './rules.ts'
 import { state } from './state.ts'
 import { each, isPromise, then } from './pipe.ts'
@@ -202,7 +208,9 @@ export let graph = (opts: Options): Graph => {
 
   // The rules registered on a phase: the core's own (the stamps), then each
   // plugin's, in registration order.
-  let stamping = provenance(opts.provenance)
+  // The marks are rules of the VOCABULARY, so a host that replaces the
+  // created/updated pair with a policy of its own still gets them.
+  let stamping = [...provenance(opts.provenance), ...marks(vocab)]
   let ruled = (phase: Phase): Rule[] =>
     [...stamping, ...plugins.flatMap((p) => p.rules ?? [])]
       .filter((r) => r.phase == phase)

@@ -167,12 +167,14 @@ Deno.test('legacy completion actors become authors once, including anonymous mar
   let path = dir + '/legacy.db'
   let h = open(path)
   try {
+    // Trusted: a completion's author is server-owned, so only server code
+    // states one outright.
     h.g.apply([
       { entity: { eid: 'parent' }, session: {} },
       { entity: { eid: 'worker' }, session: {} },
       { entity: { eid: 'known' }, task: {}, completed: { by: 'worker' } },
       { entity: { eid: 'anonymous' }, task: {}, completed: { by: 'worker' } },
-    ])
+    ], { trusted: true })
     h.db.exec('alter table completed add column actor integer')
     h.db.exec('create index completed_actor on completed(actor)')
     h.db.exec(

@@ -21,7 +21,7 @@ import { transient } from '@yaks/graph'
 // provider keeps about an ask is its own comp on the ask entry (`model.mark`),
 // which is why the question is the model's to answer.
 
-import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import type { Actor, Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import {
   type Item,
   MODEL,
@@ -184,11 +184,19 @@ export let react = async (
   if (!newest || status == 'settled' || status == 'stopped') return nothing
   if (status == 'failed') return nothing
   let mint = deps.mint ?? (() => crypto.randomUUID() as Eid)
+  // Who a line of this turn is written by. The pair is the one the fleet
+  // resolves for an agent's write (src/db.ts actorFor/writerVia): the
+  // instrument is the transcript it came in on, and the actor is the model
+  // answering there — nobody else is at this keyboard. Which model is in force
+  // is read off the transcript below, so the signature is taken when a line is
+  // minted rather than when this closure is made.
+  let signer: Actor = { via: session }
   let line = (extra: Record<string, Comp>, body?: string): Bundle => ({
     entity: { eid: mint() },
     [ENTRY]: { session },
     ...body == null ? {} : { [CONTENT]: { body } },
     ...extra,
+    $actor: signer,
   })
   let append = async (added: Bundle[]): Promise<Step> => {
     added = await g.apply(added, { trusted: true })
@@ -281,6 +289,7 @@ export let react = async (
   // newest ask the model can continue from; only what followed it travels.
   let using = usingBefore(entries)
   let modelEid = using?.model == null ? undefined : String(using.model)
+  if (modelEid) signer = { by: modelEid, via: session }
   let [modelEntity] = modelEid
     ? await g.storage.tx((tx) => tx.get([modelEid]))
     : []

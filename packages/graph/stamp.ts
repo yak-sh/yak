@@ -3,6 +3,12 @@
 // the first edit after birth. Both are server-owned: a caller may not write
 // them, and this phase is their only writer.
 //
+// A MARK is the third shape and the same sentence about an ACT rather than
+// about an entity: `completed`, `archived`, `notified` — a participle the wire
+// writes bare and the server signs with the same `{at, by, via}`. There is no
+// list of them here either; a component whose vocabulary declares that triple
+// server-owned IS one, and gets the filler.
+//
 // The actor rides IN the batch, as the `$actor` component. That is deliberate:
 // the door that received the write — an HTTP handler that authenticated a
 // session, a CLI that knows who is at the keyboard, a test that says so
@@ -35,14 +41,19 @@ let mark = (
   now: string,
   actor: Actor,
   overrides?: Attribution,
+  held?: Comp,
 ): Comp | undefined => {
   let info = vocab.comp(comp)
   if (!info) return undefined
   let has = new Set(vocab.columns(comp))
+  // A column somebody already filled is left as it was found: a hook that
+  // signed the mark (@yaks/task keeps a completion's author across edits) and
+  // a graph whose policy named the writer both speak before this.
+  let said = (col: string) => held?.[col] != null
   let out: Comp = {}
-  if (has.has('at')) out.at = now
+  if (has.has('at') && !said('at')) out.at = now
   for (let col of ['by', 'via'] as const) {
-    if (!has.has(col)) continue
+    if (!has.has(col) || said(col)) continue
     if (overrides && col in overrides) out[col] = overrides[col]
     else if (actor[col]) out[col] = actor[col]
   }
@@ -93,6 +104,38 @@ export let provenance = (policy?: StampPolicy): Rule[] =>
 
 export let stamps: Rule[] = provenance()
 
+/** Whether a component is a MARK: a participle the wire writes bare and the
+ * server signs — `completed`, `archived`, `notified` — recognized by its
+ * shape, so a new one joins with no edit here. `created` and `updated` wear
+ * the same columns but fire on a birth and a touch rather than on the mark
+ * being written, so they keep their own rules and are named out. */
+export let marked = (vocab: Vocab, comp: string): boolean => {
+  if (comp == 'created' || comp == 'updated') return false
+  let has = new Set(vocab.comp(comp)?.stamped ?? [])
+  return has.has('at') && (has.has('by') || has.has('via'))
+}
+
+/**
+ * One rule per mark: its `{at, by, via}` filled the first time it lands.
+ *
+ * A mark is said ONCE — the gate is its own empty `at`, so a later patch of
+ * the same component leaves the first telling alone, and re-archiving
+ * something does not rewrite who archived it. That is the whole difference
+ * from `updated`, which is meant to move.
+ *
+ * The rules are made from the VOCABULARY, not from a list of component names:
+ * a graph that declares the triple server-owned gets the filler, and one that
+ * does not gets no rule at all.
+ */
+export let marks = (vocab: Vocab): Rule[] =>
+  vocab.all.filter((c) => marked(vocab, c)).map((comp) => ({
+    name: `mark/${comp}`,
+    phase: 'stamp',
+    match: `.${comp}, ${comp}.at=, *${comp}, #Vocab, #Actor, #Now`,
+    run: (b: Bound) =>
+      wear(comp, b.Vocab, b.Now.at, b.Actor, undefined, b[comp] as Comp),
+  }))
+
 // One rule's patch: the component, narrowed to the columns this vocabulary
 // declares. Nothing to say is no patch — the gate has already put the
 // component on.
@@ -102,8 +145,9 @@ let wear = (
   now: string,
   actor: Actor,
   overrides?: Attribution,
+  held?: Comp,
 ): Patch | undefined => {
-  let m = mark(vocab, comp, now, actor, overrides)
+  let m = mark(vocab, comp, now, actor, overrides, held)
   return m ? { [comp]: m } : undefined
 }
 

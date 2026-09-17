@@ -80,10 +80,7 @@ Deno.test('finishing a child lowers the count', () => {
     link('p', 'requires', 'a'),
   ])
   assertEquals(openDeps(storage, 'p'), 1)
-  g.apply([{
-    entity: { eid: 'a' },
-    completed: { at: '2026-01-01T00:00:00.000Z' },
-  }])
+  g.apply([{ entity: { eid: 'a' }, completed: {} }])
   assertEquals(openDeps(storage, 'p'), 0)
 })
 

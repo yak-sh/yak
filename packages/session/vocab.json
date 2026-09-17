@@ -8,7 +8,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "the runner\u2019s own name for it"
+          "description": "the runner’s own name for it"
         },
         "status": {
           "enum": [
@@ -39,20 +39,20 @@
     "claim": {
       "type": "object",
       "kind": true,
-      "description": "a session\u2019s lock on the entity carrying it",
+      "description": "a session’s lock on the entity carrying it",
       "properties": {
         "session": {
           "type": "string",
           "ref": "session",
           "death": "release",
           "bare": false,
-          "description": "the session holding it \u2014 when that session\u2019s entity dies the lock goes and the entity lives"
+          "description": "the session holding it — when that session’s entity dies the lock goes and the entity lives"
         },
-        "claimed_at": {
+        "at": {
           "type": "string",
           "format": "date-time",
           "stamped": true,
-          "description": "when it was taken \u2014 stamped when the lock is new"
+          "description": "when it was taken — stamped when the lock is new"
         }
       }
     },
@@ -201,7 +201,23 @@
       "properties": {
         "at": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was archived"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who archived it — kept as history when that entity is deleted"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the instrument it was written through — the session or client the write came in on"
         }
       }
     },

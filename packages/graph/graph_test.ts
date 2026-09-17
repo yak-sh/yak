@@ -182,6 +182,33 @@ Deno.test('births are stamped created, later touches updated', () => {
   assertEquals(again.find((b) => b.created), undefined)
 })
 
+Deno.test('a mark is signed where it lands, and the first telling stands', () => {
+  let one = g()
+  let out = sync(one.apply([{
+    entity: { eid: 'b1' },
+    doc: { title: 'Dune' },
+    sold: {},
+    $actor: { by: 'me', via: 'till' },
+  }], { now: '2026-01-01T00:00:00.000Z' }))
+  assertEquals(at(out, 'b1', 'sold'), {
+    at: '2026-01-01T00:00:00.000Z',
+    by: 'me',
+    via: 'till',
+  })
+  // Said again, by somebody else, a day later: a mark is not a touch.
+  sync(one.apply([{
+    entity: { eid: 'b1' },
+    sold: {},
+    $actor: { by: 'you', via: 'post' },
+  }], { now: '2026-01-02T00:00:00.000Z' }))
+  let [held] = one.storage.tx((tx) => tx.get(['b1'])) as Bundle[]
+  assertEquals(comp(held, 'sold'), {
+    at: '2026-01-01T00:00:00.000Z',
+    by: 'me',
+    via: 'till',
+  })
+})
+
 Deno.test('$was guards a column, and a moved value refuses the whole batch', () => {
   let one = g()
   sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]))

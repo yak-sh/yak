@@ -315,6 +315,11 @@ export let agent = (opts: Opts = {}): Agent => {
     model: modelEid(provider, name),
   }
   let entries = (session: Eid) => transcript(h.g, session)
+  // What signs a write this door makes: the transcript it is about. The
+  // harness runs for whoever is at the keyboard and holds no entity for them,
+  // so the instrument is said and the actor is left unclaimed rather than
+  // guessed; a model turn signs itself (@yaks/session react.ts).
+  let through = (session: Eid) => ({ via: session })
 
   let migrationError: Error | undefined
   let migrationWatch: ReturnType<typeof watchMigrations> | undefined
@@ -338,6 +343,7 @@ export let agent = (opts: Opts = {}): Agent => {
         entry: { session },
         notice: {},
         using: { ...using, ...prior, ...chosen },
+        $actor: through(session),
       }])
     },
     start: (prompt, o = {}) =>
@@ -357,6 +363,7 @@ export let agent = (opts: Opts = {}): Agent => {
             entity: { eid: session },
             session: { id: session.slice(0, 8) },
             home,
+            $actor: through(session),
           },
           {
             entity: { eid: crypto.randomUUID() as Eid },
@@ -389,6 +396,7 @@ export let agent = (opts: Opts = {}): Agent => {
         entity: { eid },
         [ENTRY]: { session },
         [CONTENT]: { body: text },
+        $actor: through(session),
       }])
       return eid
     },
@@ -402,9 +410,12 @@ export let agent = (opts: Opts = {}): Agent => {
       if (!rows.some((b) => b.entity.eid == session)) {
         throw new Error('Unknown session')
       }
+      // The mark is written bare: when it happened, and through what, are the
+      // graph's to stamp (@yaks/graph stamp.ts), never this clock's.
       await h.g.apply([{
         entity: { eid: session },
-        archived: archived ? { at: new Date().toISOString() } : null,
+        archived: archived ? {} : null,
+        $actor: through(session),
       }])
     },
     sessions: async () => {

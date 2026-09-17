@@ -78,6 +78,21 @@ let storableDefault = (comp: string, prop: string, s: PropSchema): string[] => {
   ]
 }
 
+// A component wearing the whole provenance triple is a MARK — `completed`,
+// `archived`, `created` — and a mark is SIGNED, never stated: the graph fills
+// all three from the batch's clock and actor (@yaks/graph stamp.ts), so a
+// wire-writable one is a column anyone may forge and nothing will correct.
+// TWO of the three is somebody's own vocabulary — a letter's `at` and the
+// address it went `via` — and says nothing about this.
+let PROVENANCE = ['at', 'by', 'via']
+let signed = (comp: string, s: PropSchema): string[] => {
+  let props = s.properties ?? {}
+  if (!PROVENANCE.every((c) => props[c])) return []
+  return PROVENANCE.filter((c) => !props[c].stamped).map((c) =>
+    `${comp}.${c} is wire-writable — a component carrying the whole {at, by, via} is a mark the server signs, so mark every one of them "stamped": true`
+  )
+}
+
 // The columns an identity is spelled across, both spellings together — the
 // component's list, or the columns that flagged themselves.
 let identified = (s: PropSchema): string[] =>
@@ -107,6 +122,7 @@ export let storable = (doc: VocabDoc): string[] => {
       errs.push(...storableProp(comp, prop, s))
       if (object(s)) errs.push(...storableDefault(comp, prop, s))
     }
+    errs.push(...signed(comp, schema))
     for (let c of composites(schema)) {
       for (let col of [...c.cols, ...(c.present ?? [])]) {
         if (!(schema.properties ?? {})[col]) {

@@ -58,6 +58,16 @@ let doc: VocabDoc = {
         of: { type: 'string', ref: 'entity', death: 'release' },
       },
     },
+    // A MARK: a participle the wire writes bare and the graph signs, said
+    // once. The three columns are what makes it one (@yaks/graph stamp.ts).
+    sold: {
+      type: 'object',
+      properties: {
+        at: { type: 'string', format: 'date-time', stamped: true },
+        by: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
+        via: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
+      },
+    },
     created: {
       type: 'object',
       properties: {

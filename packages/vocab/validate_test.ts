@@ -67,6 +67,36 @@ Deno.test('storable refuses an index over a column that is not there', () => {
   assertEquals(errs, ['recipe indexes oven, which is no column of recipe'])
 })
 
+Deno.test('storable refuses a mark a client could sign', () => {
+  let mark = (stamped: boolean) => ({
+    baked: {
+      type: 'object',
+      properties: {
+        at: { type: 'string', format: 'date-time', stamped: true },
+        by: { type: 'string', ref: 'entity', death: 'keep', stamped },
+        via: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
+      },
+    },
+  })
+  assertEquals(storable(doc(mark(true))), [])
+  assert(
+    storable(doc(mark(false)))[0].startsWith('baked.by is wire-writable'),
+  )
+  // Two of the three is an ordinary vocabulary, and says nothing about marks.
+  assertEquals(
+    storable(doc({
+      sent: {
+        type: 'object',
+        properties: {
+          at: { type: 'string', format: 'date-time' },
+          via: { type: 'string' },
+        },
+      },
+    })),
+    [],
+  )
+})
+
 Deno.test('storable refuses an identity nothing could derive', () => {
   let errs = storable(doc({
     page: {
