@@ -116,7 +116,7 @@ export let fleetStamps = (host: StampHost) => {
       },
       cascade: (bundles) => {
         let s = current()
-        // SQL insertion defaults (notably claim.claimed_at) precede the
+        // SQL insertion defaults (notably claim.at) precede the
         // batch's provenance clock, as they did at the live writer door.
         if (!s.fixed) s.now = new Date().toISOString()
         s.active = false

@@ -18,7 +18,7 @@ export type LifecycleHost = {
 }
 export type PriorClaim = {
   eid: string
-  claimed_at: string
+  at: string
   claim_order: number
   actor: string | null
   cwd: string | null
@@ -41,7 +41,7 @@ export type LifecycleBatch = {
 export let priorClaimsOf = (host: LifecycleHost): PriorClaim[] => {
   return host.prepare(
     `
-      select co.eid as eid, c.claimed_at, c.rowid as claim_order,
+      select co.eid as eid, c.at, c.rowid as claim_order,
              act.eid as actor, s.cwd as cwd
       from claim c
       join entity co on co.id = c.entity
@@ -50,7 +50,7 @@ export let priorClaimsOf = (host: LifecycleHost): PriorClaim[] => {
     `,
   ).all() as {
     eid: string
-    claimed_at: string
+    at: string
     claim_order: number
     actor: string | null
     cwd: string | null
@@ -65,7 +65,7 @@ export let lifecycleBefore = (
   let { changes, extra, touched, now, took } = batch
   // Taking a task again pops it; settling one removes it. Releasing an
   // unsettled task pushes it for the holder's actor. A wrap releases several
-  // claims in one batch, so claimed_at supplies their nested order and rank
+  // claims in one batch, so at supplies their nested order and rank
   // preserves it after those lease rows are gone.
   let clear = new Set(
     changes.filter((c) =>
@@ -111,7 +111,7 @@ export let lifecycleBefore = (
       .map((c) => ({ ...c, actor: c.actor ?? host.venture(c.cwd) }))
       .filter((c) => c.actor)
       .sort((a, b) =>
-        a.claimed_at.localeCompare(b.claimed_at) ||
+        a.at.localeCompare(b.at) ||
         a.claim_order - b.claim_order
       )
     let top = Number(

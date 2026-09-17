@@ -704,7 +704,7 @@ export let stamped: Record<string, Record<string, PropType>> = {
     via: { eid: 'entity', death: 'keep' },
   },
   claim: {
-    claimed_at: 'time',
+    at: 'time',
   },
   client: {
     ip: 'text',
@@ -1578,7 +1578,7 @@ export type Setting = {
 // 'managed'; an 'external' session just announces itself and carries
 // none of it). Those columns are server-owned — absent from comps.session,
 // so no client can fake a status, a branch, or a final answer, same as
-// frozen_at/claimed_at. They ride the snapshot (it selects whole rows), so
+// frozen_at/claim.at. They ride the snapshot (it selects whole rows), so
 // the live cache gets the summary for free. latest_seq is the log's latest
 // sequence: the file's line count for a process-backed session (the tailer,
 // src/sessions.ts), the top entry seq for a graph-native one (advanced in
@@ -1827,7 +1827,7 @@ export let standing = (s: Session) =>
 // A session's lease on an entity — claims point at the session ENTITY.
 // One claim per entity; taking one over another session's is a CONFLICT
 // the server rejects — release first (comp: null), then claim.
-export type Claim = { eid: string; session: string; claimed_at?: string }
+export type Claim = { eid: string; session: string; at?: string }
 
 // One task parked on one actor's interruption stack. rank preserves the
 // nested claim order when one wrap releases several leases at the same time.

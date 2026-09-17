@@ -3612,7 +3612,7 @@ export let backlinks = (target: string): Backlink[] =>
 
 // The task a session is ON: the newest task it holds a claim over, else its
 // managed request. The claims aimed at a session are an eid EQUALITY the refs
-// index answers in O(result); membership is the only reactive edge (claimed_at
+// index answers in O(result); membership is the only reactive edge (at
 // is server-stamped at the claim's birth, never edited, and a release removes
 // the row), so the face wakes exactly when its session gains or loses a claimed
 // task — no bespoke per-session set to keep (T-17064).
@@ -3620,8 +3620,8 @@ export let jobOf = (e: Ent): string | null => {
   let g = paint.peek()
   return queryEids([eq('claim', 'session', e.eid), has('task')]).value
     .toSorted((a, b) =>
-      String(g[b]?.claim?.claimed_at ?? '').localeCompare(
-        String(g[a]?.claim?.claimed_at ?? ''),
+      String(g[b]?.claim?.at ?? '').localeCompare(
+        String(g[a]?.claim?.at ?? ''),
       )
     )[0] ?? e.session?.requested_task ?? null
 }

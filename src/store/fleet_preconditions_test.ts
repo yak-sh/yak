@@ -78,7 +78,7 @@ Deno.test(`fleet guards: lease collision rolls back body and audits outside oute
     comp: { session: s },
   }])
   let time = readComp(db, t, 'claim')
-    ?.claimed_at
+    ?.at
   let err = assertThrows(
     () =>
       write(db, [
@@ -120,7 +120,7 @@ Deno.test(`fleet guards: lease collision rolls back body and audits outside oute
     comp: { session: s },
   }])
   assertEquals(
-    readComp(db, t, 'claim')?.claimed_at,
+    readComp(db, t, 'claim')?.at,
     time,
   )
   assertEquals(rows(db, 'conflict').length, 1)

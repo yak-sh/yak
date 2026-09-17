@@ -59,7 +59,7 @@ export let columnDdl = (comp: string, prop: string, t: PropType): string => {
 
 // Every column a component declares — wire-writable (`comps`) then server-owned
 // (`stamped`), in declaration order — so a stamped column (mail.from,
-// claim.claimed_at) still gets its table column.
+// claim.at) still gets its table column.
 export let derivedCols = (comp: string): { prop: string; ddl: string }[] =>
   [
     ...Object.entries(comps[comp] ?? {}),

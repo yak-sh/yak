@@ -1498,24 +1498,24 @@ Deno.test('backlinks: reverse-union set + via, awake only for its own target', (
 Deno.test('jobOf: newest claimed task, off the reverse index', () => {
   cache.value = {
     s1: { entity: { eid: 's1', num: 1 }, session: { eid: 's1', id: 'x' } },
-    // two claims by s1; the newer claimed_at wins regardless of cache order
+    // two claims by s1; the newer at wins regardless of cache order
     t_old: {
       entity: { eid: 't_old', num: 2 },
       task: { eid: 't_old' },
       filed: { eid: 't_old', priority: 1 },
-      claim: { eid: 't_old', session: 's1', claimed_at: '2026-01-01' },
+      claim: { eid: 't_old', session: 's1', at: '2026-01-01' },
     },
     t_new: {
       entity: { eid: 't_new', num: 3 },
       task: { eid: 't_new' },
       filed: { eid: 't_new', priority: 1 },
-      claim: { eid: 't_new', session: 's1', claimed_at: '2026-08-01' },
+      claim: { eid: 't_new', session: 's1', at: '2026-08-01' },
     },
     // a claim by s1 on a non-task entity is skipped (the `r.task` screen)
     d1: {
       entity: { eid: 'd1', num: 4 },
       doc: { eid: 'd1', title: 'note', body: '' },
-      claim: { eid: 'd1', session: 's1', claimed_at: '2026-12-01' },
+      claim: { eid: 'd1', session: 's1', at: '2026-12-01' },
     },
     // a claim by another session must not leak in
     s2: { entity: { eid: 's2', num: 5 }, session: { eid: 's2', id: 'y' } },
@@ -1523,7 +1523,7 @@ Deno.test('jobOf: newest claimed task, off the reverse index', () => {
       entity: { eid: 't_other', num: 6 },
       task: { eid: 't_other' },
       filed: { eid: 't_other', priority: 1 },
-      claim: { eid: 't_other', session: 's2', claimed_at: '2026-12-31' },
+      claim: { eid: 't_other', session: 's2', at: '2026-12-31' },
     },
   }
   assertEquals(jobOf({ eid: 's1' } as Ent), 't_new')

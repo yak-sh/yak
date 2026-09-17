@@ -2582,7 +2582,7 @@ let unheard = (eid: string) =>
          select 1 from claim q
          where q.entity = c.target
            and q.session = (select id from entity where eid = ?)
-           and b.at > q.claimed_at
+           and b.at > q.at
        )
      ) and not exists (
        select 1 from entry x

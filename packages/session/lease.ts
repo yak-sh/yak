@@ -46,7 +46,7 @@ export let takes = (bundles: Bundle[]): [Eid, Eid][] =>
 
 /**
  * The `precondition` hook: refuse a take of a held lock ({@link Bounced}) and
- * stamp `claimed_at` on every lock the batch newly takes.
+ * stamp `at` on every lock the batch newly takes.
  *
  * Registered by {@link https://jsr.io/@yaks/session/doc/~/sessions | sessions};
  * exported on its own for a graph that wants the rule without the vocabulary.
@@ -74,7 +74,7 @@ export let leasing = (opts: LeaseOpts = {}): Hook => (bundles, tx) => {
       held.set(on, session)
     }
     if (!fresh.size) return bundles
-    // A new lock is stamped with the moment it was taken. `claimed_at` is
+    // A new lock is stamped with the moment it was taken. `at` is
     // server-owned, so admission already dropped whatever a client sent; this
     // phase runs after admission, which is what lets a hook stamp at all.
     let stamp = now()
@@ -82,7 +82,7 @@ export let leasing = (opts: LeaseOpts = {}): Hook => (bundles, tx) => {
       let c = of(b, CLAIM)
       if (!c?.session || !fresh.has(b.entity.eid)) return b
       fresh.delete(b.entity.eid) // one stamp per lock, however it was stated
-      return { ...b, [CLAIM]: { ...c, claimed_at: stamp } }
+      return { ...b, [CLAIM]: { ...c, at: stamp } }
     })
   })
 }

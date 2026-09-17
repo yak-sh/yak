@@ -24,7 +24,7 @@ Deno.test('schema(): stamped marked, death words carried, tags empty', () => {
     rows.claim.find((c) => c.col == 'session')?.death,
     'release',
   )
-  assertEquals(rows.claim.find((c) => c.col == 'claimed_at')?.stamped, true)
+  assertEquals(rows.claim.find((c) => c.col == 'at')?.stamped, true)
   assertEquals(rows.entity.every((c) => c.stamped), true) // spine: all server's
   assertEquals(rows.canvas, []) // a tag — the row is the statement
   assertEquals(rows.favorite, [{ col: 'at', type: 'time', stamped: true }])
@@ -47,7 +47,7 @@ Deno.test('vocabularyMd: components, death words, effects — all present', () =
   }])
   assert(md.includes('### task'))
   assert(md.includes('`project` → project (detach)'))
-  assert(md.includes('`claimed_at` time ⚙'))
+  assert(md.includes('`at` time ⚙'))
   assert(md.includes('- parent requires child'))
   assert(md.includes('open → wip → done → cancelled'))
   assert(md.includes('**session** created, removed — spawns the agent'))

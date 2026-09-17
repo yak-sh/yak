@@ -103,7 +103,7 @@
         }
       },
       "stamped": {
-        "claimed_at": "time"
+        "at": "time"
       }
     },
     "content": {

@@ -3345,7 +3345,7 @@ let resumptions = (
   )
   let sessions = new Map(sessRows.map((r) => [r.eid, r] as const))
   let at = (r: Row) =>
-    String(r.comps.resume?.at ?? r.comps.claim?.claimed_at ?? editedAt(r))
+    String(r.comps.resume?.at ?? r.comps.claim?.at ?? editedAt(r))
   // The claim arm is a forward deref — task's claim → its session → that
   // session's actor — so it IS the traversal grammar: `.claim.session.actor`.
   // The resume/updated/created fallback has no single ref column, so it stays
@@ -3940,8 +3940,8 @@ export let contextDigest = (
     ? claims.filter((r) => r.comps.claim?.session == sess.eid)
     : []
   mine.sort((a, b) =>
-    String(b.comps.claim?.claimed_at ?? '').localeCompare(
-      String(a.comps.claim?.claimed_at ?? ''),
+    String(b.comps.claim?.at ?? '').localeCompare(
+      String(a.comps.claim?.at ?? ''),
     )
   )
   let lines = [
@@ -4093,7 +4093,7 @@ export let noticeEvents = (
     homeEid: who.scope,
     claimedEids: who.claims,
     claimedAt: (eid) =>
-      String(byEid.get(eid)?.comps.claim?.claimed_at ?? '') ||
+      String(byEid.get(eid)?.comps.claim?.at ?? '') ||
       undefined,
     idOf: (eid) => {
       let row = byEid.get(eid)

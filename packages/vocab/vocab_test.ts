@@ -54,16 +54,16 @@ Deno.test('columns interrogate to their whole shape', () => {
   assertEquals([body.scalar, body.affinity], ['text', 'text'])
   // scalars reconstruct from native type+format
   assertEquals(v.column('board', 'query')!.scalar, 'query')
-  assertEquals(v.column('claim', 'claimed_at')!.scalar, 'time')
+  assertEquals(v.column('claim', 'at')!.scalar, 'time')
   assertEquals(v.column('role', 'state')!.values![0], 'running')
 })
 
 Deno.test('stamped columns are readable, never writable', () => {
   let claim = v.comp('claim')!
   assertEquals(claim.writable, ['session'])
-  assertEquals(claim.stamped, ['claimed_at'])
-  assertEquals(v.columns('claim'), ['session', 'claimed_at'])
-  assert(v.column('claim', 'claimed_at')!.stamped)
+  assertEquals(claim.stamped, ['at'])
+  assertEquals(v.columns('claim'), ['session', 'at'])
+  assert(v.column('claim', 'at')!.stamped)
 })
 
 Deno.test('bare props route to their home', () => {
@@ -229,8 +229,8 @@ Deno.test('instances check against the loaded shape', () => {
   ])
   assert(v.check('task', { bogus: 1 })[0].includes('task has'))
   // stamped columns refuse a write unless asked for
-  assert(v.check('claim', { claimed_at: 'now' }).length == 1)
-  assertEquals(v.check('claim', { claimed_at: 'now' }, { stamped: true }), [])
+  assert(v.check('claim', { at: 'now' }).length == 1)
+  assertEquals(v.check('claim', { at: 'now' }, { stamped: true }), [])
   assertEquals(v.check('notice', { event: 'wake' }), [])
   assert(v.check('notice', { event: 'boom' })[0].includes('one of'))
   assert(v.check('task', { domain: { nested: 1 } })[0].includes('scalar'))

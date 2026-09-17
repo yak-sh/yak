@@ -247,6 +247,26 @@ export let open = (path: string = dbPath()): Harness => {
     db.close()
     throw error
   }
+  // A lock's timestamp is `claim.at` now, the word every other mark uses.
+  // `install` above has already planted the new column; this carries the taken
+  // moment across and takes the old spelling away, which is its own guard.
+  sql.exec('begin immediate')
+  try {
+    if (
+      sql.query('pragma table_info(claim)', []).some((c) =>
+        c.name == 'claimed_at'
+      )
+    ) {
+      sql.exec('update claim set at = claimed_at where at is null')
+      sql.exec('drop index if exists claim_claimed_at')
+      sql.exec('alter table claim drop column claimed_at')
+    }
+    sql.exec('commit')
+  } catch (error) {
+    sql.exec('rollback')
+    db.close()
+    throw error
+  }
   // Sequence high-water was captured by install before clearing historical
   // entry numbers. No remaining human identifier is renumbered or reused.
   sql.exec(

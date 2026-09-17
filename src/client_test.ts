@@ -493,7 +493,7 @@ Deno.test('notices: claimed-work comments only', () => {
       {
         eid: T1,
         name: 'claim',
-        comp: { session: S, claimed_at: '2026-01-01' },
+        comp: { session: S, at: '2026-01-01' },
       },
       { eid: B, name: 'entity', comp: { eid: B, num: 80, created_at: '' } },
       { eid: B, name: 'session', comp: { id: 'sess-b', actor: P } },
@@ -656,7 +656,7 @@ Deno.test('notices: an explicit context read is bounded and stateless', () => {
       {
         eid: T1,
         name: 'claim',
-        comp: { session: S, claimed_at: '2025-12-31' },
+        comp: { session: S, at: '2025-12-31' },
       },
       ...comments,
     ],
@@ -682,7 +682,7 @@ Deno.test('notices: human stamps cannot drain an agent query', () => {
       {
         eid: T1,
         name: 'claim',
-        comp: { session: S, claimed_at: '2026-01-01' },
+        comp: { session: S, at: '2026-01-01' },
       },
       { eid: B, name: 'entity', comp: { eid: B, num: 30, created_at: '' } },
       { eid: B, name: 'session', comp: { id: 'sess-b' } },
@@ -2126,12 +2126,12 @@ Deno.test('contextDigest: current claims lead newest first', () => {
     {
       eid: T1,
       name: 'claim',
-      comp: { session: S, claimed_at: '2026-07-18' },
+      comp: { session: S, at: '2026-07-18' },
     },
     {
       eid: T2,
       name: 'claim',
-      comp: { session: S, claimed_at: '2026-07-20' },
+      comp: { session: S, at: '2026-07-20' },
     },
   )
   let d = contextDigest(current, 'sess-x')
@@ -4558,7 +4558,7 @@ Deno.test('contextDigest: resume pops this actor stack before narrative memory',
       }),
       ...task(active, 8, 'Still held elsewhere', undefined, {
         session: past,
-        claimed_at: '2026-07-19',
+        at: '2026-07-19',
       }),
       ...task(touched, 9, 'Recently touched'),
       {
@@ -4571,7 +4571,7 @@ Deno.test('contextDigest: resume pops this actor stack before narrative memory',
       { eid: other, name: 'session', comp: { id: 'other-sess', actor: other } },
       ...task(id(10), 10, 'Held by another actor', undefined, {
         session: other,
-        claimed_at: '2026-07-19',
+        at: '2026-07-19',
       }),
     ],
     deps: [],
@@ -4723,12 +4723,12 @@ Deno.test('contextDigest: golden — every section, frozen assembly', () => {
     { eid: G + 'T1', name: 'doc', comp: { title: 'First claimed', body: '' } },
     { eid: G + 'T1', name: 'filed', comp: { priority: 0, project: P } },
     { eid: G + 'T1', name: 'task', comp: {} },
-    { eid: G + 'T1', name: 'claim', comp: { session: S, claimed_at: ago(5) } },
+    { eid: G + 'T1', name: 'claim', comp: { session: S, at: ago(5) } },
     ...mkE('T2', 5, 39),
     { eid: G + 'T2', name: 'doc', comp: { title: 'Second claimed', body: '' } },
     { eid: G + 'T2', name: 'filed', comp: { priority: 1, project: P } },
     { eid: G + 'T2', name: 'task', comp: {} },
-    { eid: G + 'T2', name: 'claim', comp: { session: S, claimed_at: ago(6) } },
+    { eid: G + 'T2', name: 'claim', comp: { session: S, at: ago(6) } },
     ...mkE('T3', 6, 30),
     mkU('T3', 2),
     {

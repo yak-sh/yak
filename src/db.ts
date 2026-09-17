@@ -586,7 +586,7 @@ let schema = `
   create table if not exists claim (
     entity         integer primary key references entity(id),
     session integer not null references entity(id),
-    claimed_at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    at      text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
   -- An actor's standing instruction about one entity (watch / mute).
   -- One row per (actor, target); the derived unique index
@@ -709,13 +709,13 @@ let schema = `
   -- on the first edit after it.
   create table if not exists created (
     entity integer primary key references entity(id),
-    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    at      text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     "by" integer,
     via integer
   );
   create table if not exists updated (
     entity integer primary key references entity(id),
-    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    at      text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     "by" integer,
     via integer
   );
@@ -726,25 +726,25 @@ let schema = `
   -- stampedPresence loop fills and returns the stamp.
   create table if not exists notified (
     entity integer primary key references entity(id),
-    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    at      text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     "by" integer,
     via integer
   );
   create table if not exists opened (
     entity integer primary key references entity(id),
-    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    at      text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     "by" integer,
     via integer
   );
   create table if not exists archived (
     entity integer primary key references entity(id),
-    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    at      text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     "by" integer,
     via integer
   );
   create table if not exists quarantined (
     entity integer primary key references entity(id),
-    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    at      text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     "by" integer,
     via integer
   );
@@ -752,7 +752,7 @@ let schema = `
   -- and byline ride the wire while the server alone names the instrument.
   create table if not exists proposed (
     entity integer primary key references entity(id),
-    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    at      text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     "by" integer,
     via integer
   );
@@ -763,7 +763,7 @@ let schema = `
   -- every row stamped before the column meant.
   create table if not exists decided (
     entity integer primary key references entity(id),
-    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    at      text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     "by" integer,
     via integer,
     verdict text
@@ -775,13 +775,13 @@ let schema = `
   -- optional "reason". Presence IS the status: statusOf reads these two + claim.
   create table if not exists completed (
     entity integer primary key references entity(id),
-    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    at      text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     "by" integer,
     via integer
   );
   create table if not exists cancelled (
     entity integer primary key references entity(id),
-    at  text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+    at      text not null default (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     "by" integer,
     reason text,
     via integer
@@ -1796,6 +1796,12 @@ export let migrate = <D extends Sql>(db: D): D => {
       // like every other create, so a fresh backend gets them too.
       for (let stmt of telemetrySchema()) db.exec(stmt)
       for (let stmt of embeddingSchema()) db.exec(stmt)
+      // A lock's timestamp is `claim.at`, the word every other mark uses. The
+      // old spelling is the guard, and the rename runs before the additive
+      // fill below, which would otherwise plant an empty second column.
+      if (hasCol(db, 'claim', 'claimed_at')) {
+        db.exec('alter table claim rename column claimed_at to at')
+      }
       let addCol = (table: string, col: string, ddl: string) => {
         if (!hasCol(db, table, col)) {
           // Quoted: a component may be named after a keyword (`commit`).

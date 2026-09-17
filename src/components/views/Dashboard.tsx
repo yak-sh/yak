@@ -77,8 +77,8 @@ export let sessionsOf = (
     if (!task.task || !task.claim) continue
     let prior = jobs.get(task.claim.session)
     if (
-      !prior || String(task.claim.claimed_at ?? '') >
-        String(prior.claim?.claimed_at ?? '')
+      !prior || String(task.claim.at ?? '') >
+        String(prior.claim?.at ?? '')
     ) jobs.set(task.claim.session, task)
   }
   return sessions
@@ -108,7 +108,7 @@ export let Dashboard = ({ e }: { e: Ent }) => {
   let boards = useQueryResult(`.board.query~=${e.eid}`)
   let sessions = useQueryResult(sessionDetail)
   let claims = useQueryResult(
-    '.claim!&.fields=task.status,claim.session,claim.claimed_at,filed.project',
+    '.claim!&.fields=task.status,claim.session,claim.at,filed.project',
   )
   let requested = useQueryResult(
     `.session.requested_task.filed.project=${e.eid}&.fields=session.id`,

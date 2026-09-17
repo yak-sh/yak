@@ -11,7 +11,7 @@ Deno.test('a lock lands, stamped with the moment it was taken', () => {
   locked(s, clock).apply([
     { entity: { eid: ids.p1 }, claim: { session: ids.run1 } },
   ])
-  assertEquals(lockOn(s, ids.p1), { session: ids.run1, claimed_at: AT })
+  assertEquals(lockOn(s, ids.p1), { session: ids.run1, at: AT })
 })
 
 Deno.test('the same run re-claiming is a refresh, not a take', () => {

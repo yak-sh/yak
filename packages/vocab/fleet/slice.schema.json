@@ -93,7 +93,7 @@
       "description": "A session's lease on any entity.",
       "properties": {
         "session": { "type": "string", "ref": "session", "death": "release" },
-        "claimed_at": {
+        "at": {
           "type": "string",
           "format": "date-time",
           "stamped": true
