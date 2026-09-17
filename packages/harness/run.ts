@@ -156,9 +156,11 @@ export type Agent = {
   names: Record<string, string>
   /** start a transcript with one instruction; the daemon takes it from there */
   start: (prompt: string, o?: { effort?: string; model?: Eid }) => Promise<Eid>
-  /** say something more to a transcript that is already going */
+  /** the configured models, and what this session asks for next */
   models: (session?: Eid) => Promise<ModelSelection>
+  /** record a passive model choice; the next request honours it */
   selectModel: (session: Eid, model: Eid) => Promise<void>
+  /** say something more to a transcript that is already going */
   send: (session: Eid, text: string) => Promise<Eid>
   /** mint and delegate unfiled work under an existing session */
   taskEntry: (session: Eid, text: string) => Promise<{ task: Eid; child: Eid }>
@@ -239,11 +241,12 @@ export let agent = (opts: Opts = {}): Agent => {
       web: opts.web ?? Deno.env.get('HARNESS_WEB') != '0',
     })
   const providerAuth = providerAuthorization(h.g)
-  const resolveModel = providerResolver(h.g, {
+  const implementations = {
     openai: model,
     openrouter: openrouter({ key: providerAuth.key }),
     ...opts.providers,
-  }, opts.model)
+  }
+  const resolveModel = providerResolver(h.g, implementations, opts.model)
   let tools = opts.tools ?? harnessTools(h.g, opts)
   let remoteSignature = ''
   const remoteHandlers = new Map<string, Tool>()
@@ -328,7 +331,7 @@ export let agent = (opts: Opts = {}): Agent => {
     selectModel: async (session, model) => {
       const [owner] = await h.g.storage.tx((tx) => tx.get([session]))
       if (!owner?.session) throw new Error('Unknown session')
-      const chosen = await modelUsing(h.g, model)
+      const chosen = await modelUsing(h.g, model, implementations)
       const prior = await selectedUsing(h.g, session)
       await h.g.apply([{
         entity: { eid: crypto.randomUUID() },
@@ -339,7 +342,9 @@ export let agent = (opts: Opts = {}): Agent => {
     },
     start: (prompt, o = {}) =>
       admit(h.g, undefined, opts, async () => {
-        const chosen = o.model ? await modelUsing(h.g, o.model) : {}
+        const chosen = o.model
+          ? await modelUsing(h.g, o.model, implementations)
+          : {}
         let home = await homeAt(h.g, opts.cwd ?? Deno.cwd())
         let session = crypto.randomUUID() as Eid
         let files = await instructionFiles(opts.cwd ?? Deno.cwd())

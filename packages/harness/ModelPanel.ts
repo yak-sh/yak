@@ -22,12 +22,11 @@ export const ModelPanel = ({ ui, agent, session }: {
     String((b.model as Comp).name) + ' · ' + String((b.provider as Comp).name)
   useLayoutEffect(() => {
     if (!agent.models) return
-    let alive = true, generation = 0
+    let alive = true
     const load = async () => {
-      const n = ++generation
       try {
         const result = await agent.models!(session)
-        if (alive && n == generation) {
+        if (alive) {
           ui.patch({
             modelChoices: JSON.stringify(result.choices),
             currentModel: result.current ?? '',

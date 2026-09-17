@@ -8,6 +8,7 @@ import type {
 import { streamingEnabled } from './streaming.ts'
 import { transient } from '@yaks/graph'
 import type { ImageOptions } from './images.ts'
+import type { ModelSelection } from './model_selection.ts'
 /** Worker frontend. UI state remains in the frontend's private graph. */
 import { client } from '@yaks/client'
 import { type Frame, portLink } from '@yaks/sync'
@@ -289,9 +290,7 @@ export let remote = async (
     start: async (text, options) =>
       await request('start', [text, options]) as string,
     models: async (session) =>
-      await request('models', [
-        session,
-      ]) as import('./model_selection.ts').ModelSelection,
+      await request('models', [session]) as ModelSelection,
     selectModel: async (session, model) => {
       await request('selectModel', [session, model])
     },

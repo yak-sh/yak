@@ -1,9 +1,14 @@
 /** Model choices are graph records; the provider always comes from the model. */
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import type { Model } from '@yaks/model'
 
 export type ModelSelection = { choices: Bundle[]; current?: string }
 
-export const modelUsing = async (g: Graph, id: string): Promise<Comp> => {
+export const modelUsing = async (
+  g: Graph,
+  id: string,
+  implementations: Readonly<Record<string, Model>>,
+): Promise<Comp> => {
   const [row] = await g.storage.tx((tx) => tx.get([id]))
   const model = row?.model as Comp | undefined
   if (!model || typeof model.provider != 'string') {
@@ -13,8 +18,10 @@ export const modelUsing = async (g: Graph, id: string): Promise<Comp> => {
     tx.get([model.provider as string])
   )
   const name = (provider?.provider as Comp | undefined)?.name
-  if (name != 'openai' && name != 'openrouter') {
-    throw new Error('Unsupported model provider')
+  // The same record the resolver dispatches on, so a configured provider is
+  // never refused here and an unconfigured one fails before it is recorded.
+  if (typeof name != 'string' || !Object.hasOwn(implementations, name)) {
+    throw new Error('No implementation configured for the selected provider')
   }
   return { model: id, provider: model.provider }
 }

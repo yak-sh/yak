@@ -163,25 +163,18 @@ export let statusOf = (entries: Bundle[]): TranscriptStatus => {
 export let usingBefore = (
   entries: Bundle[],
   seq = Infinity,
-): Comp | undefined => effectiveUsing(entries, seq)
-
-// An ask records what was served, not a new configuration choice. A selection
-// made after its context boundary must survive a late response/ask record.
-const effectiveUsing = (entries: Bundle[], seq: number): Comp | undefined => {
-  const orderedUsing = ordered(entries).filter((b) =>
-    seqOf(b) <= seq && USING in b
-  )
-  const explicit = orderedUsing.filter((b) => !b.ask).at(-1)
-  const latest = orderedUsing.at(-1)
-  if (latest?.ask && explicit) {
-    const boundary = entries.find((b) =>
-      b.entity.eid == (latest.ask as Comp).through
-    )
-    if (!boundary || seqOf(explicit) > seqOf(boundary)) {
-      return explicit[USING] as Comp
-    }
-  }
-  return latest?.[USING] as Comp | undefined
+): Comp | undefined => {
+  let all = ordered(entries).filter((b) => seqOf(b) <= seq && USING in b)
+  let latest = all.at(-1)
+  let ask = latest?.ask as Comp | undefined
+  // An ask records what was served, not a choice: a selection made after that
+  // ask's context boundary outlives a reply recorded late.
+  let chosen = ask ? all.filter((b) => !b.ask).at(-1) : undefined
+  let through = chosen &&
+    entries.find((b) => b.entity.eid == ask!.through)
+  return (chosen && (!through || seqOf(chosen) > seqOf(through))
+    ? chosen
+    : latest)?.[USING] as Comp | undefined
 }
 
 /**
