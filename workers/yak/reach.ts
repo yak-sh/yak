@@ -38,7 +38,7 @@ import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { edits, mode } from '@yaks/member'
 import { storeOf } from './door.ts'
-import { appDoc, appKeywords, coreDocs } from './vocab.ts'
+import { appKeywords, coreDocs, meant } from './vocab.ts'
 import { type Bundle, dead, type Entity } from '@yaks/graph'
 import { matcher } from '@yaks/match'
 import { parse } from '@yaks/query'
@@ -596,7 +596,7 @@ export let read = async (
 
 // The words one store declares as its own — its `vocab.json` as the store last
 // accepted it (T-32502), read back through the same door the deploy wrote it
-// at and loaded as the document it means, either spelling (vocab.ts `appDoc`).
+// at and loaded as the document it means, either spelling (vocab.ts `meant`).
 // A component nobody declares is the platform's, and every store speaks it. A
 // store that cannot answer says nothing, which reads as an app with no words
 // of its own.
@@ -606,11 +606,7 @@ let vocabAt = async (env: Env, r: Reach): Promise<VocabDoc> => {
     await res.body?.cancel()
     return {}
   }
-  try {
-    return appDoc(await res.json())
-  } catch {
-    return {}
-  }
+  return meant(await res.json())
 }
 
 // Every word in reach as ONE vocabulary: the platform's core plus each app's

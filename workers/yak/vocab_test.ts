@@ -2,7 +2,12 @@
 // the guide is written in still converts, the two spellings load to the SAME
 // vocabulary, and what the load implies is one app's tables — not the fleet's
 // 83 (V-33553).
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import { schema } from '@yaks/sqlite'
 import { fields } from '@yaks/fts'
 import { EXAMPLE as SHORT_EXAMPLE } from '../../src/store/vocab.ts'
@@ -11,6 +16,9 @@ import { PAGES } from './guide.ts'
 import {
   appDoc,
   appVocab,
+  homed,
+  livesIn,
+  meant,
   PLATFORM_APART,
   platformVocab,
   RELATIONS,
@@ -358,4 +366,95 @@ Deno.test('a searched column of an app reaches the index fields', () => {
     { comp: 'doc', prop: 'title' },
     { comp: 'doc', prop: 'body' },
   ])
+})
+
+// One word, one home (T-32728): the second app in a space to name a word does
+// not plant it again — it uses it where it lives, and a column it brings grows
+// the home's table. What travels is the column's SCHEMA, so the keywords a
+// borrowed column declares reach the store that plants it (T-37546).
+Deno.test('a word the space already has is a use, not a home', () => {
+  let shelf = appDoc({ book: { title: 'text', pages: 'number' } })
+  let homes = {
+    book: { at: 'reading-list', props: shelf.$defs!.book.properties! },
+  }
+  let out = homed(
+    appDoc({ book: { title: 'text' }, loan: { to: 'text' } }),
+    homes,
+  )
+  // The word this app is the first to say stays its own; the shared one does
+  // not, and the answer says where it lives.
+  assertEquals(Object.keys(out.mine.$defs ?? {}), ['loan'])
+  assertEquals(out.uses, { book: 'reading-list' })
+  assertEquals(out.grows, {})
+  assertEquals(livesIn(out.uses), [
+    'book lives in reading-list; this app reads and writes it there',
+  ])
+
+  // A column the home has never seen grows the HOME's table, keywords and all.
+  assertEquals(
+    homed(
+      appDoc({
+        $defs: {
+          book: {
+            type: 'object',
+            properties: { blurb: { type: 'string', search: true } },
+          },
+        },
+      }),
+      homes,
+    ).grows,
+    { 'reading-list': { book: { blurb: { type: 'string', search: true } } } },
+  )
+
+  // And the one refusal: the same column, two types, named with both and
+  // with the app the word lives in.
+  let why = assertThrows(
+    () => homed(appDoc({ book: { pages: 'text' } }), homes),
+    Error,
+  ).message
+  assertStringIncludes(why, 'book.pages is text here and number in')
+  assertStringIncludes(why, 'reading-list, where book lives')
+})
+
+// The `search` keyword is the column's, and a column the platform refuses to
+// index says so at the deploy, in @yaks/vocab's own words.
+Deno.test('a searched column that holds no prose is refused', () => {
+  assertThrows(
+    () =>
+      appDoc({
+        $defs: {
+          recipe: {
+            type: 'object',
+            properties: { serves: { type: 'number', search: true } },
+          },
+        },
+      }),
+    Error,
+    'recipe.serves is searched but holds no prose',
+  )
+})
+
+// What a store KEEPS is the document (graph.ts `#vocabDoor`), and a store that
+// last accepted the short form is converted on the way out, so no reader ever
+// learns there were two spellings.
+Deno.test('a store answers the document it means, either spelling', () => {
+  assertEquals(
+    meant('{"recipe": {"serves": "number"}}').$defs?.recipe.properties,
+    { serves: { type: 'number' } },
+  )
+  assertEquals(
+    meant({
+      $defs: {
+        recipe: {
+          type: 'object',
+          properties: { note: { type: 'string', search: true } },
+        },
+      },
+    }).$defs?.recipe.properties,
+    { note: { type: 'string', search: true } },
+  )
+  // An answer nothing can read is an app with no words of its own, never a
+  // failed request: a deploy is where a manifest is refused.
+  assertEquals(meant('{'), {})
+  assertEquals(meant({ doc: { headline: 'text' } }), {})
 })

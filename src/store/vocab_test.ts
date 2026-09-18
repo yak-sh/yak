@@ -5,8 +5,7 @@
 Deno.env.set('DB_PATH', ':memory:')
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 
-let { GUIDE, borrowed, dropOps, grow, homed, livesIn, parseVocab, vocabOps } =
-  await import('./vocab.ts')
+let { GUIDE, parseVocab, vocabOps } = await import('./vocab.ts')
 let { eager, mutate, plantVocab } = await import('../db.ts')
 let { bareDb } = await import('../testdb.ts')
 let { askOf, askRows, layered } = await import('../graph_query.ts')
@@ -60,45 +59,6 @@ Deno.test('vocab.json: every refusal names the file', () => {
     why({ recipe: { entity: 'text' } }).includes('is not a column name'),
     true,
   )
-})
-
-Deno.test('vocab.json grows: a column arrives, none leaves or retypes', () => {
-  let was = parseVocab(recipes)
-  // A later manifest that adds a column keeps the ones already written.
-  assertEquals(grow(was, { recipe: { notes: 'text' } }).vocab, {
-    recipe: { title: 'text', serves: 'number', notes: 'text' },
-  })
-  // And one that drops a column keeps it declared: its rows are still there.
-  assertEquals(grow(was, { recipe: { title: 'text' } }).vocab, was)
-  // A rename is an arrival beside a survivor, and the answer says both, so
-  // it is not silent (C-32652 item 4).
-  let moved = grow(was, { recipe: { title: 'text', portions: 'number' } })
-  assertEquals(moved.added, ['recipe.portions'])
-  assertEquals(moved.kept, ['recipe.serves'])
-  // A manifest that changed nothing says neither.
-  assertEquals(grow(was, was).added, [])
-  assertEquals(grow(was, was).kept, [])
-  assertThrows(
-    () => grow(was, { recipe: { serves: 'text' } }),
-    Error,
-    'a column keeps the type',
-  )
-})
-
-Deno.test('vocab.json: an empty component the manifest drops goes', () => {
-  let was = parseVocab({ ...recipes, jot: { text: 'text' } })
-  // The word a manifest stopped saying, with nothing written under it: gone,
-  // table and all. The store answers how many rows a word holds.
-  let next = parseVocab(recipes)
-  let out = grow(was, next, (name) => name == 'jot' ? 0 : 1)
-  assertEquals(out.dropped, ['jot'])
-  assertEquals(out.vocab, next)
-  assertEquals(dropOps(out.dropped).map((o) => o.sql), [
-    'drop table if exists "jot"',
-  ])
-  // One that holds rows stays declared: the data is the record of its shape.
-  assertEquals(grow(was, next, () => 1).dropped, [])
-  assertEquals(grow(was, next).vocab, was)
 })
 
 Deno.test('vocab.json: the DDL is a create plus one guarded add per column', () => {
@@ -209,41 +169,4 @@ Deno.test('a store lists its own word in creation order', async () => {
   assertEquals(await listed('?.doc!'), titles)
   // A window is the NEWEST page of that same order.
   assertEquals(await listed('?.recipe!&.doc?&limit=2'), titles.slice(-2))
-})
-
-// One word, one home (T-32728): the second app in a space to name a word does
-// not plant it again — it uses it where it lives.
-Deno.test('vocab.json: a word the space already has is a use, not a home', () => {
-  let shelf = parseVocab({ book: { title: 'text', pages: 'number' } })
-  let homes = { book: { at: 'reading-list', cols: shelf.book } }
-  let out = homed(
-    parseVocab({ book: { title: 'text' }, loan: { to: 'text' } }),
-    homes,
-  )
-  // The word this app is the first to say stays its own; the shared one does
-  // not, and the answer says where it lives.
-  assertEquals(out.mine, { loan: { to: 'text' } })
-  assertEquals(out.uses, { book: 'reading-list' })
-  assertEquals(out.grows, {})
-  assertEquals(livesIn(out.uses), [
-    'book lives in reading-list; this app reads and writes it there',
-  ])
-  // A use enters a tools.json check as a bare word: the columns are the
-  // home's to say.
-  assertEquals(borrowed(out.uses), { book: {} })
-
-  // A column the home has never seen grows the HOME's table.
-  assertEquals(
-    homed(parseVocab({ book: { isbn: 'text' } }), homes).grows,
-    { 'reading-list': { book: { isbn: 'text' } } },
-  )
-
-  // And the one refusal: the same column, two types, named with both and
-  // with the app the word lives in.
-  let why = assertThrows(
-    () => homed(parseVocab({ book: { pages: 'text' } }), homes),
-    Error,
-  ).message
-  assertStringIncludes(why, 'book.pages is text here and number in')
-  assertStringIncludes(why, 'reading-list, where book lives')
 })

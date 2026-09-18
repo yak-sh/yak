@@ -43,7 +43,7 @@ import type { Host } from './host.ts'
 import { at, reachable, spacesOf, toolsIn, vocabIn } from './declared.ts'
 import { told } from './memory.ts'
 import type { Ctx } from './tools.ts'
-import { appDoc } from './vocab.ts'
+import { meant } from './vocab.ts'
 
 /** The file, at the app's root. */
 export let NOTES = 'NOTES.md'
@@ -120,15 +120,8 @@ export let notesOf = async (
 // The words an app declares as its own, as the store last accepted them
 // (reach.ts `vocabAt` reads the same door for the same file). A store that
 // cannot answer says nothing, which reads as an app with no words of its own.
-let kindsOf = async (ctx: Ctx, space: Space, app: App): Promise<string[]> => {
-  let said = await vocabIn(ctx, space, app)
-  if (!said) return []
-  try {
-    return Object.keys(appDoc(said).$defs ?? {})
-  } catch {
-    return []
-  }
-}
+let kindsOf = async (ctx: Ctx, space: Space, app: App): Promise<string[]> =>
+  Object.keys(meant(await vocabIn(ctx, space, app)).$defs ?? {})
 
 // A component name as a person would say the things it holds. English enough
 // for a sentence and no more: a wrong plural costs a reader nothing, and a

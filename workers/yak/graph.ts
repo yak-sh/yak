@@ -186,8 +186,8 @@ import {
   appVocab,
   gitVocab,
   grew,
+  meant,
   platformVocab,
-  shortOf,
   teach,
 } from './vocab.ts'
 
@@ -1698,9 +1698,18 @@ export class Store {
   // column arrives BESIDE the old one, and `added` is how they see that. Nothing
   // ever leaves — the DDL is additive and a column's rows are already written —
   // so `dropped` is empty and stays that way.
+  //
+  // What is kept, and answered, is the DOCUMENT (T-37546). The short form
+  // `{comp: {col: type}}` is a convenience an app may still WRITE, and it is
+  // normalized to a document here, once, at the one door that takes one: a
+  // keyword is the column's — `search`, `stamped`, a reference's `death` — and
+  // a manifest flattened to its types on the way in dropped every one of them
+  // before any store could read it. A store that last accepted the short form
+  // is converted on the way OUT (vocab.ts `meant`), so a reader never learns
+  // there were two spellings, and the next deploy writes the document down.
   #vocabDoor(request: Request): Response | Promise<Response> {
     if (request.method == 'GET') {
-      return Response.json(JSON.parse(this.#get('vocab') ?? '{}'))
+      return Response.json(meant(this.#get('vocab') ?? '{}'))
     }
     if (request.method != 'POST') {
       return Response.json(
@@ -1718,7 +1727,7 @@ export class Store {
         appVocab(doc)
         // The declaration and its DDL must roll back together on boot failure.
         this.#boot(() => {
-          this.#put('vocab', JSON.stringify(shortOf(doc)))
+          this.#put('vocab', JSON.stringify(doc))
           for (let name of dropped) {
             this.#ctx.storage.sql.exec(
               `drop table if exists "${name.replaceAll('"', '""')}"`,

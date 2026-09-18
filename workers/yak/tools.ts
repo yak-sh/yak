@@ -39,22 +39,23 @@ import type { Blobs } from '../../src/store/blobs.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { fullFiles } from './usage.ts'
 import { parseTools, TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
-import {
-  borrowed,
-  EXAMPLE,
-  grow,
-  homed,
-  type Homes,
-  livesIn,
-  parseVocab,
-  type Vocab,
-} from '../../src/store/vocab.ts'
+import { borrowed, EXAMPLE, type Vocab } from '../../src/store/vocab.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { appAccess } from '../../src/types.ts'
 import { VERSION } from '../../src/version.ts'
-import { appDoc, coreDocs, shortOf, teach } from './vocab.ts'
+import {
+  appDoc,
+  coreDocs,
+  grew,
+  meant,
+  homed,
+  type Homes,
+  livesIn,
+  shortOf,
+  teach,
+} from './vocab.ts'
 import { withKinds } from './kinds.ts'
-import type { VocabDoc } from '@yaks/vocab'
+import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Cols, Sheet } from './csv.ts'
 import { mimeOf, purged } from './files.ts'
 import {
@@ -587,6 +588,10 @@ let toGallery = async (ctx: Ctx, space: Space, app: App) => {
 // first — the routing table a deploy reads to find a word's home (T-32728).
 // A store's `/vocab` answers only the words it homes, so a use never looks
 // like a second declaration and the first entry here is always the home.
+//
+// Each answer is the DOCUMENT that store keeps (vocab.ts `meant`), keywords
+// and all: a home's manifest is written back whole when a sibling grows it,
+// and read as types alone it would come back with every `search` erased.
 let vocabs = async (ctx: Ctx, space: Space, app: App) => {
   let all = await ctx.dir.apps(space)
   if (!all.some((a) => a.eid == app.eid)) all = [...all, app]
@@ -594,9 +599,9 @@ let vocabs = async (ctx: Ctx, space: Space, app: App) => {
     let r = await storeOf(ctx.env.STORE, storeName(space, one))('/vocab')
     if (!r.ok) {
       await r.body?.cancel()
-      return [one.slug, {} as Vocab] as const
+      return [one.slug, {} as VocabDoc] as const
     }
-    return [one.slug, await r.json() as Vocab] as const
+    return [one.slug, meant(await r.json())] as const
   }))
   return new Map(read)
 }
@@ -608,12 +613,13 @@ let vocabs = async (ctx: Ctx, space: Space, app: App) => {
 // home's whole manifest back.
 let homesIn = async (ctx: Ctx, space: Space, app: App) => {
   let said = await vocabs(ctx, space, app)
+  let ours = said.get(app.slug)?.$defs ?? {}
   let homes: Homes = {}
-  for (let [slug, cols] of said) {
+  for (let [slug, doc] of said) {
     if (slug == app.slug) continue
-    for (let [name, one] of Object.entries(cols)) {
-      if (name in homes || name in (said.get(app.slug) ?? {})) continue
-      homes[name] = { at: slug, cols: one }
+    for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
+      if (name in homes || name in ours) continue
+      homes[name] = { at: slug, props: schema.properties ?? {} }
     }
   }
   return { said, homes }
@@ -711,9 +717,9 @@ let byCaller = async (ctx: Ctx, who: Who) => ({
 // Whether a manifest can land on this app AT ALL, asked before anything moves
 // (app_update). The same two rules a deploy holds it to, both of which throw
 // rather than answer: a word another app in the space homes keeps that home's
-// column types (store/vocab.ts `homed`), and this app's own columns keep the
-// types their rows were written under (`grow`). Neither writes, so a refusal
-// leaves the app exactly as it was — code included.
+// column types (vocab.ts `homed`), and this app's own columns keep the types
+// their rows were written under (`grew`). Neither writes, so a refusal leaves
+// the app exactly as it was — code included.
 let fits = async (
   ctx: Ctx,
   space: Space,
@@ -723,12 +729,12 @@ let fits = async (
   file: string,
 ) => {
   let split = homed(
-    parseVocab(read(source, file), file),
+    appDoc(source, file),
     (await homesIn(ctx, space, app)).homes,
   )
   let r = await store('/vocab')
-  let mine = r.ok ? await r.json() as Vocab : {}
-  grow(mine, split.mine)
+  let mine = r.ok ? meant(await r.json()) : {}
+  grew(mine, split.mine)
 }
 
 // A RELEASE, whichever door asked for it — app_deploy, app_install,
@@ -781,28 +787,35 @@ let released = async (
   let vocabTook = c.since()
   if (key) {
     let source = new TextDecoder().decode(await blobs.get(key))
-    // Read ONCE, here, in whichever spelling the app wrote (@yaks/yaml): the
-    // two readers below take the value, and neither has to know there are two
-    // spellings of the file.
-    let held = read(source, vocabFile)
-    let next = parseVocab(held, vocabFile)
-    manifest = appDoc(held, vocabFile)
+    // The manifest as one document, in whichever spelling the app wrote it
+    // (vocab.ts `appDoc`, @yaks/yaml): everything below reads the document,
+    // so nothing here has to know there are two spellings of the file, and a
+    // column's keywords ride all the way to the store that plants it.
+    manifest = appDoc(source, vocabFile)
     // One word, one home: a word another app in the space already declares is
     // that app's, so this release records a USE of it instead of planting a
     // second table, and any column it adds grows the HOME's.
     let { said, homes } = await homesIn(ctx, space, app)
-    let split = homed(next, homes)
+    let split = homed(manifest, homes)
     uses = split.uses
     // The home's table grows first: a use whose column the home does not have
-    // yet is not a use anyone can write until it does.
+    // yet is not a use anyone can write until it does. Its whole manifest is
+    // written back, so it goes back as the DOCUMENT the home declared —
+    // projected to types, a sibling's deploy would silently unsearch the
+    // home's own columns (T-37546).
     for (let [slug, grown] of Object.entries(split.grows)) {
       let home = await ctx.dir.app(space, slug)
       if (!home) continue
-      let whole: Vocab = { ...said.get(slug) }
-      for (let [name, cols] of Object.entries(grown)) {
-        whole[name] = { ...whole[name], ...cols }
-        for (let col of Object.keys(cols)) added.push(`${name}.${col}`)
+      let was = said.get(slug) ?? {}
+      let defs: Record<string, PropSchema> = { ...was.$defs }
+      for (let [name, props] of Object.entries(grown)) {
+        defs[name] = {
+          ...defs[name],
+          properties: { ...defs[name]?.properties, ...props },
+        }
+        for (let col of Object.keys(props)) added.push(`${name}.${col}`)
       }
+      let whole: VocabDoc = { ...was, $defs: defs }
       await answer(
         await storeOf(ctx.env.STORE, storeName(space, home))('/vocab', {
           method: 'POST',

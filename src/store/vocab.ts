@@ -137,70 +137,6 @@ export let parseVocab = (source: unknown, file = 'vocab.json'): Vocab => {
   return out
 }
 
-// The manifest a store keeps after a deploy: columns only ever ARRIVE. A
-// column the new manifest stopped naming stays declared — its rows are still
-// there — and one whose type changed is refused, because the values already
-// stored were written under the old word.
-//
-// A whole COMPONENT the manifest stopped naming is the one thing that may
-// leave, and only when it holds nothing: a name tried once and abandoned is a
-// probe's leftover, not data, and it used to be declared forever (C-32624
-// item 1). `rows` counts what a component holds — the store's question, since
-// only it has the tables — and a caller that cannot count says so by leaving
-// it out: nothing is dropped unless something says it is empty.
-//
-// It also says WHAT MOVED, because additive growth is silent where it matters
-// most: rename a column and the manifest reads as one word while the store
-// holds two, the old one still under every row already written (C-32652
-// item 4, where `minutes` became `mins` and the rows went
-// `"minutes":46,"mins":null` with nothing said). `added` is every column this
-// manifest planted; `kept` is every column the store still declares that this
-// manifest did not name. A manifest that changed nothing says neither.
-export let grow = (
-  was: Vocab,
-  next: Vocab,
-  rows: (name: string) => number = () => 1,
-): { vocab: Vocab; dropped: string[]; added: string[]; kept: string[] } => {
-  let dropped = Object.keys(was).filter((name) =>
-    !(name in next) && !rows(name)
-  )
-  let out: Vocab = { ...was }
-  let added: string[] = []
-  for (let name of dropped) delete out[name]
-  for (let [name, cols] of Object.entries(next)) {
-    let had = was[name] ?? {}
-    for (let [col, type] of Object.entries(cols)) {
-      if (had[col] && had[col] != type) {
-        throw new Error(
-          `vocab.json: ${name}.${col} is already ${had[col]} — ` +
-            'a column keeps the type its rows were written under',
-        )
-      }
-      if (!(col in had)) added.push(`${name}.${col}`)
-    }
-    out[name] = { ...had, ...cols }
-  }
-  let kept = Object.entries(out).flatMap(([name, cols]) =>
-    Object.keys(cols)
-      .filter((col) => !(col in (next[name] ?? {})))
-      .map((col) => `${name}.${col}`)
-  )
-  return { vocab: out, dropped, added, kept }
-}
-
-// How a store counts one component's rows, in this module because this module
-// owns how a component's name is spelled as a table.
-export let countSql = (name: string) =>
-  `select count(*) as n from ${quote(name)}`
-
-// And what an empty component's departure costs: the table, nothing else. A
-// dropped word's rows are none by construction — that is what let it go.
-export let dropOps = (names: string[]): SchemaOp[] =>
-  names.map((name) => ({
-    kind: 'exec',
-    sql: `drop table if exists ${quote(name)}`,
-  } as SchemaOp))
-
 // The DDL that makes the manifest true, additive both ways: the table when the
 // store has never seen the word, one guarded `add column` per column so a
 // manifest that grew plants only what is new. db.ts `graft()` runs the guards.
@@ -223,59 +159,6 @@ export let vocabOps = (vocab: Vocab): SchemaOp[] =>
       sql: `alter table ${quote(name)} add column ${column(col, type)}`,
     })),
   ])
-
-// A word has ONE HOME (T-32728): the first app in the space to declare it.
-// A second app naming the same word is not a second declaration — it is a
-// USE. Nothing is planted here, the writes route to the home store
-// (reach.ts), and a column this manifest adds grows the HOME's table, by the
-// same additive rule `grow()` holds every store to.
-//
-// So a manifest arrives split three ways: `mine` the words this app homes,
-// `uses` the words it borrows and where each lives, and `grows` what each
-// home has to add. The one refusal is a SHAPE conflict — the same column
-// with two types — because the rows already written under the home's type
-// are the record of what that column is, and no manifest may rewrite them.
-export type Homes = Record<
-  string,
-  { at: string; cols: Record<string, PropType> }
->
-
-export let homed = (next: Vocab, homes: Homes) => {
-  let mine: Vocab = {}
-  let uses: Record<string, string> = {}
-  let grows: Record<string, Vocab> = {}
-  for (let [name, cols] of Object.entries(next)) {
-    let home = homes[name]
-    if (!home) {
-      mine[name] = cols
-      continue
-    }
-    uses[name] = home.at
-    let add: Record<string, PropType> = {}
-    for (let [col, type] of Object.entries(cols)) {
-      let had = home.cols[col]
-      if (had && had != type) {
-        throw new Error(
-          `vocab.json: ${name}.${col} is ${type} here and ${had} in ` +
-            `${home.at}, where ${name} lives — a column keeps the type its ` +
-            'rows were written under',
-        )
-      }
-      if (!had) add[col] = type
-    }
-    if (Object.keys(add).length) {
-      grows[home.at] = { ...grows[home.at], [name]: add }
-    }
-  }
-  return { mine, uses, grows }
-}
-
-// What a deploy says about a word it does not own, in the sentence the person
-// asked for: where it lives, and that this app still reads and writes it.
-export let livesIn = (uses: Record<string, string>) =>
-  Object.entries(uses).map(([name, at]) =>
-    `${name} lives in ${at}; this app reads and writes it there`
-  )
 
 // A use as a vocabulary sees it: the word, with no columns of its own —
 // those are the home's to say. Enough for a check that asks only whether the

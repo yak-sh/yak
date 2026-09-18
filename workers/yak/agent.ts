@@ -30,7 +30,7 @@ import { composed as perEntity, detached } from '@yaks/graph'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
 import { Say, type Search } from '@yaks/mcp'
-import type { Column, Vocab } from '@yaks/vocab'
+import type { Column, PropSchema, Vocab } from '@yaks/vocab'
 import { META } from './directory.ts'
 import { vocabIn } from './declared.ts'
 import { letters } from './letters.ts'
@@ -44,7 +44,7 @@ import {
   TOOLS,
 } from './tools.ts'
 import { ceiling, serve, unseenBlock } from './unseen.ts'
-import { appVocab, PLATFORM_APART } from './vocab.ts'
+import { appVocab, meant, PLATFORM_APART, wordOf } from './vocab.ts'
 import { lined } from './wire.ts'
 import { type Host, hosted } from './host.ts'
 
@@ -338,31 +338,41 @@ let spoken = async (
   ctx: Ctx,
   reach: Reach[],
 ): Promise<{ vocab: Vocab; clashes: Set<string> }> => {
-  // Each store's words, read once per request (declared.ts `vocabIn`): the
-  // roster already asked for them (standing.ts `kindsOf`).
+  // Each store's words as the document it keeps, read once per request
+  // (declared.ts `vocabIn`, vocab.ts `meant`): the roster already asked for
+  // them (standing.ts `kindsOf`).
   let said = await Promise.all(
-    reach.map(async (r) => (await vocabIn(ctx, r.space, r.app)) ?? {}),
+    reach.map(async (r) => meant(await vocabIn(ctx, r.space, r.app))),
   )
-  let all: Record<string, unknown> = {}
+  let defs: Record<string, PropSchema> = {}
   let clashes = new Set<string>()
-  let cols = (v: unknown) => (v ?? {}) as Record<string, unknown>
   for (let one of said) {
-    for (let [name, held] of Object.entries(one)) {
-      if (!(name in all)) {
-        all[name] = held
+    for (let [name, schema] of Object.entries(one.$defs ?? {})) {
+      let mine = defs[name]
+      if (!mine) {
+        defs[name] = schema
         continue
       }
-      let mine = cols(all[name])
-      for (let [col, type] of Object.entries(cols(held))) {
-        if (col in mine && mine[col] != type) clashes.add(`${name}.${col}`)
+      // The word has a HOME (tools.ts `homesIn`), and the first store here is
+      // it — so the home says what the component IS, and a column two stores
+      // spell differently is typed nowhere (`reading` below). But a sibling
+      // that BORROWED the word may have grown a column of its own, planted in
+      // the home's table (vocab.ts `homed`): the door admits the UNION, or a
+      // column an app deployed itself would be refused at the only door it
+      // could be written through.
+      let props = { ...mine.properties }
+      for (let [col, s] of Object.entries(schema.properties ?? {})) {
+        if (!props[col]) props[col] = s
+        else if (wordOf(props[col]) != wordOf(s)) clashes.add(`${name}.${col}`)
       }
+      defs[name] = { ...mine, properties: props }
     }
   }
   let meta = ctx.person && await ctx.dir.space(META.space)
   if (meta && await ctx.dir.role(meta, ctx.person)) {
     for (let col of PLATFORM_APART) clashes.add(col)
   }
-  return { vocab: appVocab(all), clashes }
+  return { vocab: appVocab({ $defs: defs }), clashes }
 }
 
 /**

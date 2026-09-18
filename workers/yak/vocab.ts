@@ -1022,6 +1022,73 @@ export let grew = (
   return { doc: { ...next, $defs: defs }, dropped, added, kept }
 }
 
+/**
+ * Where each word of a space LIVES: the component schemas one app homes, by
+ * name. Read off that app's `/vocab`, which answers only the words it homes —
+ * so a use never looks like a second declaration (tools.ts `homesIn`).
+ */
+export type Homes = Record<
+  string,
+  { at: string; props: Record<string, PropSchema> }
+>
+
+/**
+ * A manifest split by home. A word another app in the space already declares
+ * is not a second declaration but a USE (T-32728): nothing is planted here,
+ * the writes route to the home store (reach.ts), and a column this manifest
+ * adds grows the HOME's table by the additive rule {@link grew} holds every
+ * store to.
+ *
+ * So a manifest arrives split three ways: `mine` the words this app homes,
+ * `uses` the words it borrows and where each lives, and `grows` the columns
+ * each home has to add. A column travels as its SCHEMA, never as its type
+ * alone: `search` and every other keyword belong to the column, and the store
+ * that plants it is the one that reads them (T-37546).
+ *
+ * The one refusal is a SHAPE conflict — the same column with two types —
+ * because the rows already written under the home's type are the record of
+ * what that column is, and no manifest may rewrite them.
+ */
+export let homed = (next: VocabDoc, homes: Homes) => {
+  let mine: Record<string, PropSchema> = {}
+  let uses: Record<string, string> = {}
+  let grows: Record<string, Record<string, Record<string, PropSchema>>> = {}
+  for (let [name, schema] of Object.entries(next.$defs ?? {})) {
+    let home = homes[name]
+    if (!home) {
+      mine[name] = schema
+      continue
+    }
+    uses[name] = home.at
+    let add: Record<string, PropSchema> = {}
+    for (let [col, s] of Object.entries(schema.properties ?? {})) {
+      let had = home.props[col]
+      if (had && (had.type != s.type || had.format != s.format)) {
+        throw new Error(
+          `vocab.json: ${name}.${col} is ${wordOf(s)} here and ${
+            wordOf(had)
+          } in ${home.at}, where ${name} lives — a column keeps the type its ` +
+            'rows were written under',
+        )
+      }
+      if (!had) add[col] = s
+    }
+    if (Object.keys(add).length) {
+      grows[home.at] = { ...grows[home.at], [name]: add }
+    }
+  }
+  return { mine: { ...next, $defs: mine }, uses, grows }
+}
+
+/**
+ * What a deploy says about a word it does not own, in the sentence the person
+ * asked for: where it lives, and that this app still reads and writes it.
+ */
+export let livesIn = (uses: Record<string, string>) =>
+  Object.entries(uses).map(([name, at]) =>
+    `${name} lives in ${at}; this app reads and writes it there`
+  )
+
 export let schemaOf = (manifest: Record<string, unknown>): VocabDoc => ({
   $vocabulary: { [CORE_URI]: true },
   title: 'app',
@@ -1071,6 +1138,23 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   let errs = [...reserved(doc, RESERVED), ...storable(doc)]
   if (errs.length) throw new Error(`${file}: ${errs.join('; ')}`)
   return doc
+}
+
+/**
+ * What a store's `/vocab` ANSWERED, as the document it means — and an empty
+ * document where it cannot be read at all. A door reading a vocabulary is
+ * reading it to say something else (which words are in reach, which kinds an
+ * app holds, what a batch may write), so one store with an answer nothing can
+ * parse reads as an app with no words of its own rather than a failed request.
+ * {@link appDoc} is the door a DEPLOY comes through, where a refusal is the
+ * whole point.
+ */
+export let meant = (said: unknown): VocabDoc => {
+  try {
+    return appDoc(said)
+  } catch {
+    return {}
+  }
 }
 
 /**
