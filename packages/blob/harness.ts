@@ -38,8 +38,8 @@ let doc: VocabDoc = {
       type: 'object',
       kind: true,
       properties: {
-        title: { type: 'string' },
-        body: { type: 'string', store: 'blob' },
+        title: { type: 'string', search: true },
+        body: { type: 'string', store: 'blob', search: true },
         author: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },

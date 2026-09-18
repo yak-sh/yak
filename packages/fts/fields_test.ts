@@ -2,9 +2,10 @@
 
 import { assertEquals } from '@std/assert'
 import { fields, indexes, indexName } from './fields.ts'
+import { loadVocab } from '@yaks/vocab'
 import { shop } from './harness.ts'
 
-Deno.test('every text property is indexed, whatever component holds it', () => {
+Deno.test('the declared text properties are indexed, whatever component holds them', () => {
   assertEquals(fields(shop), [
     { comp: 'book', prop: 'title' },
     { comp: 'book', prop: 'blurb' },
@@ -31,4 +32,28 @@ Deno.test('fields group into one index per component', () => {
     { comp: 'review', props: ['prose'] },
   ])
   assertEquals(indexName('book'), 'book_fts')
+})
+
+Deno.test('a text column nobody declared is stored, readable, and never searched', () => {
+  let quiet = loadVocab({
+    $defs: {
+      book: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', search: true },
+          shelf: { type: 'string' },
+        },
+      },
+    },
+  })
+  assertEquals(fields(quiet), [{ comp: 'book', prop: 'title' }])
+})
+
+Deno.test('a vocabulary declaring no search has nothing to search', () => {
+  let silent = loadVocab({
+    $defs: {
+      book: { type: 'object', properties: { title: { type: 'string' } } },
+    },
+  })
+  assertEquals(fields(silent), [])
 })

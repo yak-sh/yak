@@ -51,6 +51,9 @@ export type Column = {
   ref?: string // the entity kind a reference names ('entity' = any)
   death?: Death
   stamped: boolean // server-owned: readable, never wire-writable
+  /** this text column's words are indexed: a bare-word search matches them
+   * (@yaks/fts reads it). A column nobody declares is never searched. */
+  search: boolean
   persist: boolean // false = computed/never-stored (query-only rank, aggregates)
   /** this column is what the entity's own id is derived from — see the
    * `identity` keyword and `Vocab.identity` */
@@ -146,6 +149,8 @@ export type PropSchema = {
   // legal spelling too — the loader carries it, it never reads it.
   persist?: boolean | string
   stamped?: boolean
+  // true = this text column is full-text indexed (@yaks/fts reads it).
+  search?: boolean
   kind?: boolean
   before?: string[]
   wire?: boolean

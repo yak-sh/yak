@@ -19,6 +19,7 @@ vocabulary (declared via JSON Schema's own `$vocabulary` mechanism,
 | `death`    | column | `cascade` \| `detach` \| `release` \| `keep` when the target dies |
 | `persist`  | column | `false` = computed, never stored (a query-only rank)              |
 | `stamped`  | column | `true` = server-owned: readable, never wire-writable              |
+| `search`   | column | `true` = this text column's words are full-text indexed           |
 | `store`    | column | `"blob"` = a content-addressed markdown body                      |
 | `aliases`  | column | input spellings that resolve to an enum member                    |
 | `bare`     | both   | `false` = never claims its bare filter spelling; qualified only   |
@@ -43,6 +44,27 @@ Every stored `ref` column is indexed automatically, including stamped refs and
 refs with `death: "keep"`. No `index: true` is needed, and `index: false` does
 not opt out. A reference that already leads a declared index (including a
 composite unique or identity index) needs no additional single-column index.
+
+**`search` is the one that says what a search reads.** A column marked
+`"search": true` has its words indexed, and a bare word in a query line matches
+them; a text column nobody marked is stored and readable but never searched, so
+a repo path or a provider name is not what a search has to wade through. The
+keyword is for stored prose — a number, a stamp, a reference, a closed set and a
+computed column carry no words, and `validate.ts` refuses it there. This package
+DECLARES it; [@yaks/fts](https://jsr.io/@yaks/fts) is what cuts the index, one
+per component, from the columns that said so.
+
+```json
+{
+  "recipe": {
+    "type": "object",
+    "properties": {
+      "note": { "type": "string", "search": true },
+      "serves": { "type": "number" }
+    }
+  }
+}
+```
 
 **`identity` is the one that names the entity.** A component whose column says
 `"identity": true` has its entities' ids DERIVED from that value — the same

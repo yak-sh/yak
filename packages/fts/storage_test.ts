@@ -11,11 +11,14 @@ Deno.test('storage composes FTS explicitly for document and non-document prose',
     $defs: {
       doc: {
         type: 'object',
-        properties: { title: { type: 'string' }, body: { type: 'string' } },
+        properties: {
+          title: { type: 'string', search: true },
+          body: { type: 'string', search: true },
+        },
       },
       review: {
         type: 'object',
-        properties: { prose: { type: 'string' } },
+        properties: { prose: { type: 'string', search: true } },
       },
     },
   })

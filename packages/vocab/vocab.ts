@@ -131,6 +131,7 @@ let columnOf = (
     ref: s.ref,
     death,
     stamped: !!s.stamped,
+    search: s.search === true,
     persist: s.persist !== false,
     identity: s.identity === true,
     affinity: affinityOf(category, scalar, s.type),

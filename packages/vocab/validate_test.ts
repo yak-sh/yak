@@ -121,6 +121,29 @@ Deno.test('storable refuses an identity nothing could derive', () => {
   ])
 })
 
+Deno.test('storable refuses search on anything but stored prose', () => {
+  let errs = storable(doc({
+    recipe: {
+      type: 'object',
+      properties: {
+        note: { type: 'string', search: true },
+        serves: { type: 'number', search: true },
+        cook: { type: 'string', ref: 'entity', death: 'detach', search: true },
+        course: { enum: ['starter', 'main'], search: true },
+        made: { type: 'string', format: 'date-time', search: true },
+        rank: { type: 'number', persist: false, search: true },
+      },
+    },
+  }))
+  assertEquals(errs, [
+    'recipe.serves is searched but holds no prose — "search": true is for a stored text column',
+    'recipe.cook is searched but holds no prose — "search": true is for a stored text column',
+    'recipe.course is searched but holds no prose — "search": true is for a stored text column',
+    'recipe.made is searched but holds no prose — "search": true is for a stored text column',
+    'recipe.rank is searched but holds no prose — "search": true is for a stored text column',
+  ])
+})
+
 Deno.test('reserved names refuse against a base vocabulary', () => {
   let base = loadVocab(slice)
   let app = doc({

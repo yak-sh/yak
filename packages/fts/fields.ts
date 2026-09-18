@@ -14,16 +14,24 @@ import type { Column, Vocab } from '@yaks/vocab'
 export type Field = { comp: string; prop: string }
 
 // Decides whether a column is indexed. An application passes its own to index
-// less than everything textual — say, titles only.
+// less than the vocabulary declared — say, titles only.
 export type Pick = (column: Column) => boolean
 
-// The default choice: every STORED text column. A computed column has no row to
-// index, and a number, a stamp or a reference is not prose.
-export let textual: Pick = (c) =>
-  c.persist && c.category == 'scalar' && c.scalar == 'text'
+// The default choice: the columns the VOCABULARY declared searched — a column
+// saying `"search": true` (@yaks/vocab). Which prose is worth finding is the
+// vocabulary's sentence to say, not this package's guess: a repo path and a
+// provider name are text nobody goes looking for, and an index over them is
+// words a search has to wade through. A vocabulary that declares none is a
+// vocabulary with nothing to search.
+//
+// The storage guards stand beside the declaration because an index is cut from
+// a table: a computed column has no row to index, and a number or a reference
+// has no words even where a document said otherwise.
+export let searched: Pick = (c) =>
+  c.search && c.persist && c.category == 'scalar' && c.scalar == 'text'
 
 // The indexed fields of a vocabulary, by component then declaration order.
-export let fields = (vocab: Vocab, pick: Pick = textual): Field[] =>
+export let fields = (vocab: Vocab, pick: Pick = searched): Field[] =>
   vocab.all.flatMap((comp) =>
     vocab.columns(comp)
       .map((prop) => vocab.column(comp, prop)!)

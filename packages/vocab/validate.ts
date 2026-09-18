@@ -78,6 +78,22 @@ let storableDefault = (comp: string, prop: string, s: PropSchema): string[] => {
   ]
 }
 
+// `search` says this column's words are indexed (@yaks/fts cuts the index from
+// the declaration). Only PROSE has words: a number, a stamp, a reference and a
+// closed set are matched by their value rather than read, and a computed column
+// has no row to index — so the keyword is refused anywhere but a stored text
+// column, where it would otherwise name an index over nothing.
+let WORDLESS = ['date-time', 'uri', 'query', 'json']
+let searched = (comp: string, prop: string, s: PropSchema): string[] =>
+  s.search !== true ||
+    (s.persist !== false && s.ref == null && s.enum == null &&
+      (s.type == null || s.type == 'string') &&
+      !WORDLESS.includes(s.format ?? ''))
+    ? []
+    : [
+      `${comp}.${prop} is searched but holds no prose — "search": true is for a stored text column`,
+    ]
+
 // A component wearing the whole provenance triple is a MARK — `completed`,
 // `archived`, `created` — and a mark is SIGNED, never stated: the graph fills
 // all three from the batch's clock and actor (@yaks/graph stamp.ts), so a
@@ -121,6 +137,7 @@ export let storable = (doc: VocabDoc): string[] => {
       }
       errs.push(...storableProp(comp, prop, s))
       if (object(s)) errs.push(...storableDefault(comp, prop, s))
+      if (object(s)) errs.push(...searched(comp, prop, s))
     }
     errs.push(...signed(comp, schema))
     for (let c of composites(schema)) {

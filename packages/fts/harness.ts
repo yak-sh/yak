@@ -2,8 +2,8 @@
 // in-memory SQLite driver over jsr:@db/sqlite, a small made-up vocabulary, and
 // just enough table-building to search it. The domain is a bookshop: books with
 // a title and a blurb, reviews with prose of their own, and a price that is not
-// text at all — so the tests can prove that search reaches EVERY text property
-// and no others.
+// text at all — so the tests can prove that search reaches every DECLARED text
+// property and no others.
 
 import { Database } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -31,8 +31,8 @@ let doc: VocabDoc = {
       type: 'object',
       kind: true,
       properties: {
-        title: { type: 'string' },
-        blurb: { type: 'string' },
+        title: { type: 'string', search: true },
+        blurb: { type: 'string', search: true },
         price: { type: 'number' },
       },
     },
@@ -42,7 +42,7 @@ let doc: VocabDoc = {
       type: 'object',
       kind: true,
       properties: {
-        prose: { type: 'string' },
+        prose: { type: 'string', search: true },
         stars: { type: 'number' },
         book: { type: 'string', ref: 'book', death: 'cascade' },
       },

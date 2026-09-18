@@ -3,13 +3,15 @@
  *
  * Search here is not welded to one "document" component. A vocabulary declares
  * components; some of their columns hold prose — a book's title, a review's
- * paragraph, a shop's own description — and this package indexes whichever of
- * them you choose, then answers a search across all of them at once.
+ * paragraph, a shop's own description — each says `"search": true` for itself,
+ * and this package indexes the ones that did, then answers a search across all
+ * of them at once.
  *
  * It is four small pieces, each usable alone:
  *
  * - {@link fields} reads the indexed properties off a
- *   {@link https://jsr.io/@yaks/vocab | @yaks/vocab} schema;
+ *   {@link https://jsr.io/@yaks/vocab | @yaks/vocab} schema — the columns that
+ *   declared themselves `"search": true`;
  * - {@link schema} emits the SQLite FTS5 index and the triggers that keep it in
  *   step with the rows;
  * - {@link search} — the {@link https://jsr.io/@yaks/sql | @yaks/sql} extension
@@ -22,7 +24,7 @@
  * import { compile } from '@yaks/sql'
  * import { parse } from '@yaks/query'
  *
- * let text = fields(shop) // every text property the vocabulary declares
+ * let text = fields(shop) // the properties the vocabulary declares searched
  * for (let stmt of schema(text)) db.exec(stmt)
  *
  * // which books match, with the rest of the line still filtering

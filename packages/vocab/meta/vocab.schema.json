@@ -87,6 +87,7 @@
         "death": { "enum": ["cascade", "detach", "release", "keep"] },
         "persist": { "type": "boolean" },
         "stamped": { "type": "boolean" },
+        "search": { "type": "boolean" },
         "bare": { "type": "boolean" },
         "unique": { "type": "boolean" },
         "index": { "type": "boolean" },

@@ -27,6 +27,7 @@ Deno.test('columns interrogate to their whole shape', () => {
     ref: undefined,
     death: undefined,
     stamped: false,
+    search: false,
     persist: true,
     identity: false,
     affinity: 'real',
@@ -484,4 +485,20 @@ Deno.test('a composite entry may be partial: the columns a row must hold', () =>
     { cols: ['key'], unique: true, present: ['key'] },
     { cols: ['source'], unique: false },
   ])
+})
+
+Deno.test('a column says for itself whether its words are searched', () => {
+  let w = loadVocab({
+    $defs: {
+      recipe: {
+        type: 'object',
+        properties: {
+          note: { type: 'string', search: true },
+          origin: { type: 'string' },
+        },
+      },
+    },
+  })
+  assertEquals(w.column('recipe', 'note')!.search, true)
+  assertEquals(w.column('recipe', 'origin')!.search, false)
 })

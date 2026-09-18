@@ -15,10 +15,10 @@ deno add jsr:@yaks/fts
 
 Search here is not welded to one "document" component. A vocabulary declares
 components; some of their columns hold prose — a book's title, a review's
-paragraph, a shop's own description — and this package indexes whichever of them
-you choose, then answers a search across all of them at once. It is backed by
-SQLite's FTS5, kept in step with the rows by triggers, and ranks matches with a
-marked snippet.
+paragraph, a shop's own description — each declares itself with `"search": true`
+and this package indexes the ones that did, then answers a search across all of
+them at once. It is backed by SQLite's FTS5, kept in step with the rows by
+triggers, and ranks matches with a marked snippet.
 
 ## The four pieces
 
@@ -27,7 +27,7 @@ import { fields, find, schema, search } from '@yaks/fts'
 import { compile } from '@yaks/sql'
 import { parse } from '@yaks/query'
 
-// 1. which properties are searchable
+// 1. which properties the vocabulary declared searchable ("search": true)
 let text = fields(shop) // [{comp: 'book', prop: 'title'}, …]
 
 // 2. the index, and the triggers that keep it current
@@ -53,9 +53,13 @@ address without the document's index carrying an `addr` column joined in from
 the letter. An application that ranks an address above prose does so in its own
 statement over the arms `hits()` builds.
 
-- **`fields(vocab, pick?)`** reads the text properties off a
-  [@yaks/vocab](https://jsr.io/@yaks/vocab) schema. The default takes every
-  stored text column; a `pick` narrows it (titles only, say).
+- **`fields(vocab, pick?)`** reads the searched properties off a
+  [@yaks/vocab](https://jsr.io/@yaks/vocab) schema: the columns that declared
+  themselves, `{"note": {"type": "string", "search": true}}`. Which prose is
+  worth finding is the vocabulary's sentence to say, so a text column nobody
+  declared is stored and readable but never indexed, and a vocabulary declaring
+  none has nothing to search — there is no fallback indexing everything textual.
+  A `pick` narrows the declaration further (titles only, say).
 - **`schema(fields, text?)`** emits one FTS5 index per component —
   external-content, so the prose is never stored twice — plus the three triggers
   that follow the table. `text` says which columns are not their own words:

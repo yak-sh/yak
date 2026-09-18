@@ -22,6 +22,10 @@
       "description": "true = server-owned: readable but never wire-writable.",
       "type": "boolean"
     },
+    "search": {
+      "description": "true = this text column is full-text indexed: its words are what a bare-word search matches, and a hit ranks by them. A column no one declares is stored and readable but never searched.",
+      "type": "boolean"
+    },
     "kind": {
       "description": "true = this component names a display kind (feeds kindOf / kindOrder).",
       "type": "boolean"

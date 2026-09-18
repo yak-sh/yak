@@ -20,17 +20,20 @@ let post = loadVocab({
     doc: {
       type: 'object',
       kind: true,
-      properties: { title: { type: 'string' }, body: { type: 'string' } },
+      properties: {
+        title: { type: 'string', search: true },
+        body: { type: 'string', search: true },
+      },
     },
     content: {
       type: 'object',
-      properties: { body: { type: 'string' } },
+      properties: { body: { type: 'string', search: true } },
     },
     mail: {
       type: 'object',
       properties: {
-        from: { type: 'string', stamped: true },
-        to_addr: { type: 'string', stamped: true },
+        from: { type: 'string', stamped: true, search: true },
+        to_addr: { type: 'string', stamped: true, search: true },
       },
     },
   },
