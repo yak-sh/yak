@@ -489,8 +489,10 @@ export class Store {
     let drive = driver(ctx.storage)
     this.#drive = drive
     let bytes = sqliteBlobs(drive)
-    // Keep the app's doc-only search policy explicit; sqlite owns no index.
-    let searchable = fields(vocab).filter((f) => f.comp == 'doc')
+    // The vocabulary says which prose is searched — @yaks/doc declares its
+    // title and body, and an app's own vocab.json declares `"search": true` on
+    // whatever of its words it wants found. sqlite owns no index.
+    let searchable = fields(vocab)
     let store = storage(ctx.storage, vocab, {
       extend: [search(searchable)],
       derived: { ...blobRead(vocab), ...(own ? {} : appDerived()) },
@@ -1480,10 +1482,10 @@ export class Store {
     let text = parse(line).clauses
       .flatMap((c) => c.kind == 'text' ? [c.value] : []).join(' ')
     if (!text.trim() || !rows.length) return rows
-    // The same doc-only field policy used at boot for schema and membership.
+    // The same declared fields the boot schema and membership were cut from.
     let hits = find(
       this.#drive,
-      fields(this.#vocab).filter((f) => f.comp == 'doc'),
+      fields(this.#vocab),
       text,
       { limit: Math.max(rows.length, 20) },
     )

@@ -21,8 +21,8 @@ let doc: VocabDoc = {
       type: 'object',
       kind: true,
       properties: {
-        title: { type: 'string' },
-        body: { type: 'string' },
+        title: { type: 'string', search: true },
+        body: { type: 'string', search: true },
       },
     },
     // A book on sale: what it costs, when it came out, whether it is in stock,

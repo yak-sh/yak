@@ -302,9 +302,7 @@ export let install = (
   }
   for (let stmt of indexed(ready)) d.exec(stmt)
   // Search is app composition, after all indexed columns have been raised.
-  for (
-    let stmt of ftsSchema(fields(vocab).filter((f) => f.comp == 'doc'), text)
-  ) d.exec(stmt)
+  for (let stmt of ftsSchema(fields(vocab), text)) d.exec(stmt)
   if (classify && vocab.comp('archetype')) backfill(d, false)
 }
 

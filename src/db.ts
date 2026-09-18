@@ -20,7 +20,7 @@ import type { FleetWrite } from './store/fleet_stamps.ts'
 export type { SchemaOp } from './store/sql.ts'
 import { initVector } from './vector.ts'
 import { schema as telemetrySchema } from '@yaks/telemetry'
-import { adopt, type Field, type Text } from '@yaks/fts'
+import { adopt, type Field, fields, type Text } from '@yaks/fts'
 import { schema as embeddingSchema, state as indexState } from '@yaks/embedding'
 import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -890,25 +890,23 @@ let schema = `
   );
 `
 
-// WHICH prose the graph searches, as @yaks/fts fields. The package cuts one
-// FTS5 index per component from these, keeps it current with three triggers,
-// and heals one that drifts; the fleet only says which columns hold words.
+// WHICH prose the graph searches: the columns the VOCABULARY declares searched
+// (`"search"` in the manifests, @yaks/vocab's keyword through fleet_vocab.ts).
+// @yaks/fts cuts one FTS5 index per component from them, keeps it current with
+// three triggers, and heals one that drifts.
 //
-// Not every text column the vocabulary declares — a repo path and a provider
-// name are not words anyone goes looking for. Three things are: a document's
-// title and body, a transcript entry's prose, and a letter's ENVELOPE
-// (T-32657), the two addresses saying who wrote it and who received it. An
-// address appears nowhere in the subject or the body, so a search for one
-// finds the letter only because the envelope is indexed — in mail_fts, its own
-// index over the mail table, rather than as a column of doc_fts joined in from
-// the letter.
-let SEARCHED: Field[] = [
-  { comp: 'doc', prop: 'title' },
-  { comp: 'doc', prop: 'body' },
-  { comp: 'mail', prop: 'from' },
-  { comp: 'mail', prop: 'to_addr' },
-  { comp: 'content', prop: 'body' },
-]
+// Not every text column a comp declares — a repo path and a provider name are
+// not words anyone goes looking for. Three things are: a document's title and
+// body, a transcript entry's prose, and a letter's ENVELOPE (T-32657), the two
+// addresses saying who wrote it and who received it. An address appears nowhere
+// in the subject or the body, so a search for one finds the letter only because
+// the envelope is indexed — in mail_fts, its own index over the mail table,
+// rather than as a column of doc_fts joined in from the letter.
+//
+// Read lazily: loading the manifests is work no importer of this module should
+// pay for until a graph is opened.
+let searched: Field[] | undefined
+let SEARCHED = (): Field[] => searched ??= fields(fleetVocab())
 
 // doc.body is an ADDRESS, not its own words: the prose lives in blob_text. The
 // package resolves it on BOTH sides of the mirror — in the triggers, so every
@@ -1968,7 +1966,7 @@ export let migrate = <D extends Sql>(db: D): D => {
           db.exec(`drop table if exists ${t}`)
         }
         try {
-          adopt(driverOf(db), SEARCHED, RESOLVE, { deep })
+          adopt(driverOf(db), SEARCHED(), RESOLVE, { deep })
         } catch (error) {
           // An FTS integrity failure often says only "database disk image is
           // malformed", which reads the same whether the damage is index-wide

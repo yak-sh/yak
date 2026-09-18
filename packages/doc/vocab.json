@@ -12,11 +12,13 @@
       "properties": {
         "title": {
           "type": "string",
+          "search": true,
           "description": "the one line an entity is known by"
         },
         "body": {
           "type": "string",
           "store": "blob",
+          "search": true,
           "description": "the prose, as markdown — content-addressed where @yaks/blob is composed in, plain text everywhere else"
         }
       }

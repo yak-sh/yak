@@ -32,6 +32,7 @@
         "doc"
       ],
       "prefix": "E",
+      "search": ["from", "to_addr"],
       "cols": {
         "target": {
           "eid": "entity",

@@ -48,6 +48,7 @@ type ManifestComp = {
   by_name?: boolean
   wire?: boolean
   log?: boolean
+  search?: string[]
   cols?: Record<string, ManifestType>
   stamped?: Record<string, ManifestType>
 }
@@ -127,6 +128,11 @@ for (let m of manifests) {
   for (let type of m.edges ?? []) relationOf[natureOf[type] ?? type] = type
 }
 
+// A comp's `search` list names the columns whose words are indexed — the
+// manifest's spelling of @yaks/vocab's `"search": true`, said once per comp
+// where the columns are, rather than column by column. db.ts reads it back
+// through @yaks/fts `fields()`; nothing else in the fleet decides what is
+// searched.
 let compOf = (name: string, spec: ManifestComp): PropSchema => ({
   type: 'object',
   ...(relationOf[name] ? { relation: relationOf[name] } : {}),
@@ -136,16 +142,23 @@ let compOf = (name: string, spec: ManifestComp): PropSchema => ({
   ...(spec.log ? { bare: false } : {}),
   ...(spec.prefix ? { prefix: spec.prefix } : {}),
   ...(spec.by_name ? { by_name: true } : {}),
-  properties: {
-    ...Object.fromEntries(
-      Object.entries(spec.cols ?? {}).map(([p, t]) => [p, propOf(t)]),
-    ),
-    ...Object.fromEntries(
-      Object.entries(spec.stamped ?? {}).map((
-        [p, t],
-      ) => [p, { ...propOf(t), stamped: true }]),
-    ),
-  },
+  properties: Object.fromEntries(
+    Object.entries({
+      ...Object.fromEntries(
+        Object.entries(spec.cols ?? {}).map(([p, t]) => [p, propOf(t)]),
+      ),
+      ...Object.fromEntries(
+        Object.entries(spec.stamped ?? {}).map((
+          [p, t],
+        ) => [p, { ...propOf(t), stamped: true }]),
+      ),
+    }).map((
+      [p, schema]: [string, PropSchema],
+    ) => [
+      p,
+      spec.search?.includes(p) ? { ...schema, search: true } : schema,
+    ]),
+  ),
 })
 
 // The keyword vocabularies the fleet's own components use beyond the core

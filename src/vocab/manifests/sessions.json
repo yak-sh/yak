@@ -108,6 +108,7 @@
     },
     "content": {
       "log": true,
+      "search": ["body"],
       "cols": {
         "body": "body",
         "source": {

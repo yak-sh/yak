@@ -1449,6 +1449,38 @@
   },
   {
     "kind": "exec",
+    "sql": "drop trigger if exists \"content_fts_insert\""
+  },
+  {
+    "kind": "exec",
+    "sql": "drop trigger if exists \"content_fts_delete\""
+  },
+  {
+    "kind": "exec",
+    "sql": "drop trigger if exists \"content_fts_update\""
+  },
+  {
+    "kind": "exec",
+    "sql": "drop table if exists \"content_fts\""
+  },
+  {
+    "kind": "exec",
+    "sql": "create virtual table if not exists \"content_fts\" using fts5(\n      \"body\", content='content', content_rowid='entity'\n    )"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"content_fts_insert\" after insert on \"content\" begin\n      insert into \"content_fts\"(rowid, \"body\") values (new.entity, coalesce(new.\"body\", ''));\n    end"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"content_fts_delete\" after delete on \"content\" begin\n      insert into \"content_fts\"(\"content_fts\", rowid, \"body\")\n        values ('delete', old.entity, coalesce(old.\"body\", ''));\n    end"
+  },
+  {
+    "kind": "exec",
+    "sql": "create trigger if not exists \"content_fts_update\" after update on \"content\" begin\n      insert into \"content_fts\"(\"content_fts\", rowid, \"body\")\n        values ('delete', old.entity, coalesce(old.\"body\", ''));\n      insert into \"content_fts\"(rowid, \"body\") values (new.entity, coalesce(new.\"body\", ''));\n    end"
+  },
+  {
+    "kind": "exec",
     "sql": "drop trigger if exists \"doc_fts_insert\""
   },
   {
@@ -1514,38 +1546,6 @@
   {
     "kind": "exec",
     "sql": "create trigger if not exists \"mail_fts_update\" after update on \"mail\" begin\n      insert into \"mail_fts\"(\"mail_fts\", rowid, \"from\", \"to_addr\")\n        values ('delete', old.entity, coalesce(old.\"from\", ''), coalesce(old.\"to_addr\", ''));\n      insert into \"mail_fts\"(rowid, \"from\", \"to_addr\") values (new.entity, coalesce(new.\"from\", ''), coalesce(new.\"to_addr\", ''));\n    end"
-  },
-  {
-    "kind": "exec",
-    "sql": "drop trigger if exists \"content_fts_insert\""
-  },
-  {
-    "kind": "exec",
-    "sql": "drop trigger if exists \"content_fts_delete\""
-  },
-  {
-    "kind": "exec",
-    "sql": "drop trigger if exists \"content_fts_update\""
-  },
-  {
-    "kind": "exec",
-    "sql": "drop table if exists \"content_fts\""
-  },
-  {
-    "kind": "exec",
-    "sql": "create virtual table if not exists \"content_fts\" using fts5(\n      \"body\", content='content', content_rowid='entity'\n    )"
-  },
-  {
-    "kind": "exec",
-    "sql": "create trigger if not exists \"content_fts_insert\" after insert on \"content\" begin\n      insert into \"content_fts\"(rowid, \"body\") values (new.entity, coalesce(new.\"body\", ''));\n    end"
-  },
-  {
-    "kind": "exec",
-    "sql": "create trigger if not exists \"content_fts_delete\" after delete on \"content\" begin\n      insert into \"content_fts\"(\"content_fts\", rowid, \"body\")\n        values ('delete', old.entity, coalesce(old.\"body\", ''));\n    end"
-  },
-  {
-    "kind": "exec",
-    "sql": "create trigger if not exists \"content_fts_update\" after update on \"content\" begin\n      insert into \"content_fts\"(\"content_fts\", rowid, \"body\")\n        values ('delete', old.entity, coalesce(old.\"body\", ''));\n      insert into \"content_fts\"(rowid, \"body\") values (new.entity, coalesce(new.\"body\", ''));\n    end"
   },
   {
     "kind": "exec",

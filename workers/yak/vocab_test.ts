@@ -4,6 +4,7 @@
 // 83 (V-33553).
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { schema } from '@yaks/sqlite'
+import { fields } from '@yaks/fts'
 import { EXAMPLE as SHORT_EXAMPLE } from '../../src/store/vocab.ts'
 import ops from '../../src/store/schema.json' with { type: 'json' }
 import { PAGES } from './guide.ts'
@@ -330,4 +331,31 @@ Deno.test('none of the fleet vocabulary comes with it', () => {
     assert(fleet.includes(word), `the fleet no longer plants ${word}`)
     assert(!mine.has(word), `an app's store still plants ${word}`)
   }
+})
+
+// A column of an app's own says whether its words are searched, the same way
+// @yaks/doc says it of `title` and `body` — the keyword rides the JSON Schema
+// spelling into the loaded vocabulary, which is what @yaks/fts cuts its index
+// from (graph.ts `searchable`).
+Deno.test('a searched column of an app reaches the index fields', () => {
+  let v = appVocab({
+    $defs: {
+      memo: {
+        type: 'object',
+        properties: {
+          note: { type: 'string', search: true },
+          aside: { type: 'string' },
+        },
+      },
+    },
+  })
+  assertEquals(
+    fields(v).filter((f) => f.comp == 'memo'),
+    [{ comp: 'memo', prop: 'note' }],
+  )
+  // And the platform's own words are declared, not assumed.
+  assertEquals(fields(v).filter((f) => f.comp == 'doc'), [
+    { comp: 'doc', prop: 'title' },
+    { comp: 'doc', prop: 'body' },
+  ])
 })

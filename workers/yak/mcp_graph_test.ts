@@ -193,6 +193,27 @@ slow('a read with no app composes every app the caller can reach', async () => {
       found.find((r) => r.doc.title == 'Lemon cake')?.recipe?.serves,
       4,
     )
+    // What a search reads is what the VOCABULARY declares searched — @yaks/doc
+    // says so of its title and body, and nothing else in an app's store does,
+    // so a word held only in an app's own column is stored, readable, and not
+    // found by a bare word. (The kernel keeps a store's manifest in the short
+    // form `{comp: {col: type}}`, which has no room for `"search": true` yet;
+    // when it carries the keyword, this is the assertion that changes.)
+    await agent.tool('graph_apply', {
+      app: 'lending',
+      entities: [{
+        entity: { eid: '$marzipan' },
+        doc: { title: 'Kitchen notes' },
+        loan: { to: 'marzipan' },
+      }],
+    })
+    assertEquals(
+      (JSON.parse(await agent.tool('search', { text: 'marzipan' })) as {
+        doc: { title: string }
+      }[]).map((r) => r.doc.title),
+      [],
+    )
+
     // A bare word is a text pred in the query grammar, so narrowing a search
     // is graph_query with the words in the line — and the ordinary rule about
     // which components an answer carries is back with it.
