@@ -46,7 +46,6 @@ import {
   type Keywords,
   loadVocab,
   type PropSchema,
-  reserved,
   storable,
   type Vocab,
   type VocabDoc,
@@ -62,6 +61,7 @@ import { mailDoc } from '@yaks/mail'
 import { memberDoc } from '@yaks/member'
 import { wakeDoc } from '@yaks/wake'
 import { read } from '@yaks/yaml'
+import { RESERVED as FLEET } from '../../src/store/vocab.ts'
 import { vocabOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { sweepDoc } from './wake.ts'
@@ -876,10 +876,22 @@ export let appKeywords: Keywords[] = [
   keyKeywords,
 ]
 
-/** Every word the platform already says in an app's store, sorted. A
- * `vocab.json` naming one is refused: a word means the same thing everywhere. */
+/**
+ * Every word the platform already says, sorted. A `vocab.json` naming one is
+ * refused: a word means the same thing everywhere.
+ *
+ * Two lists, because the platform is two things. An app's store plants the
+ * core documents, so those names are taken there. And the FLEET's whole
+ * vocabulary is taken too (store/vocab.ts `RESERVED`) — that is the list the
+ * guide publishes under "Components of your own", and a word it spells is a
+ * word this platform means something by, whether or not an app's store raises
+ * a table for it.
+ */
 export let RESERVED: string[] = [
-  ...new Set(coreDocs.flatMap((d) => Object.keys(d.$defs ?? {}))),
+  ...new Set([
+    ...coreDocs.flatMap((d) => Object.keys(d.$defs ?? {})),
+    ...FLEET,
+  ]),
 ].sort()
 
 /** What a `vocab.json` looks like, for a refusal that teaches. */
@@ -1135,7 +1147,22 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
     ? body as VocabDoc
     : schemaOf(body)
   if (off !== undefined) doc = { ...doc, tools: off }
-  let errs = [...reserved(doc, RESERVED), ...storable(doc)]
+  // The platform's words, all of them, before anything is planted: a manifest
+  // refused one name at a time is probed one deploy at a time, and every probe
+  // that got through left a component behind for good (C-32624 item 1). The
+  // sentence is the one the guide prints under "The words already taken", and
+  // it says where the whole list is, because the agent reading it has no other
+  // source.
+  let taken = Object.keys(doc.$defs ?? {}).filter((n) => RESERVED.includes(n))
+  if (taken.length) {
+    throw new Error(
+      `${file}: ${taken.join(', ')} ${
+        taken.length == 1 ? 'is a word' : 'are words'
+      } the platform already says — pick another name; the whole list is in ` +
+        `the guide under "Components of your own" (${GUIDE})`,
+    )
+  }
+  let errs = storable(doc)
   if (errs.length) throw new Error(`${file}: ${errs.join('; ')}`)
   return doc
 }

@@ -47,10 +47,10 @@ import {
   appDoc,
   coreDocs,
   grew,
-  meant,
   homed,
   type Homes,
   livesIn,
+  meant,
   shortOf,
   teach,
 } from './vocab.ts'

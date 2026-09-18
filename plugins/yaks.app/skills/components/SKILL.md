@@ -43,9 +43,10 @@ These words mean the same thing in every store on the platform. Each heading
 gives the columns you may WRITE; a few carry server-set columns you can read but
 never write, and those are named beneath.
 
-**`doc`** — `title` (text), `body` (text). The words a person reads, and the
-only thing `search` searches. Nearly every entity your app saves should wear
-one: a row with no `doc` is invisible to search and has nothing to draw.
+**`doc`** — `title` (text), `body` (text). The words a person reads, and what
+`search` searches unless a column of your own says otherwise (below). Nearly
+every entity your app saves should wear one: a row with no `doc` has nothing to
+draw.
 
     await apply({ entity: { eid: '$c' }, doc: { title: 'Chana masala' } })
 
@@ -176,14 +177,14 @@ written, when the message was left, when the seedling went in. That is not a
 second copy of the stamp; they are two different facts, and they disagree
 exactly when it matters — an import.
 
-    { "entry": { "written": "time" } }
+    { "jotting": { "written": "time" } }
 
     graph_apply { app: 'diary', entities: [
       { doc: { body: 'Beans in, back bed.' },
-        entry: { written: '2026-04-11T12:00:00Z' } } ] }
+        jotting: { written: '2026-04-11T12:00:00Z' } } ] }
 
 Seed a fortnight of a guestbook and every `created.at` says today, truthfully:
-today is when you wrote them here. Draw `entry.written`.
+today is when you wrote them here. Draw `jotting.written`.
 
 **`exception`** — `at`, `message`, `stack`, `request`, `version`, all
 server-set. **`error`** — `at`, `message`, server-set. The kernel's own rows
@@ -204,9 +205,9 @@ A column is one of these:
 - `time` — an ISO 8601 timestamp with a zone, as text:
   `new Date().toISOString()`, or `'2026-04-11T12:00:00Z'` written by hand. It
   comes back exactly as it was sent, so it is a string on the way in and a
-  string on the way out; `new Date(row.entry.written)` when you need to do
+  string on the way out; `new Date(row.jotting.written)` when you need to do
   arithmetic with it, and the ordinary comparisons filter it
-  (`.entry.written>=2026-04-01`).
+  (`.jotting.written>=2026-04-01`).
 - `url` — an address out on the web; text with a link's face.
 - `eid` — a reference to another entity. The platform's own words have these; a
   `vocab.json` cannot declare one (below).
@@ -257,14 +258,14 @@ patch straight back is never punished for carrying its own stamps.
 ## What an unwritten column reads back as
 
 **Null, and present.** A column of yours that nothing has ever written is on the
-row with the value `null` — not missing from it. So `'mood' in row.entry` is
+row with the value `null` — not missing from it. So `'mood' in row.jotting` is
 true either way and is the wrong test; the value is the right one.
 
-    { "entry": { "written": "2026-04-11T12:00:00Z",
-                 "mood": null, "pages": null, "aloud": null } }
+    { "jotting": { "written": "2026-04-11T12:00:00Z",
+                   "mood": null, "pages": null, "aloud": null } }
 
-    if (row.entry.mood) …          // right
-    if ('mood' in row.entry) …     // always true
+    if (row.jotting.mood) …          // right
+    if ('mood' in row.jotting) …     // always true
 
 That holds for the platform's own columns too, `doc.title` included: a doc
 nobody titled answers null, not `''`. `doc.body` is kept as a content-addressed
@@ -369,6 +370,21 @@ the way in. `text` is `{"type": "string"}`, `number` is `{"type": "number"}`,
 `{"type": "string", "format": "uri"}`. Both spellings plant the same columns, so
 nothing about an app already deployed changes.
 
+What the long form can say that the short one cannot is a keyword ON a column.
+`"search": true` is the one to know: it puts that column's words in the search
+index, so `search` finds a row by what is written there, the way it already
+finds one by its title or its body.
+
+    { "$defs": {
+        "recipe": { "type": "object", "properties": {
+          "serves": { "type": "number" },
+          "method": { "type": "string", "search": true } } } } }
+
+Only prose can be searched — a number, a date and a URL are matched by their
+value, not read — so `"search": true` anywhere else is refused at deploy, in a
+sentence naming the column. A column that says nothing is stored and readable
+and simply never searched.
+
 ## How a vocabulary evolves
 
 The rule is one sentence: **columns only ever arrive.**
@@ -415,22 +431,22 @@ whole:
 
 These are the names, all of them:
 
-    about accept alias anchor app apply archetype architecture archived attachment
-    attention bash blob blocked board brief bug call camera cancel cancelled
-    canvas card chat checkpoint claim client comment commit completed
-    conflict contains content created cursor decided delegates deliver
+    about accept access alias anchor app apply archetype architecture archived
+    attachment attention bash blob blocked board bounced brief bug call camera
+    cancel cancelled canvas card chat checkpoint claim client comment commit
+    completed conflict contains content created cursor decided delegates deliver
     delivered deploy design doc dream edge effect email entity entry error
     exception exit favorite feedback fetch filed finding fixer fold fork
-    generation goal graph_query headers hook hostname image imported
-    installed knock layout lease mail member memory message meta meter model
-    nofix notice notified noverify opaque opened output pane patch person
-    persona pin plan process project prompt proposed provider published
-    quarantined reads
-    reasoning recall recalled redaction references repo report requires
-    response result resume retired review role run runner runtime satisfies service
-    session setting settled shelf signin space spawn stderr stop stop_request
-    subscription supersedes supervises task task_context timeout tool
-    updated usage venture verifier wake wants web worked worktree yield
+    generation goal grant graph_query headers hook hostname image imported
+    installed key knock layout lease mail member memory message meta meter model
+    nofix notice notified noverify opaque opened order output pane patch person
+    persona pin plan process product project prompt proposed provider published
+    quarantined reads reasoning recall recalled redaction referenced references
+    repo report requires response result resume retired review role run runner
+    runtime satisfies service session setting settled shelf signin space spawn
+    stderr stop stop_request subscription supersedes supervises task
+    task_context timeout tool updated usage venture verifier wake wants web
+    worked worktree yield
 
 When your first choice is taken, ask what the word is FOR and name that: the
 taken word is the general one, yours is the specific one. Not `card` but

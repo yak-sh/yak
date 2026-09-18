@@ -143,17 +143,45 @@ for (let aggregate of [false, true]) {
   })
 }
 
-Deno.test("an app's vocab.json is read back as it was written", async () => {
-  let store = await cookbook()
-  assertEquals(await (await get(store, '/vocab')).json(), JSON.parse(SHORT))
+// The words a store declares, as it answers them.
+let words = async (store: Store) =>
+  (await (await get(store, '/vocab')).json()).$defs
+
+// What a store KEEPS is the DOCUMENT, whichever spelling it was handed: the
+// short form is normalized once at the door, so a keyword a column declares is
+// still on it when the kernel reads the manifest back (T-37546).
+Deno.test("an app's vocab.json is read back as the document it means", async () => {
+  assertEquals(
+    await words(await cookbook()),
+    await words(await cookbook(state(), SCHEMA)),
+  )
+  assertEquals(
+    (await words(await cookbook())).recipe.properties,
+    { serves: { type: 'number' } },
+  )
+  let searched = await cookbook(
+    state(),
+    JSON.stringify({
+      $defs: {
+        recipe: {
+          type: 'object',
+          properties: { method: { type: 'string', search: true } },
+        },
+      },
+    }),
+  )
+  assertEquals((await words(searched)).recipe.properties, {
+    method: { type: 'string', search: true },
+  })
 })
 
 Deno.test('a manifest the vocabulary refuses leaves the store as it was', async () => {
   let store = await cookbook()
+  let was = await words(store)
   let no = await post(store, '/vocab', '{"doc": {"headline": "text"}}', owner)
   assertEquals(no.status, 400)
   assert((await no.json()).message.includes('doc'))
-  assertEquals(await (await get(store, '/vocab')).json(), JSON.parse(SHORT))
+  assertEquals(await words(store), was)
 })
 
 for (let [spelling, manifest] of SPELLINGS) {

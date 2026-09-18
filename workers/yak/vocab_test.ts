@@ -194,7 +194,14 @@ Deno.test('a manifest is refused in the words that fix it', () => {
   assertThrows(
     () => appDoc('{"doc": {"headline": "text"}}'),
     Error,
-    "'doc' is a word the platform already owns",
+    'doc is a word the platform already says',
+  )
+  // Every collision at once, so probing for a free name is one deploy and not
+  // one a name (C-32624 item 1).
+  assertThrows(
+    () => appDoc('{"card": {}, "entry": {"at": "time"}, "jotting": {}}'),
+    Error,
+    'card, entry are words the platform already says',
   )
   assertEquals(RESERVED.includes('member'), true)
   assertEquals(RESERVED.includes('edge'), true)

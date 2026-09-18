@@ -9,7 +9,7 @@
 // app's own worker.js runs under (T-32780).
 import { assert, assertEquals } from '@std/assert'
 import { front } from '@yaks/yaml'
-import { RESERVED } from '../../src/store/vocab.ts'
+import { RESERVED } from './vocab.ts'
 import { comps, typeName } from '../../src/types.ts'
 import { SHIM, upload } from './dispatch.ts'
 import type { Env } from './env.ts'

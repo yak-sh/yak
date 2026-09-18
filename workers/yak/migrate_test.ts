@@ -1223,7 +1223,11 @@ for (let door of ['constructor', 'vocab']) {
       JSON.parse(line)
     ).find((r) => r.kind == 'slots').slots
     assertEquals(slots.name, 'ada/cookbook')
-    assertEquals(JSON.parse(slots.vocab), { recipe: { title: 'text' } })
+    // The slot keeps the DOCUMENT the manifest means (graph.ts `#vocabDoor`),
+    // whichever spelling the deploy was written in.
+    assertEquals(JSON.parse(slots.vocab).$defs.recipe.properties, {
+      title: { type: 'string' },
+    })
     assertEquals(
       slots.schema,
       (before as { k: string; v: string }[]).find((r) =>

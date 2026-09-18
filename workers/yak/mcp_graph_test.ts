@@ -194,11 +194,10 @@ slow('a read with no app composes every app the caller can reach', async () => {
       4,
     )
     // What a search reads is what the VOCABULARY declares searched — @yaks/doc
-    // says so of its title and body, and nothing else in an app's store does,
-    // so a word held only in an app's own column is stored, readable, and not
-    // found by a bare word. (The kernel keeps a store's manifest in the short
-    // form `{comp: {col: type}}`, which has no room for `"search": true` yet;
-    // when it carries the keyword, this is the assertion that changes.)
+    // says so of its title and body, and a column that declares nothing is
+    // stored, readable, and not found by a bare word. These two apps declare
+    // nothing of their own; the one below declares `"search": true` and is
+    // found by it.
     await agent.tool('graph_apply', {
       app: 'lending',
       entities: [{
@@ -740,6 +739,117 @@ slow('a word the space already has is used where it lives', async () => {
       (await rows(`id=${piranesi}`, 'reading-list'))[0].book!.pages,
       null,
     )
+  } finally {
+    await k.stop()
+  }
+})
+
+// Which prose is worth finding is the VOCABULARY's sentence (T-37546):
+// @yaks/doc says `"search": true` of its title and body, and an app says it of
+// its own columns, in the JSON Schema spelling the guide teaches — the short
+// form has no room for a keyword.
+slow('an app declares which of its own columns are searched', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    let manifest = async (slug: string, vocab: unknown) => {
+      await agent.tool('app_files', {
+        app: slug,
+        op: 'write',
+        path: 'vocab.json',
+        content: JSON.stringify(vocab),
+      })
+      return await agent.tool('app_deploy', { app: slug })
+    }
+    let made = async (slug: string, vocab: unknown) => {
+      await agent.tool('app_new', { slug, title: slug })
+      return await manifest(slug, vocab)
+    }
+    let recipe = (props: Record<string, unknown>) => ({
+      $defs: { recipe: { type: 'object', properties: props } },
+    })
+    let titles = async (text: string) =>
+      (JSON.parse(await agent.tool('search', { text })) as {
+        doc: { title: string }
+      }[]).map((r) => r.doc.title)
+
+    await made(
+      'kitchen',
+      recipe({
+        note: { type: 'string' },
+        serves: { type: 'number' },
+      }),
+    )
+    let cake = minted(
+      await agent.tool('graph_apply', {
+        app: 'kitchen',
+        entities: [{
+          entity: { eid: '$r' },
+          doc: { title: 'Lemon cake' },
+          recipe: { note: 'zest the marzipan', serves: 4 },
+        }],
+      }),
+      '$r',
+    )
+    // Declared searched by nobody, the note is stored, readable, and not found.
+    assertEquals(await titles('marzipan'), [])
+
+    // The column says so, and the index is cut from the declaration — the row
+    // already written is found by the word in it, because a schema that moved
+    // rebuilds the index off the rows it mirrors (graph.ts `#build`).
+    await manifest(
+      'kitchen',
+      recipe({
+        note: { type: 'string', search: true },
+        serves: { type: 'number' },
+      }),
+    )
+    assertEquals(await titles('marzipan'), ['Lemon cake'])
+
+    // A sibling app BORROWS the word and brings a searched column of its own.
+    // The column is planted in the home's table, and its keywords travel with
+    // it — the deploy writes the home's whole manifest back, so this is also
+    // where the home's own `search` would be erased if that manifest went back
+    // as types alone.
+    let second = await made(
+      'menus',
+      recipe({
+        blurb: { type: 'string', search: true },
+      }),
+    )
+    assertStringIncludes(
+      second,
+      'recipe lives in kitchen; this app reads and writes it there',
+    )
+    await agent.tool('graph_apply', {
+      app: 'menus',
+      entities: [{
+        entity: { eid: cake },
+        recipe: { blurb: 'a citrus tearoom favourite' },
+      }],
+    })
+    assertEquals(await titles('tearoom'), ['Lemon cake'])
+    assertEquals(await titles('marzipan'), ['Lemon cake'])
+
+    // A number holds no words. The deploy refuses the manifest in @yaks/vocab's
+    // own sentence rather than planting an index over nothing, and refuses it
+    // whole: the column that WAS searched still is.
+    await agent.tool('app_files', {
+      app: 'kitchen',
+      op: 'write',
+      path: 'vocab.json',
+      content: JSON.stringify(recipe({
+        note: { type: 'string', search: true },
+        serves: { type: 'number', search: true },
+      })),
+    })
+    let why = (await assertRejects(
+      () => agent.tool('app_deploy', { app: 'kitchen' }),
+      Error,
+    )).message
+    assertStringIncludes(why, 'recipe.serves is searched but holds no prose')
+    assertEquals(await titles('marzipan'), ['Lemon cake'])
   } finally {
     await k.stop()
   }
