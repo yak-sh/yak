@@ -353,19 +353,19 @@ let spoken = async (
         defs[name] = schema
         continue
       }
-      // The word has a HOME (tools.ts `homesIn`), and the first store here is
-      // it — so the home says what the component IS, and a column two stores
-      // spell differently is typed nowhere (`reading` below). But a sibling
-      // that BORROWED the word may have grown a column of its own, planted in
-      // the home's table (vocab.ts `homed`): the door admits the UNION, or a
-      // column an app deployed itself would be refused at the only door it
-      // could be written through.
-      let props = { ...mine.properties }
+      // Two apps in two SPACES may each home one word, and then one name
+      // means two things (reach.ts `apartIn`). The first declarer is the word
+      // here — the same rule the space's own union loads by — and a column
+      // they spell differently is typed nowhere (`reading` below).
+      //
+      // Inside one space there is nothing to merge: a word has one home, and
+      // a column a BORROWER declared was planted on the home's manifest by
+      // the deploy that brought it (tools.ts `released`), so the home's
+      // document already says every column the word has.
       for (let [col, s] of Object.entries(schema.properties ?? {})) {
-        if (!props[col]) props[col] = s
-        else if (wordOf(props[col]) != wordOf(s)) clashes.add(`${name}.${col}`)
+        let had = mine.properties?.[col]
+        if (had && wordOf(had) != wordOf(s)) clashes.add(`${name}.${col}`)
       }
-      defs[name] = { ...mine, properties: props }
     }
   }
   let meta = ctx.person && await ctx.dir.space(META.space)

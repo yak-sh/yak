@@ -832,6 +832,25 @@ slow('an app declares which of its own columns are searched', async () => {
     assertEquals(await titles('tearoom'), ['Lemon cake'])
     assertEquals(await titles('marzipan'), ['Lemon cake'])
 
+    // The word has one HOME, and the door speaks the UNION of what the home
+    // and its borrowers declare (agent.ts `spoken`): the schema an agent reads
+    // names the borrowed column too, where the home's own manifest alone would
+    // have left an app unable to discover a column it deployed itself.
+    let schema = JSON.parse(await agent.tool('graph_schema', {})) as {
+      comps: { name: string; columns: string[] }[]
+    }
+    assertEquals(
+      schema.comps.find((c) => c.name == 'recipe')?.columns.sort(),
+      ['blurb', 'note', 'serves'],
+    )
+    await agent.tool('graph_apply', {
+      entities: [{
+        entity: { eid: cake },
+        recipe: { blurb: 'still warm from the oven' },
+      }],
+    })
+    assertEquals(await titles('oven'), ['Lemon cake'])
+
     // A number holds no words. The deploy refuses the manifest in @yaks/vocab's
     // own sentence rather than planting an index over nothing, and refuses it
     // whole: the column that WAS searched still is.
