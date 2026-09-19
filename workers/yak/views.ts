@@ -422,7 +422,7 @@ let STATS: Row[] = [
       // No token, no numbers — one sentence rather than an error, because
       // there is nothing the agent or the person can do about it (views.ts).
       let asked = statsOf(ctx.env, app.eid, days)
-      if (!asked) return { text: NOT_ON, space, data: { on: false } }
+      if (!asked) return { text: NOT_ON, space }
       let seen = await asked
       let list = (head: string, rows: { name: string; views: number }[]) =>
         rows.length
@@ -438,17 +438,7 @@ let STATS: Row[] = [
         ].join('\n')
         : `${space.slug}/${app.slug} — nobody has opened it in ${seen.days} ` +
           'days'
-      return {
-        text,
-        space,
-        data: {
-          on: true,
-          space: space.slug,
-          app: app.slug,
-          url: appUrl(space, app, ctx.env),
-          ...seen,
-        },
-      }
+      return { text, space }
     },
   },
 ]
