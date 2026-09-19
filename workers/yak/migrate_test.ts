@@ -25,6 +25,7 @@ import { schema } from '@yaks/sqlite'
 import { Store } from './graph.ts'
 import {
   carry,
+  documented,
   FILED,
   FORMER,
   HANDLED,
@@ -313,6 +314,77 @@ slow("the runtime's own table is not the object's to move", async () => {
   // neither dropped it nor renamed it aside.
   let held = ctx.storage.beneath('select count(*) as n from "_cf_KV"')
   assertEquals(Number(held[0].n), 1)
+})
+
+// ---- the vocabulary slot (T-37546) -----------------------------------------
+
+// A store that last accepted the short type map remembers it that way. The
+// short form is gone from every door, so the slot itself is rewritten as the
+// document at the object's next open — and `seedApp` writes one the old way,
+// which is what `older().vocab()` still does.
+slow('a store holding the short type map is rewritten as the document', async () => {
+  let ctx = state()
+  await seedApp(ctx)
+  assertEquals(
+    ctx.slots.get('vocab'),
+    '{"recipe":{"title":"text","serves":"number"}}',
+  )
+  let now = newer(ctx, 'ada/cookbook', { EXPORTS: bucket().r2 })
+  // The door answers the document, and the app's word still reads.
+  let said = await (await now.door('/vocab')).json()
+  assertEquals(said.$defs.recipe.properties, {
+    title: { type: 'string' },
+    serves: { type: 'number' },
+  })
+  assertEquals((await now.query('.recipe.serves=8', APP)).length, 1)
+  // And what the object KEEPS is the document, so nothing reads a short map
+  // again — including a later deploy, which would refuse one.
+  let held = JSON.parse(
+    (ctx.storage.sql.exec("select v from yak_kv where k = 'vocab'")
+      .toArray()[0] as { v: string }).v,
+  )
+  assertEquals(Object.keys(held), ['$defs'])
+  assertEquals(held.$defs.recipe.kind, true)
+})
+
+Deno.test('the short type map, as the document it means', () => {
+  assertEquals(
+    JSON.parse(documented('{"recipe": {"serves": "number"}}')!),
+    {
+      $defs: {
+        recipe: {
+          type: 'object',
+          kind: true,
+          before: ['doc'],
+          properties: { serves: { type: 'number' } },
+        },
+      },
+    },
+  )
+  // Every word it could spell, and the manifest's one word about itself.
+  assertEquals(
+    JSON.parse(
+      documented(
+        '{"t": {"a": "text", "b": "number", "c": "bool", "d": "time", ' +
+          '"e": "url"}, "tools": false}',
+      )!,
+    ).$defs.t.properties,
+    {
+      a: { type: 'string' },
+      b: { type: 'number' },
+      c: { type: 'boolean' },
+      d: { type: 'string', format: 'date-time' },
+      e: { type: 'string', format: 'uri' },
+    },
+  )
+  assertEquals(
+    JSON.parse(documented('{"t": {}, "tools": false}')!).tools,
+    false,
+  )
+  // Nothing to do: a document, an empty slot, or bytes nothing can read.
+  assertEquals(documented('{"$defs": {"recipe": {}}}'), null)
+  assertEquals(documented('{}'), null)
+  assertEquals(documented('not json'), null)
 })
 
 slow('the second boot is a no-op', async () => {
@@ -1177,7 +1249,9 @@ for (let door of ['constructor', 'vocab']) {
     assertEquals(
       (await now.door('/vocab', {
         method: 'POST',
-        body: JSON.stringify({ recipe: { title: 'text' } }),
+        body: JSON.stringify(
+          { $defs: { recipe: { properties: { title: { type: 'string' } } } } },
+        ),
       })).status,
       200,
     )
@@ -1205,7 +1279,9 @@ for (let door of ['constructor', 'vocab']) {
     } else {
       let response = await now.door('/vocab', {
         method: 'POST',
-        body: JSON.stringify({ menu: { title: 'text' } }),
+        body: JSON.stringify(
+          { $defs: { menu: { properties: { title: { type: 'string' } } } } },
+        ),
       })
       assertEquals(response.status, 503)
       assertEquals(response.headers.get('x-yak-migration'), 'refused')
@@ -1333,7 +1409,13 @@ slow('counts that do not reconcile refuse the pass', async () => {
   // that quietly loses or gains a row — so `plant` stands in for one that went
   // wrong: the schema is raised the way the object raises it, and then one row
   // too many lands in a table the pass is about to fill.
-  let vocab = appVocab({ recipe: { title: 'text', serves: 'number' } })
+  let vocab = appVocab({
+    $defs: {
+      recipe: {
+        properties: { title: { type: 'string' }, serves: { type: 'number' } },
+      },
+    },
+  })
   let before = count(ctx, 'doc')
   let raised: unknown = null
   try {
@@ -1435,7 +1517,9 @@ Deno.test('a schema that moves re-cuts its definitions and refills', async () =>
   // content — which resolves a body. Both documents are findable by their prose.
   let grew = await now.door('/vocab', {
     method: 'POST',
-    body: JSON.stringify({ recipe: { serves: 'number' } }),
+    body: JSON.stringify(
+      { $defs: { recipe: { properties: { serves: { type: 'number' } } } } },
+    ),
   }, APP)
   assertEquals(grew.status, 200)
   assertEquals((await now.query('limes', APP)).length, 1)

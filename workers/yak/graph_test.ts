@@ -86,23 +86,11 @@ let APP = 'a0000000-0000-4000-8000-000000000001'
 let ADA = 'b0000000-0000-4000-8000-000000000002'
 let CAKE = 'c0000000-0000-4000-8000-000000000003'
 
-// The same app in both spellings: the five-scalar short form every app deployed
-// before JSON Schema, and the JSON Schema it means.
-let SHORT = '{"recipe": {"serves": "number"}}'
+// The app every test here deploys: one component, one column, in the one
+// spelling a vocab.json is written in.
 let SCHEMA = JSON.stringify({
-  $defs: {
-    recipe: {
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: { serves: { type: 'number' } },
-    },
-  },
+  $defs: { recipe: { properties: { serves: { type: 'number' } } } },
 })
-let SPELLINGS: [string, string][] = [['short form', SHORT], [
-  'JSON Schema',
-  SCHEMA,
-]]
 
 let owner: Vouch = { app: APP, person: ADA, role: 'owner', title: 'Ada' }
 
@@ -111,7 +99,7 @@ let owner: Vouch = { app: APP, person: ADA, role: 'owner', title: 'Ada' }
 let by = (b: Bundle) => (b.created as { by?: string } | undefined)?.by ?? null
 
 // A store with the app deployed into it, which is where every test starts.
-let cookbook = async (ctx = state(), manifest = SHORT, v = owner) => {
+let cookbook = async (ctx = state(), manifest = SCHEMA, v = owner) => {
   let store = new Store(ctx)
   assertEquals((await post(store, '/vocab', manifest, v)).status, 200)
   return store
@@ -147,14 +135,9 @@ for (let aggregate of [false, true]) {
 let words = async (store: Store) =>
   (await (await get(store, '/vocab')).json()).$defs
 
-// What a store KEEPS is the DOCUMENT, whichever spelling it was handed: the
-// short form is normalized once at the door, so a keyword a column declares is
-// still on it when the kernel reads the manifest back (T-37546).
+// What a store KEEPS is the DOCUMENT, so a keyword a column declares is still
+// on it when the kernel reads the manifest back (T-37546).
 Deno.test("an app's vocab.json is read back as the document it means", async () => {
-  assertEquals(
-    await words(await cookbook()),
-    await words(await cookbook(state(), SCHEMA)),
-  )
   assertEquals(
     (await words(await cookbook())).recipe.properties,
     { serves: { type: 'number' } },
@@ -178,15 +161,20 @@ Deno.test("an app's vocab.json is read back as the document it means", async () 
 Deno.test('a manifest the vocabulary refuses leaves the store as it was', async () => {
   let store = await cookbook()
   let was = await words(store)
-  let no = await post(store, '/vocab', '{"doc": {"headline": "text"}}', owner)
+  let no = await post(
+    store,
+    '/vocab',
+    '{"$defs": {"doc": {"properties": {"headline": {"type": "string"}}}}}',
+    owner,
+  )
   assertEquals(no.status, 400)
   assert((await no.json()).message.includes('doc'))
   assertEquals(await words(store), was)
 })
 
-for (let [spelling, manifest] of SPELLINGS) {
-  Deno.test(`a bundle applies and queries back (${spelling})`, async () => {
-    let store = await cookbook(state(), manifest)
+{
+  Deno.test('a bundle applies and queries back', async () => {
+    let store = await cookbook()
 
     let wrote = await post(store, '/apply', [{
       entity: { eid: CAKE },
@@ -346,7 +334,7 @@ Deno.test('a woken object serves the same app, and the same sockets', async () =
 
 Deno.test('a stranger is refused on a private app', async () => {
   let mine: Vouch = { ...owner, access: 'private' }
-  let store = await cookbook(state(), SHORT, mine)
+  let store = await cookbook(state(), SCHEMA, mine)
   // The owner writes: the kernel vouched for the level, and the store wrote
   // that down as a grant of its own.
   assertEquals(
@@ -372,7 +360,7 @@ Deno.test('a stranger is refused on a private app', async () => {
 
 Deno.test('an open app is written by nobody', async () => {
   let open: Vouch = { app: APP, access: 'open' }
-  let store = await cookbook(state(), SHORT, open)
+  let store = await cookbook(state(), SCHEMA, open)
   let wrote = await post(store, '/apply', [{
     entity: { eid: CAKE },
     recipe: { serves: 8 },
@@ -702,7 +690,8 @@ Deno.test('app archetype descriptors are read-only and vocabulary extension trac
   let extended = await post(
     store,
     '/vocab',
-    '{"recipe":{"serves":"number"},"specialty":{}}',
+    '{"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}, ' +
+      '"specialty": {}}}',
     owner,
   )
   assertEquals(extended.status, 200)

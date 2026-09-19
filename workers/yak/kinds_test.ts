@@ -14,8 +14,13 @@ let box = {
       description: 'a dish somebody cooks, with what it takes and how long',
       properties: { serves: { type: 'number' }, cuisine: { type: 'string' } },
     },
-    // Not a kind: a mark a recipe wears, which is nobody's thing to add.
-    starred: { type: 'object', properties: { at: { type: 'string' } } },
+    // Not a kind: a mark a recipe wears, which is nobody's thing to add. A
+    // component an app declares is a kind unless it says this.
+    starred: {
+      type: 'object',
+      kind: false,
+      properties: { at: { type: 'string' } },
+    },
   },
 }
 
@@ -37,13 +42,14 @@ Deno.test('the sentence says the app and what the vocabulary means', () => {
     'Find recipes in jeff/recipes: a dish somebody cooks, with what it takes ' +
       'and how long. Words match the title and body',
   )
-  // A manifest in the short form claims no meaning, so the sentence stops.
+  // A component that claims no meaning says none, so the sentence stops.
   assertEquals(
-    tools({ dish: { serves: 'number' } }).add_dish.description,
+    tools({ $defs: { dish: { properties: { serves: { type: 'number' } } } } })
+      .add_dish.description,
     'Add a dish to jeff/recipes',
   )
   assertStringIncludes(
-    tools({ story: {} }).find_story.description,
+    tools({ $defs: { story: {} } }).find_story.description,
     'Find stories in jeff/recipes. Words match',
   )
 })
@@ -100,9 +106,12 @@ Deno.test('find is a filter line, one clause per argument given', () => {
 })
 
 Deno.test('an app declines them, or spells one itself', () => {
-  // The manifest says so, in either spelling.
+  // The manifest says so.
   assertEquals(withKinds({}, appDoc({ ...box, tools: false }), 'a/b'), {})
-  assertEquals(withKinds({}, appDoc({ dish: {}, tools: false }), 'a/b'), {})
+  assertEquals(
+    withKinds({}, appDoc({ $defs: { dish: {} }, tools: false }), 'a/b'),
+    {},
+  )
   // Or a tools.json spells the name, and that one is whole: the app's own
   // template, its own sentence, its own arguments.
   let own = {

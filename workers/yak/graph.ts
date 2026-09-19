@@ -1119,6 +1119,10 @@ export class Store {
       let held = w == 'name' ? name : slots?.get(w)
       if (held != null && String(held)) this.#put(w, String(held))
     }
+    // The vocabulary those slots carry is the OLD object's, which may be the
+    // short type map (migrate.ts `documented`): the carry raises the new schema
+    // out of it, so it is the document before anything reads it.
+    this.#documenting()
     await this.#after(
       request,
       MARK,
