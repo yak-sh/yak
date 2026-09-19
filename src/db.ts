@@ -75,7 +75,7 @@ import { reachRows, textMatchesAt, where } from './sql.ts'
 import { type Frag, toSql } from './relation.ts'
 import { derivedCols, indexDdlOne, tableDdl } from './ddl.ts'
 import { FILTERS, type Vocab, vocabOps } from './store/vocab.ts'
-import type { Vocab as FleetVocab } from '@yaks/vocab'
+import { syncOf, type Vocab as FleetVocab } from '@yaks/vocab'
 import {
   backfill,
   type Bundle,
@@ -2629,23 +2629,48 @@ let fleetRefusal = (db: Sql, err: unknown) => {
   return err
 }
 
+// A `sync: peers` value is the server's to HAND ON, never to keep, and this
+// server has no way to hand anything on: the fleet's /ws (src/server_runtime.ts,
+// wsworker.ts) is its own socket path, not @yaks/api's, and it is @yaks/api's
+// subscription registry that holds a relay under the connection that wrote it.
+// So the write is refused. Storing it would be worse than refusing it — the
+// declaration says nobody keeps this, and a row that outlives the tab it came
+// from is the bug the tier exists to prevent.
+export let relaying = (vocab: FleetVocab, changes: Change[]): string[] => [
+  ...new Set(
+    changes.filter((c) => syncOf(vocab, c.name) == 'peers').map((c) => c.name),
+  ),
+]
+
+let relayRefused = (db: Sql, changes: Change[]) => {
+  let peers = relaying(fleetVocabOf(db), changes)
+  if (!peers.length) return
+  throw new Error(
+    `${
+      peers.join(', ')
+    } syncs to peers, and this server does not relay — its socket is its own, not @yaks/api's, so there is nothing here to hold the value under your connection`,
+  )
+}
+
 // Historical stored columns and projected row identities are readable echoes,
 // not new vocabulary. Core owns admission; this removes only fleet SQL aliases.
-let fleetInput = (db: Sql, changes: Change[]) =>
-  normalizeChanges(canonEmail(mintAddresses(db, changes)), {
-    now: Date.now(),
-    resolve: (id) => ident(db, id),
-  }).flatMap((c) => {
-    if (!c.comp) return [c]
-    let sent = Object.entries(c.comp).filter(([col]) => col != 'eid')
-    let kept = sent.filter(([col]) =>
-      !(columnsOf(db, c.name).has(col) &&
-        !fleetVocabOf(db).column(c.name, col))
-    )
-    return sent.length && !kept.length
-      ? []
-      : [{ ...c, comp: Object.fromEntries(kept) }]
-  })
+let fleetInput = (db: Sql, changes: Change[]) => (
+  relayRefused(db, changes),
+    normalizeChanges(canonEmail(mintAddresses(db, changes)), {
+      now: Date.now(),
+      resolve: (id) => ident(db, id),
+    }).flatMap((c) => {
+      if (!c.comp) return [c]
+      let sent = Object.entries(c.comp).filter(([col]) => col != 'eid')
+      let kept = sent.filter(([col]) =>
+        !(columnsOf(db, c.name).has(col) &&
+          !fleetVocabOf(db).column(c.name, col))
+      )
+      return sent.length && !kept.length
+        ? []
+        : [{ ...c, comp: Object.fromEntries(kept) }]
+    })
+)
 
 let spawnCols = Object.keys(comps.spawn)
 let spawnSpec = (comp: Record<string, unknown>) =>
