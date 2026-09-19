@@ -318,7 +318,10 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
             .filter((r) => r.entities.some((e) => e && touched.has(e)))
             .map((r) => ({
               kind: 'matched' as Kind,
-              entity: { eid: r.entities[0]! },
+              // The subject: the first entity the match BOUND. A pattern that
+              // only writes binds nothing and its place is null (@yaks/graph
+              // `Binding`), so the event is about the first one there is.
+              entity: { eid: r.entities.find((e) => !!e)! },
               name: s.comp,
               vars: r.vars,
             })),
