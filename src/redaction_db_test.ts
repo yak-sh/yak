@@ -84,11 +84,11 @@ Deno.test('redact: live doc, journal, indexes, embedding, and audit move atomica
   assert(batches(db).every((batch) => !batch.includes(secret)))
 })
 
-// The normalized journal holds the same content and every history/replay reader
+// The journal holds the same content and every history/replay reader
 // now reads it (T-18880), so redaction must scrub journal_field too or the value
 // leaks through the new door. Prove it disappears from the normalized rows and
 // from what journalOf reconstructs, not just the JSON batch.
-Deno.test('redact: scrubs the normalized journal_field, so the new readers cannot leak it', () => {
+Deno.test('redact: scrubs journal_field, so the new readers cannot leak it', () => {
   let db = bareDb()
   let target = uid()
   let secret = 'normalized-needle-51873'

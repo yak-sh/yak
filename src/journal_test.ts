@@ -36,7 +36,7 @@ let logged = (out: Change[]): Change[] =>
 // journal_change in applied order, its comp rebuilt from the present after-image
 // rows (a remove is comp:null). If this equals what apply() logged, the record
 // is faithful.
-let normalizedBatch = (d: DB): Change[] => {
+let loggedBatch = (d: DB): Change[] => {
   let tx = (d.prepare('select max(id) as id from journal_tx').get() as {
     id: number
   }).id
@@ -96,7 +96,7 @@ Deno.test('journal: rows retain every applied value independently of answer orde
     cs.toSorted((a, b) =>
       `${a.eid} ${a.name}`.localeCompare(`${b.eid} ${b.name}`)
     )
-  assertEquals(sorted(normalizedBatch(d)), sorted(logged(out)))
+  assertEquals(sorted(loggedBatch(d)), sorted(logged(out)))
 })
 
 Deno.test('journal: one journal_tx per apply carries the provenance', () => {
@@ -255,5 +255,5 @@ Deno.test('journal: entity deletion cascades to a remove per casualty', () => {
   assertEquals(eids.has(p), true)
   assertEquals(eids.has(c), true)
   // And the batch reconstructs what apply() logged, casualties included.
-  assertEquals(normalizedBatch(d), logged(out))
+  assertEquals(loggedBatch(d), logged(out))
 })

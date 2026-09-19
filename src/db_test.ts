@@ -3682,7 +3682,7 @@ Deno.test('journalOf: newest first, cut to the eid', () => {
 // The readers reconstruct their changes from journal_change + journal_field:
 // per-entity history (journalOf) and the replay window (delta) agree on the
 // same content, births and all.
-Deno.test('journalOf/delta read the normalized rows', () => {
+Deno.test('journalOf/delta read the journal rows', () => {
   let d = fresh()
   let t = uid()
   apply(d, [{ eid: t, name: 'doc', comp: { title: 'v1' } }]) // births t

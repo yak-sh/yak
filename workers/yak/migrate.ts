@@ -66,8 +66,8 @@
 // go to. They are in the export, they are named in the report with their row
 // counts, and the tables are dropped — which is step 4 of T-33809. The JOURNAL
 // is one of them: nothing in workers/yak installs @yaks/journal, so an app store
-// has no `batch`/`delta` table to carry `journal_tx`/`journal_change`/
-// `journal_field` into. It is archived to R2 with the rest and said so.
+// keeps no `journal_tx`/`journal_change`/`journal_field` of its own. They are
+// archived to R2 with the rest and said so.
 import { fields, schema as ftsSchema } from '@yaks/fts'
 import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
 import { edgeEid } from '@yaks/edge'

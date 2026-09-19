@@ -95,11 +95,11 @@ import { fleetVocab } from './vocab/fleet_vocab.ts'
 import { Stale as CoreStale } from '@yaks/graph'
 import {
   type Batch as JournalBatch,
+  ddl as journalDdl,
   type Entry as JournalRecord,
   type Hit as JournalHit,
-  type Normal,
-  normalDdl,
-  normalized,
+  type Log as JournalLog,
+  log as journalLog,
   type Patch as JournalPatch,
 } from '@yaks/journal'
 import { Bounced as LeaseBounced } from '@yaks/session'
@@ -816,14 +816,13 @@ let schema = `
     unique (jrow, handler)
   );
   ${tombstoneDdl};
-  -- The journal, now @yaks/journal's normalized layout (packages/journal/
-  -- normalized.ts), which is where its prose lives. Log data, not graph (like
-  -- tool_call below): the record OF the wire, never part of it, written inside
-  -- apply()'s transaction. No eid of its own, never in snapshot() or a client
-  -- cache, not a vocabulary component (so no codegen). The tables and indexes
-  -- are unchanged, so this is not a migration -- the fleet simply stopped
-  -- keeping its own copy of them.
-${normalDdl()}
+  -- The journal, now @yaks/journal's (packages/journal/log.ts, which is where
+  -- its prose lives). Log data, not graph (like tool_call below): the record OF
+  -- the wire, never part of it, written inside apply()'s transaction. No eid of
+  -- its own, never in snapshot() or a client cache, not a vocabulary component
+  -- (so no codegen). The tables and indexes are unchanged, so this is not a
+  -- migration -- the fleet simply stopped keeping its own copy of them.
+${journalDdl()}
   -- The store's own key/value (@yaks/sqlite meta.ts), named by the package's
   -- own constant so the two can never drift apart. Not graph: no eid, no
   -- components, so snapshot() (which walks the comps vocabulary) never carries
@@ -1039,19 +1038,19 @@ export let textBlob = (db: Sql, value: string): number => {
   return id
 }
 
-// The journal, bound once per connection: @yaks/journal's normalized layout
-// over this store's spine, told the one thing it cannot know — which column is
+// The journal, bound once per connection: @yaks/journal's log over this
+// store's spine, told the one thing it cannot know — which column is
 // content-addressed here. doc.body is the only one, so history refs the blob
 // the graph already keeps instead of repeating every revision of every
 // document. Every journal read and write in the fleet goes through this handle;
 // no fleet file issues journal SQL of its own.
-let journals = new WeakMap<Sql, Normal>()
-let jrnOf = (db: Sql): Normal => {
+let journals = new WeakMap<Sql, JournalLog>()
+let jrnOf = (db: Sql): JournalLog => {
   let held = journals.get(db)
   if (!held) {
     journals.set(
       db,
-      held = normalized({
+      held = journalLog({
         rows: (sql, params) =>
           prep(db, sql).all(...params as never[]) as Record<string, unknown>[],
         cas: {
@@ -4274,7 +4273,7 @@ let casBlobs = (logged: Change[]): string[] =>
       : []
   )
 
-// The journal write: one batch down into @yaks/journal's normalized tables,
+// The journal write: one batch down into @yaks/journal's tables,
 // answering its seq -- the log's monotonic total order and the cursor every
 // delta client holds. Derived wholly from `logged`, so it touches nothing in
 // the change loop. Called inside the caller's transaction: a failure
@@ -4707,7 +4706,7 @@ let asEntry = (r: JournalRecord): JournalEntry => ({
 
 // One journaled batch reconstructed whole (all eids) or, with `eid`, screened
 // to that entity's own changes — both in applied order.
-let normalizedBatch = (db: Sql, tx: number, eid?: string): Change[] =>
+let loggedBatch = (db: Sql, tx: number, eid?: string): Change[] =>
   jrnOf(db).patches(tx, eid).map(asChange)
 
 export let journalOf = (
@@ -4765,11 +4764,11 @@ let wasOf = (name: string, comp: Record<string, unknown>, keys: string[]) => {
 // Server-owned components (resume, imported — empty wire vocabulary) and the
 // provenance echoes are re-derived by apply(), never user intent: skipped.
 export let inverseBatch = (db: Sql, id: number): Change[] => {
-  // The batch reconstructed from the normalized rows (every journal_change
+  // The batch reconstructed from the logged rows (every journal_change
   // shares this one tx). A tx always journals at least one change, so an empty
   // reconstruction means the batch does not exist — including the corrupt-gap
   // row that has no journal_tx (T-24020).
-  let batch = normalizedBatch(db, id)
+  let batch = loggedBatch(db, id)
   if (!batch.length) throw new Error(`no journal batch #${id}`)
 
   let dead = batch.find((c) => c.name == 'entity' && c.comp == null)
@@ -4797,8 +4796,8 @@ export let inverseBatch = (db: Sql, id: number): Change[] => {
       .map((c) => c.eid),
   )
   // The state each entity was in just before this batch, and whether anything
-  // has touched it since: both are @yaks/journal's own questions over the
-  // normalized log, bounded to one entity and never a scan.
+  // has touched it since: both are @yaks/journal's own questions over the log,
+  // bounded to one entity and never a scan.
   let j = jrnOf(db)
   let touchedSince = (eid: string) => j.touchedSince(eid, id)
   let priors = new Map<string, Record<string, Record<string, unknown>>>()
