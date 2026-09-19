@@ -1,9 +1,9 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { Database } from '@yaks/sqlite/db'
+import { Database, driver } from '@yaks/sqlite/db'
 import type { Comp } from '@yaks/graph'
 import type { Model } from '@yaks/model'
 import { react, statusOf, transcript } from '@yaks/session'
-import { driver, open } from './store.ts'
+import { open } from './store.ts'
 
 Deno.test('harness driver refuses cached and new statements after native close', () => {
   const db = new Database(':memory:')
@@ -19,7 +19,7 @@ Deno.test('harness driver refuses cached and new statements after native close',
       () => sql.query('select 3 as value', []),
       () => sql.exec('create table stale (id integer)'),
     ]
-  ) assertThrows(operation, Error, 'Harness database is closed')
+  ) assertThrows(operation, Error, 'the database is closed')
 })
 
 let fake: Model = (req) =>

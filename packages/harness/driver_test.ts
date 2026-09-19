@@ -1,6 +1,6 @@
 import { assertEquals, assertThrows } from '@std/assert'
-import { Database } from '@yaks/sqlite/db'
-import { driver, open } from './store.ts'
+import { Database, driver } from '@yaks/sqlite/db'
+import { open } from './store.ts'
 
 Deno.test('failed row decoding releases a cached write before rollback and the next savepoint', () => {
   let db = new Database(':memory:')

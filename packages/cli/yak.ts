@@ -20,7 +20,14 @@
 import { Usage } from './args.ts'
 import { bundlesIn, chunks } from './apply.ts'
 import { appStray, appTools } from './commands.ts'
-import { cli, type Ctx, helpTool, type Opts, type Word } from './run.ts'
+import {
+  cli,
+  configPath,
+  type Ctx,
+  helpTool,
+  type Opts,
+  type Word,
+} from './run.ts'
 import { listed, printed, rosterOf } from './platform.ts'
 import type { Result } from './roster.ts'
 import { forgetToken, saveToken } from './store.ts'
@@ -31,6 +38,8 @@ export let HOST = 'yaks.app'
 let HEAD = 'yak — the tools this server lists, and the words this box adds'
 
 let TAIL = `  --host <host>   which server (default $YAKS_HOST, else ${HOST})
+  --config <path> serve, and run tools against, the graph this config
+                  composes (default $YAK_CONFIG)
   --json          print the structured result instead of the words
   --timing        a line on stderr per answer, with its Server-Timing
                   (or YAKS_TIMING=1)
@@ -71,13 +80,52 @@ let applied = async (
   return code
 }
 
+// A local host, composed from a config: its tools are words like any other,
+// run against the graph this box just opened rather than a server's. The
+// module is imported only on a line that asks for one — it opens a database,
+// and `yak login` must work on a box with no graph at all.
+let local = async (c: Ctx): Promise<Word[]> => {
+  let { compose, read, words } = await import('./serve.ts')
+  let path = configPath(c.config)
+  if (!path) return []
+  return words(await compose(read(path)))
+}
+
+// What a line means when it names a config: the local host's tools. Without
+// one it is the server's table, as always.
+let table = (c: Ctx): Word[] | Promise<Word[]> =>
+  configPath(c.config) ? local(c) : listed(c)
+
+// `serve` is the whole server: one config, the plugins it names, and the doors
+// @yaks/api and @yaks/mcp mount over the graph they compose.
+let served = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
+  let { read, serve } = await import('./serve.ts')
+  let path = configPath(
+    typeof args.config == 'string' ? args.config : c.config,
+  )
+  let config = path ? read(path) : {}
+  if (typeof args.db == 'string') config.db = args.db
+  if (args.port != null) config.port = Number(args.port)
+  let { host, server } = await serve(
+    config,
+    (addr, host) =>
+      c.note(
+        `yak serve — http://${addr.hostname}:${addr.port} · ${config.db}` +
+          ` · ${host.tools.length} tools`,
+      ),
+  )
+  await server.finished
+  host.close()
+  return 0
+}
+
 /** What a plain `yak` is, besides its tools. */
 export let YAK: Opts = {
   name: 'yak',
   about: HEAD,
   notes: TAIL,
   host: HOST,
-  more: listed,
+  more: table,
   stray: appStray,
 }
 
@@ -110,6 +158,24 @@ export let own: Word[] = [
       c.out(`forgot the bearer for ${c.host}`)
       return 0
     },
+  },
+  {
+    name: 'serve',
+    description: 'the doors onto the graph a config composes',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        config: {
+          type: 'string',
+          description: 'the config file (default $YAK_CONFIG)',
+        },
+        db: { type: 'string', description: 'the graph, over the config' },
+        port: { type: 'number', description: 'what to listen on' },
+      },
+    },
+    options: { positional: ['config'] },
+    run: served,
   },
   {
     name: 'apply',

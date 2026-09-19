@@ -1,5 +1,4 @@
 import { repairSequences } from '@yaks/session'
-import type { Derived } from '@yaks/sql'
 import { diagnostics } from './diagnostics.ts'
 import { home } from './paths.ts'
 // The harness's own graph: one SQLite file, the vocabulary it speaks, and the
@@ -8,13 +7,12 @@ import { home } from './paths.ts'
 // `HARNESS_DB` points, `:memory:` for a test), so an agent runs with the
 // tasks daemon down and the same bundles move into the fleet's graph later.
 //
-// The vocabulary is a composition, not a document: the words a transcript is
-// made of (@yaks/session), what serves it (@yaks/model, @yaks/openai), the
-// programs it starts (@yaks/process), and the work it is doing (@yaks/doc,
-// @yaks/edge, @yaks/task). Two of those carry a status that is COMPUTED and
-// never stored, so both rules are registered as derived columns — the SQL
-// halves of `statusOf` — and `.session.status=running` or `.task.status=open`
-// filters in the database rather than in a loop here.
+// What the harness is MADE of is said once, in ./plugin.ts: the documents it
+// speaks, the columns it computes rather than keeps, and the rules that decide
+// what a batch means. This file takes those same facets for the harness's own
+// file, and a host composing the harness (@yaks/cli `compose`) takes them for
+// a served one. What is here and not there is BOOT: the upgrades an older file
+// needs, and the reconciliation an abnormal ending leaves behind.
 //
 // Boot reconciles what an abnormal ending leaves behind: `reapLeases` frees
 // every lock whose holder is not a session in this graph. What a half-done
@@ -23,88 +21,28 @@ import { home } from './paths.ts'
 
 import {
   address,
-  blobRead,
   type Blobs,
-  blobs,
   blobSchema,
   bodies,
   encode,
   sqliteBlobs,
 } from '@yaks/blob'
-import { Database } from '@yaks/sqlite/db'
-import { edges } from '@yaks/edge'
+import { Database, driver } from '@yaks/sqlite/db'
 import { type Effects, effects } from '@yaks/effects'
 import { type Graph, graph } from '@yaks/graph'
-import { processes } from '@yaks/process'
-import { reapLeases, sessionDerived, sessions, taskMarks } from '@yaks/session'
+import { reapLeases } from '@yaks/session'
 import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
-import { derived as taskDerived, tasks } from '@yaks/task'
 import { type Vocab } from '@yaks/vocab'
 
+import { derived, rules } from './plugin.ts'
 import { vocab } from './vocab.ts'
 export { harnessDoc, vocab } from './vocab.ts'
-
-/** The computed columns, said in SQL: a transcript's status and a task's. */
-export let derived: Derived = { ...sessionDerived, ...taskDerived(taskMarks) }
 
 /** Where the graph lives when nobody says: `$HARNESS_DB`, else
  * `$HARNESS_HOME/harness.db` (home defaults to `~/.harness`). */
 export let dbPath = (
   env: (name: string) => string | undefined = Deno.env.get,
 ): string => env('HARNESS_DB') || `${home(env)}/harness.db`
-
-/** @yaks/sqlite's two-method driver over an embedded database. */
-export let driver = (db: Database): Driver => {
-  // The adapter repeatedly issues the same parameterized gathers/writes. Keep
-  // a bounded statement cache, not tens of thousands of prepare/finalize pairs
-  // per transcript. Database.close() finalizes the retained statements.
-  let cache = new Map<string, ReturnType<Database['prepare']>>()
-  let checkOpen = () => {
-    // @db/sqlite closes/finalizes native handles without invalidating the JS
-    // Statement objects. Calling a cached one after close is a SIGSEGV, not a
-    // catchable SQLite error. Refuse at the driver boundary, before any FFI.
-    if (!db.open) throw new Error('Harness database is closed')
-  }
-  return {
-    query: (sql, params) => {
-      checkOpen()
-      let statement = cache.get(sql)
-      if (!statement) {
-        if (cache.size >= 256) {
-          let key = cache.keys().next().value!
-          cache.get(key)!.finalize()
-          cache.delete(key)
-        }
-        statement = db.prepare(sql)
-        cache.set(sql, statement)
-      }
-      try {
-        return statement.all(...params)
-      } catch (error) {
-        // @db/sqlite resets all() on success, but an exception while decoding
-        // a row can leave a RETURNING statement at SQLITE_ROW. Retaining it
-        // then prevents every later SAVEPOINT on this connection. Evict only
-        // the failed statement; never retry SQL with possible side effects.
-        cache.delete(sql)
-        try {
-          statement.finalize()
-        } catch (cleanup) {
-          throw new AggregateError(
-            [error, cleanup],
-            String(error) +
-              '; SQLite statement finalization also reported an error',
-            { cause: error },
-          )
-        }
-        throw error
-      }
-    },
-    exec: (sql) => {
-      checkOpen()
-      db.exec(sql)
-    },
-  }
-}
 
 /** An open harness graph: the file it is, the store under it, the graph over
  * it, and the effects registry the daemon hangs on. */
@@ -200,7 +138,7 @@ export let open = (path: string = dbPath()): Harness => {
   let store = storage(sql, vocab, {
     // Agent sessions, TUI microtasks and transcript artifacts use eids.
     number: false,
-    derived: { ...derived, ...blobRead(vocab) },
+    derived: derived(vocab),
   })
   store.install()
   // The short-lived completed.actor spelling duplicated the completion
@@ -318,11 +256,15 @@ export let open = (path: string = dbPath()): Harness => {
     storage: store,
     vocab,
     plugins: [
-      blobs(vocab, bytes),
-      sessions(),
-      edges(vocab),
-      tasks(vocab, taskMarks),
-      processes(),
+      ...rules({
+        config: { db: path },
+        vocab,
+        storage: store,
+        sql,
+        get graph(): Graph {
+          return g
+        },
+      }),
       fx,
     ],
   })

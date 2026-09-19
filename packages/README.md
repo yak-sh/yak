@@ -175,11 +175,11 @@ In dependency order:
   subcommand, mapping the command line through each tool's own input schema. It
   has no verb list of its own, so it cannot drift from the connector an agent is
   talking to — and a PLUGIN, a table of tools contributed at boot, is how a box
-  adds words of its own beside them under one help.
-- **[@yaks/plugin](./plugin)** — the composition seam: a manifest of lazy
-  contributions (vocabulary, commands, graph plugins, views), each aimed at one
-  subsystem, and the `load`/`select` a host uses to pick what one subsystem
-  needs. It installs and discovers nothing.
+  adds words of its own beside them under one help. It is also the HOST:
+  `yak serve` reads one config naming plugin modules, imports each, and composes
+  what they export — vocabulary, rules, tool runs, effects, routes — into a
+  graph with the doors on it. A plugin is a plain module; there is no registry
+  and no other server wiring.
 - **[@yaks/harness](./harness)** — the packages above as a working agent, with
   nothing under it but a file: one SQLite database it makes itself, the session
   daemon in the same process, the shell and the generic graph tools handed to

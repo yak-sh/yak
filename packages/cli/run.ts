@@ -27,6 +27,9 @@ import { tokenFor } from './store.ts'
 export type Ctx = {
   /** The server this line is aimed at. */
   host: string
+  /** The config file naming a LOCAL host, where the line is aimed at one:
+   * `--config`, else `$YAK_CONFIG` (serve.ts). */
+  config?: string
   json: boolean
   help: boolean
   ask: Rpc
@@ -146,6 +149,7 @@ export let globals = (
   host = 'yaks.app',
 ): {
   host: string
+  config?: string
   json: boolean
   help: boolean
   timing: boolean
@@ -153,6 +157,7 @@ export let globals = (
 } => {
   let json = false
   let help = false
+  let config: string | undefined
   // A whole shell asks for the timing line with YAKS_TIMING=1; one command
   // asks with the flag.
   let timing = Deno.env.get('YAKS_TIMING') == '1'
@@ -164,10 +169,16 @@ export let globals = (
     else if (a == '--timing') timing = true
     else if (a == '--host') host = argv[++i] ?? host
     else if (a.startsWith('--host=')) host = a.slice(7)
+    else if (a == '--config') config = argv[++i] ?? config
+    else if (a.startsWith('--config=')) config = a.slice(9)
     else rest.push(a)
   }
-  return { host, json, help, timing, rest }
+  return { host, config, json, help, timing, rest }
 }
+
+/** Where a LOCAL host's config is: what the line said, else `$YAK_CONFIG`. */
+export let configPath = (said?: string): string | undefined =>
+  said ?? Deno.env.get('YAK_CONFIG') ?? undefined
 
 let disk: Reads = {
   file: (path) => Deno.readTextFile(path),
@@ -184,7 +195,7 @@ export let cli = async (
 ): Promise<number> => {
   let out = opts.out ?? ((line: string) => console.log(safe(line)))
   let note = opts.note ?? ((line: string) => console.error(safe(line)))
-  let { host, json, help, timing, rest } = globals(
+  let { host, config, json, help, timing, rest } = globals(
     opts.argv ?? Deno.args,
     Deno.env.get('YAKS_HOST') ?? opts.host ?? 'yaks.app',
   )
@@ -204,6 +215,7 @@ export let cli = async (
   }
   let c: Ctx = {
     host,
+    config,
     json,
     help,
     ask: opts.ask ?? rpc({

@@ -632,12 +632,14 @@ new harness version is coordinated with older running connections. Stop those
 connections before such upgrades. Already-completed migrations are not a version
 compatibility check when an older binary first opens the file.
 
-## Package composition pilot
+## The harness as a plugin module
 
-The `./plugin` export supplies a lazy manifest containing session vocabulary,
-session rules, and one graph tool. Hosts can select these contributions
-independently using `@yaks/plugin`; importing the manifest opens no database and
-starts no services. It is not yet a complete replacement for harness startup.
+`./plugin` is where the harness says what it is made of, once: the documents it
+speaks, the columns it computes rather than keeps, the rules that decide what a
+batch means, and the runs behind its tool declarations. `store.ts` takes those
+facets for the harness's own file, and a host takes the same ones for a served
+one — `yak serve --config harness.json` (@yaks/cli `compose`) is the harness
+with doors on it. Importing the module opens no database and starts nothing.
 
 The executable accepts `session list` and `list session`, returning session
 bundles as JSON. The same definition is exposed as MCP `session_list` through
@@ -645,8 +647,7 @@ the MCP adapter. Both CLI word orders derive from the same Tool noun/verb
 fields, without alias declarations. `bin.ts` hands `@yaks/cli`'s `cli()` one
 flat list — the graph's tools, then the harness's own words — and there is no
 plugin registration in between. See
-[the design and limits](../plugin/DESIGN.md). No daemon, installer, or `:`
-command interface is added in this pilot.
+[the host and the export shape](../cli/README.md).
 
 Mouse clicks select session rows, **New session**, and task rows in the sidebar.
 A claimed task opens its worker session; an unclaimed task selects only the row.

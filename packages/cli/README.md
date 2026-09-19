@@ -1,209 +1,115 @@
 # @yaks/cli
 
-The `yak` command: an MCP server's tool list, read at run time, with every tool
-a subcommand.
+The `yak` command, and the server behind it.
 
-## Install
+Two halves, one vocabulary of tools:
 
-```sh
-deno install -gf --allow-net --allow-env --allow-read --allow-write jsr:@yaks/cli/yak
-```
-
-That gives you `yak`. (`npx` and `bunx` reach JSR through its npm bridge at
-`npm.jsr.io` — configure the `@jsr` scope and the package is `@jsr/yaks__cli` —
-but Deno is the supported install, and the one this is tested against.)
-
-## Server tools
-
-There is no list of verbs in this package. It asks the server for `tools/list`
-and every tool it gets back is a subcommand:
+- **the client** — every tool an MCP server lists is a subcommand, read at run
+  time, with the command line mapped through each tool's own input schema;
+- **the host** (`yak serve`, [./serve.ts](./serve.ts)) — one config file naming
+  plugin modules, imported and composed into a running graph with its doors on
+  it. There is no other server wiring: a server IS a config and a list of
+  modules.
 
 ```sh
-yak app_list
-yak app_files --app recipes --path index.html --content @index.html
-yak graph_query --q '.recipe!'
+deno install -gAf jsr:@yaks/cli/yak
+
+yak app_list                       # a tool the server lists
+yak serve --config yak.json        # the doors onto the graph that config names
+yak --config yak.json session list # that graph's own tools, locally
 ```
 
-Server tools become commands without a CLI release. Tool discovery depends on
-the selected server and its cached tool list.
+## The config
 
-Four tools are the command's own and shadow a server tool of the same name:
-`help`, `login`, `logout`, `apply`.
+One JSON file. `--config` names it, else `$YAK_CONFIG`.
 
-## `cli(tools, opts)`
-
-There is no registration shape between a tool and the command that runs it. A
-tool is a @yaks/graph `Tool` and nothing else — noun, verb, description,
-`inputSchema`, `run` — the same declaration an MCP transport lists. What a CLI
-tool is handed is this package's `Ctx`, and what it answers with is an exit
-code, which is what `Tool<Ctx, number>` (exported as `Word`) says.
-
-```ts
-import { cli, type Word } from '@yaks/cli'
-
-let mine: Word[] = [{
-  name: 'ping',
-  description: 'say hello',
-  inputSchema: { type: 'object', additionalProperties: false },
-  run: (_args, c) => (c.out('hi'), 0),
-}]
-
-Deno.exitCode = await cli(mine, { name: 'mine', about: 'local commands' })
-```
-
-A `yak` with words of its own is the same call: `main(Deno.args, mine)` puts
-them in front of everything the package ships.
-
-The tool's own input schema is the whole grammar of the line: `argsFor` fills
-`options.positional` from the bare words, then `options.rest`, reads
-`--name value`, `--name=value` and a declared short `-n`, inflates `@path` and
-`-`, and checks the bag against the schema, which is also what fills its
-defaults. A two-word tool answers to either order — `session list` and
-`list session` are the same tool. The usage line and the `--help` page are drawn
-from that same schema, so no tool carries a hand-written argument string.
-
-The **first** tool to name a word wins, so the order of the list is the
-precedence and a box that carries its own `login` means it. `unique(tools)` is
-the check a contributor runs over its own table, where two words the same is a
-mistake rather than a choice.
-
-Two opts cost more than a list does. `more` is a table that has to be fetched —
-the server's `tools/list` — asked only when the tools in hand did not name the
-word, so `yak login` still works with no server in sight, and drawn into the
-page as a reason when it cannot be had. `stray` is a tool for a first word
-nobody named, which is how `yak recipes add_recipe` finds an app.
-
-## An app's own commands
-
-An app declares commands rather than tools, so the tool list never moves for
-them. `yak commands` lists them, and either spelling runs one:
-
-```sh
-yak command add_recipe --app recipes title='Lemon cake' serves=4
-yak recipes add_recipe title='Lemon cake' serves=4
-```
-
-The second is what a first word nothing else claimed means: an app, then its
-command. The arguments are the app's own, so they are `key=value` words — JSON
-where the value parses as JSON, `@path` and `-` as everywhere else — which is
-what keeps them apart from this program's own options.
-
-## Arguments
-
-A tool's own input schema is the grammar. `--name value` names a property, and
-what the schema says that property IS decides what the word becomes: a `string`
-stays the word it is, JSON-looking or not; an `object`, `array`, `number` or
-`boolean` parses. Repeat an option to build a list.
-
-Three spellings inflate a value first, because a body is rarely something you
-type:
-
-| you write            | it sends              |
-| -------------------- | --------------------- |
-| `--content hello`    | `hello`               |
-| `--content @page.md` | that file's text      |
-| `--content -`        | stdin                 |
-| `--name=--weird`     | a value starting `--` |
-
-A name the tool does not declare, a value its type cannot be, and a required
-argument nobody gave are all refused here, before the round trip.
-
-## Output
-
-Tool text is written to stdout. `--json` prints its structured result instead:
-
-```sh
-yak graph_query --q '.recipe!' --json | jq '.[].doc.title'
-```
-
-Exit codes: `0` success, `1` tool or transport error, `2` invalid command-line
-arguments.
-
-## Signing in
-
-The bearer token comes from `$YAKS_TOKEN` when set, otherwise from the file
-written by `yak login` with mode 0600 in the OS config directory:
-
-```sh
-yak login <token>     # remembered for this host
-yak logout            # forgotten
-```
-
-A 401 reports an authentication error. The CLI does not launch an OAuth browser
-flow; supply a valid token and retry.
-
-## Which server
-
-`yaks.app`, unless `$YAKS_HOST` or `--host` says otherwise. A bare name becomes
-`https://<host>/mcp`; a whole origin is taken as given, so a `--host` of
-`http://localhost:8787` aims at one you are running.
-
-## Help
-
-```sh
-yak help              # every tool, one line each
-yak help graph_query  # that tool's arguments, off its own schema
-```
-
-The tool list is cached per host and stamped with the roster version the server
-names in `about`. Nothing checks that version — checking would cost the round
-trip the cache saves. It is dropped on the two signals that arrive for free: a
-result carrying the server's roster line, and an `about` naming a version the
-cached list is not.
-
-## apply
-
-`yak apply` is `graph_apply` with streaming input. A batch is atomic, and a file
-of bundles is a load rather than one batch, so NDJSON — one bundle per line —
-goes over in batches of 50:
-
-```sh
-cat bundles.ndjson | yak apply
-yak apply @bundles.ndjson
-yak apply --change '[{"entity":{"eid":"$r"},"doc":{"title":"Lemon cake"}}]'
-```
-
-## Dependencies
-
-The runtime uses native fetch and implements `initialize`, `tools/list` and
-`tools/call` without an MCP SDK dependency. Command execution and credential
-storage require Deno filesystem, environment and network permissions.
-
-## Completion
-
-`complete(tools, line, look?)` says what could come next, read off the same
-declarations that run the line — never a second table to keep in step.
-
-```ts
-import { complete } from '@yaks/cli'
-
-await complete(tools, 'session li') // ['list']
-await complete(tools, 'session list --') // ['--all', '--limit', '--scope']
-await complete(tools, 'session list --status ') // ['done', 'open']
-await complete(tools, ['session', 'list', '']) // a shell hook's words
-```
-
-The first word is every word a tool answers to — both halves of a pair, since
-either order is a line. After one half, the other half. After the tool, its
-input schema's properties as `--name`, minus the ones already said; and for a
-value, what the property says about itself: an `enum` offers its members, a
-boolean offers `true` and `false`, and `examples` offer themselves.
-
-Two answers belong to a graph rather than to a command line, so they are the
-caller's to supply as `look`: `ids(comp, prefix)` for an argument declaring
-`ref` (the component whose entities it names), and `hits(prefix)` for a text
-argument declaring `search: true`. Left out, those arguments offer nothing. Over
-a graph both are one read each:
-
-```ts
-let look = {
-  ids: async (comp: string) =>
-    (await graph.read(parse(`.${comp}`))).map((b) => b.entity.eid),
-  hits: async (words: string) =>
-    (await graph.read(parse(words))).map((b) => String(b.doc?.title ?? '')),
+```json
+{
+  "db": "graph.db",
+  "plugins": ["@yaks/harness/plugin", "./plugins/mail.ts"],
+  "port": 8787,
+  "actor": "me"
 }
 ```
 
-Nothing in this package is wired to a shell hook or a TUI line yet: the harness
-has no command line to complete, and a shell hook is a few lines of the shell's
-own, not of this package's.
+| field      | what it says                                                                 |
+| ---------- | ---------------------------------------------------------------------------- |
+| `db`       | the SQLite file, or `:memory:`. Relative to the config file itself.          |
+| `plugins`  | the modules, by import specifier; a relative one resolves against the config |
+| `port`     | what to listen on (default 8787)                                             |
+| `hostname` | which interface                                                              |
+| `actor`    | the eid every request is signed with, where no plugin authenticates          |
+| `numbers`  | whether the store mints human numbers beside eids (default true)             |
+| `name`     | what the MCP door calls itself                                               |
+
+**There is no default database.** `db`, or `DB_PATH` in the environment, or the
+host refuses to start: the path anybody would pick as a default is somebody's
+live graph.
+
+## A plugin is a plain module
+
+No manifest, no registry, no activation. A plugin exports named parts and the
+host takes the ones it runs; a part it does not have is a part it does not
+export. Every export is optional.
+
+```ts
+export let vocab = [mailDoc] // the components and tools it declares
+export let keywords = [mailKeywords] // JSON Schema keywords those use
+export let derived = (vocab) => mailRead(vocab) // columns computed, not kept
+export let rules = (host) => [mail(host.vocab)] // what a batch means
+export let runs = { mail_send } // the runs behind its tool declarations
+export let effects = (host) => [{ comp: 'mail', created: deliver }] // after a commit
+export let routes = [{ method: 'POST', path: '/inbound', handle }] // HTTP it adds
+export let authenticate = (request) => who(request) // at most one plugin may say
+```
+
+`host` is `{ config, vocab, storage, sql, graph }`. `graph` is live from the
+moment the graph is open — a factory may keep it, and may not call it before it
+returns. A `rules` factory runs at compose time and may install tables of its
+own through `host.sql`.
+
+A **route** is `{ method, path, handle }`: `handle` is a plain
+`(Request) => Response`, `path` is exact or ends in `*` for a prefix, and
+`method` is the verb or `*` for any. Anything no route claims falls through to
+the graph's own doors, which refuse it in the wire's shape.
+
+## What `compose` does
+
+[`compose(config)`](./serve.ts) is the whole host, in order:
+
+1. imports each plugin module;
+2. loads every `vocab` document and `keywords` into one vocabulary (@yaks/vocab
+   `loadVocab` — a word declared twice is a conflict);
+3. opens the SQLite file (@yaks/sqlite), runs the migration control, and binds
+   the store with every plugin's `derived` columns;
+4. builds the graph over it with every plugin's `rules` plus the effects
+   registry (@yaks/effects), whose writes go through the graph's own `apply()`,
+   trusted;
+5. registers every plugin's `effects`;
+6. joins the vocabulary's `tool: true` declarations to the plugins' `runs`
+   (@yaks/graph `loadTools`) — a declaration nobody implements is a load error,
+   not a word that lists and then fails;
+7. mounts the doors: @yaks/api at `/apply`, `/query` and `/ws`, @yaks/mcp at
+   `/mcp`, then the plugins' own routes.
+
+It answers a `Served`: the host, its `tools`, its `fx`, one `handler`, and
+`close`. `serve(config)` is that plus `Deno.serve`. `words(host)` is the same
+tools as command-line words, which is what `yak --config …` runs.
+
+## The client half
+
+`cli(tools, opts)` is the seam: hand it tools and it reads the line — the word,
+either order of a two-word tool, the arguments through that tool's own input
+schema — runs the one it found, and answers the exit code (0 said, 1 refused, 2
+the line was wrong). A program with words of its own passes more tools; the
+first tool to name a word wins, so the order of the list is the precedence.
+
+```ts
+import { cli, helpTool } from '@yaks/cli'
+
+Deno.exitCode = await cli([helpTool(opts), ...mine], opts)
+```
+
+Globals lifted off every line: `--host`, `--config`, `--json`, `--timing`,
+`--help`. A value that is `@path` is that file and `-` is stdin. `$YAKS_TOKEN`
+is the bearer when set, otherwise the one `yak login` wrote.

@@ -1,9 +1,9 @@
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
-import { Database } from '@yaks/sqlite/db'
+import { Database, driver } from '@yaks/sqlite/db'
 import { MigrationPending, migrations } from '@yaks/sqlite'
 import { agent } from './run.ts'
-import { driver, open } from './store.ts'
+import { open } from './store.ts'
 
 Deno.test('daemon stop releases its migration monitor before a shared harness is reused', async () => {
   using time = new FakeTime()

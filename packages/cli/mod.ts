@@ -73,6 +73,7 @@ export {
 } from './tool.ts'
 export {
   cli,
+  configPath,
   type Ctx,
   globals,
   helpTool,

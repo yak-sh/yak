@@ -1,25 +1,41 @@
 import { assertEquals, assertThrows } from '@std/assert'
-import { load, select } from '@yaks/plugin'
 import { argsFor, unique, wordFor } from '@yaks/cli'
+import { loadTools } from '@yaks/graph/tools'
 import { namedTool, type ToolCtx } from '@yaks/graph'
+import { driver } from '@yaks/sqlite/db'
 import { connect } from '../mcp/harness.ts'
 import { open } from './store.ts'
 import { tools as declared } from './declared.ts'
 import { tools as cliTools } from './cli.ts'
-import manifest from './plugin.ts'
+import { rules, runs, vocab as docs } from './plugin.ts'
 
 let reads = { file: () => '', stdin: () => '' }
 
-Deno.test('manifest contributions share one command between CLI and MCP over a graph', async () => {
-  const loaded = await load([{
-    id: '@yaks/harness',
-    specifier: 'explicit:test',
-  }], () => Promise.resolve({ default: manifest }))
-  assertEquals((await select(loaded, 'vocabulary')).length, 1)
-  assertEquals((await select(loaded, 'graph.plugins')).length, 1)
-  const declarations = (await select(loaded, 'tools'))[0]
-    .value as typeof declared
+Deno.test('the plugin module says the harness once, and one declaration reaches both doors', async () => {
+  // Every facet a host takes (@yaks/cli `compose`) is an export of the module
+  // — no manifest, no registration, no activation step.
+  assertEquals(docs.some((d) => d.title == 'harness'), true)
+  const declarations = loadTools(docs, runs)
   const h = open(':memory:')
+  // The rules over that graph are the plugin module's, the very ones `open`
+  // built it with: blobs, transcripts, edges, tasks, and the programs a
+  // session runs.
+  assertEquals(
+    rules({
+      config: {},
+      vocab: h.vocab,
+      storage: h.store,
+      sql: driver(h.db),
+      graph: h.g,
+    }).map((p) => p.name),
+    [
+      '@yaks/blob',
+      '@yaks/session',
+      '@yaks/edge',
+      '@yaks/task',
+      '@yaks/process',
+    ],
+  )
   await h.g.apply([{ entity: { eid: 'session-one' }, session: { id: 'one' } }])
   const context: ToolCtx = {
     graph: h.g,

@@ -153,7 +153,6 @@
     "test:workerd:run": "deno run -A bin/test-workerd.ts"
   },
   "workspace": [
-    "./packages/plugin",
     "./workers/yak",
     "./packages/query",
     "./packages/vocab",
