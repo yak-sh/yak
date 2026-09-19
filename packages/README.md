@@ -97,9 +97,11 @@ In dependency order:
   store, and the two walks a pack makes (`entry`, `parent`) as edges — plus the
   builders that turn a `path → sha256` manifest into trees and a commit.
 - **[@yaks/effects](./effects)** — what a graph DOES about what it commits:
-  `created`/`changed`/`removed` handlers per component, run after the
-  transaction, each isolated, with an optional durable ledger. The mechanism —
-  it ships no effect of its own.
+  handlers run after the transaction, each isolated, with an optional durable
+  ledger. Registered on a component and one of the three things that happen to
+  it (`created`/`changed`/`removed`), or on a PATTERN — any query, run wherever
+  the batch just made it hold, so nothing has to be derived into the graph to
+  trigger an effect. The mechanism — it ships no effect of its own.
 - **[@yaks/journal](./journal)** — who wrote what, when: every committed batch
   recorded inside its own transaction, in three append-only tables off the
   spine, after-images only — and the three things that fall out: the history of
@@ -110,12 +112,12 @@ In dependency order:
   rendering are written once. Its `body` NAMES `@yaks/blob`'s `store` keyword
   without depending on the package that reads it — content-addressed where blob
   is composed in, plain text everywhere else.
-- **[@yaks/tools](./tools)** — a tool is a function from bundles to bundles, a
-  call is an entity, and this is the runner between them: the `tool` registered,
-  the `call` asking for it, the `execution` state it is claimed under and the
-  `result` it comes to rest as. What finds the work is a rule the vocabulary
-  declares, asked after the commit — nothing wires a tool to the components, and
-  nothing else anywhere calls a tool function.
+- **[@yaks/tools](./tools)** — a tool is a function from bundles to bundles, and
+  this runs one and keeps the record: the `tool` registered, the `call` that
+  asked for it, the `execution` it is claimed under and the `result` it comes to
+  rest as. A host calls the function itself; the calls nobody is waiting on —
+  scheduled, or left by a crash — are found by registering the rules this
+  vocabulary declares as effects.
 - **[@yaks/member](./member)** — who belongs and what they may touch: a space
   roster (`member`), per-thing grants (`grant`), an access mode (`access`), the
   `precondition` hook that refuses a write the actor's role does not allow, and
@@ -259,8 +261,9 @@ on its own:
   own code.
 - `@yaks/effects` is the other end of a write: the graph's phases decide what a
   batch MEANS, and this decides what to do about it once it is true — a
-  notification, a receipt, a spawned process — registered per component, run
-  post-commit, and isolated so a broken observer never breaks a write.
+  notification, a receipt, a spawned process — registered per component or as a
+  pattern over what committed, run post-commit, and isolated so a broken
+  observer never breaks a write.
 - `@yaks/journal` is the memory of the same write: it records what each batch
   moved in tables of its own, inside the transaction, so a refused batch leaves
   nothing and a committed one always left a record. History, undo and the delta
