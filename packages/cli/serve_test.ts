@@ -43,7 +43,8 @@ let doc: VocabDoc = {
 let shop: Module = {
   vocab: doc,
   runs: {
-    book_list: async (_args, ctx) => ({ result: await ctx.read('.book') }),
+    // A tool answers BUNDLES: the entities it found, and nothing else.
+    book_list: (_, ctx) => ctx.read('.book'),
   },
   routes: [{
     method: 'GET',
@@ -170,7 +171,7 @@ Deno.test('a rule sees the graph it is part of, and an effect fires on a commit'
   let seen: string[] = []
   let mod: Module = {
     vocab: doc,
-    runs: { book_list: () => ({ result: [] }) },
+    runs: { book_list: () => [] },
     rules: (host) => [{
       name: 'watcher',
       // The graph is live by the time a hook runs, not while it is built.

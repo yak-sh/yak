@@ -27,9 +27,9 @@ import {
   type Tool,
   toolsOf,
 } from '@yaks/graph'
-import { answerOf, runner, toolEid, worded } from '@yaks/tools'
+import { answerOf, type Runner, runner, toolEid, worded } from '@yaks/tools'
 import type { BundleOpts, Depth } from './schema.ts'
-import { core, type CoreOpts, pointed, type Search } from './tools.ts'
+import { core, type CoreOpts, pointing, type Search } from './tools.ts'
 import type { Guide } from './words.ts'
 
 /**
@@ -47,6 +47,10 @@ export type Security =
 export type Options = {
   /** the graph its tools read and write */
   graph: Graph
+  /** the runner these tools are run by, where the host keeps one (a door that
+   * builds a server per request must, or only the first server's runner is
+   * registered and the rest answer nothing). Built over `calls` otherwise. */
+  runner?: Runner
   /** where a CALL is written and its result awaited (default: `graph`). A
    * door whose graph cannot take one — a composition over somebody else's
    * stores, a connector that will not record a stranger's question — keeps a
@@ -130,11 +134,19 @@ export type Options = {
 //
 // An answer carrying an `error` or an `exception` is the tool's refusal, and
 // it comes back as an error rather than a success that reads like an apology.
-let said = (answer: Bundle[]): CallToolResult => ({
-  content: [{ type: 'text', text: worded(answer) }],
-  structuredContent: { result: answer },
-  ...(answer.some((b) => b.error || b.exception) ? { isError: true } : {}),
-})
+let said = (answer: Bundle[]): CallToolResult => {
+  let failed = answer.some((b) => b.error || b.exception)
+  return {
+    // A refusal says where the words are: a client holding a tool list from
+    // before a column moved learns it here and nowhere else.
+    content: [{
+      type: 'text',
+      text: failed ? pointing(worded(answer)) : worded(answer),
+    }],
+    structuredContent: { result: answer },
+    ...(failed ? { isError: true } : {}),
+  }
+}
 
 // A refusal IS an error: `isError` rides the reply so a harness counts it as
 // one instead of a success that reads like an apology.
@@ -274,32 +286,21 @@ export let server = (opts: Options): McpServer => {
     ...(opts.instructions ? { instructions: opts.instructions } : {}),
   })
 
-  // A refusal for a word this graph does not know, pointed at the door that
-  // has the words (./tools.ts `pointed`, which raises rather than returns).
-  let sharpened = (err: unknown): unknown => {
-    try {
-      return pointed(err)
-    } catch (e) {
-      return e
-    }
-  }
-
   let tools = listing(opts).map(namedTool)
   // The CALL LEDGER: where a call is written, which is this graph unless the
   // host keeps one of its own (a door serving a composition, a connector that
   // will not write a row into somebody's store for a question). The runner
   // registers there; the tools still work on `graph`.
   let calls = opts.calls ?? graph
-  let run = runner(calls, {
+  let run = opts.runner ?? runner(calls, {
     tools,
     host: graph,
     report: (err) => console.error('tool failed —', err),
   })
-  // Once per graph: a host that builds two servers over one graph would
-  // otherwise drive every call twice. The second server still answers its own
-  // calls — what it wrote is a call, and its own runner runs the one the first
-  // one had no word for.
-  if (!calls.plugins.some((p) => p.name == 'tools')) calls.use(run.plugin)
+  // Once per graph, whoever built it: a call is run by the runner registered
+  // on the graph it was written to, and a second one registered beside it
+  // would race the first for the same claim.
+  if (!calls.plugins.includes(run.plugin)) calls.use(run.plugin)
   // The tool rows a call points at, written once — the first call waits for
   // them, and every later one finds them there.
   let rows: Promise<unknown> | undefined
@@ -327,7 +328,7 @@ export let server = (opts: Options): McpServer => {
           }]),
         ))
       } catch (err) {
-        out = failed(sharpened(err))
+        out = failed(err)
       }
       // A refusal carries it too: an agent holding a stale list is likelier to
       // be refused than served, and that is the reply worth telling.

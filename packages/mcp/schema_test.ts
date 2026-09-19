@@ -1,36 +1,13 @@
 /// <reference lib="deno.ns" />
-// The output schemas, as a client receives them: what `names` keeps, what
-// `full` adds, and what each costs. A tool list is context an agent pays for
-// before it has asked anything, so the price is worth a test.
+// The WRITE door's schema, as a client receives it. A tool's ANSWER has no
+// schema any more — it is bundles, and what a bundle is the vocabulary
+// already says — so what is published is the one schema a client writes
+// against, and it is the vocabulary: every component, every writable column
+// and every type, before an agent guesses at one (T-34153).
 
-import { assert, assertEquals } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import { z } from 'zod'
 import { connect } from './harness.ts'
-
-// The component's own columns, wherever the nullable wrapper put them: a
-// component reads as `{object} | null`, so the object is either the schema or
-// the first branch of its `anyOf`.
-let columnsOf = (schema: unknown, comp: string): string[] => {
-  let at = (o: unknown, key: string): unknown =>
-    o && typeof o == 'object' && key in o
-      ? (o as Record<string, unknown>)[key]
-      : undefined
-  let object = (o: unknown): unknown => {
-    let any = at(o, 'anyOf')
-    return Array.isArray(any) ? any[0] : o
-  }
-  let items = at(at(at(schema, 'properties'), 'result'), 'items')
-  let props = at(object(at(at(items, 'properties'), comp)), 'properties')
-  return props && typeof props == 'object' ? Object.keys(props) : []
-}
-
-let queried = async (depth: 'names' | 'full') => {
-  let client = await connect({ schema: depth })
-  let { tools } = await client.listTools()
-  let tool = tools.find((t: { name: string }) => t.name == 'graph_query')
-  await client.close()
-  return { schema: tool?.outputSchema, size: JSON.stringify(tools).length }
-}
 
 // graph_apply's published INPUT schema — the write door as a client reads it.
 let writing = async () => {
@@ -52,49 +29,16 @@ let at = (o: unknown, ...keys: string[]): unknown =>
     o,
   )
 
-Deno.test('both depths name every component and column', async () => {
-  for (let depth of ['names', 'full'] as const) {
-    let { schema } = await queried(depth)
-    assertEquals(columnsOf(schema, 'book'), ['price', 'status', 'author'])
-    assertEquals(columnsOf(schema, 'doc'), ['title', 'body'])
-  }
-})
-
-Deno.test('graph_show declares only bundles in its answer', async () => {
-  let client = await connect()
+Deno.test('no tool publishes an output schema: an answer is bundles', async () => {
+  let client = await connect({ search: () => [] })
   let { tools } = await client.listTools()
-  let tool = tools.find((t: { name: string }) => t.name == 'graph_show')
-  let schema = at(tool?.outputSchema, 'properties', 'result')
-  assertEquals(Object.keys(at(schema, 'properties') as object), ['bundles'])
-  assertEquals(at(schema, 'required'), ['bundles'])
-  await client.close()
-})
-
-Deno.test('names costs less than full, which is the default anyway', async () => {
-  let cheap = await queried('names')
-  let rich = await queried('full')
-  assert(
-    cheap.size < rich.size,
-    `names (${cheap.size}) should be smaller than full (${rich.size})`,
+  assertEquals(
+    tools.map((t: { outputSchema?: unknown }) => t.outputSchema),
+    tools.map(() => undefined),
   )
-  // …and what a host gets without asking is the typed one: an agent guessing
-  // at a column costs more than the schema does (T-34153).
-  let client = await connect()
-  let { tools } = await client.listTools()
-  assertEquals(JSON.stringify(tools).length, rich.size)
   await client.close()
 })
 
-Deno.test('full spells out an enum, names leaves the value open', async () => {
-  let rich = JSON.stringify((await queried('full')).schema)
-  let cheap = JSON.stringify((await queried('names')).schema)
-  assert(rich.includes('shelved'), 'full lists the enum members')
-  assert(!cheap.includes('shelved'), 'names does not')
-})
-
-// The WRITE door (T-34153): graph_apply's input schema is the vocabulary, so
-// an agent reads the columns and their types before it writes any, rather
-// than guessing at them and learning from a refusal.
 Deno.test('graph_apply takes the vocabulary, typed and described', async () => {
   let schema = await writing()
   let book = at(schema, 'properties', 'change', 'items', 'properties', 'book')
@@ -114,41 +58,22 @@ Deno.test('graph_apply takes the vocabulary, typed and described', async () => {
   assertEquals(at(items, 'entity', 'required'), ['eid'])
 })
 
-// A host whose door answers a column differently than the vocabulary declares
-// says so once, and every schema is derived through it — yaks.app reads a
-// reference back as `{eid, name}` and takes an id (agent.ts `reading`).
-Deno.test('a host spells its own reading of a column, read and write', async () => {
+// A host whose door TAKES a column differently than the vocabulary declares
+// says so once, and the write schema is derived through it — yaks.app takes an
+// id for a reference (agent.ts `reading`).
+Deno.test('a host spells its own reading of a column on the write door', async () => {
   let client = await connect({
-    schema: 'full',
     column: (col, o) =>
       col.category == 'ref' && !o.write
         ? z.object({ eid: z.string() }).passthrough()
         : undefined,
   })
   let { tools } = await client.listTools()
-  let of = (name: string, where: 'inputSchema' | 'outputSchema') =>
-    JSON.stringify(
-      tools.find((t: { name: string }) => t.name == name)?.[where],
-    )
+  let schema = tools.find((t: { name: string }) => t.name == 'graph_apply')
+    ?.inputSchema
   await client.close()
-  // The read says the object it answers, where the vocabulary says a string…
-  let read = at(
-    JSON.parse(of('graph_query', 'outputSchema')),
-    'properties',
-    'result',
-    'items',
-    'properties',
-    'book',
-    'properties',
-    'author',
-    'anyOf',
-    '0',
-  )
-  assertEquals(at(read, 'type'), 'object')
-  assertEquals(Object.keys(at(read, 'properties') as object), ['eid'])
-  // …and the write still takes the id.
   let author = at(
-    JSON.parse(of('graph_apply', 'inputSchema')),
+    schema,
     'properties',
     'change',
     'items',
@@ -186,94 +111,39 @@ Deno.test('the write door names its own words, and stays open to newer ones', as
   assertEquals(at(comp('book'), 'additionalProperties'), true)
 })
 
-Deno.test('JSON Schema output declarations reach listing unchanged and validate structured replies', async () => {
-  // A tool's answer rides under `result`, so that wrapper is what an output
-  // schema describes — there is no second, unwrapped spelling any more.
-  const outputSchema = {
+Deno.test('a JSON Schema input declaration reaches the listing unchanged', async () => {
+  let inputSchema = {
     type: 'object',
-    required: ['result'],
+    required: ['shelf'],
     additionalProperties: false,
-    properties: {
-      result: {
-        type: 'object',
-        required: ['count'],
-        additionalProperties: false,
-        properties: { count: { type: 'integer', minimum: 0 } },
-      },
-    },
+    properties: { shelf: { type: 'string' } },
   }
-  const client = await connect({
-    tools: [
-      {
-        name: 'count_good',
-        description: 'Count records',
-        outputSchema,
-        run: () => ({ result: { count: 2 } }),
-      },
-      {
-        name: 'count_bad',
-        description: 'Invalid implementation',
-        outputSchema,
-        run: () => ({ result: { count: 'two' } }),
-      },
-      {
-        name: 'list_values',
-        description: 'Return a wrapped list',
-        outputSchema: {
-          type: 'object',
-          required: ['result'],
-          properties: {
-            result: { type: 'array', items: { type: 'string' } },
-          },
-        },
-        run: () => ({ result: ['one', 'two'] }),
-      },
-    ],
-  })
-  try {
-    const listed = await client.listTools()
-    assertEquals(
-      listed.tools.find((t: { name: string }) => t.name == 'count_good')
-        ?.outputSchema,
-      outputSchema,
-    )
-    const good = await client.callTool({ name: 'count_good', arguments: {} })
-    assertEquals(good.structuredContent, { result: { count: 2 } })
-    const bad = await client.callTool({ name: 'count_bad', arguments: {} })
-    assertEquals(bad.isError, true)
-    const list = await client.callTool({ name: 'list_values', arguments: {} })
-    assertEquals(list.structuredContent, { result: ['one', 'two'] })
-  } finally {
-    await client.close()
-  }
-})
-
-Deno.test('output validation does not invent defaulted result fields', async () => {
-  const client = await connect({
+  let client = await connect({
     tools: [{
-      name: 'missing_count',
-      description: 'Missing required result property',
-      outputSchema: {
-        type: 'object',
-        required: ['result'],
-        properties: {
-          result: {
-            type: 'object',
-            required: ['count'],
-            properties: { count: { type: 'integer', default: 0 } },
-          },
-        },
-      },
-      run: () => ({ result: {} }),
+      name: 'count_books',
+      description: 'Count a shelf',
+      inputSchema,
+      run: (_, ctx) => [{
+        entity: { eid: '$said' },
+        content: { body: `two on ${ctx.args.shelf}` },
+        output: { source: ctx.call },
+      }],
     }],
   })
   try {
-    const answer = await client.callTool({
-      name: 'missing_count',
-      arguments: {},
+    let { tools } = await client.listTools()
+    assertEquals(
+      tools.find((t: { name: string }) => t.name == 'count_books')?.inputSchema,
+      inputSchema,
+    )
+    // And the runner checks the call against it before the tool ever runs.
+    let good = await client.callTool({
+      name: 'count_books',
+      arguments: { shelf: 'poetry' },
     })
-    assertEquals(answer.isError, true)
-    assert(String(answer.content[0].text).includes('Invalid tool result'))
+    assertEquals((good.content as { text: string }[])[0].text, 'two on poetry')
+    let bad = await client.callTool({ name: 'count_books', arguments: {} })
+    assertEquals(bad.isError, true)
   } finally {
     await client.close()
   }

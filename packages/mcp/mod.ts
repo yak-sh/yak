@@ -24,9 +24,20 @@
  * A bundle already says everything a hand-written tool would say — which
  * entity, which components, which columns — so an agent that knows the wire can
  * write anything the vocabulary declares. Every tool here takes and answers
- * them, and each declares an `outputSchema` DERIVED from the vocabulary
- * ({@link bundleSchema}), so a caller reads a described value instead of
- * parsing prose.
+ * them, and a reply says the answer both ways: the prose its bundles carry as
+ * text, the bundles themselves as `structuredContent`. Nothing declares an
+ * output schema, because what a bundle is the vocabulary already says; the one
+ * schema published is the WRITE door's input, derived from that same
+ * vocabulary ({@link bundleSchema}).
+ *
+ * ## A call is an entity
+ * `tools/call` does not call a function. It writes `call{to, args}` into the
+ * graph, signed as the identity the door authenticated, and awaits what
+ * answers it — {@link https://jsr.io/@yaks/tools | @yaks/tools}' runner finds
+ * that call, runs the tool with the CALLER's actor, and lands its bundles. So
+ * every call this door served is an entity somebody can read afterwards, and a
+ * door whose graph cannot take one keeps a ledger of its own
+ * ({@link Options.calls}).
  *
  * ## Two doors, one server
  * {@link mcp} is Streamable HTTP as a portable `Request` → `Response` handler,
@@ -36,8 +47,9 @@
  *
  * ## Trust
  * The door decides who is writing. {@link mcp} builds a server per request
- * around the identity its `authenticate` returned, and every batch a tool
- * applies is signed with it — never with what the client said about itself.
+ * around the identity its `authenticate` returned; the call is written in that
+ * name, and the runner signs what the tool answered with the same one — never
+ * with what the client said about itself.
  *
  * ## Plugins bring tools
  * A {@link https://jsr.io/@yaks/graph | @yaks/graph} `Plugin` contributes

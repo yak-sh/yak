@@ -116,6 +116,34 @@ Deno.test('a throw is an error entity, a result, and a failed execution', async 
   assertEquals((await g.read('.execution'))[0].execution, { state: 'failed' })
 })
 
+Deno.test('a batch the graph refuses is the call failing, not a call left claimed', async () => {
+  let { g, r } = world([{
+    ...echo,
+    run: () => [{ entity: { eid: '$nope' }, person: { nosuch: 1 } }],
+  }])
+  await r.ensure()
+  let answer = await r.call(called('example_echo', '{"value":"x"}'))
+  assertEquals(answer.some((b) => b.exception || b.error), true)
+  assertEquals((await g.read('.execution'))[0].execution, { state: 'failed' })
+  assertEquals((await g.read('.result')).length, 1)
+})
+
+Deno.test('a reading tool answers entities and writes none of them', async () => {
+  let { g, r } = world([{
+    ...echo,
+    readOnly: true,
+    inputSchema: { type: 'object', properties: {} },
+    run: (_, ctx) => ctx.read('.person'),
+  }])
+  await r.ensure()
+  await g.apply([{ entity: { eid: 'p1' }, person: {} }])
+  let before = (await g.read('.person'))[0]
+  let answer = await r.call(called('example_echo'))
+  assertEquals(answer.find((b) => b.person)!.entity.eid, 'p1')
+  // The row it found is the row it was: a read does not touch what it read.
+  assertEquals((await g.read('.person'))[0], before)
+})
+
 Deno.test('a refused argument is an error code, not an exception', async () => {
   let { r } = world()
   await r.ensure()

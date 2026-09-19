@@ -25,7 +25,9 @@ import {
   JSONRPCRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import { type Authenticate, type Handler, json, refuse } from '@yaks/api'
-import { type Options, server } from './server.ts'
+import { namedTool } from '@yaks/graph'
+import { runner } from '@yaks/tools'
+import { listing, type Options, server } from './server.ts'
 
 /** How the HTTP door is built: everything {@link Options} takes except the
  * actor, which this door decides per request. */
@@ -77,6 +79,14 @@ let ask = async (
  */
 export let mcp = (opts: MountOptions): Handler => {
   let ms = opts.timeout ?? 60_000
+  // ONE runner for the door, not one per request: it is registered on the
+  // graph the calls are written to, and the second registration would be a
+  // second claimant for every call.
+  let runs = opts.runner ?? runner(opts.calls ?? opts.graph, {
+    tools: listing(opts).map(namedTool),
+    host: opts.graph,
+    report: (err: unknown) => console.error('tool failed —', err),
+  })
   return async (request) => {
     if (request.method != 'POST') {
       return refused('this MCP door takes POST — it serves no stream', 405)
@@ -98,7 +108,7 @@ export let mcp = (opts: MountOptions): Handler => {
           ? new Response(null, { status: 202 })
           : refused('not a JSON-RPC request', 400)
       }
-      let built = server({ ...opts, actor })
+      let built = server({ ...opts, actor, runner: runs })
       // Whatever else this host serves — resources, prompts — goes on before
       // the request is answered, so `resources/list` sees them on the very
       // first call rather than the second.

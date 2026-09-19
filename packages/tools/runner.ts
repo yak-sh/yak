@@ -228,7 +228,9 @@ export let runner = (g: Graph, opts: Opts): Runner => {
 
   // The answer, read back out of the graph: the result the rule named, and
   // whatever says it came from this call. What a host sees when another
-  // process ran the tool.
+  // process ran the tool — a READ's answer was never written, so what comes
+  // back for one is the result alone and the way to see it again is to ask
+  // again.
   let recalled = async (id: Eid): Promise<Bundle[]> => {
     let result = await g.read(`.result.call=${id}`)
     if (!result.length) return []
@@ -272,8 +274,41 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       },
     }])
     let started = now()
-    let made: Bundle[] = []
-    let state = 'done'
+    // What a throw comes to: the fault as its own entity, saying which call it
+    // came from. An expected refusal wears `error{code}`; anything else is a
+    // defect, reported as well as recorded.
+    let faulted = (error: unknown): Bundle[] => {
+      if (!(error instanceof CallError)) opts.report?.(error, call)
+      return [{
+        entity: { eid: '$fault' },
+        content: { body: String(error) },
+        output: { source: id },
+        ...error instanceof CallError
+          ? { error: { code: error.code } }
+          : { exception: {} },
+      }]
+    }
+    // The landing. A READING tool's answer is not a write — its bundles are
+    // entities that already exist, and landing them would patch every row a
+    // query found and move its `updated` stamp — so a read lands its
+    // bookkeeping alone and hands the answer back as the tool said it. A
+    // failure lands either way: an error is a record whatever the tool was.
+    let land = async (made: Bundle[], state: string): Promise<Bundle[]> => {
+      let keeps = !tool.readOnly || state == 'failed'
+      let landed = await g.apply([
+        ...(keeps ? made : []),
+        {
+          ...attached(id, Math.round(now() - started)),
+          content: { body: worded(made) },
+        },
+        {
+          entity: call.entity,
+          execution: { state },
+          $was: { execution: { state: token('running') } },
+        },
+      ])
+      return keep(id, keeps ? landed : [...made, ...landed])
+    }
     try {
       let args = checked(tool, parsed(c.args))
       let ctx: ToolCtx = {
@@ -283,30 +318,13 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         args,
         call: id,
       }
-      made = signed(await tool.run([call], ctx), ctx.actor)
+      return await land(signed(await tool.run([call], ctx), ctx.actor), 'done')
     } catch (error) {
-      state = 'failed'
-      if (!(error instanceof CallError)) opts.report?.(error, call)
-      made = [{
-        entity: { eid: '$fault' },
-        content: { body: String(error) },
-        output: { source: id },
-        ...error instanceof CallError
-          ? { error: { code: error.code } }
-          : { exception: {} },
-      }]
+      // The tool's own throw AND a refusal of what it answered: a batch the
+      // graph would not take is this call's failure, not a call left claimed
+      // with nothing said about it.
+      return await land(faulted(error), 'failed')
     }
-    let result = attached(id, Math.round(now() - started))
-    let landed = await g.apply([
-      ...made,
-      { ...result, content: { body: worded(made) } },
-      {
-        entity: call.entity,
-        execution: { state },
-        $was: { execution: { state: token('running') } },
-      },
-    ])
-    return keep(id, landed)
   }
 
   let run = (id: Eid, o: { redrive?: boolean } = {}): Promise<Bundle[]> => {

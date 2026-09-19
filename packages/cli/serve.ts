@@ -28,10 +28,17 @@ import {
   type Entity,
   type Graph,
   graph,
-  land,
   type NamedTool,
   type Plugin,
 } from '@yaks/graph'
+import {
+  answerOf,
+  reconcile,
+  type Runner,
+  runner,
+  toolEid,
+  worded,
+} from '@yaks/tools'
 import { loadTools, type Runs } from '@yaks/graph/tools'
 import {
   type Keywords,
@@ -98,7 +105,7 @@ export type Route = {
  * ```ts
  * // export let vocab = [mailDoc]
  * // export let rules = (host) => [mail(host.vocab)]
- * // export let runs = { mail_send: (args, ctx) => ({ change: [] }) }
+ * // export let runs = { mail_send: (bundles, ctx) => [] }
  * // export let effects = () => [{ comp: 'mail', created: (e) => deliver(e) }]
  * // export let routes = [{ method: 'POST', path: '/inbound', handle }]
  * ```
@@ -127,6 +134,9 @@ export type Module = {
 export type Served = Host & {
   /** every tool declared and implemented across the modules */
   tools: NamedTool[]
+  /** the one thing that calls a tool function here: the doors and the command
+   * line both write a CALL and read what answered it (@yaks/tools) */
+  runner: Runner
   /** the post-commit registry the modules registered on */
   fx: Effects
   /** the doors, as one request handler */
@@ -273,6 +283,17 @@ export let compose = async (
       docs,
       Object.assign({}, ...mods.map((m) => m.runs ?? {})) as Runs,
     )
+    // The one RUNNER over this graph. Nothing here calls a tool function: a
+    // door writes `call{to, args}` and the runner's rule finds it after the
+    // commit, runs it as whoever wrote it, and lands the answer beside a
+    // result. The `tool` rows a call points at are written on the first call
+    // and at boot, never at compose: a one-shot command opens a host to ask
+    // one question and should not write to say hello.
+    let run = runner(g, {
+      tools,
+      report: (err) => console.error('tool failed —', err),
+    })
+    g.use(run.plugin)
     let routes = mods.flatMap((m) => m.routes ?? [])
     let authenticate = doorman(mods, config)
     let door = api({ graph: g, authenticate })
@@ -290,7 +311,15 @@ export let compose = async (
       // `/apply`, `/query` and `/ws` and refuse the rest in the wire's shape.
       return route ? route.handle(request) : door(request)
     }
-    return { ...host, graph: g, tools, fx, handler, close: () => db.close() }
+    return {
+      ...host,
+      graph: g,
+      tools,
+      runner: run,
+      fx,
+      handler,
+      close: () => db.close(),
+    }
   } catch (error) {
     db.close()
     throw error
@@ -303,20 +332,26 @@ export let words = (host: Served): Word[] =>
   host.tools.map((tool) => ({
     ...tool,
     run: async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
-      // The command line is a HOST: the tool says what it wants done, the
-      // landing happens here, and what it answers is printed.
-      let call = {
-        graph: host.graph,
-        actor: host.config.actor ? { eid: host.config.actor } : null,
-        read: (
-          query: Parameters<Graph['read']>[0],
-          opts?: unknown,
-        ) => host.graph.read(query, opts as undefined),
-      }
-      let intent = await tool.run(args, call)
-      let value = await land(intent, call)
-      if (value !== undefined) c.out(JSON.stringify(value, null, 2))
-      return 0
+      // The command line WRITES A CALL, signed as whoever this host says it
+      // is, and prints what answered it — the prose the answer carries, or
+      // the bundles themselves as JSON. Calling the tool is the runner's.
+      //
+      // The `tool` rows a call's `to` points at come first, once per process.
+      await host.runner.ensure()
+      let answer = answerOf(
+        await host.runner.call([{
+          entity: { eid: '$call' },
+          call: {
+            to: toolEid(tool.name),
+            args: JSON.stringify(args ?? {}),
+          },
+          ...(host.config.actor ? { $actor: { by: host.config.actor } } : {}),
+        }]),
+      )
+      c.out(worded(answer))
+      // A refusal is data now, not a throw: the words are printed either way
+      // and the exit code is what says which it was.
+      return answer.some((b) => b.error || b.exception) ? 1 : 0
     },
   }))
 
@@ -327,6 +362,12 @@ export let serve = async (
   onListen?: (addr: Deno.NetAddr, host: Served) => void,
 ): Promise<{ host: Served; server: Deno.HttpServer }> => {
   let host = await compose(config)
+  // Boot: the `tool` rows a call points at, and then what a crash left
+  // claimed and unanswered, finished. Here rather than in `compose`, because
+  // BOOT is the server starting — a one-shot command composes the same host
+  // and must not reach into calls another process is running.
+  await host.runner.ensure()
+  await reconcile(host.runner)
   let server = Deno.serve({
     port: config.port ?? 8787,
     hostname: config.hostname,

@@ -109,22 +109,23 @@ let batch = (v: unknown): Bundle[] => {
   })
 }
 
-// A write refused for a word this graph does not know, pointed at the door
-// that has the words. The input schema is OPEN (schema.ts) precisely so a
-// client's cached copy cannot refuse a column that now exists — which leaves
-// the server the only authority on what a component takes, and this the only
-// place a caller learns its picture was stale.
-// The refusal is matched by its WORDS rather than its class: a graph may be a
-// composition over stores of its own, where admission ran on the far side of a
-// hop and what arrives here is the sentence it wrote, not the error it threw.
-export let pointed = (err: unknown): never => {
-  let said = err instanceof Error ? err.message : ''
-  if (!said.includes('unknown column')) throw err
-  throw new Refused(
-    `${said}. Your tool list may be from before this word moved — ` +
-      'graph_schema says what this graph knows right now.',
-  )
-}
+/**
+ * A refusal for a word this graph does not know, pointed at the door that has
+ * the words. The input schema is OPEN (schema.ts) precisely so a client's
+ * cached copy cannot refuse a column that now exists — which leaves the server
+ * the only authority on what a component takes, and this the only place a
+ * caller learns its picture was stale.
+ *
+ * It reads the refusal's WORDS rather than its class: the refusal is landed by
+ * the runner as an entity's prose long before a door renders it, and a graph
+ * may be a composition over stores of its own, where admission ran on the far
+ * side of a hop and what arrives is the sentence it wrote.
+ */
+export let pointing = (said: string): string =>
+  said.includes('unknown column')
+    ? `${said}. Your tool list may be from before this word moved — ` +
+      'graph_schema says what this graph knows right now.'
+    : said
 
 // The entities, then everything pointing at them, each one whole and each one
 // once. `.refs=<id>` is the query grammar's backlink union, so the incoming

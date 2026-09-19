@@ -94,30 +94,21 @@ the page your host documents it on (`guide`). It rarely has to ask at all:
 `graph_apply`'s own input schema is that vocabulary, typed, so the write
 interface teaches itself.
 
-## Output schemas, and what they cost
+## What a call answers
 
-Every tool declares an `outputSchema` and answers with `structuredContent` (MCP
-2025-06-18), so a caller reads a described value instead of parsing prose. The
-bundle schema is not hand-written — it is DERIVED from your vocabulary, so a
-component you add appears in it with nobody editing anything.
+A reply says the answer twice: the prose its bundles carry as its text, and the
+bundles themselves as `structuredContent` under `result`. Nothing declares an
+output schema — what a bundle IS your vocabulary already says, and a second
+description of it is context an agent pays for before it has asked anything.
 
-That schema is sent to the agent **before it asks anything**, so its size is
-context spent up front. Hence a choice:
+An answer that is not entities is the one entity it can be: prose, as
+`content{body}`, saying which call produced it (`output{source}`). That is how
+`graph_schema` answers — a vocabulary is not rows in the store it describes.
 
-```ts
-mcp({ graph, schema: 'names' }) // the default
-mcp({ graph, schema: 'full' })
-```
-
-- **`names`** — every component and every column name, values left open.
-- **`full`** — each column at its declared type, with an enum's members listed.
-
-Over a 138-component vocabulary that is 17.8 KB versus 28.0 KB **per
-bundle-returning tool**. Take `full` when agents write bundles all day and the
-types earn their bytes; take `names` when they mostly read.
-
-The derivation is exported, so you can build the same schema for your own
-handler:
+The write door is the one place a schema is published, and it is derived from
+your vocabulary, so a component you add appears in it with nobody editing
+anything. The derivation is exported, so you can build the same schema for your
+own handler:
 
 ```ts
 import { bundleSchema } from '@yaks/mcp'
@@ -219,12 +210,10 @@ let shelf = {
     name: 'shelve',
     description: 'put a book on the shelf',
     input: { book: z.string().describe('the book to shelve') },
-    run: (args) => ({
-      change: [{
-        entity: { eid: String(args.book) },
-        book: { status: 'shelved' },
-      }],
-    }),
+    run: (_, ctx) => [{
+      entity: { eid: String(ctx.args.book) },
+      book: { status: 'shelved' },
+    }],
   }],
 }
 
@@ -232,14 +221,16 @@ graph.use(shelf)
 ```
 
 They are listed beside the generic tier, with the same signing and the same
-reply shape. A tool is handed the arguments the client sent (already checked
-against its `input`) and a `ToolCtx`: the graph to READ, and who is asking.
-Schemas are [Zod](https://zod.dev), because the MCP SDK takes Zod.
+reply shape. A tool is a function from BUNDLES to BUNDLES: it is handed the
+call's own bundle and a `ToolCtx` — the graph to READ, who is asking, the
+arguments the client sent (already checked against its `input`), and the call
+being answered. Schemas are [Zod](https://zod.dev), because the MCP SDK takes
+Zod.
 
-A tool never writes. It answers an `Intent` — `change` for what it wants landed
-and `result` for an answer of its own — and this server lands it (@yaks/graph
-`land`) signed as the actor. What a `change` answers is the batch as applied.
-Words a person reads are a FIELD of that answer, never a channel beside it.
+A tool never writes. The bundles it answers ARE the write, landed by
+@yaks/tools' runner signed as the CALLER, in one batch beside the
+`result{call, ms}` entity that answers the call. Words a person reads are a
+bundle like any other — `content{body}` — never a channel beside them.
 
 A tool that carries `meta` has it handed to the client verbatim as `_meta`:
 
@@ -248,14 +239,15 @@ A tool that carries `meta` has it handed to the client verbatim as `_meta`:
   name: 'shelf',
   description: 'what is on the shelf',
   meta: { ui: { resourceUri: 'ui://shop/shelf' } },
-  run: () => ({ result: { text: 'two books here', books: 2 } }),
+  run: (_, ctx) => [{
+    entity: { eid: '$said' },
+    content: { body: 'two books here' },
+    output: { source: ctx.call },
+  }],
 }
 ```
 
-A tool that answers words — a `text` field on its answer — says them as its text
-block and hands the whole answer over as `structuredContent`, in that very
-shape. One that answers no words says its value as JSON, under `result` where it
-declared a schema for it.
+Its words are the reply's text; the bundle that carried them is its structure.
 
 ## When a host serves more than tools
 
@@ -334,14 +326,13 @@ and uses shared JSON Schema validation for the new declarations. This projection
 describes the server's initial static registry; dynamically adding, disabling,
 or modifying SDK tools after construction is not supported when JSON Schema
 tools are present. This is an explicit adapter limitation, not a second schema
-compiler. Output schemas retain the existing Zod path.
+compiler.
 
-### JSON Schema results
+### JSON Schema arguments
 
-Custom tools may declare `outputSchema` as a JSON Schema object, alongside
-`inputSchema`. The schema describes the complete `structuredContent` object. The
-server wraps every answer as `{ result: value }`; declare that wrapper in the
-output schema. Failed calls use `isError` and do not need to conform to the
-success schema. JSON Schema outputs are validated before being returned.
-Existing Zod `output` declarations remain supported; prefer one declaration
-format per tool.
+Custom tools may declare `inputSchema` as a JSON Schema object instead of the
+Zod `input` bag. The runner checks a call's arguments against it before the tool
+runs, and the declaration reaches `tools/list` unchanged.
+
+There is no output declaration: a tool answers bundles, and a failed call says
+so with `isError` and an `error`/`exception` bundle carrying what happened.
