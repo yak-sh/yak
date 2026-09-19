@@ -1,7 +1,8 @@
 import { assertEquals, assertThrows } from '@std/assert'
 import { argsFor, unique, wordFor } from '@yaks/cli'
 import { loadTools } from '@yaks/graph/tools'
-import { namedTool, type ToolCtx } from '@yaks/graph'
+import { namedTool } from '@yaks/graph'
+import { answerOf, runner, toolEid, worded } from '@yaks/tools'
 import { driver } from '@yaks/sqlite/db'
 import { connect } from '../mcp/harness.ts'
 import { open } from './store.ts'
@@ -37,11 +38,10 @@ Deno.test('the plugin module says the harness once, and one declaration reaches 
     ],
   )
   await h.g.apply([{ entity: { eid: 'session-one' }, session: { id: 'one' } }])
-  const context: ToolCtx = {
-    graph: h.g,
-    actor: null,
-    read: (q, opts) => h.g.read(q, opts),
-  }
+  // Nothing calls a tool function: a word typed here is a CALL in the graph,
+  // and @yaks/tools' runner is what answers it.
+  const r = runner(h.g, { tools: declarations })
+  await r.ensure()
   const results: unknown[] = []
   // The same declaration reaches a command line and a transport: @yaks/cli
   // resolves either word order and reads the line through its input schema.
@@ -52,7 +52,12 @@ Deno.test('the plugin module says the harness once, and one declaration reaches 
     declarations[0],
   )
   assertEquals(await argsFor(found.verb, found.args, reads), {})
-  results.push(await found.verb.run({}, context))
+  results.push(worded(answerOf(
+    await r.call([{
+      entity: { eid: '$call' },
+      call: { to: toolEid(namedTool(found.verb).name), args: '{}' },
+    }]),
+  )))
   const client = await connect({
     graph: h.g,
     tools: [...declarations],
@@ -111,7 +116,14 @@ Deno.test('JSON Schema tool uses identical metadata and constraints through MCP 
       },
       options: { positional: ['scope'], short: { n: 'limit' } },
     }),
-    run: (args: Record<string, unknown>) => ({ result: args }),
+    run: (
+      _bundles: unknown[],
+      ctx: { args: Record<string, unknown>; call: string },
+    ) => [{
+      entity: { eid: '$said' },
+      content: { body: JSON.stringify(ctx.args) },
+      output: { source: ctx.call },
+    }],
   }
   const h = open(':memory:')
   const c = await connect({ graph: h.g, tools: [tool] })

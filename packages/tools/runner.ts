@@ -59,6 +59,19 @@ import { rulesIn } from '@yaks/vocab'
 import { validateToolInput } from '@yaks/vocab/tools'
 import { toolsDoc } from './vocab.ts'
 
+// What a call is doing RIGHT NOW in this process, and what the last few came
+// to — per GRAPH, not per runner. Two runners over one graph (a door's and a
+// daemon's) are one claimant and one answer between them: the second finds the
+// first's promise instead of racing it, and the host that wrote a call reads
+// the bundles that were landed for it whichever runner ran them.
+let running = new WeakMap<Graph, Map<Eid, Promise<Bundle[]>>>()
+let answers = new WeakMap<Graph, Map<Eid, Bundle[]>>()
+let per = <V>(at: WeakMap<Graph, Map<Eid, V>>, g: Graph): Map<Eid, V> => {
+  let mine = at.get(g)
+  if (!mine) at.set(g, mine = new Map())
+  return mine
+}
+
 /** A durable claim exists but no answer does. The host must reconcile it —
  * running the tool again could repeat something the world already saw. */
 export class UnfinishedCall extends Error {
@@ -215,14 +228,11 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     )
   )
   let answering = plans.find((p) => p.rule.name == READY)!
-  // What a call is running RIGHT NOW in this process, and what the last few
-  // answered — so a host that wrote a call reads the same bundles the runner
-  // landed, without asking the graph to reassemble them.
-  let running = new Map<Eid, Promise<Bundle[]>>()
-  let answers = new Map<Eid, Bundle[]>()
+  let inflight = per(running, g)
+  let landings = per(answers, g)
   let keep = (id: Eid, bundles: Bundle[]) => {
-    answers.set(id, bundles)
-    for (let old of [...answers.keys()].slice(0, -256)) answers.delete(old)
+    landings.set(id, bundles)
+    for (let old of [...landings.keys()].slice(0, -256)) landings.delete(old)
     return bundles
   }
 
@@ -328,10 +338,10 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   }
 
   let run = (id: Eid, o: { redrive?: boolean } = {}): Promise<Bundle[]> => {
-    let held = running.get(id)
+    let held = inflight.get(id)
     if (held) return held
-    let pending = perform(id, o).finally(() => running.delete(id))
-    running.set(id, pending)
+    let pending = perform(id, o).finally(() => inflight.delete(id))
+    inflight.set(id, pending)
     return pending
   }
 
@@ -355,7 +365,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       let id = call.entity.eid
       // Claimed and not this pass's to take: either it is running here (the
       // promise is the answer) or another process holds it.
-      if (running.has(id)) continue
+      if (inflight.has(id)) continue
       if (call.execution && !o.redrive) continue
       try {
         out.push(...await run(id, o))
@@ -367,12 +377,12 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   }
 
   let answered = (id: Eid): Promise<Bundle[]> => {
-    let held = answers.get(id)
+    let held = landings.get(id)
     if (held) {
-      answers.delete(id)
+      landings.delete(id)
       return Promise.resolve(held)
     }
-    return running.get(id) ?? run(id)
+    return inflight.get(id) ?? run(id)
   }
 
   return {

@@ -160,6 +160,18 @@ Deno.test("a tool writes in the CALLER's name, never the runner's", async () => 
   assertEquals((said.created as Comp).by, 'p1')
 })
 
+Deno.test('two runners over one graph are one claimant and one answer', async () => {
+  let { g, r } = world()
+  await r.ensure()
+  // A second runner over the same graph — a door's beside a daemon's. Only
+  // the first is registered, so the effect runs the call there; the second is
+  // the one that wrote it and still reads what was landed for it.
+  let other = runner(g, { tools: [echo] })
+  let answer = await other.call(called('example_echo', '{"value":"both"}'))
+  assertEquals(body(answer.find((b) => b.output)), 'both 2')
+  assertEquals((await g.read('.result')).length, 1)
+})
+
 Deno.test('a call for a tool this runner has no word for is left alone', async () => {
   let { g, r } = world()
   await r.ensure()

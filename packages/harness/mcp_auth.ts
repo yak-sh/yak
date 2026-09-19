@@ -8,6 +8,15 @@ import {
 import { type Authorization, authorization } from '@yaks/mcp-client/oauth'
 import { fileAuthorizationStore } from '@yaks/mcp-client/host'
 import { tokenFor } from '@yaks/cli'
+import type { Tool } from '@yaks/graph'
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+
+/** A remote tool wearing the connection that listed it: `reply` is that
+ * server's own door, captured, so an issued call never moves to a transport
+ * opened after it. */
+export type Remote = Tool & {
+  reply: (args: Record<string, unknown>) => Promise<CallToolResult>
+}
 
 export type MCPAuthAction = 'list' | 'begin' | 'complete' | 'cancel'
 export type MCPAuthReply = {
@@ -87,10 +96,21 @@ export const authorizedMCP = (
       for (const a of auths.values()) a.cancel()
     },
     control,
-    tools: async () =>
+    // Each tool wearing the connection that LISTED it (`reply`). A tool on
+    // another server is a request to that server, not a function this graph
+    // holds, and the harness renders the reply whole — artifacts and all — so
+    // it asks here rather than through the graph-tool projection. The capture
+    // is the point: a call issued from an older listing keeps its original
+    // transport even after a refresh replaced the connection.
+    tools: async (): Promise<Remote[]> =>
       (await Promise.all(servers.map(async (s) => {
         try {
-          return await get(s).tools()
+          const conn = get(s)
+          return (await conn.tools()).map((tool): Remote => ({
+            ...tool,
+            reply: (args) =>
+              conn.call(String(tool.meta?.remoteName ?? tool.name), args),
+          }))
         } catch (error) {
           if (!(error instanceof MCPAuthorizationRequired)) throw error
           challenges.set(s.name, error.challenge)
