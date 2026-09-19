@@ -66,8 +66,9 @@ in two graphs: `!wake` says nothing where nothing is scheduled and gates the
 answer where something is.
 
 A pattern over more than one entity (a join) needs a storage that answers
-`bindings` — @yaks/sqlite and @yaks/durable-object do; an in-memory map does
-not, and the registry reports that rather than breaking the batch it committed.
+`bindings` — @yaks/sqlite and @yaks/durable-object do, an in-memory map does
+not — and a store that cannot says so when it is asked, which the registry
+reports rather than breaking the batch it has already committed.
 
 ## Three things happen to a component
 
