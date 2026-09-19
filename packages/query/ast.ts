@@ -120,9 +120,23 @@ export const WALK_LIMIT = 10_000
 // makes it fire once, the components it writes, and the singleton resource it
 // reads — and `$name` binds a variable, as `$alias` names an entity in a
 // bundle. An evaluator with no rule engine refuses them rather than guessing.
-export type Ensure = { kind: 'ensure'; comp: string }
+// A `+` or `*` word may name a COLUMN and a value as well as a component —
+// `+result.call=$call` — because the sigil already means "this is written",
+// and saying which column is written is not a second idea. The gate has no
+// such spelling: an absence has no value.
+export type Ensure = {
+  kind: 'ensure'
+  comp: string
+  prop?: string
+  value?: Value
+}
 export type Gate = { kind: 'gate'; comp: string }
-export type Mutable = { kind: 'mutable'; comp: string }
+export type Mutable = {
+  kind: 'mutable'
+  comp: string
+  prop?: string
+  value?: Value
+}
 export type Resource = { kind: 'resource'; comp: string }
 export type Var = { kind: 'var'; name: string }
 
@@ -283,9 +297,17 @@ export let every = (): Every => ({ kind: 'every' })
 // declares a component the rule writes; `resource` names a singleton; and
 // `variable` binds a name. Presence and absence have builders already
 // (`present`, `absent`) — they are predicates, not rule words.
-export let ensure = (comp: string): Ensure => ({ kind: 'ensure', comp })
+export let ensure = (comp: string, prop?: string, value?: Input): Ensure => ({
+  kind: 'ensure',
+  comp,
+  ...(prop ? { prop, value: coerce(value ?? '') } : {}),
+})
 export let gate = (comp: string): Gate => ({ kind: 'gate', comp })
-export let mutable = (comp: string): Mutable => ({ kind: 'mutable', comp })
+export let mutable = (comp: string, prop?: string, value?: Input): Mutable => ({
+  kind: 'mutable',
+  comp,
+  ...(prop ? { prop, value: coerce(value ?? '') } : {}),
+})
 export let resource = (comp: string): Resource => ({ kind: 'resource', comp })
 export let variable = (name: string): Var => ({ kind: 'var', name })
 

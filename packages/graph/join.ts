@@ -34,10 +34,20 @@ import {
   type Pred,
   type Value,
 } from '@yaks/query'
+import type { Set as Sets } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
+import type { Eid } from './bundle.ts'
 
 /** A column tied to a variable: the raw path as written, and the name. */
 export type Bind = { path: string[]; name: string }
+
+/** One row of a match: the entity each pattern bound, in the order they were
+ * written, and the value each variable took. A pattern that MAKES an entity
+ * (one that only writes) binds nothing, and its place is `null`. */
+export type Binding = {
+  entities: (Eid | null)[]
+  vars: Record<string, unknown>
+}
 
 /** One entity's pattern — everything one `;`-separated half says. */
 export type Pattern = {
@@ -55,6 +65,11 @@ export type Pattern = {
   resources: string[]
   /** the columns a variable ties this pattern to */
   binds: Bind[]
+  /** `+comp.col=value` — the columns it writes */
+  sets: Sets[]
+  /** nothing to match: every clause writes, so this pattern MAKES an entity,
+   * one per binding of the patterns that do match */
+  makes: boolean
 }
 
 /** A rule's match, read: its patterns and every variable they name. */
@@ -101,6 +116,12 @@ let pattern = (text: string): Pattern => {
     writes: d.writes,
     resources: d.resources,
     binds,
+    sets: d.sets,
+    // A pattern that asks nothing is not a pattern that matches everything:
+    // with no filter, no gate, no entity name and no bound column, the only
+    // thing it says is what to write, so it MAKES the entity it writes to.
+    makes: !clauses.length && !d.gates.length && !d.vars.length &&
+      !binds.length && !d.writes.length,
   }
 }
 
@@ -137,7 +158,18 @@ export let match = (source: string): Match => {
 export let reads = (m: Match, v: Vocab): string[] => {
   let out = new Set<string>()
   let path = (p: string[], facet = false) => {
-    for (let hop of v.aim(p.join('.'), facet)) out.add(hop.comp)
+    // A reverse association names the component on the FAR side (`.reviews`
+    // is `review.product` seen from the product), and that is the component a
+    // batch has to be overlaid in for the hop to see it.
+    let far = v.assoc(p[0])
+    if (far) return void out.add(far.comp)
+    try {
+      for (let hop of v.aim(p.join('.'), facet)) out.add(hop.comp)
+    } catch {
+      // A word this vocabulary does not know is a rule that will be inert
+      // here; covering the word itself costs nothing and says no less.
+      out.add(p[0])
+    }
   }
   let walk = (clauses: And['clauses']) => {
     for (let c of clauses) {
@@ -146,6 +178,7 @@ export let reads = (m: Match, v: Vocab): string[] => {
     }
   }
   for (let p of m.patterns) {
+    if (p.makes) continue
     walk(p.filter.clauses)
     for (let b of p.binds) path(b.path)
     for (let c of [...p.gates, ...p.ensures, ...p.writes]) out.add(c)

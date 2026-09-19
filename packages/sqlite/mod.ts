@@ -41,7 +41,14 @@
 
 import type { Vocab } from '@yaks/vocab'
 import type { BindOpts } from '@yaks/sql'
-import type { Bundle, Doom, Entity, ReadOpts } from '@yaks/graph'
+import type {
+  Binding,
+  Bundle,
+  Doom,
+  Entity,
+  Match,
+  ReadOpts,
+} from '@yaks/graph'
 import type { Driver, Row } from './driver.ts'
 import type { Query } from './read.ts'
 import { grown, indexed, refit, schema, tabled, type Text } from './ddl.ts'
@@ -51,12 +58,13 @@ import { keyed } from './keyed.ts'
 import { unit } from './unit.ts'
 import { backfill } from './archetype.ts'
 import { patch, remove } from './write.ts'
+import { bindings } from './rules.ts'
 
 export * from './driver.ts'
 export * from './archetype.ts'
 export { catalog } from './catalog.ts'
 export { GONE, OVER, type Overlay, overlay } from './overlay.ts'
-export { type Binding, matched, prefixed, statement } from './rules.ts'
+export { bindings, matched, prefixed, statement } from './rules.ts'
 export * from './bundle.ts'
 export {
   grown,
@@ -111,6 +119,13 @@ export type Tx = {
   /** who dies with these entities, and what has to let go of them — the death
    * cascade's question as one recursive statement rather than a read per rung */
   doom: (eids: string[]) => Doom
+  /** the declared rules' door: every match answered against this graph with
+   * `batch` folded in, through one batch overlay (./overlay.ts) */
+  bindings: (
+    matches: Match[],
+    batch: Bundle[],
+    covers: string[],
+  ) => Binding[][]
   /** patch the bundles in → the entities this patch minted */
   patch: (bundles: Bundle[]) => Entity[]
   /** remove these entities: rows gone, identity tombstoned */
@@ -179,6 +194,8 @@ export let storage = (
     get: (eids) => identity(eids),
     pick: identity,
     doom: (eids) => doom(driver, vocab, eids),
+    bindings: (matches, batch, covers) =>
+      bindings(driver, vocab, matches, batch, covers, base),
     patch: (bundles) => patch(driver, vocab, bundles, base.number),
     remove: (entities) => remove(driver, vocab, entities),
   }

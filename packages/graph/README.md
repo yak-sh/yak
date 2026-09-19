@@ -199,3 +199,43 @@ variable by the compiler, which is where `parse()` has always left meaning.
 overlay has to cover for the statement to see a batch that has not landed
 (`@yaks/sqlite`'s `overlay()`). That is the whole of "rules run before
 persistence": the same statement, a different set of tables underneath.
+
+### A rule with no code at all
+
+A plugin `declared`s rules as data — a name, the query, and the rules it runs
+`before`:
+
+```ts
+graph.use({
+  name: 'shop',
+  declared: [{
+    name: 'unshelved',
+    match: '.product, +!shelf, +shelf.aisle=Z',
+  }],
+})
+```
+
+The `rules` phase runs them. A `+` or `*` word may name a column and a value
+(`+result.call=$call`) — the sigil already means "this is written", so saying
+which column is written is not a second idea — and a value is read as the
+column's own type, a `$name` as what the binding bound, a `#Name` as the
+resource it stands for. A pattern where every word writes MATCHES nothing: it
+MAKES its entity, and the id is derived from the rule's name and the entities it
+bound, so the same rule on the same binding names the same entity in this batch
+or a later one.
+
+What a rule produces joins the batch, the overlay is raised again, and every
+rule is asked again — so a rule fires on what another rule just wrote. It
+settles because a rule fires AT MOST ONCE per
+`(rule name, the entities it
+bound)`: a repeat is not a slow fixpoint, it is a
+rule that failed to gate itself, and it is refused by name and by binding. That
+refusal is the whole termination argument.
+
+Nothing a rule writes is written by the rule. The patches join the batch and
+`mutate` writes them, so a rule's output is admitted, stamped, journaled,
+cascaded and answered like anything a client sent.
+
+Order is declared: alphabetical by name, refined by `before`. Registration order
+never decides it, and two rules that run before each other are refused as the
+circle they are.

@@ -29,7 +29,7 @@
 // persistence": no flag, no second path, a different set of tables underneath.
 
 import type { Vocab } from '@yaks/vocab'
-import type { Match } from '@yaks/graph'
+import type { Binding, Bundle, Match } from '@yaks/graph'
 import {
   and,
   bind,
@@ -45,16 +45,7 @@ import {
 } from '@yaks/sql'
 import { present } from '@yaks/query'
 import type { Driver, Row } from './driver.ts'
-
-/** One row of a rule's match: the entity each pattern bound, in order, and the
- * value each variable took. */
-export type Binding = {
-  /** the eid each pattern matched, in the order the patterns were written */
-  entities: string[]
-  /** every variable's value — an eid for an entity or a reference, the column's
-   * own value otherwise */
-  vars: Record<string, unknown>
-}
+import { overlay } from './overlay.ts'
 
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
@@ -138,6 +129,9 @@ export let statement = (
   }
 
   m.patterns.forEach((p, i) => {
+    // A pattern that only writes matches nothing: it MAKES its entity, one
+    // per binding of the patterns that do match, so it contributes no table.
+    if (p.makes) return
     let pre = `p${i}_`
     let d = prefixed(pre)
     // A bound column has to be joined, and a bind implies the component is
@@ -233,7 +227,32 @@ export let matched = (
   return driver.query(s.sql, s.params as (string | number)[]).map((
     row: Row,
   ) => ({
-    entities: m.patterns.map((_, i) => String(row[`e${i}`])),
+    entities: m.patterns.map((p, i) => p.makes ? null : String(row[`e${i}`])),
     vars: Object.fromEntries(m.vars.map((name) => [name, row[`v_${name}`]])),
   }))
+}
+
+/**
+ * The storage's DECLARED-RULE door (@yaks/graph `Tx.bindings`): answer every
+ * match against this graph with `batch` folded in.
+ *
+ * One overlay for the whole set — `covers` is what the rules read — and then
+ * one statement per match under it. Raising a table is DDL, so raising one
+ * overlay for every rule rather than one per rule is most of what this costs.
+ */
+export let bindings = (
+  driver: Driver,
+  vocab: Vocab,
+  matches: Match[],
+  batch: Bundle[],
+  covers: string[],
+  opts: BindOpts = {},
+): Binding[][] => {
+  if (!matches.length) return []
+  let over = overlay(driver, vocab, batch, covers)
+  try {
+    return matches.map((m) => matched(driver, m, vocab, opts))
+  } finally {
+    over.drop()
+  }
 }

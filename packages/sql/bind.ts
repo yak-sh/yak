@@ -365,7 +365,15 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
 // columns, ending in a leaf column tested against op/value. Nested correlated
 // scalar subqueries walk the chain without widening the candidate set. Every
 // non-final hop must be a reference.
+// The table a subquery gives its OWN alias to: the storage name, never the
+// dialect's aliased source, since `as "__p1"` follows it.
 let source = (comp: string) => `"${comp}"`
+
+// A reference column's stored key, through the dialect — which is what lets a
+// dialect that renames its tables (a rule's per-pattern prefix, @yaks/sqlite
+// `prefixed`) reach the same column under the name it gave it.
+let refKey = (ctx: Ctx, comp: string, prop: string): string =>
+  ctx.d.refCol?.(comp, prop) ?? `"${comp}"."${prop}"`
 let isRef = (v: Vocab, comp: string, prop: string) =>
   v.column(comp, prop)?.category == 'ref'
 
@@ -380,7 +388,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
     )
   }
   ctx.tables.add(root.comp)
-  let target = `"${root.comp}"."${root.prop}"`
+  let target = refKey(ctx, root.comp, root.prop)
   for (let i = 1; i < hops.length - 1; i++) {
     let h = hops[i]
     if (!isRef(ctx.v, h.comp, h.prop)) {
@@ -435,7 +443,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
     ((op == '' || op == '~') && flat(p.value) != '')
   return needsRoot
     ? raw({
-      sql: `("${root.comp}"."entity" is not null and ${frag.sql})`,
+      sql: `(${ctx.d.presence(root.comp).sql} and ${frag.sql})`,
       params: frag.params,
     })
     : raw(frag)
@@ -516,12 +524,14 @@ let inRefs = (ctx: Ctx, cols: [string, string][], value: string): Cond => {
   if (!cols.length) return FALSE
   let at = '(select id from entity where eid = ?)'
   let sub = ([c, props]: Arm) =>
-    `select ${ctx.d.ownerKey(c)} from "${c}" where ` +
-    props.map((p) => `"${c}"."${p}" = ${at}`).join(' or ')
+    `select ${ctx.d.ownerKey(c)} from ${ctx.d.table(c)} where ` +
+    props.map((p) => `${refKey(ctx, c, p)} = ${at}`).join(' or ')
   return or(
     ...cut(arms(cols), ARMS).map((group) =>
       raw({
-        sql: `"entity"."id" in (${group.map(sub).join(' union ')})`,
+        sql: `${ctx.d.ownerKey('entity')} in (${
+          group.map(sub).join(' union ')
+        })`,
         params: group.flatMap(([, props]) => props.map(() => value)),
       })
     ),
@@ -548,12 +558,14 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
   // already index-driven, and a presence tree keeps its boolean shape.
   if (!joins.length) return or(...conds)
   let picks = conds.map((where) =>
-    render(rel(ctx.d.spine, { cols: ['"entity"."id"'], joins, where }))
+    render(rel(ctx.d.spine, { cols: [ctx.d.ownerKey('entity')], joins, where }))
   )
   return or(
     ...cut(picks, ARMS).map((group) =>
       raw({
-        sql: `"entity"."id" in (${group.map((a) => a.sql).join(' union ')})`,
+        sql: `${ctx.d.ownerKey('entity')} in (${
+          group.map((a) => a.sql).join(' union ')
+        })`,
         params: group.flatMap((a) => a.params),
       })
     ),
@@ -593,7 +605,7 @@ let COUNT_OPS: Record<string, string> = {
 let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
   if (ctx.owner) throw new Unsupported('a nested reverse association')
   let child = ctx.d.table(a.comp)
-  let corr = `"${a.comp}"."${a.prop}" = "entity"."id"`
+  let corr = `${refKey(ctx, a.comp, a.prop)} = ${ctx.d.ownerKey('entity')}`
   let rest = p.path.slice(1)
   let value = flat(p.value)
   if (!rest.length && !p.where) {
@@ -666,7 +678,7 @@ let walk = (ctx: Ctx, c: Walk): Cond => {
   }
   let root = hops[0]
   let from = ctx.d.table(root.comp)
-  let to = `"${root.comp}"."${root.prop}"`
+  let to = refKey(ctx, root.comp, root.prop)
   hops.slice(1).forEach((h, i) => {
     let a = `__w${i + 1}`
     from += ` join ${source(h.comp)} as "${a}" on "${a}"."entity" = ${to}`

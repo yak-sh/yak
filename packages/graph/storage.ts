@@ -11,6 +11,7 @@
 
 import type { Query as Ast } from '@yaks/query'
 import type { Bundle, Eid, Entity } from './bundle.ts'
+import type { Binding, Match } from './join.ts'
 
 /** One raw result row from a storage read — column name → value. */
 export type Row = Record<string, unknown>
@@ -73,6 +74,16 @@ export type Tx = {
    * about rows it has not written yet, says nothing and is walked instead
    * (./cascade.ts). */
   doom?: (eids: Eid[]) => Doom | null | Promise<Doom | null>
+  /** the DECLARED rules' door: answer each match against this graph with
+   * `batch` folded in, as though it had landed. `covers` names the components
+   * the matches read, so a store raising a batch overlay raises only those.
+   * A storage without one runs no declared rules — a rule is a query, and a
+   * store that cannot answer one has nothing to say about it. */
+  bindings?: (
+    matches: Match[],
+    batch: Bundle[],
+    covers: string[],
+  ) => Binding[][] | Promise<Binding[][]>
   /** patch the bundles in → the entities this patch MINTED, with their `num`
    * when the adapter mints one. An adapter whose numbers are the database's to
    * pick may not know them yet — it fills each `num` into the very entity it

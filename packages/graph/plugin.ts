@@ -16,6 +16,7 @@ import type { Bundle, Eid, Entity } from './bundle.ts'
 import type { Query, ReadOpts, Tx } from './storage.ts'
 import type { Ask } from './gather.ts'
 import type { Resource, Rule } from './rules.ts'
+import type { Declared } from './declared.ts'
 import type { Derive } from './alias.ts'
 import type { Graph } from './graph.ts'
 import type { VocabDoc } from '@yaks/vocab'
@@ -240,6 +241,11 @@ export type Plugin = {
    * bundle in the batch plus what comes out (see {@link Rule}). The phase runs
    * every rule registered on it, in plugin order, before its hooks. */
   rules?: Rule[]
+  /** the rules it DECLARES — a query and nothing else (see {@link Declared}).
+   * They run in the `rules` phase, over a storage's batch overlay, to a
+   * fixpoint, and what they produce joins the batch. A declared rule needs no
+   * code at all: an app ships one in its vocabulary. */
+  declared?: Declared[]
   /** the resources it provides: a singleton made from the tick, which any
    * rule may then bind by `#Name` (see {@link Resource}). The graph provides
    * `#Vocab`, `#Now` and `#Actor` itself; a host adds its own — an `#Env`, a

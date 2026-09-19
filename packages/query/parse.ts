@@ -260,6 +260,28 @@ export let parseDot = (token: string): Clause[] | null => {
   }
   let marked = sigil(token)
   if (marked) return marked
+  // A sigil marks a whole word (`+doc`), and it marks a PATH that carries an
+  // operator just the same (`+doc.title=$x`): the sigil says the component is
+  // written, and the column beside it says which part. The gate is left out —
+  // an absence has no value to write.
+  let written = token.match(/^([+*])(\.?[A-Za-z_].*)$/s)
+  if (written) {
+    let [, mark, rest] = written
+    let inner = parseDot(rest.startsWith('.') ? rest : `.${rest}`)
+    let c = inner?.length == 1 ? inner[0] : undefined
+    if (!c || c.kind != 'pred' || c.op != '=' || !c.value) {
+      throw new Error(`a written word takes a value: ${mark}doc.title=Dune`)
+    }
+    if (c.path.length != 2) {
+      throw new Error(`a written word names a component and a column: ${token}`)
+    }
+    let [comp, prop] = c.path
+    return [
+      mark == '+'
+        ? { kind: 'ensure', comp, prop, value: c.value }
+        : { kind: 'mutable', comp, prop, value: c.value },
+    ]
+  }
   // A bracket rides a path, and a sigil marks a whole word: `?doc[x]` is a
   // broken clause, never a search term.
   if (/^(\+!|[!+*#$?])\.?[A-Za-z_][^\s]*\[/.test(token)) {

@@ -9,7 +9,24 @@
 // absence it means, and every word that is an instruction dropped. The rest is
 // lists of component names, in the order they were written.
 
-import { type And, type Clause, present, type Query } from './ast.ts'
+import {
+  type And,
+  type Clause,
+  present,
+  type Query,
+  type Value,
+} from './ast.ts'
+
+/** One column a rule WRITES: the component, the column, the value as written
+ * (a literal, or a `$name` the compiler reads as a variable). `mutable` says
+ * which sigil wrote it — `*` writes into a component that must be there, `+`
+ * into one the rule puts there. */
+export type Set = {
+  comp: string
+  prop: string
+  value: Value
+  mutable?: boolean
+}
 
 /** What a query declares when it is read as a rule. */
 export type Declares = {
@@ -29,6 +46,8 @@ export type Declares = {
   resources: string[]
   /** `$name` — the variables it binds */
   vars: string[]
+  /** `+comp.col=value` / `*comp.col=value` — the columns it writes */
+  sets: Set[]
 }
 
 /**
@@ -55,9 +74,18 @@ export let declared = (ast: Query): Declares => {
     writes: [],
     resources: [],
     vars: [],
+    sets: [],
+  }
+  let once = (list: string[], comp: string) => {
+    if (!list.includes(comp)) list.push(comp)
   }
   let take = (c: Clause) => {
-    if (c.kind == 'ensure') return void out.ensures.push(c.comp)
+    if (c.kind == 'ensure') {
+      if (c.prop) {
+        out.sets.push({ comp: c.comp, prop: c.prop, value: c.value! })
+      }
+      return void once(out.ensures, c.comp)
+    }
     if (c.kind == 'gate') {
       out.gates.push(c.comp)
       // The gate's filter half: it fires only where the component is absent.
@@ -68,7 +96,17 @@ export let declared = (ast: Query): Declares => {
         value: { kind: 'scalar', raw: '' },
       })
     }
-    if (c.kind == 'mutable') return void out.writes.push(c.comp)
+    if (c.kind == 'mutable') {
+      if (c.prop) {
+        out.sets.push({
+          comp: c.comp,
+          prop: c.prop,
+          value: c.value!,
+          mutable: true,
+        })
+      }
+      return void once(out.writes, c.comp)
+    }
     if (c.kind == 'resource') return void out.resources.push(c.comp)
     if (c.kind == 'var') return void out.vars.push(c.name)
     out.filter.clauses.push(c)

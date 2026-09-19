@@ -65,6 +65,7 @@ import {
   type StampPolicy,
 } from './stamp.ts'
 import { fire, registry, type Resource, type Rule, stands } from './rules.ts'
+import { ready, settle } from './declared.ts'
 import { state } from './state.ts'
 import { each, isPromise, then } from './pipe.ts'
 
@@ -212,6 +213,10 @@ export let graph = (opts: Options): Graph => {
   // The marks are rules of the VOCABULARY, so a host that replaces the
   // created/updated pair with a policy of its own still gets them.
   let stamping = [...provenance(opts.provenance), ...marks(vocab)]
+  // The DECLARED rules, read once per apply: a plugin registered since the
+  // last one is in, and a rule that will not parse says so before the batch
+  // opens a transaction.
+  let declaring = () => ready(plugins.flatMap((p) => p.declared ?? []))
   let ruled = (phase: Phase): Rule[] =>
     [...stamping, ...plugins.flatMap((p) => p.rules ?? [])]
       .filter((r) => r.phase == phase)
@@ -397,7 +402,36 @@ export let graph = (opts: Options): Graph => {
                 // The declared rules, before a row of the batch is written:
                 // what they produce joins the batch and `mutate` writes it
                 // like anything else.
-                phase('rules', held, undefined, holds),
+                phase(
+                  'rules',
+                  held,
+                  (b) => {
+                    let rules = declaring()
+                    if (!rules.length) return b
+                    // A resource a declared rule WRITES (`+result.at=#Now`)
+                    // is the same singleton the coded rules read, made at
+                    // most once and only if something asks.
+                    let kept = new Map<string, unknown>()
+                    let ask = (name: string) => {
+                      if (!kept.has(name)) {
+                        kept.set(
+                          name,
+                          resources[name]?.({
+                            vocab,
+                            tx: held,
+                            phase: 'rules',
+                            bundles: b,
+                            resources,
+                            of: holds,
+                          }),
+                        )
+                      }
+                      return kept.get(name)
+                    }
+                    return settle(rules, b, held, vocab, ask)
+                  },
+                  holds,
+                ),
                 phase('mutate', held, (b) => {
                   checks = plugins.flatMap((p) =>
                     p.beforeWrite ? [p.beforeWrite(b)] : []
