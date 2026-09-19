@@ -61,11 +61,11 @@ export let typeName = (t: PropType): string =>
     ? 'eid'
     : 'text'
 
-// A component's whole shape, said in one line: `attachment has blob (eid),
-// mime (text), name (text)`. Every unknown-column refusal carries it, at the
+// A component's whole shape, said in one line: `attachment has artifact
+// (eid), media_type (text), name (text)`. Every unknown-column refusal carries it, at the
 // write door and the filter door alike, because a refusal that names only what
 // it did not understand teaches nothing — the seventh user test learned
-// `blob` by guessing five times and still read `bytes` as the bytes
+// `artifact` by guessing five times and still read `size` as the bytes
 // (C-32675 items 2 and 3). `type` is how the caller's vocabulary answers what
 // a column is; a column it cannot type says its name alone.
 export let shapeOf = (
@@ -434,15 +434,17 @@ export type Pane = {
 // stamped frozen_at when ready — frozen_at is server-owned, never wire-set.
 export type Web = { eid: string; url: string; frozen_at?: string | null }
 // Immutable content: eid is its SHA-256; external bytes live beside the db.
-export type BlobComp = {
+// The word is @yaks/blob's own for the stored thing — `blob` there names the
+// STORE, and @yaks/git's `blob{sha}` is a git blob, a different idea.
+export type Artifact = {
   eid: string
-  bytes?: number | null
+  size?: number | null
 }
 // Per-use file metadata points at shared content.
 export type Attachment = {
   eid: string
-  blob: string
-  mime?: string | null
+  artifact: string
+  media_type?: string | null
   name?: string | null
 }
 export type Image = {
@@ -1136,7 +1138,7 @@ export type EntCore = {
   layout?: LayoutTag
   pane?: Pane
   web?: Web
-  blob?: BlobComp
+  artifact?: Artifact
   attachment?: Attachment
   image?: Image
   card?: CardComp

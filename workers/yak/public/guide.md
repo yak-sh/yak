@@ -293,10 +293,10 @@ renders as the day before for anyone west of Greenwich.
 - `archived` — no columns. The stamp that takes something out of the open list
   (`.archived=` selects the ones without it).
 - `web` — `url` (url). An address out on the web.
-- `blob` — `bytes` (number). A byte COUNT, not the bytes themselves.
-- `attachment` — `blob` (eid), `mime` (text), `name` (text). A file, as `upload`
-  writes it above.
-- `image` — `w` (number), `h` (number). What a picture measures, on the blob
+- `artifact` — `size` (number). A byte COUNT, not the bytes themselves.
+- `attachment` — `artifact` (eid), `media_type` (text), `name` (text). A file,
+  as `upload` writes it above.
+- `image` — `w` (number), `h` (number). What a picture measures, on the artifact
   itself; `upload` reads it off the file's own header (png, jpeg, gif, webp).
 
 An edge is a sentence, not a column: `edges` takes `{type, child}`, where type
@@ -337,21 +337,21 @@ collision at once and leaves the store as it was. These are the words already
 taken:
 
     about accept access alias anchor app apply archetype architecture archived
-    attachment attention bash blob blocked board bounced brief bug call camera
-    cancel cancelled canvas card chat checkpoint claim client comment commit
-    completed conflict contains content created cursor decided delegates
-    deliver delivered deploy design doc dream edge effect email entity entry
-    error exception exit failed favorite feedback fetch filed finding fixer
-    fold fork generation goal grant graph_query headers hook hostname image
-    imported installed key knock layout lease mail member memory message meta
-    meter model nofix notified noverify opaque opened order output pane patch
-    person persona pin plan process product project prompt proposed provider
-    published quarantined reads reasoning recall recalled redaction referenced
-    references repo report requires response result resume retired review role
-    run runner runtime satisfies service session setting settled shelf signal
-    signin space spawn stderr stop stop_request subscription supersedes
-    supervises task task_context timeout tool_use updated usage venture
-    verifier wake wants web worked worktree yield
+    artifact attachment attention bash blob blocked board bounced brief bug
+    call camera cancel cancelled canvas card chat checkpoint claim client
+    comment commit completed conflict contains content created cursor decided
+    delegates deliver delivered deploy design doc dream edge effect email
+    entity entry error exception exit failed favorite feedback fetch filed
+    finding fixer fold fork generation goal grant graph_query headers hook
+    hostname image imported installed key knock layout lease mail member memory
+    message meta meter model nofix notified noverify opaque opened order output
+    pane patch person persona pin plan process product project prompt proposed
+    provider published quarantined reads reasoning recall recalled redaction
+    referenced references repo report requires response result resume retired
+    review role run runner runtime satisfies service session setting settled
+    shelf signal signin space spawn stderr stop stop_request subscription
+    supersedes supervises task task_context timeout tool_use updated usage
+    venture verifier wake wants web worked worktree yield
 
 Anything the columns don't cover still lives in `doc.body`: it is text, so
 markdown or JSON both keep there.

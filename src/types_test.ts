@@ -84,7 +84,7 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       // the lazy partition has no life after its owning Session
       'entry.session',
       // an attachment cannot survive without the content it names
-      'attachment.blob',
+      'attachment.artifact',
       // the platform directory (D-32318): an app and a membership die with
       // their space, a membership with its person
       'app.space',

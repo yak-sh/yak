@@ -282,13 +282,15 @@ let schema = `
   create table if not exists doc (
     entity   integer primary key references entity(id),
     title text not null,
-    body  integer not null references blob(entity)
+    body  integer not null references artifact(entity)
   );
   -- Canonical in-db bytes for text content. Identity and length live on the
-  -- blob entity; this is one storage backend attached to that identity, not a
-  -- second CAS. doc_value is the direct-SQL projection of component values.
+  -- artifact entity; this is one storage backend attached to that identity,
+  -- not a second CAS. doc_value is the direct-SQL projection of component
+  -- values. The TABLE keeps the store's own word: @yaks/blob is where the
+  -- bytes live, and artifact is what the entity wearing them is.
   create table if not exists blob_text (
-    entity integer primary key references blob(entity),
+    entity integer primary key references artifact(entity),
     value text not null
   );
   -- doc_value, the projection ordinary reads take, is cut beside this string
@@ -345,19 +347,19 @@ let schema = `
   );
   -- Immutable content. Its entity eid is the SHA-256; external bytes live at
   -- ~/.tasks/blobs/<eid>. Attachments point here, so dedup is structural.
-  create table if not exists blob (
+  create table if not exists artifact (
     entity   integer primary key references entity(id),
-    bytes integer
+    size  integer
   );
   create table if not exists attachment (
     entity integer primary key references entity(id),
-    blob   integer not null references entity(id),
-    mime   text,
+    artifact integer not null references entity(id),
+    media_type text,
     name   text
   );
-  create index if not exists attachment_blob on attachment(blob);
+  create index if not exists attachment_artifact on attachment(artifact);
   create table if not exists image (
-    entity integer primary key references blob(entity),
+    entity integer primary key references artifact(entity),
     w     integer,
     h     integer
   );
@@ -1031,7 +1033,7 @@ export let textBlob = (db: Sql, value: string): number => {
   let { id } = prep(db, 'select id from entity where eid = ?').get(eid) as {
     id: number
   }
-  prep(db, 'insert or ignore into blob (entity, bytes) values (?, ?)')
+  prep(db, 'insert or ignore into artifact (entity, size) values (?, ?)')
     .run(id, utf8.encode(value).byteLength)
   prep(db, 'insert or ignore into blob_text (entity, value) values (?, ?)')
     .run(id, value)
@@ -1782,10 +1784,14 @@ export let migrate = <D extends Sql>(db: D): D => {
       // here, as the guard that carries the rows across once.
       renameTable(db, 'error', 'failed')
       renameTable(db, 'notice', 'signal')
+      renameTable(db, 'blob', 'artifact')
+      renameCol(db, 'artifact', 'bytes', 'size')
+      renameCol(db, 'attachment', 'blob', 'artifact')
+      renameCol(db, 'attachment', 'mime', 'media_type')
       renameTable(db, 'tool', 'tool_use')
-      renameCol(db, 'session', 'signal_at', 'signal_at')
-      renameCol(db, 'session', 'signal_accepted_at', 'signal_accepted_at')
-      renameCol(db, 'session', 'signal_token', 'signal_token')
+      renameCol(db, 'session', 'notice_at', 'signal_at')
+      renameCol(db, 'session', 'notice_accepted_at', 'signal_accepted_at')
+      renameCol(db, 'session', 'notice_token', 'signal_token')
       db.exec(schema)
       // The doc projection ordinary reads take: title and body, resolved
       // through the blob backend. It names its columns rather than starring
@@ -4096,8 +4102,8 @@ let fleetGuardHost = (db: Sql): GuardHost => ({
         )
       }
     }
-    if (name == 'blob' && comp && !CONTENT_EID.test(eid)) {
-      throw new Error('blob eid must be its SHA-256')
+    if (name == 'artifact' && comp && !CONTENT_EID.test(eid)) {
+      throw new Error('artifact eid must be its SHA-256')
     }
     if (name == 'entity' && comp == null) {
       // A redaction is the durable fact that bytes were deliberately
@@ -4439,7 +4445,7 @@ let redactionHits = (db: Sql, value: string): RedactionHit[] =>
 // text attachments share by content hash; forgetting a doc body repoints it at a
 // clean blob, which can strand the old content with no live referrer. This
 // collects the VALUE — the blob_text row — only when NOTHING needs it: no
-// doc.body points at the blob, no attachment.blob does, no journal_field refs
+// doc.body points at the blob, no attachment.artifact does, no journal_field refs
 // it (history reads its text through the same row), and it is not itself an
 // image facet sharing the sha. A referenced (shared) value is never touched, so
 // a body two docs hold survives forgetting one. The blob entity's byte-count
@@ -4473,7 +4479,7 @@ export let collectBlobText = (
     `select o.eid as eid, bt.entity as id
        from blob_text bt join entity o on o.id = bt.entity
       where not exists (select 1 from doc where body = bt.entity)
-        and not exists (select 1 from attachment where blob = bt.entity)
+        and not exists (select 1 from attachment where artifact = bt.entity)
         and not exists (select 1 from image where entity = bt.entity)
         ${scope}`,
   ).all(...(only ?? [])) as { eid: string; id: number }[]
@@ -4823,7 +4829,7 @@ export let inverseBatch = (db: Sql, id: number): Change[] => {
   // Archetype descriptors likewise belong to storage and are permanent.
   // Pointer-only entity echoes below are moves, never entity births.
   let content = new Set(
-    batch.filter((c) => c.name == 'blob' || c.name == 'archetype')
+    batch.filter((c) => c.name == 'artifact' || c.name == 'archetype')
       .map((c) => c.eid),
   )
   let born = new Set(

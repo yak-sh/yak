@@ -291,7 +291,7 @@ Deno.test('the guide prints every column of every component it lists', () => {
   let listed = bullets()
   let named = listed.flatMap((b) => b.names)
   // A parse that found nothing would pass every assertion below.
-  assert(named.includes('doc') && named.includes('blob'), named.join(' '))
+  assert(named.includes('doc') && named.includes('artifact'), named.join(' '))
   for (let { names, cols } of listed) {
     for (let name of names) {
       assert(comps[name], `the guide lists ${name}, which is no component`)

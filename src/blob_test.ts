@@ -31,20 +31,20 @@ Deno.test('landBlob makes one content entity and one attachment', async () => {
 
   let sha = changes[0].eid
   assertEquals(changes, [
-    { eid: sha, name: 'blob', comp: { bytes: bytes.length } },
+    { eid: sha, name: 'artifact', comp: { size: bytes.length } },
     { eid: sha, name: 'image', comp: { w: 120, h: 80 } },
     {
       eid,
       name: 'attachment',
-      comp: { blob: sha, mime: 'image/png', name: 'shot.png' },
+      comp: { artifact: sha, media_type: 'image/png', name: 'shot.png' },
     },
   ])
 
   // Content is shared while attachment metadata belongs to the use.
   let row = db.prepare(
-    `select a.mime, ce.eid as blob, b.bytes, i.w from attachment a
-     join entity ce on ce.id = a.blob
-     join blob b on b.entity = ce.id
+    `select a.media_type as mime, ce.eid as blob, b.size as bytes, i.w from attachment a
+     join entity ce on ce.id = a.artifact
+     join artifact b on b.entity = ce.id
      join image i on i.entity = ce.id
      where a.entity = (select id from entity where eid = ?)`,
   ).get(eid)
@@ -85,8 +85,8 @@ Deno.test('blob identity must be its content hash', () => {
     () =>
       apply(db, [{
         eid: crypto.randomUUID(),
-        name: 'blob',
-        comp: { bytes: 3 },
+        name: 'artifact',
+        comp: { size: 3 },
       }]),
     Error,
     'SHA-256',
@@ -112,7 +112,7 @@ Deno.test('doc bodies deduplicate behind their wire projection', () => {
   assertEquals(rows[0].ref, rows[1].ref)
   assertEquals(
     db.prepare(
-      `select b.bytes, t.value, e.num from blob b
+      `select b.size as bytes, t.value, e.num from artifact b
        join blob_text t on t.entity = b.entity
        join entity e on e.id = b.entity where e.eid = ?`,
     ).get(content),

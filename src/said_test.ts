@@ -182,7 +182,7 @@ let spoke: Snapshot = {
       comp: { by: J, at: '2026-09-01T19:39:00.000Z' },
     },
     // The content-addressed blob the server mints beside a body edit.
-    { eid: 'blob', name: 'blob', comp: { bytes: 12 } },
+    { eid: 'blob', name: 'artifact', comp: { size: 12 } },
     {
       eid: 'blob',
       name: 'created',

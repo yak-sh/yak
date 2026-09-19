@@ -22,9 +22,9 @@ let size = (n?: number | null) =>
 
 export let Media = ({ e }: { e: Ent }) => {
   let a = e.attachment!
-  let b = ent(a.blob)
-  let src = `/blob/${a.blob}`
-  return a.mime?.startsWith('image/')
+  let b = ent(a.artifact)
+  let src = `/blob/${a.artifact}`
+  return a.media_type?.startsWith('image/')
     ? (
       <Img
         src={src}
@@ -36,7 +36,7 @@ export let Media = ({ e }: { e: Ent }) => {
     : (
       <File href={src} download={a.name ?? undefined}>
         <Name>{a.name ?? 'file'}</Name>
-        <Size>{size(b.blob?.bytes)}</Size>
+        <Size>{size(b.artifact?.size)}</Size>
       </File>
     )
 }

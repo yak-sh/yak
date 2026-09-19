@@ -483,10 +483,10 @@ export let listed = (comps: Comps, preds: Pred[]) =>
 // opt-in, the same step `quarantined` asks for.
 //
 // `image` names them too: dimensions belong to the content (its row keys on
-// blob), so a filter that asks for one can be asking for nothing else, and a
-// photo wall reading what its pictures measure should not have to say `.blob!`
-// to be allowed the answer (C-32706 item 1).
-let ON_BLOB = ['blob', 'image']
+// artifact), so a filter that asks for one can be asking for nothing else,
+// and a photo wall reading what its pictures measure should not have to say
+// `.artifact!` to be allowed the answer (C-32706 item 1).
+let ON_BLOB = ['artifact', 'image']
 
 export let namesBlobs = (preds: Pred[]) =>
   preds.some((p) =>
@@ -498,7 +498,7 @@ export let namesBlobs = (preds: Pred[]) =>
 // `id=` addresses entities instead of selecting them, so it keeps `listed`
 // alone — naming a blob's sha IS asking for it.
 export let selected = (comps: Comps, preds: Pred[]) =>
-  listed(comps, preds) && (!comps.blob || namesBlobs(preds))
+  listed(comps, preds) && (!comps.artifact || namesBlobs(preds))
 
 // The pred list a COMPILED membership statement should carry: the caller's
 // filter plus the universal screens a door otherwise applies in JS after the
@@ -516,7 +516,7 @@ let absent = (comp: string): Pred => ({ comp, prop: '', op: '', value: '' })
 export let screened = (preds: Pred[], entries: boolean): Pred[] => [
   ...preds,
   ...reveals(preds) ? [] : [absent('quarantined')],
-  ...namesBlobs(preds) ? [] : [absent('blob')],
+  ...namesBlobs(preds) ? [] : [absent('artifact')],
   ...entries || preds.some((p) => p.op == TEXT) ? [] : [absent('entry')],
 ]
 

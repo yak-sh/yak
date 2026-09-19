@@ -370,7 +370,7 @@ let COVERS: Record<string, string[]> = {
   mail: ['mail', 'email', 'deliver', 'delivered', 'bounced'],
   entities: ['edge'],
   errors: ['exception', 'failed', 'archived'],
-  files: ['blob', 'image', 'attachment'],
+  files: ['artifact', 'image', 'attachment'],
   components: ['doc', 'task', 'filed', 'project', 'comment', 'favorite', 'web'],
 }
 

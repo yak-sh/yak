@@ -146,7 +146,7 @@ Deno.test('askRows: every arm both doors share, one answer', async () => {
 // (C-32498 item 4) — so a filter answers with one only when it NAMES `.blob`.
 Deno.test("askRows: a filter answers the graph, not the store's blob rows", async () => {
   let rows = async (q: string) => ids(await askRows(db, askOf(q.split('&'))))
-  let blobs = await rows('.blob!')
+  let blobs = await rows('.artifact!')
   let none = async (q: string) =>
     (await rows(q)).filter((e) => blobs.includes(e))
   // The case that found it: an empty needle is a PRESENCE test, not a contains

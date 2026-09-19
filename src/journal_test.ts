@@ -127,7 +127,7 @@ Deno.test('journal: within-batch ordinals reproduce applied order', () => {
   // (tx, ordinal) is a dense 0..n-1 sequence matching the batch positions.
   assertEquals(rows.map((r) => r.ordinal), rows.map((_, i) => i))
   assertEquals(rows.slice(0, 4).map((r) => r.component), [
-    'blob',
+    'artifact',
     'doc',
     'task',
     'filed',

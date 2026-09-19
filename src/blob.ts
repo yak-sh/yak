@@ -23,9 +23,13 @@ export let landBlob = async (
   let { address: sha } = await artifacts(bytes, mime)
   let dim = sizeOf(bytes)
   return [
-    { eid: sha, name: 'blob', comp: { bytes: bytes.length } },
+    { eid: sha, name: 'artifact', comp: { size: bytes.length } },
     ...(dim ? [{ eid: sha, name: 'image', comp: dim }] : []),
-    { eid, name: 'attachment', comp: { blob: sha, mime, name } },
+    {
+      eid,
+      name: 'attachment',
+      comp: { artifact: sha, media_type: mime, name },
+    },
   ]
 }
 
@@ -37,8 +41,8 @@ export let readBlob = async (sha: string) => {
   let bytes = await blobs.get(sha)
   if (!bytes) return null
   let row = db.prepare(
-    `select a.mime, a.name from attachment a
-     where a.blob = (select id from entity where eid = ?) limit 1`,
+    `select a.media_type as mime, a.name from attachment a
+     where a.artifact = (select id from entity where eid = ?) limit 1`,
   ).get(sha) as { mime: string | null; name: string | null } | undefined
   return { bytes, mime: row?.mime, name: row?.name }
 }

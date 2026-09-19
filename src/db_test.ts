@@ -485,7 +485,7 @@ let contract = (
 
 let contracts = [
   contract('filed', 'project', 'project', {}),
-  contract('attachment', 'blob', 'blob'),
+  contract('attachment', 'artifact', 'artifact'),
   contract('camera', 'client', 'client', (d) => ({
     canvas: tag(d, 'canvas'),
   })),
@@ -1067,7 +1067,7 @@ Deno.test('a column naming nothing is refused, not silently defaulted', () => {
 })
 
 // And the refusal says what IS there, with types: a shape learned in one
-// refusal instead of five probes, and `blob.bytes` readable as the COUNT it
+// refusal instead of five probes, and `artifact.size` readable as the COUNT it
 // is rather than the bytes (C-32675 items 2 and 3).
 Deno.test('an unknown column is answered with the component it named', () => {
   let t = uid()
@@ -1081,14 +1081,14 @@ Deno.test('an unknown column is answered with the component it named', () => {
   }
   assertEquals(
     why({ data: 'x' }),
-    'unknown column: attachment.data — attachment has blob (eid), ' +
-      'mime (text), name (text)',
+    'unknown column: attachment.data — attachment has artifact (eid), ' +
+      'media_type (text), name (text)',
   )
   // Every unknown word at once, and the shape once.
   assertEquals(
     why({ data: 'x', type: 'png' }),
     'unknown columns: attachment.data, attachment.type — attachment has ' +
-      'blob (eid), mime (text), name (text)',
+      'artifact (eid), media_type (text), name (text)',
   )
   // A closed set spells its values; a component with nothing says so.
   assertThrows(

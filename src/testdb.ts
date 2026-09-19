@@ -166,7 +166,7 @@ export let applyNumbered: typeof apply = (db, changes, ...rest) => {
     ).map((c) => c.eid),
   )
   let hidden = new Set(
-    changes.filter((c) => ['entry', 'edge', 'blob'].includes(c.name))
+    changes.filter((c) => ['entry', 'edge', 'artifact'].includes(c.name))
       .map((c) => c.eid),
   )
   return apply(

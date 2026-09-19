@@ -54,8 +54,8 @@ Deno.test('fleet CAS creates default both doc columns and echo whole writable ro
     { type: 'integer' },
   ])
   let blob = out.find((b) => b.entity.eid == sha('Only body 🦬'))!
-  assertEquals(blob.blob, {
-    bytes: new TextEncoder().encode('Only body 🦬').length,
+  assertEquals(blob.artifact, {
+    size: new TextEncoder().encode('Only body 🦬').length,
   })
   assertEquals(blob.entity, {
     eid: sha('Only body 🦬'),
@@ -82,7 +82,7 @@ Deno.test('fleet CAS patches echo exact text, deduplicate and preserve omitted c
     entity: { eid: 'q' },
     doc: { body: 'replacement' },
   }])
-  assertEquals(again.filter((b) => b.blob).length, 0)
+  assertEquals(again.filter((b) => b.artifact).length, 0)
   assertEquals(raw(db, 'select count(*) as n from blob_text'), [{ n: 2 }])
   assertEquals(raw(db, 'select count(distinct body) as n from doc'), [{ n: 1 }])
   assertEquals(fleetGraphOf(db).rows('.doc.body=replacement'), [{ eid: 'p' }, {
@@ -119,7 +119,7 @@ Deno.test('fleet $was reads hydrated text before defaults and CAS swaps', () => 
   assertEquals(component(fresh, 'fresh', 'doc'), { title: 'Fresh', body: '' })
 })
 
-Deno.test('fleet CAS rollback removes bytes, blob entities, docs and numbers', () => {
+Deno.test('fleet CAS rollback removes bytes, artifact entities, docs and numbers', () => {
   let db = bareDb()
   let g = fleetGraphOf(db)
   g.use({
@@ -135,7 +135,7 @@ Deno.test('fleet CAS rollback removes bytes, blob entities, docs and numbers', (
     Error,
     'late refusal',
   )
-  for (let table of ['entity', 'blob', 'blob_text', 'doc', 'created']) {
+  for (let table of ['entity', 'artifact', 'blob_text', 'doc', 'created']) {
     assertEquals(raw(db, `select count(*) as n from ${table}`), [{ n: 0 }])
   }
 })
@@ -259,7 +259,7 @@ Deno.test('fleet CAS a SQL refusal rolls back materialized blobs as well as docu
       { entity: { eid: 'bad' }, doc: { title: null, body: 'also rolls back' } },
     ])
   )
-  for (let table of ['entity', 'blob', 'blob_text', 'doc']) {
+  for (let table of ['entity', 'artifact', 'blob_text', 'doc']) {
     assertEquals(raw(db, `select count(*) as n from ${table}`), [{ n: 0 }])
   }
 })

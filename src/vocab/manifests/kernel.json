@@ -52,20 +52,20 @@
         }
       }
     },
+    "artifact": {
+      "cols": {
+        "size": "number"
+      }
+    },
     "attachment": {
       "kind": true,
       "cols": {
-        "blob": {
-          "eid": "blob",
+        "artifact": {
+          "eid": "artifact",
           "death": "cascade"
         },
-        "mime": "text",
+        "media_type": "text",
         "name": "text"
-      }
-    },
-    "blob": {
-      "cols": {
-        "bytes": "number"
       }
     },
     "comment": {

@@ -1197,7 +1197,7 @@ Deno.test('normalizeLiterals: a bundle mints at a client-chosen eid', () => {
       { comment: { target: mine, body: 'about mine' } },
       { entity: { eid: sha }, commit: { target: mine, sha, repo: 'tasks' } },
       // The old literal shape's `id` follows the same rule.
-      { id: hash, comps: { blob: { bytes: 1 } } },
+      { id: hash, comps: { artifact: { size: 1 } } },
     ]).changes,
     [
       { eid: mine.toLowerCase(), name: 'doc', comp: { title: 'mine' } },
@@ -1211,7 +1211,7 @@ Deno.test('normalizeLiterals: a bundle mints at a client-chosen eid', () => {
         name: 'commit',
         comp: { target: mine.toLowerCase(), sha, repo: 'tasks' },
       },
-      { eid: hash, name: 'blob', comp: { bytes: 1 } },
+      { eid: hash, name: 'artifact', comp: { size: 1 } },
     ],
   )
   // Everything else unresolved is a typo, not a new entity: only an eid's own

@@ -197,7 +197,7 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
   }
 
   let prepare: Plugin = {
-    name: 'fleet/blob-entities',
+    name: 'fleet/artifact-entities',
     hooks: {
       // Core $was has ALREADY passed against hydrated text. Defaults and blob
       // materialization belong here, not normalize (which runs before $was).
@@ -237,14 +237,14 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
                 let eid = sha(value)
                 if (
                   !made.has(eid) && !row(
-                    `select 1 from blob where entity = ${owner}`,
+                    `select 1 from artifact where entity = ${owner}`,
                     eid,
                   )
                 ) {
                   made.set(eid, {
                     entity: { eid },
-                    blob: { bytes: encode(value).byteLength },
-                    $fleetCreated: { blob: true },
+                    artifact: { size: encode(value).byteLength },
+                    $fleetCreated: { artifact: true },
                     $fleetMaterialized: true,
                   })
                 }
@@ -285,7 +285,7 @@ export let fleetGraph = (host: FleetGraphHost): FleetGraph => {
     columns,
     reference: (eid) => {
       let held = row('select id from entity where eid = ?', eid)
-      if (!held) throw new Error(`missing blob entity ${eid}`)
+      if (!held) throw new Error(`missing artifact entity ${eid}`)
       return Number(held.id)
     },
   })

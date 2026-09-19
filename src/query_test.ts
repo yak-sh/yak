@@ -309,9 +309,9 @@ Deno.test('query: bad tokens are loud, bare words are terms', () => {
     'no such prop: .task.eels — task has status (open|wip|done|cancelled)',
   )
   assertThrows(
-    () => parseQuery('.blob.data=x'),
+    () => parseQuery('.artifact.data=x'),
     Error,
-    'no such prop: .blob.data — blob has bytes (number)',
+    'no such prop: .artifact.data — artifact has size (number)',
   )
   assertEquals(parseQuery('sandwich')[0].op, 'text') // a term, not an error
   // Two presence filters run together: the refusal spells the fix, since
@@ -1473,19 +1473,19 @@ Deno.test('.decided.at filters like any stamped time', () => {
 })
 
 Deno.test('a blob row answers only a filter that names one — `image` names one', () => {
-  let photo = { blob: { bytes: 9 }, image: { w: 1600, h: 900 } }
+  let photo = { artifact: { size: 9 }, image: { w: 1600, h: 900 } }
   assertEquals(selected(photo, parseQuery('.image!')), true)
-  assertEquals(selected(photo, parseQuery('.blob!')), true)
+  assertEquals(selected(photo, parseQuery('.artifact!')), true)
   // Anything else still leaves the store's own rows out of a person's list.
   assertEquals(selected(photo, parseQuery('.image.w>0&.doc!')), true)
   assertEquals(selected(photo, parseQuery('.doc!')), false)
   // …and the screen a compiled membership carries says the same thing.
   assertEquals(
-    screened(parseQuery('.image!'), false).some((p) => p.comp == 'blob'),
+    screened(parseQuery('.image!'), false).some((p) => p.comp == 'artifact'),
     false,
   )
   assertEquals(
-    screened(parseQuery('.doc!'), false).some((p) => p.comp == 'blob'),
+    screened(parseQuery('.doc!'), false).some((p) => p.comp == 'artifact'),
     true,
   )
 })

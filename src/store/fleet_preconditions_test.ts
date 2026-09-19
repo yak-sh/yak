@@ -414,10 +414,10 @@ Deno.test(`fleet guards: surrounding refusal policy stays atomic`, () => {
     [
       [{
         eid: blob,
-        name: 'blob',
-        comp: { bytes: 1 },
+        name: 'artifact',
+        comp: { size: 1 },
       }],
-      'blob eid must be its SHA-256',
+      'artifact eid must be its SHA-256',
     ],
     [
       [{
@@ -652,7 +652,7 @@ Deno.test('fleet guards: only distinct document patches certify independence', (
       [a, { ...b, doc: null }],
       [a, { ...b, tombstone: {} }],
       [a, { ...b, claim: { session: s } }],
-      [a, { entity: b.entity, blob: { bytes: new Uint8Array() } }],
+      [a, { entity: b.entity, artifact: { size: new Uint8Array() } }],
     ]
   ) assertEquals(factory(batch).independent, false)
   // No-op settling, FOUND guards and journal/effect output survive batching.

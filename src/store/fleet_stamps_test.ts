@@ -395,14 +395,17 @@ Deno.test('fleet journal: operations stay ordered, only the last new row gets de
     { eid: 'a', name: 'doc', comp: null },
     { eid: 'a', name: 'doc', comp: { title: '', body: 'last' } },
   ])
-  assertEquals(log.batch.filter((c) => c.name == 'blob').map((c) => c.eid), [
-    sha('first'),
-    sha('last'),
-  ])
+  assertEquals(
+    log.batch.filter((c) => c.name == 'artifact').map((c) => c.eid),
+    [
+      sha('first'),
+      sha('last'),
+    ],
+  )
   assertEquals(log.trace, { created: t.created, removed: t.removed })
   assertEquals(
     t.created,
-    new Set([`blob ${sha('first')}`, `blob ${sha('last')}`, 'doc a']),
+    new Set([`artifact ${sha('first')}`, `artifact ${sha('last')}`, 'doc a']),
   )
   assertEquals(t.removed, new Map([['a', ['doc']]]))
 })
