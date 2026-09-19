@@ -1576,6 +1576,11 @@ export class Store {
         return subs.drop(by(sink))
       },
       commit: subs.commit,
+      // A relay carries no membership news and no stored rows, so there is
+      // nothing here to rename or cut — only the sink to translate.
+      relay: (sink, bundles) => subs.relay(by(sink), bundles),
+      relaying: (sink) => subs.relaying(by(sink)),
+      relayed: (sink, keys) => subs.relayed(by(sink), keys),
     }
   }
 

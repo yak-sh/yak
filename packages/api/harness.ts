@@ -47,6 +47,21 @@ let doc: VocabDoc = {
         book: { type: 'string', ref: 'book', death: 'cascade' },
       },
     },
+    // Where a browsing customer's finger is on a book's page. Everyone in the
+    // shop sees it, the shop keeps none of it, and it goes with the browser.
+    browsing: {
+      type: 'object',
+      sync: 'peers',
+      durable: 'connection',
+      properties: { x: { type: 'number' }, y: { type: 'number' } },
+    },
+    // A typing indicator that gives up on its own after a moment.
+    typing: {
+      type: 'object',
+      sync: 'peers',
+      durable: '5s',
+      properties: { who: { type: 'string' } },
+    },
     // Provenance: server-owned, so the graph's stamp phase is their only
     // writer — which is what makes the door's actor visible in a read.
     created: {

@@ -77,8 +77,15 @@ declare let WebSocketPair: { new (): { 0: unknown; 1: Wire } }
 // What a socket asked for, kept on the socket. The runtime caps an attachment
 // at 2KB and a host may be holding fields of its own there, so the asks live
 // under one key and the rest is left alone.
-type Held = { subs?: Record<string, Ask> }
+type Held = { subs?: Record<string, Ask>; relay?: string[] }
 let CAP = 2048
+// A `sync: peers` value is held in MEMORY, and this object's memory does not
+// survive hibernation. What survives is the attachment, so the KEYS go there:
+// a value lost to an eviction cannot be re-sent, but its clearing still can,
+// and a peer left staring at a cursor that will never move again is the worse
+// failure. Bounded, because the 2KB is shared with the asks — past this many a
+// value lost to an eviction lingers until its writer clears it.
+let KEYS = 16
 
 let asksOf = (ws: Wire): Record<string, Ask> => {
   let held = ws.deserializeAttachment() as Held | null
@@ -95,6 +102,22 @@ let hold = (ws: Wire, subs: Record<string, Ask>): boolean => {
   if (JSON.stringify(next).length > CAP) return false
   ws.serializeAttachment(next)
   return true
+}
+
+let relayOf = (ws: Wire): string[] => {
+  let held = ws.deserializeAttachment() as Held | null
+  let keys = held && typeof held == 'object' ? held.relay : undefined
+  return Array.isArray(keys) ? keys : []
+}
+
+// The relay keys, written back beside everything else. Over the cap they are
+// simply not written: a relay must never cost somebody their subscriptions.
+let remember = (ws: Wire, keys: string[]) => {
+  let held = ws.deserializeAttachment()
+  let was = held && typeof held == 'object' ? held as Held : {}
+  let relay = keys.slice(0, KEYS)
+  let next = relay.length ? { ...was, relay } : { ...was, relay: undefined }
+  if (JSON.stringify(next).length <= CAP) ws.serializeAttachment(next)
 }
 
 // What a frame asked for, read alongside @yaks/api's own dispatch so the
@@ -122,8 +145,10 @@ let asked = (data: unknown): { id: string; ask?: Ask } | null => {
  * // webSocketClose(ws)             → live.close(ws)
  * ```
  *
- * Frames go straight to the socket; no write ever crosses it (a batch is
+ * Frames go straight to the socket; no DURABLE write crosses it (a batch is
  * applied with `POST /apply`, and the socket is how everyone hears about it).
+ * The one exception is a `sync: peers` relay, which crosses here because its
+ * lifetime is this socket's — see @yaks/api's `receive`.
  */
 export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
   let sinks = new Map<Wire, Sink>()
@@ -136,6 +161,9 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
     if (to) return to
     let fresh: Sink = (frame) => ws.send(JSON.stringify(frame))
     sinks.set(ws, fresh)
+    // The relay keys FIRST: whatever else this socket did, the registry has to
+    // know what it is saying before a close can stop saying it.
+    subs.relayed(fresh, relayOf(ws))
     for (let [id, ask] of Object.entries(asksOf(ws))) subs.open(fresh, id, ask)
     return fresh
   }
@@ -166,7 +194,12 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
     message: (ws, data) => {
       let to = sink(ws)
       let ask = asked(data)
+      let was = subs.relaying(to).join('\n')
       receive(subs, to, data)
+      // Only when it moved: a frame that relays nothing should not rewrite an
+      // attachment, and most frames relay nothing.
+      let now = subs.relaying(to)
+      if (now.join('\n') != was) remember(ws, now)
       if (!ask) return
       let subscriptions = asksOf(ws)
       if (ask.ask === undefined) delete subscriptions[ask.id]

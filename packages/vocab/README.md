@@ -32,7 +32,7 @@ vocabulary (declared via JSON Schema's own `$vocabulary` mechanism,
 | `before`   | comp   | kinds this kind sorts before (feeds the derived kindOrder)          |
 | `wire`     | comp   | `false` = readable-not-writable component (entity metadata)         |
 | `sync`     | comp   | who hears a write: `none` \| `server` (default) \| `peers`          |
-| `durable`  | comp   | how long a value lives: `forever` (default) \| `disconnect` \| `5s` |
+| `durable`  | comp   | how long a value lives: `forever` (default) \| `connection` \| `5s` |
 
 Native keywords reach the table as written: `type: integer` stores with integer
 affinity where a plain `number` stores real, `enum` is a CHECK on the column,

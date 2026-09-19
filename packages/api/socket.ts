@@ -53,9 +53,19 @@ export let sink = (socket: Socket): Sink => {
   }
 }
 
-/** One frame from a client, dispatched: `{subscribe, id}` opens a subscription
- * (a query line, or `true` for the raw feed of committed batches) and
- * `{unsubscribe}` closes one. Anything else is refused under its own id. */
+/**
+ * One frame from a client, dispatched: `{subscribe, id}` opens a subscription
+ * (a query line, or `true` for the raw feed of committed batches),
+ * `{unsubscribe}` closes one, and `{relay: [...]}` hands `sync: peers`
+ * components to the other subscribers. Anything else is refused under its own
+ * id.
+ *
+ * The relay is the only write that crosses this seam, and the invariant it
+ * leaves standing is the one that matters: no DURABLE write crosses it.
+ * Nothing a relay frame says is stored, and the connection it arrives on is
+ * what holds it — which is precisely why it cannot go through `/apply`,
+ * a separate request with no connection to name.
+ */
 export let receive = (subs: Subs, to: Sink, data: unknown): void => {
   let id = ''
   try {
@@ -69,7 +79,11 @@ export let receive = (subs: Subs, to: Sink, data: unknown): void => {
       subs.close(to, String(msg.unsubscribe))
       return
     }
-    throw new SyntaxError('expected {subscribe} or {unsubscribe}')
+    if (Array.isArray(msg?.relay)) {
+      subs.relay(to, msg.relay)
+      return
+    }
+    throw new SyntaxError('expected {subscribe}, {unsubscribe} or {relay}')
   } catch (err) {
     to({ id, refused: refusal(err) })
   }

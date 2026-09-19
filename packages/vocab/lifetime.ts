@@ -7,7 +7,7 @@
 //   durable  how long the value lives, asked of whoever owns it
 //
 // They are independent. A cursor position is `sync: peers, durable:
-// disconnect` — everybody watching sees it, nobody stores it, and it goes away
+// connection` — everybody watching sees it, nobody stores it, and it goes away
 // with the tab that wrote it. A saved draft is `sync: none, durable: forever` —
 // nobody else hears about it, and this browser keeps it across a reload. A task
 // is the default, `sync: server, durable: forever`.
@@ -44,9 +44,9 @@ let UNIT: Record<string, number> = {
 
 /**
  * A `durable` word in milliseconds — `null` when it names no duration.
- * `forever` and `disconnect` are words about a boundary, not spans, so they
- * answer `null` too: a caller asks {@link ms} to decide whether to set a timer,
- * and compares the word itself for the rest.
+ * `forever` and `connection` are spans a clock cannot count, so they answer
+ * `null` too: a caller asks {@link ms} to decide whether to set a timer, and
+ * compares the word itself for the rest.
  */
 export let ms = (durable: string): number | null => {
   let m = /^(\d+(?:\.\d+)?)(ms|s|m|h|d)$/.exec(durable)
@@ -56,4 +56,4 @@ export let ms = (durable: string): number | null => {
 /** Whether a `durable` word is one this model knows: the two boundaries, or a
  * duration. */
 export let lives = (durable: string): boolean =>
-  durable == 'forever' || durable == 'disconnect' || ms(durable) != null
+  durable == 'forever' || durable == 'connection' || ms(durable) != null

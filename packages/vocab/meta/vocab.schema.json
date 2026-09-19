@@ -67,7 +67,7 @@
         "sync": { "enum": ["none", "server", "peers"] },
         "durable": {
           "type": "string",
-          "pattern": "^(forever|disconnect|[0-9]+(\\.[0-9]+)?(ms|s|m|h|d))$"
+          "pattern": "^(forever|connection|[0-9]+(\\.[0-9]+)?(ms|s|m|h|d))$"
         },
         "bare": { "type": "boolean" },
         "unique": { "$ref": "#/$defs/cols" },

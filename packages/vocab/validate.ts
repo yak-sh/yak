@@ -124,12 +124,12 @@ let lived = (comp: string, s: PropSchema): string[] => {
   }
   if (s.durable != null && !lives(s.durable)) {
     errs.push(
-      `${comp} is durable "${s.durable}" — say "forever", "disconnect", or a duration such as "5s" or "2m"`,
+      `${comp} is durable "${s.durable}" — say "forever", "connection", or a duration such as "5s" or "2m"`,
     )
   }
   if (s.sync == 'peers' && s.durable == 'forever') {
     errs.push(
-      `${comp} syncs to peers and is durable forever — a relay hands a value on without owning it, so it has nowhere to keep one; say "disconnect" or a duration, or sync to the server`,
+      `${comp} syncs to peers and is durable forever — a relay hands a value on without owning it, so it has nowhere to keep one; say "connection" or a duration, or sync to the server`,
     )
   }
   return errs

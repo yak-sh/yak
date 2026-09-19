@@ -19,7 +19,7 @@
       "default": "server"
     },
     "durable": {
-      "description": "How long a value of this component lives, asked of whoever owns it. \"forever\" (the default) is storage \u2014 SQLite and the journal on a server, the vault in a client. \"disconnect\" is memory keyed by the writer's connection, swept when it closes. A duration (\"5s\", \"2m\") is that plus a timer, restarted on each write.",
+      "description": "How long a value of this component lives, asked of whoever owns it. \"forever\" (the default) is storage \u2014 SQLite and the journal on a server, the vault in a client. \"connection\" is memory keyed by the writer's connection, swept when that connection closes. A duration (\"5s\", \"2m\") is that plus a timer, restarted on each write.",
       "type": "string",
       "default": "forever"
     },

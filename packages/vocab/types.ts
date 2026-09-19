@@ -89,7 +89,7 @@ export type CompInfo = {
   stamped: string[] // server-owned column names
   /** who hears about a write to it — see {@link Sync} */
   sync: Sync
-  /** how long one of its values lives: `forever`, `disconnect`, or a duration
+  /** how long one of its values lives: `forever`, `connection`, or a duration
    * (lifetime.ts `ms` reads the span out of one) */
   durable: string
   keywords: Record<string, unknown> // registered extension keywords, verbatim

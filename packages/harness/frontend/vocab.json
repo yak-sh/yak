@@ -9,7 +9,7 @@
     },
     "keyboard": {
       "sync": "none",
-      "durable": "disconnect",
+      "durable": "connection",
       "properties": {
         "mode": {
           "type": "string"
@@ -84,7 +84,7 @@
     },
     "frontend": {
       "sync": "none",
-      "durable": "disconnect",
+      "durable": "connection",
       "properties": {
         "selected": {
           "type": "string"
@@ -117,7 +117,7 @@
     },
     "visual": {
       "sync": "none",
-      "durable": "disconnect",
+      "durable": "connection",
       "properties": {
         "surface": {
           "type": "string"
@@ -138,7 +138,7 @@
     },
     "composer": {
       "sync": "none",
-      "durable": "disconnect",
+      "durable": "connection",
       "properties": {
         "mode": {
           "enum": [
@@ -150,7 +150,7 @@
     },
     "feedback": {
       "sync": "none",
-      "durable": "disconnect",
+      "durable": "connection",
       "properties": {
         "error": {
           "type": "string"
@@ -159,7 +159,7 @@
     },
     "viewport": {
       "sync": "none",
-      "durable": "disconnect",
+      "durable": "connection",
       "properties": {
         "item": {
           "type": "string"
@@ -243,7 +243,7 @@
     },
     "draft": {
       "sync": "none",
-      "durable": "disconnect",
+      "durable": "connection",
       "properties": {
         "text": {
           "type": "string"

@@ -39,7 +39,7 @@
  *
  * `sync` says who hears about a write — `server` (the default) and `peers` go
  * out, `none` stays here — and `durable` says how long the value lives:
- * `forever` (the default) is the vault, `disconnect` or a duration is memory.
+ * `forever` (the default) is the vault, `connection` or a duration is memory.
  * All of them ride the same `apply()`.
  *
  * ## Reading is a subscription

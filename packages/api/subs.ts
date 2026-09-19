@@ -22,6 +22,7 @@
 
 import type { Bundle, Eid, Graph } from '@yaks/graph'
 import {
+  admit,
   composed,
   detached,
   isPromise,
@@ -30,10 +31,12 @@ import {
   transient,
   type TransientFrame,
 } from '@yaks/graph'
+import { comps } from '@yaks/graph'
 import { type Filter, filter } from '@yaks/match'
 import { bare, type Clause, parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { type Refusal, refusal } from './refuse.ts'
+import { type Relay, relay as relaying, type Timer } from './relay.ts'
 
 /**
  * One push to one subscriber. `bundles` are whole entities that are now in the
@@ -52,6 +55,13 @@ export type Frame = {
   bundles?: Bundle[]
   /** entities that left the set — deleted, or no longer matching */
   gone?: Eid[]
+  /**
+   * `sync: peers` components being relayed: a cursor, a caret, a presence dot.
+   * Never stored, on either end. A value cleared by its writer — or by that
+   * writer's connection closing, or by its own duration running out — arrives
+   * as the component set to `null`.
+   */
+  relay?: Bundle[]
   /** why the subscription was refused, when it was */
   refused?: Refusal
 }
@@ -75,6 +85,17 @@ export type Subs = {
   drop: (sink: Sink) => void
   /** a batch committed: push what changed to whoever is watching */
   commit: (applied: Bundle[]) => void | Promise<void>
+  /**
+   * A `sync: peers` batch from one sink: forwarded to everyone else watching
+   * those entities, and held under this sink until it closes (relay.ts).
+   * Nothing is stored, so nothing commits and no subscription re-reads.
+   */
+  relay: (sink: Sink, bundles: Bundle[]) => void
+  /** The keys one sink's relay values are held under — small enough to keep
+   * somewhere that outlives this process's memory. */
+  relaying: (sink: Sink) => string[]
+  /** Take those keys back after such a loss, so a close still clears them. */
+  relayed: (sink: Sink, keys: string[]) => void
 }
 
 type Sub = {
@@ -131,6 +152,8 @@ export let subscriptions = (graph: Graph, opts: {
    * session status depends on transcript entries). Returning true refreshes
    * that subscription after this commit. It does not subscribe to those rows. */
   invalidate?: (query: string, applied: Bundle[]) => boolean
+  /** how a `durable: "5s"` relay value's timer is set (default: setTimeout) */
+  timer?: Timer
 } = {}): Subs => {
   let held = new Map<Sink, Map<string, Sub>>()
   let all = () => [...held.values()].flatMap((m) => [...m.values()])
@@ -193,11 +216,15 @@ export let subscriptions = (graph: Graph, opts: {
         for (let b of bundles) sub.members.add(b.entity.eid)
         rememberFields(sub, bundles)
         const snapshots = live.snapshots().filter((f) => visible(sub, f))
+        // What the peers are already saying about this set. A subscriber that
+        // arrives late sees the cursors that were there before it.
+        let now = peers.snapshot(sink, (eid) => sub.members.has(eid))
         sink({
           id,
           bundles,
           transientReset: bundles.map((b) => b.entity.eid),
           ...snapshots.length ? { transient: snapshots } : {},
+          ...now.length ? { relay: now } : {},
         })
       })
     })
@@ -272,6 +299,23 @@ export let subscriptions = (graph: Graph, opts: {
       ))
   }
 
+  // The relay, and how a value reaches the people watching. A relay frame
+  // carries no membership news, so it is cast to whoever already has the
+  // entity in their set (a raw feed hears every one) and never opens or closes
+  // anybody's subscription.
+  let cast = (bundles: Bundle[], except?: Sink) => {
+    for (let [sink, mine] of held) {
+      if (sink === except) continue
+      for (let sub of mine.values()) {
+        let seen = sub.raw
+          ? bundles
+          : bundles.filter((b) => sub.members.has(b.entity.eid))
+        if (seen.length) sink({ id: sub.id, relay: seen })
+      }
+    }
+  }
+  let peers: Relay<Sink> = relaying(graph.vocab, (b) => cast(b), opts.timer)
+
   const live = transient(graph)
   const pending = new Map<Sink, Map<string, TransientFrame[]>>()
   let scheduled = false
@@ -316,7 +360,28 @@ export let subscriptions = (graph: Graph, opts: {
     drop: (sink) => {
       pending.delete(sink)
       held.delete(sink)
+      // Everything this connection was saying stops being true when it goes.
+      let off = peers.drop(sink)
+      if (off.length) cast(off)
     },
     commit,
+    relay: (sink, bundles) => {
+      // Admitted like any other write — an unknown column is refused, a
+      // server-owned or computed one is dropped, every value is checked
+      // against the vocabulary — and then stripped of the `$` marks a stored
+      // batch carries. A relay has no precondition to guard, no death to
+      // cascade, and no actor to sign: the connection it arrived on was
+      // authenticated at the upgrade, and nothing here is kept for anyone to
+      // read it off later.
+      let bare = admit(bundles, graph.vocab).map((b) => {
+        let out: Bundle = { entity: { eid: b.entity.eid } }
+        for (let [name, patch] of comps(b)) out[name] = patch
+        return out
+      })
+      let out = peers.write(sink, bare)
+      if (out.length) cast(out, sink)
+    },
+    relaying: (sink) => peers.holds(sink),
+    relayed: (sink, keys) => peers.adopt(sink, keys),
   }
 }

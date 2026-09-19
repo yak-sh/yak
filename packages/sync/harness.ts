@@ -60,7 +60,7 @@ let doc: VocabDoc = {
     sieve: {
       type: 'object',
       sync: 'none',
-      durable: 'disconnect',
+      durable: 'connection',
       properties: { text: { type: 'string' } },
     },
     // Where this cook's finger is on the page: everyone else sees it, nobody
@@ -68,7 +68,7 @@ let doc: VocabDoc = {
     pointing: {
       type: 'object',
       sync: 'peers',
-      durable: 'disconnect',
+      durable: 'connection',
       properties: { x: { type: 'number' }, y: { type: 'number' } },
     },
     created: {

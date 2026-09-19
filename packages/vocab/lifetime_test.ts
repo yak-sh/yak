@@ -18,9 +18,9 @@ Deno.test('a duration is milliseconds; a boundary is not a span', () => {
   assertEquals(ms('2m'), 120_000)
   assertEquals(ms('1.5h'), 5_400_000)
   assertEquals(ms('forever'), null)
-  assertEquals(ms('disconnect'), null)
+  assertEquals(ms('connection'), null)
   assertEquals(ms('soon'), null)
-  assertEquals([lives('forever'), lives('disconnect'), lives('5s')], [
+  assertEquals([lives('forever'), lives('connection'), lives('5s')], [
     true,
     true,
     true,
@@ -35,7 +35,7 @@ Deno.test('a component that says nothing syncs to the server, forever', () => {
       presence: {
         type: 'object',
         sync: 'peers',
-        durable: 'disconnect',
+        durable: 'connection',
         properties: { x: { type: 'number' } },
       },
     },
@@ -43,7 +43,7 @@ Deno.test('a component that says nothing syncs to the server, forever', () => {
   assertEquals([syncOf(v, 'task'), durableOf(v, 'task')], ['server', 'forever'])
   assertEquals([syncOf(v, 'presence'), durableOf(v, 'presence')], [
     'peers',
-    'disconnect',
+    'connection',
   ])
   // A component this vocabulary never heard of answers like an undeclared one.
   assertEquals([syncOf(v, 'ghost'), durableOf(v, 'ghost')], [

@@ -9,7 +9,7 @@
 //   sync: "none"    it stays on this node
 //
 //   durable: "forever"     (the default) storage — the server's, or the vault
-//   durable: "disconnect"  memory, for as long as this connection lives
+//   durable: "connection"  memory, for as long as this connection lives
 //   durable: "5s"          the same, plus a timer
 //
 // A component with no declaration syncs to the server and is kept forever,
@@ -102,7 +102,7 @@ export let outward = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
  * `sync: peers` components, which the server hands on without keeping.
  *
  * These go up the SOCKET, not through `/apply`. Their lifetime is that
- * socket's: `durable: disconnect` means the server clears them when it closes,
+ * socket's: `durable: connection` means the server clears them when it closes,
  * so the connection the value arrived on has to be the one holding it. A
  * second reason is traffic — a caret or a cursor moves faster than a POST
  * should — and a third is that there is nothing to guard: a relay value has no

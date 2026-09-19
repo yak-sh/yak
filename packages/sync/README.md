@@ -120,7 +120,7 @@ itself, in the two core [@yaks/vocab](https://jsr.io/@yaks/vocab) keywords:
 | `durable`      | how long the value lives                                     |
 | -------------- | ------------------------------------------------------------ |
 | `"forever"`    | storage — the server's, or this client's vault — **default** |
-| `"disconnect"` | memory, for as long as the writing connection lives          |
+| `"connection"` | memory, for as long as the writing connection lives          |
 | `"5s"`, `"2m"` | the same, plus a timer restarted on each write               |
 
 They are core keywords, so nothing has to be registered:

@@ -1,7 +1,7 @@
 # Frontend graph pilot
 
 Each mounted frontend owns a local-only `@yaks/client` over RAM. Most UI
-components declare `sync: none, durable: disconnect`. Draft recovery records
+components declare `sync: none, durable: connection`. Draft recovery records
 declare `sync: none` and use the client vault. No URL or socket is configured.
 Identical local entity IDs in two clients deliberately refer to different
 frontend instances. `App` also accepts an application-owned `frontend` so other

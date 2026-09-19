@@ -258,18 +258,18 @@ Deno.test('storable admits a literal or clock default and refuses the rest', () 
 Deno.test('a relay owns nothing, so it cannot keep a value forever', () => {
   let one = (comp: PropSchema) => storable(doc({ presence: comp }))
   assertEquals(
-    one({ type: 'object', sync: 'peers', durable: 'disconnect' }),
+    one({ type: 'object', sync: 'peers', durable: 'connection' }),
     [],
   )
   assertEquals(one({ type: 'object', sync: 'peers', durable: '5s' }), [])
   assertEquals(one({ type: 'object', sync: 'none', durable: '250ms' }), [])
   assertEquals(one({ type: 'object', sync: 'peers', durable: 'forever' }), [
-    'presence syncs to peers and is durable forever — a relay hands a value on without owning it, so it has nowhere to keep one; say "disconnect" or a duration, or sync to the server',
+    'presence syncs to peers and is durable forever — a relay hands a value on without owning it, so it has nowhere to keep one; say "connection" or a duration, or sync to the server',
   ])
   assertEquals(one({ type: 'object', sync: 'everyone' }), [
     'presence syncs "everyone" — a component syncs to none, server, peers',
   ])
   assertEquals(one({ type: 'object', sync: 'peers', durable: 'a while' }), [
-    'presence is durable "a while" — say "forever", "disconnect", or a duration such as "5s" or "2m"',
+    'presence is durable "a while" — say "forever", "connection", or a duration such as "5s" or "2m"',
   ])
 })

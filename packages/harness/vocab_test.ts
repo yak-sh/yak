@@ -25,7 +25,7 @@ Deno.test('package JSON declarations preserve artifact references and backend co
 })
 
 Deno.test('frontend and projection vocabularies stay separate from stored backend fields', () => {
-  assertEquals(frontendVocab.comp('draft')?.durable, 'disconnect')
+  assertEquals(frontendVocab.comp('draft')?.durable, 'connection')
   assertEquals(frontendVocab.comp('savedDraft')?.sync, 'none')
   assertEquals(vocab.comp('savedDraft'), undefined)
   assertEquals(loadVocab([column]).column('column', 'ref')?.scalar, 'text')

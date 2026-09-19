@@ -6,7 +6,7 @@
 // to THIS node, and of those the ones that are `durable: forever` are the
 // vault's — nobody else will ever send them back, so if this process does not
 // write them down they are gone at the next reload. A `sync: none` component
-// that lasts only until `disconnect` stays in memory and never reaches here.
+// that lasts only until `connection` stays in memory and never reaches here.
 //
 // A vault is not a `Storage`. Storage answers queries, and a query is answered
 // here by the map @yaks/ram already holds; what is missing is durability, so
