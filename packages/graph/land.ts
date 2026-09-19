@@ -32,7 +32,7 @@ export let signed = (change: Change, who: Entity | null): Change =>
 /**
  * Land an intent: apply its change signed as the actor, and answer what the
  * tool said — its own `result` where it named one, the batch as applied
- * otherwise. `card` and `msg` are for a host with a screen; this is not one.
+ * otherwise.
  */
 export let land = async (
   intent: Intent,

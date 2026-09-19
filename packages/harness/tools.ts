@@ -75,7 +75,7 @@ export let graphTools = (
       let actor = call?.session ? { eid: call.session } : ctx.actor
       let mine = { ...ctx, actor }
       let intent = await t.run(validateToolInput(t, args), mine)
-      return said(intent.msg ?? await land(intent, mine))
+      return said(await land(intent, mine))
     },
   }))
 }

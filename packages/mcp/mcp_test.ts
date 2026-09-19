@@ -349,7 +349,7 @@ Deno.test('a tool that says its own words says them, and its data beside', async
       name: 'stocktake',
       description: 'count the shelf',
       meta: { ui: { resourceUri: 'ui://shop/shelf' } },
-      run: () => ({ msg: 'two books here', result: { books: 2 } }),
+      run: () => ({ result: { text: 'two books here', books: 2 } }),
     }],
   })
   let client = await connect({ graph })
@@ -366,9 +366,12 @@ Deno.test('a tool that says its own words says them, and its data beside', async
     content: { text: string }[]
     structuredContent?: unknown
   }
-  assertEquals(out.content[0].text, 'two books here')
-  // Unwrapped — a host that renders this was told which page to render it in.
-  assertEquals(out.structuredContent, { books: 2 })
+  // A tool with no declared schema answers its value as text and nothing else.
+  assertEquals(
+    out.content[0].text,
+    JSON.stringify({ text: 'two books here', books: 2 }, null, 2),
+  )
+  assertEquals(out.structuredContent, undefined)
   await client.close()
 })
 
@@ -468,13 +471,13 @@ Deno.test('every tool says how a client signs in for it', async () => {
       description: 'what this shop is',
       input: {},
       meta: { securitySchemes: [{ type: 'noauth' }] },
-      run: () => ({ msg: 'a bookshop' }),
+      run: () => ({ result: { text: 'a bookshop' } }),
     }, {
       name: 'shelve',
       description: 'put a book on the shelf',
       input: {},
       meta: { ui: { resourceUri: 'ui://shelf' } },
-      run: () => ({ msg: 'shelved' }),
+      run: () => ({ result: { text: 'shelved' } }),
     }],
   })
   let client = await connect({

@@ -129,12 +129,12 @@ export type ToolCtx = {
  *
  * A tool never writes; it says what should be written and the host lands it
  * signed as the actor, answering the batch as applied. `result` is the other
- * half: what a READ found, or an answer that is not what landed. `card` and
- * `msg` are for a host with a screen and a person in front of it — every other
- * host ignores them.
+ * half: what a READ found, or an answer that is not what landed — words a
+ * person reads included, as a field of that answer rather than a channel of
+ * its own.
  *
  * ```ts
- * run: () => ({ msg: 'two books here', result: { books: 2 } })
+ * run: () => ({ result: { text: 'two books here', books: 2 } })
  * run: (args) => ({ change: [{ entity: { eid: '$b' }, book: args }] })
  * ```
  */
@@ -143,10 +143,6 @@ export type Intent = {
   change?: Bundle[]
   /** the structured answer, where what landed is not it */
   result?: unknown
-  /** an entity a host with a screen should open */
-  card?: Eid
-  /** a line for a person */
-  msg?: string
 }
 
 /**

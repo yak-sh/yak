@@ -236,10 +236,10 @@ reply shape. A tool is handed the arguments the client sent (already checked
 against its `input`) and a `ToolCtx`: the graph to READ, and who is asking.
 Schemas are [Zod](https://zod.dev), because the MCP SDK takes Zod.
 
-A tool never writes. It answers an `Intent` — `change` for what it wants landed,
-`result` for an answer of its own, `msg` for words a person reads, and `card`
-for a host with a screen — and this server lands it (@yaks/graph `land`) signed
-as the actor. What a `change` answers is the batch as applied.
+A tool never writes. It answers an `Intent` — `change` for what it wants landed
+and `result` for an answer of its own — and this server lands it (@yaks/graph
+`land`) signed as the actor. What a `change` answers is the batch as applied.
+Words a person reads are a FIELD of that answer, never a channel beside it.
 
 A tool that carries `meta` has it handed to the client verbatim as `_meta`:
 
@@ -248,13 +248,12 @@ A tool that carries `meta` has it handed to the client verbatim as `_meta`:
   name: 'shelf',
   description: 'what is on the shelf',
   meta: { ui: { resourceUri: 'ui://shop/shelf' } },
-  run: () => ({ msg: 'two books here', result: { books: 2 } }),
+  run: () => ({ result: { text: 'two books here', books: 2 } }),
 }
 ```
 
-`msg` is what a client without schemas reads; the `result` beside it goes to one
-that renders the answer, unwrapped — a tool that says no `msg` gets its value
-under `result` instead.
+A tool that declares no schema answers its value as text alone; one that does
+gets it as `structuredContent` under `result`.
 
 ## When a host serves more than tools
 
@@ -338,10 +337,9 @@ compiler. Output schemas retain the existing Zod path.
 ### JSON Schema results
 
 Custom tools may declare `outputSchema` as a JSON Schema object, alongside
-`inputSchema`. The schema describes the complete `structuredContent` object.
-Answer `{ msg, result }` to keep a human-readable message and expose the value
-unwrapped. For ordinary return values, the server wraps the value as
-`{ result: value }`; declare that wrapper in the output schema. Failed calls use
-`isError` and do not need to conform to the success schema. JSON Schema outputs
-are validated before being returned. Existing Zod `output` declarations remain
-supported; prefer one declaration format per tool.
+`inputSchema`. The schema describes the complete `structuredContent` object. The
+server wraps every answer as `{ result: value }`; declare that wrapper in the
+output schema. Failed calls use `isError` and do not need to conform to the
+success schema. JSON Schema outputs are validated before being returned.
+Existing Zod `output` declarations remain supported; prefer one declaration
+format per tool.

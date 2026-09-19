@@ -134,16 +134,6 @@ let bare = (value: unknown): CallToolResult => ({
   content: [{ type: 'text', text: JSON.stringify(value ?? null, null, 2) }],
 })
 
-// A tool that says its own words (an intent's `msg`). The value rides
-// UNWRAPPED, because a host that renders it was told which page to render it
-// in and the page reads the answer's own shape.
-let spoke = (msg: string, value: unknown): CallToolResult => ({
-  content: [{ type: 'text', text: msg }],
-  ...(value == undefined
-    ? {}
-    : { structuredContent: value as Record<string, unknown> }),
-})
-
 // A refusal IS an error: `isError` rides the reply so a harness counts it as
 // one instead of a success that reads like an apology.
 let failed = (err: unknown): CallToolResult => ({
@@ -325,11 +315,7 @@ export let server = (opts: Options): McpServer => {
       try {
         let intent = await t.run(validateToolInput(t, args), ctx)
         let value = await landing(intent)
-        out = intent.msg != null
-          ? spoke(intent.msg, value)
-          : output || t.outputSchema
-          ? said(value)
-          : bare(value)
+        out = output || t.outputSchema ? said(value) : bare(value)
         validateToolOutput(t, out.structuredContent)
       } catch (err) {
         out = failed(err)

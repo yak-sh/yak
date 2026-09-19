@@ -38,7 +38,7 @@ import type {
 import { composed as perEntity, detached } from '@yaks/graph'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
-import type { Search } from '@yaks/mcp'
+import { outputSchema, type Search } from '@yaks/mcp'
 import type { Column, PropSchema, Vocab } from '@yaks/vocab'
 import { META } from './directory.ts'
 import { vocabIn } from './declared.ts'
@@ -127,7 +127,7 @@ export let answered = async (ctx: Ctx, out: Out): Promise<Intent> => {
   // Nobody signed in has no space to be told what is unseen in (anon.ts): the
   // breaks in an app are its members', and a stranger is not one.
   if (!out.space || !ctx.person) {
-    return { msg: out.text, result: structuredOutput(out.text, out.data) }
+    return { result: structuredOutput(out.text, out.data) }
   }
   let who = {
     person: ctx.person,
@@ -135,7 +135,7 @@ export let answered = async (ctx: Ctx, out: Out): Promise<Intent> => {
   }
   const text = out.text + unseenBlock(await serve(ctx.env, out.space, who)) +
     await ceiling(ctx.env, out.space)
-  return { msg: text, result: structuredOutput(text, out.data) }
+  return { result: structuredOutput(text, out.data) }
 }
 
 /**
@@ -172,13 +172,15 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   ...(t.idempotent ? { idempotent: true } : {}),
   ...(t.openWorld ? { openWorld: true } : {}),
   // What it answers, where it says: an intent's `result` rides as the reply's
-  // structuredContent unwrapped (@yaks/mcp `server`), so the schema describes
-  // that object itself rather than a value under a key.
-  output: t.output
-    ? (outputOf(t.output, ctx.env) as z.AnyZodObject).extend({
-      text: z.string(),
-    }).passthrough()
-    : platformOutput(t.name),
+  // structuredContent under `result` (@yaks/mcp `said`), so the schema says
+  // that wrapper and the answer's own words ride in it as `text`.
+  output: outputSchema(
+    t.output
+      ? (outputOf(t.output, ctx.env) as z.AnyZodObject).extend({
+        text: z.string(),
+      }).passthrough()
+      : platformOutput(t.name),
+  ),
   // The page a host renders this answer in (MCP Apps): the tool names it, the
   // transport hands it over verbatim, and a host without views ignores it.
   ...metaOf(t),

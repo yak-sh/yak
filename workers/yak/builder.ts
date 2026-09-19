@@ -226,6 +226,14 @@ export let roster = (ctx: Ctx): { fn: Fn; run: Run }[] =>
     run: running(ctx, t),
   }))
 
+// The words in an answer: a platform tool's sentence is a FIELD of what it
+// answers (`text`), never a second channel beside it, so this is where the
+// model's line comes from.
+let words = (intent: { result?: unknown }): string => {
+  let r = intent.result as { text?: unknown } | undefined
+  return typeof r?.text == 'string' ? r.text : ''
+}
+
 // One tool, run. A refusal is the tool's own sentence handed back to the
 // model, exactly as MCP hands it one (`isError` with the text): a bad
 // argument is something to correct on the next turn, not the end of the
@@ -238,7 +246,7 @@ let called = async (
   if (!run) return { text: `no tool ${c.name}`, ok: false }
   try {
     let said = await run(c.args.trim() ? JSON.parse(c.args) : {})
-    return { text: said.msg ?? '', ok: true }
+    return { text: words(said), ok: true }
   } catch (e) {
     return { text: e instanceof Error ? e.message : String(e), ok: false }
   }

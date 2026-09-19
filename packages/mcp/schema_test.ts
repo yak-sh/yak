@@ -187,11 +187,20 @@ Deno.test('the write door names its own words, and stays open to newer ones', as
 })
 
 Deno.test('JSON Schema output declarations reach listing unchanged and validate structured replies', async () => {
+  // A tool's answer rides under `result`, so that wrapper is what an output
+  // schema describes — there is no second, unwrapped spelling any more.
   const outputSchema = {
     type: 'object',
-    required: ['count'],
+    required: ['result'],
     additionalProperties: false,
-    properties: { count: { type: 'integer', minimum: 0 } },
+    properties: {
+      result: {
+        type: 'object',
+        required: ['count'],
+        additionalProperties: false,
+        properties: { count: { type: 'integer', minimum: 0 } },
+      },
+    },
   }
   const client = await connect({
     tools: [
@@ -199,13 +208,13 @@ Deno.test('JSON Schema output declarations reach listing unchanged and validate 
         name: 'count_good',
         description: 'Count records',
         outputSchema,
-        run: () => ({ msg: 'two records', result: { count: 2 } }),
+        run: () => ({ result: { count: 2 } }),
       },
       {
         name: 'count_bad',
         description: 'Invalid implementation',
         outputSchema,
-        run: () => ({ msg: 'wrong', result: { count: 'two' } }),
+        run: () => ({ result: { count: 'two' } }),
       },
       {
         name: 'list_values',
@@ -229,8 +238,7 @@ Deno.test('JSON Schema output declarations reach listing unchanged and validate 
       outputSchema,
     )
     const good = await client.callTool({ name: 'count_good', arguments: {} })
-    assertEquals(good.structuredContent, { count: 2 })
-    assertEquals(good.content[0].text, 'two records')
+    assertEquals(good.structuredContent, { result: { count: 2 } })
     const bad = await client.callTool({ name: 'count_bad', arguments: {} })
     assertEquals(bad.isError, true)
     const list = await client.callTool({ name: 'list_values', arguments: {} })
@@ -247,12 +255,16 @@ Deno.test('output validation does not invent defaulted result fields', async () 
       description: 'Missing required result property',
       outputSchema: {
         type: 'object',
-        required: ['count'],
+        required: ['result'],
         properties: {
-          count: { type: 'integer', default: 0 },
+          result: {
+            type: 'object',
+            required: ['count'],
+            properties: { count: { type: 'integer', default: 0 } },
+          },
         },
       },
-      run: () => ({ msg: 'no count', result: {} }),
+      run: () => ({ result: {} }),
     }],
   })
   try {

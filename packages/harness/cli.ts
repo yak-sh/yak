@@ -260,7 +260,6 @@ let overGraph = (tool: typeof declared[number]): Word => ({
           h.g.read(query, opts as undefined),
       }
       let intent = await tool.run(args, call)
-      if (intent.msg) c.out(intent.msg)
       let value = await land(intent, call)
       if (value !== undefined) c.out(JSON.stringify(value, null, 2))
       return 0
