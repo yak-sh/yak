@@ -34,12 +34,11 @@ import { archetypeDoc } from '@yaks/archetype'
 // declare the letter its entities are numbered in, and the loader carries it.
 //
 // And the app's own `vocab.json` — or `vocab.yml`, read through the same door
-// (@yaks/yaml, M-34605) — in EITHER spelling. The format is JSON
-// Schema now (D-33490 gate 3), and the five-scalar short form every app
-// deployed before it still deploys: a short-form manifest is CONVERTED here,
-// never refused, because those files exist and their rows are already written
-// (Jeff, 2026-09-05: "there are a few users! can't just drop"). The two
-// spellings load to the same vocabulary.
+// (@yaks/yaml, M-34605). It is a JSON Schema 2020-12 document with `$defs`
+// (D-33490 gate 3), the same shape every `packages/*/vocab.json` is written in,
+// and it is the ONE spelling: a keyword belongs to the column — `search`,
+// `stamped`, a reference's `death` — and a manifest flattened to bare type
+// words could not carry one (T-37546).
 import { type Host, url } from './host.ts'
 import {
   CORE_URI,
@@ -225,11 +224,15 @@ export let notifiedDoc: VocabDoc = {
  * the read door, because it is the same missing act. The fleet's own store
  * says it too (src/store/vocab.ts `TEACH`); it is spelled again here because
  * the Store carries the packages' vocabulary and never the fleet's. */
+/** What a `vocab.json` looks like, for a refusal that teaches. */
+export let EXAMPLE =
+  '{"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}}'
+
 export let GUIDE = url({}, '/guide.md')
 export let teach = (env: Host = {}) =>
   ' — a component of your own is declared in vocab.json ' +
   'and planted by app_deploy: ' +
-  '{"recipe": {"title": "text", "serves": "number"}} · call guide with page ' +
+  `${EXAMPLE} · call guide with page ` +
   `components, or ${url(env, '/guide.md')}`
 export let TEACH = teach()
 
@@ -894,15 +897,11 @@ export let RESERVED: string[] = [
   ]),
 ].sort()
 
-/** What a `vocab.json` looks like, for a refusal that teaches. */
-export let EXAMPLE =
-  '{"$defs": {"recipe": {"type": "object", "properties": {"serves": ' +
-  '{"type": "number"}}}}}'
-
-// The five words a short-form manifest spells, and the JSON Schema each is.
-// This is the whole of the old format: one component per key, one typed column
-// per entry, nothing around it.
-let SHORT: Record<string, PropSchema> = {
+// The five words a column's TYPE is spelled with, and the JSON Schema each is.
+// A manifest writes the schema; these are for reading one back in a sentence —
+// a refusal saying what a column already is, the arguments a kind's tools take
+// (kinds.ts), the types a CSV's cells are coerced to (csv.ts).
+let WORDS: Record<string, PropSchema> = {
   text: { type: 'string' },
   number: { type: 'number' },
   bool: { type: 'boolean' },
@@ -913,60 +912,20 @@ let SHORT: Record<string, PropSchema> = {
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 
-let propOf = (comp: string, col: string, type: unknown): PropSchema => {
-  let s = typeof type == 'string' ? SHORT[type] : undefined
-  if (!s) {
-    throw new Error(
-      `vocab.json: ${comp}.${col} is ${JSON.stringify(type)} — one of ${
-        Object.keys(SHORT).join(', ')
-      }`,
-    )
-  }
-  return { ...s }
-}
-
-// One short-form component. It becomes a KIND sorting before `doc`, because an
-// app's own word is the most specific thing said about a row: an entity wearing
-// `recipe` is a recipe, not the `doc` it also wears for its title.
-let compOf = (name: string, cols: unknown): PropSchema => {
-  if (!object(cols)) {
-    throw new Error(`vocab.json: ${name} is an object of columns — ${EXAMPLE}`)
-  }
-  return {
-    type: 'object',
-    kind: true,
-    before: ['doc'],
-    properties: Object.fromEntries(
-      Object.entries(cols).map(([col, t]) => [col, propOf(name, col, t)]),
-    ),
-  }
-}
-
-/**
- * The five-scalar short form, as the JSON Schema document it means:
- * `{"recipe": {"serves": "number"}}` → a `$defs.recipe` object schema whose
- * `serves` property is `{"type": "number"}`. `text` → string, `number` →
- * number, `bool` → boolean, `time` → string/date-time, `url` → string/uri.
- *
- * The result is the APP half of a load — its components sort before `doc`, so
- * it is loaded beside {@link coreDocs}, never alone.
- */
-/** The short word a declared column is spelled with, for the inverse below,
- * for a refusal that says what a column already is, and for the tools a kind is
- * worth (kinds.ts) — a tool's input speaks the same five words a column does. A
- * column no short word spells reads as `text`, which is what it stores as. */
+/** The word a declared column's type is spelled with. A column no word spells
+ * reads as `text`, which is what it stores as. */
 export let wordOf = (s: PropSchema): string =>
-  Object.entries(SHORT).find(([, one]) =>
+  Object.entries(WORDS).find(([, one]) =>
     one.type == s.type && one.format == s.format
   )?.[0] ?? 'text'
 
 /**
- * The inverse of {@link schemaOf}: a document as the five-scalar short form.
- * That is the one spelling a store ANSWERS its own words in — the kernel reads
- * an app's vocabulary as `{comp: {col: type}}` whichever way it was declared
- * (tools.ts `vocabs`, reach.ts `spoken`) — while a POST takes either.
+ * A document as `{comp: {col: word}}` — every component's columns as the word
+ * each one's type is spelled with. That is how the kernel READS a vocabulary
+ * where it needs the types and not the keywords (tools.ts `sheetOf`,
+ * reach.ts `spoken`); the document itself is what a store keeps and answers.
  */
-export let shortOf = (doc: VocabDoc): Record<string, Record<string, string>> =>
+export let wordsOf = (doc: VocabDoc): Record<string, Record<string, string>> =>
   Object.fromEntries(
     Object.entries(doc.$defs ?? {}).map(([name, schema]) => [
       name,
@@ -1101,32 +1060,35 @@ export let livesIn = (uses: Record<string, string>) =>
     `${name} lives in ${at}; this app reads and writes it there`
   )
 
-export let schemaOf = (manifest: Record<string, unknown>): VocabDoc => ({
-  $vocabulary: { [CORE_URI]: true },
-  title: 'app',
-  $defs: Object.fromEntries(
-    Object.entries(manifest).map(([name, cols]) => [name, compOf(name, cols)]),
-  ),
+/** One component an app declared. Its own word is the most specific thing said
+ * about a row — an entity wearing `recipe` is a recipe, not the `doc` it also
+ * wears for its title — so it is a KIND sorting before `doc` unless the
+ * manifest says otherwise, which is also what earns it its two tools
+ * (kinds.ts). */
+let mine = (schema: PropSchema): PropSchema => ({
+  type: 'object',
+  kind: true,
+  before: ['doc'],
+  ...schema,
 })
 
 /**
- * An app's `vocab.json` as one document, whichever spelling it was written in:
- * JSON Schema passes through, the short form is converted. The two are told
- * apart by SHAPE — a JSON Schema document declares a `$` keyword (`$defs`,
- * `$schema`, `$id`), and a manifest of bare component names cannot.
+ * An app's `vocab.json` as one document: a JSON Schema 2020-12 document with
+ * `$defs`, which is the one spelling a manifest is written in. A manifest of
+ * bare component names declares no `$` keyword, and is refused in a sentence
+ * naming the shape.
  *
  * It is checked here rather than at the load: a name the platform already owns
  * is refused, and so is anything a column cannot hold.
  *
- * `file` is what a refusal calls it — the app may have written either
- * spelling (tools.ts `spelled`), and the sentence has to name the file they
- * are looking at.
+ * `file` is what a refusal calls it — the app may have written it as `.json` or
+ * `.yml` (tools.ts `spelled`), and the sentence has to name the file they are
+ * looking at.
  *
  * `"tools": false` is the one word a manifest says about ITSELF rather than
  * about a component — no tools synthesized for its kinds (kinds.ts, T-34513) —
- * so it is lifted off in either spelling and carried on the document. A boolean
- * tells it from a component named `tools`, which is an object of columns like
- * any other.
+ * so it is lifted off and carried on the document. A boolean tells it from a
+ * component named `tools`, which is an object of columns like any other.
  */
 export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   let held = source
@@ -1143,9 +1105,24 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   let body = off === undefined
     ? held
     : Object.fromEntries(Object.entries(held).filter(([k]) => k != 'tools'))
-  let doc = Object.keys(body).some((k) => k.startsWith('$'))
-    ? body as VocabDoc
-    : schemaOf(body)
+  let keys = Object.keys(body)
+  if (keys.length && !keys.some((k) => k.startsWith('$'))) {
+    throw new Error(
+      `${file}: ${keys.join(', ')} — a manifest is a JSON Schema document, ` +
+        `one $defs entry per component and one properties entry per column: ` +
+        `${EXAMPLE}; the whole of it is in the guide under ` +
+        `"Components of your own" (${GUIDE})`,
+    )
+  }
+  let doc = body as VocabDoc
+  if (doc.$defs) {
+    doc = {
+      ...doc,
+      $defs: Object.fromEntries(
+        Object.entries(doc.$defs).map(([name, s]) => [name, mine(s)]),
+      ),
+    }
+  }
   if (off !== undefined) doc = { ...doc, tools: off }
   // The platform's words, all of them, before anything is planted: a manifest
   // refused one name at a time is probed one deploy at a time, and every probe

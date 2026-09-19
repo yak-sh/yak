@@ -150,6 +150,7 @@ import {
   aims,
   type Bucket,
   carry,
+  documented,
   FILED,
   filed,
   filings,
@@ -439,6 +440,7 @@ export class Store {
   #start() {
     let ctx = this.#ctx
     ctx.storage.sql.exec(KV)
+    this.#documenting()
     this.#pending = !this.#get('migrated') && stale(ctx.storage)
     if (!this.#pending) this.#boot()
     if (this.#refused) return
@@ -452,6 +454,17 @@ export class Store {
         (housed(ctx.storage) || slugged(ctx.storage) ||
           aimedOld(ctx.storage) || unhandled(ctx.storage) ||
           unfiled(ctx.storage)))
+  }
+
+  // The vocabulary an object KEEPS is the document (T-37546). A store that
+  // last accepted the short type map an app's vocab.json could be written as
+  // remembers it that way, and nothing converts one at the door any more — so
+  // it is rewritten here, once, before anything above the storage reads it
+  // (migrate.ts `documented`). After one wake no short map is left anywhere.
+  #documenting() {
+    let held = this.#get('vocab')
+    let doc = held && documented(held)
+    if (doc) this.#put('vocab', doc)
   }
 
   // Waking on whatever this object holds. Everything above the storage is
@@ -1699,14 +1712,11 @@ export class Store {
   // ever leaves — the DDL is additive and a column's rows are already written —
   // so `dropped` is empty and stays that way.
   //
-  // What is kept, and answered, is the DOCUMENT (T-37546). The short form
-  // `{comp: {col: type}}` is a convenience an app may still WRITE, and it is
-  // normalized to a document here, once, at the one door that takes one: a
-  // keyword is the column's — `search`, `stamped`, a reference's `death` — and
-  // a manifest flattened to its types on the way in dropped every one of them
-  // before any store could read it. A store that last accepted the short form
-  // is converted on the way OUT (vocab.ts `meant`), so a reader never learns
-  // there were two spellings, and the next deploy writes the document down.
+  // What is written, kept and answered is one thing: the DOCUMENT (T-37546).
+  // A manifest is a JSON Schema document and nothing else — a keyword is the
+  // column's (`search`, `stamped`, a reference's `death`), and a manifest
+  // flattened to bare type words dropped every one of them before any store
+  // could read it.
   #vocabDoor(request: Request): Response | Promise<Response> {
     if (request.method == 'GET') {
       return Response.json(meant(this.#get('vocab') ?? '{}'))

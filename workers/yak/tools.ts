@@ -39,20 +39,21 @@ import type { Blobs } from '../../src/store/blobs.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { fullFiles } from './usage.ts'
 import { parseTools, TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
-import { borrowed, EXAMPLE, type Vocab } from '../../src/store/vocab.ts'
+import { borrowed, type Vocab } from '../../src/store/vocab.ts'
 import type { EntityLiteral } from '../../src/mutation.ts'
 import { appAccess } from '../../src/types.ts'
 import { VERSION } from '../../src/version.ts'
 import {
   appDoc,
   coreDocs,
+  EXAMPLE,
   grew,
   homed,
   type Homes,
   livesIn,
   meant,
-  shortOf,
   teach,
+  wordsOf,
 } from './vocab.ts'
 import { withKinds } from './kinds.ts'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
@@ -683,18 +684,18 @@ let mapping = (v: unknown): Record<string, string> | undefined => {
 
 // What a CSV is read AS (csv.ts): the component a row becomes, and the type
 // each of its columns takes. The words are the platform's own plus this app's,
-// in the five-scalar short form a store answers its own words in (vocab.ts
-// `shortOf`) — an app declares scalars, and a core column that is a reference
-// or a closed set holds the text a cell has anyway.
+// each column as the word its type is spelled with (vocab.ts `wordsOf`) — an
+// app declares scalars, and a core column that is a reference or a closed set
+// holds the text a cell has anyway.
 let sheetOf = async (
   store: Door,
   as: string,
   map?: Record<string, string>,
   env: Pick<Env, 'APEX'> = {},
 ): Promise<Sheet> => {
-  let mine = shortOf(appDoc(await answer(await store('/vocab'))))
+  let mine = wordsOf(appDoc(await answer(await store('/vocab'))))
   let words: Record<string, Cols> = {}
-  for (let doc of coreDocs) Object.assign(words, shortOf(doc))
+  for (let doc of coreDocs) Object.assign(words, wordsOf(doc))
   Object.assign(words, mine)
   if (!(as in words)) {
     throw new Error(
@@ -780,17 +781,15 @@ let released = async (
   let kept: string[] = []
   // And the words this app USES rather than homes (T-32728).
   let uses: Record<string, string> = {}
-  // The manifest as WRITTEN, which is where a kind says it is one and what it
-  // means — the store keeps the short form of its words (graph.ts) and neither
-  // survives the round trip. It is what the tools below are generated from.
+  // The manifest as WRITTEN, which is where a kind says what it means. It is
+  // what the tools below are generated from.
   let manifest: VocabDoc = {}
   let vocabTook = c.since()
   if (key) {
     let source = new TextDecoder().decode(await blobs.get(key))
-    // The manifest as one document, in whichever spelling the app wrote it
-    // (vocab.ts `appDoc`, @yaks/yaml): everything below reads the document,
-    // so nothing here has to know there are two spellings of the file, and a
-    // column's keywords ride all the way to the store that plants it.
+    // The manifest as one document (vocab.ts `appDoc`, @yaks/yaml — the file
+    // may be .json or .yml): a column's keywords ride all the way to the store
+    // that plants it.
     manifest = appDoc(source, vocabFile)
     // One word, one home: a word another app in the space already declares is
     // that app's, so this release records a USE of it instead of planting a
@@ -901,8 +900,7 @@ let released = async (
   // (graph.ts `/tools`) — a store that parsed its own tools would be a second
   // vocabulary inside the object, and the one that plants the words is the one
   // that can say which they are.
-  // Either spelling of the manifest says the same words (vocab.ts `appDoc`),
-  // and a tool is checked against the NAMES, so that is all this reads.
+  // A tool is checked against the NAMES, so the names are all this reads.
   let words = Object.fromEntries(
     Object.keys(
       appDoc(JSON.parse(await answer(await store('/vocab')))).$defs ?? {},

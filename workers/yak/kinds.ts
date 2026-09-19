@@ -40,8 +40,8 @@ let plural = (word: string) =>
     ? `${word.slice(0, -1)}ies`
     : `${word}s`
 
-// What the vocabulary says the kind IS, as the tail of a sentence. A manifest
-// in the five-scalar short form says nothing, and the sentence stops early
+// What the vocabulary says the kind IS, as the tail of a sentence. A component
+// that declared no `description` says nothing, and the sentence stops early
 // rather than inventing a meaning the app never claimed. No full stop: the door
 // appends the app's title and address to every declared tool's sentence
 // (declared.ts), and that reads as one line.

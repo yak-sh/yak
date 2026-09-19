@@ -25,8 +25,8 @@ import { parse } from '@std/csv'
 import type { Bundle } from '@yaks/graph'
 import type { Sown } from './seed.ts'
 
-/** A component's columns, as the type each takes: the five-scalar short form a
- * store answers its own words in (vocab.ts `shortOf`). */
+/** A component's columns, as the type each takes: the word each column's type
+ * is spelled with (vocab.ts `wordsOf`). */
 export type Cols = Record<string, string>
 
 /** What a CSV is read AS: the component every row wears, that component's

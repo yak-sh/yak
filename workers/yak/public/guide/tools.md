@@ -35,7 +35,10 @@ You get the first two for nothing. Every component an app's `vocab.json`
 declares is a KIND — a thing this app is about — and `app_deploy` gives each one
 a verb for adding one and a verb for finding one again:
 
-    vocab.json  { "recipe": { "serves": "number", "cuisine": "text" } }
+    vocab.json  { "$defs": {
+                    "recipe": { "properties": {
+                      "serves":  { "type": "number" },
+                      "cuisine": { "type": "string" } } } } }
 
     →  add_recipe    title, body, alias, serves, cuisine
        find_recipe   words, serves, cuisine, limit
@@ -56,8 +59,8 @@ apps here can do, so the app answers there whether or not anybody wrote a
 
 Two ways to say otherwise:
 
-- **Opt out** — `"tools": false` at the top of `vocab.json`, beside the
-  components. The app declares its kinds and gets no generated commands at all.
+- **Opt out** — `"tools": false` at the top of `vocab.json`, beside `$defs`.
+  The app declares its kinds and gets no generated commands at all.
 - **Override** — declare `add_recipe` or `find_recipe` in `tools.json` yourself.
   Your entry wins whole: your sentence, your arguments, your template. A
   hand-written command says what the app MEANS; a generated one only says what
@@ -461,7 +464,11 @@ Expect the frame to be narrow: a view is drawn inside a conversation.
 
 The run club, with the vocabulary it needs. `vocab.json`:
 
-    { "jog": { "who": "text", "miles": "number", "at": "time" } }
+    { "$defs": {
+        "jog": { "properties": {
+          "who":   { "type": "string" },
+          "miles": { "type": "number" },
+          "at":    { "type": "string", "format": "date-time" } } } } }
 
 `tools.json`:
 

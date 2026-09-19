@@ -1,7 +1,6 @@
-// The app vocabulary, held to three things: the short form every example in
-// the guide is written in still converts, the two spellings load to the SAME
-// vocabulary, and what the load implies is one app's tables — not the fleet's
-// 83 (V-33553).
+// The app vocabulary, held to two things: every example the guide teaches
+// loads, and what a load implies is ONE app's tables — not the fleet's 83
+// (V-33553).
 import {
   assert,
   assertEquals,
@@ -10,12 +9,12 @@ import {
 } from '@std/assert'
 import { schema } from '@yaks/sqlite'
 import { fields } from '@yaks/fts'
-import { EXAMPLE as SHORT_EXAMPLE } from '../../src/store/vocab.ts'
 import ops from '../../src/store/schema.json' with { type: 'json' }
 import { PAGES } from './guide.ts'
 import {
   appDoc,
   appVocab,
+  EXAMPLE,
   homed,
   livesIn,
   meant,
@@ -23,8 +22,18 @@ import {
   platformVocab,
   RELATIONS,
   RESERVED,
-  schemaOf,
 } from './vocab.ts'
+import type { PropSchema, VocabDoc } from '@yaks/vocab'
+
+// A manifest in the one spelling, without every test saying `$defs` and
+// `properties` around it. The columns are written as they are declared.
+let says = (defs: Record<string, Record<string, PropSchema>>): VocabDoc => ({
+  $defs: Object.fromEntries(
+    Object.entries(defs).map(([name, props]) => [name, { properties: props }]),
+  ),
+})
+let txt: PropSchema = { type: 'string' }
+let num: PropSchema = { type: 'number' }
 
 let read = (path: string) =>
   Deno.readTextFileSync(new URL(path, import.meta.url))
@@ -50,22 +59,14 @@ let braced = (text: string): unknown[] => {
   return out
 }
 
-// A short-form manifest, by its own shape: components of typed columns.
-let TYPES = ['text', 'number', 'bool', 'time', 'url']
-let manifest = (v: unknown): v is Record<string, Record<string, string>> => {
-  let cols = Object.values(v as Record<string, unknown>)
-  return !!v && typeof v == 'object' && !Array.isArray(v) && cols.length > 0 &&
-    cols.every((c) =>
-      !!c && typeof c == 'object' && !Array.isArray(c) &&
-      Object.values(c as Record<string, unknown>).every((t) =>
-        typeof t == 'string' && TYPES.includes(t)
-      )
-    )
-}
+// A manifest in a page, by its own shape: a JSON Schema document.
+let manifest = (v: unknown): v is VocabDoc =>
+  !!v && typeof v == 'object' && !Array.isArray(v) &&
+  !!(v as VocabDoc).$defs
 
-let examples = (): [string, Record<string, Record<string, string>>][] => {
+let examples = (): [string, VocabDoc][] => {
   let sources: [string, string][] = [
-    ['store/vocab.ts EXAMPLE', SHORT_EXAMPLE],
+    ['vocab.ts EXAMPLE', EXAMPLE],
     ['guide.md', read('./public/guide.md')],
     ...PAGES.map((
       p,
@@ -77,87 +78,54 @@ let examples = (): [string, Record<string, Record<string, string>>][] => {
     ),
   ]
   return sources.flatMap(([where, text]) =>
-    braced(text).filter(manifest).map((
-      m,
-    ) => [where, m] as [string, Record<string, Record<string, string>>])
+    braced(text).filter(manifest).map((m) => [where, m] as [string, VocabDoc])
   )
 }
 
-Deno.test('every example vocab.json in the repo converts and loads', () => {
+Deno.test('every example vocab.json in the repo loads', () => {
   let found = examples()
   // The guide is full of them; finding almost none means the extractor broke,
   // not that the examples went away.
   assert(found.length >= 15, `only ${found.length} examples found`)
   for (let [where, m] of found) {
     let v = appVocab(m)
-    for (let [name, cols] of Object.entries(m)) {
+    for (let [name, schema] of Object.entries(m.$defs ?? {})) {
       assertEquals(
         v.comp(name)?.writable.sort(),
-        Object.keys(cols).sort(),
+        Object.keys(schema.properties ?? {}).sort(),
         where,
       )
-      for (let [col, type] of Object.entries(cols)) {
-        assertEquals(
-          v.column(name, col)?.scalar,
-          type,
-          `${where} ${name}.${col}`,
-        )
-      }
     }
   }
 })
 
-Deno.test('the five scalars each become their JSON Schema type', () => {
+// A component an app declares is a KIND sorting before `doc` without saying
+// so: its own word is the most specific thing said about a row, and that is
+// what earns it its two tools (kinds.ts).
+Deno.test("an app's own word is a kind before doc", () => {
+  let v = appVocab(says({ recipe: { serves: num } }))
+  assertEquals(v.kindOf({ doc: 1, recipe: 1 }), 'recipe')
+  // Unless the manifest says otherwise.
   assertEquals(
-    schemaOf({ t: { a: 'text', b: 'number', c: 'bool', d: 'time', e: 'url' } })
-      .$defs?.t.properties,
-    {
-      a: { type: 'string' },
-      b: { type: 'number' },
-      c: { type: 'boolean' },
-      d: { type: 'string', format: 'date-time' },
-      e: { type: 'string', format: 'uri' },
-    },
+    appVocab({ $defs: { note: { type: 'object', kind: false } } }).kinds
+      .includes('note'),
+    false,
   )
 })
 
-// The whole point of converting rather than refusing: an app deployed before
-// JSON Schema and one written in it are the same store.
-Deno.test('an old-format and a new-format app load to one vocabulary', () => {
-  let old = appVocab('{"recipe": {"serves": "number", "source": "text"}}')
-  let now = appVocab({
-    $defs: {
-      recipe: {
-        type: 'object',
-        kind: true,
-        before: ['doc'],
-        properties: {
-          serves: { type: 'number' },
-          source: { type: 'string' },
-        },
-      },
-    },
-  })
-  let said = (v: typeof old) =>
-    v.all.map((c) =>
-      `${c}(${
-        v.columns(c).map((p) =>
-          `${p}:${v.column(c, p)!.scalar ?? v.column(c, p)!.category}`
-        )
-      })`
-    ).join(' ')
-  assertEquals(said(old), said(now))
-  assertEquals(old.kinds, now.kinds)
-  assertEquals(old.kindOf({ doc: 1, recipe: 1 }), 'recipe')
-})
-
-// A JSON Schema document is told from the short form by SHAPE, not by a flag.
-Deno.test('the two spellings are told apart by shape', () => {
-  assertEquals(Object.keys(appDoc('{"jot": {"note": "text"}}').$defs ?? {}), [
-    'jot',
-  ])
-  assertEquals(appDoc({ $defs: { jot: { type: 'object' } } }).title, undefined)
+// There is ONE spelling. A manifest of bare component names is not a shorter
+// way to say a document — it is refused, in the shape that works.
+Deno.test('a manifest that is not a document is refused', () => {
+  let why = assertThrows(
+    () => appDoc('{"recipe": {"serves": "number"}}'),
+    Error,
+  ).message
+  assertStringIncludes(why, 'vocab.json: recipe — a manifest is a JSON Schema')
+  assertStringIncludes(why, '"$defs"')
+  assertStringIncludes(why, 'guide')
+  // Nothing declared is not a refusal: an app may have no words of its own.
   assertEquals(Object.keys(appDoc('').$defs ?? {}), [])
+  assertEquals(Object.keys(appDoc('{}').$defs ?? {}), [])
   assertEquals(Object.keys(appDoc(undefined).$defs ?? {}), [])
 })
 
@@ -165,9 +133,11 @@ Deno.test('the two spellings are told apart by shape', () => {
 // (@yaks/yaml, M-34605). The two spellings of the FILE are the same manifest;
 // which one an app wrote is what a refusal has to name.
 Deno.test('a manifest may be written as YAML', () => {
-  let yml = appDoc('recipe:\n  title: text\n  serves: number\n', 'vocab.yml')
-  let json = appDoc('{"recipe": {"title": "text", "serves": "number"}}')
-  assertEquals(yml, json)
+  let yml = appDoc(
+    '$defs:\n  recipe:\n    properties:\n      serves:\n        type: number\n',
+    'vocab.yml',
+  )
+  assertEquals(yml, appDoc(says({ recipe: { serves: num } })))
 })
 
 Deno.test('a broken manifest is refused in its own file name', () => {
@@ -187,19 +157,14 @@ Deno.test('a manifest is refused in the words that fix it', () => {
   assertThrows(() => appDoc('{'), Error, 'vocab.json is not JSON')
   assertThrows(() => appDoc('[]'), Error, 'vocab.json is an object')
   assertThrows(
-    () => appDoc('{"recipe": {"serves": "int"}}'),
-    Error,
-    'recipe.serves is "int" — one of text, number, bool, time, url',
-  )
-  assertThrows(
-    () => appDoc('{"doc": {"headline": "text"}}'),
+    () => appDoc(says({ doc: { headline: txt } })),
     Error,
     'doc is a word the platform already says',
   )
   // Every collision at once, so probing for a free name is one deploy and not
   // one a name (C-32624 item 1).
   assertThrows(
-    () => appDoc('{"card": {}, "entry": {"at": "time"}, "jotting": {}}'),
+    () => appDoc(says({ card: {}, entry: { at: txt }, jotting: {} })),
     Error,
     'card, entry are words the platform already says',
   )
@@ -216,7 +181,7 @@ let tablesOf = (sql: string[]) =>
 // into every customer's Durable Object today; this is the whole of what a
 // store needs instead.
 Deno.test('the loaded vocabulary implies core + member + edge + the app', () => {
-  let sql = schema(appVocab('{"recipe": {"serves": "number"}, "cooked": {}}'))
+  let sql = schema(appVocab(says({ recipe: { serves: num }, cooked: {} })))
   assertEquals(
     tablesOf(sql),
     [
@@ -380,12 +345,12 @@ Deno.test('a searched column of an app reaches the index fields', () => {
 // the home's table. What travels is the column's SCHEMA, so the keywords a
 // borrowed column declares reach the store that plants it (T-37546).
 Deno.test('a word the space already has is a use, not a home', () => {
-  let shelf = appDoc({ book: { title: 'text', pages: 'number' } })
+  let shelf = appDoc(says({ book: { title: txt, pages: num } }))
   let homes = {
     book: { at: 'reading-list', props: shelf.$defs!.book.properties! },
   }
   let out = homed(
-    appDoc({ book: { title: 'text' }, loan: { to: 'text' } }),
+    appDoc(says({ book: { title: txt }, loan: { to: txt } })),
     homes,
   )
   // The word this app is the first to say stays its own; the shared one does
@@ -416,7 +381,7 @@ Deno.test('a word the space already has is a use, not a home', () => {
   // And the one refusal: the same column, two types, named with both and
   // with the app the word lives in.
   let why = assertThrows(
-    () => homed(appDoc({ book: { pages: 'text' } }), homes),
+    () => homed(appDoc(says({ book: { pages: txt } })), homes),
     Error,
   ).message
   assertStringIncludes(why, 'book.pages is text here and number in')
@@ -441,14 +406,9 @@ Deno.test('a searched column that holds no prose is refused', () => {
   )
 })
 
-// What a store KEEPS is the document (graph.ts `#vocabDoor`), and a store that
-// last accepted the short form is converted on the way out, so no reader ever
-// learns there were two spellings.
-Deno.test('a store answers the document it means, either spelling', () => {
-  assertEquals(
-    meant('{"recipe": {"serves": "number"}}').$defs?.recipe.properties,
-    { serves: { type: 'number' } },
-  )
+// What a store KEEPS is the document (graph.ts `#vocabDoor`), and what it
+// answers is that document, keywords and all.
+Deno.test('a store answers the document it means', () => {
   assertEquals(
     meant({
       $defs: {
@@ -463,5 +423,6 @@ Deno.test('a store answers the document it means, either spelling', () => {
   // An answer nothing can read is an app with no words of its own, never a
   // failed request: a deploy is where a manifest is refused.
   assertEquals(meant('{'), {})
-  assertEquals(meant({ doc: { headline: 'text' } }), {})
+  assertEquals(meant({ recipe: { serves: 'number' } }), {})
+  assertEquals(meant(says({ doc: { headline: txt } })), {})
 })

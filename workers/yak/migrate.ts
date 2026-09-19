@@ -99,6 +99,68 @@ export let SLOTS = [
   'schema_version',
 ]
 
+/** The five type words the short manifest spelled, and the JSON Schema each
+ * meant. Frozen here rather than read off vocab.ts: what a stored slot MEANT is
+ * history, and history does not move when the platform's words do. */
+let WAS: Record<string, Record<string, unknown>> = {
+  text: { type: 'string' },
+  number: { type: 'number' },
+  bool: { type: 'boolean' },
+  time: { type: 'string', format: 'date-time' },
+  url: { type: 'string', format: 'uri' },
+}
+
+/**
+ * The vocabulary slot a store kept before T-37546, as the document it means.
+ * An app's `vocab.json` could be written as a short type map —
+ * `{"recipe": {"serves": "number"}}` — and a store that last accepted one
+ * remembers it that way. That spelling is gone: a manifest is a JSON Schema
+ * document and nothing converts one at the door any more, so a store still
+ * holding a short map is rewritten at its next open (graph.ts `#documenting`)
+ * and never reads one again.
+ *
+ * `null` where there is nothing to do — an empty slot, a slot that is already a
+ * document, or one no reader could parse — which is every store after one wake.
+ *
+ * `"tools": false` is the manifest's one word about itself, so it rides across
+ * as the document's own; every other key is a component.
+ */
+export let documented = (held: string): string | null => {
+  let said: unknown
+  try {
+    said = JSON.parse(held)
+  } catch {
+    return null
+  }
+  if (!said || typeof said != 'object' || Array.isArray(said)) return null
+  let body = said as Record<string, unknown>
+  let keys = Object.keys(body)
+  if (!keys.length || keys.some((k) => k.startsWith('$'))) return null
+  let defs: Record<string, unknown> = {}
+  let tools: boolean | undefined
+  for (let [name, cols] of Object.entries(body)) {
+    if (name == 'tools' && typeof cols == 'boolean') {
+      tools = cols
+      continue
+    }
+    if (!cols || typeof cols != 'object' || Array.isArray(cols)) return null
+    defs[name] = {
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: Object.fromEntries(
+        Object.entries(cols as Record<string, unknown>).map(([col, word]) => [
+          col,
+          { ...(WAS[String(word)] ?? WAS.text) },
+        ]),
+      ),
+    }
+  }
+  return JSON.stringify(
+    tools === undefined ? { $defs: defs } : { $defs: defs, tools },
+  )
+}
+
 /** The marker written when a pass reconciles, so it never runs twice. The
  * number is the version an object stands at: {@link MARK} is the move off the
  * fleet-shaped store, and each one after it a pass over the new schema

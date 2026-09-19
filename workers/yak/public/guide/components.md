@@ -184,7 +184,9 @@ written, when the message was left, when the seedling went in. That is not a
 second copy of the stamp; they are two different facts, and they disagree
 exactly when it matters — an import.
 
-    { "jotting": { "written": "time" } }
+    { "$defs": {
+        "jotting": { "properties": {
+          "written": { "type": "string", "format": "date-time" } } } } }
 
     graph_apply { app: 'diary', entities: [
       { doc: { body: 'Beans in, back bed.' },
@@ -204,18 +206,22 @@ section.
 
 ## The column types
 
-A column is one of these:
+A column is one of these, and a `vocab.json` spells it with the JSON Schema
+beside it:
 
-- `text` — one line, or many. The catch-all.
-- `number` — stored as a SQLite real, so integers and decimals both fit.
-- `bool` — true or false.
-- `time` — an ISO 8601 timestamp with a zone, as text:
+- `text` — `{"type": "string"}`. One line, or many. The catch-all.
+- `number` — `{"type": "number"}`, stored as a SQLite real, so integers and
+  decimals both fit.
+- `bool` — `{"type": "boolean"}`. True or false.
+- `time` — `{"type": "string", "format": "date-time"}`, an ISO 8601 timestamp
+  with a zone, as text:
   `new Date().toISOString()`, or `'2026-04-11T12:00:00Z'` written by hand. It
   comes back exactly as it was sent, so it is a string on the way in and a
   string on the way out; `new Date(row.jotting.written)` when you need to do
   arithmetic with it, and the ordinary comparisons filter it
   (`.jotting.written>=2026-04-01`).
-- `url` — an address out on the web; text with a link's face.
+- `url` — `{"type": "string", "format": "uri"}`, an address out on the web;
+  text with a link's face.
 - `eid` — a reference to another entity. The platform's own words have these; a
   `vocab.json` cannot declare one (below).
 - a closed set of words — the platform's alone; a refusal spells the set,
@@ -255,7 +261,8 @@ from, never what some other graph has:
 
     unknown component: dayline — a component of your own is declared in
       vocab.json and planted by app_deploy:
-      {"recipe": {"title": "text", "serves": "number"}}
+      {"$defs": {"recipe": {"properties": {"title": {"type": "string"},
+        "serves": {"type": "number"}}}}}
       · https://yaks.app/guide.md
 
 A column that exists but is the server's (`created.at`, `completed.via`) is
@@ -281,12 +288,18 @@ blob and answers null when there is none.
 ## Components of your own
 
 An app names its own components in a `vocab.json` at its root, and `app_deploy`
-plants them in that app's store. One object, one key per component, one typed
-column per entry — nothing around it:
+plants them in that app's store. It is a JSON Schema document, which is what the
+platform speaks underneath: one `$defs` entry per component, one `properties`
+entry per column — nothing around it:
 
-    { "recipe": { "serves": "number", "minutes": "number",
-                  "source": "text" },
-      "cooked": { "on": "time", "again": "bool" } }
+    { "$defs": {
+        "recipe": { "properties": {
+          "serves":  { "type": "number" },
+          "minutes": { "type": "number" },
+          "source":  { "type": "string" } } },
+        "cooked": { "properties": {
+          "on":    { "type": "string", "format": "date-time" },
+          "again": { "type": "boolean" } } } } }
 
 After the deploy those are components like any other: write them in a bundle,
 read them back on the row, filter on them, name them in a `tools.json`.
@@ -297,16 +310,19 @@ read them back on the row, filter on them, name them in a `tools.json`.
     let quick = await query('.recipe.minutes<=30&.doc?')
 
 Write it as `vocab.yml` instead if you would rather read it — YAML is the same
-manifest in fewer brackets, and an app that has both is deployed from the
-`.yml`:
+manifest with fewer braces and quotes, and an app that has both is deployed from
+the `.yml`:
 
-    recipe:
-      serves: number
-      minutes: number
-      source: text
-    cooked:
-      on: time
-      again: bool
+    $defs:
+      recipe:
+        properties:
+          serves: { type: number }
+          minutes: { type: number }
+          source: { type: string }
+      cooked:
+        properties:
+          on: { type: string, format: date-time }
+          again: { type: boolean }
 
 A component name is `a-z`, then `a-z0-9_`, up to 40 characters, and may not be
 one of the platform's words. A COLUMN name follows the same spelling and is
@@ -317,7 +333,10 @@ component, and `.recipe.doc` addresses it rather than the doc beside it.
 **A chore board.** The state is the platform's, so declare only what the
 platform has no word for:
 
-    { "chore": { "room": "text", "every_days": "number" } }
+    { "$defs": {
+        "chore": { "properties": {
+          "room":       { "type": "string" },
+          "every_days": { "type": "number" } } } } }
 
     await apply({ entity: { eid: '$c' },
       doc: { title: 'Descale the kettle' },
@@ -330,9 +349,15 @@ platform has no word for:
 **A reading list.** Two components, because a book and your reading of it are
 two aspects — one is true of the book forever, the other is yours and changes:
 
-    { "book": { "author": "text", "pages": "number", "isbn": "text" },
-      "reading": { "started": "time", "finished": "time",
-                   "rating": "number" } }
+    { "$defs": {
+        "book": { "properties": {
+          "author": { "type": "string" },
+          "pages":  { "type": "number" },
+          "isbn":   { "type": "string" } } },
+        "reading": { "properties": {
+          "started":  { "type": "string", "format": "date-time" },
+          "finished": { "type": "string", "format": "date-time" },
+          "rating":   { "type": "number" } } } } }
 
     await apply({ entity: { eid: '$b' }, doc: { title: 'Piranesi' },
       book: { author: 'Susanna Clarke', pages: 245 } })
@@ -346,44 +371,25 @@ two aspects — one is true of the book forever, the other is yours and changes:
 
 **A recipe box with pictures.** Your word points at the platform's:
 
-    { "recipe": { "serves": "number", "minutes": "number" },
-      "photo": { "caption": "text", "blob": "text" } }
+    { "$defs": {
+        "recipe": { "properties": {
+          "serves":  { "type": "number" },
+          "minutes": { "type": "number" } } },
+        "photo": { "properties": {
+          "caption": { "type": "string" },
+          "blob":    { "type": "string" } } } } }
 
 `photo.blob` is `text` and not `eid`, because a manifest cannot declare a
 reference. It costs nothing here: it holds the eid `upload` answered with, and
 `./api/blob/<eid>` serves the bytes.
 
-Your words are yours. No other app's store has heard of them, and no other app's
-rows can collide with them — unless a sibling app of the same person names the
-same word, which is the next page.
-
-## The same manifest, as JSON Schema
-
-A `vocab.json` may also be written as a JSON Schema document, which is what the
-platform speaks underneath and the form to reach for in a new app. One `$defs`
-entry per component, one `properties` entry per column:
+**A searched column.** A column says more than its type when it carries a
+keyword. `"search": true` is the one to know: it puts that column's words in the
+search index, so `search` finds a row by what is written there, the way it
+already finds one by its title or its body.
 
     { "$defs": {
-        "recipe": { "type": "object", "properties": {
-          "serves":  { "type": "number" },
-          "minutes": { "type": "number" },
-          "source":  { "type": "string" } } } } }
-
-The short form above is that said shorter, and it is still accepted: a manifest
-with no `$defs` is read as `{"component": {"column": "type"}}` and converted on
-the way in. `text` is `{"type": "string"}`, `number` is `{"type": "number"}`,
-`bool` is `{"type": "boolean"}`, `time` is
-`{"type": "string", "format": "date-time"}`, and `url` is
-`{"type": "string", "format": "uri"}`. Both spellings plant the same columns, so
-nothing about an app already deployed changes.
-
-What the long form can say that the short one cannot is a keyword ON a column.
-`"search": true` is the one to know: it puts that column's words in the search
-index, so `search` finds a row by what is written there, the way it already
-finds one by its title or its body.
-
-    { "$defs": {
-        "recipe": { "type": "object", "properties": {
+        "recipe": { "properties": {
           "serves": { "type": "number" },
           "method": { "type": "string", "search": true } } } } }
 
@@ -391,6 +397,10 @@ Only prose can be searched — a number, a date and a URL are matched by their
 value, not read — so `"search": true` anywhere else is refused at deploy, in a
 sentence naming the column. A column that says nothing is stored and readable
 and simply never searched.
+
+Your words are yours. No other app's store has heard of them, and no other app's
+rows can collide with them — unless a sibling app of the same person names the
+same word, which is the next page.
 
 ## How a vocabulary evolves
 

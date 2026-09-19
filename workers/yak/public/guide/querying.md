@@ -22,10 +22,17 @@ do.
 
 The examples are a kitchen app: a `vocab.json` declaring
 
-    { "recipe": { "serves": "number", "minutes": "number",
-                  "cuisine": "text" },
-      "chore":  { "every": "number" },
-      "reading": { "pages": "number", "started": "time", "done": "bool" } }
+    { "$defs": {
+        "recipe": { "properties": {
+          "serves":  { "type": "number" },
+          "minutes": { "type": "number" },
+          "cuisine": { "type": "string" } } },
+        "chore": { "properties": {
+          "every": { "type": "number" } } },
+        "reading": { "properties": {
+          "pages":   { "type": "number" },
+          "started": { "type": "string", "format": "date-time" },
+          "done":    { "type": "boolean" } } } } }
 
 beside the platform's own words — `doc`, `task`, `comment`, `archived`,
 `created` and the rest.

@@ -89,8 +89,12 @@ refusal, and the rows are all in one place:
 A column the borrower adds grows the HOME's table, additively, and is then
 writable from either app:
 
-    lending/vocab.json: { "book": { "title": "text", "isbn": "text" },
-                          "loan": { "to": "text" } }
+    lending/vocab.json: { "$defs": {
+      "book": { "properties": {
+        "title": { "type": "string" },
+        "isbn":  { "type": "string" } } },
+      "loan": { "properties": {
+        "to": { "type": "string" } } } } }
     → added: book.isbn
 
 **From the agent tier and from an app's own commands, a borrowed word just
@@ -197,11 +201,18 @@ every space they belong to — and answered as one bundle per entity.
 Two apps, one shelf of books.
 
     reading-list/vocab.json
-    { "book": { "author": "text", "pages": "number" } }
+    { "$defs": {
+        "book": { "properties": {
+          "author": { "type": "string" },
+          "pages":  { "type": "number" } } } } }
 
     lending/vocab.json
-    { "book": { "author": "text" }, "loan": { "to": "text",
-      "due": "time" } }
+    { "$defs": {
+        "book": { "properties": {
+          "author": { "type": "string" } } },
+        "loan": { "properties": {
+          "to":  { "type": "string" },
+          "due": { "type": "string", "format": "date-time" } } } } }
 
 The lending deploy answers:
 
