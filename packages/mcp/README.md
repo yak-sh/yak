@@ -252,8 +252,10 @@ A tool that carries `meta` has it handed to the client verbatim as `_meta`:
 }
 ```
 
-A tool that declares no schema answers its value as text alone; one that does
-gets it as `structuredContent` under `result`.
+A tool that answers words — a `text` field on its answer — says them as its text
+block and hands the whole answer over as `structuredContent`, in that very
+shape. One that answers no words says its value as JSON, under `result` where it
+declared a schema for it.
 
 ## When a host serves more than tools
 

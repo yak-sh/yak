@@ -366,12 +366,11 @@ Deno.test('a tool that says its own words says them, and its data beside', async
     content: { text: string }[]
     structuredContent?: unknown
   }
-  // A tool with no declared schema answers its value as text and nothing else.
-  assertEquals(
-    out.content[0].text,
-    JSON.stringify({ text: 'two books here', books: 2 }, null, 2),
-  )
-  assertEquals(out.structuredContent, undefined)
+  // Its words are its text block, and the answer they are a field of rides
+  // beside them — unwrapped, because the page a host renders it in was named
+  // by this tool and reads the answer's own shape.
+  assertEquals(out.content[0].text, 'two books here')
+  assertEquals(out.structuredContent, { text: 'two books here', books: 2 })
   await client.close()
 })
 

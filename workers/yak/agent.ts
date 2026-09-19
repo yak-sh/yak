@@ -38,7 +38,7 @@ import type {
 import { composed as perEntity, detached } from '@yaks/graph'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
-import { outputSchema, type Search } from '@yaks/mcp'
+import type { Search } from '@yaks/mcp'
 import type { Column, PropSchema, Vocab } from '@yaks/vocab'
 import { META } from './directory.ts'
 import { vocabIn } from './declared.ts'
@@ -171,16 +171,15 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   ...(t.destructive == null ? {} : { destructive: t.destructive }),
   ...(t.idempotent ? { idempotent: true } : {}),
   ...(t.openWorld ? { openWorld: true } : {}),
-  // What it answers, where it says: an intent's `result` rides as the reply's
-  // structuredContent under `result` (@yaks/mcp `said`), so the schema says
-  // that wrapper and the answer's own words ride in it as `text`.
-  output: outputSchema(
-    t.output
-      ? (outputOf(t.output, ctx.env) as z.AnyZodObject).extend({
-        text: z.string(),
-      }).passthrough()
-      : platformOutput(t.name),
-  ),
+  // What it answers, where it says: an intent's `result` carries this tool's
+  // own words as `text`, so the reply says them and hands the answer over in
+  // this very shape (@yaks/mcp `said`) — which is the shape the page a host
+  // renders it in reads, and the shape `yak` parses.
+  output: t.output
+    ? (outputOf(t.output, ctx.env) as z.AnyZodObject).extend({
+      text: z.string(),
+    }).passthrough()
+    : platformOutput(t.name),
   // The page a host renders this answer in (MCP Apps): the tool names it, the
   // transport hands it over verbatim, and a host without views ignores it.
   ...metaOf(t),

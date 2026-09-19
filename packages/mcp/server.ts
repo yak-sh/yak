@@ -119,20 +119,36 @@ export type Options = {
   extend?: (server: McpServer) => void | Promise<void>
 }
 
-// The reply, said both ways from one value: the JSON as text for a client that
-// reads text, and the same value as `structuredContent` for one that reads the
-// schema. MCP requires structured content to be an object, so it rides under
-// `result` (schema.ts `outputSchema`).
-let said = (value: unknown): CallToolResult => ({
-  content: [{ type: 'text', text: JSON.stringify(value ?? null, null, 2) }],
-  structuredContent: { result: value },
-})
+// The words in an answer, where it has them: a tool's sentence is a FIELD of
+// what it answers (`text`), never a channel beside it.
+let words = (value: unknown): string | undefined =>
+  value != null && typeof value == 'object' && !Array.isArray(value) &&
+    typeof (value as { text?: unknown }).text == 'string'
+    ? (value as { text: string }).text
+    : undefined
 
-// A tool that asked for nothing and answered nothing still says something: a
-// reply with no content at all is not a reply a client can read.
-let bare = (value: unknown): CallToolResult => ({
-  content: [{ type: 'text', text: JSON.stringify(value ?? null, null, 2) }],
-})
+// The reply, from one value. An answer that carries words says THEM as its
+// text — a host shows that block to the model, and prose is what these tools
+// answer in — and rides as `structuredContent` in its own shape, which is the
+// shape the page a host renders it in reads. An answer with no words is said
+// as JSON, under `result` where a schema was declared for it: MCP requires
+// structured content to be an object and an answer need not be one
+// (schema.ts `outputSchema`).
+let said = (value: unknown, typed: boolean): CallToolResult => {
+  let text = words(value)
+  if (text != undefined) {
+    return {
+      content: [{ type: 'text', text }],
+      structuredContent: value as Record<string, unknown>,
+    }
+  }
+  // A tool that asked for nothing and answered nothing still says something: a
+  // reply with no content at all is not a reply a client can read.
+  return {
+    content: [{ type: 'text', text: JSON.stringify(value ?? null, null, 2) }],
+    ...(typed ? { structuredContent: { result: value } } : {}),
+  }
+}
 
 // A refusal IS an error: `isError` rides the reply so a harness counts it as
 // one instead of a success that reads like an apology.
@@ -315,7 +331,7 @@ export let server = (opts: Options): McpServer => {
       try {
         let intent = await t.run(validateToolInput(t, args), ctx)
         let value = await landing(intent)
-        out = output || t.outputSchema ? said(value) : bare(value)
+        out = said(value, !!(output || t.outputSchema))
         validateToolOutput(t, out.structuredContent)
       } catch (err) {
         out = failed(err)

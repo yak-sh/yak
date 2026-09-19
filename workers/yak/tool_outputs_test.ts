@@ -26,15 +26,9 @@ Deno.test('every public platform tool declares a nonempty object result schema',
       ) => t.name == tool.name)?.outputSchema
       assert(schema, tool.name)
       assertEquals(schema.type, 'object')
-      // A tool's answer rides under `result` (@yaks/mcp `said`), so that is
-      // what the declared schema says, and the tool's own words are a field
-      // of the answer inside it.
-      assert((schema.required as string[]).includes('result'), tool.name)
-      let result =
-        (schema.properties as Record<string, Record<string, unknown>>)
-          .result
-      assertEquals(result.type, 'object')
-      assert((result.required as string[]).includes('text'), tool.name)
+      // A platform tool's answer is the structured content itself, and its
+      // own words are a field of it (@yaks/mcp `said`).
+      assert((schema.required as string[]).includes('text'), tool.name)
       ajv.compile(schema)
     }
     console.log(
@@ -92,15 +86,9 @@ Deno.test('isolated public MCP calls return structured text for narratives, list
         valid(result.structuredContent),
         `${name}: ${JSON.stringify(valid.errors)}`,
       )
-      const data =
-        (result.structuredContent as { result: Record<string, unknown> })
-          .result
-      // The text a client without schemas reads is the answer itself, and the
-      // words are in it.
-      assertEquals(
-        JSON.parse((result.content as { text: string }[])[0].text).text,
-        data.text,
-      )
+      const data = result.structuredContent as Record<string, unknown>
+      // The text a client without schemas reads is the tool's own words.
+      assertEquals((result.content as { text: string }[])[0].text, data.text)
       return data
     }
     await call('space_new', { slug: 'schema-test', title: 'Schema Test' })
