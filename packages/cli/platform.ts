@@ -9,13 +9,12 @@
 // way back through is read here too — `printed` is the one place a tool's
 // answer becomes stdout, an exit code, and a cache that is still true.
 
-import { argsFor } from './args.ts'
-import type { Ctx, Plugin, Verb } from './plugin.ts'
+import type { Tool } from '@yaks/graph'
+import type { Ctx, Plugin } from './plugin.ts'
 import { initialize, type Rpc } from './rpc.ts'
 import { type Result, rosterAfter, saidBy } from './roster.ts'
-import { toolHelp } from './show.ts'
 import { cached, forget, remember, type Roster } from './store.ts'
-import { titleOf, type Tool } from './tool.ts'
+import type { Listed } from './tool.ts'
 
 /** The tool list for a host: the cached one, or a handshake and a listing.
  * The protocol version is negotiated on this same path and kept beside it. */
@@ -26,7 +25,7 @@ export let rosterOf = async (host: string, ask: Rpc): Promise<Roster> => {
   let listed = await ask('tools/list')
   let roster: Roster = {
     protocol: String(hello.protocolVersion ?? ''),
-    tools: (listed.tools ?? []) as Tool[],
+    tools: (listed.tools ?? []) as Listed[],
   }
   remember(host, roster)
   return roster
@@ -65,18 +64,25 @@ export let printed = (
   return 0
 }
 
-let verbOf = (roster: Roster, t: Tool): Verb => ({
+// One tool the server listed, as a tool this command runs: its published
+// schema IS the grammar of the line, and running it is the call.
+let toolOf = (roster: Roster, t: Listed): Tool<Ctx, number> => ({
   name: t.name,
-  about: titleOf(t),
-  help: () => toolHelp(t),
-  run: async (c) =>
+  ...(t.title ?? t.annotations?.title
+    ? { title: t.title ?? t.annotations?.title }
+    : {}),
+  description: t.description ?? '',
+  ...(t.inputSchema
+    ? { inputSchema: t.inputSchema as Record<string, unknown> }
+    : {}),
+  run: async (args, c) =>
     printed(
       c,
       roster,
       t.name,
       await c.ask('tools/call', {
         name: t.name,
-        arguments: await argsFor(t, c.args, c.reads),
+        arguments: args,
       }) as Result,
     ),
 })
@@ -87,6 +93,6 @@ export let platform: Plugin = {
   about: 'the tools this server lists',
   verbs: async (c: Ctx) => {
     let roster = await rosterOf(c.host, c.ask)
-    return roster.tools.map((t) => verbOf(roster, t))
+    return roster.tools.map((t) => toolOf(roster, t))
   },
 }

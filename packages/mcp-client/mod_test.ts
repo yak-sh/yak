@@ -205,7 +205,7 @@ Deno.test('graph Tool is usable through the CLI adapter without any session runt
       note: (s: string) => lines.push(s),
     } as never
     const verbs = await plugin.verbs(ctx)
-    assertEquals(await verbs[0].run(ctx), 0)
+    assertEquals(await verbs[0].run({ html: '<b>demo</b>' }, ctx), 0)
     assert(lines.join('').includes('mockup/1'))
     assertEquals(
       f.calls.find((x) => x.method === 'tools/call')?.params.arguments,

@@ -1,8 +1,10 @@
-// What a tool IS to this client: the two fields `tools/list` always carries,
-// the input schema it publishes, and nothing about what it does. Every other
-// module here reads a tool through these types — the mapper (args.ts), the
-// help (show.ts) and the cache (store.ts) — so a field the server adds costs
-// nothing to carry and a field it drops is a type error in one place.
+// What a tool a SERVER lists is to this client: the two fields `tools/list`
+// always carries, the input schema it publishes, and nothing about what it
+// does. A `Listed` is not yet something to run — platform.ts is what turns one
+// into a @yaks/graph `Tool` whose `run` makes the call — but the mapper
+// (args.ts), the help (show.ts) and the cache (store.ts) read both shapes
+// through the types here, so a field the server adds costs nothing to carry
+// and a field it drops is a type error in one place.
 
 /** One property of an input schema, as far as this client reads it: enough to
  * decide how the word on the command line becomes a value. */
@@ -22,7 +24,7 @@ export type Schema = {
 }
 
 /** A tool as the server lists it. */
-export type Tool = {
+export type Listed = {
   name: string
   title?: string
   description?: string
@@ -32,7 +34,9 @@ export type Tool = {
 
 /** The one word a listing shows beside a name: its title, or the first
  * sentence of its description. */
-export let titleOf = (t: Tool): string => {
+export let titleOf = (
+  t: { title?: string; description?: string; annotations?: { title?: string } },
+): string => {
   let said = t.title ?? t.annotations?.title
   if (said) return said
   let first = (t.description ?? '').split(/(?<=\.)\s/)[0]
@@ -46,3 +50,11 @@ export let typeOf = (p: Prop | undefined): string => {
   if (Array.isArray(said)) return said.find((t) => t != 'null') ?? 'string'
   return said ?? 'string'
 }
+
+/** The word a person types for a tool: its two words where it has them, its
+ * legacy name otherwise. `toolName` (@yaks/graph) answers the same question
+ * for a transport, which spells the pair `noun_verb`; a command line has a
+ * space to spare. */
+export let wordOf = (
+  t: { name?: string; noun?: string; verb?: string },
+): string => t.noun && t.verb ? `${t.noun} ${t.verb}` : t.name ?? ''

@@ -1,9 +1,14 @@
 /** Transport-independent identity for graph tools. */
-import type { Tool } from './plugin.ts'
+import type { Tool, ToolCtx } from './plugin.ts'
 
-export type NamedTool = Tool & { name: string }
+/** The three fields that decide what a tool is CALLED — the only part of a
+ * tool naming reads, so it costs nothing to ask about one whose context and
+ * result are somebody else's. */
+export type ToolId = { name?: string; noun?: string; verb?: string }
 
-export const toolName = (tool: Tool): string => {
+export type NamedTool<C = ToolCtx, R = unknown> = Tool<C, R> & { name: string }
+
+export const toolName = (tool: ToolId): string => {
   if (tool.noun != null || tool.verb != null) {
     const word = /^[a-z][a-z0-9-]*$/
     if (
@@ -17,7 +22,7 @@ export const toolName = (tool: Tool): string => {
   return tool.name
 }
 
-export const namedTool = (tool: Tool): NamedTool => ({
+export const namedTool = <C, R>(tool: Tool<C, R>): NamedTool<C, R> => ({
   ...tool,
   name: toolName(tool),
 })

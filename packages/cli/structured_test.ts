@@ -1,11 +1,11 @@
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Tool } from '@yaks/graph'
-import {
-  commandArguments,
-  completeCommand,
-  resolveCommand,
-} from './structured.ts'
+import { completeCommand, resolveCommand } from './structured.ts'
+import { argsFor, type Reads, Usage } from './args.ts'
 import { toolDefinition } from '@yaks/vocab/tools'
+
+let reads: Reads = { file: () => '', stdin: () => '' }
+let said = (argv: string[]) => argsFor(t, argv, reads)
 const t: Tool = {
   ...toolDefinition({
     noun: 'session',
@@ -33,34 +33,30 @@ Deno.test('one registry supports both traversals and contextual completion', () 
   assertEquals(resolveCommand(tools, ['list', 'session', 'root'])?.command, t)
   assertEquals(resolveCommand(tools, ['session', 'list', 'root'])?.command, t)
 })
-Deno.test('JSON schema arguments provide typed options validation and defaults', () => {
+Deno.test('JSON schema arguments provide typed options validation and defaults', async () => {
   assertEquals(
-    commandArguments(t, ['root', '-n', '3', '-a', '--status=done']),
+    await said(['root', '-n', '3', '-a', '--status=done']),
     { scope: 'root', limit: 3, all: true, status: 'done' },
   )
-  assertEquals(commandArguments(t, ['root']), { scope: 'root', limit: 20 })
-  assertThrows(
-    () => commandArguments(t, ['root', '--limit=0']),
-    Error,
+  assertEquals(await said(['root']), { scope: 'root', limit: 20 })
+  await assertRejects(() => said(['root', '--limit=0']), Usage, 'Invalid tool')
+  await assertRejects(() => said([]), Usage, 'Invalid tool')
+  await assertRejects(
+    () => said(['root', '--status=bad']),
+    Usage,
     'Invalid tool',
   )
-  assertThrows(() => commandArguments(t, []), Error, 'Invalid tool')
-  assertThrows(
-    () => commandArguments(t, ['root', '--status=bad']),
-    Error,
-    'Invalid tool',
-  )
-  assertThrows(
-    () => commandArguments(t, ['root', '--unknown']),
-    Error,
+  await assertRejects(
+    () => said(['root', '--unknown']),
+    Usage,
     'Unknown option',
   )
-  assertThrows(
-    () => commandArguments(t, ['root', '--limit=1.5']),
-    Error,
+  await assertRejects(
+    () => said(['root', '--limit=1.5']),
+    Usage,
     'Invalid tool',
   )
-  assertEquals(commandArguments(t, ['--', '--literal']).scope, '--literal')
+  assertEquals((await said(['--', '--literal'])).scope, '--literal')
 })
 Deno.test('declaration is JSON Schema validated without component association', () => {
   assertThrows(

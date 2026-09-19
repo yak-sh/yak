@@ -11,27 +11,24 @@ import { commands } from './commands.ts'
 // UI mounts, so a listing and a transcript cannot drift from what any other
 // door shows.
 
-import type { Comp, Eid } from '@yaks/graph'
-import { type Ctx, type Plugin, saidIn } from '@yaks/cli'
+import type { Comp, Eid, Tool } from '@yaks/graph'
+import type { Ctx, Plugin } from '@yaks/cli'
 import { codexPaths, fromCodex, fromEnv } from '@yaks/openai'
 import { type Agent, agent, titleOf } from './run.ts'
 import { dbPath, open } from './store.ts'
 
-let said = (c: Ctx) => {
-  let { opts, words } = saidIn(c.args)
-  let opt = (name: string) => {
-    let hit = opts.find(([k]) => k == name)?.[1]
-    return typeof hit == 'string' ? hit : undefined
-  }
-  return { opt, words }
+type Args = Record<string, unknown>
+let word = (args: Args, name: string): string | undefined => {
+  let v = args[name]
+  return typeof v == 'string' ? v : undefined
 }
 
-// One harness, its steps printed as they land. Opened per verb: the graph is a
+// One harness, its steps printed as they land. Opened per tool: the graph is a
 // file, and holding it open between commands would buy nothing.
-let running = (c: Ctx, name?: string): Agent => {
+let running = (args: Args, c: Ctx): Agent => {
   let a: Agent = agent({
-    name,
-    provider: said(c).opt('provider'),
+    name: word(args, 'model'),
+    provider: word(args, 'provider'),
     each: (step) => step.added.forEach((b) => c.out('  ' + a.line(b))),
   })
   return a
@@ -48,16 +45,11 @@ let sessionAt = async (a: Agent, id: string): Promise<Eid | undefined> => {
     rows.find((b) => b.entity.eid.startsWith(id)))?.entity.eid
 }
 
-let start = async (c: Ctx): Promise<number> => {
-  let { opt, words } = said(c)
-  let prompt = words.join(' ')
-  if (!prompt) {
-    c.note('want a prompt: harness new "<what to do>"')
-    return 2
-  }
-  let a = running(c, opt('model'))
+let start = async (args: Args, c: Ctx): Promise<number> => {
+  let prompt = String(args.prompt ?? '')
+  let a = running(args, c)
   try {
-    let s = await a.start(prompt, { effort: opt('effort') })
+    let s = await a.start(prompt, { effort: word(args, 'effort') })
     c.out(`session ${s.slice(0, 8)} — ${a.h.path}`)
     await a.idle(s)
     return 0
@@ -66,17 +58,16 @@ let start = async (c: Ctx): Promise<number> => {
   }
 }
 
-let send = async (c: Ctx): Promise<number> => {
-  let { opt, words } = said(c)
-  let [id, ...rest] = words
-  let a = running(c, opt('model'))
+let send = async (args: Args, c: Ctx): Promise<number> => {
+  let id = String(args.session)
+  let a = running(args, c)
   try {
-    let s = id && await sessionAt(a, id)
+    let s = await sessionAt(a, id)
     if (!s) {
-      c.note(`no such session: ${id ?? ''}`)
+      c.note(`no such session: ${id}`)
       return 2
     }
-    await a.send(s, rest.join(' '))
+    await a.send(s, String(args.text))
     await a.idle(s)
     return 0
   } finally {
@@ -84,8 +75,8 @@ let send = async (c: Ctx): Promise<number> => {
   }
 }
 
-let ls = async (c: Ctx): Promise<number> => {
-  let a = running(c)
+let ls = async (args: Args, c: Ctx): Promise<number> => {
+  let a = running(args, c)
   try {
     let rows = await a.sessions()
     for (let row of rows) {
@@ -99,13 +90,12 @@ let ls = async (c: Ctx): Promise<number> => {
   }
 }
 
-let show = async (c: Ctx): Promise<number> => {
-  let { words } = said(c)
-  let a = running(c)
+let show = async (args: Args, c: Ctx): Promise<number> => {
+  let a = running(args, c)
   try {
-    let s = words[0] && await sessionAt(a, words[0])
+    let s = await sessionAt(a, String(args.session))
     if (!s) {
-      c.note(`no such session: ${words[0] ?? ''}`)
+      c.note(`no such session: ${args.session}`)
       return 2
     }
     let entries = await a.transcript(s)
@@ -118,8 +108,8 @@ let show = async (c: Ctx): Promise<number> => {
   }
 }
 
-let tasks = async (c: Ctx): Promise<number> => {
-  let a = running(c)
+let tasks = async (args: Args, c: Ctx): Promise<number> => {
+  let a = running(args, c)
   try {
     for (let t of await a.tasks()) {
       let held = (t.claim as Comp | undefined)?.session
@@ -138,7 +128,7 @@ let tasks = async (c: Ctx): Promise<number> => {
 
 // What the harness would sign an ask with, and where it found it. The token
 // itself is never printed — only which door it opens.
-let models = async (c: Ctx): Promise<number> => {
+let models = async (_args: Args, c: Ctx): Promise<number> => {
   let env = Deno.env.get
   let key = fromEnv(env)
   let found = key ? { at: 'OPENAI_API_KEY', cred: key } : undefined
@@ -180,40 +170,85 @@ let models = async (c: Ctx): Promise<number> => {
   return 0
 }
 
-/** The harness's verbs, for a `yak` (or a `harness`) that carries them. */
+// Every tool takes the same two presentation options, so one harness graph is
+// opened the same way whatever the word was.
+let howto = (props: Record<string, unknown>) => ({
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    ...props,
+    model: { type: 'string', description: 'which model to speak to' },
+    provider: { type: 'string', description: 'which backend' },
+  },
+})
+
+/** The harness's tools, for a `yak` (or a `harness`) that carries them. */
 export let plugin: Plugin = {
   name: '@yaks/harness',
   about: `the harness — its own graph at ${dbPath()}`,
-  verbs: () => [
+  verbs: (): Tool<Ctx, number>[] => [
     {
       name: 'new',
-      args: '<prompt> [--model m] [--effort e]',
-      about: 'start a transcript and run it until it settles',
+      description: 'start a transcript and run it until it settles',
+      inputSchema: {
+        ...howto({
+          prompt: { type: 'string', description: 'what to do' },
+          effort: { type: 'string', description: 'how hard to think' },
+        }),
+        required: ['prompt'],
+      },
+      options: { positional: ['prompt'] },
       run: start,
     },
     {
       name: 'send',
-      args: '<session> <text>',
-      about: 'say something more to a transcript',
+      description: 'say something more to a transcript',
+      inputSchema: {
+        ...howto({
+          session: { type: 'string', description: 'the transcript' },
+          text: { type: 'string', description: 'what to say' },
+        }),
+        required: ['session', 'text'],
+      },
+      options: { positional: ['session', 'text'] },
       run: send,
     },
-    { name: 'ls', about: 'every session, with its status', run: ls },
+    {
+      name: 'ls',
+      description: 'every session, with its status',
+      inputSchema: howto({}),
+      readOnly: true,
+      run: ls,
+    },
     {
       name: 'show',
-      args: '<session>',
-      about: 'one transcript, in full',
+      description: 'one transcript, in full',
+      inputSchema: {
+        ...howto({ session: { type: 'string' } }),
+        required: ['session'],
+      },
+      options: { positional: ['session'] },
+      readOnly: true,
       run: show,
     },
-    { name: 'tasks', about: 'the open work in the harness graph', run: tasks },
+    {
+      name: 'tasks',
+      description: 'the open work in the harness graph',
+      inputSchema: howto({}),
+      readOnly: true,
+      run: tasks,
+    },
     {
       name: 'models',
-      about: 'the credential found, and what it reaches',
+      description: 'the credential found, and what it reaches',
+      inputSchema: howto({}),
+      readOnly: true,
       run: models,
     },
   ],
 }
 
-/** Optional structured entrypoint alongside the existing short CLI verbs. */
+/** Optional structured entrypoint alongside the existing short CLI tools. */
 export const structured = commandPlugin(commands, async (command, args, c) => {
   const h = open()
   try {

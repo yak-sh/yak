@@ -37,10 +37,8 @@ Deno.test('manifest contributions share one command between CLI and MCP over a g
     return 0
   })
   const ctx = { args: ['list'], note: () => {} } as unknown as Ctx
-  assertEquals(
-    await (await cli.verbs(ctx)).find((v) => v.name === 'session')!.run(ctx),
-    0,
-  )
+  const listed = (await cli.verbs(ctx)).find((v) => v.noun === 'session')!
+  assertEquals(await listed.run({}, ctx), 0)
   assertEquals(
     resolveCommand(declarations, ['list', 'session'])?.command,
     declarations[0],
@@ -85,7 +83,7 @@ Deno.test('noun and verb traversal is automatic and collision checked', () => {
 })
 
 Deno.test('JSON Schema tool uses identical metadata and constraints through MCP and provider adapter', async () => {
-  const { commandArguments } = await import('@yaks/cli/structured')
+  const { argsFor } = await import('@yaks/cli')
   const { parametersOf } = await import('./tools.ts')
   const { toolDefinition } = await import('@yaks/vocab/tools')
   const tool = {
@@ -114,7 +112,10 @@ Deno.test('JSON Schema tool uses identical metadata and constraints through MCP 
     ) => t.name === 'example_list')!
     assertEquals(listed.inputSchema, tool.inputSchema)
     assertEquals(parametersOf(tool), tool.inputSchema)
-    const args = commandArguments(tool, ['root', '-n', '3'])
+    const args = await argsFor(tool, ['root', '-n', '3'], {
+      file: () => '',
+      stdin: () => '',
+    })
     const response = await c.callTool({ name: 'example_list', arguments: args })
     assertEquals(response.isError, undefined)
     assertEquals(JSON.stringify(response).includes('root'), true)

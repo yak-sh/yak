@@ -13,13 +13,13 @@
 // dropped instead on the two signals that arrive for free — a result carrying
 // the roster line, and an `about` naming a different version.
 
-import type { Tool } from './tool.ts'
+import type { Listed } from './tool.ts'
 
 /** The tools a host served, and the name of that list. */
 export type Roster = {
   version?: string
   protocol?: string
-  tools: Tool[]
+  tools: Listed[]
 }
 
 let env = (name: string): string | undefined => {

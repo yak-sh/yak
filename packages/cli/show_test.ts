@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert'
 import { safe, toolHelp, toolLines } from './show.ts'
-import type { Tool } from './tool.ts'
+import type { Listed as Tool } from './tool.ts'
 
 Deno.test('content off the wire cannot speak to the terminal', () => {
   // The escape and the bell go; the printable bytes after them stay, a tab

@@ -134,7 +134,7 @@ export type ToolCtx = {
  * against `input` — and whatever `run` returns is the tool's structured result,
  * which for most tools is bundles.
  */
-export type Tool = {
+export type Tool<C = ToolCtx, R = unknown> = {
   /** Legacy transport name. Structured tools derive it from noun and verb. */
   name?: string
   /** Resource word, independent of CLI word order or graph components. */
@@ -147,6 +147,9 @@ export type Tool = {
   options?: {
     positional?: readonly string[]
     short?: Readonly<Record<string, string>>
+    /** the property the bare words left over after the positionals fill:
+     * `key=value` pairs for an object, the words themselves for an array */
+    rest?: string
   }
   /** a short human title */
   title?: string
@@ -177,10 +180,7 @@ export type Tool = {
    * renders the answer in. Opaque here, like {@link Schema}. */
   meta?: Record<string, unknown>
   /** do it: the arguments in, the structured result out */
-  run: (
-    args: Record<string, unknown>,
-    ctx: ToolCtx,
-  ) => unknown | Promise<unknown>
+  run: (args: Record<string, unknown>, ctx: C) => R | Promise<R>
 }
 
 /**

@@ -6,7 +6,8 @@
 // movement chosen by a terminal, and only `\n` survives. A tool's answer is
 // content, never an escape sequence.
 
-import { type Prop, titleOf, type Tool, typeOf } from './tool.ts'
+import { type Grammar } from './args.ts'
+import { type Prop, type Schema, titleOf, typeOf, wordOf } from './tool.ts'
 
 // deno-lint-ignore no-control-regex -- the control class IS the subject
 let ctrl = /[\x00-\x1f\x7f-\x9f]/g
@@ -18,10 +19,12 @@ export let safe = (text: string): string =>
 let pad = (s: string, n: number): string => s.padEnd(n)
 
 /** Every tool, one per line, with the one word that says what it is. */
-export let toolLines = (tools: Tool[]): string => {
-  let wide = Math.max(0, ...tools.map((t) => t.name.length))
+export let toolLines = (
+  tools: (Grammar & { title?: string; description?: string })[],
+): string => {
+  let wide = Math.max(0, ...tools.map((t) => wordOf(t).length))
   return tools
-    .map((t) => `  ${pad(t.name, wide)}  ${titleOf(t)}`.trimEnd())
+    .map((t) => `  ${pad(wordOf(t), wide)}  ${titleOf(t)}`.trimEnd())
     .join('\n')
 }
 
@@ -32,15 +35,45 @@ let slot = (name: string, p: Prop | undefined, need: boolean): string => {
   return need ? said : `[${said}]`
 }
 
+/**
+ * The arguments part of the line to type: the positionals in their order, then
+ * every other property as an option, bracketed where the tool can do without
+ * it. The tool's own schema is the whole grammar, so this is the only place
+ * that decides how one is spelled on a line.
+ */
+export let sketch = (t: Grammar): string => {
+  let schema = (t.inputSchema ?? {}) as Schema
+  let props = schema.properties ?? {}
+  let need = new Set(schema.required ?? [])
+  let positional = t.options?.positional ?? []
+  let rest = t.options?.rest
+  let named = Object.keys(props).filter(
+    (n) => !positional.includes(n) && n != rest,
+  )
+  return [
+    ...positional.map((n) => need.has(n) ? `<${n}>` : `[${n}]`),
+    ...(rest
+      ? [typeOf(props[rest]) == 'array' ? '[word ...]' : '[key=value ...]']
+      : []),
+    ...named.map((n) => slot(n, props[n], need.has(n))),
+  ].join(' ')
+}
+
+/** The whole line to type, without the program's own name. */
+export let lineOf = (t: Grammar): string =>
+  `${wordOf(t)} ${sketch(t)}`.trimEnd()
+
 /** One tool's help: the line to type, what it is for, and a row per argument
  * with its type, whether it is required, and what the schema says it means. */
-export let toolHelp = (t: Tool): string => {
-  let props = t.inputSchema?.properties ?? {}
-  let need = new Set(t.inputSchema?.required ?? [])
+export let toolHelp = (
+  t: Grammar & { description?: string },
+  program = 'yak',
+): string => {
+  let schema = (t.inputSchema ?? {}) as Schema
+  let props = schema.properties ?? {}
+  let need = new Set(schema.required ?? [])
   let names = Object.keys(props)
-  let head = `yak ${t.name} ${
-    names.map((n) => slot(n, props[n], need.has(n))).join(' ')
-  }`.trimEnd()
+  let head = `${program} ${lineOf(t)}`.trimEnd()
   let wide = Math.max(0, ...names.map((n) => n.length))
   let kind = Math.max(0, ...names.map((n) => typeOf(props[n]).length))
   let rows = names.map((n) => {

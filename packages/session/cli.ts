@@ -25,6 +25,7 @@ import { ram } from '@yaks/ram'
 import { render } from '@yaks/text'
 import { loadVocab } from '@yaks/vocab'
 import { type Ctx, main, type Plugin } from '@yaks/cli'
+import type { Tool as GraphTool } from '@yaks/graph'
 import { sessionDoc } from './comp.ts'
 import { daemon } from './daemon.ts'
 import { sessions } from './plugin.ts'
@@ -47,10 +48,13 @@ let tools: Tool[] = [
   },
 ]
 
-let spike = async (c: Ctx): Promise<number> => {
+let spike = async (
+  args: Record<string, unknown>,
+  c: Ctx,
+): Promise<number> => {
   let env = (name: string) => Deno.env.get(name)
   let MODEL = env('MODEL') ?? 'gpt-6-astra'
-  let prompt = c.args.join(' ') || 'List your tools, then say done.'
+  let prompt = String(args.prompt ?? '') || 'List your tools, then say done.'
 
   let vocab = loadVocab([sessionDoc, modelDoc, openaiDoc])
   let fx = effects(vocab)
@@ -140,14 +144,19 @@ let spike = async (c: Ctx): Promise<number> => {
   return 0
 }
 
-/** The verb, for a `yak` that carries it. */
+/** The tool, for a `yak` that carries it. */
 export let plugin: Plugin = {
   name: '@yaks/session',
   about: 'a graph-native session, in memory',
-  verbs: () => [{
+  verbs: (): GraphTool<Ctx, number>[] => [{
     name: 'spike',
-    args: '[prompt]',
-    about: 'run one transcript against the model and print it',
+    description: 'run one transcript against the model and print it',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { prompt: { type: 'string', description: 'what to ask' } },
+    },
+    options: { positional: ['prompt'] },
     run: spike,
   }],
 }

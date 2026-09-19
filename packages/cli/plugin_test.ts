@@ -5,9 +5,10 @@
 // what it was asked.
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { Usage } from './args.ts'
+import { argsFor, Usage } from './args.ts'
 import { commands } from './commands.ts'
 import { type Ctx, parts, type Plugin, usage, verbFor } from './plugin.ts'
+import { wordOf } from './tool.ts'
 
 let asked: { name: string; arguments: Record<string, unknown> }[] = []
 let printed: string[] = []
@@ -32,26 +33,37 @@ let saying = (name: string, about: string): Plugin => ({
   name,
   about,
   verbs: () => [
-    { name, about: `the ${name} verb`, run: () => 0 },
+    { name, description: `the ${name} verb`, run: () => 0 },
     {
       name: 'both',
-      about: `${name}’s both`,
+      description: `${name}’s both`,
       run: () => (printed.push(name), 0),
     },
   ],
 })
 
+// The line, as the command runs one: the word resolved, then its own schema
+// read off what was left.
+let ran = async (plugins: Plugin[], c: Ctx, word: string) => {
+  let found = await verbFor(plugins, c, word)
+  if (!found) return undefined
+  return await found.verb.run(
+    await argsFor(found.verb, found.args, c.reads),
+    c,
+  )
+}
+
 let one = saying('one', 'the first table')
 let two = saying('two', 'the second table')
 
-Deno.test('two plugins are one table, and the first to name a verb wins', async () => {
+Deno.test('two plugins are one table, and the first to name a word wins', async () => {
   printed = []
   let c = ctx([one, two])
-  assertEquals((await verbFor([one, two], c, 'one'))?.name, 'one')
-  assertEquals((await verbFor([one, two], c, 'two'))?.name, 'two')
-  await (await verbFor([one, two], c, 'both'))!.run(c)
+  assertEquals(wordOf((await verbFor([one, two], c, 'one'))!.verb), 'one')
+  assertEquals(wordOf((await verbFor([one, two], c, 'two'))!.verb), 'two')
+  await ran([one, two], c, 'both')
   assertEquals(printed, ['one'])
-  await (await verbFor([two, one], c, 'both'))!.run(c)
+  await ran([two, one], c, 'both')
   assertEquals(printed, ['one', 'two'])
   assertEquals(await verbFor([one, two], c, 'neither'), undefined)
 })
@@ -63,7 +75,10 @@ Deno.test('one usage renders every plugin under its own heading', async () => {
   assert(page.includes('the apps’ own commands'), page)
   // One column across the sections, so it reads as one page.
   assert(page.includes('  one      '), page)
-  assert(page.includes('  command <name> [key=value ...]  '), page)
+  assert(
+    page.includes('  command <name> [key=value ...] [--app <string>]  '),
+    page,
+  )
   // `both` is named by both tables and reachable in one: it is drawn once,
   // under the table that answers for it.
   assertEquals(page.match(/^ {2}both\b/gm)?.length, 1)
@@ -92,7 +107,7 @@ Deno.test('`yak command` builds the command call, with the app it was given', as
     'title=Lemon cake',
     'serves=4',
   ])
-  assertEquals(await (await verbFor([commands], c, 'command'))!.run(c), 0)
+  assertEquals(await ran([commands], c, 'command'), 0)
   assertEquals(asked, [{
     name: 'command',
     arguments: {
@@ -107,9 +122,9 @@ Deno.test('`yak command` builds the command call, with the app it was given', as
 Deno.test('`yak <app> <command>` is the same call, the app named by the word', async () => {
   asked = []
   let c = ctx([commands], 'recipes', ['add_recipe', 'title=@page.md'])
-  let verb = await verbFor([commands], c, 'recipes')
-  assertEquals(verb?.name, 'recipes')
-  await verb!.run(c)
+  let found = await verbFor([commands], c, 'recipes')
+  assertEquals(wordOf(found!.verb), 'recipes')
+  await ran([commands], c, 'recipes')
   assertEquals(asked, [{
     name: 'command',
     // @path is that file, the same spelling every value here takes.
@@ -130,7 +145,7 @@ Deno.test('a stray needs a second word, and a verb of its own is never one', asy
   // And a table that names the word answers before any stray is asked.
   let c = ctx([one, commands], 'one', ['add_recipe'])
   assertEquals(
-    (await verbFor([one, commands], c, 'one'))?.about,
+    (await verbFor([one, commands], c, 'one'))?.verb.description,
     'the one verb',
   )
 })
@@ -138,7 +153,6 @@ Deno.test('a stray needs a second word, and a verb of its own is never one', asy
 Deno.test('an argument that is not key=value is a usage error, not a round trip', async () => {
   asked = []
   let c = ctx([commands], 'command', ['add_recipe', 'lemon'])
-  let verb = (await verbFor([commands], c, 'command'))!
-  await assertRejects(() => Promise.resolve(verb.run(c)), Usage, 'key=value')
+  await assertRejects(() => ran([commands], c, 'command'), Usage, 'key=value')
   assertEquals(asked, [])
 })

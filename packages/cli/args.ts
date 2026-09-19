@@ -15,7 +15,24 @@
 // the cached schema fresh (store.ts), so an undeclared `--nmae` is a typo and
 // worth a sentence here rather than a refusal one round trip away.
 
-import { type Prop, type Schema, type Tool, typeOf } from './tool.ts'
+import { validateToolInput } from '@yaks/vocab/tools'
+import { type Prop, type Schema, typeOf, wordOf } from './tool.ts'
+
+/** As much of a tool as a command line reads: what it is called, the schema
+ * its arguments must satisfy, and how it likes them typed. A tool a server
+ * listed (tool.ts `Listed`) and one this box runs (@yaks/graph `Tool`) are
+ * both this much. */
+export type Grammar = {
+  name?: string
+  noun?: string
+  verb?: string
+  inputSchema?: Schema | Record<string, unknown>
+  options?: {
+    positional?: readonly string[]
+    short?: Readonly<Record<string, string>>
+    rest?: string
+  }
+}
 
 /** The command line was wrong — nothing was called, and the exit code is 2. */
 export class Usage extends Error {}
@@ -152,48 +169,111 @@ let listed = (names: string[]): string =>
   names.length ? names.map((n) => `--${n}`).join(', ') : '(no arguments)'
 
 /**
- * The arguments a tool was given, mapped through its schema. Throws
- * {@link Usage} for a name the tool does not declare, a value its type cannot
- * be, and a required argument nobody gave.
+ * The arguments a tool was given, mapped through its own input schema — the
+ * one grammar there is. The bare words fill `options.positional` in order and
+ * then `options.rest`; `--name value`, `--name=value` and a short `-n` name a
+ * property, a boolean one is a flag, a repeated one builds its list, and `--`
+ * ends the options. Every value inflates (`@path`, `-`) before its type is
+ * consulted, and the whole bag is then checked against the schema, which is
+ * also what fills in its defaults.
+ *
+ * Throws {@link Usage} — exit code 2 — for anything the line got wrong.
  */
 export let argsFor = async (
-  tool: Tool,
-  argv: string[],
+  tool: Grammar,
+  argv: readonly string[],
   reads: Reads,
 ): Promise<Record<string, unknown>> => {
-  let schema: Schema = tool.inputSchema ?? {}
+  let schema = (tool.inputSchema ?? {}) as Schema
   let props = schema.properties ?? {}
-  let { opts, words } = saidIn(argv)
-  if (words.length) {
-    throw new Usage(
-      `${tool.name} takes named arguments — try --${
-        Object.keys(props)[0] ?? 'name'
-      } ${words[0]}`,
-    )
-  }
+  let positional = tool.options?.positional ?? []
+  let shorts = tool.options?.short ?? {}
+  let rest = tool.options?.rest
   let out: Record<string, unknown> = {}
-  for (let [name, given] of opts) {
+  let spare: string[] = []
+  let at = 0
+  let literal = false
+
+  let prop = (name: string, flag: string): Prop => {
     let p = props[name]
     if (!p) {
       throw new Usage(
-        `${tool.name} takes ${listed(Object.keys(props))}, not --${name}`,
+        `Unknown option: ${flag} — ${wordOf(tool)} takes ${
+          listed(Object.keys(props))
+        }`,
       )
     }
-    if (given === true) {
-      if (typeOf(p) != 'boolean') throw new Usage(`--${name} needs a value`)
-      out[name] = true
-      continue
-    }
-    let value = valueOf(name, await inflate(given, reads), p)
-    // A repeated option builds the list its property asked for.
+    return p
+  }
+  let put = async (name: string, raw: string) => {
+    let value = valueOf(name, await inflate(raw, reads), props[name])
     let had = out[name]
+    // A repeated option builds the list its property asked for.
     out[name] = Array.isArray(had) && Array.isArray(value)
       ? [...had, ...value]
       : value
   }
-  let missing = (schema.required ?? []).filter((n) => !(n in out))
-  if (missing.length) {
-    throw new Usage(`${tool.name} needs ${listed(missing)}`)
+
+  for (let i = 0; i < argv.length; i++) {
+    let word = argv[i]
+    if (!literal && word == '--') {
+      literal = true
+      continue
+    }
+    // An option is `--name`, or a `-n` the tool DECLARED as a short. Anything
+    // else that opens with a dash is a word: `-5` is a number somebody typed,
+    // not an option nobody named.
+    let eq = word.indexOf('=')
+    let flag = eq > 0 ? word.slice(0, eq) : word
+    let short = flag.length > 1 && !flag.startsWith('--') &&
+      flag.startsWith('-') && shorts[flag.slice(1)]
+    if (!literal && (flag.startsWith('--') && flag.length > 2 || short)) {
+      let name = flag.startsWith('--') ? flag.slice(2) : shorts[flag.slice(1)]
+      let p = prop(name, flag)
+      if (eq > 0) {
+        await put(name, word.slice(eq + 1))
+        continue
+      }
+      if (typeOf(p) == 'boolean') {
+        out[name] = true
+        continue
+      }
+      let next = argv[i + 1]
+      if (next == undefined || next.startsWith('--')) {
+        throw new Usage(`${flag} needs a value`)
+      }
+      await put(name, argv[++i])
+      continue
+    }
+    if (at < positional.length) await put(positional[at++], word)
+    else if (rest) spare.push(word)
+    else {
+      throw new Usage(
+        `${wordOf(tool)} takes ${listed(Object.keys(props))}, not ${word}`,
+      )
+    }
   }
-  return out
+
+  // The words nobody named, where the tool asked for them: an app's own
+  // arguments as `key=value` pairs, or a plain list.
+  if (rest && spare.length) {
+    out[rest] = typeOf(props[rest]) == 'array'
+      ? await Promise.all(spare.map((w) => inflate(w, reads)))
+      : await pairsIn(spare, reads)
+  }
+
+  if (!tool.inputSchema) {
+    if (Object.keys(out).length) {
+      throw new Usage(`${wordOf(tool)} takes no arguments`)
+    }
+    return out
+  }
+  try {
+    return validateToolInput(
+      { inputSchema: tool.inputSchema as Record<string, unknown> },
+      out,
+    )
+  } catch (e) {
+    throw new Usage((e as Error).message)
+  }
 }

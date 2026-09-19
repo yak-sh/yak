@@ -19,22 +19,15 @@
 // Exit codes are the contract a script reads: 0 said, 1 the tool or the door
 // refused, 2 the command line was wrong.
 
-import { argsFor, type Reads, saidIn, Usage } from './args.ts'
+import type { Tool } from '@yaks/graph'
+import { argsFor, type Reads, Usage } from './args.ts'
 import { bundlesIn, chunks } from './apply.ts'
 import { commands } from './commands.ts'
-import {
-  type Ctx,
-  helpFor,
-  parts,
-  type Plugin,
-  usage,
-  type Verb,
-  verbFor,
-} from './plugin.ts'
+import { type Ctx, parts, type Plugin, usage, verbFor } from './plugin.ts'
 import { platform, printed, rosterOf } from './platform.ts'
 import { doorUrl, rpc, timed } from './rpc.ts'
 import type { Result } from './roster.ts'
-import { safe } from './show.ts'
+import { safe, toolHelp } from './show.ts'
 import { forgetToken, saveToken, tokenFor } from './store.ts'
 
 /** The platform this command talks to unless told otherwise. */
@@ -94,19 +87,21 @@ let page = async (c: Ctx): Promise<string> =>
 
 // `apply` is graph_apply with a door for a stream: a batch is atomic, and a
 // file of bundles is a load rather than one batch, so it goes over in chunks.
-let applied = async (c: Ctx): Promise<number> => {
+let applied = async (
+  args: Record<string, unknown>,
+  c: Ctx,
+): Promise<number> => {
   let roster = await rosterOf(c.host, c.ask)
   let tool = roster.tools.find((t) => t.name == 'graph_apply')
   if (!tool) throw new Usage(`${c.host} lists no graph_apply to apply through`)
-  let { opts } = saidIn(c.args)
-  if (opts.some(([n]) => n == 'change')) {
+  if (args.change) {
     let said = await c.ask('tools/call', {
       name: tool.name,
-      arguments: await argsFor(tool, c.args, reads),
+      arguments: { change: args.change },
     }) as Result
     return printed(c, roster, tool.name, said)
   }
-  let source = c.args.find((a) => !a.startsWith('--')) ?? '-'
+  let source = typeof args.file == 'string' ? args.file : '-'
   let body = source == '-' || source == '@-'
     ? await c.reads.stdin()
     : await c.reads.file(source.replace(/^@/, ''))
@@ -122,40 +117,63 @@ let applied = async (c: Ctx): Promise<number> => {
   return code
 }
 
-/** The command's own four words, which shadow a verb any plugin names. */
+/** The command's own four words, which shadow a word any plugin names. */
 export let built: Plugin = {
   name: 'yak',
   about: 'the command itself',
-  verbs: (): Verb[] => [
+  verbs: (): Tool<Ctx, number>[] => [
     {
       name: 'help',
-      args: '[verb]',
-      about: 'every verb, one line each — or one verb’s own page',
-      run: async (c) => {
-        if (!c.args[0]) {
+      description: 'every word, one line each — or one word’s own page',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          words: { type: 'array', items: { type: 'string' } },
+        },
+      },
+      options: { rest: 'words' },
+      readOnly: true,
+      run: async (args, c) => {
+        let words = (args.words ?? []) as string[]
+        if (!words.length) {
           c.out(await page(c))
           return 0
         }
-        let v = await verbFor(c.plugins, c, c.args[0])
-        if (!v) throw new Usage(`nothing here is called ${c.args[0]}`)
-        c.out(await helpFor(v, c))
+        let found = await verbFor(
+          c.plugins,
+          { ...c, args: words.slice(1) },
+          words[0],
+        )
+        if (!found) throw new Usage(`nothing here is called ${words[0]}`)
+        c.out(toolHelp(found.verb))
         return 0
       },
     },
     {
       name: 'login',
-      args: '<token>',
-      about: 'remember a bearer for this host',
-      run: (c) => {
-        if (!c.args[0]) throw new Usage('yak login <token>')
-        c.out(`bearer for ${c.host} kept in ${saveToken(c.host, c.args[0])}`)
+      description: 'remember a bearer for this host',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['token'],
+        properties: { token: { type: 'string' } },
+      },
+      options: { positional: ['token'] },
+      run: (args, c) => {
+        c.out(
+          `bearer for ${c.host} kept in ${
+            saveToken(c.host, String(args.token))
+          }`,
+        )
         return 0
       },
     },
     {
       name: 'logout',
-      about: 'forget it',
-      run: (c) => {
+      description: 'forget it',
+      inputSchema: { type: 'object', additionalProperties: false },
+      run: (_args, c) => {
         forgetToken(c.host)
         c.out(`forgot the bearer for ${c.host}`)
         return 0
@@ -163,8 +181,17 @@ export let built: Plugin = {
     },
     {
       name: 'apply',
-      args: '[@file]',
-      about: 'bundles as NDJSON, in batches of 50',
+      description: 'bundles as NDJSON, in batches of 50',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          file: { type: 'string', description: '@file, or - for stdin' },
+          change: { type: 'array', description: 'one batch, inline' },
+        },
+      },
+      options: { positional: ['file'] },
+      destructive: true,
       run: applied,
     },
   ],
@@ -204,15 +231,15 @@ export let run = async (
     out(await page(c))
     return 0
   }
-  let verb = await verbFor(plugins, c, word)
-  if (!verb) {
+  let found = await verbFor(plugins, c, word)
+  if (!found) {
     throw new Usage(`${host} has nothing called ${word} — try \`yak help\``)
   }
   if (help) {
-    out(await helpFor(verb, c))
+    out(toolHelp(found.verb))
     return 0
   }
-  return await verb.run(c)
+  return await found.verb.run(await argsFor(found.verb, found.args, reads), c)
 }
 
 /** One line, from argv to an exit code — the refusal printed on the way. */

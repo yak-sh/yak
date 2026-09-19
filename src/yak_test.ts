@@ -10,7 +10,7 @@ import {
   assertStringIncludes,
   assertThrows,
 } from '@std/assert'
-import type { Ctx } from '@yaks/cli'
+import { argsFor, type Ctx } from '@yaks/cli'
 import { known, owner, verbs } from './yak.ts'
 import { ADMIN, envOf, Refused } from './yaks_account.ts'
 import {
@@ -42,8 +42,12 @@ let ctx = (args: string[]): Ctx => ({
   plugins: [owner],
 })
 
-let ran = (name: string, args: string[]) =>
-  Promise.resolve(verb(name).run(ctx(args)))
+// The line, as the command runs one: the tool's own input schema is the
+// grammar, so a test says what a person types.
+let ran = async (name: string, args: string[], c: Ctx = ctx(args)) => {
+  let t = verb(name)
+  return await t.run(await argsFor(t, args, c.reads), c)
+}
 
 // The fee is the PLATFORM's (workers/yak/sell.ts `fees`), so reading it or
 // moving it is a named act — never something a default or a throwaway arrives
@@ -113,14 +117,12 @@ Deno.test('an agent names a platform operation with --admin', async () => {
   )
   let said: string[] = []
   await assertRejects(() =>
-    Promise.resolve(
-      verb('revert').run({
-        ...ctx(['--admin', 'HEAD']),
-        note: (l) => {
-          said.push(l)
-        },
-      }),
-    )
+    ran('revert', ['--admin', 'HEAD'], {
+      ...ctx(['--admin', 'HEAD']),
+      note: (l: string) => {
+        said.push(l)
+      },
+    })
   )
   assertStringIncludes(said.join('\n'), 'ADMIN ACCOUNT')
   assertStringIncludes(said.join('\n'), ADMIN)
@@ -198,7 +200,10 @@ let asking = async (spaces: unknown[]) => {
   }) as typeof fetch
   let said: string[] = []
   try {
-    await verb('whoami').run({ ...ctx([]), out: (l) => said.push(l) })
+    await ran('whoami', [], {
+      ...ctx([]),
+      out: (l: string) => said.push(l),
+    })
     return { hit, said: said.join('\n') }
   } finally {
     globalThis.fetch = real

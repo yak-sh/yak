@@ -173,7 +173,7 @@ In dependency order:
   reads an MCP server's `tools/list` at run time and makes every tool a
   subcommand, mapping the command line through each tool's own input schema. It
   has no verb list of its own, so it cannot drift from the connector an agent is
-  talking to — and a PLUGIN, a table of verbs contributed at boot, is how a box
+  talking to — and a PLUGIN, a table of tools contributed at boot, is how a box
   adds words of its own beside them under one help.
 - **[@yaks/plugin](./plugin)** — the composition seam: a manifest of lazy
   contributions (vocabulary, commands, graph plugins, views), each aimed at one

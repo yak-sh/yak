@@ -1,6 +1,6 @@
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { argsFor, type Reads, saidIn, Usage, valueOf } from './args.ts'
-import type { Tool } from './tool.ts'
+import type { Listed as Tool } from './tool.ts'
 
 let reads: Reads = {
   file: (path) => `<${path}>`,

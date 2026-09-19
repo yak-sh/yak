@@ -27,32 +27,48 @@ yak graph_query --q '.recipe!'
 Server tools become commands without a CLI release. Tool discovery depends on
 the selected server and its cached tool list.
 
-Four verbs are the command's own and shadow a tool of the same name: `help`,
-`login`, `logout`, `apply`.
+Four tools are the command's own and shadow a server tool of the same name:
+`help`, `login`, `logout`, `apply`.
 
 ## Plugins
 
 Everything else arrives through a plugin, and a plugin is data: a name, the
-heading its verbs sit under, and a table of verbs contributed at boot.
+heading its tools sit under, and a table of tools contributed at boot.
+
+A tool here is a @yaks/graph `Tool` and nothing else — noun, verb, description,
+`inputSchema`, `run` — the same declaration an MCP transport lists. What a CLI
+tool is handed is this package's `Ctx` and what it answers with is an exit code,
+which is what `Tool<Ctx, number>` says. There is no second shape.
 
 ```ts
-import { main, type Plugin, PLUGINS } from '@yaks/cli/yak'
+import type { Tool } from '@yaks/graph'
+import { type Ctx, main, type Plugin, PLUGINS } from '@yaks/cli/yak'
 
 let mine: Plugin = {
   name: 'mine',
   about: 'local commands',
-  verbs:
-    () => [{ name: 'ping', about: 'say hello', run: (c) => (c.out('hi'), 0) }],
+  verbs: (): Tool<Ctx, number>[] => [{
+    name: 'ping',
+    description: 'say hello',
+    inputSchema: { type: 'object', additionalProperties: false },
+    run: (_args, c) => (c.out('hi'), 0),
+  }],
 }
 
 Deno.exit(await main(Deno.args, [mine, ...PLUGINS]))
 ```
 
+The tool's own input schema is the whole grammar of the line: `argsFor` fills
+`options.positional` from the bare words, then `options.rest`, reads
+`--name value`, `--name=value` and a declared short `-n`, inflates `@path` and
+`-`, and checks the bag against the schema, which is also what fills its
+defaults. The usage line and `--help` page are drawn from that same schema.
+
 `yak --help` renders every table on one page, one column throughout. The
-**first** plugin to name a verb wins, so the order is the precedence and an
+**first** plugin to name a word wins, so the order is the precedence and an
 application chooses precedence through plugin order. A plugin is asked for its
 table only until the word is found, so one that has to reach the network for its
-verbs costs nothing on a line that never reaches it.
+tools costs nothing on a line that never reaches it.
 
 Two plugins ship here: the server's tools (above), and the apps' commands.
 
@@ -157,13 +173,14 @@ storage require Deno filesystem, environment and network permissions.
 `@yaks/cli/structured` consumes graph `Tool` definitions with string `noun` and
 `verb` fields. `session list` and `list session` automatically traverse the same
 registry; they are not separately registered aliases. `completeCommand` lists
-matching nouns or verbs. `resolveCommand` resolves the first two words and
-`commandArguments` decodes the remaining arguments against `inputSchema`.
+matching nouns or verbs. `resolveCommand` resolves the first two words, and
+`argsFor` decodes the remaining arguments against `inputSchema`.
 
-Long options derive from JSON Schema properties. Optional `options.positional`
-and `options.short` metadata describe positional fields and short flags. Shared
-validation applies types, bounds, enums, required fields and defaults. The CLI
-adapter supplies execution context; the handler remains the graph Tool's `run`.
+Long options derive from JSON Schema properties. Optional `options.positional`,
+`options.short` and `options.rest` metadata describe positional fields, short
+flags, and the property the leftover bare words fill. Shared validation applies
+types, bounds, enums, required fields and defaults. The CLI adapter supplies
+execution context; the handler remains the graph Tool's `run`.
 
 MCP and provider adapters derive a name such as `session_list` when no explicit
 transport name is present. Existing name-only tools remain supported. JSON

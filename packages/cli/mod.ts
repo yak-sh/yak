@@ -26,6 +26,7 @@
 
 export {
   argsFor,
+  type Grammar,
   inflate,
   pairsIn,
   type Reads,
@@ -46,7 +47,7 @@ export {
   Unauthorized,
 } from './rpc.ts'
 export { type Result, rosterAfter, saidBy, STALE, versionIn } from './roster.ts'
-export { safe, toolHelp, toolLines, wrap } from './show.ts'
+export { lineOf, safe, sketch, toolHelp, toolLines, wrap } from './show.ts'
 export {
   cached,
   configDir,
@@ -58,16 +59,21 @@ export {
   stateDir,
   tokenFor,
 } from './store.ts'
-export { type Prop, type Schema, titleOf, type Tool, typeOf } from './tool.ts'
+export {
+  type Listed,
+  type Prop,
+  type Schema,
+  titleOf,
+  typeOf,
+  wordOf,
+} from './tool.ts'
 export {
   type Ctx,
-  helpFor,
-  lineOf,
+  type Found,
   type Part,
   parts,
   type Plugin,
   usage,
-  type Verb,
   verbFor,
 } from './plugin.ts'
 export { platform, printed, rosterOf } from './platform.ts'
