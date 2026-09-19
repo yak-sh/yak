@@ -1,4 +1,3 @@
-import { validateToolInput, validateToolOutput } from '@yaks/vocab/tools'
 import { type NamedTool, namedTool, toolName } from '@yaks/graph'
 import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { zodToJsonSchema } from 'zod-to-json-schema'
@@ -6,11 +5,12 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 // calls them. Everything transport-shaped lives in ./mount.ts and ./stdio.ts;
 // this file only knows how a `Tool` becomes an MCP tool.
 //
-// A tool never writes: it answers an `Intent` saying what it wants done and
-// this server LANDS it (@yaks/graph `land`), signed — every bundle's `$actor`
-// is replaced by the identity the door authenticated, exactly as @yaks/api's
-// `/apply` does it, so a tool cannot write in the client's name even if the
-// client asked it to.
+// A tool is never called here. `tools/call` WRITES A CALL — `call{to, args}`
+// signed as the identity the door authenticated — and awaits what answers it;
+// @yaks/tools' runner is what finds that call, runs the function and lands its
+// bundles as the caller. So a tool cannot write in the client's name even if
+// the client asked it to, and every call this door served is an entity
+// somebody can read afterwards.
 //
 // A refusal comes back as the tool's own error text with `isError`, never as a
 // protocol error: a bad argument or a rejected write is something the agent
@@ -20,15 +20,15 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import {
+  type Bundle,
+  type Comp,
   type Entity,
   type Graph,
-  type Intent,
-  land,
   type Schema,
   type Tool,
-  type ToolCtx,
   toolsOf,
 } from '@yaks/graph'
+import { answerOf, runner, toolEid, worded } from '@yaks/tools'
 import type { BundleOpts, Depth } from './schema.ts'
 import { core, type CoreOpts, pointed, type Search } from './tools.ts'
 import type { Guide } from './words.ts'
@@ -48,6 +48,11 @@ export type Security =
 export type Options = {
   /** the graph its tools read and write */
   graph: Graph
+  /** where a CALL is written and its result awaited (default: `graph`). A
+   * door whose graph cannot take one — a composition over somebody else's
+   * stores, a connector that will not record a stranger's question — keeps a
+   * ledger of its own here; the tools still work on `graph`. */
+  calls?: Graph
   /** who is calling — every write this server makes is signed as this entity
    * (default: nobody, and batches land unattributed) */
   actor?: Entity | null
@@ -119,36 +124,18 @@ export type Options = {
   extend?: (server: McpServer) => void | Promise<void>
 }
 
-// The words in an answer, where it has them: a tool's sentence is a FIELD of
-// what it answers (`text`), never a channel beside it.
-let words = (value: unknown): string | undefined =>
-  value != null && typeof value == 'object' && !Array.isArray(value) &&
-    typeof (value as { text?: unknown }).text == 'string'
-    ? (value as { text: string }).text
-    : undefined
-
-// The reply, from one value. An answer that carries words says THEM as its
-// text — a host shows that block to the model, and prose is what these tools
-// answer in — and rides as `structuredContent` in its own shape, which is the
-// shape the page a host renders it in reads. An answer with no words is said
-// as JSON, under `result` where a schema was declared for it: MCP requires
-// structured content to be an object and an answer need not be one
-// (schema.ts `outputSchema`).
-let said = (value: unknown, typed: boolean): CallToolResult => {
-  let text = words(value)
-  if (text != undefined) {
-    return {
-      content: [{ type: 'text', text }],
-      structuredContent: value as Record<string, unknown>,
-    }
-  }
-  // A tool that asked for nothing and answered nothing still says something: a
-  // reply with no content at all is not a reply a client can read.
-  return {
-    content: [{ type: 'text', text: JSON.stringify(value ?? null, null, 2) }],
-    ...(typed ? { structuredContent: { result: value } } : {}),
-  }
-}
+// The reply, said both ways from the answer's BUNDLES: the prose they carry
+// (or the bundles themselves, as JSON) for a client that reads text, and the
+// bundles as `structuredContent` for one that reads structure. MCP requires
+// structured content to be an object, so they ride under `result`.
+//
+// An answer carrying an `error` or an `exception` is the tool's refusal, and
+// it comes back as an error rather than a success that reads like an apology.
+let said = (answer: Bundle[]): CallToolResult => ({
+  content: [{ type: 'text', text: worded(answer) }],
+  structuredContent: { result: answer },
+  ...(answer.some((b) => b.error || b.exception) ? { isError: true } : {}),
+})
 
 // A refusal IS an error: `isError` rides the reply so a harness counts it as
 // one instead of a success that reads like an apology.
@@ -288,36 +275,35 @@ export let server = (opts: Options): McpServer => {
     ...(opts.instructions ? { instructions: opts.instructions } : {}),
   })
 
-  let ctx: ToolCtx = {
-    graph,
-    actor,
-    read: (query, readOpts) => graph.read(query, readOpts),
-  }
-
-  // This server is a HOST: a tool answers with what it wants done and the
-  // landing happens here (@yaks/graph `land`), signed as the actor, so a tool
-  // can never write in the client's name by accident. A word this graph does
-  // not know is worth a sentence with the door in it — and `apply` may refuse
-  // before it ever returns a promise, so the catch is around the whole call.
-  let landing = async (intent: Intent): Promise<unknown> => {
+  // A refusal for a word this graph does not know, pointed at the door that
+  // has the words (./tools.ts `pointed`, which raises rather than returns).
+  let sharpened = (err: unknown): unknown => {
     try {
-      return await land(intent, ctx)
-    } catch (err) {
       return pointed(err)
+    } catch (e) {
+      return e
     }
   }
 
   let tools = listing(opts).map(namedTool)
+  // The CALL LEDGER: where a call is written, which is this graph unless the
+  // host keeps one of its own (a door serving a composition, a connector that
+  // will not write a row into somebody's store for a question). The runner
+  // registers there; the tools still work on `graph`.
+  let calls = opts.calls ?? graph
+  let run = runner(calls, {
+    tools,
+    host: graph,
+    report: (err) => console.error('tool failed —', err),
+  })
+  calls.use(run.plugin)
+  // The tool rows a call points at, written once — the first call waits for
+  // them, and every later one finds them there.
+  let rows: Promise<unknown> | undefined
+  let ready = () => rows ??= Promise.resolve(run.ensure())
   let names = tools.map((t) => t.name)
 
   for (let t of tools) {
-    if (t.output && t.outputSchema) {
-      throw new Error(`Tool ${t.name} declares both output and outputSchema`)
-    }
-    if (t.outputSchema && t.outputSchema.type != 'object') {
-      throw new Error(`Tool ${t.name} outputSchema must describe an object`)
-    }
-    let output = zodOf(t.name, 'output', t.output)
     let meta = metaOf(t, opts.security)
     let config = {
       ...(t.title ? { title: t.title } : {}),
@@ -326,27 +312,27 @@ export let server = (opts: Options): McpServer => {
       annotations: annotated(t),
       ...(meta ? { _meta: meta } : {}),
     }
-    let run = async (args: Record<string, unknown>) => {
+    let call = async (args: Record<string, unknown>) => {
       let out: CallToolResult
       try {
-        let intent = await t.run(validateToolInput(t, args), ctx)
-        let value = await landing(intent)
-        out = said(value, !!(output || t.outputSchema))
-        validateToolOutput(t, out.structuredContent)
+        await ready()
+        out = said(answerOf(await run.call([{
+          entity: { eid: '$call' },
+          call: { to: toolEid(t.name), args: JSON.stringify(args ?? {}) },
+          ...(actor ? { $actor: { by: actor.eid } } : {}),
+        }])))
       } catch (err) {
-        out = failed(err)
+        out = failed(sharpened(err))
       }
       // A refusal carries it too: an agent holding a stale list is likelier to
       // be refused than served, and that is the reply worth telling.
       return noting(out, await opts.roster?.(names))
     }
-    if (output) {
-      mcp.registerTool(t.name, { ...config, outputSchema: output }, run)
-    } else mcp.registerTool(t.name, config, run)
+    mcp.registerTool(t.name, config, call)
   }
   // Preserve JSON Schema declarations exactly on the wire. SDK argument parsing
-  // for these tools is passthrough; the shared validator runs before the handler.
-  if (tools.some((t) => t.inputSchema || t.outputSchema)) {
+  // for these tools is passthrough; the runner validates before the handler.
+  if (tools.some((t) => t.inputSchema)) {
     mcp.server.setRequestHandler(ListToolsRequestSchema, () => ({
       tools: tools.map((t) => ({
         name: t.name,
@@ -356,14 +342,6 @@ export let server = (opts: Options): McpServer => {
           target: 'jsonSchema7',
           $refStrategy: 'none',
         })) as { type: 'object'; [key: string]: unknown },
-        ...(t.outputSchema ? { outputSchema: t.outputSchema } : t.output
-          ? {
-            outputSchema: zodToJsonSchema(zodOf(t.name, 'output', t.output)!, {
-              target: 'jsonSchema7',
-              $refStrategy: 'none',
-            }) as { type: 'object'; [key: string]: unknown },
-          }
-          : {}),
         annotations: annotated(t),
         ...(metaOf(t, opts.security)
           ? { _meta: metaOf(t, opts.security) }

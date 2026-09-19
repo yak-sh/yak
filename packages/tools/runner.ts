@@ -49,6 +49,7 @@ import {
   type Ready,
   reads,
   ready,
+  signed,
   type Tool,
   type ToolCtx,
   token,
@@ -120,16 +121,6 @@ export type Runner = {
   drive: (opts?: { redrive?: boolean }) => Promise<Bundle[]>
 }
 
-// A batch as one actor's. Whatever `$actor` the tool's bundles carried is
-// dropped: who is writing is the CALL's word, never the tool's.
-let signed = (change: Bundle[], who: Entity | null): Bundle[] =>
-  change.map((b) => {
-    let out: Bundle = { ...b }
-    delete out.$actor
-    if (who) out.$actor = { by: who.eid }
-    return out
-  })
-
 // What a tool's bundles say in words: the prose they carry, or the bundles
 // themselves. It rides on the result entity as `content{body}` so a model, a
 // terminal and a transcript all read the answer the same way.
@@ -148,6 +139,15 @@ let who = (call: Bundle): Entity | null => {
   let by = (call.created as Comp | undefined)?.by ?? call.$actor?.by
   return by ? { eid: String(by) } : null
 }
+
+/**
+ * What a call ANSWERED, as a host renders it: the tool's own bundles, with the
+ * runner's bookkeeping left out. The result entity carries a copy of the prose
+ * so a transcript reads one line per answer; a host showing the answer itself
+ * would otherwise show it twice.
+ */
+export let answerOf = (landed: Bundle[]): Bundle[] =>
+  landed.filter((b) => !b.result && !b.execution)
 
 let parsed = (args: unknown): Record<string, unknown> => {
   let value: unknown

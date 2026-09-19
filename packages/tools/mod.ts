@@ -14,6 +14,7 @@
 
 export { callDoc, toolDoc, toolsDoc } from './vocab.ts'
 export {
+  answerOf,
   CallError,
   type Opts,
   READY,
