@@ -14,6 +14,15 @@ export type Prop = {
   enum?: unknown[]
   items?: Prop
   default?: unknown
+  /** native JSON Schema, and what a completion offers when nothing else
+   * narrows the word (@yaks/vocab: a text column's examples union its own live
+   * values) */
+  examples?: unknown[]
+  /** the component this argument names an entity of — what a completion reads
+   * ids out of */
+  ref?: string
+  /** true = this text is matched by words, so a completion asks the index */
+  search?: boolean
 }
 
 /** A tool's input schema — an object schema, or nothing when it takes none. */

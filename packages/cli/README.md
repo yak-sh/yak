@@ -169,21 +169,41 @@ The runtime uses native fetch and implements `initialize`, `tools/list` and
 `tools/call` without an MCP SDK dependency. Command execution and credential
 storage require Deno filesystem, environment and network permissions.
 
-## Structured command pilot
+## Completion
 
-`@yaks/cli/structured` consumes graph `Tool` definitions with string `noun` and
-`verb` fields. `session list` and `list session` automatically traverse the same
-registry; they are not separately registered aliases. `completeCommand` lists
-matching nouns or verbs. `resolveCommand` resolves the first two words, and
-`argsFor` decodes the remaining arguments against `inputSchema`.
+`complete(tools, line, look?)` says what could come next, read off the same
+declarations that run the line — never a second table to keep in step.
 
-Long options derive from JSON Schema properties. Optional `options.positional`,
-`options.short` and `options.rest` metadata describe positional fields, short
-flags, and the property the leftover bare words fill. Shared validation applies
-types, bounds, enums, required fields and defaults. The CLI adapter supplies
-execution context; the handler remains the graph Tool's `run`.
+```ts
+import { complete } from '@yaks/cli'
 
-MCP and provider adapters derive a name such as `session_list` when no explicit
-transport name is present. Existing name-only tools remain supported. JSON
-Schema tool declarations are available through `@yaks/vocab/tools`; where they
-belong within vocabulary documents remains an open design question.
+await complete(tools, 'session li') // ['list']
+await complete(tools, 'session list --') // ['--all', '--limit', '--scope']
+await complete(tools, 'session list --status ') // ['done', 'open']
+await complete(tools, ['session', 'list', '']) // a shell hook's words
+```
+
+The first word is every word a tool answers to — both halves of a pair, since
+either order is a line. After one half, the other half. After the tool, its
+input schema's properties as `--name`, minus the ones already said; and for a
+value, what the property says about itself: an `enum` offers its members, a
+boolean offers `true` and `false`, and `examples` offer themselves.
+
+Two answers belong to a graph rather than to a command line, so they are the
+caller's to supply as `look`: `ids(comp, prefix)` for an argument declaring
+`ref` (the component whose entities it names), and `hits(prefix)` for a text
+argument declaring `search: true`. Left out, those arguments offer nothing. Over
+a graph both are one read each:
+
+```ts
+let look = {
+  ids: async (comp: string) =>
+    (await graph.read(parse(`.${comp}`))).map((b) => b.entity.eid),
+  hits: async (words: string) =>
+    (await graph.read(parse(words))).map((b) => String(b.doc?.title ?? '')),
+}
+```
+
+Nothing in this package is wired to a shell hook or a TUI line yet: the harness
+has no command line to complete, and a shell hook is a few lines of the shell's
+own, not of this package's.

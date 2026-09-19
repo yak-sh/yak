@@ -39,6 +39,7 @@ export {
   valueOf,
 } from './args.ts'
 export { bundlesIn, CHUNK, chunks } from './apply.ts'
+export { complete, type Lookup } from './complete.ts'
 export {
   type Door,
   doorUrl,

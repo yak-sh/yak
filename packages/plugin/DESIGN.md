@@ -15,22 +15,21 @@ configuration-file search, hot reload, or a new command prompt.
 
 - `@yaks/plugin`: explicit installed-module loading, version-1 manifests, lazy
   target selection, capability checks, and identity validation.
-- `@yaks/cli/structured`: noun/verb traversal of the existing `@yaks/graph` Tool
-  schema, annotations, execution context, and handler.
-- `@yaks/harness/plugin`: session vocabulary, session graph rules, and a session
-  list command. This is a partial manifest, **not everything required to boot
-  the harness**. Model/tool/context vocabulary and derived columns still come
-  from the existing host composition.
+- `@yaks/cli`: `cli(tools, opts)` — noun/verb traversal of the existing
+  `@yaks/graph` Tool schema, annotations, execution context, and handler.
+- `@yaks/harness/plugin`: session vocabulary, session graph rules, and the
+  `session list` tool its vocab.json declares. This is a partial manifest, **not
+  everything required to boot the harness**. Model/tool/context vocabulary and
+  derived columns still come from the existing host composition.
 - `harness session list` and the verb-first traversal `harness list session` are
   wired into the existing executable. They return session bundles as JSON.
   Existing short commands such as `ls` are unchanged.
-- The same command becomes MCP `session_list` by passing
-  `commandTools(commands)` to the existing MCP server. An in-memory MCP
-  client/server regression exercises this path; the harness does not start a new
-  MCP listener automatically.
+- The same tool becomes MCP `session_list` by passing it to the existing MCP
+  server. An in-memory MCP client/server regression exercises this path; the
+  harness does not start a new MCP listener automatically.
 
-Two consumers can select vocabulary and commands from one loaded manifest
-without loading a service factory. No daemon or extra executable is required.
+Two consumers can select vocabulary and tools from one loaded manifest without
+loading a service factory. No daemon or extra executable is required.
 
 ## Structured commands
 
