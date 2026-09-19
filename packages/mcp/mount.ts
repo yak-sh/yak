@@ -79,9 +79,9 @@ let ask = async (
  */
 export let mcp = (opts: MountOptions): Handler => {
   let ms = opts.timeout ?? 60_000
-  // ONE runner for the door, not one per request: it is registered on the
-  // graph the calls are written to, and the second registration would be a
-  // second claimant for every call.
+  // ONE runner for the door, not one per request: the `tool` rows a call
+  // points at are written once for the process, and a call in flight is one
+  // run however many requests ask about it.
   let runs = opts.runner ?? runner(opts.calls ?? opts.graph, {
     tools: listing(opts).map(namedTool),
     host: opts.graph,

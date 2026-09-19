@@ -60,14 +60,10 @@ export let graphTools = (
   opts: { actor?: Entity | null; depth?: Depth } = {},
 ): Tool[] => {
   let tier = core({ vocab: g.vocab, depth: opts.depth ?? 'names' })
-  // A runner, and deliberately NOT its effect plugin: these calls are this
-  // agent's own and `call()` answers them itself. Driving the whole queue is a
-  // daemon's job, and a second hook on a graph a door is also serving would
-  // answer that door's calls out from under it.
+  // A runner: these calls are this agent's own, and `call()` runs them here.
+  // Nothing sweeps a queue from inside an agent — a call somebody else wrote
+  // is a daemon's to notice, by registering the same rules as effects.
   let r = runner(g, { tools: tier, host: g })
-  // The tool rows a call points at, written once and awaited by the first
-  // call that needs them.
-  let rows: Promise<unknown> | undefined
   return tier.map((t) => ({
     name: toolName(t),
     description: t.description,
@@ -76,7 +72,7 @@ export let graphTools = (
     // and lands what it answered in that session's name.
     run: async (args: Record<string, unknown>, call) => {
       let actor = call?.session ? { eid: call.session } : opts.actor ?? null
-      await (rows ??= Promise.resolve(r.ensure()))
+      await r.ensure()
       return worded(answerOf(
         await r.call([{
           entity: { eid: '$call' },

@@ -144,14 +144,14 @@
     "call_ready": {
       "rule": true,
       "phase": "effect",
-      "match": "$call .call, results=; +result.call=$call",
-      "description": "a call nobody has answered yet: run the tool it names and attach the result"
+      "match": "$call .call, !results, !wake; +result.call=$call",
+      "description": "a call nobody has answered and nobody scheduled: run the tool it names and attach the result"
     },
-    "call_waiting": {
+    "call_woken": {
       "rule": true,
       "phase": "effect",
-      "match": "$call .call, .wake, .fired=",
-      "description": "a call whose wake has not fired: not this tick. Inert in a graph that knows no wakes, which is what makes the pair one rule there and two where calls are scheduled"
+      "match": "$call .call, .wake, .fired, !results; +result.call=$call",
+      "description": "a scheduled call whose wake has fired and nobody has answered: run it now. Inert in a graph that knows no wakes, where the pair is one rule and every call is due when it is written"
     }
   }
 }

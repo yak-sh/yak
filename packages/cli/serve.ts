@@ -284,17 +284,21 @@ export let compose = async (
       docs,
       Object.assign({}, ...mods.map((m) => m.runs ?? {})) as Runs,
     )
-    // The one RUNNER over this graph. Nothing here calls a tool function: a
-    // door writes `call{to, args}` and the runner's rule finds it after the
-    // commit, runs it as whoever wrote it, and lands the answer beside a
-    // result. The `tool` rows a call points at are written on the first call
-    // and at boot, never at compose: a one-shot command opens a host to ask
-    // one question and should not write to say hello.
+    // The one RUNNER over this graph. A door calls a tool and records the ask
+    // and the answer as it goes; what this adds is the calls NOBODY here is
+    // waiting on — one written by another process through `/apply`, or one
+    // wearing a wake that has now fired. Each rule is one effect registration
+    // over committed changes, and a call this graph has no tool for is left
+    // alone for whoever does. The `tool` rows a call points at are written on
+    // the first call and at boot, never at compose: a one-shot command opens a
+    // host to ask one question and should not write to say hello.
     let run = runner(g, {
       tools,
       report: (err) => console.error('tool failed —', err),
     })
-    g.use(run.plugin)
+    for (let rule of run.rules) {
+      fx.on(rule.plan, (e) => run.run(e.entity.eid), { doc: rule.rule.name })
+    }
     let routes = mods.flatMap((m) => m.routes ?? [])
     let authenticate = doorman(mods, config)
     let door = api({ graph: g, authenticate })

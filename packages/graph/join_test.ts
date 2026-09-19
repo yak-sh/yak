@@ -4,7 +4,7 @@
 
 import { assertEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
-import { bound, filled, match, reads } from './join.ts'
+import { asked, bound, filled, match, reads } from './join.ts'
 
 let vocab = loadVocab([{
   $defs: {
@@ -114,4 +114,26 @@ Deno.test('arguments may be a query or a plain object', () => {
     filled('+result.ms=$x', '$x=5').patterns[0].sets[0].value,
     filled('+result.ms=$x', { x: '5' }).patterns[0].sets[0].value,
   )
+})
+
+// `asked`: the same sentence, read by two vocabularies.
+
+Deno.test('a clause about a word this vocabulary lacks, absent, says nothing', () => {
+  let m = asked(match('$call .call, !results, !wake'), vocab)!
+  // `wake` is not a word here, so nothing can wear it and the clause is out;
+  // `results` is, so the gate it states stands.
+  assertEquals(m.patterns[0].filter.clauses.length, 2)
+  assertEquals(m.patterns[0].entity, 'call')
+})
+
+Deno.test('a clause about a word this vocabulary lacks, present, is inert', () => {
+  assertEquals(
+    asked(match('$call .call, .wake, .fired, !results'), vocab),
+    null,
+  )
+})
+
+Deno.test('a match this vocabulary knows every word of is itself', () => {
+  let m = match('$call .call, !results')
+  assertEquals(asked(m, vocab), m)
 })

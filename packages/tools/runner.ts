@@ -1,33 +1,32 @@
-// The RUNNER: the one thing that turns a `call` into a `result`, and the only
-// thing anywhere that calls a tool function.
+// The RUNNER: the one thing that calls a tool function, and the record it
+// leaves. A tool is a function from BUNDLES to BUNDLES — `(bundles, host) =>
+// bundles` — and nothing about it lives on `call` and `result`. A HOST invokes
+// it directly and gets its bundles back; what this file adds is the
+// TRANSCRIPT, which is why a host typically comes through here: the `call`
+// entity that says what was asked, the `result{call, ms}` that says what came
+// back, and the `execution{state}` that says a run is in flight.
 //
-// A tool is a function from BUNDLES to BUNDLES — `(bundles, host) => bundles`
-// — and nothing wires it to the `call` and `result` components. What finds the
-// work is a declared RULE, in the ordinary query grammar, read out of this
-// package's own vocabulary (./vocab.json):
+// The result entity is a declared RULE's own emit (./vocab.json, @yaks/graph
+// `emitted`), so its id is DERIVED from the firing — `call_ready(<the call>)`
+// — and the same call names the same result entity in this process, another
+// process, or a year later. Answering twice patches one entity, never two.
 //
-//   call_ready    $call .call, results=; +result.call=$call
-//   call_waiting  $call .call, .wake, .fired=
+// A call somebody ELSE wrote — one scheduled for later, one a crash left
+// behind — is not this file's problem to notice. That is an EFFECT, and the
+// rules here are the patterns to register it on (@yaks/effects `on`):
 //
-// The first says what a call with no answer is and what to attach; the second
-// says which of those are not due yet, and is INERT in a graph that knows no
-// wakes — which is why the scheduled split costs nothing where nothing is
-// scheduled. Both name the `effect` phase, so `apply()` never runs them: they
-// are asked here, after the commit, because a tool may take a minute and a
-// transaction may not.
+//   fx.on('$call .call, !results, !wake', (e) => run.run(e.entity.eid))
+//   fx.on('$call .call, .wake, .fired, !results', (e) => run.run(e.entity.eid))
 //
-// The result entity is the rule's own emit (@yaks/graph `emitted`), so its id
-// is DERIVED from the firing — `call_ready(<the call>)` — and the same call
-// names the same result entity in this process, another process, or a year
-// later. Answering twice patches one entity instead of making two.
+// one registration each, nothing special here. `drive()` is the same two
+// queries asked once, which is what a boot sweep is.
 //
 // AT MOST ONCE, and how a crash is recovered: `execution{state}` on the call
 // is the claim. The runner writes `running` under a `$was` that the column was
 // absent, so a second host loses the race rather than running the tool again;
 // it writes `done` or `failed` when the answer lands. A call left `running` by
-// a process that died has no result, so the same rule still selects it — and
-// `reconcile()` at boot re-drives it, claiming over `running` this time. That
-// is the whole sweep: one query, the rule's own.
+// a process that died has no result, so the same rules still select it — and
+// `reconcile()` at boot re-drives it, claiming over `running` this time.
 //
 // THE ACTOR IS THE CALLER'S. Whoever wrote the call is who the tool's bundles
 // are signed as, never the process running them, so authorization is decided
@@ -35,6 +34,7 @@
 // execution — is the server's and carries no actor at all.
 
 import {
+  asked,
   type Bundle,
   type Change,
   type Comp,
@@ -46,7 +46,6 @@ import {
   type NamedTool,
   namedTool,
   type Plugin,
-  reads,
   type Ready,
   ready,
   signed,
@@ -60,10 +59,11 @@ import { validateToolInput } from '@yaks/vocab/tools'
 import { toolsDoc } from './vocab.ts'
 
 // What a call is doing RIGHT NOW in this process, and what the last few came
-// to — per GRAPH, not per runner. Two runners over one graph (a door's and a
-// daemon's) are one claimant and one answer between them: the second finds the
-// first's promise instead of racing it, and the host that wrote a call reads
-// the bundles that were landed for it whichever runner ran them.
+// to — per GRAPH, not per runner. A door that calls a tool and an effect that
+// found the same call are one claimant and one answer between them: the second
+// finds the first's promise instead of racing it, and reads the bundles that
+// were landed for it whichever ran them. The memo is what makes that true for
+// a READING tool, whose answer is never written down.
 let running = new WeakMap<Graph, Map<Eid, Promise<Bundle[]>>>()
 let answers = new WeakMap<Graph, Map<Eid, Bundle[]>>()
 let per = <V>(at: WeakMap<Graph, Map<Eid, V>>, g: Graph): Map<Eid, V> => {
@@ -97,8 +97,8 @@ export let RULES: Declared[] = rulesIn(toolsDoc)
 /** The rule that ANSWERS a call — the one whose emit names the result. */
 export let READY = 'call_ready'
 
-/** The rule that says a call is not due — a wake that has not fired. */
-export let WAITING = 'call_waiting'
+/** The rule that answers a SCHEDULED call once its wake has fired. */
+export let WOKEN = 'call_woken'
 
 /** The entity a tool is called BY name at: derived, so a graph's tool rows are
  * the same rows every time this runner is built. */
@@ -117,20 +117,23 @@ export type Opts = {
   now?: () => number
 }
 
-/** A live runner: the plugin to register, and the three doors a host uses. */
+/** A live runner: the words it writes in, and the doors a host calls through. */
 export type Runner = {
   /** register this on the graph the calls are written to */
   plugin: Plugin
+  /** the rules a scheduled call is found by — what an effect registers on */
+  rules: Ready[]
   /** the tools it runs, named */
   tools: NamedTool[]
-  /** write the `tool` rows the calls point at — once, at startup */
+  /** write the `tool` rows the calls point at — once per runner, whoever
+   * asks, so a door may call it on the way into every request */
   ensure: () => Promise<Bundle[]>
   /** ask a tool: the call bundles in, the answer's bundles out */
   call: (change: Change) => Promise<Bundle[]>
   /** run one call that is already in the graph */
   run: (call: Eid, opts?: { redrive?: boolean }) => Promise<Bundle[]>
-  /** every call the rules select, run — what the effect does per batch, and
-   * what a boot pass does with `redrive` for the ones a crash left claimed */
+  /** every call the rules select, run: one sweep, which is what a boot pass
+   * does with `redrive` for the ones a crash left claimed */
   drive: (opts?: { redrive?: boolean }) => Promise<Bundle[]>
 }
 
@@ -215,35 +218,42 @@ let checked = (
  *
  * ```ts
  * let r = runner(g, { tools })
- * g.use(r.plugin)
  * await r.ensure()
+ * // the call is the transcript; the answer is the tool's own bundles
  * let answer = await r.call([
  *   { entity: { eid: '$c' }, call: { to: toolEid('text_echo'), args: '{}' } },
  * ])
  * ```
+ *
+ * Nothing watches the graph for calls. A host that wants the scheduled ones
+ * too registers the rules as effects — `for (let r of run.rules)
+ * fx.on(r.plan, (e) => run.run(e.entity.eid))` — and calls `reconcile()` at
+ * boot for what a crash left claimed.
  */
 export let runner = (g: Graph, opts: Opts): Runner => {
   let tools = opts.tools.map(namedTool)
   let by = new Map(tools.map((t) => [t.eid ?? toolEid(t.name), t]))
   let now = opts.now ?? (() => performance.now())
   let host = opts.host ?? g
-  // A rule this graph has no words for is INERT rather than a query that
-  // throws: `call_waiting` names the wake components, and a graph that
-  // schedules nothing never loaded them (@yaks/graph's rules read the same
-  // way — a rule about a component that is not here says nothing).
-  let plans: Ready[] = ready(RULES).filter((p) =>
-    reads(p.plan, g.vocab).every((name) =>
-      !!g.vocab.comp(name) || !!g.vocab.assoc(name)
-    )
-  )
+  // The rules as THIS graph can ask them (@yaks/graph `asked`). A graph that
+  // schedules nothing never loaded the wake words: there `!wake` says nothing
+  // and comes out, and `call_woken`, which requires them, is inert — one rule
+  // text, right in both graphs.
+  let plans: Ready[] = ready(RULES)
+    .map((p) => ({ ...p, plan: asked(p.plan, g.vocab) }))
+    .filter((p): p is Ready => !!p.plan)
   let answering = plans.find((p) => p.rule.name == READY)!
+  let woken = plans.find((p) => p.rule.name == WOKEN)
   let inflight = per(running, g)
   let landings = per(answers, g)
+  // The last few answers, by call. Bounded: a memo is a convenience for the
+  // caller that is about to ask, never a cache of the graph.
   let keep = (id: Eid, bundles: Bundle[]) => {
     landings.set(id, bundles)
     for (let old of [...landings.keys()].slice(0, -256)) landings.delete(old)
     return bundles
   }
+  let ensured: Promise<Bundle[]> | undefined
 
   // The answer, read back out of the graph: the result the rule named, and
   // whatever says it came from this call. What a host sees when another
@@ -260,9 +270,10 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   // The result entity, as the RULE writes it: one binding of `call_ready`,
   // emitted. The id is derived from the firing, so it is the same entity
   // however many times a call is answered.
-  let attached = (id: Eid, ms: number): Bundle => {
-    let name = answering.plan.patterns[0].entity!
-    let [made] = emitted(answering, {
+  let attached = (id: Eid, ms: number, sleeps = false): Bundle => {
+    let rule = sleeps && woken ? woken : answering
+    let name = rule.plan.patterns[0].entity!
+    let [made] = emitted(rule, {
       entities: [id, null],
       vars: { [name]: id },
     }, g.vocab)
@@ -317,7 +328,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       let landed = await g.apply([
         ...(keeps ? made : []),
         {
-          ...attached(id, Math.round(now() - started)),
+          ...attached(id, Math.round(now() - started), !!call.wake),
           content: { body: worded(made) },
         },
         {
@@ -354,18 +365,17 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     return pending
   }
 
-  // The queue: what the answering rule selects, less what the waiting one
-  // does. A rule's match IS the query — its first pattern is the call — so
-  // this asks the storage the same question the compiler would.
+  // The queue: every call either rule selects, asked once. A rule's match IS
+  // the query — its first pattern is the call — so this asks the storage the
+  // same question an effect registered on that pattern would.
   let queued = async (): Promise<Bundle[]> => {
-    let open = await g.read(answering.plan.patterns[0].filter)
-    let waiting = plans.find((p) => p.rule.name == WAITING)
-    if (!waiting || !open.length) return open
-    let held = new Set(
-      (await g.read(waiting.plan.patterns[0].filter))
-        .map((b) => b.entity.eid),
-    )
-    return open.filter((b) => !held.has(b.entity.eid))
+    let out = new Map<Eid, Bundle>()
+    for (let p of plans) {
+      for (let b of await g.read(p.plan.patterns[0].filter)) {
+        out.set(b.entity.eid, b)
+      }
+    }
+    return [...out.values()]
   }
 
   let drive = async (o: { redrive?: boolean } = {}): Promise<Bundle[]> => {
@@ -385,42 +395,38 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     return out
   }
 
-  let answered = (id: Eid): Promise<Bundle[]> => {
-    let held = landings.get(id)
-    if (held) {
-      landings.delete(id)
-      return Promise.resolve(held)
-    }
-    return inflight.get(id) ?? run(id)
-  }
-
   return {
+    rules: plans,
     tools,
-    plugin: {
-      name: 'tools',
-      vocab: [toolsDoc],
-      // Post-commit, and only about a batch that wrote a call: the queue is
-      // read when something asked for work, never on every write. What a crash
-      // left behind is `reconcile`'s, at boot.
-      hooks: {
-        effect: async (bundles) => {
-          if (bundles.some((b) => b.call)) await drive()
-          return bundles
-        },
-      },
-    },
+    // The words a call is written in, and nothing else: a tool is run by
+    // whoever asks for it, not by a hook this plugin hides in a graph.
+    plugin: { name: 'tools', vocab: [toolsDoc] },
+    // Once per runner, however many callers ask: a tool row is the same row
+    // every time (its id is derived from the name), and writing it again would
+    // move an `updated` stamp for nothing.
     ensure: () =>
-      Promise.resolve(g.apply(
+      ensured ??= Promise.resolve(g.apply(
         tools.map((t) => ({
           entity: { eid: t.eid ?? toolEid(t.name) },
           tool: { name: t.name, description: t.description },
         })),
       )),
     call: async (change) => {
+      // The call is written FIRST, because it is the transcript: what was
+      // asked stands whether or not the answer ever comes. Then the tool is
+      // run — here, by this process, for this caller — unless an effect over
+      // the same commit got there first, in which case its answer is this
+      // caller's answer.
       let applied = await g.apply(change)
       let made = applied.find((b) => b.call)
       if (!made) throw new CallError('call', 'a call batch needs a call')
-      return answered(made.entity.eid)
+      let id = made.entity.eid
+      let held = landings.get(id)
+      if (held) {
+        landings.delete(id)
+        return held
+      }
+      return inflight.get(id) ?? run(id)
     },
     run,
     drive,

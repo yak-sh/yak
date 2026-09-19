@@ -226,3 +226,58 @@ Deno.test('an async handler makes that one apply a promise', async () => {
   await out
   assertEquals(seen, ['late'])
 })
+
+// A PATTERN registration: any query over what the batch committed, with
+// nothing derived into the graph to trigger it.
+
+Deno.test('a pattern fires where this batch made it hold', () => {
+  let { fx, seen, apply } = fixture()
+  fx.on('.post, !comments', (e) => seen.push(e.entity.eid))
+  apply([post('p1')])
+  assertEquals(seen, ['p1'])
+  // p1 still has no comments, but this batch is not about p1.
+  apply([post('p2')])
+  assertEquals(seen, ['p1', 'p2'])
+  // and now it has one, so it is not what the pattern is about any more
+  apply([{ entity: { eid: 'c1' }, comment: { text: 'hi', post: 'p1' } }])
+  apply([post('p1', { title: 'Again' })])
+  assertEquals(seen, ['p1', 'p2'])
+})
+
+Deno.test('a pattern is a query, not a column subscription', () => {
+  let { fx, seen, apply } = fixture()
+  fx.on('.post.title=Ready', (e) => seen.push(e.entity.eid))
+  apply([post('p1', { title: 'Draft' })])
+  assertEquals(seen, [])
+  apply([post('p1', { title: 'Ready' })])
+  assertEquals(seen, ['p1'])
+})
+
+Deno.test('a pattern names its component, and lists beside the rest', () => {
+  let { fx } = fixture()
+  fx.on('.post, !comments', () => {})
+  fx.created('post', () => {})
+  assertEquals(fx.slots().map((s) => s.id), ['post.matched', 'post.created'])
+  assertEquals(fx.docs().map((d) => d.hooks), [['matched'], ['created']])
+})
+
+Deno.test('a word this vocabulary has no entry for says nothing, or nothing at all', () => {
+  let { fx, seen, apply } = fixture()
+  // Nothing here can wear `archived`, so requiring its ABSENCE is no
+  // constraint — one sentence, right in a graph that has the word and in one
+  // that does not.
+  fx.on('.post, !archived', (e) => seen.push(`open ${e.entity.eid}`))
+  // Requiring its PRESENCE can never hold: registered, listed, never woken.
+  fx.on('.post, .archived', (e) => seen.push(`gone ${e.entity.eid}`))
+  apply([post('p1')])
+  assertEquals(seen, ['open p1'])
+  assertEquals(fx.slots().length, 2)
+})
+
+Deno.test('a pattern over two entities needs a storage that answers bindings', () => {
+  let { fx, oops, apply } = fixture()
+  fx.on('$p .post; .comment, comment.post=$p', () => {})
+  // The batch committed; a question this storage cannot answer is telemetry.
+  apply([post('p1')])
+  assertEquals(oops.map((j) => j.handler), ['post.matched'])
+})

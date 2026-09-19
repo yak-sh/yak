@@ -39,6 +39,36 @@ registered like any other. Handlers may be registered before or after the graph
 is built — after is what lets a handler close over the graph it writes back
 through.
 
+## Or a pattern — any query over what committed
+
+A component and one of three things happening to it is the narrow question. The
+wide one is a PATTERN: any query, in the ordinary grammar, run wherever this
+batch just made it hold.
+
+```ts
+fx.on('$call .call, !results', (e) => run(e.entity.eid))
+```
+
+Nothing has to be derived into the graph to wake that. A call with no result is
+a sentence the storage can already answer, so it is the registration — no flag
+column, no `pending` component, no second write to notice the first.
+
+The question is asked once per batch, and only of a batch that moved one of the
+components the pattern reads; a binding is kept where the batch touched the
+entity the pattern's first half bound, so a handler wakes for what just happened
+rather than for every row that has always matched. What a crash left behind is a
+boot sweep's to find, by asking the same query.
+
+A word the vocabulary has no entry for cannot be worn by anything in that graph,
+so a clause saying it is ABSENT comes out and one saying it is PRESENT makes the
+pattern inert — registered, listed, never woken. One sentence is therefore right
+in two graphs: `!wake` says nothing where nothing is scheduled and gates the
+answer where something is.
+
+A pattern over more than one entity (a join) needs a storage that answers
+`bindings` — @yaks/sqlite and @yaks/durable-object do; an in-memory map does
+not, and the registry reports that rather than breaking the batch it committed.
+
 ## Three things happen to a component
 
 | registration                 | fires when                                      |
@@ -47,6 +77,11 @@ through.
 | `changed(comp, column, run)` | a patch moves that column                       |
 | `changed(comp, run)`         | a patch moves any column of it                  |
 | `removed(comp, run)`         | it goes — dropped, or with the entity that died |
+| `on(pattern, run)`           | a query holds where this batch touched          |
+
+`created` and `changed` are `on()` said narrowly, and could be written as
+patterns. `removed` could not: the grammar has no clause for a row that is no
+longer there, so the three stay.
 
 A batch on the wire does not say which of these it is: the same bundle patches a
 component that existed and creates one that did not, and a cascade's casualty

@@ -232,6 +232,12 @@ A tool never writes. The bundles it answers ARE the write, landed by
 `result{call, ms}` entity that answers the call. Words a person reads are a
 bundle like any other — `content{body}` — never a channel beside them.
 
+`tools/call` calls the function, here, for this request. What it records as it
+goes is the TRANSCRIPT: a `call{to, args}` entity before, signed as whoever is
+asking, and the result after. A door whose graph should not carry that — a
+connector over somebody else's store — passes a `calls` graph of its own and the
+tools still work on `graph`.
+
 A tool that carries `meta` has it handed to the client verbatim as `_meta`:
 
 ```ts

@@ -1,13 +1,13 @@
 // Where this door's CALLS live, and why they do not live in the caller's data.
 //
-// A tool is asked for by writing `call{to, args}` and awaiting what answers it
-// (@yaks/tools). Every other host writes that into the graph the tools work
-// on, and is right to: a call is a fact worth keeping. This door cannot. The
+// @yaks/tools records a tool call as it runs one: `call{to, args}` before,
+// `result{call}` after. Every other host keeps that record in the graph the
+// tools work on, and is right to: a call is a fact worth keeping. This door
+// cannot. The
 // graph @yaks/mcp is mounted on here is a COMPOSITION over other people's app
 // stores (agent.ts `reaching`) — it declares no `call` word, its `apply` routes
 // every component to the app that owns it, and it runs no effect phase at all,
-// so a call written there would be somebody's row in somebody's app and
-// nothing would ever run it. An app's OWN store (graph.ts `door`) declares no
+// so a call written there would be somebody's row in somebody's app. An app's OWN store (graph.ts `door`) declares no
 // such word either: `call`, `result` and `tool` are not what a cookbook is
 // about.
 //
@@ -113,7 +113,7 @@ let mine = (b: Bundle): boolean => {
 
 /**
  * One door's call ledger: an in-memory graph speaking this door's words plus
- * the invocation vocabulary, for @yaks/mcp to write its calls into
+ * the invocation vocabulary, for @yaks/mcp to record its calls in
  * (`Options.calls`). What a tool wrote passes through to `host`.
  */
 export let ledger = (host: Graph): Graph => {

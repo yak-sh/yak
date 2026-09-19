@@ -669,11 +669,11 @@ export class Store {
    * values @yaks/mcp's mount is built out of, so the agent door is the same
    * graph under the same `Authenticate` as the page door (T-33812).
    *
-   * The third is where a CALL goes (ledger.ts). A tool is asked for by writing
-   * one and awaiting what answers it (@yaks/tools), and an app's store speaks
-   * its own app's words — not `call`, `result` or `tool` — so the invocation
-   * lives in a graph of its own for the life of this door rather than as three
-   * tables in everybody's app. */
+   * The third is where a CALL is RECORDED (ledger.ts). @yaks/tools writes one
+   * as the transcript of having asked, and an app's store speaks its own app's
+   * words — not `call`, `result` or `tool` — so the record lives in a graph of
+   * its own for the life of this door rather than as three tables in
+   * everybody's app. */
   get door(): { graph: Graph; authenticate: Authenticate; calls: Graph } {
     return {
       graph: this.#graph,

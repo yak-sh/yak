@@ -5,12 +5,13 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 // calls them. Everything transport-shaped lives in ./mount.ts and ./stdio.ts;
 // this file only knows how a `Tool` becomes an MCP tool.
 //
-// A tool is never called here. `tools/call` WRITES A CALL — `call{to, args}`
-// signed as the identity the door authenticated — and awaits what answers it;
-// @yaks/tools' runner is what finds that call, runs the function and lands its
-// bundles as the caller. So a tool cannot write in the client's name even if
-// the client asked it to, and every call this door served is an entity
-// somebody can read afterwards.
+// `tools/call` calls the tool function, through @yaks/tools' runner, and what
+// the runner records as it goes is the TRANSCRIPT: a `call{to, args}` entity
+// signed as the identity the door authenticated, written before the function
+// runs, and the `result` after. The tool's own bundles are landed as the
+// CALLER, so a tool cannot write in the client's name even if the client asked
+// it to, and every call this door served is an entity somebody can read
+// afterwards.
 //
 // A refusal comes back as the tool's own error text with `isError`, never as a
 // protocol error: a bad argument or a rejected write is something the agent
@@ -54,11 +55,12 @@ export type Security =
 export type Options = {
   /** the graph its tools read and write */
   graph: Graph
-  /** the runner these tools are run by, where the host keeps one (a door that
-   * builds a server per request must, or only the first server's runner is
-   * registered and the rest answer nothing). Built over `calls` otherwise. */
+  /** the runner these tools are run by, where the host keeps one. A door that
+   * builds a server per request shares it so the `tool` rows are written once
+   * for the process rather than once per request. Built over `calls`
+   * otherwise. */
   runner?: Runner
-  /** where a CALL is written and its result awaited (default: `graph`). A
+  /** where a call and its result are RECORDED (default: `graph`). A
    * door whose graph cannot take one — a composition over somebody else's
    * stores, a connector that will not record a stranger's question — keeps a
    * ledger of its own here; the tools still work on `graph`. */
@@ -293,24 +295,16 @@ export let server = (opts: Options): McpServer => {
   })
 
   let tools = listing(opts).map(namedTool)
-  // The CALL LEDGER: where a call is written, which is this graph unless the
-  // host keeps one of its own (a door serving a composition, a connector that
-  // will not write a row into somebody's store for a question). The runner
-  // registers there; the tools still work on `graph`.
+  // The TRANSCRIPT: where a call and its result are recorded, which is this
+  // graph unless the host keeps a ledger of its own (a door serving a
+  // composition, a connector that will not write a row into somebody's store
+  // for a question). The tools still work on `graph`.
   let calls = opts.calls ?? graph
   let run = opts.runner ?? runner(calls, {
     tools,
     host: graph,
     report: (err) => console.error('tool failed —', err),
   })
-  // Once per graph, whoever built it: a call is run by the runner registered
-  // on the graph it was written to, and a second one registered beside it
-  // would race the first for the same claim.
-  if (!calls.plugins.includes(run.plugin)) calls.use(run.plugin)
-  // The tool rows a call points at, written once — the first call waits for
-  // them, and every later one finds them there.
-  let rows: Promise<unknown> | undefined
-  let ready = () => rows ??= Promise.resolve(run.ensure())
   let names = tools.map((t) => t.name)
 
   for (let t of tools) {
@@ -325,7 +319,7 @@ export let server = (opts: Options): McpServer => {
     let call = async (args: Record<string, unknown>) => {
       let out: CallToolResult
       try {
-        await ready()
+        await run.ensure()
         let landed = await run.call([{
           entity: { eid: '$call' },
           call: { to: toolEid(t.name), args: JSON.stringify(args ?? {}) },

@@ -1,8 +1,11 @@
-// The runner, end to end over a graph: what the rule selects, what the claim
-// stops, what a throw lands, and whose name the tool writes in.
+// The runner, end to end over a graph: what a host's call records, what the
+// claim stops, what a throw lands, whose name the tool writes in — and the
+// same rules registered as EFFECTS, which is how a call nobody is waiting on
+// (one another process wrote, one that was scheduled) gets run.
 
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, graph, type Tool } from '@yaks/graph'
+import { effects } from '@yaks/effects'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import {
@@ -33,8 +36,8 @@ let echo: Tool = {
   }],
 }
 
-let world = (tools: Tool[] = [echo]) => {
-  let vocab = loadVocab([callDoc, toolDoc, {
+let words = (extra: Record<string, unknown> = {}) =>
+  loadVocab([callDoc, toolDoc, {
     $defs: {
       person: { component: true, properties: {} },
       created: {
@@ -44,12 +47,26 @@ let world = (tools: Tool[] = [echo]) => {
           at: { type: 'string', format: 'date-time', stamped: true },
         },
       },
+      ...extra,
     },
   }])
+
+let world = (tools: Tool[] = [echo]) => {
+  let vocab = words()
   let g = graph({ vocab, storage: ram(vocab) })
+  return { g, r: runner(g, { tools, report: () => {} }) }
+}
+
+// The same graph with the runner's rules registered as EFFECTS: one
+// registration each, and then a call is run because it was WRITTEN, not
+// because somebody awaited it.
+let watched = (tools: Tool[] = [echo], extra = {}) => {
+  let vocab = words(extra)
+  let fx = effects(vocab, { report: () => {} })
+  let g = graph({ vocab, storage: ram(vocab), plugins: [fx] })
   let r = runner(g, { tools, report: () => {} })
-  g.use(r.plugin)
-  return { g, r }
+  for (let rule of r.rules) fx.on(rule.plan, (e) => r.run(e.entity.eid))
+  return { g, r, fx }
 }
 
 let called = (
@@ -64,7 +81,7 @@ let called = (
 
 let body = (b: Bundle | undefined) => String((b?.content as Comp)?.body ?? '')
 
-Deno.test('a call written is a call run: the rule finds it and the result is attached', async () => {
+Deno.test('a call is the transcript: the ask, the answer, the result beside it', async () => {
   let { g, r } = world()
   await r.ensure()
   let answer = await r.call(called('example_echo', '{"value":"hi"}'))
@@ -185,55 +202,67 @@ Deno.test("a tool writes in the CALLER's name, never the runner's", async () => 
 })
 
 Deno.test('two runners over one graph are one claimant and one answer', async () => {
-  let { g, r } = world()
+  let { g, r, fx } = watched()
   await r.ensure()
-  // A second runner over the same graph — a door's beside a daemon's. Only
-  // the first is registered, so the effect runs the call there; the second is
-  // the one that wrote it and still reads what was landed for it.
+  // A door's runner beside a daemon's. The effect runs the call the moment it
+  // is written; the runner that WROTE it still reads back what was landed,
+  // and the tool ran once between them.
   let other = runner(g, { tools: [echo] })
+  for (let rule of other.rules) fx.on(rule.plan, (e) => other.run(e.entity.eid))
   let answer = await other.call(called('example_echo', '{"value":"both"}'))
   assertEquals(body(answer.find((b) => b.output)), 'both 2')
   assertEquals((await g.read('.result')).length, 1)
 })
 
+Deno.test('a call somebody else wrote is run because an effect matched it', async () => {
+  let { g, r } = watched()
+  await r.ensure()
+  // Nobody awaits this: it is a plain write, by a plain writer.
+  await g.apply([{
+    entity: { eid: 'c9' },
+    call: { to: toolEid('example_echo'), args: '{"value":"elsewhere"}' },
+  }])
+  assertEquals(body((await g.read('.result'))[0]), 'elsewhere 2')
+  assertEquals((await g.read('.execution'))[0].execution, { state: 'done' })
+})
+
 Deno.test('a call for a tool this runner has no word for is left alone', async () => {
-  let { g, r } = world()
+  let { g, r } = watched()
   await r.ensure()
   await g.apply([{
     entity: { eid: 'c2' },
     call: { to: toolEid('somebody_else'), args: '{}' },
   }])
+  assertEquals((await r.drive()).length, 0)
   assertEquals((await g.read('.result')).length, 0)
   assertEquals((await g.read('.execution')).length, 0)
 })
 
 Deno.test('a call waiting on a wake that has not fired is not this tick', async () => {
-  let vocab = loadVocab([callDoc, toolDoc, {
-    $defs: {
-      wake: {
-        component: true,
-        properties: { at: { type: 'string', format: 'date-time' } },
-      },
-      fired: {
-        component: true,
-        properties: { at: { type: 'string', format: 'date-time' } },
-      },
+  let clock = {
+    wake: {
+      component: true,
+      properties: { at: { type: 'string', format: 'date-time' } },
     },
-  }])
-  let g = graph({ vocab, storage: ram(vocab) })
-  let r = runner(g, { tools: [echo] })
-  g.use(r.plugin)
+    fired: {
+      component: true,
+      properties: { at: { type: 'string', format: 'date-time' } },
+    },
+  }
+  let { g, r } = watched([echo], clock)
   await r.ensure()
+  // Written, and sleeping: the ready rule says `!wake` and this one wears it.
   await g.apply([{
     entity: { eid: 'later' },
     call: { to: toolEid('example_echo'), args: '{"value":"soon"}' },
     wake: { at: '2030-01-01T00:00:00.000Z' },
   }])
   assertEquals((await g.read('.result')).length, 0)
-  // Fired, and the same rule that left it alone now selects it.
+  // Fired — and the second registration, which is the whole of the scheduled
+  // case, selects it.
   await g.apply([{
     entity: { eid: 'later' },
     fired: { at: '2030-01-01T00:00:00.000Z' },
   }])
-  assertEquals(body((await r.drive()).find((b) => b.result)), 'soon 2')
+  assertEquals(body((await g.read('.result'))[0]), 'soon 2')
 })

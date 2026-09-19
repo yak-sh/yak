@@ -32,6 +32,20 @@
  * when it goes — by its own deletion, or with an entity that died, including
  * every casualty a cascade took.
  *
+ * ## Or a PATTERN
+ * Those three are the narrow question. The wide one is any query, run
+ * wherever this batch just made it hold:
+ *
+ * ```ts
+ * fx.on('$call .call, !results', (e) => run(e.entity.eid))
+ * ```
+ *
+ * Nothing has to be derived into the graph to trigger that — a call with no
+ * result is a sentence the storage can already answer, so it is the
+ * registration, with no flag column and no second write to notice the first.
+ * Only a batch that moved a component the pattern reads is asked, and a
+ * binding counts where the batch touched the entity it bound.
+ *
  * ## The promises
  * - **Post-commit only.** A handler cannot veto a write; by the time it runs,
  *   the write is durable. A batch that was refused fires nothing at all.

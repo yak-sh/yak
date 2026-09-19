@@ -1,8 +1,7 @@
 # @yaks/tools
 
-A tool is a function from BUNDLES to BUNDLES. A CALL is an entity. This package
-is the runner between them — and it is the only thing anywhere that calls a tool
-function.
+A tool is a function from BUNDLES to BUNDLES. A CALL is the record of having
+asked one. This package runs the function and keeps the record.
 
 ```ts
 let tool = (bundles, ctx) => [{
@@ -41,23 +40,27 @@ declarations are needed; it loads no runner and no JSON Schema validator.
 
 ## The rules
 
-The work is found by two rules the vocabulary declares, in the ordinary query
-grammar, under the `effect` phase — so `apply()` never runs them and the runner
-asks them after the commit, because a tool may take a minute and a transaction
-may not:
+Two rules the vocabulary declares, in the ordinary query grammar, name the calls
+that still want running:
 
 ```
-call_ready    $call .call, results=; +result.call=$call
-call_waiting  $call .call, .wake, .fired=
+call_ready  $call .call, !results, !wake;         +result.call=$call
+call_woken  $call .call, .wake, .fired, !results; +result.call=$call
 ```
 
-The first says what a call with no answer is and what to attach to it; the
-second holds back a call whose wake has not fired, and is INERT in a graph that
-knows no wakes. Nothing wires a tool to the `call` and `result` components: the
-rule is the wiring.
+A call with no result and no wake is due now; one wearing a wake is due once it
+has fired. In a graph that knows no wakes the first clause says nothing and the
+second rule is inert — one text, right in both.
 
-The result entity is `call_ready`'s own emit, so its id is DERIVED from the
-firing — answering the same call twice patches one entity instead of making two.
+The result entity is the rule's own emit, so its id is DERIVED from the firing:
+answering the same call twice patches one entity instead of making two.
+
+These rules are not machinery this package hides. They are what a host
+REGISTERS, one effect each, when it wants the calls nobody is waiting on:
+
+```ts
+for (let rule of r.rules) fx.on(rule.plan, (e) => r.run(e.entity.eid))
+```
 
 ## Run it
 
@@ -70,7 +73,6 @@ import { runner, toolEid, toolsDoc } from '@yaks/tools'
 let vocab = loadVocab([toolsDoc, mine])
 let g = graph({ vocab, storage: ram(vocab) })
 let r = runner(g, { tools: [echo] })
-g.use(r.plugin)
 await r.ensure()
 
 let answer = await r.call([{
@@ -80,10 +82,13 @@ let answer = await r.call([{
 }])
 ```
 
-`call()` writes the call and answers what answered it. `run(call)` runs one that
-is already in the graph; `drive()` runs every call the rules select, which is
-what the effect does on a batch that wrote one; `answerOf(landed)` is the answer
-without the runner's bookkeeping, and `worded(bundles)` is the prose it carries.
+`call()` writes the call — the transcript comes first, because what was asked
+stands whether or not an answer ever does — then runs the function here, for
+this caller, and lands what it answered beside a result. `run(call)` runs one
+that is already in the graph; `drive()` runs every call the rules select, which
+is what a boot sweep is; `answerOf(landed)` is the answer without the runner's
+bookkeeping, `worded(bundles)` is the prose it carries, and `faulted(landed)` is
+whether the CALL failed — not whether the answer mentions a failure.
 
 ## Who a tool writes as
 
@@ -111,8 +116,12 @@ so whoever is waiting always hears something.
 
 ## Scheduling
 
-The host decides when a call is eligible; importing this package starts no
-observer. Registering the runner's plugin on a graph is what wakes it, and it
-wakes only on a batch that wrote a call. Keep a single scheduling owner per
-graph: `@yaks/session`'s daemon drives its own transcript's calls in order and
-calls `run()` directly rather than registering the plugin.
+Importing this package starts no observer and registers no hook. A host that
+wants the calls nobody here is waiting on — one another process wrote, one
+wearing a wake that has now fired — registers the two rules as effects
+(@yaks/effects `on`), one registration each, and that is the whole of the
+asynchronous case. `reconcile(runner)` at boot finishes what a crash left
+claimed, by asking the same queries once.
+
+Keep a single scheduling owner per graph. `@yaks/session`'s daemon drives its
+own transcript's calls in order, through `run()`, and registers nothing.
