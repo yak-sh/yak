@@ -28,7 +28,7 @@ import {
 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { type BundleOpts, bundleSchema, type Depth } from './schema.ts'
-import { detail, type Guide, index, ofKind, schemaSchema } from './words.ts'
+import { detail, type Guide, index, ofKind } from './words.ts'
 
 /**
  * Ranked full-text search, when the host has it. Compose
@@ -162,7 +162,6 @@ let gather = async (
  */
 export let core = (opts: CoreOpts): Tool[] => {
   let { vocab, column } = opts
-  let depth = opts.depth ?? 'full'
   // What a write TAKES: the same bundle, closed over what a client may write.
   // Always `full` — a write door that leaves a column's type to the reader is
   // the door an agent guesses at (T-34153).
@@ -303,11 +302,14 @@ export let core = (opts: CoreOpts): Tool[] => {
               `${v.kinds.join(', ')}; ask for it as component instead`,
           )
         }
-        return told(ctx, kind
-          ? ofKind(v, kind, opts.guide)
-          : named.length
-          ? { comps: named.map((name) => detail(v, name, opts.guide)) }
-          : index(v))
+        return told(
+          ctx,
+          kind
+            ? ofKind(v, kind, opts.guide)
+            : named.length
+            ? { comps: named.map((name) => detail(v, name, opts.guide)) }
+            : index(v),
+        )
       },
     },
   ]

@@ -21,7 +21,6 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import {
   type Bundle,
-  type Comp,
   type Entity,
   type Graph,
   type Schema,
@@ -296,7 +295,11 @@ export let server = (opts: Options): McpServer => {
     host: graph,
     report: (err) => console.error('tool failed —', err),
   })
-  calls.use(run.plugin)
+  // Once per graph: a host that builds two servers over one graph would
+  // otherwise drive every call twice. The second server still answers its own
+  // calls — what it wrote is a call, and its own runner runs the one the first
+  // one had no word for.
+  if (!calls.plugins.some((p) => p.name == 'tools')) calls.use(run.plugin)
   // The tool rows a call points at, written once — the first call waits for
   // them, and every later one finds them there.
   let rows: Promise<unknown> | undefined
@@ -316,11 +319,13 @@ export let server = (opts: Options): McpServer => {
       let out: CallToolResult
       try {
         await ready()
-        out = said(answerOf(await run.call([{
-          entity: { eid: '$call' },
-          call: { to: toolEid(t.name), args: JSON.stringify(args ?? {}) },
-          ...(actor ? { $actor: { by: actor.eid } } : {}),
-        }])))
+        out = said(answerOf(
+          await run.call([{
+            entity: { eid: '$call' },
+            call: { to: toolEid(t.name), args: JSON.stringify(args ?? {}) },
+            ...(actor ? { $actor: { by: actor.eid } } : {}),
+          }]),
+        ))
       } catch (err) {
         out = failed(sharpened(err))
       }

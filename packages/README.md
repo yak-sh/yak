@@ -110,10 +110,12 @@ In dependency order:
   rendering are written once. Its `body` NAMES `@yaks/blob`'s `store` keyword
   without depending on the package that reads it — content-addressed where blob
   is composed in, plain text everywhere else.
-- **[@yaks/tools](./tools)** — a tool call as entities: the `tool` registered,
-  the `call` asking for it, the `execution` state it moves through and the
-  `result` it comes to rest as — run against a graph, independent of any session
-  or provider transport.
+- **[@yaks/tools](./tools)** — a tool is a function from bundles to bundles, a
+  call is an entity, and this is the runner between them: the `tool` registered,
+  the `call` asking for it, the `execution` state it is claimed under and the
+  `result` it comes to rest as. What finds the work is a rule the vocabulary
+  declares, asked after the commit — nothing wires a tool to the components, and
+  nothing else anywhere calls a tool function.
 - **[@yaks/member](./member)** — who belongs and what they may touch: a space
   roster (`member`), per-thing grants (`grant`), an access mode (`access`), the
   `precondition` hook that refuses a write the actor's role does not allow, and

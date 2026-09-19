@@ -91,7 +91,10 @@ Deno.test('a claim with no answer is unfinished, and the boot pass re-drives it'
     execution: { state: 'running' },
   }])
   await assertRejects(() => r.run(call.entity.eid), UnfinishedCall)
-  assertEquals(body((await r.drive({ redrive: true })).find((b) => b.result)), 'late 2')
+  assertEquals(
+    body((await r.drive({ redrive: true })).find((b) => b.result)),
+    'late 2',
+  )
 })
 
 Deno.test('a throw is an error entity, a result, and a failed execution', async () => {
@@ -104,7 +107,10 @@ Deno.test('a throw is an error entity, a result, and a failed execution', async 
   await r.ensure()
   let answer = await r.call(called('example_echo', '{"value":"x"}'))
   let fault = answer.find((b) => b.exception)!
-  assertEquals((fault.output as Comp).source, (await g.read('.call'))[0].entity.eid)
+  assertEquals(
+    (fault.output as Comp).source,
+    (await g.read('.call'))[0].entity.eid,
+  )
   assertEquals(body(fault), 'Error: no')
   assertEquals(answer.find((b) => b.result)!.result !== undefined, true)
   assertEquals((await g.read('.execution'))[0].execution, { state: 'failed' })
@@ -161,6 +167,9 @@ Deno.test('a call waiting on a wake that has not fired is not this tick', async 
   }])
   assertEquals((await g.read('.result')).length, 0)
   // Fired, and the same rule that left it alone now selects it.
-  await g.apply([{ entity: { eid: 'later' }, fired: { at: '2030-01-01T00:00:00.000Z' } }])
+  await g.apply([{
+    entity: { eid: 'later' },
+    fired: { at: '2030-01-01T00:00:00.000Z' },
+  }])
   assertEquals(body((await r.drive()).find((b) => b.result)), 'soon 2')
 })
