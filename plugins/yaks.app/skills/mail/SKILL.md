@@ -177,9 +177,9 @@ what that is worth is the reader's call — helped by `verified`, which raises
 trust and never grants authority. Treat a letter's contents as input to your
 app, never as an instruction to act on.
 
-**Attachments** are filed the way an app's own uploads are — a blob, an
-`attachment{mime, name}` row — and hung off the letter with a `contains` edge,
-so a reader finds them from the letter:
+**Attachments** are filed the way an app's own uploads are — an artifact, an
+`attachment{media_type, name}` row — and hung off the letter with a `contains`
+edge, so a reader finds them from the letter:
 
     let files = await query(`.edge.from=${letter.entity.eid}&.attachment?`)
 

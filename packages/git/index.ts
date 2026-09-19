@@ -31,7 +31,7 @@ import type { Bundle, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph'
 import { keyed, valueOf } from '@yaks/key'
 import { type Commit, commitBody } from './commit.ts'
-import { BLOB, COMPAT, ENTRY, GITOBJ, PARENT } from './comp.ts'
+import { BLOB, COMPAT, GITOBJ, PARENT, TREE_ENTRY } from './comp.ts'
 import { hex, type Kind, oid, oid256, type Oids } from './oid.ts'
 import { DIR, type Dir, FILE, type Files, nest, treeBody } from './tree.ts'
 
@@ -78,7 +78,7 @@ export type Index = {
  * the other. Within a tree a NAME is unique — that is the sentence.
  */
 export let entryEid = (tree: Eid, name: string): Eid =>
-  derivedEid(`${ENTRY}|${tree}|${name}`)
+  derivedEid(`${TREE_ENTRY}|${tree}|${name}`)
 
 let sha256 = async (bytes: Uint8Array<ArrayBuffer>): Promise<string> =>
   hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))
@@ -166,7 +166,7 @@ export let index = (g: Writes, store: Blobs): Index => {
       ) => ({
         entity: { eid: entryEid(oids.oid, c.name) },
         [EDGE]: { from: oids.oid, to: c.oid, ord: i },
-        [ENTRY]: { name: c.name, mode: c.mode },
+        [TREE_ENTRY]: { name: c.name, mode: c.mode },
       })),
     )
   }

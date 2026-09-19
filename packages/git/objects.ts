@@ -23,7 +23,7 @@
 import type { Blobs } from '@yaks/blob'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { treeOf } from './commit.ts'
-import { BLOB, ENTRY, GITOBJ, PARENT } from './comp.ts'
+import { BLOB, GITOBJ, PARENT, TREE_ENTRY } from './comp.ts'
 import type { Kind } from './oid.ts'
 import { type Obj, pack } from './pack.ts'
 
@@ -131,7 +131,7 @@ export let objects = (g: Reads, store: Blobs): Objects => {
     front = fresh(tops)
     while (front.length) {
       found.push(...front)
-      let next = fresh(await out(ENTRY, front))
+      let next = fresh(await out(TREE_ENTRY, front))
       let under = await kinds(next)
       front = next.filter((o) => under.get(o) == 'tree')
       blobs.push(...next.filter((o) => under.get(o) != 'tree'))

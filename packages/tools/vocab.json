@@ -82,8 +82,35 @@
     "exception": {
       "component": true,
       "type": "object",
-      "description": "an outcome the code did not expect, whoever caused it: a defect report, not a stop",
-      "properties": {}
+      "description": "an outcome the code did not expect, whoever caused it: a defect report, not a stop. Bare, its prose rides the `content` beside it; a host that catches the fault itself fills these, which are its to write and nobody else's",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was caught"
+        },
+        "message": {
+          "type": "string",
+          "stamped": true,
+          "description": "what it said"
+        },
+        "stack": {
+          "type": "string",
+          "stamped": true,
+          "description": "where it came from, as the runtime reported it"
+        },
+        "request": {
+          "type": "string",
+          "stamped": true,
+          "description": "what was being served when it threw"
+        },
+        "version": {
+          "type": "number",
+          "stamped": true,
+          "description": "the build that threw it"
+        }
+      }
     },
     "execution": {
       "component": true,

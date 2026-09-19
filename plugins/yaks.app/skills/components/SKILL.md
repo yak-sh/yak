@@ -151,17 +151,18 @@ page a recipe was copied from. Also carries a server-set `frozen_at`.
     await apply({ entity: { eid: '$b' }, doc: { title: 'The recipe' },
       web: { url: 'https://example.com/chana' } })
 
-**`blob`** — `bytes` (number). A byte COUNT, not the bytes. It sits on the
+**`artifact`** — `size` (number). A byte COUNT, not the bytes. It sits on the
 content-addressed entity the bytes live at, so it is how big a file is.
 
-**`attachment`** — `blob` (eid), `mime` (text), `name` (text). One file, as
-`upload` writes it. `attachment.blob` is where the bytes are, which is what
-`./api/blob/<eid>` is built from; deleting the bytes takes the row with them.
+**`attachment`** — `artifact` (eid), `media_type` (text), `name` (text). One
+file, as `upload` writes it. `attachment.artifact` is where the bytes are, which
+is what `./api/blob/<eid>` is built from; deleting the bytes takes the row with
+them.
 
-**`image`** — `w` (number), `h` (number). What a picture measures, on the BLOB
-itself, not on the row that points at it. `upload` reads it off the file's own
-header (png, jpeg, gif, webp), so a wall can hold a photo's space open before
-its bytes arrive.
+**`image`** — `w` (number), `h` (number). What a picture measures, on the
+ARTIFACT itself, not on the row that points at it. `upload` reads it off the
+file's own header (png, jpeg, gif, webp), so a wall can hold a photo's space
+open before its bytes arrive.
 
 **`created`** — `by` (eid); the store sets `at` (time) and `via` (eid).
 **`updated`** — the same three. The byline and the clock. You rarely write
@@ -189,7 +190,7 @@ Seed a fortnight of a guestbook and every `created.at` says today, truthfully:
 today is when you wrote them here. Draw `jotting.written`.
 
 **`exception`** — `at`, `message`, `stack`, `request`, `version`, all
-server-set. **`error`** — `at`, `message`, server-set. The kernel's own rows
+server-set. **`failed`** — `at`, `message`, server-set. The kernel's own rows
 about your app: what a route threw, what a page reported. Nothing you write.
 They stay out of every listing unless the filter names one (`.exception!`), and
 `app_errors` is the door meant for them.
@@ -274,7 +275,7 @@ true either way and is the wrong test; the value is the right one.
 
 That holds for the platform's own columns too, `doc.title` included: a doc
 nobody titled answers null, not `''`. `doc.body` is kept as a content-addressed
-blob and answers null when there is none.
+artifact and answers null when there is none.
 
 ## Components of your own
 
@@ -440,21 +441,21 @@ whole:
 These are the names, all of them:
 
     about accept access alias anchor app apply archetype architecture archived
-    attachment attention bash blob blocked board bounced brief bug call camera
-    cancel cancelled canvas card chat checkpoint claim client comment commit
-    completed conflict contains content created cursor decided delegates deliver
-    delivered deploy design doc dream edge effect email entity entry error
-    exception exit favorite feedback fetch filed finding fixer fold fork
-    generation goal grant graph_query headers hook hostname image imported
-    installed key knock layout lease mail member memory message meta meter model
-    nofix notice notified noverify opaque opened order output pane patch person
-    persona pin plan process product project prompt proposed provider published
-    quarantined reads reasoning recall recalled redaction referenced references
-    repo report requires response result resume retired review role run runner
-    runtime satisfies service session setting settled shelf signin space spawn
-    stderr stop stop_request subscription supersedes supervises task
-    task_context timeout tool updated usage venture verifier wake wants web
-    worked worktree yield
+    artifact attachment attention bash blob blocked board bounced brief bug
+    call camera cancel cancelled canvas card chat checkpoint claim client
+    comment commit completed conflict contains content created cursor decided
+    delegates deliver delivered deploy design doc dream edge effect email
+    entity entry error exception exit failed favorite feedback fetch filed
+    finding fixer fold fork generation goal grant graph_query headers hook
+    hostname image imported installed key knock layout lease mail member memory
+    message meta meter model nofix notified noverify opaque opened order output
+    pane patch person persona pin plan process product project prompt proposed
+    provider published quarantined reads reasoning recall recalled redaction
+    referenced references repo report requires response result resume retired
+    review role run runner runtime satisfies service session setting settled
+    shelf signal signin space spawn stderr stop stop_request subscription
+    supersedes supervises task task_context timeout tool_use updated usage
+    venture verifier wake wants web worked worktree yield
 
 When your first choice is taken, ask what the word is FOR and name that: the
 taken word is the general one, yours is the specific one. Not `card` but

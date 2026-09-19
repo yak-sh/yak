@@ -42,7 +42,7 @@
         }
       }
     },
-    "entry": {
+    "tree_entry": {
       "component": true,
       "type": "object",
       "edge": true,

@@ -57,11 +57,15 @@ Deno.test('the SHA-256 name is a key off the SHA-1 one', async () => {
 Deno.test('a tree links to each child under the name it holds it by', async () => {
   let { g, git, bytes } = fixture()
   await git.files(deployed(bytes))
-  let rows = await g.read(`.entry!&.edge.from=${ROOT_OID}&.order=ord`)
+  let rows = await g.read(`.tree_entry!&.edge.from=${ROOT_OID}&.order=ord`)
   assertEquals(
     rows.map((
       r,
-    ) => [comp(r, 'entry').name, comp(r, 'entry').mode, comp(r, 'edge').to]),
+    ) => [
+      comp(r, 'tree_entry').name,
+      comp(r, 'tree_entry').mode,
+      comp(r, 'edge').to,
+    ]),
     [['hello.txt', FILE, HELLO_OID], ['lib', DIR, LIB_OID]],
   )
   assertEquals(rows[0].entity.eid, entryEid(ROOT_OID, 'hello.txt'))
@@ -71,8 +75,8 @@ Deno.test('one blob under two names is two entries', async () => {
   let { g, git, bytes } = fixture()
   let sha = file(bytes, HELLO)
   let root = await git.files({ 'a.txt': sha, 'b.txt': sha })
-  let rows = await g.read(`.entry!&.edge.from=${root.oid}`)
-  assertEquals(rows.map((r) => comp(r, 'entry').name).sort(), [
+  let rows = await g.read(`.tree_entry!&.edge.from=${root.oid}`)
+  assertEquals(rows.map((r) => comp(r, 'tree_entry').name).sort(), [
     'a.txt',
     'b.txt',
   ])

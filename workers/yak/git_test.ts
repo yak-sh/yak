@@ -144,13 +144,13 @@ Deno.test('a deploy mints one commit whose tree is the manifest', async () => {
   // The tree IS the manifest: one entry per top-level name, the blob under
   // `index.html` named by the very bytes the deploy pinned.
   let tree = body.match(/^tree ([0-9a-f]{40})$/m)![1]
-  let entries = await git.query(`.entry!&.edge.from=${tree}`)
+  let entries = await git.query(`.tree_entry!&.edge.from=${tree}`)
   assertEquals(
-    entries.map((e) => (e.entry as { name: string }).name).sort(),
+    entries.map((e) => (e.tree_entry as { name: string }).name).sort(),
     ['index.html', 'lib'],
   )
   let page = entries.find((e) =>
-    (e.entry as { name: string }).name == 'index.html'
+    (e.tree_entry as { name: string }).name == 'index.html'
   )!
   let [blob] = await git.query(`.eid=${(page.edge as { to: string }).to}`)
   assertEquals((blob.blob as { sha: string }).sha, manifest['index.html'])

@@ -49,8 +49,9 @@ export let GITOBJ = 'gitobj'
 /** The component naming where an object's bytes are. */
 export let BLOB = 'blob'
 
-/** The relation tag a tree's link to a child wears. */
-export let ENTRY = 'entry'
+/** The relation tag a tree's link to a child wears — git's own two words for
+ * it, because `entry` alone is a transcript line in @yaks/session. */
+export let TREE_ENTRY = 'tree_entry'
 
 /** The relation tag a commit's link to the commit it follows wears. */
 export let PARENT = 'parent'
