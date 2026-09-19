@@ -86,23 +86,28 @@ transcript through the package's `Line` and `Status` renderers.
 
 ## When something runs the session
 
-A session is still identity only. What a host knows because it RUNS one is said
-beside it, each comp about one thing, so a row is gone when the fact is:
+A session is still identity only, and a host that RUNS one adds no session
+columns for it. The run is somebody else's word:
 
 ```
-spawn{provider, model, effort, persona, role, task}  what was asked for
-runner{name, kind, origin}                           what runs it, and how it arrived
-runtime{pid, pane, transcript, process, …}           where it is running, right now
-run{status, started_at, input_at, …}                 it is going
-settled{at, status, exit_code, stop_reason}          it ended, once
-yield{final_text, usage_json, stderr}                what it produced
+@yaks/process  process{pid, command, cwd}   the program, while it lives
+@yaks/process  exit{code}                   how that program ended
+@yaks/git      worktree{repository, path}   where it works
+               using{provider, model, effort}  on the first entry: what was asked
+               spawned{parent, call}          the parent that delegated it
+               imported{source, line}         the log line an entry was read from
 ```
 
-`spawn` is the ASK and `using` is what is in force — a session started on one
-model and switched to another says both. `runtime` is gone when nothing is
-running; `settled` appears once and does not change. Where the session works is
-[@yaks/git](../git)'s `worktree`, and who supervises it is an edge, not a
-column.
+What it is DOING is never one of them: `session.status` is read off the entries,
+and so are the times the fleet kept as `started_at`, `input_at` and
+`finished_at` — they are the `created.at` of the first entry, the newest input,
+and the newest entry. A stop is a `stop` ENTRY, not a request on the session;
+what a run produced is its last `content`, its `usage` (@yaks/model) and its
+stderr prose wearing `output`. What a persona or a role asked for is an edge to
+that persona or role, materialized at ask time, never copied onto a column.
+
+One pane has no home yet: the terminal a run is shown in is a TODO for a
+`@yaks/tmux`, not a column here.
 
 ## A lock is a lease, not a patch
 

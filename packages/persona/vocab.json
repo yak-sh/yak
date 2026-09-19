@@ -7,58 +7,6 @@
   },
   "title": "persona",
   "$defs": {
-    "bug": {
-      "component": true,
-      "type": "object",
-      "properties": {
-        "fault": {
-          "type": "string"
-        },
-        "hits": {
-          "type": "number"
-        },
-        "last": {
-          "type": "string",
-          "format": "date-time"
-        }
-      },
-      "description": "a fault seen more than once: what broke, how often, and when last"
-    },
-    "finding": {
-      "component": true,
-      "type": "object",
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "hits": {
-          "type": "number"
-        },
-        "last": {
-          "type": "string",
-          "format": "date-time"
-        }
-      },
-      "description": "something a verifier saw, counted: what it was, how often, and when last"
-    },
-    "fixer": {
-      "component": true,
-      "type": "object",
-      "properties": {},
-      "description": "this role fixes what verification found"
-    },
-    "nofix": {
-      "component": true,
-      "type": "object",
-      "properties": {},
-      "description": "leave this one alone: a fixer does not take it"
-    },
-    "noverify": {
-      "component": true,
-      "type": "object",
-      "properties": {},
-      "description": "skip verification here"
-    },
     "person": {
       "component": true,
       "type": "object",
@@ -131,115 +79,13 @@
           "death": "detach",
           "description": "what it is responsible for"
         },
-        "checkout": {
-          "type": "string",
-          "ref": "entity",
-          "death": "detach",
-          "description": "the worktree it works in"
-        },
-        "schedule": {
-          "type": "string",
-          "description": "when it runs, when it runs on a schedule"
-        },
-        "wake_policy": {
-          "enum": [
-            "always",
-            "attention",
-            "scheduled",
-            "manual"
-          ],
-          "description": "always, only when something wants attention, on its schedule, or by hand"
-        },
-        "wake_target": {
-          "type": "string",
-          "ref": "entity",
-          "death": "detach",
-          "description": "what waking it looks at"
-        },
-        "retry_at": {
-          "type": "string",
-          "format": "date-time",
-          "description": "when to try again after a failure"
-        },
-        "quiet": {
-          "type": "number",
-          "description": "seconds of silence before it is considered idle"
-        },
-        "cooldown": {
-          "type": "number",
-          "description": "seconds to wait between runs"
-        },
-        "cap": {
-          "type": "number",
-          "description": "the most runs it may take"
-        },
-        "applied_hash": {
-          "type": "string",
-          "stamped": true,
-          "description": "the digest of the persona text last applied"
-        },
-        "applied_at": {
-          "type": "string",
-          "format": "date-time",
-          "stamped": true,
-          "description": "when that text was applied"
-        },
         "stopped_at": {
-          "type": "string",
-          "format": "date-time",
-          "stamped": true
-        },
-        "decision": {
-          "type": "string",
-          "stamped": true
-        },
-        "reason": {
-          "type": "string",
-          "stamped": true
-        },
-        "observed": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true
-        },
-        "decided_at": {
           "type": "string",
           "format": "date-time",
           "stamped": true
         }
       },
-      "description": "a persona hired into standing work: what it watches, how it is woken, and how often"
-    },
-    "verifier": {
-      "component": true,
-      "type": "object",
-      "properties": {},
-      "description": "this role verifies work rather than doing it"
-    },
-    "roleStates": {
-      "enum": [
-        "running",
-        "stopped",
-        "paused",
-        "disabled",
-        "retired",
-        "held"
-      ]
-    },
-    "roleSurfaces": {
-      "enum": [
-        "native",
-        "managed"
-      ]
-    },
-    "wakePolicies": {
-      "enum": [
-        "always",
-        "attention",
-        "scheduled",
-        "manual"
-      ]
+      "description": "a persona hired into standing work: what it is responsible for, and whether it is running. When it wakes is a @yaks/wake `wake` pointed at it, where it works is a @yaks/git `worktree`, and what it last decided is kernel `decided`"
     }
   }
 }

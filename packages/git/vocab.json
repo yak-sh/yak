@@ -10,7 +10,7 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "one git object \u2014 its entity id IS its SHA-1 object id, so writing the same object twice writes one row",
+      "description": "one git object — its entity id IS its SHA-1 object id, so writing the same object twice writes one row",
       "properties": {
         "type": {
           "type": "string",
@@ -26,7 +26,7 @@
         "size": {
           "type": "number",
           "bare": false,
-          "description": "the body's length in bytes \u2014 the number in that same header"
+          "description": "the body's length in bytes — the number in that same header"
         }
       }
     },
@@ -38,7 +38,7 @@
         "sha": {
           "type": "string",
           "bare": false,
-          "description": "the SHA-256 of the bytes \u2014 for a git blob it is the app file's own address, never a re-encoded copy"
+          "description": "the SHA-256 of the bytes — for a git blob it is the app file's own address, never a re-encoded copy"
         }
       }
     },
@@ -46,7 +46,7 @@
       "component": true,
       "type": "object",
       "edge": true,
-      "description": "a tree holds a child under a name \u2014 the walk a pack's reachability needs",
+      "description": "a tree holds a child under a name — the walk a pack's reachability needs",
       "properties": {
         "name": {
           "type": "string",
@@ -64,7 +64,7 @@
       "component": true,
       "type": "object",
       "edge": true,
-      "description": "this commit follows that one \u2014 `ord` on the edge carries parent order",
+      "description": "this commit follows that one — `ord` on the edge carries parent order",
       "properties": {}
     },
     "compat": {
@@ -76,7 +76,7 @@
     "ref": {
       "component": true,
       "type": "object",
-      "description": "where one branch of one repository stands \u2014 one row per repository and branch name, so moving a branch patches the row that was there",
+      "description": "where one branch of one repository stands — one row per repository and branch name, so moving a branch patches the row that was there",
       "properties": {
         "app": {
           "type": "string",
@@ -86,7 +86,7 @@
         },
         "name": {
           "type": "string",
-          "description": "the branch's full name \u2014 `refs/heads/main`, never `main`"
+          "description": "the branch's full name — `refs/heads/main`, never `main`"
         },
         "commit": {
           "type": "string",
@@ -116,6 +116,11 @@
         "common": {
           "type": "string",
           "description": "canonical absolute common Git directory"
+        },
+        "origin": {
+          "type": "string",
+          "format": "uri",
+          "description": "where it is published — the remote it was cloned from or pushes to"
         }
       }
     },
@@ -197,13 +202,11 @@
           "death": "cascade",
           "description": "the work this commit is about"
         },
-        "sha": {
-          "type": "string",
-          "description": "the full object id"
-        },
         "repo": {
           "type": "string",
-          "description": "which repository, by name"
+          "ref": "entity",
+          "death": "detach",
+          "description": "the repository it landed in"
         },
         "message": {
           "type": "string",

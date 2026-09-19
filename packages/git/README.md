@@ -72,15 +72,16 @@ ref{app, name, commit}  where one branch of one repository stands
 Source as the rest of a graph refers to it:
 
 ```
-repository{common}                     a local object database, by its git dir
+repository{common, origin}             a local object database, and its remote
 worktree{repository, path, branch,…}   a checkout: where it is, what it is on
-commit{target, sha, repo, message}     a landed commit, attached to its work
+commit{target, repo, message}          a landed commit, attached to its work
 anchor{paths, sha, symbol, hunk, …}    what a document promised about source
 ```
 
-A `commit` is the whole message, not its first line, and its eid is the sha — so
-recording the same commit twice is one entity. An `anchor` stores the promise
-and nothing derived: freshness is re-read from git against the `sha`.
+A `commit` is the whole message, not its first line, and its eid IS the sha — so
+recording the same commit twice is one entity, and it carries no `sha` column to
+disagree with its own id. An `anchor` stores the promise and nothing derived:
+freshness is re-read from git against the `sha`.
 
 Load it beside the two carriers it uses:
 

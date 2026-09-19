@@ -68,14 +68,11 @@
       "component": true,
       "type": "object",
       "properties": {
-        "path": {
+        "repository": {
           "type": "string",
-          "description": "the checkout on this host"
-        },
-        "url": {
-          "type": "string",
-          "format": "uri",
-          "description": "where it is published"
+          "ref": "entity",
+          "death": "detach",
+          "description": "the @yaks/git repository this project's work is in — its checkouts are `worktree`s of it"
         },
         "base_branch": {
           "type": "string",
@@ -90,7 +87,7 @@
           "description": "whether landing also pushes"
         }
       },
-      "description": "a project's source: where its checkout is, what it branches from, and how a change is proven and published"
+      "description": "a project's landing policy for its source: which repository it is in, what work branches from, and how a change is proven and published"
     },
     "venture": {
       "component": true,
@@ -103,55 +100,10 @@
             "building",
             "launching",
             "live",
-            "hold",
-            "paused",
             "shuttered",
             "killed"
           ],
-          "description": "where it is: a phase, not a status — nothing here is done"
-        },
-        "paused_from": {
-          "enum": [
-            "incubating",
-            "idea",
-            "building",
-            "launching",
-            "live",
-            "hold",
-            "paused",
-            "shuttered",
-            "killed"
-          ],
-          "description": "the phase it was paused from, so resuming puts it back"
-        },
-        "hold_from": {
-          "enum": [
-            "incubating",
-            "idea",
-            "building",
-            "launching",
-            "live",
-            "hold",
-            "paused",
-            "shuttered",
-            "killed"
-          ],
-          "description": "the phase it was held from, so releasing puts it back"
-        },
-        "run_mode": {
-          "enum": [
-            "long-loop",
-            "cold",
-            "cron"
-          ],
-          "description": "long-loop: an agent stays on it. cold: it is picked up. cron: on a schedule"
-        },
-        "agent_model": {
-          "type": "string"
-        },
-        "operated_by": {
-          "type": "string",
-          "description": "who runs it day to day"
+          "description": "where it is: a phase, not a status — nothing here is done. Suspension is `paused`, so a phase never has to be remembered and put back"
         },
         "tagline": {
           "type": "string",
@@ -163,27 +115,21 @@
           "description": "where it lives on the web"
         }
       },
-      "description": "a business being built: a phase it is in, how it is run, and where it lives"
+      "description": "a business being built: the phase it is in and where it lives. Who runs it is an edge, and the model an agent uses is @yaks/model's"
     },
-    "ventureModes": {
-      "enum": [
-        "long-loop",
-        "cold",
-        "cron"
-      ]
-    },
-    "ventureStates": {
-      "enum": [
-        "incubating",
-        "idea",
-        "building",
-        "launching",
-        "live",
-        "hold",
-        "paused",
-        "shuttered",
-        "killed"
-      ]
+    "paused": {
+      "component": true,
+      "type": "object",
+      "bare": true,
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when work on it was suspended"
+        }
+      },
+      "description": "work on it is suspended — a mark, so the phase underneath is untouched and resuming removes the mark"
     }
   }
 }

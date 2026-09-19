@@ -72,20 +72,6 @@
         }
       },
       "description": "what one actor watches, or mutes, about one thing"
-    },
-    "subModes": {
-      "enum": [
-        "watch",
-        "mute"
-      ]
-    },
-    "signalKinds": {
-      "enum": [
-        "lapse",
-        "sweep",
-        "scene",
-        "wake"
-      ]
     }
   }
 }

@@ -31,17 +31,6 @@
           "stamped": true,
           "description": "the body exactly as delivered"
         },
-        "spool_id": {
-          "type": "string",
-          "stamped": true,
-          "description": "the sender’s own id for this delivery, so a retry is the same row"
-        },
-        "received_at": {
-          "type": "string",
-          "format": "date-time",
-          "stamped": true,
-          "description": "when it reached us"
-        },
         "method": {
           "type": "string",
           "stamped": true,
@@ -58,10 +47,10 @@
           "stamped": true,
           "description": "the headers, as sent"
         },
-        "sig_ok": {
+        "verified": {
           "type": "boolean",
           "stamped": true,
-          "description": "whether its signature checked out"
+          "description": "whether the sender's signature checked out — the same word @yaks/mail's `mail.verified` says"
         }
       },
       "description": "an event another system delivered, kept as it arrived — the payload is the body it sent, not our reading of it"
