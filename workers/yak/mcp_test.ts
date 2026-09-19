@@ -327,10 +327,9 @@ slow(
       // the tool list.
       let guide = tools.find((t: { name: string }) => t.name == 'guide')
       assertEquals(guide.annotations.readOnlyHint, true)
-      assertEquals(
-        guide.outputSchema.required.sort(),
-        ['markdown', 'page', 'text'],
-      )
+      // What it answers is the page itself, which the two reads below check
+      // byte for byte against what the web serves — there is no second schema
+      // saying so, because an answer is bundles now.
       for (let p of PAGES) assertStringIncludes(guide.description, p.slug)
       let map = await agent.tool('guide')
       assertEquals(map, await (await k.at('yaks.app', '/guide.md')).text())
@@ -1302,7 +1301,7 @@ slow(
       assertEquals(
         (await agent.tool('app_list', { space: 'jeff-work' })).split('\n'),
         [
-          'jeff-work — https://jeff-work.yaks.app/',
+          'jeff-work — https://jeff-work.yaks.app/ — you are the owner',
           '- no apps yet',
           'Trash — app_restore brings one back; erased for good when its ' +
           'days run out',
