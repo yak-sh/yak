@@ -85,13 +85,7 @@ export {
 } from './server.ts'
 export { rosterLine, rosterVersion } from './roster.ts'
 export { core, type CoreOpts, type Search } from './tools.ts'
-export {
-  type BundleOpts,
-  bundleSchema,
-  type Depth,
-  outputSchema,
-  showSchema,
-} from './schema.ts'
+export { type BundleOpts, bundleSchema, type Depth } from './schema.ts'
 export {
   type Col,
   detail as compDetail,
