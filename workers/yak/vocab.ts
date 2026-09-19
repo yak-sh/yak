@@ -219,15 +219,15 @@ export let notifiedDoc: VocabDoc = {
   $defs: { notified: { type: 'object', properties: stampCols } },
 }
 
+/** What a `vocab.json` looks like, for a refusal that teaches. */
+export let EXAMPLE =
+  '{"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}}'
+
 /** Where the whole of it is written, and what an app's store says when it is
  * asked for a word nobody declared — the same sentence at the write door and
  * the read door, because it is the same missing act. The fleet's own store
  * says it too (src/store/vocab.ts `TEACH`); it is spelled again here because
  * the Store carries the packages' vocabulary and never the fleet's. */
-/** What a `vocab.json` looks like, for a refusal that teaches. */
-export let EXAMPLE =
-  '{"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}}'
-
 export let GUIDE = url({}, '/guide.md')
 export let teach = (env: Host = {}) =>
   ' — a component of your own is declared in vocab.json ' +
@@ -1164,8 +1164,8 @@ export let meant = (said: unknown): VocabDoc => {
 /**
  * One app's whole vocabulary: the core documents plus its own `vocab.json`,
  * loaded into the `Vocab` a Store reads its DDL, routing and admission out of.
- * The source is the file as written — text or parsed, either spelling — and an
- * app that declares nothing gets the core alone.
+ * The source is the file as written — text or already parsed — and an app that
+ * declares nothing gets the core alone.
  */
 export let appVocab = (source: unknown = {}): Vocab =>
   loadVocab([...coreDocs, appDoc(source)], appKeywords)

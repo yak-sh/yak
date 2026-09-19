@@ -2,7 +2,15 @@ import { pkt } from '@yaks/git'
 import type { Bundle } from '@yaks/graph'
 import { assert, assertEquals } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { client, connector, kernel, meta, seed } from './probe.ts'
+import {
+  client,
+  connector,
+  kernel,
+  meta,
+  num,
+  seed,
+  vocabFile,
+} from './probe.ts'
 
 slow(
   'hosted app archetypes classify and query writes through the deployed Worker',
@@ -21,7 +29,7 @@ slow(
       let app = client(k, 'jeff.yaks.app', 'recipes', cookie)
       let planted = await app.put(
         '/vocab.json',
-        '{"recipe":{"serves":"number"},"specialty":{}}',
+        vocabFile({ recipe: { serves: num }, specialty: {} }),
       )
       await app.put('/index.html', '<!doctype html><h1>Recipes</h1>')
       await connector(k, cookie).tool('app_deploy', {

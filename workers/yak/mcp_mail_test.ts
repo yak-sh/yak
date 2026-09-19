@@ -11,9 +11,11 @@ import {
   client,
   connector,
   kernel,
+  num,
   rfc822,
   seed,
   signIn,
+  vocabFile,
 } from './probe.ts'
 import { type Letter } from './mcp-probe.ts'
 
@@ -190,7 +192,10 @@ slow(
         ...app,
         files: [
           { path: 'index.html', content: '<!doctype html><h1>Cookbook' },
-          { path: 'vocab.json', content: '{"recipe":{"serves":"number"}}' },
+          {
+            path: 'vocab.json',
+            content: vocabFile({ recipe: { serves: num } }),
+          },
           {
             path: 'seed.json',
             content: JSON.stringify([{

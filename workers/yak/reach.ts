@@ -596,7 +596,7 @@ export let read = async (
 
 // The words one store declares as its own — its `vocab.json` as the store last
 // accepted it (T-32502), read back through the same door the deploy wrote it
-// at and loaded as the document it means, either spelling (vocab.ts `meant`).
+// at and loaded as the document it means (vocab.ts `meant`).
 // A component nobody declares is the platform's, and every store speaks it. A
 // store that cannot answer says nothing, which reads as an app with no words
 // of its own.

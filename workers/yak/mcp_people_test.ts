@@ -7,7 +7,18 @@ import {
 } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 
-import { connector, kernel, letter, meta, seed, signIn } from './probe.ts'
+import {
+  connector,
+  kernel,
+  letter,
+  meta,
+  num,
+  seed,
+  signIn,
+  txt,
+  vocabFile,
+  when,
+} from './probe.ts'
 import { VERSION } from '../../src/version.ts'
 import { HELLO, minted } from './mcp-probe.ts'
 
@@ -273,8 +284,14 @@ slow('the answers four builders had to guess at', async () => {
       app: 'diary',
       op: 'write',
       path: 'vocab.json',
-      content: '{"dayline":{"written":"time","mood":"text",' +
-        '"pages":"number","aloud":"bool"}}',
+      content: vocabFile({
+        dayline: {
+          written: when,
+          mood: txt,
+          pages: num,
+          aloud: { type: 'boolean' },
+        },
+      }),
     })
     await agent.tool('app_deploy', { app: 'diary' })
     let rows = async (filter: string) =>

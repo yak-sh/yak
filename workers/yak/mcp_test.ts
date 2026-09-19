@@ -15,6 +15,7 @@ import {
   signedIn,
   txt,
   vocabFile,
+  when,
 } from './probe.ts'
 import { PAGES, uriOf } from './guide.ts'
 import { PROMPTS } from './prompts.ts'

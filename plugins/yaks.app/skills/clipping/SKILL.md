@@ -138,7 +138,10 @@ lose you the page.
 Whatever else the app keeps, keep **where it came from**. That is a component of
 its own, in the app's `vocab.json`:
 
-    { "source": { "url": "url", "at": "time" } }
+    { "$defs": {
+        "source": { "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "at":  { "type": "string", "format": "date-time" } } } } }
 
 Two columns, because they are two facts: the address the words came from, and
 when this app took its copy. `source.url` is what tells a page where to send
@@ -230,8 +233,14 @@ A recipe page's JSON-LD is a schema.org `Recipe`, and the fields worth taking
 are `name`, `recipeIngredient`, `recipeInstructions`, `recipeYield`, `totalTime`
 and `image`. The app declares what it will filter on:
 
-    { "recipe": { "serves": "number", "minutes": "number", "image": "text" },
-      "source": { "url": "url", "at": "time" } }
+    { "$defs": {
+        "recipe": { "properties": {
+          "serves":  { "type": "number" },
+          "minutes": { "type": "number" },
+          "image":   { "type": "string" } } },
+        "source": { "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "at":  { "type": "string", "format": "date-time" } } } } }
 
 The ingredients and the method go in `doc.body`, as markdown. That is the
 guide's own rule — a column for what you filter, sort or draw as a field; the

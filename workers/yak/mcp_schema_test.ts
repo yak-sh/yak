@@ -7,7 +7,7 @@ import {
 } from '@std/assert'
 import { Ajv } from 'ajv'
 import { slow, until } from '../../src/testing.ts'
-import { connector, kernel, signIn } from './probe.ts'
+import { connector, kernel, num, signIn, txt, vocabFile } from './probe.ts'
 import { hearing, HELLO } from './mcp-probe.ts'
 
 // An app's OWN tools (T-32685): a tools.json beside vocab.json, planted by
@@ -28,7 +28,7 @@ slow('an app declares its own commands, and command runs them', async () => {
       files: [
         {
           path: 'vocab.json',
-          content: '{"jog":{"who":"text","miles":"number"}}',
+          content: vocabFile({ jog: { who: txt, miles: num } }),
         },
         {
           path: 'tools.json',
@@ -277,7 +277,7 @@ slow('a kind an app declares is two commands, with no tools.json', async () => {
         { path: 'index.html', content: '<!doctype html><p>recipes' },
         {
           path: 'vocab.json',
-          content: '{"recipe":{"serves":"number","cuisine":"text"}}',
+          content: vocabFile({ recipe: { serves: num, cuisine: txt } }),
         },
       ],
     })
@@ -443,7 +443,7 @@ slow(
           files: [
             {
               path: 'vocab.json',
-              content: JSON.stringify({ [comp]: { text: 'text' } }),
+              content: vocabFile({ [comp]: { text: txt } }),
             },
             { path: 'tools.json', content: tools(comp, name) },
           ],
@@ -571,7 +571,7 @@ slow('graph_schema answers the index, a word whole, and a kind', async () => {
       app: 'cookbook',
       op: 'write',
       path: 'vocab.json',
-      content: JSON.stringify({ recipe: { serves: 'number' } }),
+      content: vocabFile({ recipe: { serves: num } }),
     })
     await agent.tool('app_deploy', { app: 'cookbook' })
     type Word = {
@@ -739,7 +739,7 @@ slow(
         app: 'cookbook',
         op: 'write',
         path: 'vocab.json',
-        content: JSON.stringify({ recipe: { serves: 'number' } }),
+        content: vocabFile({ recipe: { serves: num } }),
       })
       await agent.tool('app_deploy', { app: 'cookbook' })
       assertEquals(ear.said().includes('list_changed'), false)

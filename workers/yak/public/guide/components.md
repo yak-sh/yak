@@ -214,14 +214,13 @@ beside it:
   decimals both fit.
 - `bool` — `{"type": "boolean"}`. True or false.
 - `time` — `{"type": "string", "format": "date-time"}`, an ISO 8601 timestamp
-  with a zone, as text:
-  `new Date().toISOString()`, or `'2026-04-11T12:00:00Z'` written by hand. It
-  comes back exactly as it was sent, so it is a string on the way in and a
-  string on the way out; `new Date(row.jotting.written)` when you need to do
-  arithmetic with it, and the ordinary comparisons filter it
+  with a zone, as text: `new Date().toISOString()`, or `'2026-04-11T12:00:00Z'`
+  written by hand. It comes back exactly as it was sent, so it is a string on
+  the way in and a string on the way out; `new Date(row.jotting.written)` when
+  you need to do arithmetic with it, and the ordinary comparisons filter it
   (`.jotting.written>=2026-04-01`).
-- `url` — `{"type": "string", "format": "uri"}`, an address out on the web;
-  text with a link's face.
+- `url` — `{"type": "string", "format": "uri"}`, an address out on the web; text
+  with a link's face.
 - `eid` — a reference to another entity. The platform's own words have these; a
   `vocab.json` cannot declare one (below).
 - a closed set of words — the platform's alone; a refusal spells the set,
@@ -261,8 +260,7 @@ from, never what some other graph has:
 
     unknown component: dayline — a component of your own is declared in
       vocab.json and planted by app_deploy:
-      {"$defs": {"recipe": {"properties": {"title": {"type": "string"},
-        "serves": {"type": "number"}}}}}
+      {"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}}
       · https://yaks.app/guide.md
 
 A column that exists but is the server's (`created.at`, `completed.via`) is

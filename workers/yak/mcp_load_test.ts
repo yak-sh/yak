@@ -7,7 +7,17 @@ import {
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { slow } from '../../src/testing.ts'
-import { connector, kernel, seed, signed, signIn, stripe } from './probe.ts'
+import {
+  connector,
+  kernel,
+  num,
+  seed,
+  signed,
+  signIn,
+  stripe,
+  txt,
+  vocabFile,
+} from './probe.ts'
 import { HAS_NOTES } from './standing.ts'
 import { managePath } from './route.ts'
 import { HELLO } from './mcp-probe.ts'
@@ -26,7 +36,10 @@ slow('a refused seed bundle names its file and index', async () => {
       ...app,
       files: [
         { path: 'index.html', content: '<!doctype html><h1>Cellar' },
-        { path: 'vocab.json', content: '{"bottle":{"year":"number"}}' },
+        {
+          path: 'vocab.json',
+          content: vocabFile({ bottle: { year: num } }),
+        },
         {
           path: 'seed/01-bottles.json',
           content: JSON.stringify([
@@ -247,8 +260,9 @@ slow('store_load reads a CSV as rows of one component', async () => {
         { path: 'index.html', content: '<!doctype html><h1>Kitchen' },
         {
           path: 'vocab.json',
-          content: '{"recipe":{"name":"text","serves":"number",' +
-            '"vegan":"bool"}}',
+          content: vocabFile({
+            recipe: { name: txt, serves: num, vegan: { type: 'boolean' } },
+          }),
         },
         // As a spreadsheet writes one: a BOM, CRLF, a quoted comma, and a
         // header nothing matches until `map` renames it.
@@ -343,7 +357,7 @@ slow('an app says what it holds, and keeps notes about itself', async () => {
         { path: 'index.html', content: '<h1>Recipes</h1>' },
         {
           path: 'vocab.json',
-          content: JSON.stringify({ recipe: { serves: 'number' } }),
+          content: vocabFile({ recipe: { serves: num } }),
         },
         {
           path: 'tools.json',
@@ -367,7 +381,7 @@ slow('an app says what it holds, and keeps notes about itself', async () => {
       app: 'chores',
       files: [{
         path: 'vocab.json',
-        content: JSON.stringify({ chore: { who: 'text' } }),
+        content: vocabFile({ chore: { who: txt } }),
       }],
     })
     await agent.tool('app_deploy', { space, app: 'chores' })

@@ -59,8 +59,8 @@ apps here can do, so the app answers there whether or not anybody wrote a
 
 Three ways to say otherwise:
 
-- **Opt out** — `"tools": false` at the top of `vocab.json`, beside `$defs`.
-  The app declares its kinds and gets no generated commands at all.
+- **Opt out** — `"tools": false` at the top of `vocab.json`, beside `$defs`. The
+  app declares its kinds and gets no generated commands at all.
 - **Say one is not a kind** — `"kind": false` on that component. A mark a row
   WEARS rather than a thing somebody adds — `starred`, `paid` — is nobody's to
   add, so it gets no commands while the rest of the manifest keeps its own.

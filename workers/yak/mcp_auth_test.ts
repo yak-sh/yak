@@ -8,7 +8,17 @@ import {
 } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { COOKIE, sign } from '../../src/token.ts'
-import { client, connector, kernel, letter, seed, signIn } from './probe.ts'
+import {
+  client,
+  connector,
+  kernel,
+  letter,
+  num,
+  seed,
+  signIn,
+  txt,
+  vocabFile,
+} from './probe.ts'
 import { PAGES, uriOf } from './guide.ts'
 import { PROMPTS } from './prompts.ts'
 import { APPS, b64u, ERRORS, facing, GUIDE, HELLO } from './mcp-probe.ts'
@@ -196,7 +206,7 @@ slow('the door before anyone signs in', async () => {
       space,
       app: 'runs',
       files: [
-        { path: 'vocab.json', content: '{"jog":{"miles":"number"}}' },
+        { path: 'vocab.json', content: vocabFile({ jog: { miles: num } }) },
         {
           path: 'tools.json',
           content: JSON.stringify({
@@ -413,7 +423,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
     let made = async (
       slug: string,
       comp: string,
-      cols: Record<string, string>,
+      cols: Record<string, unknown>,
       access?: string,
     ) => {
       await agent.tool('app_new', {
@@ -427,14 +437,14 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
         app: slug,
         files: [{
           path: 'vocab.json',
-          content: JSON.stringify({ [comp]: cols }),
+          content: vocabFile({ [comp]: cols }),
         }],
       })
       await agent.tool('app_deploy', { space: 'ada', app: slug })
     }
     // One app anyone with the link reads, one only its members do.
-    await made('runs', 'jog', { miles: 'number' })
-    await made('diary', 'confession', { mood: 'text' }, 'private')
+    await made('runs', 'jog', { miles: num })
+    await made('diary', 'confession', { mood: txt }, 'private')
     let run = crypto.randomUUID()
     await agent.tool('graph_apply', {
       space: 'ada',

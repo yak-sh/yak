@@ -1,7 +1,15 @@
 // MCP workerd probes, split by subject so Deno can run the modules in parallel.
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import { slow, until } from '../../src/testing.ts'
-import { connector, kernel, seed, signIn } from './probe.ts'
+import {
+  connector,
+  kernel,
+  num,
+  seed,
+  signIn,
+  txt,
+  vocabFile,
+} from './probe.ts'
 import { hearing, HELLO } from './mcp-probe.ts'
 
 // The stream is DURABLE and resumable (T-32734): it lives in a Durable Object
@@ -49,7 +57,7 @@ slow('the stream names its session and replays a missed line', async () => {
       files: [
         {
           path: 'vocab.json',
-          content: JSON.stringify({ walk: { text: 'text' } }),
+          content: vocabFile({ walk: { text: txt } }),
         },
         { path: 'walks.html', content: '<!doctype html><ol id=board>' },
         { path: 'tools.json', content: tools('walks.html') },
@@ -157,7 +165,10 @@ slow(
         space,
         app: 'runs',
         files: [
-          { path: 'vocab.json', content: '{"jog":{"miles":"number"}}' },
+          {
+            path: 'vocab.json',
+            content: vocabFile({ jog: { miles: num } }),
+          },
           {
             path: 'tools.json',
             content: JSON.stringify({
@@ -227,7 +238,7 @@ slow(
         files: [
           {
             path: 'vocab.json',
-            content: JSON.stringify({ walk: { text: 'text' } }),
+            content: vocabFile({ walk: { text: txt } }),
           },
           { path: 'walk.html', content: '<!doctype html><h1>walks</h1>' },
           { path: 'tools.json', content: manifest() },
