@@ -8,7 +8,14 @@ import {
 } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 
-import { connector, kernel, signedIn } from './probe.ts'
+import {
+  connector,
+  kernel,
+  num,
+  signedIn,
+  txt,
+  vocabFile,
+} from './probe.ts'
 import { PAGES, uriOf } from './guide.ts'
 import { PROMPTS } from './prompts.ts'
 import { sha256 } from './versions.ts'
@@ -663,15 +670,15 @@ slow(
         await agent.tool('app_files', {
           ...app,
           path: 'vocab.json',
-          content: '{"recipe": {"serves": "number"}}',
+          content: vocabFile({ recipe: { serves: num } }),
         }),
-        '32 bytes, sha256 ',
+        '64 bytes, sha256 ',
       )
       assertStringIncludes(
         await agent.tool('app_files', {
           ...app,
           path: 'vocab.json',
-          content: '{"recipe": {"serves": "number"}',
+          content: '{"$defs": {"recipe": {"properties": {}}}',
         }),
         'NOT valid JSON — ',
       )
@@ -892,7 +899,7 @@ slow(
         ...app,
         op: 'write',
         path: 'vocab.json',
-        content: '{"recipe":{"title":"text","serves":"number"}}',
+        content: vocabFile({ recipe: { title: txt, serves: num } }),
       })
       assertStringIncludes(
         await agent.tool('app_deploy', app),
@@ -940,10 +947,12 @@ slow(
           path: 'vocab.json',
           content: json,
         })
-      await manifest(
-        '{"recipe":{"title":"text","serves":"number"},' +
-          '"dayline":{"on":"time"},"card":{},"entry":{"at":"time"}}',
-      )
+      await manifest(vocabFile({
+        recipe: { title: txt, serves: num },
+        dayline: { on: when },
+        card: {},
+        entry: { at: when },
+      }))
       let taken = (await assertRejects(() =>
         agent.tool('app_deploy', app), Error))
         .message
@@ -967,14 +976,15 @@ slow(
 
       // And a word the next manifest stops naming goes, table and all, so
       // long as nothing was written under it.
-      await manifest(
-        '{"recipe":{"title":"text","serves":"number"},"jot":{"text":"text"}}',
-      )
+      await manifest(vocabFile({
+        recipe: { title: txt, serves: num },
+        jot: { text: txt },
+      }))
       assertStringIncludes(
         await agent.tool('app_deploy', app),
         'components: recipe, jot',
       )
-      await manifest('{"note":{"text":"text"}}')
+      await manifest(vocabFile({ note: { text: txt } }))
       let shed = await agent.tool('app_deploy', app)
       assertStringIncludes(shed, 'dropped (no rows): jot')
       // The deploy says what it planted, and what the store still has that
@@ -1015,9 +1025,10 @@ slow(
       await agent.tool('graph_apply', {
         change: [{ entity: { eid: '$n' }, note: { text: 'wrote it' } }],
       })
-      await manifest(
-        '{"recipe":{"title":"text","serves":"number"},"note":{"body":"text"}}',
-      )
+      await manifest(vocabFile({
+        recipe: { title: txt, serves: num },
+        note: { body: txt },
+      }))
       let renamed = await agent.tool('app_deploy', app)
       assertStringIncludes(renamed, 'added: note.body')
       assertStringIncludes(
@@ -1047,8 +1058,9 @@ slow(
         ...app,
         op: 'write',
         path: 'vocab.yml',
-        content: 'recipe:\n  title: text\n  serves: number\nsticker:\n' +
-          '  colour: text\n',
+        content: '$defs:\n  recipe:\n    properties:\n' +
+          '      title: {type: string}\n      serves: {type: number}\n' +
+          '  sticker:\n    properties:\n      colour: {type: string}\n',
       })
       let inYaml = await agent.tool('app_deploy', app)
       assertStringIncludes(inYaml, 'components: recipe, note, sticker')

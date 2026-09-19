@@ -322,30 +322,33 @@ slow("the runtime's own table is not the object's to move", async () => {
 // short form is gone from every door, so the slot itself is rewritten as the
 // document at the object's next open — and `seedApp` writes one the old way,
 // which is what `older().vocab()` still does.
-slow('a store holding the short type map is rewritten as the document', async () => {
-  let ctx = state()
-  await seedApp(ctx)
-  assertEquals(
-    ctx.slots.get('vocab'),
-    '{"recipe":{"title":"text","serves":"number"}}',
-  )
-  let now = newer(ctx, 'ada/cookbook', { EXPORTS: bucket().r2 })
-  // The door answers the document, and the app's word still reads.
-  let said = await (await now.door('/vocab')).json()
-  assertEquals(said.$defs.recipe.properties, {
-    title: { type: 'string' },
-    serves: { type: 'number' },
-  })
-  assertEquals((await now.query('.recipe.serves=8', APP)).length, 1)
-  // And what the object KEEPS is the document, so nothing reads a short map
-  // again — including a later deploy, which would refuse one.
-  let held = JSON.parse(
-    (ctx.storage.sql.exec("select v from yak_kv where k = 'vocab'")
-      .toArray()[0] as { v: string }).v,
-  )
-  assertEquals(Object.keys(held), ['$defs'])
-  assertEquals(held.$defs.recipe.kind, true)
-})
+slow(
+  'a store holding the short type map is rewritten as the document',
+  async () => {
+    let ctx = state()
+    await seedApp(ctx)
+    assertEquals(
+      ctx.slots.get('vocab'),
+      '{"recipe":{"title":"text","serves":"number"}}',
+    )
+    let now = newer(ctx, 'ada/cookbook', { EXPORTS: bucket().r2 })
+    // The door answers the document, and the app's word still reads.
+    let said = await (await now.door('/vocab')).json()
+    assertEquals(said.$defs.recipe.properties, {
+      title: { type: 'string' },
+      serves: { type: 'number' },
+    })
+    assertEquals((await now.query('.recipe.serves=8', APP)).length, 1)
+    // And what the object KEEPS is the document, so nothing reads a short map
+    // again — including a later deploy, which would refuse one.
+    let held = JSON.parse(
+      (ctx.storage.sql.exec("select v from yak_kv where k = 'vocab'")
+        .toArray()[0] as { v: string }).v,
+    )
+    assertEquals(Object.keys(held), ['$defs'])
+    assertEquals(held.$defs.recipe.kind, true)
+  },
+)
 
 Deno.test('the short type map, as the document it means', () => {
   assertEquals(

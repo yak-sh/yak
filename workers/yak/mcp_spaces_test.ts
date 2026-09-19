@@ -14,6 +14,8 @@ import {
   meta,
   seed,
   signIn,
+  txt,
+  vocabFile,
 } from './probe.ts'
 
 // A space's front page is a choice (T-32947), and one nobody makes by
@@ -390,7 +392,7 @@ slow('an app goes to the trash, and app_restore brings it back', async () => {
         { path: 'index.html', content: '<!doctype html><h1>notes</h1>' },
         {
           path: 'vocab.json',
-          content: JSON.stringify({ note: { at: 'text' } }),
+          content: vocabFile({ note: { at: txt } }),
         },
         {
           path: 'tools.json',
@@ -512,7 +514,7 @@ slow(
           { path: 'index.html', content: '<!doctype html><h1>notes</h1>' },
           {
             path: 'vocab.json',
-            content: JSON.stringify({ note: { at: 'text' } }),
+            content: vocabFile({ note: { at: txt } }),
           },
           {
             path: 'tools.json',

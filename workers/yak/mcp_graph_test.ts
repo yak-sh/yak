@@ -603,26 +603,32 @@ slow('a word the space already has is used where it lives', async () => {
   try {
     let jeff = await signIn(k)
     let agent = connector(k, jeff.cookie)
-    let manifest = async (slug: string, vocab: unknown) => {
+    let manifest = async (
+      slug: string,
+      defs: Record<string, Record<string, unknown>>,
+    ) => {
       await agent.tool('app_files', {
         app: slug,
         op: 'write',
         path: 'vocab.json',
-        content: JSON.stringify(vocab),
+        content: vocabFile(defs),
       })
       return await agent.tool('app_deploy', { app: slug })
     }
-    let made = async (slug: string, vocab: unknown) => {
+    let made = async (
+      slug: string,
+      defs: Record<string, Record<string, unknown>>,
+    ) => {
       await agent.tool('app_new', { slug, title: slug })
-      return await manifest(slug, vocab)
+      return await manifest(slug, defs)
     }
     // The reading list says `book` first, so `book` is the reading list's.
-    await made('reading-list', { book: { title: 'text', pages: 'number' } })
+    await made('reading-list', { book: { title: txt, pages: num } })
     // The lending app says it second: the deploy plants its own word and
     // names where the shared one lives.
     let second = await made('lending', {
-      book: { title: 'text' },
-      loan: { to: 'text' },
+      book: { title: txt },
+      loan: { to: txt },
     })
     assertStringIncludes(
       second,
@@ -673,8 +679,8 @@ slow('a word the space already has is used where it lives', async () => {
     // A column the lending app adds to the shared word grows the HOME's
     // table, additively — and is then writable from either app.
     let grew = await manifest('lending', {
-      book: { title: 'text', isbn: 'text' },
-      loan: { to: 'text' },
+      book: { title: txt, isbn: txt },
+      loan: { to: txt },
     })
     assertStringIncludes(grew, 'added: book.isbn')
     await agent.tool('graph_apply', {
@@ -725,9 +731,9 @@ slow('a word the space already has is used where it lives', async () => {
       app: 'lending',
       op: 'write',
       path: 'vocab.json',
-      content: JSON.stringify({
-        book: { pages: 'text' },
-        loan: { to: 'text' },
+      content: vocabFile({
+        book: { pages: txt },
+        loan: { to: txt },
       }),
     })
     let why = (await assertRejects(
@@ -749,8 +755,8 @@ slow('a word the space already has is used where it lives', async () => {
 
 // Which prose is worth finding is the VOCABULARY's sentence (T-37546):
 // @yaks/doc says `"search": true` of its title and body, and an app says it of
-// its own columns, in the JSON Schema spelling the guide teaches — the short
-// form has no room for a keyword.
+// its own columns, beside the type, in the one JSON Schema spelling the guide
+// teaches.
 slow('an app declares which of its own columns are searched', async () => {
   let k = await kernel()
   try {

@@ -6,7 +6,15 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { connector, kernel, letter, signIn } from './probe.ts'
+import {
+  connector,
+  kernel,
+  letter,
+  num,
+  signIn,
+  txt,
+  vocabFile,
+} from './probe.ts'
 
 // Across spaces a word means what its space says (T-32728): one name, two
 // vocabularies. A bundle merges by name only where the shapes agree, and
@@ -16,7 +24,11 @@ slow('a word two spaces spell differently stays two words', async () => {
   try {
     let jeff = await signIn(k)
     let agent = connector(k, jeff.cookie)
-    let made = async (space: string, slug: string, vocab: unknown) => {
+    let made = async (
+      space: string,
+      slug: string,
+      defs: Record<string, Record<string, unknown>>,
+    ) => {
       await agent.tool('space_new', { slug: space, title: space })
       await agent.tool('app_new', { space, slug, title: slug })
       await agent.tool('app_files', {
@@ -24,7 +36,7 @@ slow('a word two spaces spell differently stays two words', async () => {
         app: slug,
         op: 'write',
         path: 'vocab.json',
-        content: JSON.stringify(vocab),
+        content: vocabFile(defs),
       })
       await agent.tool('app_deploy', { space, app: slug })
     }
@@ -34,12 +46,12 @@ slow('a word two spaces spell differently stays two words', async () => {
     // vocabulary only ever grows. `note.body` does not: text here, number
     // there, so the name is two words.
     await made(shelf, 'reading', {
-      book: { title: 'text', pages: 'number' },
-      note: { body: 'text' },
+      book: { title: txt, pages: num },
+      note: { body: txt },
     })
     await made(stall, 'catalog', {
-      book: { title: 'text' },
-      note: { body: 'number' },
+      book: { title: txt },
+      note: { body: num },
     })
     let piranesi = crypto.randomUUID()
     await agent.tool('graph_apply', {
@@ -454,7 +466,7 @@ slow('an installed app is the installer own copy, data and all', async () => {
     let mine = write(his, 'tally')
     await his.tool('app_new', { slug: 'tally', title: 'Tally' })
     await mine('index.html', '<h1>Tally v1</h1>')
-    await mine('vocab.json', '{"vote": {"who": "text", "pick": "text"}}')
+    await mine('vocab.json', vocabFile({ vote: { who: txt, pick: txt } }))
     await his.tool('app_deploy', { app: 'tally' })
     await his.tool('app_publish', { app: 'tally', about: 'Count the votes' })
     let votes = (agent: ReturnType<typeof connector>) => async () =>
@@ -505,7 +517,7 @@ slow('an installed app is the installer own copy, data and all', async () => {
     await mine('index.html', '<h1>Tally v2</h1>')
     await mine(
       'vocab.json',
-      '{"vote": {"who": "text", "pick": "text", "at": "text"}}',
+      vocabFile({ vote: { who: txt, pick: txt, at: txt } }),
     )
     await his.tool('app_deploy', { app: 'tally' })
     await his.tool('app_publish', { app: 'tally' })
@@ -552,14 +564,12 @@ slow('an installed app is the installer own copy, data and all', async () => {
     // with the deploy's own sentence, and not a byte of her app moves.
     await write(hers, 'tally')(
       'vocab.json',
-      '{"vote": {"who": "text", "pick": "text", "at": "text", ' +
-        '"count": "number"}}',
+      vocabFile({ vote: { who: txt, pick: txt, at: txt, count: num } }),
     )
     await hers.tool('app_deploy', { app: 'tally' })
     await mine(
       'vocab.json',
-      '{"vote": {"who": "text", "pick": "text", "at": "text", ' +
-        '"count": "text"}}',
+      vocabFile({ vote: { who: txt, pick: txt, at: txt, count: txt } }),
     )
     await mine('index.html', '<h1>Tally v3</h1>')
     await his.tool('app_deploy', { app: 'tally' })

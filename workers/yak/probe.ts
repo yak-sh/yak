@@ -611,7 +611,9 @@ export let vocabFile = (
 ): string =>
   JSON.stringify({
     $defs: Object.fromEntries(
-      Object.entries(defs).map(([name, props]) => [name, { properties: props }]),
+      Object.entries(defs).map((
+        [name, props],
+      ) => [name, { properties: props }]),
     ),
   })
 export let txt = { type: 'string' }
