@@ -260,6 +260,13 @@ export let parseDot = (token: string): Clause[] | null => {
   }
   let marked = sigil(token)
   if (marked) return marked
+  // `$x=5` — a variable and what binds it. A query that is nothing but these
+  // is a BINDINGS query, which is what a template invocation's arguments are
+  // (`+foo.bar=$x` merged with `$x=5`).
+  let bound = token.match(new RegExp(`^\\$(${SEG})=(.*)$`, 's'))
+  if (bound) {
+    return [{ kind: 'var', name: bound[1], value: value(bound[2]) }]
+  }
   // A sigil marks a whole word (`+doc`), and it marks a PATH that carries an
   // operator just the same (`+doc.title=$x`): the sigil says the component is
   // written, and the column beside it says which part. The gate is left out —

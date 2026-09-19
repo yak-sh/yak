@@ -30,8 +30,10 @@ import {
   type And,
   bare,
   declared,
+  eq,
   parse,
   type Pred,
+  scalar,
   type Value,
 } from '@yaks/query'
 import type { Set as Sets } from '@yaks/query'
@@ -185,3 +187,76 @@ export let reads = (m: Match, v: Vocab): string[] => {
   }
   return [...out]
 }
+
+/**
+ * A template INVOCATION: the template's query merged with a bindings-only
+ * query built from the call's arguments.
+ *
+ * There is no second kind of thing here, which is the whole point. A template
+ * is a rule; arguments are `$x=5`, which is a query; merging them is the
+ * conjunction of two clause lists. Where a bound variable sits decides what it
+ * does, and that was already how variables worked: in a MATCH clause it
+ * constrains (the column must equal the argument), in a `+` clause it SUPPLIES
+ * (the column is written with it), and in both it does both.
+ *
+ * ```ts
+ * import { filled, match } from '@yaks/graph'
+ *
+ * // `+foo.bar=$x` merged with `$x=5` writes a new entity with bar=5
+ * filled(match('+foo.bar=$x'), { x: 5 }).patterns[0].sets
+ * ```
+ */
+export let filled = (
+  m: Match | string,
+  args: Record<string, unknown> | string,
+): Match => {
+  let plan = typeof m == 'string' ? match(m) : m
+  let values = typeof args == 'string' ? bound(args) : args
+  let patterns = plan.patterns.map((p) => {
+    let clauses = [...p.filter.clauses]
+    // A bound variable in a MATCH position is an ordinary predicate again:
+    // the column must equal what the argument said.
+    let binds = p.binds.filter((b) => {
+      if (!(b.name in values)) return true
+      clauses.push(eq(b.path.join('.'), String(values[b.name])))
+      return false
+    })
+    // In a WRITE position it supplies the value instead.
+    let sets = p.sets.map((s) => {
+      let name = variable(s.value)
+      return name && name in values
+        ? { ...s, value: scalar(String(values[name])) }
+        : s
+    })
+    // Naming the pattern's ENTITY, it names one entity: the pattern is about
+    // that row and no other.
+    let entity = p.entity
+    if (entity && entity in values) {
+      clauses.push(eq('entity.eid', String(values[entity])))
+      entity = undefined
+    }
+    return {
+      ...p,
+      ...(entity ? { entity } : { entity: undefined }),
+      filter: { kind: 'and' as const, clauses },
+      binds,
+      sets,
+      // A pattern that only wrote still only writes; one that gained a clause
+      // now matches, which is what a constraint means.
+      makes: p.makes && !clauses.length,
+    }
+  })
+  return {
+    patterns,
+    vars: plan.vars.filter((name) => !(name in values)),
+  }
+}
+
+/** The bindings a query carries: every `$name=value` in it, as plain values.
+ * A query that is nothing but these is what a call's arguments are. */
+export let bound = (source: string): Record<string, unknown> =>
+  Object.fromEntries(
+    declared(parse(source, { text: false })).values.map((
+      [name, v],
+    ) => [name, v.kind == 'scalar' || v.kind == 'time' ? v.raw : v]),
+  )

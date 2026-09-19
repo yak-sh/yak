@@ -215,13 +215,23 @@ export let graph = (opts: Options): Graph => {
   let stamping = [...provenance(opts.provenance), ...marks(vocab)]
   // The DECLARED rules, read once per apply: a plugin registered since the
   // last one is in, and a rule that will not parse says so before the batch
-  // opens a transaction. A plugin's own vocabulary is read for them too, so
-  // an app that ships `rule: true` in its manifest needs no wiring at all.
-  let declaring = () =>
-    ready(plugins.flatMap((p) => [
-      ...(p.declared ?? []),
-      ...rulesIn(p.vocab ?? []),
-    ]))
+  // opens a transaction.
+  //
+  // The graph's OWN vocabulary is where most of them are, because that is
+  // where an app's `vocab.json` ends up — so an app that ships a `rule: true`
+  // entry runs it with no wiring at all. A plugin registered after the graph
+  // was built carries documents the loaded vocabulary never saw, so those are
+  // read too.
+  let declaring = () => {
+    let seen = new Set(vocab.docs)
+    return ready([
+      ...rulesIn(vocab.docs),
+      ...plugins.flatMap((p) => [
+        ...(p.declared ?? []),
+        ...rulesIn((p.vocab ?? []).filter((d) => !seen.has(d))),
+      ]),
+    ])
+  }
   let ruled = (phase: Phase): Rule[] =>
     [...stamping, ...plugins.flatMap((p) => p.rules ?? [])]
       .filter((r) => r.phase == phase)
@@ -433,7 +443,14 @@ export let graph = (opts: Options): Graph => {
                       }
                       return kept.get(name)
                     }
-                    return settle(rules, b, held, vocab, ask)
+                    return settle(
+                      rules,
+                      b,
+                      held,
+                      vocab,
+                      ask,
+                      (made) => admit(made, vocab, true),
+                    )
                   },
                   holds,
                 ),

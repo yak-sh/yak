@@ -3,7 +3,7 @@
 // these.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { graph } from '@yaks/graph'
+import { graph, invoked } from '@yaks/graph'
 import type { Bundle } from '@yaks/graph'
 import { mem, shop } from './harness.ts'
 import { storage } from './mod.ts'
@@ -160,4 +160,49 @@ Deno.test('a rule declared in a vocabulary runs with no wiring at all', () => {
     product: { price: 9 },
   }]) as Bundle[]
   assertEquals(at(out, 'p1', 'shelf'), { aisle: 'Z' })
+})
+
+// A TEMPLATE is the same object as a rule, and an invocation is that query
+// merged with the call's arguments as a bindings query (T-37570).
+
+Deno.test('a template invocation is the template merged with its arguments', () => {
+  let s = storage(mem(), shop)
+  s.install()
+  let one = graph({ storage: s, vocab: shop })
+  one.apply([
+    { entity: { eid: 'p1' }, doc: { title: 'Dune' }, product: { price: 9 } },
+    { entity: { eid: 'p2' }, doc: { title: 'Ubik' }, product: { price: 4 } },
+  ])
+  // An app's command: "shelve this product in this aisle". `$p` names the
+  // entity it is about, `$aisle` supplies a column — both plain variables,
+  // and which is which is decided by where they are written.
+  let shelve = '$p .product; +shelf.aisle=$aisle'
+  let made = s.tx((tx) =>
+    invoked(tx, shop, shelve, { p: 'p1', aisle: 'B' })
+  ) as Bundle[]
+  // One firing, about the product the argument named, writing the column the
+  // other argument supplied.
+  assertEquals(made.length, 1)
+  assertEquals(made[0].shelf, { aisle: 'B' })
+  // …and the host lands it like anything else.
+  let out = one.apply(made) as Bundle[]
+  assertEquals(
+    (out.find((b) => b.shelf)?.shelf as { aisle: string }).aisle,
+    'B',
+  )
+})
+
+Deno.test('a template with no argument for a variable still joins on it', () => {
+  let s = storage(mem(), shop)
+  s.install()
+  graph({ storage: s, vocab: shop }).apply([
+    { entity: { eid: 'p1' }, product: { price: 9 } },
+    { entity: { eid: 'r1' }, review: { stars: 5, product: 'p1' } },
+  ])
+  // `$p` is unbound: it is the join it looks like, and the answer is one
+  // firing per product that has a review.
+  let made = s.tx((tx) =>
+    invoked(tx, shop, '$p .product; .review, review.product=$p, +shelf', {})
+  ) as Bundle[]
+  assertEquals(made.map((b) => b.entity.eid), ['r1'])
 })

@@ -25,7 +25,7 @@
 
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { derivedEid } from './identity.ts'
-import { type Binding, type Match, match, reads } from './join.ts'
+import { type Binding, filled, type Match, match, reads } from './join.ts'
 import type { Tx } from './storage.ts'
 import { then } from './pipe.ts'
 import type { Value } from '@yaks/query'
@@ -143,13 +143,17 @@ export let emitted = (
     for (let comp of [...p.gates, ...p.ensures]) patch[comp] ??= {}
     for (let s of p.sets) {
       patch[s.comp] ??= {}
-      patch[s.comp][s.prop] = worth(
+      let v = worth(
         s.value,
         vocab.column(s.comp, s.prop),
         row,
         made,
         resource,
       )
+      // A resource standing for NOTHING writes nothing — `+created.by=#Actor`
+      // on a batch nobody signed leaves the column alone rather than clearing
+      // it, so a rule needs no conditional around the column it wanted.
+      if (v !== undefined) patch[s.comp][s.prop] = v
     }
     if (Object.keys(patch).length) {
       out.push({ entity: { eid: at[i] }, ...patch })
@@ -164,6 +168,10 @@ export let emitted = (
  * `tx.bindings` is the storage's door: it answers each match against the graph
  * with the batch folded in. A storage that has none runs no declared rules —
  * they are a query, and a store that cannot answer one has nothing to say.
+ *
+ * `admit` is the graph's own admission, handed in so this file need not know
+ * what a column is: what a rule wrote goes through it before it joins the
+ * batch.
  */
 export let settle = (
   rules: Ready[],
@@ -171,6 +179,7 @@ export let settle = (
   tx: Tx,
   vocab: Vocab,
   resource: (name: string) => unknown = () => undefined,
+  admit: (made: Bundle[]) => Bundle[] = (made) => made,
 ): Bundle[] | Promise<Bundle[]> => {
   if (!rules.length || !tx.bindings) return bundles
   let ask = tx.bindings
@@ -195,10 +204,41 @@ export let settle = (
           }
         })
         if (!made.length) return batch
-        return round([...batch, ...made])
+        // Admitted like anything else that reaches the graph: a column this
+        // vocabulary does not declare is dropped, a value it refuses refuses
+        // the batch. A rule is server code, so its server-owned columns are
+        // its to write.
+        return round([...batch, ...admit(made)])
       },
     )
   return round(bundles)
+}
+
+/**
+ * A TEMPLATE, invoked: the template's query merged with its arguments as a
+ * bindings query (./join.ts `filled`), matched against the graph once, and the
+ * bundles it emits — for a host to land as an ordinary batch.
+ *
+ * It is the same engine the rules phase runs, asked outright instead of about
+ * a batch. That is the whole of what a template is: a rule with its variables
+ * filled in.
+ */
+export let invoked = (
+  tx: Tx,
+  vocab: Vocab,
+  template: string | Match,
+  args: Record<string, unknown> | string,
+  name = 'template',
+  resource: (name: string) => unknown = () => undefined,
+): Bundle[] | Promise<Bundle[]> => {
+  if (!tx.bindings) return []
+  let plan = filled(template, args)
+  let rule: Ready = { rule: { name, match: '' }, plan }
+  return then(
+    tx.bindings([plan], [], reads(plan, vocab)),
+    ([rows]) =>
+      (rows ?? []).flatMap((row) => emitted(rule, row, vocab, resource)),
+  )
 }
 
 /** The components a rule set reads — what a batch overlay has to cover. */

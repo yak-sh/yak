@@ -138,7 +138,10 @@ export type Mutable = {
   value?: Value
 }
 export type Resource = { kind: 'resource'; comp: string }
-export type Var = { kind: 'var'; name: string }
+// A variable, and what BINDS it where a query says so: `$x` alone names a
+// slot, `$x=5` fills it. A bindings-only query is nothing but these, which is
+// what a template invocation's arguments are.
+export type Var = { kind: 'var'; name: string; value?: Value }
 
 // Boolean composition. `parse` always yields an `and` of the token clauses
 // (the yaks text format is a flat AND-list); `or` is builder-only — the AST is
@@ -309,7 +312,11 @@ export let mutable = (comp: string, prop?: string, value?: Input): Mutable => ({
   ...(prop ? { prop, value: coerce(value ?? '') } : {}),
 })
 export let resource = (comp: string): Resource => ({ kind: 'resource', comp })
-export let variable = (name: string): Var => ({ kind: 'var', name })
+export let variable = (name: string, value?: Input): Var => ({
+  kind: 'var',
+  name,
+  ...(value === undefined ? {} : { value: coerce(value) }),
+})
 
 export let edges = (
   opts: { select?: EdgeSelect; peers?: string[][] } = {},

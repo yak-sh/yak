@@ -44,8 +44,11 @@ export type Declares = {
   writes: string[]
   /** `#comp` — the singleton resources it reads */
   resources: string[]
-  /** `$name` — the variables it binds */
+  /** `$name` — the variables it names */
   vars: string[]
+  /** `$name=value` — the variables it BINDS, which is what a template
+   * invocation's arguments are */
+  values: [string, Value][]
   /** `+comp.col=value` / `*comp.col=value` — the columns it writes */
   sets: Set[]
 }
@@ -74,6 +77,7 @@ export let declared = (ast: Query): Declares => {
     writes: [],
     resources: [],
     vars: [],
+    values: [],
     sets: [],
   }
   let once = (list: string[], comp: string) => {
@@ -108,7 +112,11 @@ export let declared = (ast: Query): Declares => {
       return void once(out.writes, c.comp)
     }
     if (c.kind == 'resource') return void out.resources.push(c.comp)
-    if (c.kind == 'var') return void out.vars.push(c.name)
+    if (c.kind == 'var') {
+      return void (c.value
+        ? out.values.push([c.name, c.value])
+        : out.vars.push(c.name))
+    }
     out.filter.clauses.push(c)
   }
   for (let c of ast.clauses) take(c)
