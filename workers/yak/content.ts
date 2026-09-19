@@ -122,7 +122,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'store',
     'title': 'The store, from a page',
     'description':
-      './api/client.js in full — apply, query, search, subscribe, upload and me — the shape of an entity bundle, patching and deleting, who may read and write, the byline on a row, seed.json for the data an app comes with, and the HTTP doors underneath.',
+      './api/client.js in full — apply, query, search, subscribe, upload and me — the shape of an entity bundle, patching and deleting, compare-and-set with $was so two writers cannot both spend one value, who may read and write, the byline on a row, seed.json for the data an app comes with, and the HTTP doors underneath.',
     'brief': 'reading and writing from a page',
   },
   'tools': {

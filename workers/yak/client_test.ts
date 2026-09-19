@@ -46,6 +46,9 @@ slow('the served client: a page saves, lists and watches', async () => {
       source,
       /export let \{ apply, me, query, search, subscribe, upload \}/,
     )
+    // And the precondition's hash beside them, which is not one of the doors:
+    // it is what a page puts in `$was` (T-37614).
+    assertMatch(source, /export let was = /)
 
     // The page a person would be given, and its script, run here. The import
     // is the guide's own: relative, naming no app, resolved through the base
@@ -216,6 +219,50 @@ slow('the served client: a page saves, lists and watches', async () => {
     assertEquals(
       (await store.query('.doc!')).some((r: Row) => r.doc.title == them.email),
       false,
+    )
+
+    // The precondition, at the page's own door (T-37614): a write that names
+    // what it was BASED on. Two readers of one value — two tabs, a tab and an
+    // agent — each write it back, and the second one loses instead of winning
+    // by being last. This is the duplicate reward the guide's store page
+    // spells out.
+    let claimed = await store.apply({
+      entity: { eid: '$claim' },
+      doc: { title: 'day 1' },
+    })
+    let ticket = claimed.aliases.$claim
+    // What both of them read, hashed the way the store hashes it.
+    let read = await mod.was('day 1')
+    await store.apply({
+      entity: { eid: ticket },
+      doc: { title: 'day 2' },
+      $was: { doc: { title: read } },
+    })
+    await assertRejects(
+      () =>
+        store.apply({
+          entity: { eid: ticket },
+          doc: { title: 'day 2, again' },
+          $was: { doc: { title: read } },
+        }),
+      Error,
+      'has moved since it was read',
+    )
+    assertEquals(
+      (await store.query(`id=${ticket}&.doc!`))[0].doc.title,
+      'day 2',
+    )
+    // `null` is a guard too — "I read no value" — which is how a page mints a
+    // row once: the column is no longer empty, so the second write is refused.
+    await assertRejects(
+      () =>
+        store.apply({
+          entity: { eid: ticket },
+          doc: { title: 'day 3' },
+          $was: { doc: { title: null } },
+        }),
+      Error,
+      'has moved since it was read',
     )
 
     // A refusal arrives as the server's own sentence, not a status code and

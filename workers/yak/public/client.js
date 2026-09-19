@@ -31,6 +31,10 @@
 // input, a Blob a canvas made — under its own SHA-256 and answers the address
 // to put in an `<img src>` and the eid for a row to point at.
 //
+// `was(value)` is the precondition half of a write: hash what you read, name
+// it under `$was`, and the store refuses the whole batch if that column has
+// moved since — the read-modify-write two tabs cannot both win.
+//
 // `store(base)` is those doors at an address you name, and what the bound
 // set is made of. Every app in a space shares one hostname, so
 // `store('/other/api/')` reads a sibling app's graph the same way.
@@ -89,6 +93,27 @@ let based = (base) => {
   let at = new URL(base, globalThis.location?.origin)
   if (!at.pathname.endsWith('/')) at.pathname += '/'
   return at
+}
+
+// The precondition a read-modify-write carries: the SHA-256 of a value as the
+// page READ it, which a bundle names under `$was` — per component, per column.
+// The store refuses the whole batch if that column has moved since, so two
+// tabs, two phones or an agent and a page cannot both spend one balance or
+// claim one reward. `null` is "it held none", which guards a column that must
+// still be empty. The hash is the store's own (@yaks/graph `token`), so a page
+// and a tool guard the same value alike.
+//
+//     let [me] = await query(`id=${eid}&.player!`)
+//     await apply({
+//       entity: { eid },
+//       player: { gold: me.player.gold + 10, claimed: today },
+//       $was: { player: { claimed: await was(me.player.claimed) } },
+//     })
+export let was = async (value) => {
+  if (value == null) return null
+  let bytes = new TextEncoder().encode(String(value))
+  let sum = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
+  return [...sum].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 export let store = (base) => {

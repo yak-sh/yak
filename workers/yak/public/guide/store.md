@@ -6,7 +6,8 @@ guide:
   brief: reading and writing from a page
   description: >-
     ./api/client.js in full — apply, query, search, subscribe, upload and me
-    — the shape of an entity bundle, patching and deleting, who may read and
+    — the shape of an entity bundle, patching and deleting, compare-and-set
+    with $was so two writers cannot both spend one value, who may read and
     write, the byline on a row, seed.json for the data an app comes with,
     and the HTTP doors underneath.
 ---
@@ -183,6 +184,53 @@ permanent, and it cascades to entities that exist only about the dead one.
 A row you READ can be handed straight back as a patch: the projections a read
 adds — `kind`, `rank`, the stamps — are dropped on the way in, and a reference
 that came back as `{eid, name}` writes as the eid it named.
+
+### Only one of you wins: `$was`
+
+A batch is atomic, which says nothing about the read that came before it. Two
+tabs, a phone and a tab, a page and an agent — each reads 40 gold, each writes
+50, and the second write is not wrong about anything except the world. That is
+the duplicate reward, and it is a read-modify-write with nothing holding the
+read.
+
+So say what you based the write on. `$was` names, per component and per column,
+the SHA-256 of the value you READ, and the store refuses the WHOLE batch if that
+column has moved since. `was()` is that hash, exported beside `apply`:
+
+    import { apply, query, was } from './api/client.js'
+
+    let claim = async (eid) => {
+      let [me] = await query(`id=${eid}&.player!`)
+      // Already collected today: nothing to write, and nothing to race.
+      if (me.player.claimed == today()) return 'already claimed'
+      await apply({
+        entity: { eid },
+        player: { gold: me.player.gold + 10, claimed: today() },
+        // The guard: the day I read, as I read it. A second claim that read
+        // the same day loses here rather than paying out twice.
+        $was: { player: { claimed: await was(me.player.claimed) } },
+      })
+      return 'claimed'
+    }
+
+The refusal arrives as an ordinary throw, in the store's own words — which
+column moved and what it holds now — so the page re-reads and decides again
+rather than clobbering a writer it never saw:
+
+    try { await claim(eid) } catch (e) {
+      if (/has moved since it was read/.test(e.message)) return claim(eid)
+      throw e
+    }
+
+Three things worth knowing. `null` is a guard too — "I read no value" — and it
+is how a column that must still be EMPTY is guarded, which is the shape of "mint
+this once". Every column you name must be one the vocabulary declares, because a
+guard on a word that is not there would compare absent to absent and protect
+nothing. And the whole batch is refused, never the part that moved: a title from
+one writer and a body from another is the state this exists to make impossible.
+
+Agents guard the same way, on the same column: `graph_apply` takes `$was` beside
+the components, and refuses with the same sentence.
 
 ## What a row carries back
 

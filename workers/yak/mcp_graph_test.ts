@@ -21,6 +21,7 @@ import {
 } from './probe.ts'
 import { FREE, monthOf } from './meter.ts'
 import { minted } from './mcp-probe.ts'
+import { token } from '@yaks/graph'
 
 // An entity spans apps (T-32699): a read that names no app asks every store
 // the caller can reach and answers one bundle per eid — and only the stores
@@ -1030,6 +1031,67 @@ slow(
         }),
         'as yourname/copy',
       )
+    } finally {
+      await k.stop()
+    }
+  },
+)
+
+// Compare-and-set, through the connector (T-37614). A batch is atomic, which
+// says nothing about the read that came before it: two callers who both read
+// 40 gold both write 50, and the second is wrong about the world rather than
+// about the write. `$was` is the graph's `--ff-only` — the SHA-256 of the
+// value as it was READ, per column — and the batch is refused WHOLE when that
+// column has moved since.
+slow(
+  'a $was precondition refuses a batch built on a value that moved',
+  async () => {
+    let k = await kernel()
+    try {
+      let jeff = await signIn(k)
+      let agent = connector(k, jeff.cookie)
+      await agent.tool('app_new', { slug: 'idler', title: 'Idler' })
+      await agent.tool('app_files', {
+        app: 'idler',
+        files: [{
+          path: 'vocab.json',
+          content: vocabFile({ player: { gold: num, claimed: txt } }),
+        }],
+      })
+      await agent.tool('app_deploy', { app: 'idler' })
+      let hero = minted(
+        await agent.tool('graph_apply', {
+          app: 'idler',
+          entities: [{
+            entity: { eid: '$p' },
+            player: { gold: 40, claimed: 'day 1' },
+          }],
+        }),
+        '$p',
+      )
+      // What both claimants read, hashed the way the graph hashes it.
+      let read = token('day 1')
+      let claim = (gold: number, day: string) =>
+        agent.tool('graph_apply', {
+          app: 'idler',
+          entities: [{
+            entity: { eid: hero },
+            player: { gold, claimed: day },
+            $was: { player: { claimed: read } },
+          }],
+        })
+      await claim(50, 'day 2')
+      // The second reward, built on the same read, is refused by name — and the
+      // sentence says which column moved, so the caller re-reads and merges.
+      await assertRejects(
+        () => claim(60, 'day 2'),
+        Error,
+        'player.claimed',
+      )
+      let [row] = JSON.parse(
+        await agent.tool('graph_query', { app: 'idler', query: '.player!' }),
+      ) as { player: { gold: number } }[]
+      assertEquals(row.player.gold, 50)
     } finally {
       await k.stop()
     }

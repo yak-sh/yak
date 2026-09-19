@@ -186,7 +186,13 @@ export let core = (opts: CoreOpts): Tool[] => {
         `store keeps names, alias: {name: '<your name>'} beside a '$name' eid ` +
         `makes the write IDEMPOTENT — the same name written again patches the ` +
         `entity that already holds it instead of making a second one, and a ` +
-        `name stands wherever an eid does. The answer ` +
+        `name stands wherever an eid does. A read-modify-write says what it ` +
+        `was based on: $was names, per component and column, the SHA-256 of ` +
+        `the value you READ (null for "it held none"), and the batch is ` +
+        `refused WHOLE — naming the column and what it holds now — if it has ` +
+        `moved since. That is compare-and-set: two callers spending the same ` +
+        `balance or claiming the same reward, and only one of them lands. ` +
+        `The answer ` +
         `is the batch AS APPLIED, one bundle per entity: {entity: {eid, num}}, ` +
         `every component as written, the stamps the graph made (created, ` +
         `updated), and the '$alias' you named it by. Anything that died — ` +
