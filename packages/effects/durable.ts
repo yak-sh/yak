@@ -20,6 +20,11 @@
 // a row for a while (owner, token, expiry) before running it, and skips a row
 // whose claim is somebody else's and has not expired.
 //
+// A PATTERN effect is written down the same way, as `matched` on the entity
+// its first half bound. What a retry reconstructs is that entity, not the
+// bindings a join took — enough for a handler that is about an entity, which
+// is what a pattern registration almost always is.
+//
 // Loading the component is the application's choice — an app with no durable
 // effects loads no `effect` component and stores nothing.
 //

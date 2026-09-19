@@ -602,6 +602,55 @@ export let meta = (k: Kernel, cookie: string) => {
   }
 }
 
+// The two shapes a tool's WORDS carry, read back out of them. A tool answers
+// bundles now, so what a probe used to pick off `structuredContent` is in the
+// prose — and every test that wants it wants it the same way.
+
+/** One line of what `commands` answers (tools.ts). */
+export type Listed = {
+  /** `<space>/<app>`, off the header the app's commands sit under */
+  at: string
+  name: string
+  /** its arguments as the listing spells them: `who, miles, pace?` */
+  args: string
+  /** `writes` rather than `reads` */
+  writes: boolean
+  description: string
+}
+
+export let commandsIn = (said: string): Listed[] => {
+  let at = ''
+  let out: Listed[] = []
+  for (let line of said.split('\n')) {
+    let head = /^## (\S+)$/.exec(line)
+    if (head) {
+      at = head[1]
+      continue
+    }
+    let one = /^(\w+)\(([^)]*)\) (reads|writes) — (.+)$/.exec(line)
+    if (one) {
+      out.push({
+        at,
+        name: one[1],
+        args: one[2],
+        writes: one[3] == 'writes',
+        description: one[4],
+      })
+    }
+  }
+  return out
+}
+
+/**
+ * The rows a query command answered, from under its sentence: `command` says
+ * `<name>: N rows in <at>` and then the rows (declared.ts `ran`), with the
+ * unseen block after them where the caller has a space to be told about.
+ */
+export let rowsIn = <T>(said: string): T[] =>
+  JSON.parse(
+    said.slice(said.indexOf('\n\n') + 2).split('\n\n## ')[0],
+  ) as T[]
+
 // An app's `vocab.json`, as a probe writes one: the document, without every
 // test spelling `$defs` and `properties` around two columns. A column is its
 // JSON Schema — {@link txt}, {@link num} and {@link when} are the three a probe

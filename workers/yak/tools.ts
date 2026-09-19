@@ -1559,8 +1559,8 @@ export let uiMeta = (domain: string, csp: Csp = {}) => ({
 // an agent chooses one (guide.ts `brief`).
 // One command's arguments, as a signature a model reads: the required ones,
 // then the optional ones marked `?`. It is the same JSON Schema `command`
-// takes in `args` (store/tools.ts `schemaOf`), said the short way — the schema
-// itself rides on the answer's data for anything that wants it whole.
+// takes in `args` (store/tools.ts `schemaOf`), said the short way — which is
+// the only way it is said, since an answer is bundles and carries no schema.
 let argsOf = (input: unknown) => {
   let s = (input ?? {}) as {
     properties?: Record<string, unknown>
@@ -3280,7 +3280,15 @@ let OURS: Row[] = [
           seen.add(one.at)
           lines.push(`${lines.length ? '\n' : ''}## ${one.at}`)
         }
-        lines.push(`${one.name}(${argsOf(one.input)}) — ${one.description}`)
+        // Whether it READS or writes, in the line: half of these commands
+        // mutate and half do not, and a model choosing between them is owed
+        // that before it picks. It used to ride as a field on the answer, and
+        // an answer is bundles now, so it is said in the words like the rest.
+        lines.push(
+          `${one.name}(${argsOf(one.input)}) ${
+            one.readOnly ? 'reads' : 'writes'
+          } — ${one.description}`,
+        )
       }
       return {
         text: `${lines.join('\n')}\n\nRun one with command(name, args) — and ` +

@@ -77,7 +77,7 @@ export type Args = Record<string, unknown>
 // What a tool answers: the text, the space it worked in (so the door can
 // append what is unseen there), and the same answer as data, which the
 // transport carries as the result's structuredContent (agent.ts).
-export type Out = { text: string; space?: Space; data?: unknown }
+export type Out = { text: string; space?: Space }
 
 export type Shape = {
   type: 'object'
