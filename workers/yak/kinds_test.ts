@@ -118,7 +118,7 @@ Deno.test('an app declines them, or spells one itself', () => {
     add_recipe: {
       description: 'Add a recipe the way this app means it',
       input: { title: 'text' as const },
-      apply: { entity: { eid: '$r' }, doc: { title: '{{title}}' } },
+      apply: { entity: { eid: '$r' }, doc: { title: '$title' } },
     },
   }
   let both = withKinds(own, appDoc(box), 'jeff/recipes')

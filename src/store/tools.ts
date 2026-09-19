@@ -10,17 +10,22 @@
 //       "description": "Log a run for the club leaderboard",
 //       "input": { "who": "text", "miles": "number" },
 //       "apply": { "entity": { "eid": "$run" },
-//                  "run": { "who": "{{who}}", "miles": "{{miles}}" } } },
+//                  "run": { "who": "$who", "miles": "$miles" } } },
 //     "leaderboard": {
 //       "description": "This month's runs",
 //       "input": { "since": "time" },
-//       "query": ".run!&.created.at>={{since}}" } }
+//       "query": ".run!&.created.at>=$since" } }
 //
-// The act is a TEMPLATE over the app's own store: `apply` is the wire's
-// entity bundle (or a list of them) and `query` is a filter line, each with
-// `{{arg}}` holes filled from the call's arguments and typed by the declared
-// input. A hole naming an input nobody declared is refused at deploy, because
-// a tool that cannot be filled is one an agent calls once and gives up on.
+// The act is a TEMPLATE over the app's own store: `apply` is the wire's entity
+// bundle (or a list of them) and `query` is a filter line, and both are
+// written in the ONE variable language the wire and the query grammar already
+// speak. `$name` is a variable: BOUND by an argument of that name, it is that
+// argument's value, typed by the declared input; left unbound, it is what it
+// has always been — an alias the store mints an entity at, so the same `$run`
+// names the row in the bundle that made it. A `$name` that is neither an
+// argument nor an entity this template writes is refused at deploy, because a
+// tool that cannot be filled is one an agent calls once and gives up on. `$$`
+// is a literal dollar sign.
 //
 // An entry may also name a `view`: a page in the app's own files that the
 // person's agent renders the answer in (T-32687), served at the MCP door as
@@ -39,8 +44,8 @@ import { TYPES, type Vocab } from './vocab.ts'
 // entry names exactly one.
 //
 // `optional` and `drop` are the two fields a tools.json cannot spell (see
-// KEYS): every argument an app DECLARES is required, because a hole with
-// nothing to fill it would splice the word `undefined` into the author's own
+// KEYS): every argument an app DECLARES is required, because a variable with
+// nothing to bind it would splice the word `undefined` into the author's own
 // template. The tools a KIND is worth are generated instead
 // (workers/yak/kinds.ts) — nobody wrote their template, so nothing is surprised
 // when a clause drops out. `optional` names the arguments a caller may leave
@@ -61,7 +66,7 @@ export type Tools = Record<string, ToolDef>
 
 export let TOOLS_EXAMPLE =
   '{"log_run": {"description": "Log a run", "input": {"miles": "number"}, ' +
-  '"apply": {"entity": {"eid": "$run"}, "run": {"miles": "{{miles}}"}}}}'
+  '"apply": {"entity": {"eid": "$run"}, "run": {"miles": "$miles"}}}}'
 
 // The keys an entry may carry. Unknown ones are refused rather than ignored,
 // so a misspelling is a sentence at deploy and not a tool that quietly does
@@ -81,24 +86,59 @@ let VIEW = /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[\w./-]+\.html$/
 // beside the app it belongs to.
 let NAME = /^[a-z][a-z0-9_]{0,39}$/
 
-// A hole, and the whole of a string that is nothing but one — the difference
-// between a value passed through with its type and a value spliced into text.
-let HOLE = /\{\{([a-z][a-z0-9_]*)\}\}/g
-let ONLY = /^\{\{([a-z][a-z0-9_]*)\}\}$/
+// A variable, and the whole of a string that is nothing but one — the
+// difference between a value passed through with its type and a value spliced
+// into text. `$$` is a literal dollar and never a variable.
+let VAR = /\$\$|\$([a-z][a-z0-9_]*)/g
+let ONLY = /^\$([a-z][a-z0-9_]*)$/
 
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
+
+// The spelling before this one: `{{arg}}` was a hole where `$arg` is now a
+// variable. An app deployed then still has that manifest in its store, so
+// every read of a stored one comes through here (declared.ts `toolsOf`) and
+// says it the way it is said now. A DEPLOY today is refused instead, below:
+// upgrading what is already there is a kindness, accepting two spellings
+// forever is the duplication this removed.
+let OLD = /\{\{([a-z][a-z0-9_]*)\}\}/g
+let ANY_OLD = /\{\{[a-z][a-z0-9_]*\}\}/
+
+export let modern = <T>(v: T): T =>
+  typeof v == 'string'
+    ? v.replace(OLD, '$$$1') as T
+    : Array.isArray(v)
+    ? v.map(modern) as T
+    : object(v)
+    ? Object.fromEntries(
+      Object.entries(v).map(([k, one]) => [k, modern(one)]),
+    ) as T
+    : v
 
 // The wire's own keys beside the components: what an entity bundle may say
 // that is not a component name (src/mutation.ts EntityLiteral).
 let WIRE = ['entity', 'edges', 'tombstone', 'was']
 
-// Every hole in a template, wherever the strings are.
-let holes = (v: unknown, found: Set<string> = new Set()): Set<string> => {
+// Every variable in a template, wherever the strings are.
+let vars = (v: unknown, found: Set<string> = new Set()): Set<string> => {
   if (typeof v == 'string') {
-    for (let m of v.matchAll(HOLE)) found.add(m[1])
-  } else if (Array.isArray(v)) { for (let one of v) holes(one, found) }
-  else if (object(v)) { for (let one of Object.values(v)) holes(one, found) }
+    for (let m of v.matchAll(VAR)) if (m[1]) found.add(m[1])
+  } else if (Array.isArray(v)) { for (let one of v) vars(one, found) }
+  else if (object(v)) { for (let one of Object.values(v)) vars(one, found) }
+  return found
+}
+
+// The variables this template MINTS: every `$name` standing alone as an
+// entity's eid. Those are the aliases the store gives real ids to, so a
+// `$name` pointing at one is a join and not a missing argument.
+let minted = (v: unknown, found: Set<string> = new Set()): Set<string> => {
+  if (Array.isArray(v)) { for (let one of v) minted(one, found) }
+  else if (object(v)) {
+    let eid = object(v.entity) ? v.entity.eid : undefined
+    let only = typeof eid == 'string' ? ONLY.exec(eid) : null
+    if (only) found.add(only[1])
+    for (let one of Object.values(v)) minted(one, found)
+  }
   return found
 }
 
@@ -176,6 +216,12 @@ export let parseTools = (
         }
       }
     }
+    if (ANY_OLD.test(JSON.stringify(entry.apply ?? entry.query ?? ''))) {
+      wrong.push(
+        `${name}: {{arg}} is not a hole any more — write $arg, the same ` +
+          'variable the wire and the query grammar already speak',
+      )
+    }
     let acts = ['apply', 'query'].filter((k) => entry[k] != null)
     if (acts.length != 1) {
       wrong.push(
@@ -199,17 +245,18 @@ export let parseTools = (
     ) {
       wrong.push(`${name}.apply is an entity bundle, or a list of them`)
     }
-    // A hole that names no input can never be filled, and a component nobody
-    // declared can never be written — both are the deploy's to catch, since
-    // the alternative is an agent calling the tool and reading `unknown
-    // component` from a store it cannot see.
-    for (let hole of holes(entry.apply ?? entry.query)) {
-      if (!(hole in input)) {
-        wrong.push(
-          `${name}: {{${hole}}} names no input — declare it in ` +
-            `${name}.input`,
-        )
-      }
+    // A variable that binds to nothing can never be filled, and a component
+    // nobody declared can never be written — both are the deploy's to catch,
+    // since the alternative is an agent calling the tool and reading `unknown
+    // component` from a store it cannot see. A `$name` an entity in this same
+    // template is minted at is neither: it is the join it looks like.
+    let mints = entry.apply == null ? new Set<string>() : minted(entry.apply)
+    for (let held of vars(entry.apply ?? entry.query)) {
+      if (held in input || mints.has(held)) continue
+      wrong.push(
+        `${name}: $${held} names no input and no entity here — declare it ` +
+          `in ${name}.input`,
+      )
     }
     for (let comp of named(entry.apply)) {
       if (!words.includes(comp)) {
@@ -306,41 +353,52 @@ let args = (tool: ToolDef, sent: Record<string, unknown>) =>
       .map(([arg, type]) => [arg, typed(arg, type, sent[arg])]),
   )
 
-// A hole the caller left empty, travelling as a value. It takes the key that
-// held it with it: a column nobody named is a column nobody writes, never the
-// word `undefined` in the row.
+// A variable the caller left empty, travelling as a value. It takes the key
+// that held it with it: a column nobody named is a column nobody writes, never
+// the word `undefined` in the row.
 let ABSENT = Symbol('absent')
 
-let gaps = (s: string, vals: Record<string, unknown>) =>
-  [...s.matchAll(HOLE)].some((m) => !(m[1] in vals))
+// An optional argument the caller left out. A variable that is not an argument
+// at all is not a gap — it is an alias, and it travels on untouched.
+let gaps = (s: string, tool: ToolDef, vals: Record<string, unknown>) =>
+  [...s.matchAll(VAR)].some((m) =>
+    m[1] && m[1] in tool.input && !(m[1] in vals)
+  )
 
-// One template string, filled. A string that is NOTHING but a hole becomes
-// the value itself with its type — `"{{miles}}"` writes the number 5, not
-// "5" — and a hole inside a sentence is spliced in as text.
+// One template string, bound. A string that is NOTHING but a bound variable
+// becomes the value itself with its type — `"$miles"` writes the number 5, not
+// "5" — and a variable inside a sentence is spliced in as text. `$$` is a
+// dollar sign, and an unbound `$name` is the alias it was.
 let fill = (
   s: string,
+  tool: ToolDef,
   vals: Record<string, unknown>,
   encode: (v: unknown) => string,
 ) => {
-  if (gaps(s, vals)) return ABSENT
+  if (gaps(s, tool, vals)) return ABSENT
   let only = ONLY.exec(s)
-  if (only) return vals[only[1]]
-  return s.replace(HOLE, (_, arg) => encode(vals[arg]))
+  if (only && only[1] in vals) return vals[only[1]]
+  return s.replace(
+    VAR,
+    (whole, arg) => !arg ? '$' : arg in vals ? encode(vals[arg]) : whole,
+  )
 }
 
 let filling = (
   v: unknown,
+  tool: ToolDef,
   vals: Record<string, unknown>,
   encode: (v: unknown) => string,
 ): unknown =>
   typeof v == 'string'
-    ? fill(v, vals, encode)
+    ? fill(v, tool, vals, encode)
     : Array.isArray(v)
-    ? v.map((one) => filling(one, vals, encode)).filter((one) => one !== ABSENT)
+    ? v.map((one) => filling(one, tool, vals, encode))
+      .filter((one) => one !== ABSENT)
     : object(v)
     ? Object.fromEntries(
       Object.entries(v)
-        .map(([k, one]) => [k, filling(one, vals, encode)])
+        .map(([k, one]) => [k, filling(one, tool, vals, encode)])
         .filter(([, one]) => one !== ABSENT),
     )
     : v
@@ -363,10 +421,12 @@ let dropped = (v: unknown, drop: string[]): unknown =>
 // One `&`-clause of a filter line, or absent when the argument it asks about
 // is. A value is percent-encoded — a filter line is a query string, and a
 // title with an `&` in it would otherwise read as the next filter.
-let clause = (s: string, vals: Record<string, unknown>) =>
-  gaps(s, vals)
-    ? ABSENT
-    : s.replace(HOLE, (_, arg) => encodeURIComponent(String(vals[arg])))
+let clause = (s: string, tool: ToolDef, vals: Record<string, unknown>) =>
+  gaps(s, tool, vals) ? ABSENT : s.replace(
+    VAR,
+    (whole, arg) =>
+      !arg ? '$' : arg in vals ? encodeURIComponent(String(vals[arg])) : whole,
+  )
 
 // The act this call makes: the bundle to write, or the filter line to read,
 // with the caller's arguments in it. A clause whose argument the caller left
@@ -377,20 +437,22 @@ export let filled = (
 ): { apply?: unknown; query?: string } => {
   let vals = args(tool, sent)
   if (tool.query != null) {
-    // A query that is nothing but a hole is a whole filter line passed
+    // A query that is nothing but one variable is a whole filter line passed
     // through, so it keeps its `&`s rather than being read as one clause.
     let only = ONLY.exec(tool.query)
-    if (only) return { query: String(vals[only[1]] ?? '') }
+    if (only && only[1] in tool.input) {
+      return { query: String(vals[only[1]] ?? '') }
+    }
     return {
       query: tool.query.split('&')
-        .map((one) => clause(one, vals))
+        .map((one) => clause(one, tool, vals))
         .filter((one) => one !== ABSENT && one !== '')
         .join('&'),
     }
   }
   return {
     apply: dropped(
-      filling(tool.apply, vals, (v) => String(v)),
+      filling(tool.apply, tool, vals, (v) => String(v)),
       tool.drop ?? [],
     ),
   }

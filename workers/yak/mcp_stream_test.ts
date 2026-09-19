@@ -175,7 +175,7 @@ slow(
               log_run: {
                 description: 'Log a run',
                 input: { miles: 'number' },
-                apply: { jog: { miles: '{{miles}}' } },
+                apply: { jog: { miles: '$miles' } },
               },
             }),
           },
@@ -228,7 +228,7 @@ slow(
           log_walk: {
             description: 'Write a walk',
             input: { text: 'text' },
-            apply: { walk: { text: '{{text}}' } },
+            apply: { walk: { text: '$text' } },
             ...(view ? { view } : {}),
           },
         })

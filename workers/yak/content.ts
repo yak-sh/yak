@@ -129,7 +129,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'tools',
     'title': 'Commands of your own',
     'description':
-      "tools.json, so the person's agent can act on an app with no page open: an entry's description, its input types and {{arg}} holes, the apply and query acts, what a deploy refuses, the view an answer draws itself in, and how commands and command carry them.",
+      "tools.json, so the person's agent can act on an app with no page open: an entry's description, its input types and $var bindings, the apply and query acts, what a deploy refuses, the view an answer draws itself in, and how commands and command carry them.",
     'brief': 'commands of the app, for an agent',
   },
 }

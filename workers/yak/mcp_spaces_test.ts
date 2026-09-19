@@ -400,7 +400,7 @@ slow('an app goes to the trash, and app_restore brings it back', async () => {
             log_note: {
               description: 'Write a note',
               input: { at: 'text' },
-              apply: { note: { at: '{{at}}' } },
+              apply: { note: { at: '$at' } },
             },
           }),
         },
@@ -522,7 +522,7 @@ slow(
               log_note: {
                 description: 'Write a note',
                 input: { at: 'text' },
-                apply: { note: { at: '{{at}}' } },
+                apply: { note: { at: '$at' } },
               },
             }),
           },

@@ -365,7 +365,7 @@ slow('an app says what it holds, and keeps notes about itself', async () => {
             add: {
               description: 'Write a recipe down',
               input: { title: 'text' },
-              apply: { doc: { title: '{{title}}' }, recipe: {} },
+              apply: { doc: { title: '$title' }, recipe: {} },
             },
           }),
         },

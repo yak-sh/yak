@@ -48,8 +48,8 @@ let plural = (word: string) =>
 let means = (schema: PropSchema) =>
   schema.description ? `: ${schema.description.replace(/\.$/, '')}` : ''
 
-let holes = (cols: Record<string, PropType>) =>
-  Object.fromEntries(Object.keys(cols).map((col) => [col, `{{${col}}}`]))
+let bound = (cols: Record<string, PropType>) =>
+  Object.fromEntries(Object.keys(cols).map((col) => [col, `$${col}`]))
 
 // Writing one: a title, a body, a name to find it by later, and the kind's own
 // columns. Only the title is required — an agent writes what it was told and
@@ -57,9 +57,9 @@ let holes = (cols: Record<string, PropType>) =>
 // column nobody named is dropped from the bundle rather than written as the
 // word `undefined` (store/tools.ts `filled`).
 //
-// A kind spelling a column `title` or `body` of its own shares the hole with
-// `doc`: one argument, written both places, which is what a person asking for
-// "the title" means either way.
+// A kind spelling a column `title` or `body` of its own shares the variable
+// with `doc`: one argument, written both places, which is what a person asking
+// for "the title" means either way.
 let add = (kind: string, at: string, schema: PropSchema): ToolDef => {
   let cols = colsOf(schema)
   return {
@@ -69,15 +69,15 @@ let add = (kind: string, at: string, schema: PropSchema): ToolDef => {
     // The kind's own component stays even when nobody named a column — wearing
     // it is what makes the row a recipe, and `find_recipe` asks for exactly
     // that. A nameless alias is the other way: half a sentence, refused by
-    // @yaks/key, so it goes with its hole.
+    // @yaks/key, so it goes with its variable.
     drop: ['alias'],
     apply: {
       entity: { eid: `$${kind}` },
-      doc: { title: '{{title}}', body: '{{body}}' },
+      doc: { title: '$title', body: '$body' },
       // A name the row answers to afterwards (@yaks/alias), so a later call
       // reaches it without having kept the eid.
-      alias: { name: '{{alias}}' },
-      [kind]: holes(cols),
+      alias: { name: '$alias' },
+      [kind]: bound(cols),
     },
   }
 }
@@ -96,9 +96,9 @@ let find = (kind: string, at: string, schema: PropSchema): ToolDef => {
     query: [
       `.${kind}!`,
       '.doc?',
-      '{{words}}',
-      ...Object.keys(cols).map((col) => `.${kind}.${col}={{${col}}}`),
-      'limit={{limit}}',
+      '$words',
+      ...Object.keys(cols).map((col) => `.${kind}.${col}=$${col}`),
+      'limit=$limit',
     ].join('&'),
   }
 }

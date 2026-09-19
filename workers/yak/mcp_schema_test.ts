@@ -38,7 +38,7 @@ slow('an app declares its own commands, and command runs them', async () => {
               input: { who: 'text', miles: 'number' },
               apply: {
                 entity: { eid: '$run' },
-                jog: { who: '{{who}}', miles: '{{miles}}' },
+                jog: { who: '$who', miles: '$miles' },
               },
             },
             leaderboard: {
@@ -226,12 +226,12 @@ slow('an app declares its own commands, and command runs them', async () => {
       op: 'write',
       path: 'tools.json',
       content: '{"bad":{"description":"x","input":{},"apply":' +
-        '{"jog":{"who":"{{who}}"}},"screen":"index.html"}}',
+        '{"jog":{"who":"$who"}},"screen":"index.html"}}',
     })
     let why = (await assertRejects(() => agent.tool('app_deploy', app), Error))
       .message
     assertStringIncludes(why, 'bad: screen — a tool says')
-    assertStringIncludes(why, 'bad: {{who}} names no input')
+    assertStringIncludes(why, 'bad: $who names no input')
     // And a view naming a page nobody deployed: the store holds the words,
     // the app's files hold the pages, so the deploy is where that is caught.
     await agent.tool('app_files', {
@@ -373,7 +373,7 @@ slow('a kind an app declares is two commands, with no tools.json', async () => {
           input: { title: 'text' },
           apply: {
             entity: { eid: '$r' },
-            doc: { title: '{{title}}' },
+            doc: { title: '$title' },
             recipe: { cuisine: 'house' },
           },
         },
@@ -417,7 +417,7 @@ slow(
           [name]: {
             description: `Write a ${comp}`,
             input: { text: 'text' },
-            apply: { [comp]: { text: '{{text}}' } },
+            apply: { [comp]: { text: '$text' } },
           },
         })
       let made = async (
@@ -533,7 +533,7 @@ slow(
           log_run: {
             description: 'Write a jog',
             input: { text: 'text' },
-            apply: { jog: { text: '{{text}}' } },
+            apply: { jog: { text: '$text' } },
           },
           jogs: { description: 'Every jog', input: {}, query: '.jog!' },
         }),

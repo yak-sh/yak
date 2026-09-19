@@ -468,11 +468,11 @@ without a page open. They go in a `tools.json` at the app's root, beside
         "description": "Log a run for the club leaderboard",
         "input": { "who": "text", "miles": "number" },
         "apply": { "entity": { "eid": "$run" },
-                   "jog": { "who": "{{who}}", "miles": "{{miles}}" } } },
+                   "jog": { "who": "$who", "miles": "$miles" } } },
       "leaderboard": {
         "description": "Every run since a date",
         "input": { "since": "time" },
-        "query": ".jog!&.created.at>={{since}}" } }
+        "query": ".jog!&.created.at>=$since" } }
 
 After the deploy those are commands of `jeff/runs` — `log_run` and
 `leaderboard`, under their own names, listed for the person and for everyone
@@ -490,11 +490,12 @@ an `input` of arguments typed like a component's columns (`text`, `number`,
   the page.
 - `query` — a filter line, answered as the same listing `query()` gets.
 
-`{{arg}}` is a hole, filled from the call's arguments. A string that is nothing
-but a hole keeps the argument's own type, so `"{{miles}}"` writes the number; a
-hole inside a sentence is spliced in as text. A hole naming an argument the
-`input` never declared is refused at deploy, with everything else wrong in the
-file, in one sentence — nothing is planted until the whole manifest reads.
+`$arg` is a variable, bound from the call's arguments. A string that is nothing
+but a bound variable keeps the argument's own type, so `"$miles"` writes the
+number; a hole inside a sentence is spliced in as text. A hole naming an
+argument the `input` never declared is refused at deploy, with everything else
+wrong in the file, in one sentence — nothing is planted until the whole manifest
+reads.
 
 A command is a template, never code: the act goes through the app's own doors as
 the person calling it, so the app's `access` decides it, `created.by` names
@@ -509,7 +510,7 @@ and deploy the page with everything else:
 
     "leaderboard": { "description": "Every run since a date",
                      "input": { "since": "time" },
-                     "query": ".jog!&.created.at>={{since}}",
+                     "query": ".jog!&.created.at>=$since",
                      "view": "leaderboard.html" }
 
 The page gets the command's answer over the host's own postMessage protocol: say

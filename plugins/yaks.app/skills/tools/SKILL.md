@@ -1,6 +1,6 @@
 ---
 name: tools
-description: "Commands of your own (yaks.app). tools.json, so the person's agent can act on an app with no page open: an entry's description, its input types and {{arg}} holes, the apply and query acts, what a deploy refuses, the view an answer draws itself in, and how commands and command carry them."
+description: "Commands of your own (yaks.app). tools.json, so the person's agent can act on an app with no page open: an entry's description, its input types and $var bindings, the apply and query acts, what a deploy refuses, the view an answer draws itself in, and how commands and command carry them."
 ---
 
 # Commands of your own
@@ -8,7 +8,7 @@ description: "Commands of your own (yaks.app). tools.json, so the person's agent
 An app's pages need somebody looking at them. Its commands do not. A
 `tools.json` (or `tools.yml`) beside `index.html` gives the person's agent verbs
 of the app's own — log a run, read the leaderboard, close a shift — with nothing
-open. This page is that file: what an entry says, how `{{arg}}` holes are filled
+open. This page is that file: what an entry says, how `$var` variables are bound
 and typed, the two acts, what a deploy refuses, the page a command's answer
 draws itself in, and how `commands` and `command` carry the lot.
 
@@ -73,7 +73,7 @@ to a kind is an argument added to its two commands.
         "description": "Log a run for the club leaderboard",
         "input": { "who": "text", "miles": "number" },
         "apply": { "entity": { "eid": "$run" },
-                   "jog": { "who": "{{who}}", "miles": "{{miles}}" } } } }
+                   "jog": { "who": "$who", "miles": "$miles" } } } }
 
 The manifest is replaced whole on every deploy — a declaration holds no rows, so
 there is nothing to migrate; delete `tools.json` and the next deploy leaves the
@@ -175,11 +175,11 @@ a `time` argument says it wants something like 2026-09-01 or
 2026-09-01T10:00:00Z.
 
 **Every declared argument is required.** There are no optional arguments and no
-defaults: a hole with nothing to fill it would splice the word `undefined` into
-your template. If something is genuinely optional, that is two commands. (The
-two a kind is worth are generated rather than written, so those do let you leave
-an argument out — nobody's template is surprised when a clause drops out of one,
-and `commands` marks them with a `?`.)
+defaults: a variable with nothing to bind it would splice the word `undefined`
+into your template. If something is genuinely optional, that is two commands.
+(The two a kind is worth are generated rather than written, so those do let you
+leave an argument out — nobody's template is surprised when a clause drops out
+of one, and `commands` marks them with a `?`.)
 
 An argument arrives as whatever the model sent and is read under the type it was
 declared as: `"5"` for a `number` becomes `5`, `"true"` for a `bool` becomes
@@ -190,8 +190,8 @@ declared as: `"5"` for a `number` becomes `5`, `"true"` for a `bool` becomes
     ready is true or false
     who is text                    ← an object where text was declared
 
-An argument nobody declared is dropped rather than refused — it can fill no
-hole, and refusing it would only teach the model to guess again.
+An argument nobody declared is dropped rather than refused — it binds no
+variable, and refusing it would only teach the model to guess again.
 
 ### The act
 
@@ -200,24 +200,32 @@ Exactly one of `apply` or `query`. Neither, or both, is a refusal at deploy:
     log_run does one thing: apply (a bundle to write) or query (a filter
     line to read)
 
-## Holes
+## Variables
 
-`{{arg}}` anywhere in the template — a key's value, a filter line, an element of
-a list — is filled from the call's arguments.
+`$arg` anywhere in the template — a key's value, a filter line, an element of a
+list — is a VARIABLE, the same one the wire and the query grammar already speak.
+An argument of that name BINDS it, and it becomes that argument's value.
 
-**A string that is nothing but a hole keeps the argument's own type.** So
-`"miles": "{{miles}}"` writes the number `5`, not the string `"5"`, and
-`"ready": "{{ready}}"` writes a boolean. This is the form to use for every
-column that is not text.
+**A string that is nothing but a bound variable keeps the argument's own type.**
+So `"miles": "$miles"` writes the number `5`, not the string `"5"`, and
+`"ready": "$ready"` writes a boolean. This is the form to use for every column
+that is not text.
 
-**A hole inside a sentence is spliced in as text**, so a `title` of "Run by
-{{who}}" writes `Run by Ada`. In a `query`, a spliced value is percent-encoded —
-a filter line is a query string, and a title with an `&` in it would otherwise
-read as the start of the next filter.
+**A variable inside a sentence is spliced in as text**, so a `title` of "Run by
+$who" writes `Run by Ada`. In a `query`, a spliced value is percent-encoded — a
+filter line is a query string, and a title with an `&` in it would otherwise
+read as the start of the next filter. `$$` is a literal dollar sign.
 
-A hole naming an argument the `input` never declared is refused at deploy:
+**A variable nothing binds is an alias** — what `$run` has always meant in a
+bundle: the store mints an entity there and every other `$run` in the same call
+names that one. So one variable does both jobs, and which job it does is whether
+an argument of that name arrived.
 
-    log_run: {{when}} names no input — declare it in log_run.input
+A variable that is neither an argument nor an entity the template writes is a
+typo, refused at deploy:
+
+    log_run: $when names no input and no entity here — declare it in
+    log_run.input
 
 ## The apply act
 
@@ -229,8 +237,8 @@ A new entity every call:
         "description": "Log a run for the club leaderboard",
         "input": { "who": "text", "miles": "number" },
         "apply": { "entity": { "eid": "$run" },
-                   "doc": { "title": "Run by {{who}}" },
-                   "jog": { "who": "{{who}}", "miles": "{{miles}}" } } } }
+                   "doc": { "title": "Run by $who" },
+                   "jog": { "who": "$who", "miles": "$miles" } } } }
 
 Two entities in one call, the second pointing at the first by its alias:
 
@@ -239,21 +247,22 @@ Two entities in one call, the second pointing at the first by its alias:
         "input": { "who": "text", "miles": "number", "note": "text" },
         "apply": [
           { "entity": { "eid": "$run" },
-            "jog": { "who": "{{who}}", "miles": "{{miles}}" } },
-          { "entity": { "eid": "$note" },
-            "doc": { "body": "{{note}}" },
+            "jog": { "who": "$who", "miles": "$miles" } },
+          { "entity": { "eid": "$said" },
+            "doc": { "body": "$note" },
             "comment": { "target": "$run" } } ] } }
 
-An eid can be an argument, so a command may change a row somebody names rather
-than mint one: put `{{run}}` where the eid goes and the bundle patches the
-columns it says, leaving the rest. The wire's own words work in a template
-beside the components — `entity`, `edges`, `tombstone`, `was` — so a command can
-draw an edge or delete a row:
+There is ONE variable space, so an alias and an argument must not share a name:
+`$said` is the alias here because `$note` is already the argument. An eid can be
+an argument, exactly because of that — put a BOUND variable where the eid goes
+and the bundle patches the row that argument names, leaving the rest of it
+alone. The wire's own words work in a template beside the components — `entity`,
+`edges`, `tombstone`, `was` — so a command can draw an edge or delete a row:
 
     { "drop_run": {
         "description": "Delete a run somebody logged by mistake",
         "input": { "run": "text" },
-        "apply": { "entity": { "eid": "{{run}}" }, "tombstone": {} } } }
+        "apply": { "entity": { "eid": "$run" }, "tombstone": {} } } }
 
 The answer names what was written and carries the ids as `structuredContent`, so
 the agent's next call — or a view's redraw — reads the row back by the eid this
@@ -274,11 +283,11 @@ as the same listing a page gets:
       "since": {
         "description": "Runs logged since a date",
         "input": { "since": "time" },
-        "query": ".jog!&.doc?&.created.at>={{since}}" },
+        "query": ".jog!&.doc?&.created.at>=$since" },
       "longest": {
         "description": "Runs over a distance",
         "input": { "miles": "number" },
-        "query": ".jog.miles>={{miles}}&.doc?&limit=20" } }
+        "query": ".jog.miles>=$miles&.doc?&limit=20" } }
 
 A row carries only the components its filter NAMES, so name what the answer must
 show — `.jog!` alone answers no titles, and `&.doc?` asks for one beside it.
@@ -318,7 +327,7 @@ in one sentence** — an agent fixing one problem per deploy stops after the
 second:
 
     tools.json: bad: screen — a tool says description, input, apply, query,
-    view; bad: {{who}} names no input — declare it in bad.input
+    view; bad: $who names no input — declare it in bad.input
 
 Nothing is planted when it refuses: the commands the app had keep answering
 exactly as before. What it checks:
@@ -327,7 +336,7 @@ exactly as before. What it checks:
 - an entry is an object carrying no key but the five, with a `description` that
   is a sentence and an `input` whose every type is one of the five
 - exactly one act; `query` a string, `apply` an object or a list of them
-- every `{{hole}}` names a declared input
+- every `$var` names a declared input, or an entity the template writes
 - every component an `apply` names is one the platform says or this app's
   `vocab.json` declares — "jogg is not a component — declare it in vocab.json,
   or use one the platform already says"
@@ -471,9 +480,9 @@ The run club, with the vocabulary it needs. `vocab.json`:
         "description": "Log a run for the club leaderboard",
         "input": { "who": "text", "miles": "number", "at": "time" },
         "apply": { "entity": { "eid": "$run" },
-                   "doc": { "title": "Run by {{who}}" },
-                   "jog": { "who": "{{who}}", "miles": "{{miles}}",
-                            "at": "{{at}}" } } },
+                   "doc": { "title": "Run by $who" },
+                   "jog": { "who": "$who", "miles": "$miles",
+                            "at": "$at" } } },
       "leaderboard": {
         "description": "Every run logged so far, with who logged it",
         "input": {},
@@ -482,7 +491,7 @@ The run club, with the vocabulary it needs. `vocab.json`:
       "since": {
         "description": "Runs logged since a date",
         "input": { "since": "time" },
-        "query": ".jog!&.created!&.created.at>={{since}}",
+        "query": ".jog!&.created!&.created.at>=$since",
         "view": "leaderboard.html" } }
 
 Two commands share one view — the door lists the page once, and each draws its

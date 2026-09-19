@@ -34,6 +34,7 @@ import { type Host, spaceHost } from './host.ts'
 import { acting, based } from './apps.ts'
 import {
   filled,
+  modern,
   schemaOf,
   type ToolDef,
   type Tools,
@@ -60,7 +61,10 @@ export let toolsOf = async (
     await r.body?.cancel()
     return {}
   }
-  return await r.json() as Tools
+  // What is stored may have been written when `{{arg}}` was the spelling
+  // (store/tools.ts `modern`): an app deployed then goes on working, and its
+  // next deploy writes the manifest in the one spelling there is.
+  return modern(await r.json() as Tools)
 }
 
 // Every app this caller can reach, with the space it is in — the walk both

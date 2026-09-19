@@ -702,7 +702,7 @@ slow('a word the space already has is used where it lives', async () => {
         shelve: {
           description: 'Add a book to the shelf',
           input: { title: 'text' },
-          apply: { book: { title: '{{title}}' } },
+          apply: { book: { title: '$title' } },
         },
         shelf: { description: 'Every book', input: {}, query: '.book!' },
       }),
@@ -724,6 +724,41 @@ slow('a word the space already has is used where it lives', async () => {
       arguments: { name: 'shelf' },
     })
     assertStringIncludes(shelf.content[0].text, 'shelf: 2 rows')
+
+    // The spelling before this one is refused at the door, in the sentence
+    // that says what to write instead. What is already IN a store is upgraded
+    // on the way out (store/tools.ts `modern`), so an app deployed then goes
+    // on working; nothing new arrives in two spellings.
+    await agent.tool('app_files', {
+      app: 'lending',
+      op: 'write',
+      path: 'tools.json',
+      content: JSON.stringify({
+        shelve: {
+          description: 'Add a book to the shelf',
+          input: { title: 'text' },
+          apply: { book: { title: '{{title}}' } },
+        },
+      }),
+    })
+    let old = await assertRejects(() =>
+      agent.tool('app_deploy', { app: 'lending' })
+    ) as Error
+    assertStringIncludes(old.message, '{{arg}} is not a hole any more')
+    await agent.tool('app_files', {
+      app: 'lending',
+      op: 'write',
+      path: 'tools.json',
+      content: JSON.stringify({
+        shelve: {
+          description: 'Add a book to the shelf',
+          input: { title: 'text' },
+          apply: { book: { title: '$title' } },
+        },
+        shelf: { description: 'Every book', input: {}, query: '.book!' },
+      }),
+    })
+    await agent.tool('app_deploy', { app: 'lending' })
 
     // The one refusal: the same column with two types, named with both and
     // with the app the word lives in.
