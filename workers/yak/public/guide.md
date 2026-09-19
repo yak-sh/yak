@@ -342,7 +342,7 @@ taken:
     comment commit completed conflict contains content created cursor decided
     delegates deliver delivered deploy design doc dream edge effect email
     entity entry error exception exit failed favorite feedback fetch filed
-    finding fixer fold fork generation goal grant graph_query headers hook
+    finding fired fixer fold fork generation goal grant graph_query headers hook
     hostname image imported installed key knock layout lease mail member memory
     message meta meter model nofix notified noverify opaque opened order output
     pane patch person persona pin plan process product project prompt proposed

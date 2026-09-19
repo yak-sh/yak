@@ -27,8 +27,8 @@
 // page may read a public app the way anybody's curl already can — the apex's
 // own front page is a client of exactly that door and gets nothing extra.
 //
-// `scheduled` is the second entry point, and the only one no request reaches:
-// a heartbeat for the directory's wake rows and their effect rules.
+// There is no heartbeat: every store owes its own wakes and arms its own
+// Durable Object alarm for them (graph.ts, D-37562).
 //
 // The route table. Above every line of it sits what the PLATFORM owns
 // (route.ts `platform`): the whole `/.well-known/` prefix on our own
@@ -107,7 +107,6 @@ import {
 import * as sell from './sell.ts'
 import { slid } from './session.ts'
 import { metaBreaks, noted, refusal } from './unseen.ts'
-import { scheduled } from './wake.ts'
 
 // THE Store, at every address the binding names — the directory at
 // `yak/platform` and every app's own beside it (T-33815). It carries the DO's
@@ -580,18 +579,6 @@ let router = {
       }
       console.log(`yak: mail refused for ${message.to.split('@').pop()}`)
       await message.setReject(e.message)
-    }
-  },
-
-  // One coarse heartbeat; the directory's rows decide what is due, and the
-  // graph's effect rules decide what the resulting `fired` writes do.
-  async scheduled(event: { scheduledTime: number }, env: Env): Promise<void> {
-    try {
-      await scheduled(event, env)
-    } catch (e) {
-      await report(env, 'wake tick', e).catch((why) =>
-        console.error('yak: could not report', why, 'after', e)
-      )
     }
   },
 }

@@ -64,16 +64,26 @@ let out = (row: Record<string, unknown>) => {
  * Members beyond {@link DurableStorage}: two because the runtime has
  * them and an object may ask: `databaseSize`, how many bytes it holds, and
  * `deleteAll`, the one way to empty it — dropping the tables leaves metadata
- * behind, and an object whose storage is empty ceases to exist. `beneath` is
- * the runtime's own hand rather than the object's. `Symbol.dispose` lets the
- * fixture owner release native allocations without waiting for JS GC.
+ * behind, and an object whose storage is empty ceases to exist. The object's
+ * one ALARM is here for the same reason: an object that schedules its own
+ * return arms it, and a test that drives `alarm()` by hand reads the instant
+ * back off `getAlarm` rather than waiting for a runtime to deliver it.
+ * `beneath` is the runtime's own hand rather than the object's.
+ * `Symbol.dispose` lets the fixture owner release native allocations without
+ * waiting for JS GC.
  */
 export let durable = (): DurableStorage & {
   sql: { databaseSize: number }
   deleteAll(): Promise<void>
+  getAlarm(): Promise<number | null>
+  setAlarm(at: number): Promise<void>
+  deleteAlarm(): Promise<void>
   beneath(query: string): Record<string, unknown>[]
   [Symbol.dispose](): void
 } => {
+  // The one alarm, as the runtime holds it: an instant or nothing, cleared by
+  // the delivery that fires it.
+  let alarm: number | null = null
   let db = new Database(':memory:')
   // sql.exec consumes/reset every row before returning; no cursor escapes.
   // Bound native statements rather than waiting for JS GC to notice their
@@ -185,6 +195,9 @@ export let durable = (): DurableStorage & {
       }
       return Promise.resolve()
     },
+    getAlarm: () => Promise.resolve(alarm),
+    setAlarm: (at: number) => Promise.resolve(void (alarm = at)),
+    deleteAlarm: () => Promise.resolve(void (alarm = null)),
     // A statement run BENEATH the authorizer, which is the runtime's own hand:
     // planting `_cf_KV` and reading it back are both things workerd refuses to
     // an object and does itself. The only door a test has to what every

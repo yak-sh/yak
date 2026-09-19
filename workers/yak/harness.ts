@@ -343,12 +343,17 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
   // restore it was told to wake at and the restart it was asked for, which
   // are the runtime's half of a recovery and not the Store's (recover.ts).
   let recovery = new Map<string, Pitr>()
+  // Each object's own state, by name: its sockets, its recovery, and the one
+  // ALARM it arms for the wakes it holds (graph.ts, D-37562). A test reads the
+  // instant back off it, which is what the runtime would deliver.
+  let states = new Map<string, ReturnType<typeof state>>()
   let object = (name: string) => {
     let held = objects.get(name)
     if (!held) {
       let ctx = ownedState()
       sockets.set(name, ctx.live)
       recovery.set(name, ctx.pitr)
+      states.set(name, ctx)
       objects.set(name, held = new Store(ctx, env))
     }
     return held
@@ -404,6 +409,7 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
     env,
     files,
     object,
+    states,
     sockets,
     builder,
     recovery,

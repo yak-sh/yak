@@ -484,6 +484,12 @@ export let coreDocs: VocabDoc[] = [
   mailDoc,
   keyDoc,
   aliasDoc,
+  // A schedule is every store's word now (D-37562): an app writes `wake{at}`
+  // on anything it means to come back to, its Durable Object arms its own
+  // alarm for the earliest one (graph.ts), and what the firing MEANS is left
+  // to the app's own rules on `fired`. The directory's sweeps are the same
+  // rows in the same shape.
+  wakeDoc,
 ]
 
 // ---- the platform's own store (T-33814) -------------------------------------

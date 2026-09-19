@@ -39,23 +39,25 @@ export let scheduled = (
 ): Promise<Ticked> => tick(graph, event.scheduledTime)
 
 /**
- * Arm a Durable Object for one wake before the next Cron Trigger. An earlier
- * alarm is preserved because the object may hold other wakes. Returns whether
- * this wake needs the alarm; an absent or later `at` leaves it alone.
+ * Arm a Durable Object for one wake. An earlier alarm is preserved because the
+ * object may hold other wakes. Returns whether this wake needs the alarm; an
+ * absent or later `at` leaves it alone.
  *
  * Call on a wake write. In the object's `alarm()` call `tick(graph)` and arm
- * its next pending wake; the heartbeat retries any refused occurrences.
+ * its next pending wake. `before` is a host that ALSO has a heartbeat saying
+ * when that heartbeat is: a wake past it is that beat's to fire rather than
+ * this object's. A host whose alarm is its whole clock leaves it out.
  *
  * ```ts
  * import { arm } from '@yaks/wake/cloudflare'
  *
- * // await arm(ctx.storage, wake, nextHeartbeat)
+ * // await arm(ctx.storage, wake)
  * ```
  */
 export let arm = (
   storage: Alarm,
   wake: Wake,
-  before: number,
+  before = Infinity,
 ): Promise<boolean> => {
   let pending = (arming.get(storage) ?? Promise.resolve()).then(async () => {
     let at = wake.at ? Date.parse(wake.at) : NaN

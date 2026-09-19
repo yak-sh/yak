@@ -1,17 +1,15 @@
-// The platform's clock writes rows in the directory. A Cron Trigger is only
-// the heartbeat that reaches that graph; the schedules and the rules that
-// react to `fired` belong to the plugins. Keeping the hop here makes the same
-// scheduled path available to a Deno stand-in without importing workerd's
-// WorkerEntrypoint from index.ts.
+// The platform's own schedules: the rows the directory is born holding. There
+// is no heartbeat over any of it — every store arms its Durable Object alarm
+// for the earliest wake it owes and fires them itself (graph.ts `tick`), so
+// what is left here is the seeding, the job tag those rows wear, and where a
+// failed job is written down.
 //
 // Seeds are insert-once: a restart must not rewind `at`, erase `fired`, or
 // undo a schedule someone deliberately paused. A new recurring seed starts
-// at its first calendar instant at or after the heartbeat that discovered it.
+// at its first calendar instant at or after the moment it was discovered.
 import { type Graph, Stale } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import { next, span } from '@yaks/wake'
-import type { Scheduled } from '@yaks/wake/cloudflare'
-import { PLATFORM_STORE, storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import type { Wake } from './plugin.ts'
 
@@ -77,20 +75,5 @@ export let reporting = async (
   } catch (error) {
     await reported(env, job, error)
     throw error
-  }
-}
-
-/** Hand one Cloudflare heartbeat to the directory's graph and its rules. */
-export let scheduled = async (event: Scheduled, env: Env): Promise<void> => {
-  let res = await storeOf(env.STORE, PLATFORM_STORE)('/tick', {
-    method: 'POST',
-    body: JSON.stringify({ scheduledTime: event.scheduledTime }),
-  }, { 'x-yak-kernel': '1' })
-  if (!res.ok) throw new Error(`wake: ${res.status}: ${await res.text()}`)
-  let result = await res.json() as {
-    refused: { wake: Wake; error: string }[]
-  }
-  for (let refusal of result.refused) {
-    await reported(env, refusal.wake.entity.eid, refusal.error)
   }
 }

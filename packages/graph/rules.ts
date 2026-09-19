@@ -246,6 +246,13 @@ let raws = (v: Value | null): string[] =>
     ? v.items.flatMap(raws)
     : [...raws(v.lo), ...raws(v.hi)]
 
+// Every component a match NAMES, wherever it names it: the filter reads them,
+// the `+`/`!` halves write and gate them. Which one a rule is about decides
+// whether it is inert in a graph — a store that never heard of `sweep` cannot
+// have a rule about one, and asking is not an error there.
+let words = (f: And): string[] =>
+  f.clauses.flatMap((c) => c.kind == 'pred' && c.path.length ? [c.path[0]] : [])
+
 // Compiled once per rule, per vocabulary. Keyed by the rule OBJECT, so this is
 // a memo rather than a registry — two graphs sharing a plugin share the
 // compilation only while they speak the same vocabulary.
@@ -282,9 +289,11 @@ let compile = (r: Rule, v: Vocab): Ready => {
   } catch (e) {
     // A rule about a component this graph does not have is INERT, not an
     // error: the stamp rules ship with the core, and a vocabulary need not
-    // declare `created` at all. A rule whose components all exist and still
-    // will not compile is a mistake, and says so.
-    if (named.every((c) => !!v.comp(c))) throw e
+    // declare `created` at all. Every component it names counts, the ones it
+    // only READS included — one store's schedules are another's unknown word,
+    // and both hold the same rule list. A rule whose components all exist and
+    // still will not compile is a mistake, and says so.
+    if ([...named, ...words(d.filter)].every((c) => !!v.comp(c))) throw e
   }
   cache.set(r, { v, ready })
   return ready

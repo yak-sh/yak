@@ -16,7 +16,6 @@ Deno.test('staging repeats the kernel bindings without production resources', ()
       'containers',
       'ai',
       'assets',
-      'triggers',
       'send_email',
       'version_metadata',
       'cache',

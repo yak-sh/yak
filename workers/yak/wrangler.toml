@@ -60,12 +60,6 @@ invocation_logs = true
 [dev]
 host = "127.0.0.1"
 
-# The wake driver's coarse heartbeat. Five minutes includes the meter's hour
-# and the trash's 04:20 UTC without polling every minute; the directory rows
-# hold those schedules, and effect rules react to their `fired` writes.
-[triggers]
-crons = ["*/5 * * * *"]
-
 # The account whose analytics the meter reads, and whose dispatch namespace an
 # app's worker is uploaded into — the same tag as `account_id` above, which the
 # runtime is never handed. Not a secret: it is in this file.
@@ -456,9 +450,6 @@ STRIPE_PRICE = ""
 [env.staging.observability.logs]
 enabled = true
 invocation_logs = true
-
-[env.staging.triggers]
-crons = ["*/5 * * * *"]
 
 [env.staging.version_metadata]
 binding = "CF_VERSION_METADATA"

@@ -207,16 +207,17 @@ Deno.test('the trash is thirty days, counted in whole days left', () => {
   assertEquals(due({ at: '', by: 'p1' }, then(0)), true)
 })
 
-// The deployed cron is a heartbeat, while the trash row owns its schedule.
-// The heartbeat must include 04:20 so collection keeps its daily instant.
-Deno.test('the heartbeat reaches the trash wake at 04:20 UTC', async () => {
+// The trash row owns its schedule outright: there is no heartbeat to line it
+// up with any more (D-37562), and the instant the directory's alarm is set to
+// is the one this row names.
+Deno.test('the trash wake names 04:20 UTC and nothing coarser rounds it off', async () => {
   let conf = parse(
     await Deno.readTextFile(new URL('./wrangler.toml', import.meta.url)),
-  ) as { triggers: { crons: string[] } }
-  assertEquals(conf.triggers.crons, ['*/5 * * * *'])
+  ) as { triggers?: unknown }
+  assertEquals(conf.triggers, undefined)
   assertEquals(trashPlugin.wakes?.[0].wake.every, DAILY)
   let before = Date.parse('2026-09-07T04:19:00Z')
-  assertEquals(next(conf.triggers.crons[0], before), next(DAILY, before))
+  assertEquals(next(DAILY, before), '2026-09-07T04:20:00.000Z')
 })
 
 Deno.test('the sweep takes the trash that is out of days, and nothing else', () => {
@@ -446,7 +447,7 @@ slow('a space erased: the letter, the act, and the name back', async () => {
   }
 })
 
-// The daily sweep (wrangler.toml `[triggers] crons`, index.ts `scheduled`):
+// The daily sweep (the `yak-trash` wake row, fired by the directory's alarm):
 // what it takes, and — the half that matters — what it leaves. An app inside
 // its thirty days is a person's app that they can still have back, and a sweep
 // that took one early would be the bug this whole feature exists to prevent.

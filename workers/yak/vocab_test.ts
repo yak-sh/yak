@@ -249,6 +249,10 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       'deliver',
       'delivered',
       'bounced',
+      // @yaks/wake — a schedule any entity may wear, fired by the object's own
+      // alarm (D-37562)
+      'wake',
+      'fired',
       // the app's own
       'recipe',
       'cooked',
@@ -314,7 +318,7 @@ Deno.test('none of the fleet vocabulary comes with it', () => {
   // reach for — `task` and its marks among them. What must not come with it is
   // the fleet's own working life: its sessions, its canvas, its memories.
   for (
-    let word of ['session', 'canvas', 'wake', 'persona', 'memory', 'claim']
+    let word of ['session', 'canvas', 'persona', 'memory', 'claim']
   ) {
     assert(fleet.includes(word), `the fleet no longer plants ${word}`)
     assert(!mine.has(word), `an app's store still plants ${word}`)

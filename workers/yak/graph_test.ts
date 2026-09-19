@@ -482,6 +482,10 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       'deliver',
       'delivered',
       'bounced',
+      // @yaks/wake — the app's own schedules, which its own Durable Object
+      // alarm fires (D-37562)
+      'wake',
+      'fired',
       // the app's own
       'recipe',
     ].sort(),

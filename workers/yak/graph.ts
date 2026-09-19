@@ -132,8 +132,8 @@ import {
 } from '@yaks/member'
 import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import { wakes } from '@yaks/wake'
-import { scheduled } from '@yaks/wake/cloudflare'
+import { soonest, tick, type Ticked, wakes } from '@yaks/wake'
+import { type Alarm, arm } from '@yaks/wake/cloudflare'
 import { named, type Row } from './listing.ts'
 import { effected, rulesOf, wakesOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
@@ -240,6 +240,13 @@ export type State = Hibernation & {
     getCurrentBookmark?(): Promise<string>
     getBookmarkForTime?(at: number | Date): Promise<string>
     onNextSessionRestoreBookmark?(bookmark: string): Promise<string>
+    // The object's ONE alarm, which is this store's whole clock (D-37562):
+    // every wake row it holds is owed at an instant, and the earliest of them
+    // is what the runtime is asked to come back for. Optional like the
+    // bookmarks — a stand-in that schedules nothing need not offer them, and a
+    // store without them simply never wakes itself.
+    getAlarm?(): Promise<number | null>
+    setAlarm?(at: number): Promise<void>
   }
   // The runtime's own gate: work started here finishes before any request is
   // delivered, which is what makes a one-pass migration safe to start from the
@@ -276,6 +283,7 @@ type Word =
   | 'mail'
   | 'schema'
   | 'migrated'
+  | 'wakes'
 let KV = `create table if not exists yak_kv (
     k text primary key,
     v text not null
@@ -426,10 +434,24 @@ export class Store {
   #refused: string | null = null
   #failure: Unreconciled | null = null
   #reporting: Promise<void> | null = null
+  // This object's one alarm (D-37562), or null where the runtime under it has
+  // none. One adapter for the incarnation: `arm` serializes its read-compare-
+  // write per storage object, so two wakes arriving together cannot leave the
+  // later one holding the alarm.
+  #alarm: Alarm | null = null
+  // The schedules this object was born with, planted once (`#sowing`).
+  #sowing: Promise<void> | null = null
 
   constructor(ctx: State, bind: Bindings = {}) {
     this.#ctx = ctx
     this.#bind = bind
+    let { getAlarm, setAlarm } = ctx.storage
+    if (getAlarm && setAlarm) {
+      this.#alarm = {
+        getAlarm: () => getAlarm.call(ctx.storage),
+        setAlarm: (at) => setAlarm.call(ctx.storage, at),
+      }
+    }
     try {
       this.#start()
     } catch (e) {
@@ -594,7 +616,7 @@ export class Store {
         keys(vocab),
         aliases(vocab),
         blobs(vocab, bytes),
-        ...(meta ? [wakes()] : []),
+        wakes(),
         fx,
         // Before the guard, because it is what the guard reads.
         this.#vouching,
@@ -635,6 +657,18 @@ export class Store {
     // there is today (outbox.ts). The store hands over what only it knows —
     // its bindings, whether it is the platform's own, the app it holds and the
     // address it writes from — and knows nothing of what is registered.
+    // The object's own clock (D-37562). A `wake` row says when something is
+    // owed; the runtime's one alarm is how this object comes back for it. A
+    // write that moves a wake arms the alarm, `alarm()` fires what is due, and
+    // the tick's own write of the next instant arms it again — so a store
+    // holding no schedule sleeps, and one holding a schedule needs no
+    // heartbeat to keep it. Every store has this, the directory included: its
+    // sweeps are wake rows like anybody's.
+    fx.on('wake', {
+      doc: 'arm this object for the wake a write just moved',
+      created: (e) => this.#arming(e.comp?.at as string),
+      changed: { at: (e) => this.#arming(e.comp?.at as string) },
+    })
     effected(PLUGINS, fx, {
       env: this.#bind,
       meta,
@@ -987,6 +1021,101 @@ export class Store {
     this.#graph.storage.tx((tx) => tx.patch(bundles))
   }
 
+  // ---- the clock (D-37562) -------------------------------------------------
+  //
+  // Every store keeps its own schedules and its own alarm. There is no
+  // heartbeat over the platform: a Cron Trigger could only reach ONE object,
+  // which made every app's schedules the directory's business and woke the
+  // directory twelve times an hour to find nothing owed. A wake row is owed at
+  // an instant, the runtime can be asked to come back at an instant, and that
+  // is the whole mechanism.
+
+  // How long a REFUSED occurrence waits. A refusal leaves its wake due — a
+  // precondition moved, a rule said no — and nothing else will touch that row,
+  // so the object comes back for it rather than dropping it. A minute is the
+  // same floor @yaks/wake's Deno loop caps its sleep at.
+  static RETRY = 60_000
+
+  // Point the alarm at the instant a wake names. `arm` keeps an alarm already
+  // set for something sooner, since the object has one alarm and may hold many
+  // wakes, and it serializes the read-compare-write per storage it is handed —
+  // so the adapter below is built once and kept.
+  #arming = (at: string | null | undefined): Promise<unknown> =>
+    this.#alarm && at ? arm(this.#alarm, { at }) : Promise.resolve()
+
+  // The next instant this object owes, off its own rows: what a tick arms
+  // after it has fired, and what a request re-arms when the runtime lost the
+  // alarm. `soonest` reads the earliest wake still ahead.
+  #owed = async (now: number, floor = Infinity): Promise<void> => {
+    let next = await soonest(this.#graph, now)
+    let at = Math.min(next ?? Infinity, floor)
+    if (Number.isFinite(at)) await this.#arming(new Date(at).toISOString())
+  }
+
+  /**
+   * Fire the wakes due at `now`, then come back for the next one. The
+   * runtime's own `alarm()` is this at the present instant; a caller naming
+   * the instant is how a test reads a schedule without waiting for one.
+   *
+   * A refused occurrence stays due and its reason goes to this store's break
+   * log — the directory's for the platform's sweeps, the app's for an app's —
+   * and the alarm is set a minute out so nothing is silently dropped.
+   */
+  async tick(now = Date.now()): Promise<Ticked> {
+    let result = await tick(this.#graph, now)
+    for (let { wake, error } of result.refused) {
+      await this.#broke(`wake ${wake.entity.eid}`, error)
+    }
+    await this.#owed(now, result.refused.length ? now + Store.RETRY : Infinity)
+    return result
+  }
+
+  /** The runtime's clock going off: whatever this object armed itself for. */
+  async alarm(): Promise<void> {
+    if (this.#refused || this.#pending) return
+    await this.tick()
+  }
+
+  // What this object was born owing: the rows its plugins declare — the
+  // directory's sweeps — planted if they are missing, and the alarm set again
+  // if the runtime has none. `seeded` never rewinds a wake somebody moved or
+  // resumes one they paused, and the stamp means a store that already holds
+  // them asks its storage once rather than its graph three times.
+  #sow = async (): Promise<void> => {
+    try {
+      let rows = this.#get('name') == PLATFORM_STORE ? wakesOf(PLUGINS) : []
+      let stamp = sha256(rows.map((r) => r.entity.eid).join('\n'))
+      if (rows.length && this.#get('wakes') != stamp) {
+        await seeded(this.#graph, rows, Date.now())
+        this.#put('wakes', stamp)
+      }
+      if (this.#alarm && !(await this.#alarm.getAlarm())) {
+        await this.#owed(Date.now())
+      }
+    } catch (e) {
+      await this.#broke('wake seed', e)
+    }
+  }
+
+  // A break this object noted about itself, written where it notes an app's
+  // (unseen.ts `noted`): server-owned columns, through the kernel's own door.
+  #broke = async (request: string, error: unknown) => {
+    try {
+      await this.#trust([{
+        entity: { eid: crypto.randomUUID() },
+        exception: {
+          at: new Date().toISOString(),
+          request,
+          version: null,
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack ?? '' : '',
+        },
+      }], null)
+    } catch (why) {
+      console.error('store: could not note', request, why, 'after', error)
+    }
+  }
+
   // ---- the passes (T-33809, T-34227) ---------------------------------------
 
   /** The migrations, at most once per object however many requests arrive at
@@ -1265,27 +1394,14 @@ export class Store {
     this.#learn(request)
     if (this.#refused) return this.#stalled(request)
     this.#live.wake()
+    // The clock, started. A wake row is owed at an instant and the runtime's
+    // alarm is how this object comes back for it — but an object that has
+    // never been asked anything is not running, so a REQUEST is the moment its
+    // schedules are planted and a lost alarm is set again. Once per
+    // incarnation, and the stamp keeps it to one read after the first.
+    await (this.#sowing ??= this.#sow())
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
-    if (path == '/tick') {
-      if (!kernel || this.#get('name') != PLATFORM_STORE) {
-        return json({ error: 'NotFound', message: 'no route' }, 404)
-      }
-      if (request.method != 'POST') return json({ error: 'Method' }, 405)
-      let event = await request.json() as { scheduledTime: number }
-      if (!Number.isFinite(event.scheduledTime)) {
-        return json({ error: 'scheduledTime must be an instant' }, 400)
-      }
-      await seeded(this.#graph, wakesOf(PLUGINS), event.scheduledTime)
-      let result = await scheduled(this.#graph, event)
-      return json({
-        ...result,
-        refused: result.refused.map(({ wake, error }) => ({
-          wake,
-          error: error instanceof Error ? error.message : String(error),
-        })),
-      })
-    }
     if (path == '/vocab') return this.#vocabDoor(request)
     // The three slots beside the vocabulary: the words this app USES but does
     // not home (T-32728), the tools it declares (T-32685), and what the object
