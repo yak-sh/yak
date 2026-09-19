@@ -807,10 +807,13 @@ export let manuals = declare({
       'what happened. Landing does NOT close the task or release claims — ' +
       'that is your next step (task done <id>; task release <id>). The ' +
       'worktree is unlocked but kept — a later landing (or `task probes ' +
-      '--reap`) removes it once nobody is inside.',
+      '--reap`) removes it once nobody is inside. Landing is REFUSED when the ' +
+      'rebase left a file at content no commit on the branch wrote — the ' +
+      'rebase artifact that silently reverts the base; name those files with ' +
+      '--allow-revert=a,b when the revert is deliberate.',
     root: true,
     args: [],
-    opts: [],
+    opts: [value('--allow-revert', { name: 'paths', test: /.+/ })],
   },
   commit: {
     about: 'record a git commit on a task — structure, not a comment',

@@ -1542,8 +1542,11 @@ let sessionsOf = (all: Row[]) =>
 // where an operator reads the reasons first. This tree is never a candidate
 // while the verb runs in it: judgeTree spares a worktree with a process
 // inside, and that process is us.
-let land = async () => {
-  let outcome = await landTree()
+let land = async (got: Got) => {
+  let outcome = await landTree({
+    // `--allow-revert=a,b` — the files whose rewind the agent vouches for.
+    allow: (got.opts['--allow-revert'] ?? '').split(',').filter(Boolean),
+  })
   // The base moved: land.ts already rebased and told the agent what to do.
   if (!('landed' in outcome)) return
   console.log(
@@ -3654,7 +3657,7 @@ export let verbs = bind({
   forget: del,
   spawn,
   verify,
-  land: () => land(),
+  land,
   comment,
   commit: landed,
   meta: (got) => colon(undefined, ['meta', got.body ?? '']),

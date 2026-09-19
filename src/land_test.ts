@@ -5,7 +5,7 @@
 // needed except the two publish cases, which wire a real bare upstream.
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { land } from './land.ts'
+import { land, reverts } from './land.ts'
 import { slow } from './testing.ts'
 
 let command = async (cwd: string, ...args: string[]) => {
@@ -407,6 +407,138 @@ slow('a transiently failing push publishes on the retry', async () => {
     assertEquals(pushes, 2)
     assertEquals(warned, '')
     assertEquals(await command(bare, 'rev-parse', 'main'), outcome.landed)
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
+// The guard's two questions, asked of a stubbed git so the fast tier can own
+// them: what the branch's commits touch, and what the base's history held.
+// `reverts` takes its git as an argument for exactly this seam.
+let asking = (r: {
+  changed: string[]
+  touched: string[]
+  past: [string, string][]
+  head: [string, string][]
+}) =>
+(args: string[]) => {
+  let said = args.join(' ')
+  let out = (ls: string[]) => Promise.resolve(ls.map((l) => `${l}\n`).join(''))
+  if (said.startsWith('diff --name-only')) return out(r.changed)
+  if (said.startsWith('log --format= --name-only')) return out(r.touched)
+  if (said.includes('--raw')) {
+    let nil = '0'.repeat(40)
+    return out(r.past.map(([f, b]) => `:100644 100644 ${nil} ${b} M\t${f}`))
+  }
+  if (said.startsWith('ls-tree')) {
+    return out(r.head.map(([f, b]) => `100644 blob ${b}\t${f}`))
+  }
+  throw new Error(`the guard asked something unexpected: ${said}`)
+}
+
+Deno.test('a clean rebase reverts nothing', async () => {
+  let found = await reverts(
+    asking({
+      changed: ['a.ts'],
+      touched: ['a.ts'],
+      past: [['a.ts', 'old']],
+      head: [['a.ts', 'new']],
+    }),
+    'main',
+  )
+  assertEquals(found, [])
+})
+
+Deno.test("a file no branch commit touches is the rebase's own doing", async () => {
+  let found = await reverts(
+    asking({
+      changed: ['a.ts', 'merged.ts'],
+      touched: ['a.ts'],
+      past: [['a.ts', 'old']],
+      head: [['a.ts', 'new'], ['merged.ts', 'x']],
+    }),
+    'main',
+  )
+  assertEquals(found, [{ file: 'merged.ts', rewound: false }])
+})
+
+Deno.test('a blob the base already moved past is a rewind', async () => {
+  let found = await reverts(
+    asking({
+      changed: ['a.ts'],
+      touched: ['a.ts'],
+      past: [['a.ts', 'one'], ['a.ts', 'two']],
+      head: [['a.ts', 'one']],
+    }),
+    'main',
+  )
+  assertEquals(found, [{ file: 'a.ts', rewound: true }])
+})
+
+// 2d63045b's shape, reconstructed: a stale branch conflicts with a base that
+// moved, and the conflict is resolved by taking the branch's side wholesale —
+// which puts the file back to its pre-base content and undoes the base commit
+// in between. The gate cannot see it (the tests rewind with the code); land
+// must.
+let stale = async (r: Repo) => {
+  Deno.writeTextFileSync(`${r.tree}/base.txt`, 'branch\n')
+  Deno.writeTextFileSync(`${r.tree}/mine.txt`, 'mine\n')
+  await command(r.tree, 'add', '-A')
+  await command(r.tree, 'commit', '-m', 'the branch edits base.txt too')
+  await rivalLands(r, 'base.txt', 'rival\n')
+  let first = await land({ cwd: r.tree, write: () => {} })
+  assertEquals(first, { diverged: true, conflict: true })
+  // The resolution that did the damage: the branch's side, wholesale.
+  Deno.writeTextFileSync(`${r.tree}/base.txt`, 'base\n')
+  await command(r.tree, 'add', 'base.txt')
+  await command(r.tree, '-c', 'core.editor=true', 'rebase', '--continue')
+}
+
+slow('land refuses a rebase that rewound a file past the base', async () => {
+  let r = await setup()
+  try {
+    await stale(r)
+    let e = await assertRejects(() => land({ cwd: r.tree, write: () => {} }))
+    let said = (e as Error).message
+    assert(said.includes('base.txt'), said)
+    assert(said.includes('--allow-revert=base.txt'), said)
+    // Refused BEFORE the merge: the base still holds the rival's content.
+    assertEquals(await command(r.repo, 'show', 'main:base.txt'), 'rival')
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
+slow('--allow-revert lands the rewind, with a warning', async () => {
+  let r = await setup()
+  try {
+    await stale(r)
+    let warned: string[] = []
+    let outcome = await land({
+      cwd: r.tree,
+      allow: ['base.txt'],
+      write: (text, error) => error && warned.push(text),
+    })
+    assert('landed' in outcome)
+    assert(warned.some((w) => w.includes('--allow-revert')), warned.join('|'))
+    assertEquals(await command(r.repo, 'show', 'main:base.txt'), 'base')
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
+slow('a clean rebase still lands', async () => {
+  let r = await setup()
+  try {
+    await rivalLands(r, 'other.txt', 'rival\n')
+    let first = await land({ cwd: r.tree, write: () => {} })
+    assertEquals(first, { diverged: true, conflict: false })
+    let outcome = await land({ cwd: r.tree, write: () => {} })
+    assert('landed' in outcome)
+    assertEquals(
+      await command(r.repo, 'show', 'main:candidate.txt'),
+      'candidate',
+    )
   } finally {
     Deno.removeSync(r.root, { recursive: true })
   }

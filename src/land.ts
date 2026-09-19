@@ -19,6 +19,11 @@
 //     verbatim. The agent re-gates if needed and runs `task land` again, which
 //     then fast-forwards cleanly.
 //
+// A landing is also GUARDED: before the fast-forward, land refuses a branch
+// whose files carry content no commit on it wrote — the rebase artifact that
+// quietly reverts the base (see `reverts` below). `--allow-revert` names the
+// files whose rewind is deliberate.
+//
 // ff-only is the compare-and-swap that serializes concurrent landers: a lander
 // whose base moved is refused, rebases, and comes back. Landing means the
 // SHARED CHECKOUT — the tree the server runs from; pushing to a remote only
@@ -73,6 +78,9 @@ type LandOps = {
   cwd?: string
   run?: Run
   write?: (text: string, error?: boolean) => void
+  // Files whose rewind is deliberate (`--allow-revert=a,b`): warned about,
+  // then landed.
+  allow?: string[]
 }
 
 let defaultWrite = (text: string, error = false) => {
@@ -83,6 +91,128 @@ let defaultWrite = (text: string, error = false) => {
 let message = (label: string, r: Ran) => {
   let detail = (r.err || r.out).trim().split('\n').find(Boolean)
   return `${label} failed with exit ${r.code}${detail ? `: ${detail}` : ''}`
+}
+
+// A rebase can leave content no commit on the branch ever wrote. Resolving a
+// conflict by taking the branch's side wholesale rewinds a file to what the
+// branch forked from, undoing every base commit in between — 2d63045b took 22
+// files back to their pre-base content, and the gate passed because the tests
+// rewound with the code. Two questions catch that, both asked of the rebased
+// branch in the instant before it lands:
+//
+//   - which files does `base..HEAD` change that NO commit on the branch
+//     touches? After a clean rebase that set is empty; anything in it is the
+//     rebase's own doing.
+//   - for the rest, does the landing blob equal a blob that path already HELD
+//     earlier in the base's history? Content the base moved past and the
+//     branch moves back is a revert nobody wrote.
+//
+// The second question exists because a rebase rewrites the branch's commits:
+// afterwards a reverting resolution sits INSIDE a branch commit's file list,
+// where the first question cannot see it.
+export type Revert = { file: string; rewound: boolean }
+
+let lines = (out: string) => out.split('\n').filter(Boolean)
+
+// How far back down the base the blob scan looks — the base's recent history,
+// not its whole life.
+let DEPTH = 200
+
+// `git log --raw` names the blob each commit LEFT at a path
+// (`:mode mode src dst status\tpath`), so ONE walk of the base's recent
+// history yields every content each path has held — no per-file, per-commit
+// `rev-parse`. Merge commits show no raw lines and contribute nothing, which
+// is right: a merge introduces no content of its own. The base TIP rides along
+// harmlessly — its blob for a path IS `base:path`, which a file in the
+// `base...HEAD` diff cannot equal.
+let held = (log: string) => {
+  let past = new Map<string, Set<string>>()
+  for (let line of lines(log)) {
+    let m = /^:\S+ \S+ \S+ (\S+) \S+\t(.+)$/.exec(line)
+    if (!m) continue
+    if (!past.has(m[2])) past.set(m[2], new Set())
+    past.get(m[2])!.add(m[1])
+  }
+  return past
+}
+
+// path → blob for the whole landing tree, in one `ls-tree -r`: cheaper than a
+// `rev-parse` per file, and immune to a pathspec longer than argv allows.
+let blobs = (out: string) =>
+  new Map(
+    lines(out).flatMap((l) => {
+      let m = /^\S+ blob (\S+)\t(.+)$/.exec(l)
+      return m ? [[m[2], m[1]] as [string, string]] : []
+    }),
+  )
+
+// Every file this landing would change that the branch did not author. Asked
+// only when the base is an ancestor of the branch, so `base...HEAD` is exactly
+// the landing diff.
+export let reverts = async (
+  ask: (args: string[]) => Promise<string>,
+  base: string,
+): Promise<Revert[]> => {
+  let changed = lines(await ask(['diff', '--name-only', `${base}...HEAD`]))
+  if (!changed.length) return []
+  let touched = new Set(
+    lines(await ask(['log', '--format=', '--name-only', `${base}..HEAD`])),
+  )
+  let found = changed.filter((f) => !touched.has(f))
+    .map((file) => ({ file, rewound: false }))
+  let rest = changed.filter((f) => touched.has(f))
+  if (!rest.length) return found
+  let past = held(
+    await ask([
+      'log',
+      `-${DEPTH}`,
+      '--format=',
+      '--raw',
+      // Full object names: `--raw` abbreviates by default, and the tree these
+      // are compared against does not.
+      '--no-abbrev',
+      '--no-renames',
+      base,
+    ]),
+  )
+  let now = blobs(await ask(['ls-tree', '-r', 'HEAD']))
+  for (let file of rest) {
+    let blob = now.get(file)
+    // A file the branch DELETES has no landing blob and nothing to rewind to.
+    if (blob && past.get(file)?.has(blob)) found.push({ file, rewound: true })
+  }
+  return found
+}
+
+let why = (r: Revert, base: string, at: string) =>
+  `  ${r.file} — ${
+    r.rewound
+      ? `lands at content ${base} already moved past`
+      : `changed by the rebase, not by any commit on the branch`
+  }${at ? `; ${base} last touched it at ${at}` : ''}`
+
+// The refusal names the files and hands over the pointers — the base commit
+// that last touched each, the diff to read, and the spelling that lands anyway.
+let refusal = async (
+  ask: (args: string[]) => Promise<string>,
+  base: string,
+  found: Revert[],
+) => {
+  let at = await Promise.all(
+    found.map((r) =>
+      ask(['log', '-1', '--format=%h %s', base, '--', r.file])
+        .then((s) => s.split('\n')[0].trim())
+    ),
+  )
+  let names = found.map((r) => r.file)
+  return [
+    `land: refusing — the rebase left ${names.length} file${
+      names.length == 1 ? '' : 's'
+    } at content no commit on this branch wrote:`,
+    ...found.map((r, i) => why(r, base, at[i])),
+    `  inspect: git diff ${base}...HEAD -- ${names.join(' ')}`,
+    `  deliberate: task land --allow-revert=${names.join(',')}`,
+  ].join('\n')
 }
 
 export let land = async (ops: LandOps = {}): Promise<Outcome> => {
@@ -101,6 +231,13 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     let r = await git(at, args, false)
     if (r.code) throw new Error(message(label, r))
     return r.out.trim()
+  }
+  // What the guard reads: a git question asked of the session worktree, whose
+  // answer is raw lines — a failure there is a broken read, never an answer.
+  let read = async (args: string[]) => {
+    let r = await git(tree, args, false)
+    if (r.code) throw new Error(message(`git ${args[0]}`, r))
+    return r.out
   }
 
   // Every coordinate from git alone. `git worktree list --porcelain` lists the
@@ -145,12 +282,34 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   ])
   if (dirty) throw new Error(`land: worktree is dirty:\n${dirty}`)
 
-  // Try the fast-forward first — the whole job when the base has not moved. No
-  // cleanliness check of the shared checkout: git refuses a merge that would
-  // overwrite someone's uncommitted work and names the files, and leaves edits
-  // it would not touch alone.
-  let merged = await git(root, ['merge', '--ff-only', branch])
-  if (!merged.code) {
+  // Ancestry decides which of the two things this invocation is, and it is
+  // asked BEFORE the merge because the guard's refusal has to come before the
+  // merge too: once the base has fast-forwarded, the artifact has landed.
+  let anc = await git(
+    tree,
+    ['merge-base', '--is-ancestor', base, branch],
+    false,
+  )
+  if (anc.code != 0 && anc.code != 1) {
+    throw new Error(message('read merge contention', anc))
+  }
+
+  if (anc.code == 0) {
+    // The base has not moved: the branch is rebased onto it (or never left
+    // it), so `base...HEAD` is the landing diff and the guard can read it.
+    let found = await reverts(read, base)
+    let allow = new Set(ops.allow ?? [])
+    let refuse = found.filter((r) => !allow.has(r.file))
+    if (refuse.length) throw new Error(await refusal(read, base, refuse))
+    for (let r of found) {
+      write(`land: --allow-revert — landing anyway:${why(r, base, '')}`, true)
+    }
+    // No cleanliness check of the shared checkout: git refuses a merge that
+    // would overwrite someone's uncommitted work and names the files, and
+    // leaves edits it would not touch alone. If it refuses anyway — a hook, a
+    // dirty checkout — surface git's own error.
+    let merged = await git(root, ['merge', '--ff-only', branch])
+    if (merged.code) throw new Error(message('git merge', merged))
     let sha = await need('read landed commit', root, ['rev-parse', 'HEAD'])
     await publish(git, write, root, base)
     // The tree and its branch SURVIVE landing — the caller's own cleanup
@@ -164,18 +323,8 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     return { landed: sha, root }
   }
 
-  // The fast-forward refused. Ask ancestry, not stderr, why: if the base is
-  // STILL an ancestor of the branch it should have fast-forwarded, so this was
-  // a dirty checkout or a hook, not divergence — surface git's own error.
-  // Otherwise the base moved; rebase onto it and return for the agent to
-  // re-gate and re-land.
-  let anc = await git(
-    tree,
-    ['merge-base', '--is-ancestor', base, branch],
-    false,
-  )
-  if (anc.code == 0) throw new Error(message('git merge', merged))
-  if (anc.code != 1) throw new Error(message('read merge contention', anc))
+  // The base moved; rebase onto it and return for the agent to re-gate and
+  // re-land. The guard runs on that second landing, when the rebase is done.
 
   let fork = await need('find common ancestor', tree, [
     'merge-base',
