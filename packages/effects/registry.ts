@@ -291,9 +291,11 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
 
   // A pattern's bindings, narrowed to this batch. The match is asked of the
   // storage the ordinary way — a rule's match IS a query — and a binding is
-  // kept where the batch touched the entity its first pattern bound, so a
-  // handler wakes for what just happened rather than for every row that has
-  // held all along. What a crash left behind is a sweep's, not a batch's.
+  // kept where the batch touched ANY entity it bound, so a handler wakes for
+  // what just happened rather than for every row that has held all along. Any
+  // of them, not the first: what makes `$post; .comment about=$post` newly
+  // true is usually the comment. What a crash left behind is a sweep's to
+  // find, not a batch's.
   let hits = (
     s: Slot,
     bundles: Bundle[],
@@ -313,7 +315,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
         tx.bindings([plan], [], reads(plan, vocab)),
         ([rows]) =>
           rows
-            .filter((r) => r.entities[0] && touched.has(r.entities[0]))
+            .filter((r) => r.entities.some((e) => e && touched.has(e)))
             .map((r) => ({
               kind: 'matched' as Kind,
               entity: { eid: r.entities[0]! },
