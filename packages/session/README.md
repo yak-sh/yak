@@ -217,14 +217,23 @@ without loading transcript prose.
 ## Recorded tool execution
 
 Tool invocation vocabulary and execution live in `@yaks/tools`. `sessionDoc`
-includes the invocation declarations for compatibility. Session execution calls
-the shared executor under its existing scheduling lock; it does not install a
-second tool observer. A precommit membership rule adds `entry.session` to
-results that reference transcript calls, before the independent sequence
-allocator runs.
+includes the invocation declarations for compatibility. A tool there is a
+function from bundles to bundles, so `react` builds a `runner` for the step and
+wraps each session tool: the words it answers become a `content{body}` entity
+wearing `output{source}`, and the runner lands them beside the
+`result{call,
+ms}` entry the transcript reads. The runner's plugin is
+deliberately NOT registered on a session graph — a transcript's calls are run in
+order, one at a time, and an effect-phase runner would race that. A call naming
+a tool this session does not serve is answered by a tool that refuses, so the
+refusal is an `error{code}` and a result like any other answer rather than a
+call left open.
 
-A durable `execution.state = started` without a result requires explicit
-recovery; it is not automatically replayed. Tools retain their existing trusted
-session context, including fork and wait behavior. See
+A precommit membership rule adds `entry.session` to results that reference
+transcript calls, before the independent sequence allocator runs.
+
+A durable `execution.state = running` without a result requires explicit
+recovery; it is not automatically replayed (`UnfinishedCall`). Tools retain
+their existing trusted session context, including fork and wait behavior. See
 [tool execution](../tools/README.md) for non-session callers and recovery
 limitations.
