@@ -1,6 +1,7 @@
 {
   "$defs": {
     "column": {
+      "component": true,
       "type": "object",
       "properties": {
         "comp": {

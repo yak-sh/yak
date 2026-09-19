@@ -11,6 +11,7 @@ import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
@@ -18,6 +19,7 @@ let doc: VocabDoc = {
     // A named thing: a title and a body of prose. Everything in the shop wears
     // one, so this is also where the searchable text lives.
     doc: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -28,6 +30,7 @@ let doc: VocabDoc = {
     // A book on sale: what it costs, when it came out, whether it is in stock,
     // where it is in its life, and who wrote it.
     book: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -41,6 +44,7 @@ let doc: VocabDoc = {
     },
     // A review exists ABOUT a book — deleting the book takes its reviews too.
     review: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -50,6 +54,7 @@ let doc: VocabDoc = {
     },
     // Someone with a card, and the day they got it.
     member: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -59,7 +64,11 @@ let doc: VocabDoc = {
     // fact. Wearing it says the shop signed this copy; there is nothing else to
     // say about it, so `.signed!` and `.signed=` are the only questions it
     // answers.
-    signed: { type: 'object', properties: {} },
+    signed: {
+      component: true,
+      type: 'object',
+      properties: {},
+    },
   },
 }
 

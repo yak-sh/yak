@@ -19,15 +19,27 @@ import { type Stash, stash } from './stash.ts'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
-    space: { type: 'object', kind: true, properties: { name: {} } },
-    person: { type: 'object', kind: true, properties: { name: {} } },
+    space: {
+      component: true,
+      type: 'object',
+      kind: true,
+      properties: { name: {} },
+    },
+    person: {
+      component: true,
+      type: 'object',
+      kind: true,
+      properties: { name: {} },
+    },
     // The roster row @yaks/member ships, said here so the invitation example
     // has something to be woken by.
     member: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -42,12 +54,14 @@ let doc: VocabDoc = {
       },
     },
     created: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
       },
     },
     updated: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },

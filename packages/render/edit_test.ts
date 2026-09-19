@@ -16,6 +16,7 @@ import {
 let vocab = loadVocab({
   $defs: {
     doc: {
+      component: true,
       type: 'object',
       properties: {
         title: { type: 'string' },
@@ -30,7 +31,11 @@ let vocab = loadVocab({
         rank: { type: 'number', computed: true },
       },
     },
-    spine: { wire: false, properties: { num: { type: 'number' } } },
+    spine: {
+      component: true,
+      wire: false,
+      properties: { num: { type: 'number' } },
+    },
   },
 })
 let bundle = { entity: { eid: 'a' }, doc: { title: 'Before', count: 2 } }
@@ -164,7 +169,10 @@ Deno.test('enum controls use the vocabulary and offer inert patch actions', () =
 Deno.test('empty and case-distinct enum members keep their declared values', () => {
   let vocab = loadVocab({
     $defs: {
-      doc: { properties: { state: { enum: ['', '_', 'A', 'a'] } } },
+      doc: {
+        component: true,
+        properties: { state: { enum: ['', '_', 'A', 'a'] } },
+      },
     },
   })
   let registry = define(editors(vocab))

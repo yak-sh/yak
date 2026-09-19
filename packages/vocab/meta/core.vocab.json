@@ -5,6 +5,26 @@
   "description": "The keywords the yaks meta-model adds to JSON Schema 2020-12 to describe a component vocabulary. Native JSON Schema still carries type, format, enum, const, default, description, examples, $ref/$defs; these keywords add what a component table needs on top. Native keywords reach the table too: `type: integer` stores with integer affinity, a component's `required` list is NOT NULL, `default` is the column default (`{\"now\": true}` for the clock), and `enum` is a CHECK. `examples` is native and subsumes the old `well` concept: a text field's completion draws from its examples union the column's own live distinct values.",
   "$comment": "A vocabulary declaration in the JSON Schema sense: a URI that names this keyword set, plus the schema of each keyword. A vocab file declares it under $vocabulary.",
   "$defs": {
+    "component": {
+      "description": "true = this $defs entry declares a COMPONENT: an object schema whose properties are the component's columns. Required \u2014 an entry that says neither this nor `tool` is an ordinary reusable subschema the loader never plants.",
+      "const": true
+    },
+    "tool": {
+      "description": "true = this $defs entry declares a TOOL: one named thing an agent can ask the graph to do. Its implementation is the module's, keyed by the entry name (or noun_verb); the declaration is the part that travels.",
+      "const": true
+    },
+    "noun": {
+      "description": "A tool's resource word, one lowercase word \u2014 what it acts on. A CLI answers to either order (`session list`, `list session`).",
+      "type": "string"
+    },
+    "verb": {
+      "description": "A tool's operation word, one lowercase word \u2014 what it does. Always written together with `noun`.",
+      "type": "string"
+    },
+    "input": {
+      "description": "A tool's arguments: one JSON Schema per named argument, the same shape a component's `properties` takes. The entry's `required` list names the ones a call must carry.",
+      "type": "object"
+    },
     "ref": {
       "description": "The entity kind a string column references, e.g. \"project\" or \"entity\" (any entity). Makes the column a reference that stores the target's internal id.",
       "type": "string"

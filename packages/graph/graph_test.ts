@@ -516,8 +516,13 @@ Deno.test('provenance policy narrows an attribution-only vocabulary, including e
   let { loadVocab } = await import('@yaks/vocab')
   let vocab = loadVocab({
     $defs: {
-      doc: { type: 'object', properties: { title: { type: 'string' } } },
+      doc: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'string' } },
+      },
       created: {
+        component: true,
         type: 'object',
         properties: { by: { type: 'string', stamped: true } },
       },

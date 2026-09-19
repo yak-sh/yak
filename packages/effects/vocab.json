@@ -5,6 +5,7 @@
   "title": "effect",
   "$defs": {
     "effect": {
+      "component": true,
       "type": "object",
       "description": "one run of a post-commit handler, recorded so it happens at most once",
       "properties": {

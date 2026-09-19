@@ -134,6 +134,7 @@ for (let m of manifests) {
 // through @yaks/fts `fields()`; nothing else in the fleet decides what is
 // searched.
 let compOf = (name: string, spec: ManifestComp): PropSchema => ({
+  component: true,
   type: 'object',
   ...(relationOf[name] ? { relation: relationOf[name] } : {}),
   ...(spec.kind ? { kind: true } : {}),
@@ -241,6 +242,7 @@ export let fleetVocab = (
     {
       $defs: Object.fromEntries(
         Object.entries(own).map(([name, props]) => [name, {
+          component: true,
           type: 'object',
           properties: Object.fromEntries(
             Object.entries(props).map((

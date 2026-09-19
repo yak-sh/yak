@@ -137,12 +137,23 @@ let logged = (): { g: Graph; fx: ReturnType<typeof effects> } => {
     {
       $defs: {
         entity: {
+          component: true,
           type: 'object',
           wire: false,
           properties: { num: { type: 'number', stamped: true } },
         },
-        post: { type: 'object', kind: true, properties: { title: {} } },
-        subscriber: { type: 'object', kind: true, properties: { email: {} } },
+        post: {
+          component: true,
+          type: 'object',
+          kind: true,
+          properties: { title: {} },
+        },
+        subscriber: {
+          component: true,
+          type: 'object',
+          kind: true,
+          properties: { email: {} },
+        },
       },
     },
   ])

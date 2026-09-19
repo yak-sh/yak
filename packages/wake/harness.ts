@@ -15,12 +15,19 @@ import { type Opts, wakes } from './plugin.ts'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
-    plant: { type: 'object', kind: true, properties: { name: {} } },
+    plant: {
+      component: true,
+      type: 'object',
+      kind: true,
+      properties: { name: {} },
+    },
     entry: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { name: {}, on: { type: 'string', format: 'date-time' } },

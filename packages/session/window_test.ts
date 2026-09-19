@@ -5,7 +5,13 @@ import { loadVocab } from '@yaks/vocab'
 import { sessionDoc } from './comp.ts'
 let tracked = () => {
   let vocab = loadVocab([sessionDoc, {
-    $defs: { entity: { wire: false, properties: { eid: { type: 'string' } } } },
+    $defs: {
+      entity: {
+        component: true,
+        wire: false,
+        properties: { eid: { type: 'string' } },
+      },
+    },
   }])
   return graph({ storage: ram(vocab), vocab })
 }

@@ -300,11 +300,27 @@ export let loadVocab = (
   let docs = Array.isArray(input) ? input : [input]
   let compWords = new Set(keywords.flatMap((k) => k.comp ?? []))
   let colWords = new Set(keywords.flatMap((k) => k.column ?? []))
-  // Merge every doc's $defs into one component table; a name declared twice is a
-  // conflict (a word has one home).
+  // Merge every doc's COMPONENT entries into one table; a name declared twice
+  // is a conflict (a word has one home). `$defs` is JSON Schema's own reuse
+  // slot, so an entry says what it is: `component: true` is a component,
+  // `tool: true` is a tool declaration (tools.ts `toolsIn` reads those, and
+  // this loader passes over them), and anything else is an ordinary subschema
+  // somebody `$ref`s. An entry with COLUMNS and no marker is the one case that
+  // refuses rather than being ignored: it is a component whose marker was
+  // forgotten, and planting nothing for it silently loses the word.
   let defs: Record<string, PropSchema> = {}
   for (let doc of docs) {
     for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
+      if (schema?.tool === true) continue
+      if (schema?.component !== true) {
+        if (schema?.properties || schema?.type == 'object') {
+          throw new Error(
+            `'${name}' has columns but says no "component": true — mark it a ` +
+              'component, or it is an ordinary subschema and no table',
+          )
+        }
+        continue
+      }
       if (name in defs) throw new Error(`component '${name}' is declared twice`)
       defs[name] = schema
     }

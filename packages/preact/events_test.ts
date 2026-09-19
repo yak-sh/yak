@@ -7,7 +7,13 @@ import { type ComponentRenderer, render } from './mod.ts'
 import { mount } from './harness.ts'
 
 let vocab = loadVocab([{
-  $defs: { doc: { type: 'object', properties: { title: { type: 'string' } } } },
+  $defs: {
+    doc: {
+      component: true,
+      type: 'object',
+      properties: { title: { type: 'string' } },
+    },
+  },
 }])
 let bundle: Bundle = { entity: { eid: 'a' }, doc: { title: 'Before' } }
 let change = (control: Element) => {

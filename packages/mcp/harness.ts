@@ -14,12 +14,14 @@ import { type Options, server } from './server.ts'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     // A named thing: everything in the shop wears one.
     doc: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -29,6 +31,7 @@ let doc: VocabDoc = {
     },
     // A book on sale, and the author who wrote it.
     book: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -41,6 +44,7 @@ let doc: VocabDoc = {
     },
     // A review exists ABOUT a book — deleting the book takes its reviews too.
     review: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -51,6 +55,7 @@ let doc: VocabDoc = {
     // Provenance: server-owned, so the graph's stamp phase is their only
     // writer — which is what makes the door's actor visible in a read.
     created: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
@@ -58,6 +63,7 @@ let doc: VocabDoc = {
       },
     },
     updated: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },

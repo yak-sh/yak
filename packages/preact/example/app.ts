@@ -10,6 +10,7 @@ import { loadVocab } from '@yaks/vocab'
 let vocab = loadVocab([{
   $defs: {
     doc: {
+      component: true,
       type: 'object',
       properties: {
         title: { type: 'string' },

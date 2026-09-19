@@ -2,6 +2,7 @@
   "title": "process",
   "$defs": {
     "service": {
+      "component": true,
       "type": "object",
       "kind": true,
       "before": ["process"],
@@ -27,6 +28,7 @@
       }
     },
     "process": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "a program running on a host, tracked by pid — whether or not we started it",
@@ -46,6 +48,7 @@
       }
     },
     "exit": {
+      "component": true,
       "type": "object",
       "description": "the process is over — never rewritten, and cleared only by the batch that lands the next attempt on a supervised row",
       "properties": {

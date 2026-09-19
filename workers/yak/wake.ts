@@ -19,6 +19,7 @@ import type { Wake } from './plugin.ts'
 export let sweepDoc: VocabDoc = {
   $defs: {
     sweep: {
+      component: true,
       type: 'object',
       properties: {
         kind: { type: 'string', enum: ['git', 'meter', 'trash'] },

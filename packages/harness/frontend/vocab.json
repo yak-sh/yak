@@ -1,6 +1,7 @@
 {
   "$defs": {
     "entity": {
+      "component": true,
       "properties": {
         "eid": {
           "type": "string"
@@ -8,6 +9,7 @@
       }
     },
     "keyboard": {
+      "component": true,
       "sync": "none",
       "durable": "connection",
       "properties": {
@@ -83,6 +85,7 @@
       }
     },
     "frontend": {
+      "component": true,
       "sync": "none",
       "durable": "connection",
       "properties": {
@@ -116,6 +119,7 @@
       }
     },
     "visual": {
+      "component": true,
       "sync": "none",
       "durable": "connection",
       "properties": {
@@ -137,6 +141,7 @@
       }
     },
     "composer": {
+      "component": true,
       "sync": "none",
       "durable": "connection",
       "properties": {
@@ -149,6 +154,7 @@
       }
     },
     "feedback": {
+      "component": true,
       "sync": "none",
       "durable": "connection",
       "properties": {
@@ -158,6 +164,7 @@
       }
     },
     "viewport": {
+      "component": true,
       "sync": "none",
       "durable": "connection",
       "properties": {
@@ -200,6 +207,7 @@
       }
     },
     "pendingDraft": {
+      "component": true,
       "sync": "none",
       "properties": {
         "text": {
@@ -217,6 +225,7 @@
       }
     },
     "savedDraft": {
+      "component": true,
       "sync": "none",
       "properties": {
         "text": {
@@ -231,6 +240,7 @@
       }
     },
     "recovery": {
+      "component": true,
       "sync": "none",
       "properties": {
         "selected": {
@@ -242,6 +252,7 @@
       }
     },
     "draft": {
+      "component": true,
       "sync": "none",
       "durable": "connection",
       "properties": {

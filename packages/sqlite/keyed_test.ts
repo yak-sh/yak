@@ -44,14 +44,19 @@ Deno.test('transaction keyed gather shares whole-set projections, observes write
 Deno.test('singleton gather probes indexed owners, bounds wide vocab and retains real present columns', () => {
   let vocab = loadVocab({
     $defs: {
-      entity: { type: 'object', wire: false },
+      entity: {
+        component: true,
+        type: 'object',
+        wire: false,
+      },
       data: {
+        component: true,
         type: 'object',
         properties: { present: { type: 'string' } },
       },
       ...Object.fromEntries(Array.from({ length: 405 }, (_, i) => [
         `tag${i}`,
-        { type: 'object' },
+        { component: true, type: 'object' },
       ])),
     },
   })

@@ -10,9 +10,21 @@ import { loadVocab } from '@yaks/vocab'
 export let statusVocab = loadVocab([{
   title: 'sidebar status projection',
   '$defs': {
-    task: { type: 'object', properties: { status: { type: 'string' } } },
-    session: { type: 'object', properties: { status: { type: 'string' } } },
-    claim: { type: 'object', properties: { session: { type: 'string' } } },
+    task: {
+      component: true,
+      type: 'object',
+      properties: { status: { type: 'string' } },
+    },
+    session: {
+      component: true,
+      type: 'object',
+      properties: { status: { type: 'string' } },
+    },
+    claim: {
+      component: true,
+      type: 'object',
+      properties: { session: { type: 'string' } },
+    },
   },
 }])
 

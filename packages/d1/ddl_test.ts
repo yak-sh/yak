@@ -10,8 +10,14 @@ import { storage } from './store.ts'
 
 let strict = loadVocab({
   $defs: {
-    entity: { type: 'object', wire: false, properties: {} },
+    entity: {
+      component: true,
+      type: 'object',
+      wire: false,
+      properties: {},
+    },
     repo: {
+      component: true,
       type: 'object',
       required: ['base'],
       properties: {

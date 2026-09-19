@@ -7,12 +7,21 @@ import { archetypeSet, bind, compile } from './mod.ts'
 let v = loadVocab({
   $defs: {
     doc: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { title: { type: 'string' } },
     },
-    task: { type: 'object', kind: true, before: ['doc'] },
-    claim: { type: 'object' },
+    task: {
+      component: true,
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+    },
+    claim: {
+      component: true,
+      type: 'object',
+    },
   },
 })
 let cache = new Archetypes()

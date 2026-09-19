@@ -11,6 +11,7 @@ import { mount } from './harness.ts'
 let vocab = loadVocab({
   $defs: {
     doc: {
+      component: true,
       type: 'object',
       properties: {
         title: { type: 'string' },

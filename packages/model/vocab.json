@@ -2,6 +2,7 @@
   "title": "model",
   "$defs": {
     "provider": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "a service that runs models",
@@ -12,6 +13,7 @@
       }
     },
     "model": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "a model a provider serves",
@@ -33,6 +35,7 @@
       }
     },
     "usage": {
+      "component": true,
       "type": "object",
       "description": "provider-reported token counts for one completed model request, stored on its ask entry; not cumulative and not a live context estimate",
       "properties": {

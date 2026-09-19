@@ -11,6 +11,7 @@
   "description": "A hand-authored, query-able slice of the fleet's component vocabulary, expressed in the @yaks/vocab format: the spine, doc, blob, task, project, comment, board, and every kind their `before` constraints name. The full vocabulary is the same format at ~90 components (the parity test converts it mechanically from the fleet manifests).",
   "$defs": {
     "entity": {
+      "component": true,
       "type": "object",
       "wire": false,
       "description": "The spine: every entity is a row here. num is server-minted.",
@@ -19,6 +20,7 @@
       }
     },
     "doc": {
+      "component": true,
       "type": "object",
       "kind": true,
       "before": ["alias"],
@@ -29,6 +31,7 @@
       }
     },
     "blob": {
+      "component": true,
       "type": "object",
       "description": "Immutable content-addressed bytes; the eid is the SHA-256.",
       "properties": {
@@ -36,6 +39,7 @@
       }
     },
     "alias": {
+      "component": true,
       "type": "object",
       "kind": true,
       "properties": {
@@ -44,6 +48,7 @@
       }
     },
     "comment": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "Words aimed at ANY entity.",
@@ -52,6 +57,7 @@
       }
     },
     "task": {
+      "component": true,
       "type": "object",
       "kind": true,
       "before": ["alias", "doc", "knock", "memory", "notice", "role"],
@@ -67,6 +73,7 @@
       }
     },
     "project": {
+      "component": true,
       "type": "object",
       "kind": true,
       "before": ["alias", "board", "claim", "doc", "email"],
@@ -77,6 +84,7 @@
       }
     },
     "board": {
+      "component": true,
       "type": "object",
       "kind": true,
       "before": ["alias"],
@@ -88,6 +96,7 @@
       }
     },
     "claim": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "A session's lease on any entity.",
@@ -101,6 +110,7 @@
       }
     },
     "email": {
+      "component": true,
       "type": "object",
       "kind": true,
       "prefix": "A",
@@ -109,6 +119,7 @@
       }
     },
     "knock": {
+      "component": true,
       "type": "object",
       "kind": true,
       "prefix": "K",
@@ -117,6 +128,7 @@
       }
     },
     "memory": {
+      "component": true,
       "type": "object",
       "kind": true,
       "prefix": "M",
@@ -130,6 +142,7 @@
       }
     },
     "notice": {
+      "component": true,
       "type": "object",
       "kind": true,
       "before": ["doc"],
@@ -139,6 +152,7 @@
       }
     },
     "role": {
+      "component": true,
       "type": "object",
       "kind": true,
       "prefix": "R",

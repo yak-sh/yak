@@ -16,7 +16,13 @@ import {
 import { flush, mount } from './harness.ts'
 
 let vocab = loadVocab([{
-  $defs: { doc: { type: 'object', properties: { title: { type: 'string' } } } },
+  $defs: {
+    doc: {
+      component: true,
+      type: 'object',
+      properties: { title: { type: 'string' } },
+    },
+  },
 }])
 let title = (b: Bundle) => String((b.doc as { title: string }).title)
 let registry = define([

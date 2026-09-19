@@ -21,16 +21,19 @@ import { isPromise } from './pipe.ts'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     doc: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { title: { type: 'string' }, body: { type: 'string' } },
     },
     book: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -43,6 +46,7 @@ let doc: VocabDoc = {
       },
     },
     review: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -52,6 +56,7 @@ let doc: VocabDoc = {
       },
     },
     bookmark: {
+      component: true,
       type: 'object',
       properties: {
         // the row's whole reason to exist is the reference
@@ -61,6 +66,7 @@ let doc: VocabDoc = {
     // A MARK: a participle the wire writes bare and the graph signs, said
     // once. The three columns are what makes it one (@yaks/graph stamp.ts).
     sold: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
@@ -69,6 +75,7 @@ let doc: VocabDoc = {
       },
     },
     created: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
@@ -76,6 +83,7 @@ let doc: VocabDoc = {
       },
     },
     updated: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },

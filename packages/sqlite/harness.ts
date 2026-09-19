@@ -30,12 +30,14 @@ export let mem = (): Driver => {
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     // A named thing: a title and a body of text.
     doc: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -46,6 +48,7 @@ let doc: VocabDoc = {
     // Something for sale: a price, a state, and the maker who made it. Deleting
     // a maker detaches the product (the column is nulled), never deletes it.
     product: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -62,6 +65,7 @@ let doc: VocabDoc = {
     // Where a product sits on the floor: one product per slot, and an aisle
     // read by the shelf order. The COMPOSITE spellings, said on the component.
     shelf: {
+      component: true,
       type: 'object',
       unique: [['aisle', 'slot']],
       index: [['aisle', 'height']],
@@ -74,6 +78,7 @@ let doc: VocabDoc = {
     // A review exists ABOUT a product — deleting the product takes its reviews
     // with it (cascade).
     review: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -84,6 +89,7 @@ let doc: VocabDoc = {
     // A bookmark IS a reference: the row's whole reason to exist is to point at
     // something, so deleting the target releases the row (the owner survives).
     bookmark: {
+      component: true,
       type: 'object',
       properties: {
         of: { type: 'string', ref: 'entity', death: 'release' },
@@ -92,6 +98,7 @@ let doc: VocabDoc = {
     // Provenance: server-owned, so the graph's stamp phase is their only
     // writer.
     created: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
@@ -99,6 +106,7 @@ let doc: VocabDoc = {
       },
     },
     updated: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },

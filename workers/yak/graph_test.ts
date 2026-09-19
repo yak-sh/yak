@@ -89,7 +89,12 @@ let CAKE = 'c0000000-0000-4000-8000-000000000003'
 // The app every test here deploys: one component, one column, in the one
 // spelling a vocab.json is written in.
 let SCHEMA = JSON.stringify({
-  $defs: { recipe: { properties: { serves: { type: 'number' } } } },
+  $defs: {
+    recipe: {
+      component: true,
+      properties: { serves: { type: 'number' } },
+    },
+  },
 })
 
 let owner: Vouch = { app: APP, person: ADA, role: 'owner', title: 'Ada' }
@@ -147,6 +152,7 @@ Deno.test("an app's vocab.json is read back as the document it means", async () 
     JSON.stringify({
       $defs: {
         recipe: {
+          component: true,
           type: 'object',
           properties: { method: { type: 'string', search: true } },
         },

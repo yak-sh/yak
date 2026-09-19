@@ -9,7 +9,7 @@ host and are not sandboxed.
 - `open()` creates or opens storage and registers vocabulary and plugins.
 - `harnessTools()` combines shell, delegation and graph tools.
 - `agent()` configures the model and session daemon and exposes session methods.
-- `plugin` supplies commands for `@yaks/cli`.
+- `plugin` supplies the tools vocab.json declares for `@yaks/cli`.
 
 ## Use
 

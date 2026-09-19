@@ -12,10 +12,23 @@ import { mem } from './harness.ts'
 // physical shape, including text equal to old/new descriptor hash preimages.
 let vocab = loadVocab([archetypeDoc, {
   $defs: {
-    doc: { type: 'object', properties: { title: { type: 'string' } } },
-    blob: { type: 'object', properties: { bytes: { type: 'number' } } },
-    blob_text: { type: 'object', properties: { text: { type: 'string' } } },
+    doc: {
+      component: true,
+      type: 'object',
+      properties: { title: { type: 'string' } },
+    },
+    blob: {
+      component: true,
+      type: 'object',
+      properties: { bytes: { type: 'number' } },
+    },
+    blob_text: {
+      component: true,
+      type: 'object',
+      properties: { text: { type: 'string' } },
+    },
     link: {
+      component: true,
       type: 'object',
       properties: { to: { type: 'string', ref: 'entity', death: 'keep' } },
     },

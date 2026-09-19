@@ -129,9 +129,14 @@ Deno.test('wide sparse gathers cross owner and vocabulary chunks without stale o
   let driver = mem()
   let vocab = loadVocab({
     $defs: {
-      entity: { type: 'object', properties: { num: { type: 'number' } } },
+      entity: {
+        component: true,
+        type: 'object',
+        properties: { num: { type: 'number' } },
+      },
       ...Object.fromEntries(
         Array.from({ length: 405 }, (_, i) => [`facet${i}`, {
+          component: true,
           type: 'object',
           properties: { value: { type: 'string' } },
         }]),
@@ -165,12 +170,21 @@ Deno.test('numeric gather ownership stays internal; present is an ordinary colum
   let driver = mem()
   let vocab = loadVocab({
     $defs: {
-      entity: { type: 'object', properties: { num: { type: 'number' } } },
+      entity: {
+        component: true,
+        type: 'object',
+        properties: { num: { type: 'number' } },
+      },
       sample: {
+        component: true,
         type: 'object',
         properties: { present: { type: 'string' } },
       },
-      marker: { type: 'object', properties: {} },
+      marker: {
+        component: true,
+        type: 'object',
+        properties: {},
+      },
     },
   })
   let s = storage(driver, vocab)
@@ -199,9 +213,14 @@ Deno.test("a driver that declares no compound width is probed within workerd's",
   }
   let vocab = loadVocab({
     $defs: {
-      entity: { type: 'object', wire: false },
+      entity: {
+        component: true,
+        type: 'object',
+        wire: false,
+      },
       ...Object.fromEntries(
         Array.from({ length: 20 }, (_, i) => [`facet${i}`, {
+          component: true,
           type: 'object',
           properties: { value: { type: 'string' } },
         }]),

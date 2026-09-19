@@ -10,6 +10,7 @@ Deno.test('storage composes FTS explicitly for document and non-document prose',
   let vocab = loadVocab({
     $defs: {
       doc: {
+        component: true,
         type: 'object',
         properties: {
           title: { type: 'string', search: true },
@@ -17,6 +18,7 @@ Deno.test('storage composes FTS explicitly for document and non-document prose',
         },
       },
       review: {
+        component: true,
         type: 'object',
         properties: { prose: { type: 'string', search: true } },
       },

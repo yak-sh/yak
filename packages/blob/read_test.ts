@@ -10,14 +10,21 @@ import { blobRead, blobSchema } from './sqlite.ts'
 Deno.test('doc predicates, paths, projections and bundles resolve the same blob', () => {
   let vocab = loadVocab({
     $defs: {
-      entity: { properties: { num: { type: 'number', stamped: true } } },
+      entity: {
+        component: true,
+        properties: { num: { type: 'number', stamped: true } },
+      },
       doc: {
+        component: true,
         properties: {
           title: { type: 'string' },
           body: { type: 'string', store: 'blob' },
         },
       },
-      note: { properties: { target: { ref: 'doc', death: 'detach' } } },
+      note: {
+        component: true,
+        properties: { target: { ref: 'doc', death: 'detach' } },
+      },
     },
   }, [blobKeywords])
   let driver = mem()

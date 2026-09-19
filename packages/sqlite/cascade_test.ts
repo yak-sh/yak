@@ -28,6 +28,7 @@ import { storage, type Store } from './mod.ts'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
@@ -35,6 +36,7 @@ let doc: VocabDoc = {
     // A node exists ABOUT another node: deleting one takes it with it, however
     // long the chain of them is.
     node: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -44,6 +46,7 @@ let doc: VocabDoc = {
     },
     // The row's whole reason to exist is the reference.
     mark: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', ref: 'entity', death: 'release' },
@@ -51,6 +54,7 @@ let doc: VocabDoc = {
     },
     // The reference is one fact among others: it is nulled, the row stays.
     link: {
+      component: true,
       type: 'object',
       properties: {
         to: { type: 'string', ref: 'entity', death: 'detach' },
@@ -67,12 +71,14 @@ let words: Vocab = loadVocab(doc)
 let wide: Vocab = loadVocab({
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     ...Object.fromEntries(
       [1, 2, 3, 4, 5, 6].map((i) => [`n${i}`, {
+        component: true,
         type: 'object',
         properties: {
           of: { type: 'string', ref: 'entity', death: 'cascade' },
@@ -80,6 +86,7 @@ let wide: Vocab = loadVocab({
       }]),
     ),
     mark: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', ref: 'entity', death: 'release' },

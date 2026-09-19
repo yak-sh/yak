@@ -2,6 +2,7 @@
   "title": "mail",
   "$defs": {
     "mail": {
+      "component": true,
       "type": "object",
       "kind": true,
       "before": [
@@ -48,6 +49,7 @@
       }
     },
     "email": {
+      "component": true,
       "type": "object",
       "kind": true,
       "prefix": "A",
@@ -60,6 +62,7 @@
       }
     },
     "deliver": {
+      "component": true,
       "type": "object",
       "description": "who a letter is for, as an entity in your graph",
       "properties": {
@@ -72,6 +75,7 @@
       }
     },
     "delivered": {
+      "component": true,
       "type": "object",
       "description": "the letter left: half of the outcome pair",
       "properties": {
@@ -89,6 +93,7 @@
       }
     },
     "bounced": {
+      "component": true,
       "type": "object",
       "description": "the letter did not leave: the other half",
       "properties": {
@@ -106,6 +111,7 @@
       }
     },
     "notified": {
+      "component": true,
       "type": "object",
       "description": "a recipient was told about something",
       "properties": {

@@ -238,17 +238,27 @@ Deno.test('a query neither side can answer is declined by both', () => {
 let blog: Vocab = loadVocab([edgeDoc, {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     post: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { title: { type: 'string' } },
     },
-    cites: { type: 'object', relation: true },
-    links: { type: 'object', relation: 'linked' },
+    cites: {
+      component: true,
+      type: 'object',
+      relation: true,
+    },
+    links: {
+      component: true,
+      type: 'object',
+      relation: 'linked',
+    },
   },
 }], [edgeKeywords])
 
@@ -314,22 +324,26 @@ Deno.test('a walk over nothing declares is declined by both', () => {
 let forked: Vocab = loadVocab([{
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     session: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { title: { type: 'string' } },
     },
     fork: {
+      component: true,
       type: 'object',
       properties: {
         from: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },
     entry: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -398,6 +412,7 @@ Deno.test('a chain with a hop that is no reference is declined by both', () => {
 let spine: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },

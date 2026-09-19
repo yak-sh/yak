@@ -13,7 +13,11 @@ import { render } from './mod.ts'
 
 let vocab = loadVocab([{
   $defs: {
-    doc: { type: 'object', properties: { title: { type: 'string' } } },
+    doc: {
+      component: true,
+      type: 'object',
+      properties: { title: { type: 'string' } },
+    },
   },
 }])
 let bundle = { entity: { eid: 'page' }, doc: { title: '<b>"A&B"</b>' } }

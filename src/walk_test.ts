@@ -181,8 +181,14 @@ slow(
   () => {
     let vocab = loadVocab({
       $defs: {
-        entity: { type: 'object', wire: false, properties: {} },
+        entity: {
+          component: true,
+          type: 'object',
+          wire: false,
+          properties: {},
+        },
         comment: {
+          component: true,
           type: 'object',
           properties: {
             target: { type: 'string', ref: 'entity', death: 'detach' },

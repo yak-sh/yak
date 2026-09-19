@@ -14,13 +14,20 @@ import { comp, memory } from './harness.ts'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
-    doc: { type: 'object', kind: true, properties: { title: {} } },
+    doc: {
+      component: true,
+      type: 'object',
+      kind: true,
+      properties: { title: {} },
+    },
     // A page is its slug: two files with one slug are one page.
     guide: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -30,6 +37,7 @@ let doc: VocabDoc = {
     },
     // The composite spelling: an app's release is its app and its version.
     release: {
+      component: true,
       type: 'object',
       identity: ['app', 'version'],
       properties: { app: { type: 'string' }, version: { type: 'string' } },

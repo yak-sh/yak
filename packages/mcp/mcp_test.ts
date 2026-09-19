@@ -222,17 +222,20 @@ Deno.test('graph_show answers only bundles, including what points at the entity'
 let wideDoc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     doc: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { title: { type: 'string' } },
     },
     ...Object.fromEntries(
       [1, 2, 3, 4, 5, 6, 7, 8].map((i) => [`n${i}`, {
+        component: true,
         type: 'object',
         properties: {
           of: { type: 'string', ref: 'entity', death: 'detach' },

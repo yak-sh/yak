@@ -107,6 +107,7 @@ Deno.test('the index shows the component description from its vocabulary', async
   let vocabulary = loadVocab({
     $defs: {
       task: {
+        component: true,
         type: 'object',
         description: 'a thing to do',
         properties: {},

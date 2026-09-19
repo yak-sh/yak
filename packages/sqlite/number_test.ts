@@ -6,9 +6,18 @@ import { storage } from './mod.ts'
 
 let vocab = loadVocab([{
   $defs: {
-    entity: { properties: { num: { type: 'number', stamped: true } } },
-    entry: { properties: { seq: { type: 'number' } } },
-    task: { properties: { target: { type: 'string', ref: 'entity' } } },
+    entity: {
+      component: true,
+      properties: { num: { type: 'number', stamped: true } },
+    },
+    entry: {
+      component: true,
+      properties: { seq: { type: 'number' } },
+    },
+    task: {
+      component: true,
+      properties: { target: { type: 'string', ref: 'entity' } },
+    },
   },
 }])
 

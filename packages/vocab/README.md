@@ -7,32 +7,40 @@ defines the vocabulary format, not application components.
 
 ## The format
 
-A vocab is a JSON Schema document. Each component is an object schema in
-`$defs`; each column is a property. Native JSON Schema carries `type`, `format`,
-`enum`, `const`, `default`, `description`, `examples`; the yaks keyword
-vocabulary (declared via JSON Schema's own `$vocabulary` mechanism,
+A vocab is a JSON Schema document. Each entry in `$defs` says what it IS:
+`"component": true` is a component (an object schema whose properties are its
+columns), `"tool": true` is a tool declaration, and an entry saying neither is
+an ordinary reusable subschema this meta-model passes over — `$defs` is JSON
+Schema's own reuse slot and stays usable as one. Native JSON Schema carries
+`type`, `format`, `enum`, `const`, `default`, `description`, `examples`; the
+yaks keyword vocabulary (declared via JSON Schema's own `$vocabulary` mechanism,
 `meta/core.vocab.json`) adds what a component table needs:
 
-| keyword    | on     | says                                                                |
-| ---------- | ------ | ------------------------------------------------------------------- |
-| `ref`      | column | the entity kind a string references (`"project"`, `"entity"`)       |
-| `death`    | column | `cascade` \| `detach` \| `release` \| `keep` when the target dies   |
-| `computed` | column | `true` = derived, never stored (a query-only rank)                  |
-| `stamped`  | column | `true` = server-owned: readable, never wire-writable                |
-| `search`   | column | `true` = this text column's words are full-text indexed             |
-| `store`    | column | `"blob"` = a content-addressed markdown body                        |
-| `aliases`  | column | input spellings that resolve to an enum member                      |
-| `bare`     | both   | `false` = never claims its bare filter spelling; qualified only     |
-| `unique`   | both   | column: no two rows share it. comp: `[["space","slug"]]`            |
-| `index`    | both   | the same two spellings, without the uniqueness                      |
-| `required` | comp   | native: the columns every row holds (NOT NULL)                      |
-| `default`  | column | native: the row's fallback; `{"now": true}` is the clock            |
-| `identity` | both   | the entity's id is DERIVED from this. comp: `["space","slug"]`      |
-| `kind`     | comp   | this component names a display kind                                 |
-| `before`   | comp   | kinds this kind sorts before (feeds the derived kindOrder)          |
-| `wire`     | comp   | `false` = readable-not-writable component (entity metadata)         |
-| `sync`     | comp   | who hears a write: `none` \| `server` (default) \| `peers`          |
-| `durable`  | comp   | how long a value lives: `forever` (default) \| `connection` \| `5s` |
+| keyword     | on     | says                                                                |
+| ----------- | ------ | ------------------------------------------------------------------- |
+| `component` | entry  | `true` = this entry is a component. Required; there is no default   |
+| `tool`      | entry  | `true` = this entry is a tool declaration, not a table              |
+| `noun`      | tool   | the resource word a CLI answers to (`session list`, `list session`) |
+| `verb`      | tool   | the operation word, always said with `noun`                         |
+| `input`     | tool   | one schema per named argument, the way a component says columns     |
+| `ref`       | column | the entity kind a string references (`"project"`, `"entity"`)       |
+| `death`     | column | `cascade` \| `detach` \| `release` \| `keep` when the target dies   |
+| `computed`  | column | `true` = derived, never stored (a query-only rank)                  |
+| `stamped`   | column | `true` = server-owned: readable, never wire-writable                |
+| `search`    | column | `true` = this text column's words are full-text indexed             |
+| `store`     | column | `"blob"` = a content-addressed markdown body                        |
+| `aliases`   | column | input spellings that resolve to an enum member                      |
+| `bare`      | both   | `false` = never claims its bare filter spelling; qualified only     |
+| `unique`    | both   | column: no two rows share it. comp: `[["space","slug"]]`            |
+| `index`     | both   | the same two spellings, without the uniqueness                      |
+| `required`  | comp   | native: the columns every row holds (NOT NULL)                      |
+| `default`   | column | native: the row's fallback; `{"now": true}` is the clock            |
+| `identity`  | both   | the entity's id is DERIVED from this. comp: `["space","slug"]`      |
+| `kind`      | comp   | this component names a display kind                                 |
+| `before`    | comp   | kinds this kind sorts before (feeds the derived kindOrder)          |
+| `wire`      | comp   | `false` = readable-not-writable component (entity metadata)         |
+| `sync`      | comp   | who hears a write: `none` \| `server` (default) \| `peers`          |
+| `durable`   | comp   | how long a value lives: `forever` (default) \| `connection` \| `5s` |
 
 Native keywords reach the table as written: `type: integer` stores with integer
 affinity where a plain `number` stores real, `enum` is a CHECK on the column,
@@ -193,12 +201,37 @@ examples.
 Pure TypeScript with no runtime dependency — a vocabulary is plain JSON Schema.
 Runs on **Deno** and **Node** (via JSR / npm).
 
-## Tool definitions (experimental)
+## Tools
 
-`@yaks/vocab/tools` validates JSON Schema tool declarations independently of
-component vocabulary loading. It does **not** assign tools to components or
-change the root format of existing `vocab.json` files. Placement of action
-schemas in those files is deliberately open for further design.
+A tool is declared where the components are, in `$defs`, marked `tool: true`:
+
+```json
+{
+  "$defs": {
+    "session": { "component": true, "type": "object", "properties": {} },
+    "session_list": {
+      "tool": true,
+      "noun": "session",
+      "verb": "list",
+      "description": "List sessions in the connected graph.",
+      "input": { "scope": { "type": "string" } },
+      "required": ["scope"],
+      "readOnly": true
+    }
+  }
+}
+```
+
+`toolsIn(docs)` returns those declarations, each with its `input` map lowered to
+the one object schema every door downstream already reads; `loadVocab` passes
+over them, so a document is read once for its components and once for its tools
+and neither reading knows about the other. The entry's NAME is the tool's, which
+is how an implementation is found: `@yaks/graph/tools` `loadTools(docs, runs)`
+joins a declaration to the run the module gives it, and a declaration nobody
+implements is a load error rather than a word that lists and then fails.
+
+`@yaks/vocab/tools` also validates a declaration written in code, independently
+of any document.
 
 ```ts
 import { toolDefinition } from '@yaks/vocab/tools'

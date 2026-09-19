@@ -6,20 +6,37 @@ import { joinRule } from './join.ts'
 import type { Bundle } from './bundle.ts'
 const vocab = loadVocab([{
   $defs: {
-    session: { properties: {} },
-    call: { properties: {} },
+    session: {
+      component: true,
+      properties: {},
+    },
+    call: {
+      component: true,
+      properties: {},
+    },
     entry: {
+      component: true,
       properties: {
         session: { type: 'string', ref: 'session' },
         seq: { type: 'number' },
       },
     },
-    result: { properties: { call: { type: 'string', ref: 'call' } } },
+    result: {
+      component: true,
+      properties: { call: { type: 'string', ref: 'call' } },
+    },
     source: {
+      component: true,
       properties: { key: { type: 'string' }, value: { type: 'string' } },
     },
-    target: { properties: { key: { type: 'string' } } },
-    label: { properties: { value: { type: 'string' } } },
+    target: {
+      component: true,
+      properties: { key: { type: 'string' } },
+    },
+    label: {
+      component: true,
+      properties: { value: { type: 'string' } },
+    },
   },
 }])
 const rule = '$call .entry{$session} .call; .result{$call} +!entry{$session}'

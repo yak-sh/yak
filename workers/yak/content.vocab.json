@@ -5,6 +5,7 @@
   "description": "What a content file's frontmatter SAYS (T-34606, T-34649): public/guide/<slug>.md is a `guide`, prompts/<name>.md is a `prompt`, and each names its entity by its own identity column rather than by an eid somebody wrote down. Loading a file twice is one entity — the id is derived from the value (@yaks/graph identity.ts) — which is why the frontmatter carries no `entity` line at all. gen.ts reads these files into content.ts; nothing applies them to a store yet, and this is the vocabulary the day something does.",
   "$defs": {
     "guide": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "A page of the guide, offered through the connector as a resource of its own.",
@@ -25,6 +26,7 @@
       }
     },
     "prompt": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "A thing a person picks by name: a slash command, a menu entry. The message itself is the file's body, and its `arguments` are the file's own word — a list is not a column, so a store holds the row and the file holds the slots.",

@@ -2,6 +2,7 @@
   "title": "artifact",
   "$defs": {
     "artifact": {
+      "component": true,
       "description": "A binary object in the configured external blob store.",
       "properties": {
         "address": {
@@ -16,6 +17,7 @@
       }
     },
     "attachment": {
+      "component": true,
       "description": "An artifact produced by a model response; the entry belongs to its session.",
       "properties": {
         "artifact": {

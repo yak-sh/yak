@@ -19,6 +19,7 @@ import { type Index, index } from './index.ts'
 let entity: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },

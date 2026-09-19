@@ -356,6 +356,7 @@ Deno.test('the short type map, as the document it means', () => {
     {
       $defs: {
         recipe: {
+          component: true,
           type: 'object',
           kind: true,
           before: ['doc'],
@@ -1253,7 +1254,14 @@ for (let door of ['constructor', 'vocab']) {
       (await now.door('/vocab', {
         method: 'POST',
         body: JSON.stringify(
-          { $defs: { recipe: { properties: { title: { type: 'string' } } } } },
+          {
+            $defs: {
+              recipe: {
+                component: true,
+                properties: { title: { type: 'string' } },
+              },
+            },
+          },
         ),
       })).status,
       200,
@@ -1283,7 +1291,14 @@ for (let door of ['constructor', 'vocab']) {
       let response = await now.door('/vocab', {
         method: 'POST',
         body: JSON.stringify(
-          { $defs: { menu: { properties: { title: { type: 'string' } } } } },
+          {
+            $defs: {
+              menu: {
+                component: true,
+                properties: { title: { type: 'string' } },
+              },
+            },
+          },
         ),
       })
       assertEquals(response.status, 503)
@@ -1415,6 +1430,7 @@ slow('counts that do not reconcile refuse the pass', async () => {
   let vocab = appVocab({
     $defs: {
       recipe: {
+        component: true,
         properties: { title: { type: 'string' }, serves: { type: 'number' } },
       },
     },
@@ -1521,7 +1537,14 @@ Deno.test('a schema that moves re-cuts its definitions and refills', async () =>
   let grew = await now.door('/vocab', {
     method: 'POST',
     body: JSON.stringify(
-      { $defs: { recipe: { properties: { serves: { type: 'number' } } } } },
+      {
+        $defs: {
+          recipe: {
+            component: true,
+            properties: { serves: { type: 'number' } },
+          },
+        },
+      },
     ),
   }, APP)
   assertEquals(grew.status, 200)

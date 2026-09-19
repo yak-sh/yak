@@ -2,6 +2,7 @@
   "title": "harness",
   "$defs": {
     "entity": {
+      "component": true,
       "type": "object",
       "wire": false,
       "properties": {
@@ -12,6 +13,7 @@
       }
     },
     "created": {
+      "component": true,
       "type": "object",
       "properties": {
         "at": {
@@ -37,6 +39,7 @@
       }
     },
     "updated": {
+      "component": true,
       "type": "object",
       "properties": {
         "at": {
@@ -62,6 +65,7 @@
       }
     },
     "home": {
+      "component": true,
       "type": "object",
       "description": "An agent home checkout, separate from working directory; not a sandbox.",
       "properties": {
@@ -75,6 +79,14 @@
           "description": "Optional default command directory, independent of the home checkout."
         }
       }
+    },
+    "session_list": {
+      "tool": true,
+      "noun": "session",
+      "verb": "list",
+      "description": "List sessions in the connected graph.",
+      "input": {},
+      "readOnly": true
     }
   }
 }

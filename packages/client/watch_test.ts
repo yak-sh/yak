@@ -328,7 +328,12 @@ Deno.test('closing one watch does not disconnect other transient observers', asy
   const { loadVocab } = await import('@yaks/vocab')
   const c = client(
     loadVocab([{
-      $defs: { text: { properties: { body: { type: 'string' } } } },
+      $defs: {
+        text: {
+          component: true,
+          properties: { body: { type: 'string' } },
+        },
+      },
     }]),
     [],
     { vault: false },

@@ -1,4 +1,4 @@
-import { commands } from './commands.ts'
+import { tools as declared } from './declared.ts'
 // The tools @yaks/cli runs: start a transcript, say something more to one,
 // list them, read one back, and ask what the credential can reach. A handful
 // of words and no state of their own — each one opens the graph, does the one
@@ -243,11 +243,10 @@ export let own: Word[] = [
   },
 ]
 
-// A tool DECLARED over the graph (commands.ts, and one day the vocabulary)
-// runs against a graph rather than a command line, so it is run here and its
-// structured result printed. The word order and the arguments are @yaks/cli's
+// A tool the VOCABULARY declares (declared.ts) runs against a graph rather
+// than a command line, so it is run here and its structured result printed. The word order and the arguments are @yaks/cli's
 // either way — nothing about a graph tool is spelled twice.
-let overGraph = (tool: typeof commands[number]): Word => ({
+let overGraph = (tool: typeof declared[number]): Word => ({
   ...tool,
   run: async (args, c) => {
     let h = open()
@@ -272,4 +271,4 @@ let overGraph = (tool: typeof commands[number]): Word => ({
 })
 
 /** Every word `harness` answers to: the graph's tools, then its own. */
-export let tools: Word[] = [...commands.map(overGraph), ...own]
+export let tools: Word[] = [...declared.map(overGraph), ...own]

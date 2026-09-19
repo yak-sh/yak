@@ -2,6 +2,7 @@
   "title": "canvas",
   "$defs": {
     "camera": {
+      "component": true,
       "type": "object",
       "kind": true,
       "sync": "server",
@@ -42,6 +43,7 @@
       }
     },
     "canvas": {
+      "component": true,
       "type": "object",
       "kind": true,
       "by_name": true,
@@ -49,6 +51,7 @@
       "description": "a plane things are arranged on"
     },
     "card": {
+      "component": true,
       "type": "object",
       "kind": true,
       "sync": "server",
@@ -67,6 +70,7 @@
       }
     },
     "client": {
+      "component": true,
       "type": "object",
       "kind": true,
       "sync": "server",
@@ -90,6 +94,7 @@
       }
     },
     "cursor": {
+      "component": true,
       "type": "object",
       "kind": true,
       "sync": "server",
@@ -114,6 +119,7 @@
       }
     },
     "fold": {
+      "component": true,
       "type": "object",
       "kind": true,
       "sync": "server",
@@ -138,6 +144,7 @@
       }
     },
     "layout": {
+      "component": true,
       "type": "object",
       "kind": true,
       "prefix": "L",
@@ -154,6 +161,7 @@
       }
     },
     "pane": {
+      "component": true,
       "type": "object",
       "kind": true,
       "sync": "server",
@@ -200,6 +208,7 @@
       }
     },
     "pin": {
+      "component": true,
       "type": "object",
       "sync": "server",
       "description": "where a card sits on a canvas",
@@ -233,6 +242,7 @@
       }
     },
     "shelf": {
+      "component": true,
       "type": "object",
       "sync": "server",
       "description": "what one window is holding, off the canvas",

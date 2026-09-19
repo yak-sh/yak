@@ -141,6 +141,14 @@ export type VocabDoc = {
 export type PropSchema = {
   type?: string
   properties?: Record<string, PropSchema>
+  // What a $defs entry IS. An entry says one of these or it is an ordinary
+  // reusable subschema — the loader plants neither a table nor a tool for it.
+  component?: boolean
+  tool?: boolean
+  // A tool declaration's own words: what it is called, and what it takes.
+  noun?: string
+  verb?: string
+  input?: Record<string, PropSchema>
   // native
   format?: string
   enum?: readonly string[]

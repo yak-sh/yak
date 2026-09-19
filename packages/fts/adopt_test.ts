@@ -13,11 +13,13 @@ import { mem, shelf, shop } from './harness.ts'
 let post = loadVocab({
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     doc: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -26,10 +28,12 @@ let post = loadVocab({
       },
     },
     content: {
+      component: true,
       type: 'object',
       properties: { body: { type: 'string', search: true } },
     },
     mail: {
+      component: true,
       type: 'object',
       properties: {
         from: { type: 'string', stamped: true, search: true },

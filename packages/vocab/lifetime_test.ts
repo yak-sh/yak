@@ -31,8 +31,13 @@ Deno.test('a duration is milliseconds; a boundary is not a span', () => {
 Deno.test('a component that says nothing syncs to the server, forever', () => {
   let v = loadVocab({
     $defs: {
-      task: { type: 'object', properties: { title: { type: 'string' } } },
+      task: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'string' } },
+      },
       presence: {
+        component: true,
         type: 'object',
         sync: 'peers',
         durable: 'connection',

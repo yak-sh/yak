@@ -16,10 +16,12 @@ import {
 let vocab = loadVocab([{
   $defs: {
     doc: {
+      component: true,
       type: 'object',
       properties: { title: { type: 'string' } },
     },
     task: {
+      component: true,
       type: 'object',
       properties: {
         rank: { type: 'number' },
@@ -159,7 +161,11 @@ Deno.test('a column pick is remembered per registry, and an overlay replaces it'
   // The same address under a second vocabulary is a different declaration.
   let other = loadVocab([{
     $defs: {
-      doc: { type: 'object', properties: { title: { type: 'number' } } },
+      doc: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'number' } },
+      },
     },
   }])
   let byType = define([plain, ranks])

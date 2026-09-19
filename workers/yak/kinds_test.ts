@@ -9,6 +9,7 @@ import { filled, schemaOf } from '../../src/store/tools.ts'
 let box = {
   $defs: {
     recipe: {
+      component: true,
       type: 'object',
       kind: true,
       description: 'a dish somebody cooks, with what it takes and how long',
@@ -17,6 +18,7 @@ let box = {
     // Not a kind: a mark a recipe wears, which is nobody's thing to add. A
     // component an app declares is a kind unless it says this.
     starred: {
+      component: true,
       type: 'object',
       kind: false,
       properties: { at: { type: 'string' } },
@@ -44,12 +46,19 @@ Deno.test('the sentence says the app and what the vocabulary means', () => {
   )
   // A component that claims no meaning says none, so the sentence stops.
   assertEquals(
-    tools({ $defs: { dish: { properties: { serves: { type: 'number' } } } } })
+    tools({
+      $defs: {
+        dish: {
+          component: true,
+          properties: { serves: { type: 'number' } },
+        },
+      },
+    })
       .add_dish.description,
     'Add a dish to jeff/recipes',
   )
   assertStringIncludes(
-    tools({ $defs: { story: {} } }).find_story.description,
+    tools({ $defs: { story: { component: true } } }).find_story.description,
     'Find stories in jeff/recipes. Words match',
   )
 })
@@ -109,7 +118,11 @@ Deno.test('an app declines them, or spells one itself', () => {
   // The manifest says so.
   assertEquals(withKinds({}, appDoc({ ...box, tools: false }), 'a/b'), {})
   assertEquals(
-    withKinds({}, appDoc({ $defs: { dish: {} }, tools: false }), 'a/b'),
+    withKinds(
+      {},
+      appDoc({ $defs: { dish: { component: true } }, tools: false }),
+      'a/b',
+    ),
     {},
   )
   // Or a tools.json spells the name, and that one is whole: the app's own

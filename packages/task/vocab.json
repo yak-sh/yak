@@ -6,6 +6,7 @@
   "title": "task",
   "$defs": {
     "task": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "a thing to do",
@@ -23,6 +24,7 @@
       }
     },
     "filed": {
+      "component": true,
       "type": "object",
       "description": "optional portfolio filing, separate from being a task",
       "properties": {
@@ -50,12 +52,14 @@
       }
     },
     "project": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "something tasks are grouped under",
       "properties": {}
     },
     "board": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "a saved filter over the tasks — membership is never stored",
@@ -68,6 +72,7 @@
       }
     },
     "completed": {
+      "component": true,
       "type": "object",
       "description": "the mark a finished task wears",
       "properties": {
@@ -94,6 +99,7 @@
       }
     },
     "cancelled": {
+      "component": true,
       "type": "object",
       "description": "the mark a called-off task wears",
       "properties": {
@@ -124,6 +130,7 @@
       }
     },
     "blocked": {
+      "component": true,
       "type": "object",
       "description": "something outside the graph is in the way. A facet, never a status: a blocked task is still open work.",
       "properties": {
@@ -134,12 +141,14 @@
       }
     },
     "requires": {
+      "component": true,
       "type": "object",
       "relation": true,
       "description": "this task waits for that one",
       "properties": {}
     },
     "contains": {
+      "component": true,
       "type": "object",
       "relation": true,
       "description": "that task is part of this one",

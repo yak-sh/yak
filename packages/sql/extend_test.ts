@@ -12,16 +12,22 @@ import { compile, type Extension, raw, Unsupported } from './mod.ts'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     doc: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { title: { type: 'string' } },
     },
-    shelf: { type: 'object', properties: { label: { type: 'string' } } },
+    shelf: {
+      component: true,
+      type: 'object',
+      properties: { label: { type: 'string' } },
+    },
   },
 }
 let v = loadVocab(doc)

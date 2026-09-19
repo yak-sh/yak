@@ -22,12 +22,14 @@ export let mem = (): Driver => {
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     // A book on the shelf: what it is called, what it is about, what it costs.
     book: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -39,6 +41,7 @@ let doc: VocabDoc = {
     // What a reader said about one. Prose in a second component — the whole
     // point of searching any property rather than one document component.
     review: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {

@@ -2,6 +2,7 @@
   "title": "wake",
   "$defs": {
     "wake": {
+      "component": true,
       "type": "object",
       "kind": true,
       "prefix": "W",
@@ -30,6 +31,7 @@
       }
     },
     "fired": {
+      "component": true,
       "type": "object",
       "description": "when a wake last went off",
       "properties": {

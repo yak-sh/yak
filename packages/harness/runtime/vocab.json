@@ -2,6 +2,7 @@
   "title": "runtime projection",
   "$defs": {
     "session": {
+      "component": true,
       "properties": {
         "status": {
           "type": "string"
@@ -9,6 +10,7 @@
       }
     },
     "dispatch": {
+      "component": true,
       "properties": {
         "state": {
           "type": "string"
@@ -16,6 +18,7 @@
       }
     },
     "attempt": {
+      "component": true,
       "properties": {
         "state": {
           "type": "string"
@@ -23,9 +26,11 @@
       }
     },
     "call": {
+      "component": true,
       "properties": {}
     },
     "error": {
+      "component": true,
       "properties": {
         "code": {
           "type": "string"

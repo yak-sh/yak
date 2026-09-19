@@ -274,7 +274,11 @@ Deno.test('independent lists keep their boundaries and restart numbering', () =>
 Deno.test('render resolves views and column context, and missing views are empty', () => {
   let vocab = loadVocab([{
     $defs: {
-      doc: { type: 'object', properties: { title: { type: 'string' } } },
+      doc: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'string' } },
+      },
     },
   }])
   let registry = define([{
@@ -339,7 +343,11 @@ Deno.test('nested text views retain registry context and always render read-only
   ])
   let vocab = loadVocab([{
     $defs: {
-      doc: { type: 'object', properties: { title: { type: 'string' } } },
+      doc: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'string' } },
+      },
     },
   }])
   assertEquals(

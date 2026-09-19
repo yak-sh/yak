@@ -12,11 +12,13 @@ import { journalDoc } from './vocab.ts'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     page: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -27,6 +29,7 @@ let doc: VocabDoc = {
     },
     // A note has nothing left to be about once its page is gone.
     note: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -35,6 +38,7 @@ let doc: VocabDoc = {
       },
     },
     created: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
@@ -42,6 +46,7 @@ let doc: VocabDoc = {
       },
     },
     updated: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },

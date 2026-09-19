@@ -811,7 +811,13 @@ slow('an app declares which of its own columns are searched', async () => {
       return await manifest(slug, vocab)
     }
     let recipe = (props: Record<string, unknown>) => ({
-      $defs: { recipe: { type: 'object', properties: props } },
+      $defs: {
+        recipe: {
+          component: true,
+          type: 'object',
+          properties: props,
+        },
+      },
     })
     let titles = async (text: string) =>
       (JSON.parse(await agent.tool('search', { text })) as {

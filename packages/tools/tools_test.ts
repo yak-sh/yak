@@ -6,7 +6,12 @@ import { callDoc, executeCall, graphInvocation, UnfinishedCall } from './mod.ts'
 
 const setup = async (args = '{}') => {
   const vocab = loadVocab([callDoc, {
-    $defs: { tool: { properties: { name: { type: 'string' } } } },
+    $defs: {
+      tool: {
+        component: true,
+        properties: { name: { type: 'string' } },
+      },
+    },
   }])
   const g = graph({ vocab, storage: ram(vocab) })
   await g.apply([

@@ -4,7 +4,7 @@ import { argsFor, unique, wordFor } from '@yaks/cli'
 import { namedTool, type ToolCtx } from '@yaks/graph'
 import { connect } from '../mcp/harness.ts'
 import { open } from './store.ts'
-import { commands } from './commands.ts'
+import { tools as declared } from './declared.ts'
 import { tools as cliTools } from './cli.ts'
 import manifest from './plugin.ts'
 
@@ -17,8 +17,8 @@ Deno.test('manifest contributions share one command between CLI and MCP over a g
   }], () => Promise.resolve({ default: manifest }))
   assertEquals((await select(loaded, 'vocabulary')).length, 1)
   assertEquals((await select(loaded, 'graph.plugins')).length, 1)
-  const declarations = (await select(loaded, 'commands'))[0]
-    .value as typeof commands
+  const declarations = (await select(loaded, 'tools'))[0]
+    .value as typeof declared
   const h = open(':memory:')
   await h.g.apply([{ entity: { eid: 'session-one' }, session: { id: 'one' } }])
   const context: ToolCtx = {
@@ -61,7 +61,7 @@ Deno.test('manifest contributions share one command between CLI and MCP over a g
 })
 
 Deno.test('noun and verb traversal is automatic and collision checked', () => {
-  const c = commands[0]
+  const c = declared[0]
   assertEquals(namedTool(c).name, 'session_list')
   assertEquals(wordFor([c], ['session', 'list', 'extra'])?.args, ['extra'])
   assertEquals(wordFor([c], ['list', 'session'])?.verb, c)

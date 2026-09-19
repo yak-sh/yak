@@ -20,13 +20,20 @@ import type { Mark } from './words.ts'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
-    person: { type: 'object', kind: true, properties: { name: {} } },
+    person: {
+      component: true,
+      type: 'object',
+      kind: true,
+      properties: { name: {} },
+    },
     // A lease, so a test can add the `wip` rung the way an application would.
     claim: {
+      component: true,
       type: 'object',
       properties: {
         person: { type: 'string', ref: 'person', death: 'cascade' },

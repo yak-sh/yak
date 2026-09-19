@@ -12,11 +12,13 @@ import { effectDoc } from './durable.ts'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     post: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -27,6 +29,7 @@ let doc: VocabDoc = {
     },
     // A comment has nothing left to be about once its post is gone.
     comment: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -35,6 +38,7 @@ let doc: VocabDoc = {
       },
     },
     subscriber: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { email: { type: 'string' } },
@@ -42,12 +46,14 @@ let doc: VocabDoc = {
     // The provenance @yaks/graph stamps, so the tests see the components a
     // batch grows on its own beside the ones it was given.
     created: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
       },
     },
     updated: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },

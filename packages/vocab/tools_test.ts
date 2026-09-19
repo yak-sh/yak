@@ -89,3 +89,41 @@ Deno.test('2019 schema semantics and independent identical IDs use selected dial
     })
   }
 })
+
+Deno.test('a vocabulary carries tool declarations beside its components', async () => {
+  let { toolsIn } = await import('./tools.ts')
+  let doc = {
+    $defs: {
+      session: { component: true, type: 'object', properties: {} },
+      helper: { type: 'string' },
+      session_list: {
+        tool: true,
+        noun: 'session',
+        verb: 'list',
+        description: 'List sessions.',
+        input: { scope: { type: 'string' }, limit: { type: 'integer' } },
+        required: ['scope'],
+        options: { positional: ['scope'] },
+        readOnly: true,
+      },
+    },
+  }
+  let [t] = toolsIn(doc)
+  assertEquals(toolsIn(doc).length, 1) // the component and the subschema pass by
+  assertEquals(t.name, 'session_list')
+  assertEquals(t.readOnly, true)
+  // `input` is one schema per argument; what travels is the object schema
+  // every door downstream already reads.
+  assertEquals(t.inputSchema, {
+    type: 'object',
+    additionalProperties: false,
+    properties: { scope: { type: 'string' }, limit: { type: 'integer' } },
+    required: ['scope'],
+  })
+  assertEquals(validateToolInput(t, { scope: 'root' }), { scope: 'root' })
+  assertThrows(
+    () => validateToolInput(t, { scope: 'root', limit: 'lots' }),
+    Error,
+    'Invalid tool arguments',
+  )
+})

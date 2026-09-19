@@ -5,6 +5,7 @@
   "title": "memory",
   "$defs": {
     "memory": {
+      "component": true,
       "type": "object",
       "kind": true,
       "before": ["doc"],

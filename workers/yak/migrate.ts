@@ -145,6 +145,7 @@ export let documented = (held: string): string | null => {
     }
     if (!cols || typeof cols != 'object' || Array.isArray(cols)) return null
     defs[name] = {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],

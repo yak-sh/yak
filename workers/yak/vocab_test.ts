@@ -107,7 +107,15 @@ Deno.test("an app's own word is a kind before doc", () => {
   assertEquals(v.kindOf({ doc: 1, recipe: 1 }), 'recipe')
   // Unless the manifest says otherwise.
   assertEquals(
-    appVocab({ $defs: { note: { type: 'object', kind: false } } }).kinds
+    appVocab({
+      $defs: {
+        note: {
+          component: true,
+          type: 'object',
+          kind: false,
+        },
+      },
+    }).kinds
       .includes('note'),
     false,
   )
@@ -321,6 +329,7 @@ Deno.test('a searched column of an app reaches the index fields', () => {
   let v = appVocab({
     $defs: {
       memo: {
+        component: true,
         type: 'object',
         properties: {
           note: { type: 'string', search: true },
@@ -368,6 +377,7 @@ Deno.test('a word the space already has is a use, not a home', () => {
       appDoc({
         $defs: {
           book: {
+            component: true,
             type: 'object',
             properties: { blurb: { type: 'string', search: true } },
           },
@@ -396,6 +406,7 @@ Deno.test('a searched column that holds no prose is refused', () => {
       appDoc({
         $defs: {
           recipe: {
+            component: true,
             type: 'object',
             properties: { serves: { type: 'number', search: true } },
           },
@@ -413,6 +424,7 @@ Deno.test('a store answers the document it means', () => {
     meant({
       $defs: {
         recipe: {
+          component: true,
           type: 'object',
           properties: { note: { type: 'string', search: true } },
         },
@@ -425,4 +437,24 @@ Deno.test('a store answers the document it means', () => {
   assertEquals(meant('{'), {})
   assertEquals(meant({ recipe: { serves: 'number' } }), {})
   assertEquals(meant(says({ doc: { headline: txt } })), {})
+})
+
+// An app's manifest never says `component: true`: its $defs entries ARE its
+// components, that is the whole of what the file is for, and @yaks/vocab's
+// marker (T-37551) is put on here. So a store that accepted a manifest before
+// the marker existed reads back as the same words it accepted.
+Deno.test('a manifest wears the component marker without saying it', () => {
+  let doc = appDoc(
+    '{"$defs": {"recipe": {"properties": {"serves": ' +
+      '{"type": "number"}}}}}',
+  )
+  assertEquals(doc.$defs?.recipe.component, true)
+  assertEquals(appVocab(doc).all.includes('recipe'), true)
+  // The same for one read back out of a store, which is where a manifest
+  // written before the marker actually comes from.
+  assertEquals(
+    meant({ $defs: { recipe: { properties: { serves: { type: 'number' } } } } })
+      .$defs?.recipe.component,
+    true,
+  )
 })

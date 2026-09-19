@@ -22,8 +22,13 @@ let hostDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
   title: 'host',
   $defs: {
-    release: { type: 'object', properties: { files: { type: 'string' } } },
+    release: {
+      component: true,
+      type: 'object',
+      properties: { files: { type: 'string' } },
+    },
     made: {
+      component: true,
       type: 'object',
       properties: {
         release: { type: 'string', ref: 'entity', death: 'cascade' },

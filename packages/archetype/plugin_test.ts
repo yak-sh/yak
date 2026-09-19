@@ -7,7 +7,12 @@ import { archetypeDoc, archetypes, eidOf } from './mod.ts'
 for (let async of [false, true]) {
   Deno.test(`archetype: RAM plugin, async=${async}, transaction rollback`, async () => {
     let vocab = loadVocab([archetypeDoc, {
-      $defs: { note: { type: 'object' } },
+      $defs: {
+        note: {
+          component: true,
+          type: 'object',
+        },
+      },
     }])
     let store = ram(vocab)
     let storage: Storage = async

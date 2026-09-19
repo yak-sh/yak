@@ -11,18 +11,21 @@ let catalog: VocabDoc = {
   $vocabulary: { 'https://yaks.sh/vocab/core': true, [ID_URI]: true },
   $defs: {
     book: {
+      component: true,
       type: 'object',
       kind: true,
       prefix: 'B',
       properties: { title: { type: 'string' } },
     },
     author: {
+      component: true,
       type: 'object',
       kind: true,
       prefix: 'A',
       properties: { name: { type: 'string' } },
     },
     review: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { stars: { type: 'number' } },

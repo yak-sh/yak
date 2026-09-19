@@ -20,18 +20,21 @@ import type { Trouble } from './outbound.ts'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     // A named thing: everything in the box wears one.
     doc: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { title: { type: 'string' }, body: { type: 'string' } },
     },
     // A recipe, and the cook who wrote it down.
     recipe: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -43,6 +46,7 @@ let doc: VocabDoc = {
     },
     // A note exists ABOUT a recipe — deleting the recipe takes its notes too.
     note: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -52,12 +56,14 @@ let doc: VocabDoc = {
     },
     // What this cook has typed and not saved. Never leaves the browser.
     draft: {
+      component: true,
       type: 'object',
       sync: 'none',
       properties: { text: { type: 'string' } },
     },
     // The words in the search box: gone when the tab closes.
     sieve: {
+      component: true,
       type: 'object',
       sync: 'none',
       durable: 'connection',
@@ -66,12 +72,14 @@ let doc: VocabDoc = {
     // Where this cook's finger is on the page: everyone else sees it, nobody
     // stores it, and it goes with the tab.
     pointing: {
+      component: true,
       type: 'object',
       sync: 'peers',
       durable: 'connection',
       properties: { x: { type: 'number' }, y: { type: 'number' } },
     },
     created: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
@@ -79,6 +87,7 @@ let doc: VocabDoc = {
       },
     },
     updated: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },

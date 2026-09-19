@@ -3,6 +3,7 @@
   "title": "archetype",
   "$defs": {
     "archetype": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "Immutable component-table set; its eid is derivedEid('archetype|' + bytewise-sorted table names joined with ',').",
@@ -15,6 +16,7 @@
       }
     },
     "retired": {
+      "component": true,
       "type": "object",
       "description": "This archetype names a table no longer in the file. Kept forever, never tombstoned."
     }

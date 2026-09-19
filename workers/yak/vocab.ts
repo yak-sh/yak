@@ -101,13 +101,28 @@ export let coreDoc: VocabDoc = {
   title: 'core',
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
-    person: { type: 'object', kind: true, before: ['doc'], properties: {} },
-    created: { type: 'object', properties: stampCols },
-    updated: { type: 'object', properties: stampCols },
+    person: {
+      component: true,
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      properties: {},
+    },
+    created: {
+      component: true,
+      type: 'object',
+      properties: stampCols,
+    },
+    updated: {
+      component: true,
+      type: 'object',
+      properties: stampCols,
+    },
   },
 }
 
@@ -138,6 +153,7 @@ export let relationDoc: VocabDoc = {
   title: 'relations',
   $defs: Object.fromEntries(
     RELATIONS.map((name) => [name, {
+      component: true,
       type: 'object',
       relation: true,
       properties: {},
@@ -167,6 +183,7 @@ export let kernelDoc: VocabDoc = {
   title: 'kernel',
   $defs: {
     exception: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -182,21 +199,43 @@ export let kernelDoc: VocabDoc = {
     // break nobody chose. `app_errors` reads both facets in every store, so
     // both are declared in every store.
     error: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
       properties: { at: owned(time), message: owned(text) },
     },
-    archived: { type: 'object', properties: stampCols },
-    opened: { type: 'object', properties: stampCols },
-    quarantined: { type: 'object', properties: stampCols },
+    archived: {
+      component: true,
+      type: 'object',
+      properties: stampCols,
+    },
+    opened: {
+      component: true,
+      type: 'object',
+      properties: stampCols,
+    },
+    quarantined: {
+      component: true,
+      type: 'object',
+      properties: stampCols,
+    },
     // The two rows a page's upload makes (apps.ts `took`): the CONTENT,
     // addressed by its sha, and the USE of it, addressed off that. They stay
     // apart because they are two things, and because a component may not point
     // at its own entity.
-    blob: { type: 'object', properties: { bytes: num } },
-    image: { type: 'object', properties: { w: num, h: num } },
+    blob: {
+      component: true,
+      type: 'object',
+      properties: { bytes: num },
+    },
+    image: {
+      component: true,
+      type: 'object',
+      properties: { w: num, h: num },
+    },
     attachment: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -216,7 +255,13 @@ export let kernelDoc: VocabDoc = {
 export let notifiedDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
   title: 'notified',
-  $defs: { notified: { type: 'object', properties: stampCols } },
+  $defs: {
+    notified: {
+      component: true,
+      type: 'object',
+      properties: stampCols,
+    },
+  },
 }
 
 /** What a `vocab.json` looks like, for a refusal that teaches. */
@@ -253,6 +298,7 @@ export let appsDoc: VocabDoc = {
   title: 'apps',
   $defs: {
     task: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -268,6 +314,7 @@ export let appsDoc: VocabDoc = {
       },
     },
     filed: {
+      component: true,
       type: 'object',
       properties: {
         priority: num,
@@ -279,18 +326,25 @@ export let appsDoc: VocabDoc = {
     // The two marks that end a task. Both are the store's to fill — the clock
     // from the write, the writer from whoever is asking — so `completed: {}`
     // is the whole write, and `completed: null` opens it again.
-    completed: { type: 'object', properties: stampCols },
+    completed: {
+      component: true,
+      type: 'object',
+      properties: stampCols,
+    },
     cancelled: {
+      component: true,
       type: 'object',
       properties: { ...stampCols, reason: text },
     },
     project: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
       properties: { color: text },
     },
     comment: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -309,6 +363,7 @@ export let appsDoc: VocabDoc = {
     // count — nothing here decrements it, because a shop that oversells by one
     // is a conversation and a shop that loses an order to a race is a bug.
     product: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -335,6 +390,7 @@ export let appsDoc: VocabDoc = {
     // `items` is the cart as JSON in one text column, the way `home.first`
     // is; a column is a scalar, and this is a list.
     order: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -349,8 +405,13 @@ export let appsDoc: VocabDoc = {
         status: { enum: ['paid', 'refunded', 'disputed'] },
       },
     },
-    favorite: { type: 'object', properties: { at: owned(time) } },
+    favorite: {
+      component: true,
+      type: 'object',
+      properties: { at: owned(time) },
+    },
     web: {
+      component: true,
       type: 'object',
       properties: {
         url: { type: 'string', format: 'uri' },
@@ -467,12 +528,14 @@ export let platformDoc: VocabDoc = {
   title: 'platform',
   $defs: {
     space: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
       properties: { slug: unique(text) },
     },
     app: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -496,6 +559,7 @@ export let platformDoc: VocabDoc = {
     // Storage survives config edits and renames. Only the kernel may record
     // account resource ids, so an app cannot claim another tenant's data.
     binding: {
+      component: true,
       type: 'object',
       unique: [['app', 'name', 'type'], ['type', 'resource']],
       properties: {
@@ -524,7 +588,11 @@ export let platformDoc: VocabDoc = {
     // still redirecting. Not unique here — uniqueness is over an address WITHIN
     // a space for an app, and over the whole platform for a space, and neither
     // is one column's own race; the tools decide both (tools.ts `taken`).
-    former: { type: 'object', properties: { slug: text, slugs: text } },
+    former: {
+      component: true,
+      type: 'object',
+      properties: { slug: text, slugs: text },
+    },
     // WHICH app is the space's front page, and the paths its worker sees FIRST
     // before the app whose slug owns them (D-34197, T-34227). One fact, one
     // spelling: the app WEARING `home` is the home app, and its globs are
@@ -541,8 +609,13 @@ export let platformDoc: VocabDoc = {
     // `former.slugs` above splits on whitespace instead, which is the older
     // spelling of a list here;
     // JSON is the one that round-trips exactly what an agent passed.
-    home: { type: 'object', properties: { first: text } },
+    home: {
+      component: true,
+      type: 'object',
+      properties: { first: text },
+    },
     member: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -553,7 +626,11 @@ export let platformDoc: VocabDoc = {
         role: { enum: ['owner', 'editor', 'viewer'] },
       },
     },
-    email: { type: 'object', properties: { address: text } },
+    email: {
+      component: true,
+      type: 'object',
+      properties: { address: text },
+    },
     // A hostname somebody owns, and the ONE place it serves: a space, whose
     // front page it opens at `/` with every app of it at `/<app>/`, or a single
     // app, which it opens at `/` outright (T-34596). One column for both,
@@ -561,6 +638,7 @@ export let platformDoc: VocabDoc = {
     // differ only in which entity it names; a second column would let a row say
     // both and mean neither.
     hostname: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -572,6 +650,7 @@ export let platformDoc: VocabDoc = {
       },
     },
     deploy: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -595,6 +674,7 @@ export let platformDoc: VocabDoc = {
     // is about: what the store held is wound back, and what happened to it is
     // still written down here.
     restored: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -607,10 +687,12 @@ export let platformDoc: VocabDoc = {
       },
     },
     published: {
+      component: true,
       type: 'object',
       properties: { name: unique(text), version: num, at: time, about: text },
     },
     installed: {
+      component: true,
       type: 'object',
       properties: { of: ref('detach'), version: num },
     },
@@ -628,7 +710,11 @@ export let platformDoc: VocabDoc = {
     // second spelling of the same fact drifts from it. That is also why an
     // app and a space share the word — it says one thing, thrown away and
     // since when, and every reader asks the row in front of it.
-    trashed: { type: 'object', properties: { at: time, by: ref('keep') } },
+    trashed: {
+      component: true,
+      type: 'object',
+      properties: { at: time, by: ref('keep') },
+    },
     // That this app's OFFER has been put forward for the gallery, and whether
     // we said yes (gallery.ts, T-34476). Two stamps rather than a state word:
     // `asked_at` is the owner of the app asking, `listed_at` is the platform
@@ -641,6 +727,7 @@ export let platformDoc: VocabDoc = {
     // something a write can lift for itself. The tools stamp them through the
     // kernel's own door (directory.ts `stamp`).
     gallery: {
+      component: true,
       type: 'object',
       properties: { asked_at: owned(time), listed_at: owned(time) },
     },
@@ -649,6 +736,7 @@ export let platformDoc: VocabDoc = {
     // `app_set`, never guessed off its page: an app that names neither gets
     // the platform's own palette instead of a browser's default grey.
     theme: {
+      component: true,
       type: 'object',
       properties: { theme_color: text, background_color: text },
     },
@@ -658,7 +746,11 @@ export let platformDoc: VocabDoc = {
     // what the person has changed since. It lives on the app rather than in
     // the store because an install mints a new app row and a new store
     // together, and the copy is meant to be seeded again.
-    seeded: { type: 'object', properties: { at: time, version: num } },
+    seeded: {
+      component: true,
+      type: 'object',
+      properties: { at: time, version: num },
+    },
     // The Stripe account this space SELLS through (sell.ts, T-34524). Direct
     // charges: the connected account is the merchant, so this is the whole of
     // what the platform keeps about it — the id every call carries in its
@@ -672,6 +764,7 @@ export let platformDoc: VocabDoc = {
     // ever said it may. Only the Connect webhook and `space_sell` write them,
     // through the kernel's own door (directory.ts `stamp`).
     stripe: {
+      component: true,
       type: 'object',
       properties: {
         account: owned(text),
@@ -690,10 +783,12 @@ export let platformDoc: VocabDoc = {
     // answering for a TTL, and the rate a sale is charged has to be the rate
     // the owner set a moment ago.
     fee: {
+      component: true,
       type: 'object',
       properties: { bps: owned(num) },
     },
     plan: {
+      component: true,
       type: 'object',
       properties: {
         tier: owned({ enum: ['free', 'plus'] }),
@@ -712,6 +807,7 @@ export let platformDoc: VocabDoc = {
     // but an owner of `yak` reaches that door at all (directory.ts), which is
     // what keeps a customer from writing their own bill.
     meter: {
+      component: true,
       type: 'object',
       properties: {
         month: text,
@@ -729,6 +825,7 @@ export let platformDoc: VocabDoc = {
       },
     },
     signin: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -744,6 +841,7 @@ export let platformDoc: VocabDoc = {
     // question a standing sign-in link raises: has anybody used it at all. Not
     // `kind`: it is a mark a person wears, never a thing of its own.
     signed_in: {
+      component: true,
       type: 'object',
       properties: {
         at: owned(time),
@@ -751,6 +849,7 @@ export let platformDoc: VocabDoc = {
       },
     },
     report: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -1066,6 +1165,12 @@ export let livesIn = (uses: Record<string, string>) =>
  * manifest says otherwise, which is also what earns it its two tools
  * (kinds.ts). */
 let mine = (schema: PropSchema): PropSchema => ({
+  // `component: true` is the marker @yaks/vocab wants on a component, and it
+  // is put on HERE rather than asked of the person: an app manifest's $defs
+  // entries are its components, that is the whole of what the file is for, and
+  // a store that accepted one before the marker existed reads back the same
+  // way (T-37551).
+  component: true,
   type: 'object',
   kind: true,
   before: ['doc'],

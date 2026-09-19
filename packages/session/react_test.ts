@@ -28,7 +28,11 @@ import { took } from './timing.ts'
 // keeps `openai{response_id}`.
 let fakeDoc: VocabDoc = {
   $defs: {
-    fake: { type: 'object', properties: { reply: { type: 'string' } } },
+    fake: {
+      component: true,
+      type: 'object',
+      properties: { reply: { type: 'string' } },
+    },
   },
 }
 let vocab = loadVocab([sessionDoc, modelDoc, fakeDoc])

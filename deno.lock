@@ -1874,7 +1874,8 @@
       "packages/graph": {
         "dependencies": [
           "jsr:@std/assert@1",
-          "jsr:@yaks/id@0.1"
+          "jsr:@yaks/id@0.1",
+          "jsr:@yaks/vocab@0.1"
         ]
       },
       "packages/harness": {

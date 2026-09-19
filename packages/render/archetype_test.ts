@@ -7,8 +7,16 @@ import { applicable, type Bundle, define, extend, resolve } from './mod.ts'
 
 let vocab = loadVocab([{
   $defs: {
-    doc: { type: 'object', properties: { title: { type: 'string' } } },
-    task: { type: 'object', properties: {} },
+    doc: {
+      component: true,
+      type: 'object',
+      properties: { title: { type: 'string' } },
+    },
+    task: {
+      component: true,
+      type: 'object',
+      properties: {},
+    },
   },
 }])
 let tables = Object.freeze(['doc', 'task'])

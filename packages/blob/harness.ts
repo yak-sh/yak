@@ -30,11 +30,13 @@ export let mem = (): Driver => {
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     post: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -43,9 +45,18 @@ let doc: VocabDoc = {
         author: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },
-    person: { type: 'object', kind: true, properties: { name: {} } },
+    person: {
+      component: true,
+      type: 'object',
+      kind: true,
+      properties: { name: {} },
+    },
     // a component with no body column at all, to prove the swap is per column
-    tag: { type: 'object', properties: { label: { type: 'string' } } },
+    tag: {
+      component: true,
+      type: 'object',
+      properties: { label: { type: 'string' } },
+    },
   },
 }
 

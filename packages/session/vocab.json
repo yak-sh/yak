@@ -2,6 +2,7 @@
   "title": "session",
   "$defs": {
     "session": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "a transcript the daemon reacts to. Identity only: who runs it is `created.by`; what it is doing is read off its entries, never stored",
@@ -25,6 +26,7 @@
       }
     },
     "fork": {
+      "component": true,
       "type": "object",
       "description": "this session continues another transcript from one of its entries",
       "properties": {
@@ -37,6 +39,7 @@
       }
     },
     "claim": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "a session’s lock on the entity carrying it",
@@ -57,6 +60,7 @@
       }
     },
     "conflict": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "two sessions wanted one thing: written after the refusal, never by a client",
@@ -94,6 +98,7 @@
       }
     },
     "entry": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "one line of a transcript; the comp beside it says what kind",
@@ -117,6 +122,7 @@
       ]
     },
     "using": {
+      "component": true,
       "type": "object",
       "description": "provider, model and effort: on an input it sets or switches them, on an ask it records what was served",
       "properties": {
@@ -142,6 +148,7 @@
       }
     },
     "ask": {
+      "component": true,
       "type": "object",
       "description": "the model was asked here, from the prefix ending at `through`; what the provider keeps about it rides in that provider's own comp beside this one",
       "properties": {
@@ -160,11 +167,13 @@
       }
     },
     "stop": {
+      "component": true,
       "type": "object",
       "description": "a mark in the transcript: the daemon performs nothing after it",
       "properties": {}
     },
     "spawned": {
+      "component": true,
       "type": "object",
       "description": "a child session delegated by a parent; fork independently selects an inherited prefix",
       "properties": {
@@ -183,6 +192,7 @@
       }
     },
     "notice": {
+      "component": true,
       "type": "object",
       "description": "passive transcript context, included in the next ask without requesting one",
       "properties": {
@@ -198,6 +208,7 @@
       }
     },
     "archived": {
+      "component": true,
       "description": "Hidden from ordinary listings, without stopping execution or deleting history.",
       "type": "object",
       "properties": {
@@ -224,6 +235,7 @@
       }
     },
     "dispatch": {
+      "component": true,
       "type": "object",
       "description": "durable child pool admission; queued intent survives daemon restart",
       "properties": {
@@ -239,6 +251,7 @@
       }
     },
     "attempt": {
+      "component": true,
       "description": "Provider request lifecycle. Unfinished dispatched attempts are ambiguous on restart, never automatically replayed.",
       "properties": {
         "state": {

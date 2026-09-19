@@ -27,22 +27,26 @@ export let mem = (): Driver => {
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     doc: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { title: { type: 'string' } },
     },
     recipe: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
       properties: { serves: { type: 'number' } },
     },
     comment: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],

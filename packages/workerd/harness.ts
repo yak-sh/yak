@@ -14,16 +14,19 @@ import type { Namespace, Stub } from './stub.ts'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     doc: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { title: { type: 'string' }, body: { type: 'string' } },
     },
     book: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -33,6 +36,7 @@ let doc: VocabDoc = {
       },
     },
     created: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },

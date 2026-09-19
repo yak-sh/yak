@@ -3,7 +3,12 @@ import { graph, transient } from './mod.ts'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 const vocab = loadVocab([{
-  $defs: { doc: { properties: { body: { type: 'string' } } } },
+  $defs: {
+    doc: {
+      component: true,
+      properties: { body: { type: 'string' } },
+    },
+  },
 }])
 const make = () => graph({ vocab, storage: ram(vocab) })
 Deno.test('transient ordered text is projected but not stored, commit/discard and late frames', async () => {

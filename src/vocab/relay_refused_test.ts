@@ -11,8 +11,13 @@ import { fleetVocab } from './fleet_vocab.ts'
 Deno.test('a peers-tier write is named, a durable one is not', () => {
   let vocab = loadVocab({
     $defs: {
-      doc: { type: 'object', properties: { title: { type: 'string' } } },
+      doc: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'string' } },
+      },
       presence: {
+        component: true,
         type: 'object',
         sync: 'peers',
         durable: 'connection',

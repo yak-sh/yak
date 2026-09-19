@@ -47,8 +47,12 @@ let owner = { app: APP, person: ADA, role: 'owner', title: 'Ada' }
 // which it does not keep at all.
 let SCHEMA = JSON.stringify({
   $defs: {
-    recipe: { properties: { serves: { type: 'number' } } },
+    recipe: {
+      component: true,
+      properties: { serves: { type: 'number' } },
+    },
     presence: {
+      component: true,
       sync: 'peers',
       durable: 'connection',
       properties: {

@@ -19,31 +19,53 @@ export const eid = (n: number) =>
 export const vocab = loadVocab([edgeDoc, {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number' } },
     },
     doc: {
+      component: true,
       type: 'object',
       properties: { title: { type: 'string' }, body: { type: 'string' } },
     },
     task: {
+      component: true,
       type: 'object',
       properties: {
         status: { enum: ['open', 'wip', 'done', 'cancelled'], computed: true },
       },
     },
-    session: { type: 'object', properties: { id: { type: 'string' } } },
+    session: {
+      component: true,
+      type: 'object',
+      properties: { id: { type: 'string' } },
+    },
     claim: {
+      component: true,
       type: 'object',
       properties: {
         session: { type: 'string', ref: 'session', death: 'release' },
       },
     },
-    completed: { type: 'object' },
-    cancelled: { type: 'object' },
-    requires: { type: 'object', relation: true },
-    contains: { type: 'object', relation: true },
+    completed: {
+      component: true,
+      type: 'object',
+    },
+    cancelled: {
+      component: true,
+      type: 'object',
+    },
+    requires: {
+      component: true,
+      type: 'object',
+      relation: true,
+    },
+    contains: {
+      component: true,
+      type: 'object',
+      relation: true,
+    },
   },
 }], [edgeKeywords])
 export const textFields = fields(vocab, (c) => c.comp == 'doc')

@@ -15,13 +15,22 @@ import { mem } from './harness.ts'
 
 let domain = {
   $defs: {
-    doc: { type: 'object', properties: { title: { type: 'string' } } },
-    task: { type: 'object' },
+    doc: {
+      component: true,
+      type: 'object',
+      properties: { title: { type: 'string' } },
+    },
+    task: {
+      component: true,
+      type: 'object',
+    },
     link: {
+      component: true,
       type: 'object',
       properties: { to: { type: 'string', ref: 'entity', death: 'release' } },
     },
     child: {
+      component: true,
       type: 'object',
       properties: { of: { type: 'string', ref: 'entity', death: 'cascade' } },
     },
@@ -227,10 +236,12 @@ Deno.test('archetype: stamps join the final set and value-only writes do not ass
   let v = loadVocab([archetypeDoc, domain, {
     $defs: {
       created: {
+        component: true,
         type: 'object',
         properties: { at: { type: 'string', stamped: true } },
       },
       updated: {
+        component: true,
         type: 'object',
         properties: { at: { type: 'string', stamped: true } },
       },

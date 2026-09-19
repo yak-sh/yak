@@ -16,9 +16,9 @@ const manifest: Manifest = {
       load: async () => (await import('@yaks/session')).sessions(),
     },
     {
-      name: 'session-commands',
-      target: 'commands',
-      load: async () => (await import('./commands.ts')).commands,
+      name: 'session-tools',
+      target: 'tools',
+      load: async () => (await import('./declared.ts')).tools,
     },
   ],
 }

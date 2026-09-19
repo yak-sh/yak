@@ -2,6 +2,7 @@
   "title": "openai",
   "$defs": {
     "openai": {
+      "component": true,
       "type": "object",
       "description": "what the Responses API keeps about an ask: the reply's id, which anchors a later request when the provider stored it",
       "properties": {

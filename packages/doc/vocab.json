@@ -6,6 +6,7 @@
   "title": "doc",
   "$defs": {
     "doc": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "the words a person reads: a title and a body",

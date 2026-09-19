@@ -6,6 +6,7 @@
   "title": "key",
   "$defs": {
     "key": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "a value an entity answers to — which kind of value it is is a tag component riding beside it",

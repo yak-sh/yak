@@ -38,6 +38,7 @@ export let gitDirectoryDoc: VocabDoc = {
   title: 'git',
   $defs: {
     commit: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],

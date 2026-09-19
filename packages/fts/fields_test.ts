@@ -38,6 +38,7 @@ Deno.test('a text column nobody declared is stored, readable, and never searched
   let quiet = loadVocab({
     $defs: {
       book: {
+        component: true,
         type: 'object',
         properties: {
           title: { type: 'string', search: true },
@@ -52,7 +53,11 @@ Deno.test('a text column nobody declared is stored, readable, and never searched
 Deno.test('a vocabulary declaring no search has nothing to search', () => {
   let silent = loadVocab({
     $defs: {
-      book: { type: 'object', properties: { title: { type: 'string' } } },
+      book: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'string' } },
+      },
     },
   })
   assertEquals(fields(silent), [])

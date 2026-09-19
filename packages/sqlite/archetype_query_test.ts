@@ -9,7 +9,12 @@ import { rows, storage } from './mod.ts'
 import { Database } from './db.ts'
 
 let vocab = loadVocab([...shop.docs, archetypeDoc, {
-  $defs: { marker: { type: 'object' } },
+  $defs: {
+    marker: {
+      component: true,
+      type: 'object',
+    },
+  },
 }])
 Deno.test('archetype query golden: presence/kind, value joins, boolean, paths, reverse and aggregates', () => {
   let driver = mem()

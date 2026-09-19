@@ -139,9 +139,18 @@ Deno.test('reverse associations derive from the reference columns', () => {
 Deno.test('an association names the column when a comp has several refs', () => {
   let w = loadVocab({
     $defs: {
-      book: { type: 'object', properties: { isbn: { type: 'string' } } },
-      member: { type: 'object', properties: { name: { type: 'string' } } },
+      book: {
+        component: true,
+        type: 'object',
+        properties: { isbn: { type: 'string' } },
+      },
+      member: {
+        component: true,
+        type: 'object',
+        properties: { name: { type: 'string' } },
+      },
       review: {
+        component: true,
         type: 'object',
         properties: {
           book: { type: 'string', ref: 'book', death: 'cascade' },
@@ -149,6 +158,7 @@ Deno.test('an association names the column when a comp has several refs', () => 
         },
       },
       loan: {
+        component: true,
         type: 'object',
         properties: {
           book: { type: 'string', ref: 'book', death: 'cascade' },
@@ -241,6 +251,7 @@ Deno.test('JSON columns store validated JSON text', () => {
   let w = loadVocab({
     $defs: {
       config: {
+        component: true,
         type: 'object',
         properties: { value: { type: 'string', format: 'json' } },
       },
@@ -263,7 +274,10 @@ Deno.test('number and priority columns refuse non-finite values', () => {
   for (let format of [undefined, 'priority']) {
     let w = loadVocab({
       $defs: {
-        reading: { properties: { value: { type: 'number', format } } },
+        reading: {
+          component: true,
+          properties: { value: { type: 'number', format } },
+        },
       },
     })
     for (let value of [NaN, Infinity, -Infinity]) {
@@ -279,6 +293,7 @@ Deno.test('a computed column reads but never writes', () => {
   let w = loadVocab({
     $defs: {
       task: {
+        component: true,
         type: 'object',
         kind: true,
         properties: {
@@ -326,8 +341,13 @@ Deno.test('the fleet order is unchanged: memory and project precede doc', () => 
 Deno.test('indexes merge the column flag with the composite lists', () => {
   let w = loadVocab({
     $defs: {
-      space: { type: 'object', properties: { slug: { unique: true } } },
+      space: {
+        component: true,
+        type: 'object',
+        properties: { slug: { unique: true } },
+      },
       app: {
+        component: true,
         type: 'object',
         unique: [['space', 'slug']],
         index: [['space', 'version']],
@@ -340,7 +360,11 @@ Deno.test('indexes merge the column flag with the composite lists', () => {
           rank: { type: 'number', computed: true, index: true },
         },
       },
-      alias: { type: 'object', properties: { slug: { type: 'string' } } },
+      alias: {
+        component: true,
+        type: 'object',
+        properties: { slug: { type: 'string' } },
+      },
     },
   })
   assertEquals(w.indexes('space'), [{ cols: ['slug'], unique: true }])
@@ -357,6 +381,7 @@ Deno.test('one pair declared twice is one index, unique if either said so', () =
   let w = loadVocab({
     $defs: {
       shelf: {
+        component: true,
         type: 'object',
         unique: [['aisle']],
         index: [['aisle']],
@@ -369,7 +394,15 @@ Deno.test('one pair declared twice is one index, unique if either said so', () =
 
 Deno.test('a word has one home across documents', () => {
   assertThrows(
-    () => loadVocab([slice, { $defs: { doc: { type: 'object' } } }]),
+    () =>
+      loadVocab([slice, {
+        $defs: {
+          doc: {
+            component: true,
+            type: 'object',
+          },
+        },
+      }]),
     Error,
     'declared twice',
   )
@@ -380,6 +413,7 @@ Deno.test('every stored reference is indexed without an opt-in', () => {
   let w = loadVocab({
     $defs: {
       link: {
+        component: true,
         type: 'object',
         wire: false,
         properties: {
@@ -415,6 +449,7 @@ Deno.test('only the leading reference is covered by a composite index', () => {
     let w = loadVocab({
       $defs: {
         link: {
+          component: true,
           type: 'object',
           ...declaration,
           properties: { from: ref, to: ref },
@@ -432,6 +467,7 @@ Deno.test('native constraints interrogate: integer, required, default', () => {
   let w = loadVocab({
     $defs: {
       created: {
+        component: true,
         type: 'object',
         required: ['at'],
         properties: {
@@ -440,6 +476,7 @@ Deno.test('native constraints interrogate: integer, required, default', () => {
         },
       },
       repo: {
+        component: true,
         type: 'object',
         required: ['base'],
         properties: {
@@ -471,6 +508,7 @@ Deno.test('a composite entry may be partial: the columns a row must hold', () =>
   let w = loadVocab({
     $defs: {
       output: {
+        component: true,
         type: 'object',
         unique: [{ cols: ['key'], present: ['key'] }],
         index: [['source']],
@@ -491,6 +529,7 @@ Deno.test('a column says for itself whether its words are searched', () => {
   let w = loadVocab({
     $defs: {
       recipe: {
+        component: true,
         type: 'object',
         properties: {
           note: { type: 'string', search: true },

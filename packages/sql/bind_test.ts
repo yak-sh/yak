@@ -15,11 +15,13 @@ import { ARMS, compile, type Derived, raw, Unsupported } from './mod.ts'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     doc: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -28,6 +30,7 @@ let doc: VocabDoc = {
       },
     },
     task: {
+      component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
@@ -37,6 +40,7 @@ let doc: VocabDoc = {
       },
     },
     note: {
+      component: true,
       type: 'object',
       properties: {
         about: { type: 'string', ref: 'entity', death: 'cascade' },
@@ -65,6 +69,7 @@ Deno.test('JSON equality compares the stored text without numeric coercion', () 
   let vocab = loadVocab({
     $defs: {
       config: {
+        component: true,
         type: 'object',
         properties: { value: { type: 'string', format: 'json' } },
       },
@@ -121,17 +126,20 @@ Deno.test('a walk over a chain of references composes one step', () => {
   let vocab = loadVocab({
     $defs: {
       entity: {
+        component: true,
         type: 'object',
         wire: false,
         properties: { num: { type: 'number', stamped: true } },
       },
       fork: {
+        component: true,
         type: 'object',
         properties: {
           from: { type: 'string', ref: 'entity', death: 'detach' },
         },
       },
       entry: {
+        component: true,
         type: 'object',
         properties: {
           session: { type: 'string', ref: 'entity', death: 'cascade' },
@@ -320,14 +328,21 @@ Deno.test('.refs= groups its arms and cuts them to what a compound may carry', (
   // here carries more than ARMS.
   let wide = loadVocab({
     $defs: {
-      entity: { type: 'object', wire: false, properties: {} },
+      entity: {
+        component: true,
+        type: 'object',
+        wire: false,
+        properties: {},
+      },
       ...Object.fromEntries(
         [1, 2, 3, 4, 5, 6].map((i) => [`n${i}`, {
+          component: true,
           type: 'object',
           properties: { of: { type: 'string', ref: 'entity' } },
         }]),
       ),
       pair: {
+        component: true,
         type: 'object',
         properties: {
           left: { type: 'string', ref: 'entity' },
@@ -356,7 +371,14 @@ Deno.test('.refs= groups its arms and cuts them to what a compound may carry', (
 
 Deno.test('.refs= over a vocabulary that references nothing selects nothing', () => {
   let none = loadVocab({
-    $defs: { entity: { type: 'object', wire: false, properties: {} } },
+    $defs: {
+      entity: {
+        component: true,
+        type: 'object',
+        wire: false,
+        properties: {},
+      },
+    },
   })
   let { sql, params } = compile(parse('.refs=a1'), none)
   assertEquals(params, [])
@@ -437,8 +459,12 @@ Deno.test('reverse NONE and compound child conditions bind without outer-owner l
 Deno.test('a builder can preserve a terminal component facet across name collisions', () => {
   let vocab = loadVocab({
     $defs: {
-      book: { type: 'object' },
+      book: {
+        component: true,
+        type: 'object',
+      },
       loan: {
+        component: true,
         type: 'object',
         properties: { book: { type: 'string', ref: 'entity' } },
       },
@@ -458,12 +484,19 @@ Deno.test('a shared reference equality unions its owners, other shapes decline',
   // question per owner, spelled the way `.refs=` is.
   let shared = loadVocab({
     $defs: {
-      entity: { type: 'object', wire: false, properties: {} },
+      entity: {
+        component: true,
+        type: 'object',
+        wire: false,
+        properties: {},
+      },
       cursor: {
+        component: true,
         type: 'object',
         properties: { client: { type: 'string', ref: 'entity' } },
       },
       camera: {
+        component: true,
         type: 'object',
         properties: { client: { type: 'string', ref: 'entity' } },
       },
@@ -506,14 +539,17 @@ Deno.test('a path leaf shared by several reference columns declines', () => {
   let vocab = loadVocab({
     $defs: {
       claim: {
+        component: true,
         type: 'object',
         properties: { session: { type: 'string', ref: 'entity' } },
       },
       session: {
+        component: true,
         type: 'object',
         properties: { actor: { type: 'string', ref: 'entity' } },
       },
       crew: {
+        component: true,
         type: 'object',
         properties: { actor: { type: 'string', ref: 'entity' } },
       },

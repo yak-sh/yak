@@ -2,6 +2,7 @@
   "title": "invocation",
   "$defs": {
     "call": {
+      "component": true,
       "type": "object",
       "description": "A recorded tool invocation.",
       "properties": {
@@ -28,6 +29,7 @@
       }
     },
     "result": {
+      "component": true,
       "type": "object",
       "description": "what a tool answered",
       "properties": {
@@ -44,6 +46,7 @@
       }
     },
     "content": {
+      "component": true,
       "type": "object",
       "description": "Text content.",
       "properties": {
@@ -54,6 +57,7 @@
       }
     },
     "output": {
+      "component": true,
       "type": "object",
       "description": "what produced the prose beside it: the ask, for a model’s own words, the call whose failure this reports, or the stream it came off (@yaks/process). Worn only by an output; prose a person or a system wrote has none",
       "properties": {
@@ -66,6 +70,7 @@
       }
     },
     "error": {
+      "component": true,
       "type": "object",
       "description": "an outcome the code expected and recorded: normal",
       "properties": {
@@ -75,11 +80,13 @@
       }
     },
     "exception": {
+      "component": true,
       "type": "object",
       "description": "an outcome the code did not expect, whoever caused it: a defect report, not a stop",
       "properties": {}
     },
     "execution": {
+      "component": true,
       "type": "object",
       "description": "Execution of a recorded call. A started call without a result is not automatically replayed.",
       "properties": {
@@ -93,6 +100,7 @@
       }
     },
     "tool": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "A registered tool that callers can invoke.",

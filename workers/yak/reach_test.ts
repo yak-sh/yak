@@ -103,12 +103,18 @@ let where = async () => {
   await deploy(env, reach[0], {
     $defs: {
       book: {
+        component: true,
         properties: { pages: { type: 'number' }, shelf: { type: 'string' } },
       },
     },
   })
   await deploy(env, reach[1], {
-    $defs: { loan: { properties: { to: { type: 'string' } } } },
+    $defs: {
+      loan: {
+        component: true,
+        properties: { to: { type: 'string' } },
+      },
+    },
   })
   return { env, reach }
 }

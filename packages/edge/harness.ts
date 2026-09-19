@@ -30,23 +30,36 @@ export let mem = (): Driver => {
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     // What is written: a post on the blog.
     post: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { title: { type: 'string' }, body: { type: 'string' } },
     },
     // A post citing another. The component's own name is the relation.
-    cites: { type: 'object', relation: true },
+    cites: {
+      component: true,
+      type: 'object',
+      relation: true,
+    },
     // A post linking to another — written `links`, read `linked`.
-    links: { type: 'object', relation: 'linked' },
+    links: {
+      component: true,
+      type: 'object',
+      relation: 'linked',
+    },
     // Something that is NOT a relation, so the tests can prove an ordinary
     // component riding beside an edge is never mistaken for one.
-    pinned: { type: 'object' },
+    pinned: {
+      component: true,
+      type: 'object',
+    },
   },
 }
 

@@ -17,15 +17,27 @@ import { members } from './plugin.ts'
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     // The club itself, and the people in it.
-    space: { type: 'object', kind: true, properties: { name: {} } },
-    person: { type: 'object', kind: true, properties: { name: {} } },
+    space: {
+      component: true,
+      type: 'object',
+      kind: true,
+      properties: { name: {} },
+    },
+    person: {
+      component: true,
+      type: 'object',
+      kind: true,
+      properties: { name: {} },
+    },
     // A thing the club runs — the reading list, the notes page.
     app: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -35,6 +47,7 @@ let doc: VocabDoc = {
     },
     // Ordinary content, so a test can write something that is not membership.
     pick: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -43,6 +56,7 @@ let doc: VocabDoc = {
       },
     },
     created: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
@@ -50,6 +64,7 @@ let doc: VocabDoc = {
       },
     },
     updated: {
+      component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },

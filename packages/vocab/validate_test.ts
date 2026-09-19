@@ -6,7 +6,13 @@ import { grow, loadVocab, reserved, storable } from './mod.ts'
 import type { PropSchema, VocabDoc } from './mod.ts'
 import slice from './fleet/slice.schema.json' with { type: 'json' }
 
-let doc = (defs: VocabDoc['$defs']): VocabDoc => ({ $defs: defs })
+// Every fixture here is a component, so the marker is said once, in the
+// helper. What the marker itself decides is its own test, at the bottom.
+let doc = (defs: VocabDoc['$defs']): VocabDoc => ({
+  $defs: Object.fromEntries(
+    Object.entries(defs ?? {}).map(([n, s]) => [n, { component: true, ...s }]),
+  ),
+})
 
 Deno.test('the slice is storable', () => {
   assertEquals(storable(slice), [])
@@ -272,4 +278,35 @@ Deno.test('a relay owns nothing, so it cannot keep a value forever', () => {
   assertEquals(one({ type: 'object', sync: 'peers', durable: 'a while' }), [
     'presence is durable "a while" — say "forever", "connection", or a duration such as "5s" or "2m"',
   ])
+})
+
+Deno.test('a $defs entry says what it is, or it is no table', () => {
+  // The ordinary JSON Schema use of $defs: a subschema something $refs. It
+  // declares no columns, so nothing here has anything to say about it.
+  assertEquals(storable({ $defs: { unit: { type: 'string' } } }), [])
+  // A tool declaration is a tool, checked as a tool, never lowered to a table.
+  assertEquals(
+    storable({
+      $defs: {
+        session_list: {
+          tool: true,
+          noun: 'session',
+          verb: 'list',
+          description: 'List sessions.',
+          input: {},
+        },
+      },
+    }),
+    [],
+  )
+  // And the forgotten marker: columns, no word for what they are.
+  assertEquals(
+    storable({
+      $defs: { recipe: { properties: { serves: { type: 'number' } } } },
+    }),
+    [
+      'recipe has columns but says no "component": true — mark it a ' +
+      'component, or it is an ordinary subschema and no table',
+    ],
+  )
 })

@@ -101,6 +101,7 @@ Deno.test('a JSON column example writes valid JSON text', () => {
   let vocab = loadVocab({
     $defs: {
       config: {
+        component: true,
         type: 'object',
         properties: { value: { type: 'string', format: 'json' } },
       },

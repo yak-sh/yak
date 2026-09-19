@@ -5,7 +5,12 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { subscriptions } from '@yaks/api'
 const vocab = loadVocab([{
-  $defs: { doc: { properties: { body: { type: 'string' } } } },
+  $defs: {
+    doc: {
+      component: true,
+      properties: { body: { type: 'string' } },
+    },
+  },
 }])
 for (const live of [false, true]) {
   const g = graph({ vocab, storage: ram(vocab) })

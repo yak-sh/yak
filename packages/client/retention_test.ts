@@ -465,7 +465,12 @@ Deno.test('query replica applies transient frames without persisting projections
   const { loadVocab } = await import('@yaks/vocab')
   const c = client(
     loadVocab([{
-      $defs: { text: { properties: { body: { type: 'string' } } } },
+      $defs: {
+        text: {
+          component: true,
+          properties: { body: { type: 'string' } },
+        },
+      },
     }]),
     [],
     { vault: false },

@@ -2,6 +2,7 @@
   "title": "mcp-client",
   "$defs": {
     "mcp_server": {
+      "component": true,
       "type": "object",
       "description": "A shared remote MCP server. Entity identity and tool display names are separate.",
       "properties": {

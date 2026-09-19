@@ -2,6 +2,7 @@
   "title": "openrouter",
   "$defs": {
     "openrouter": {
+      "component": true,
       "description": "OpenRouter response metadata; not a server-side continuation handle.",
       "properties": { "response_id": { "type": "string" } }
     }

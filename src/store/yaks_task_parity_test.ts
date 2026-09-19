@@ -85,6 +85,7 @@ add('blocked', { since: { ...time(), stamped: true } })
 let spine: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },

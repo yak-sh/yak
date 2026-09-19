@@ -111,19 +111,29 @@ Deno.test('an index comes after the table it covers', () => {
 // that is already there, so a column added to a word has to arrive by
 // `alter table` or every read naming it fails at the engine.
 Deno.test('a column a component grew is added to the live table', () => {
-  let spine = { type: 'object', wire: false, properties: {} } as const
+  let spine = {
+    component: true,
+    type: 'object',
+    wire: false,
+    properties: {},
+  } as const
   let text = { type: 'string' } as const
   let d = mem()
   let was = loadVocab({
     $defs: {
       entity: spine,
-      book: { type: 'object', properties: { title: text } },
+      book: {
+        component: true,
+        type: 'object',
+        properties: { title: text },
+      },
     },
   })
   let now = loadVocab({
     $defs: {
       entity: spine,
       book: {
+        component: true,
         type: 'object',
         properties: {
           title: text,
@@ -224,8 +234,14 @@ Deno.test('reference indexes are installed on new and existing member stores', (
 // `integer` keeps its affinity, and a composite may be partial.
 let strict = loadVocab({
   $defs: {
-    entity: { type: 'object', wire: false, properties: {} },
+    entity: {
+      component: true,
+      type: 'object',
+      wire: false,
+      properties: {},
+    },
     created: {
+      component: true,
       type: 'object',
       required: ['at'],
       properties: {
@@ -234,6 +250,7 @@ let strict = loadVocab({
       },
     },
     repo: {
+      component: true,
       type: 'object',
       required: ['base', 'push'],
       properties: {
@@ -244,6 +261,7 @@ let strict = loadVocab({
       },
     },
     output: {
+      component: true,
       type: 'object',
       unique: [{ cols: ['key'], present: ['key'] }],
       properties: { key: { type: 'string' }, source: { type: 'integer' } },
@@ -303,9 +321,22 @@ Deno.test('a grown column keeps a literal default, takes the clock only ahead', 
   let d = mem()
   let was = loadVocab({
     $defs: {
-      entity: { type: 'object', wire: false, properties: {} },
-      created: { type: 'object', properties: {} },
-      repo: { type: 'object', properties: {} },
+      entity: {
+        component: true,
+        type: 'object',
+        wire: false,
+        properties: {},
+      },
+      created: {
+        component: true,
+        type: 'object',
+        properties: {},
+      },
+      repo: {
+        component: true,
+        type: 'object',
+        properties: {},
+      },
     },
   })
   storage(d, was).install()
@@ -344,6 +375,7 @@ Deno.test('a death word that moved rebuilds its table without the key', () => {
     $defs: {
       ...(shop.docs[0].$defs as Record<string, never>),
       product: {
+        component: true,
         ...(shop.docs[0].$defs!.product as Record<string, never>),
         properties: {
           ...(shop.docs[0].$defs!.product.properties as Record<string, never>),

@@ -7,6 +7,7 @@
   "title": "git",
   "$defs": {
     "gitobj": {
+      "component": true,
       "type": "object",
       "kind": true,
       "description": "one git object — its entity id IS its SHA-1 object id, so writing the same object twice writes one row",
@@ -30,6 +31,7 @@
       }
     },
     "blob": {
+      "component": true,
       "type": "object",
       "description": "where an object's bytes are: their address in the @yaks/blob store",
       "properties": {
@@ -41,6 +43,7 @@
       }
     },
     "entry": {
+      "component": true,
       "type": "object",
       "edge": true,
       "description": "a tree holds a child under a name — the walk a pack's reachability needs",
@@ -58,17 +61,20 @@
       }
     },
     "parent": {
+      "component": true,
       "type": "object",
       "edge": true,
       "description": "this commit follows that one — `ord` on the edge carries parent order",
       "properties": {}
     },
     "compat": {
+      "component": true,
       "type": "object",
       "key": true,
       "description": "git's compat oid: the same object's SHA-256 name, keyed off its SHA-1 one, so either id resolves (git's own hash-function transition, as key rows)"
     },
     "ref": {
+      "component": true,
       "type": "object",
       "description": "where one branch of one repository stands — one row per repository and branch name, so moving a branch patches the row that was there",
       "properties": {
@@ -103,6 +109,7 @@
       }
     },
     "repository": {
+      "component": true,
       "type": "object",
       "description": "A local Git object database, identified by its canonical common Git directory.",
       "properties": {
@@ -113,6 +120,7 @@
       }
     },
     "worktree": {
+      "component": true,
       "type": "object",
       "description": "A local checkout. Identity is repository plus canonical checkout root, not branch or HEAD.",
       "properties": {
@@ -147,6 +155,7 @@
       }
     },
     "checkout": {
+      "component": true,
       "type": "object",
       "description": "Durable host checkout creation intent; ready only after Git succeeds. Failed requests retain their error for retry.",
       "properties": {

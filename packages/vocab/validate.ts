@@ -142,17 +142,28 @@ let identified = (s: PropSchema): string[] =>
     .filter(([, c]) => object(c) && c.identity === true)
     .map(([prop]) => prop)
 
-// The storable profile over a whole document: every $def is an object schema
-// whose properties are storable columns.
+// The storable profile over a whole document: every COMPONENT entry is an
+// object schema whose properties are storable columns.
 export let storable = (doc: VocabDoc): string[] => {
   let errs: string[] = []
   for (let [comp, schema] of Object.entries(doc.$defs ?? {})) {
+    // What a $defs entry IS is its own to say (vocab.ts `loadVocab`): a tool
+    // declaration is checked as a tool, an ordinary subschema is checked as
+    // nothing, and only a marked component is checked as a table. An entry
+    // with columns and no marker is the forgotten marker, said once here so a
+    // deploy refuses where it can still teach.
+    if (!object(schema) || schema.tool === true) continue
+    if (schema.component !== true) {
+      if (schema.properties || schema.type == 'object') {
+        errs.push(
+          `${comp} has columns but says no "component": true — mark it a ` +
+            'component, or it is an ordinary subschema and no table',
+        )
+      }
+      continue
+    }
     if (!NAME.test(comp)) {
       errs.push(`${JSON.stringify(comp)} is not a component name (a-z, 0-9, _)`)
-    }
-    if (!object(schema)) {
-      errs.push(`${comp} is a schema object`)
-      continue
     }
     if (schema.type != null && schema.type != 'object') {
       errs.push(`${comp} is an object schema (type 'object')`)

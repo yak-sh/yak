@@ -7,7 +7,12 @@ import { subscriptions } from '@yaks/api'
 import { land } from './inbound.ts'
 import type { Frame } from './socket.ts'
 const vocab = loadVocab([{
-  $defs: { doc: { properties: { body: { type: 'string' } } } },
+  $defs: {
+    doc: {
+      component: true,
+      properties: { body: { type: 'string' } },
+    },
+  },
 }])
 Deno.test('subscriptions transfer ordered append frames and snapshot live values on resubscribe', async () => {
   const source = graph({ vocab, storage: ram(vocab) })

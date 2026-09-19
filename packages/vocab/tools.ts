@@ -1,5 +1,7 @@
-/** JSON Schema validation for portable tool arguments. Compiled once per schema. */
+/** JSON Schema validation for portable tool arguments, and the tool
+ * declarations a vocabulary carries. Compiled once per schema. */
 import { Ajv, type ValidateFunction } from 'ajv'
+import type { PropSchema, VocabDoc } from './types.ts'
 import { Ajv2019 } from 'ajv/dist/2019.js'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 
@@ -139,6 +141,7 @@ export const toolDefinitionSchema: Record<string, unknown> = {
           propertyNames: { pattern: '^[a-zA-Z]$' },
           additionalProperties: { type: 'string' },
         },
+        rest: { type: 'string' },
       },
     },
     readOnly: { type: 'boolean' },
@@ -173,4 +176,59 @@ export const toolDefinition = (value: unknown): ToolDefinition => {
     }
   }
   return candidate
+}
+
+// A tool's arguments as one object schema. A declaration says them the way a
+// component says columns — one schema per named argument — and every door
+// downstream (the CLI's parser, an MCP `tools/list`, a completion) reads the
+// object schema, so the conversion happens once, here.
+let inputOf = (entry: PropSchema): Record<string, unknown> => ({
+  type: 'object',
+  additionalProperties: false,
+  properties: entry.input ?? {},
+  ...entry.required?.length ? { required: entry.required } : {},
+})
+
+// The keywords a declaration says that are the TOOL's, not the schema's.
+let HINTS = [
+  'title',
+  'options',
+  'readOnly',
+  'destructive',
+  'idempotent',
+  'openWorld',
+  'outputSchema',
+] as const
+
+/**
+ * The tool declarations one or more vocab documents carry: every `$defs` entry
+ * marked `tool: true`, validated, with its `input` map lowered to the one
+ * object schema everything downstream reads. The entry's NAME is the tool's,
+ * so an implementation is looked up by the word the vocabulary used.
+ *
+ * `loadVocab` passes over these; this passes over everything else. A document
+ * is read once for its components and once for its tools, and neither reading
+ * has to know about the other.
+ */
+export let toolsIn = (input: VocabDoc | VocabDoc[]): ToolDefinition[] => {
+  let docs = Array.isArray(input) ? input : [input]
+  let out: ToolDefinition[] = []
+  let seen = new Set<string>()
+  for (let doc of docs) {
+    for (let [name, entry] of Object.entries(doc.$defs ?? {})) {
+      if (entry?.tool !== true) continue
+      if (seen.has(name)) throw new Error(`tool '${name}' is declared twice`)
+      seen.add(name)
+      let said: Record<string, unknown> = {
+        name,
+        noun: entry.noun,
+        verb: entry.verb,
+        description: entry.description,
+        inputSchema: inputOf(entry),
+      }
+      for (let k of HINTS) if (entry[k] !== undefined) said[k] = entry[k]
+      out.push(toolDefinition(said))
+    }
+  }
+  return out
 }

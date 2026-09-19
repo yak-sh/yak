@@ -8,8 +8,15 @@ import { get as census } from './fixtures/census.ts'
 
 let vocab = loadVocab([...shop.docs, archetypeDoc, {
   $defs: {
-    marker: { type: 'object' },
-    sample: { type: 'object', properties: { present: { type: 'string' } } },
+    marker: {
+      component: true,
+      type: 'object',
+    },
+    sample: {
+      component: true,
+      type: 'object',
+      properties: { present: { type: 'string' } },
+    },
   },
 }])
 
@@ -48,7 +55,11 @@ Deno.test('archetype gather golden: wide sparse sets, chunks and a smaller reade
   let wide = loadVocab([...vocab.docs, {
     $defs: Object.fromEntries(Array.from({ length: 405 }, (_, i) => [
       `facet${i}`,
-      { type: 'object', properties: { value: { type: 'string' } } },
+      {
+        component: true,
+        type: 'object',
+        properties: { value: { type: 'string' } },
+      },
     ])),
   }])
   let s = storage(driver, wide)

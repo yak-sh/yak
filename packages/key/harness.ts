@@ -29,23 +29,41 @@ export let mem = (): Driver => {
 let doc: VocabDoc = {
   $defs: {
     entity: {
+      component: true,
       type: 'object',
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
     book: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { title: { type: 'string' } },
     },
-    person: { type: 'object', kind: true, properties: {} },
+    person: {
+      component: true,
+      type: 'object',
+      kind: true,
+      properties: {},
+    },
     // A book's isbn. The component's own name is the kind.
-    isbn: { type: 'object', key: true },
+    isbn: {
+      component: true,
+      type: 'object',
+      key: true,
+    },
     // A person's address — written `email`, read `mailbox`.
-    email: { type: 'object', key: 'mailbox' },
+    email: {
+      component: true,
+      type: 'object',
+      key: 'mailbox',
+    },
     // Something that is NOT a kind, so the tests can prove an ordinary
     // component riding beside a key is never mistaken for one.
-    pinned: { type: 'object' },
+    pinned: {
+      component: true,
+      type: 'object',
+    },
   },
 }
 
