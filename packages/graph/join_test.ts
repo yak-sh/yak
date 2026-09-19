@@ -66,6 +66,17 @@ Deno.test('what a match reads is what an overlay must cover', () => {
   )
   // A bare word is routed: `.title` is the `doc` component's column.
   assertEquals(reads(match('.title=Dune'), vocab), ['doc'])
+  // A removal is a read: the overlay carries the batch's deletions only for
+  // the components it covers.
+  assertEquals(reads(match('.call, -result'), vocab).sort(), ['call', 'result'])
+})
+
+Deno.test('a removal of a word this vocabulary lacks is inert', () => {
+  // Nothing here can wear `wake`, so nothing here can lose it either — the
+  // opposite of an absence, which is trivially true where the word is unknown.
+  assertEquals(asked(match('.call, -wake'), vocab), null)
+  let m = match('.call, -result')
+  assertEquals(asked(m, vocab), m)
 })
 
 // A TEMPLATE is the same object as a rule, and an invocation is that query

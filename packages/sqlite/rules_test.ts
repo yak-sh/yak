@@ -124,6 +124,47 @@ Deno.test('a gate over a batch sees what the batch will add', () => {
   assertEquals(matched(driver, m, shop).length, 2)
 })
 
+Deno.test('a removal is a clause, and only a batch answers it', () => {
+  let { driver } = floor()
+  // `-product`: the entities this batch took `product` off. p1 keeps its doc,
+  // so the rest of the pattern is answered from the committed file as usual.
+  let m = match('.doc, -product')
+  let batch = [{ entity: { eid: 'p1' }, product: null }]
+  let over = overlay(driver, shop, batch, reads(m, shop))
+  assertEquals(
+    matched(driver, m, shop, {}, { at: over.at, gone: over.gone }, over)
+      .map((h) => h.entities),
+    [['p1']],
+  )
+  // Asked of the file outright, nothing was removed: a match with no batch
+  // under it is about what IS, never about what went.
+  assertEquals(matched(driver, m, shop).length, 0)
+  // And a batch that removed something else says nothing about `product`.
+  let other = overlay(driver, shop, [{ entity: { eid: 'r1' }, review: null }], [
+    ...reads(m, shop),
+    'review',
+  ])
+  assertEquals(
+    matched(driver, m, shop, {}, { at: other.at, gone: other.gone }, other)
+      .length,
+    0,
+  )
+})
+
+Deno.test('a component removed and written again in one batch is not gone', () => {
+  let { driver } = floor()
+  let m = match('-product')
+  let batch = [
+    { entity: { eid: 'p1' }, product: null },
+    { entity: { eid: 'p1' }, product: { price: 12 } },
+  ]
+  let over = overlay(driver, shop, batch, reads(m, shop))
+  assertEquals(
+    matched(driver, m, shop, {}, { at: over.at, gone: over.gone }, over).length,
+    0,
+  )
+})
+
 Deno.test('the components a match reads are what an overlay must cover', () => {
   assertEquals(
     reads(match('$p .product, doc.title=$t; .review, review.product=$p'), shop)

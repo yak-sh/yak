@@ -26,11 +26,12 @@
  * fx.removed('post', (e) => unindex(e.entity.eid))
  * ```
  *
- * Three things happen to a component, and they are three registrations:
- * {@link Effects.created} when an entity gains it, {@link Effects.changed}
- * when it is patched (for one column, or for any), {@link Effects.removed}
- * when it goes — by its own deletion, or with an entity that died, including
- * every casualty a cascade took.
+ * Three things happen to a component: {@link Effects.created} when an entity
+ * gains it, {@link Effects.changed} when it is patched (for one column, or for
+ * any), {@link Effects.removed} when it goes — by its own deletion, or with an
+ * entity that died, including every casualty a cascade took. The last of those
+ * is `on('-comp', run)` said shortly; the first two are deltas, and a delta is
+ * not a query about what holds.
  *
  * ## Or a PATTERN
  * Those three are the narrow question. The wide one is any query, run

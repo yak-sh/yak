@@ -63,7 +63,7 @@ import { bindings } from './rules.ts'
 export * from './driver.ts'
 export * from './archetype.ts'
 export { catalog } from './catalog.ts'
-export { OVER, type Overlay, overlay } from './overlay.ts'
+export { GONE, OVER, type Overlay, overlay } from './overlay.ts'
 export { bindings, matched, prefixed, statement } from './rules.ts'
 export * from './bundle.ts'
 export {

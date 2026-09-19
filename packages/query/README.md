@@ -57,7 +57,7 @@ let b = and(
 ```
 
 Vocabulary: `eq ne contains lt le gt ge present absent want pred` (predicates);
-`ensure gate mutable resource variable` (the rule sigils);
+`ensure gate mutable gone resource variable` (the rule sigils);
 `list range scalar
 time text` (values and terms); `and or` (composition);
 `clauses orderOf nearOf
@@ -82,13 +82,21 @@ operator is part of the value (`.title~=x[1]`).
   ensure (add it before the rule runs) · `+!comp` gate (it must be absent, and
   is added, so a rule fires once) · `*comp` mutable (the rule's write set; it
   says the component is present as well, so `*comp` needs no `.comp` beside it,
-  and `+comp`/`+!comp` is how a rule writes one that is not there yet) · `#Name`
-  a singleton resource, capitalized so it cannot collide with a component in the
-  bundle a rule binds them into · `$name` a variable. The first two are ordinary
-  predicates — presence and absence are questions any evaluator answers — and
-  the rest are a rule's own words, which an evaluator with no rule engine
-  refuses (`Unsupported`) rather than guessing at. `declared(ast)` splits a
-  query into the filter half and those lists.
+  and `+comp`/`+!comp` is how a rule writes one that is not there yet) · `-comp`
+  gone (this BATCH removed it from the entity) · `#Name` a singleton resource,
+  capitalized so it cannot collide with a component in the bundle a rule binds
+  them into · `$name` a variable. The first two are ordinary predicates —
+  presence and absence are questions any evaluator answers — and the rest are a
+  rule's own words, which an evaluator with no rule engine refuses
+  (`Unsupported`) rather than guessing at. `declared(ast)` splits a query into
+  the filter half and those lists.
+- **`-comp` is not `!comp`.** An absence is about a row that is not there; a
+  removal is about a batch that took one, and once the row is gone the two read
+  alike. So `-comp` is answered only where the batch is — a rule's overlay
+  (`@yaks/sqlite`'s `overlay()`, which keeps a list of what the batch took), or
+  the reading an effect takes of what it just committed — and an evaluator with
+  no batch under it refuses rather than answering "none". A bare `-word` is
+  therefore a clause now, not a text term.
 - **Operators**: `.p=v` equals · `.p=a,b,c` any-of · `.p=1..5` range
   (inclusive), `1...5` exclusive end · `.p!=v` not · `.p~=v` contains (literal)
   · `.p<v .p<=v .p>v .p>=v` comparisons · `.p?` want the field alongside the

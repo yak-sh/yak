@@ -237,6 +237,14 @@ the committed row once, here; a dropped component and a deleted entity leave the
 CTE; an entity the batch mints gets a NEGATIVE integer id (storage hands out
 positive ones), so a rule can join two entities the same batch created.
 
+What the batch TOOK gets a list of its own (`over.gone`), because a dropped row
+leaves the CTE and "it was taken" then reads exactly like "it was never there".
+`-comp` (@yaks/query's deletion clause) is the question that tells them apart,
+and `rules.ts` contributes its lowering as an @yaks/sql extension — so a rule,
+or a pattern effect, can fire on what a batch removed. A statement with no
+overlay under it answers that clause `false`: asked of the file outright, a
+match is about what is, never about what went.
+
 It was temp tables shadowing the committed ones until an app-declared rule was
 run inside a deployed Worker: a Durable Object's SQLite refuses a temp object
 outright (`not authorized: SQLITE_AUTH`). A CTE runs wherever SQL does, and it

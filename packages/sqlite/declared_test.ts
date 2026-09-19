@@ -232,3 +232,23 @@ Deno.test('an effect on a joining pattern fires over a real store', async () => 
   await g.apply([{ entity: { eid: 'p1' }, shelf: { aisle: 'Z', slot: 1 } }])
   assertEquals(seen, ['p1 p1'])
 })
+
+Deno.test('an effect on a removal beside a filter reads the batch overlay', async () => {
+  let s = storage(mem(), shop)
+  s.install()
+  let fx = effects(shop)
+  let g = graph({ storage: s, vocab: shop, plugins: [fx] })
+  let seen: string[] = []
+  // A product taken off its shelf — a removal AND a filter, so it is not the
+  // event's to answer: the batch goes under the query, and the overlay's list
+  // of what it took is what `-shelf` reads.
+  fx.on('.product, -shelf', (e) => seen.push(e.entity.eid))
+  await g.apply([{
+    entity: { eid: 'p1' },
+    product: { sku: 'A' },
+    shelf: { aisle: 'Z', slot: 1 },
+  }])
+  assertEquals(seen, [])
+  await g.apply([{ entity: { eid: 'p1' }, shelf: null }])
+  assertEquals(seen, ['p1'])
+})

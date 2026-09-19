@@ -253,6 +253,20 @@ Deno.test('a pattern is a query, not a column subscription', () => {
   assertEquals(seen, ['p1'])
 })
 
+Deno.test('a removal is the same registration said in the grammar', () => {
+  let { fx, seen, apply } = fixture()
+  fx.on('-post', (e) => seen.push(`gone ${e.entity.eid}`))
+  apply([post('p1')])
+  assertEquals(seen, [])
+  apply([{ entity: { eid: 'p1' }, post: null }])
+  assertEquals(seen, ['gone p1'])
+  // `-post` alone is what an event already says, so it is the slot
+  // `fx.removed('post')` always made: one name, one kind, one line of docs —
+  // and a store that answers no bindings is never asked anything.
+  assertEquals(fx.slots().map((s) => s.id), ['post.removed'])
+  assertEquals(fx.docs().map((d) => d.hooks), [['removed']])
+})
+
 Deno.test('a pattern names its component, and lists beside the rest', () => {
   let { fx } = fixture()
   fx.on('.post, !comments', () => {})

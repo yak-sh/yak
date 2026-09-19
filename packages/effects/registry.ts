@@ -1,10 +1,20 @@
 // The registry: who is watching, and what running them means.
 //
-// A registration is a SLOT — a component name, one of the three things that
-// can happen to it, and (for a change) the column that has to have moved.
+// A registration is a SLOT — a component name, one of the things that can
+// happen to it, and (for a change) the column that has to have moved.
 // Handlers are matched by slot rather than by a filter function, so what a
 // graph will do about a write can be listed, and so a handler that watches one
 // column is never woken by a batch that moved a different one.
+//
+// A slot is made one of two ways, and they meet in the middle. `created` and
+// `changed` are DELTAS: what moved, which no reading of the committed rows
+// recovers, so they are registered as themselves. A PATTERN is a query, run
+// wherever this batch made it hold. `removed` used to be a third thing and is
+// not any more: `-comp` (@yaks/query) says a batch took a component, so
+// `fx.removed('post')` is `fx.on('-post')` and the slot it makes is read off
+// the pattern. A pattern that says only that is folded back to the delta it
+// is (`solo` below) — an event already says it, and that is what keeps a
+// cascade's casualties, and an external journal's `removed` events, firing.
 //
 // Two rules hold, and they are the reason effects are a separate phase:
 //
@@ -30,6 +40,7 @@
 
 import type { Bundle, Comp, Eid, Hook, Match, Plugin, Tx } from '@yaks/graph'
 import { asked, isPromise, match, over, reads, then } from '@yaks/graph'
+import type { Clause } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import {
   before,
@@ -80,6 +91,10 @@ export type Slot = Policy & {
   /** the components that pattern reads — a batch that moved none of them
    * cannot have changed whether it holds, so it is not asked */
   watch?: string[]
+  /** `-comp` — the components the pattern says this batch REMOVED. Only a
+   * batch answers that, so a slot naming any is asked through the bindings
+   * door with the batch under it, never of the committed file */
+  gone?: string[]
   /** the handler itself */
   run: Handler
 }
@@ -153,12 +168,14 @@ export type Effects = Plugin & {
    *
    *   fx.on('post', { created, changed: { published }, removed })
    *   fx.on('$call .call, !results', (e) => run(e.entity.eid))
+   *   fx.on('-post', (e) => unindex(e.entity.eid))
    *
    * The first names a component and what has to happen to it; the second is a
    * PATTERN — any query, any number of entities — and it runs wherever the
    * batch just made it hold. Nothing has to be derived into the graph to wake
    * it: if a call with no result is what you care about, that sentence is the
-   * registration.
+   * registration. The third is the deletion clause: `-comp` says this batch
+   * took the component, which is what `removed` has always meant.
    */
   on: {
     (comp: string, registration: Registration): Effects
@@ -198,7 +215,38 @@ let about = (plan: Match): string => {
       }
     }
   }
-  return plan.patterns[0]?.entity ?? 'match'
+  return gone(plan)[0] ?? plan.patterns[0]?.entity ?? 'match'
+}
+
+// Every `-comp` a plan names: what it says this batch removed.
+let gone = (plan: Match): string[] => {
+  let out: string[] = []
+  let walk = (cs: Clause[]) => {
+    for (let c of cs) {
+      if (c.kind == 'gone') out.push(c.comp)
+      else if (c.kind == 'and' || c.kind == 'or') walk(c.clauses)
+    }
+  }
+  for (let p of plan.patterns) walk(p.filter.clauses)
+  return out
+}
+
+// A pattern that says nothing but `-comp`, and the component it names. That
+// sentence is already what an EVENT says: the batch's own reading knows what
+// each removal took, tombstoned casualties and all (./trace.ts), so the slot
+// is registered as the delta it is and woken by `watching` like a birth or a
+// change — no bindings door, no overlay, and an external journal's `removed`
+// event still reaches it. Anything larger — a removal beside a filter, or
+// joined to another entity — is a question only a batch overlay answers.
+let solo = (plan: Match): string | undefined => {
+  if (plan.patterns.length != 1) return
+  let [p] = plan.patterns
+  let [c] = p.filter.clauses
+  return p.filter.clauses.length == 1 && c.kind == 'gone' && !p.entity &&
+      !p.binds.length && !p.gates.length && !p.ensures.length &&
+      !p.writes.length
+    ? c.comp
+    : undefined
 }
 
 /**
@@ -304,15 +352,23 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     let plan = s.plan!
     let touched = new Set<Eid>(bundles.map((b) => b.entity.eid))
     let one = plan.patterns.filter((p) => !p.makes)
-    if (one.length > 1 || plan.patterns.some((p) => p.binds.length)) {
+    // The batch goes under the question only where the question is about it:
+    // a `-comp` clause reads the deletions a storage's overlay carries, and
+    // nothing else here needs a row the committed file does not already have.
+    let batch = s.gone?.length ? bundles : []
+    if (
+      one.length > 1 || plan.patterns.some((p) => p.binds.length) ||
+      s.gone?.length
+    ) {
       if (!tx.bindings) {
         throw new Error(
-          `effect ${s.id} joins entities and this storage answers no ` +
-            'bindings — a one-entity pattern is all it can be asked',
+          `effect ${s.id} asks about more than one entity, or about what ` +
+            'this batch removed, and this storage answers no bindings — a ' +
+            'one-entity pattern over committed rows is all it can be asked',
         )
       }
       return then(
-        tx.bindings([plan], [], reads(plan, vocab)),
+        tx.bindings([plan], batch, reads(plan, vocab)),
         ([rows]) =>
           rows
             .filter((r) => r.entities.some((e) => e && touched.has(e)))
@@ -346,17 +402,30 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   // two graphs: a clause about a component that is not here says nothing where
   // it cannot be worn, and a pattern that REQUIRES one is registered and inert
   // — listed, documented, never woken.
-  let pattern = (what: string | Match, run: Handler, policy: Policy) => {
+  let pattern = (
+    what: string | Match,
+    run: Handler,
+    policy: Policy,
+    group?: string,
+  ) => {
     let written = typeof what == 'string' ? match(what) : what
     let plan = asked(written, vocab)
-    let comp = about(written)
+    // `-comp` alone folds back to the delta it is, so `fx.removed('post')` and
+    // `fx.on('-post')` are one registration with one name (`post.removed`).
+    let one = plan && solo(plan)
+    let comp = one ?? about(written)
+    let kind: Kind = one ? 'removed' : 'matched'
     slots.push({
       ...policy,
-      id: name(comp, 'matched'),
+      group,
+      id: name(comp, kind),
       comp,
-      kind: 'matched',
-      plan: plan ?? undefined,
-      watch: plan ? reads(plan, vocab) : [],
+      kind,
+      ...(one ? {} : {
+        plan: plan ?? undefined,
+        watch: plan ? reads(plan, vocab) : [],
+        gone: plan ? gone(plan) : [],
+      }),
       run,
     })
     return fx
@@ -453,8 +522,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       typeof column == 'string'
         ? add(comp, 'changed', run as Handler, column, policy)
         : add(comp, 'changed', column, undefined, policy),
-    removed: (comp, run, policy) =>
-      add(comp, 'removed', run, undefined, policy),
+    removed: (comp, run, policy = {}) => pattern(`-${comp}`, run, policy),
     slots: () => [...slots],
     owns: (id) => slots.some((s) => s.id == id && selected(s)),
     on: ((
@@ -470,7 +538,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       for (let [col, run] of Object.entries(changed ?? {})) {
         add(comp, 'changed', run, col, rest, group)
       }
-      if (removed) add(comp, 'removed', removed, undefined, rest, group)
+      if (removed) pattern(`-${comp}`, removed, rest, group)
       return fx
     }) as Effects['on'],
     docs: () => describe(slots),

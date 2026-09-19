@@ -178,6 +178,9 @@ export let reads = (m: Match, v: Vocab): string[] => {
     for (let c of clauses) {
       if (c.kind == 'and' || c.kind == 'or') walk(c.clauses)
       else if (c.kind == 'pred') path(c.path, bare(c))
+      // `-comp` reads the batch's own deletions, which the overlay carries
+      // only for the components it covers — so a removal is a read.
+      else if (c.kind == 'gone') out.add(c.comp)
     }
   }
   for (let p of m.patterns) {
@@ -288,7 +291,7 @@ export let asked = (m: Match, v: Vocab): Match | null => {
     }
   }
   // `!comp` and `.col=` alike: the value-less `=` the grammar reads as absent.
-  let gone = (c: Pred): boolean =>
+  let absent = (c: Pred): boolean =>
     c.op == '=' && c.value?.kind == 'scalar' && c.value.raw === ''
   let prune = (c: Clause): Clause | boolean => {
     if (c.kind == 'and' || c.kind == 'or') {
@@ -298,8 +301,12 @@ export let asked = (m: Match, v: Vocab): Match | null => {
       let kept = kids.filter((k) => k !== all) as Clause[]
       return kept.length ? { ...c, clauses: kept } : all
     }
+    // A word this vocabulary never planted cannot be REMOVED here either, so
+    // a pattern asking for that is inert rather than forgiven — the opposite
+    // of an absence, which is trivially true where the word cannot be worn.
+    if (c.kind == 'gone') return known([c.comp]) && c
     if (c.kind != 'pred' || known(c.path)) return c
-    return gone(c)
+    return absent(c)
   }
   let patterns: Pattern[] = []
   for (let p of m.patterns) {

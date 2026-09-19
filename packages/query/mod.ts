@@ -6,8 +6,8 @@
 // `parse('.a=1 .b=2')` deep-equals `and(eq('a', '1'), eq('b', '2'))`.
 //
 // It knows the FORMAT — the sigils that mark a component word (`.comp` present,
-// `!comp` absent, `+comp` ensure, `+!comp` gate, `*comp` mutable, `#Name`
-// resource, `$name` variable), operators, any-of lists, ranges, time literals,
+// `!comp` absent, `+comp` ensure, `+!comp` gate, `*comp` mutable, `-comp` gone
+// — what a batch removed, `#Name` resource, `$name` variable), operators, any-of lists, ranges, time literals,
 // the reserved directives (order, near, refs, count, distinct, tally, fields,
 // `*`, limit, after, edges), the walk, dot-param routing shape, and how tokens
 // separate — but nothing about any schema. Whether `status` is a real column, a

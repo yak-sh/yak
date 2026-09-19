@@ -29,6 +29,12 @@
 // persistence": no flag, no second path, a different set of tables underneath
 // — the overlay is a `with` prefix of CTEs and the dialect simply points each
 // covered component's name at its CTE, so what changes is a name.
+//
+// One clause cannot be said that way, because it is not about a row at all:
+// `-comp` asks what the batch REMOVED, and a removed row is indistinguishable
+// from a row that was never there. So the overlay keeps a list of what it
+// took and this file contributes the one lowering that reads it — an
+// @yaks/sql extension, the same seam text and vectors come in through.
 
 import type { Vocab } from '@yaks/vocab'
 import type { Binding, Bundle, Match } from '@yaks/graph'
@@ -39,6 +45,7 @@ import {
   type Compiled,
   type Cond,
   type Dialect,
+  type Extension,
   type Join,
   or,
   raw,
@@ -110,10 +117,37 @@ export type At = (comp: string) => string
 
 /**
  * What a statement is asked AGAINST: the sources to read (an overlay's, or
- * nothing for the committed graph) and the entity ids the batch moved, which
- * every match is narrowed to.
+ * nothing for the committed graph), where the batch's DELETIONS are read from
+ * (`-comp`), and the entity ids the batch moved, which every match is narrowed
+ * to.
  */
-export type On = { at?: At; touched?: number[] }
+export type On = { at?: At; gone?: Gone; touched?: number[] }
+
+/** Where a component the batch REMOVED is read from — the overlay's list, or
+ * `null` where this batch removed none of it. */
+export type Gone = (comp: string) => string | null
+
+// The deletion clause, lowered. `-comp` is the one question a committed row
+// cannot answer — the row is gone, and gone reads exactly like never-there —
+// so it is answered from the overlay's own list of what the batch took. With
+// no overlay under the statement nothing was removed, and the clause is false:
+// a match asked of the file outright is about what IS, never about what went.
+let removals = (gone: Gone): Extension => ({
+  name: 'gone',
+  compile: {
+    gone: (c, site) => {
+      let src = c.kind == 'gone' ? gone(c.comp) : null
+      return raw(
+        src
+          ? {
+            sql: `${site.owner} in (select "entity" from ${src})`,
+            params: [],
+          }
+          : { sql: '0', params: [] },
+      )
+    },
+  },
+})
 
 // Where a variable is filled from, and what kind of value fills it: an `id` is
 // an integer spine id (an entity, or a reference column), a `value` is the
@@ -140,6 +174,7 @@ export let statement = (
 ): Compiled => {
   let at = on.at ?? q
   let touched = on.touched
+  let extend = [...(opts.extend ?? []), removals(on.gone ?? (() => null))]
   let froms: string[] = []
   let joins: Join[] = []
   let conds: Cond[] = []
@@ -170,7 +205,12 @@ export let statement = (
         ...needs.map((hop) => present(hop.comp)),
       ],
     }
-    let r = bind(filter, vocab, { ...opts, dialect: d, archetypes: undefined })
+    let r = bind(filter, vocab, {
+      ...opts,
+      extend,
+      dialect: d,
+      archetypes: undefined,
+    })
     froms.push(r.from)
     joins.push(...r.joins)
     conds.push(r.where)
@@ -307,6 +347,6 @@ export let bindings = (
     ? [...new Set(batch.map((b) => over.ids.get(b.entity.eid)!))]
       .filter((id) => id !== undefined)
     : undefined
-  let on = { at: over.at, touched }
+  let on = { at: over.at, gone: over.gone, touched }
   return matches.map((m) => matched(driver, m, vocab, opts, on, over))
 }

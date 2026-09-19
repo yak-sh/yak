@@ -138,6 +138,12 @@ export type Mutable = {
   value?: Value
 }
 export type Resource = { kind: 'resource'; comp: string }
+// `-comp` — this BATCH removed the component from the bound entity. The one
+// clause no committed row can answer: what went leaves nothing to read, so
+// only a batch knows it (a rule's overlay, an effect's reading of what it just
+// committed), and an evaluator with no batch under it refuses rather than
+// answering "none".
+export type Gone = { kind: 'gone'; comp: string }
 // A variable, and what BINDS it where a query says so: `$x` alone names a
 // slot, `$x=5` fills it. A bindings-only query is nothing but these, which is
 // what a template invocation's arguments are.
@@ -170,6 +176,7 @@ export type Clause =
   | Gate
   | Mutable
   | Resource
+  | Gone
   | Var
   | And
   | Or
@@ -312,6 +319,7 @@ export let mutable = (comp: string, prop?: string, value?: Input): Mutable => ({
   ...(prop ? { prop, value: coerce(value ?? '') } : {}),
 })
 export let resource = (comp: string): Resource => ({ kind: 'resource', comp })
+export let gone = (comp: string): Gone => ({ kind: 'gone', comp })
 export let variable = (name: string, value?: Input): Var => ({
   kind: 'var',
   name,

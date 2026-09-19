@@ -22,6 +22,16 @@
 // no row of its own. A deleted entity leaves the spine the same way, so every
 // membership loses it.
 //
+// What DROPPED is a second reading of the same batch, and it needs its own
+// table: once a row is out of the overlay, "it is not there" and "the batch
+// took it" are the same silence, and `-comp` (@yaks/query) asks the second.
+// So each dropped component gets a list of the entities it left — the only
+// question here that a committed table can never answer, since the answer is
+// exactly what is no longer in one. A tombstoned entity's own components are
+// NOT enumerated: nothing matches a dead entity anyway (every statement here
+// is `live()`-guarded), and what a bare tombstone carried is known to whoever
+// read it before the batch, not to the batch.
+//
 // The SPINE is overlaid too, because a batch mints entities that have no
 // integer id yet. They get a NEGATIVE one here — the id space storage hands
 // out is positive, so the two can never collide — and every reference to a
@@ -44,6 +54,8 @@ import type { Driver, Param } from './driver.ts'
 
 /** What an overlaid component's CTE is called. */
 export let OVER = '_over_'
+/** What the list of entities a batch DROPPED a component from is called. */
+export let GONE = '_gone_'
 
 /**
  * A batch, readable. `with` is the prefix a statement carries, `params` the
@@ -59,6 +71,9 @@ export type Overlay = {
   params: Param[]
   /** the source a component reads from, quoted and ready to alias */
   at: (comp: string) => string
+  /** the entities this batch removed a component from, as a source to select
+   * an `entity` column from — `null` where the batch removed none */
+  gone: (comp: string) => string | null
   /** the components this overlay covers */
   covers: string[]
   /** the integer id each eid reads as inside it */
@@ -131,15 +146,22 @@ export let overlay = (
   // Which components the batch moved. A component nobody touched needs no
   // overlay: the committed table is already the answer.
   let touched = new Map<string, Map<Eid, Record<string, unknown> | null>>()
-  let gone = new Set<Eid>()
+  let dropped = new Map<string, Set<Eid>>()
+  let killed = new Set<Eid>()
   let about = new Set<Eid>()
   for (let b of bundles) {
     about.add(b.entity.eid)
-    if (dead(b)) gone.add(b.entity.eid)
+    if (dead(b)) killed.add(b.entity.eid)
     for (let [comp, patch] of comps(b)) {
       if (!vocab.comp(comp) || (wanted && !wanted.has(comp))) continue
       let rows = touched.get(comp) ?? new Map()
       let held = rows.get(b.entity.eid)
+      // Dropped, and dropped LAST: a batch that removes a component and then
+      // writes it again has not removed it, so the second patch takes the
+      // entity back off the list the same way it puts the row back.
+      if (patch == null) {
+        dropped.set(comp, (dropped.get(comp) ?? new Set()).add(b.entity.eid))
+      } else dropped.get(comp)?.delete(b.entity.eid)
       // Two patches for one entity in one batch compose, latest column wins.
       rows.set(
         b.entity.eid,
@@ -241,18 +263,34 @@ export let overlay = (
 
   // The spine, where the batch moved it: a batch that patches entities that
   // all exist already leaves the identity table alone.
-  if (fresh.length || gone.size) {
+  if (fresh.length || killed.size) {
     let cols = (vocab.comp('archetype') ? SPINE : SPINE.slice(0, 3)).slice(1)
     arm(
       'entity',
       cols,
       'id',
       q('entity'),
-      [...gone].map((e) => ids.get(e)!),
+      [...killed].map((e) => ids.get(e)!),
       fresh.map((
         eid,
       ) => [ids.get(eid)!, eid, null, ...cols.slice(2).map(() => null)]),
     )
+  }
+
+  // What the batch took, one list per component. A literal `values` list, not
+  // a select: these rows are the batch's own, and there is nothing committed
+  // left to read them from.
+  let took = new Set<string>()
+  for (let [comp, eids] of dropped) {
+    let rows = [...eids].map((e) => ids.get(e)!).filter((id) => id != null)
+    if (!rows.length) continue
+    parts.push(
+      `${q(GONE + comp)}("entity") as (values ${
+        rows.map(() => '(?)').join(', ')
+      })`,
+    )
+    params.push(...rows)
+    took.add(comp)
   }
 
   let over = new Set(covers)
@@ -260,6 +298,7 @@ export let overlay = (
     with: parts.length ? `with ${parts.join(', ')} ` : '',
     params,
     at: (comp) => over.has(comp) ? q(OVER + comp) : q(comp),
+    gone: (comp) => took.has(comp) ? q(GONE + comp) : null,
     covers,
     ids,
   }

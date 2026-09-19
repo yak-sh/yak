@@ -18,6 +18,7 @@ import {
   fields,
   gate,
   ge,
+  gone,
   gt,
   hasRefs,
   le,
@@ -69,6 +70,10 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['+created', and(ensure('created'))],
   ['+!created', and(gate('created'))],
   ['*created', and(mutable('created'))],
+  // `-comp` is a REMOVAL: what the batch took, which no row can be asked
+  ['-created', and(gone('created'))],
+  ['-.created', and(gone('created'))],
+  ['.task -claim', and(present('task'), gone('claim'))],
   // a resource is capitalized: it binds beside the components, not among them
   ['#Clock', and(resource('Clock'))],
   ['#3f9a1c2e7b', and(resource('3f9a1c2e7b'))],

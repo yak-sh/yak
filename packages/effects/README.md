@@ -70,6 +70,24 @@ A pattern over more than one entity (a join) needs a storage that answers
 — and a store that cannot says so when it is asked, which the registry reports
 rather than breaking the batch it has already committed.
 
+## A removal is a clause too
+
+```ts
+fx.on('-post', (e) => unindex(e.entity.eid))
+fx.on('.product, -shelf', (e) => relist(e.entity.eid))
+```
+
+`-comp` says **this batch removed the component**, which is the one thing no
+committed row answers: once the row is gone, "it was taken" and "it was never
+there" read alike. So the batch goes under the question — @yaks/sqlite's overlay
+keeps a list of what the batch took, and the compiled match reads it.
+
+A pattern that says nothing else (`-post`) needs none of that: it is exactly
+what an event already says, so it is registered as the delta it is, woken by the
+batch's own reading like a birth or a change, and answered by any storage at
+all. That is also what keeps a cascade's casualties firing — they are events,
+tombstone and all, long after their rows are unreadable.
+
 ## Three things happen to a component
 
 | registration                 | fires when                                      |
@@ -80,9 +98,12 @@ rather than breaking the batch it has already committed.
 | `removed(comp, run)`         | it goes — dropped, or with the entity that died |
 | `on(pattern, run)`           | a query holds where this batch touched          |
 
-`created` and `changed` are `on()` said narrowly, and could be written as
-patterns. `removed` could not: the grammar has no clause for a row that is no
-longer there, so the three stay.
+`removed(comp, run)` **is** `on('-comp', run)` — one line of sugar over the
+deletion clause (`@yaks/query`), with the same slot, name and event as before.
+`created` and `changed` are not patterns and do not become any: a pattern says
+what HOLDS once the batch landed, and a birth or a column move is what CHANGED,
+which no reading of the committed rows recovers. They stay their own
+registrations.
 
 A batch on the wire does not say which of these it is: the same bundle patches a
 component that existed and creates one that did not, and a cascade's casualty

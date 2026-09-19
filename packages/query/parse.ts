@@ -112,8 +112,10 @@ let PATH = new RegExp(`^\\.?${WORD}$`)
 // A prefix SIGIL and the word it marks. `.` is the neutral one and stays
 // accepted before any other, so `+!created` and `+!.created` say the same thing.
 // `?comp` is the prefix mirror of `!comp`: optional (selected when present,
-// never filtered on) beside missing.
-let SIGIL = new RegExp(`^(\\+!|[!+*#$?])\\.?(${WORD})$`)
+// never filtered on) beside missing. `-comp` is the mirror of `+comp` in the
+// other direction: `+` says a component arrives, `-` says one went — so a
+// leading minus marks a word here and a bare `-word` is no longer a text term.
+let SIGIL = new RegExp(`^(\\+!|[-!+*#$?])\\.?(${WORD})$`)
 // A component word alone, dot-marked: present. The dot is what tells `.env`
 // (this entity wears `env`) from `env` (the word, searched for).
 let PLAIN = new RegExp(`^\\.(${WORD})$`)
@@ -179,7 +181,10 @@ export let cursor = (val: string): number | undefined => {
 
 // A component word wearing a sigil, or null when the token wears none. `!comp`
 // and `.comp` are ordinary predicates — absence and presence are questions any
-// evaluator answers from data — and the other four are the rule's own words.
+// evaluator answers from data — and the rest are words only a batch or a rule
+// can mean. `-comp` is the newest of them: absence is a question about a row,
+// a REMOVAL is a question about a batch, and no amount of reading the file
+// tells them apart.
 let sigil = (token: string): Clause[] | null => {
   // An eid fragment is a singleton resource too; unlike a component word it
   // may contain (or consist entirely of) digits. The store resolves it.
@@ -201,6 +206,7 @@ let sigil = (token: string): Clause[] | null => {
   if (mark == '+!') return [{ kind: 'gate', comp: word }]
   if (mark == '*') return [{ kind: 'mutable', comp: word }]
   if (mark == '#') return [{ kind: 'resource', comp: word }]
+  if (mark == '-') return [{ kind: 'gone', comp: word }]
   return [{ kind: 'var', name: word }]
 }
 
