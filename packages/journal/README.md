@@ -88,6 +88,39 @@ since(g)({ seq: 0 }) // { batches, cursor }
 client cache — so the reading half needs no privileged access to the writing
 half.
 
+## Two layouts, one answer
+
+`journal(vocab)` keeps the log as entities — a `batch` and a `delta` per
+movement — which is what makes it queryable with the same grammar as everything
+else and storable by any adapter, a Map in a browser tab included. On a graph
+with hundreds of thousands of entities that costs a spine row and a minted id
+per column that moved, and keeps both sides of every write where only one of
+them is news.
+
+`normalized({ rows })` is the other trade: three append-only tables OFF the
+spine, integer ids, after-images only, with the before-value derived at read
+time from one entity's own slice of the log. Same questions, same answers, a
+third of the bytes. Its host is one function wide — `rows(sql, params)` — and it
+owns no transaction, so a refused batch leaves no trace either way.
+`journaling(n)` registers it as a plugin; `normalDdl()` is its schema.
+
+```ts
+import { journaling, normalized } from '@yaks/journal'
+
+let log = normalized({ rows: (sql, p) => db.prepare(sql).all(...p) })
+db.exec(normalDdl())
+let g = graph({ storage, vocab, plugins: [journaling(log)] })
+
+log.history('p1') // the same Batch[] history(g)('p1') answers
+```
+
+A column whose text the graph already stores once under a content address is
+recorded by ADDRESS (`cas`), so the log shares the graph's bytes instead of
+keeping every revision of every document twice.
+
+`packages/journal/normalized_test.ts` writes one corpus through both and holds
+their answers equal, before-values included.
+
 ## Limitations and recording rules
 
 - **The provenance stamps are not recorded twice.** `created` and `updated`

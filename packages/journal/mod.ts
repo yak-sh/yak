@@ -52,6 +52,13 @@
  *   what a server recasts to its subscribers, and a consumer that stores the
  *   cursor before it works drives effects at most once.
  *
+ * ## Two layouts
+ * {@link journal} keeps the log as entities. {@link normalized} keeps the
+ * same log as three relational tables off the spine, after-images only, for a
+ * graph where a row and a minted id per movement is the wrong trade;
+ * {@link journaling} registers it as a plugin and it answers the same
+ * `history`, `at` and feed. `normalized_test.ts` holds the two equal.
+ *
  * ## What it is not
  * It is not a backup and not a state machine: it records what moved, not the
  * whole entity, so a graph that was journaled from its first write can answer
