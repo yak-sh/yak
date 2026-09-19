@@ -104,6 +104,7 @@ import {
   search,
 } from '@yaks/fts'
 import {
+  type ApplyOpts,
   type Bundle,
   type Comp,
   comps,
@@ -1005,12 +1006,12 @@ export class Store {
   // One batch, applied as the caller the door decided it is. `trusted` is two
   // things at once and they are the same thing: @yaks/graph admits the
   // server-owned columns, and the guard above stands down.
-  #trust(bundles: Bundle[], who: string | null) {
+  #trust(bundles: Bundle[], who: string | null, opts: ApplyOpts = {}) {
     this.#kernelling = true
     try {
       return this.#graph.apply(
         signed(bundles, who ? { eid: who } : null),
-        { trusted: true },
+        { ...opts, trusted: true },
       )
     } finally {
       this.#kernelling = false
@@ -1062,7 +1063,14 @@ export class Store {
    * and the alarm is set a minute out so nothing is silently dropped.
    */
   async tick(now = Date.now()): Promise<Ticked> {
-    let result = await tick(this.#graph, now)
+    // The firing is the SERVER's write, not a person's: a wake is the object's
+    // own business, and @yaks/member's guard asks which person may write an
+    // app's data. So it goes through the same door the kernel writes through,
+    // carrying the tick's instant, which is the `#Now` its rules read.
+    let result = await tick({
+      read: (q, o) => this.#graph.read(q, o),
+      apply: (b, o) => this.#trust(b as Bundle[], null, o),
+    }, now)
     for (let { wake, error } of result.refused) {
       await this.#broke(`wake ${wake.entity.eid}`, error)
     }

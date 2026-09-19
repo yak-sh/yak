@@ -6,7 +6,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bound } from '@yaks/graph'
 import { Store } from './graph.ts'
-import { platform } from './harness.ts'
+import { platform, state } from './harness.ts'
 import { meta } from './meta.ts'
 import type { Plugin, Wake } from './plugin.ts'
 import { wakesOf } from './plugin.ts'
@@ -275,4 +275,64 @@ Deno.test('an app store keeps its own schedule, with no platform in the middle',
     await p.states.get('ada/app')!.storage.getAlarm(),
     Date.parse(row.wake.at),
   )
+})
+
+// An app's own vocabulary, with a rule in it: what an app declares to say what
+// a firing MEANS. The wake carries no action — the rule is the reaction.
+let GARDEN = JSON.stringify({
+  $defs: {
+    plant: { properties: { name: { type: 'string' } } },
+    watered: { properties: { by: { type: 'string' } } },
+    waters: {
+      rule: true,
+      description: 'a plant whose wake has fired is watered',
+      match: '.plant, .wake, .fired, +!watered, +watered.by=wake',
+    },
+  },
+})
+
+Deno.test("an app's rule on `fired` advances the row its wake was about", async () => {
+  let ctx = state()
+  let store = new Store(ctx)
+  let head = {
+    'x-store': 'ada/garden',
+    'x-yak-app': 'a0000000-0000-4000-8000-000000000001',
+    'x-yak-person': 'b0000000-0000-4000-8000-000000000002',
+    'x-yak-role': 'owner',
+  }
+  let ask = (path: string, body?: unknown) =>
+    store.fetch(
+      new Request(`http://store${path}`, {
+        method: body ? 'POST' : 'GET',
+        headers: head,
+        body: body == null
+          ? undefined
+          : typeof body == 'string'
+          ? body
+          : JSON.stringify(body),
+      }),
+    )
+  assertEquals((await ask('/vocab', GARDEN)).status, 200)
+  let now = Date.now() - 1
+  assertEquals(
+    (await ask('/apply', [{
+      entity: { eid: 'fern' },
+      plant: { name: 'fern' },
+      wake: { at: new Date(now).toISOString(), note: 'water me' },
+    }])).status,
+    200,
+  )
+  // The write armed the object, and firing is the SERVER's write: an app's
+  // own guard is about a person writing its data, and no person is ticking.
+  assertEquals(await ctx.storage.getAlarm(), now)
+  await ctx.storage.deleteAlarm()
+  await store.alarm()
+  let [row] =
+    await (await ask(`/query?q=${encodeURIComponent('.watered!&.wake?')}`))
+      .json() as {
+        watered: { by: string }
+        wake: { at: string | null }
+      }[]
+  assertEquals(row.watered.by, 'wake')
+  assertEquals(row.wake.at, null)
 })

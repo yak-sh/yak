@@ -1,84 +1,110 @@
-// A rule an APP declared, running inside the deployed Worker. Nothing here is
-// code: the app ships a `rule: true` entry in its own vocab.json, writes a
-// row, and the row comes back wearing what the rule said.
+// A rule an APP declared, running inside the deployed Worker, on the app's own
+// clock. Nothing here is code: the app ships a `rule: true` entry in its own
+// vocab.json, writes a row wearing a `wake`, and the row comes back wearing
+// what the rule said — because the object holding it armed its own Durable
+// Object alarm and fired the wake when it came due (D-37562).
 //
-// What this proves that no in-process test can is the OVERLAY. A rule is a
-// query over the batch as though it had landed, and @yaks/sqlite makes the
-// batch readable by prefixing the statement with a CTE per component it
-// moved. It was temp tables shadowing the committed ones until this test ran:
-// a Durable Object's SQLite refuses a temp object outright (`not authorized:
-// SQLITE_AUTH`), so the overlay had to become something a query carries
-// rather than something a database is left holding.
-//
-// `rang` stands in for a wake here (app wakes are D-37562 and not built): the
-// row is rung by hand, and the rule reacts to it exactly as it will when
-// something else writes it.
+// What this proves that no in-process test can is the two things the runtime
+// owns. The OVERLAY: a rule is a query over the batch as though it had landed,
+// and @yaks/sqlite makes the batch readable by prefixing the statement with a
+// CTE per component it moved. It was temp tables shadowing the committed ones
+// until this test ran — a Durable Object's SQLite refuses a temp object
+// outright (`not authorized: SQLITE_AUTH`), so the overlay had to become
+// something a query carries rather than something a database is left holding.
+// And the ALARM: the wake's own `at` is the clock here, so a row written a
+// second ahead is delivered by workerd itself, to an object no request is
+// touching.
 
 import type { Bundle } from '@yaks/graph'
 import { assert, assertEquals } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow, until } from '../../src/testing.ts'
 import { client, connector, kernel, seed, txt, when } from './probe.ts'
 
 // An app vocabulary with a rule in it. `vocabFile` in probe.ts only spells
 // components; a rule is an entry of its own shape, so this one is written out.
 let withRule = JSON.stringify({
   $defs: {
-    alarm: { properties: { at: when } },
-    rang: { properties: { at: when } },
-    note: { properties: { said: txt } },
-    // An alarm that has rung and has no note yet gets one. The gate is what
-    // makes it fire once: after it writes, the entity HAS a note.
-    noted: {
+    plant: { properties: { name: txt } },
+    watered: { properties: { by: txt, at: when } },
+    // A plant whose wake has gone off has been watered. The gate is what makes
+    // it fire once: after it writes, the entity HAS the mark.
+    waters: {
       rule: true,
-      description: 'a rung alarm leaves a note',
-      match: '.rang, +!note, +note.said=rang',
+      description: 'a plant whose wake has fired is watered',
+      match: '.plant, .wake, .fired, +!watered, +watered.by=wake',
     },
   },
 })
 
-slow('an app rule fires inside the deployed Worker', async () => {
-  let k = await kernel()
-  try {
-    let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['clock'] }])
-    let app = client(k, 'jeff.yaks.app', 'clock', cookie)
-    assertEquals((await app.put('/vocab.json', withRule)).status, 200)
-    await app.put('/index.html', '<!doctype html><h1>Clock</h1>')
-    await connector(k, cookie).tool('app_deploy', {
-      space: 'jeff',
-      app: 'clock',
-    })
+slow(
+  'an app rule fires on its own alarm inside the deployed Worker',
+  async () => {
+    let k = await kernel()
+    try {
+      let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['garden'] }])
+      let app = client(k, 'jeff.yaks.app', 'garden', cookie)
+      assertEquals((await app.put('/vocab.json', withRule)).status, 200)
+      await app.put('/index.html', '<!doctype html><h1>Garden</h1>')
+      await connector(k, cookie).tool('app_deploy', {
+        space: 'jeff',
+        app: 'garden',
+      })
 
-    // An alarm that has NOT rung: the rule says nothing about it.
-    let r = await app.post([{
-      entity: { eid: 'w1' },
-      alarm: { at: '2026-09-19T00:00:00.000Z' },
-    }])
-    assertEquals(r.status, 200, await r.text())
-    assertEquals(((await app.get('.note!')) as Bundle[]).length, 0)
+      // A plant with no wake at all: the rule says nothing about it.
+      let r = await app.post([{
+        entity: { eid: 'cactus' },
+        plant: { name: 'cactus' },
+      }])
+      assertEquals(r.status, 200, await r.text())
+      assertEquals(((await app.get('.watered!')) as Bundle[]).length, 0)
 
-    // Fire it by hand. The rule matches the batch as though it had landed —
-    // which is the overlay — and writes the note in the same transaction.
-    assertEquals(
-      (await app.post([{
-        entity: { eid: 'w1' },
-        rang: { at: '2026-09-19T00:00:01.000Z' },
-      }])).status,
-      200,
-    )
-    let noted = (await app.get('.note!')) as Bundle[]
-    assertEquals(noted.length, 1)
-    assertEquals(noted[0].entity.eid, 'w1')
-    assertEquals((noted[0].note as { said: string }).said, 'rang')
+      // A plant that asks to be come back to, a second from now. Nobody polls
+      // for it: the store arms its object, the runtime delivers the alarm, the
+      // tick writes `fired`, and the rule matches that batch as though it had
+      // landed — which is the overlay.
+      await app.post([{
+        entity: { eid: 'fern' },
+        plant: { name: 'fern' },
+        wake: {
+          at: new Date(Date.now() + 1000).toISOString(),
+          note: 'water me',
+        },
+      }])
+      let watered = await until(
+        async () => {
+          let rows = (await app.get('.watered!&.wake?&.fired?')) as Bundle[]
+          return rows.length ? rows : undefined
+        },
+        { timeout: 20_000, poll: 250, label: 'the fern to be watered' },
+      ) as Bundle[]
+      assertEquals(watered.length, 1)
+      assertEquals(watered[0].entity.eid, 'fern')
+      assertEquals((watered[0].watered as { by: string }).by, 'wake')
+      // A one-shot is spent, and the firing is on the row that asked for it.
+      assertEquals((watered[0].wake as { at: string | null }).at, null)
+      assert(
+        (watered[0].fired as { at: string }).at,
+        'the wake says when it went',
+      )
 
-    // And it fires ONCE: touching the entity again finds the gate closed.
-    await app.post([{
-      entity: { eid: 'w1' },
-      rang: { at: '2026-09-19T00:00:02.000Z' },
-    }])
-    let again = (await app.get('.note!')) as Bundle[]
-    assertEquals(again.length, 1)
-    assert((again[0].note as { said: string }).said == 'rang')
-  } finally {
-    await k.stop()
-  }
-})
+      // And it fires ONCE: waking the plant again finds the gate closed.
+      await app.post([{
+        entity: { eid: 'fern' },
+        wake: { at: new Date(Date.now() + 500).toISOString() },
+      }])
+      let first = (watered[0].fired as { at: string }).at
+      await until(
+        async () => {
+          let [row] = (await app.get('.fired!&.plant?')) as Bundle[]
+          return (row?.fired as { at: string } | undefined)?.at != first
+        },
+        { timeout: 20_000, poll: 250, label: 'the second firing' },
+      )
+      let again = (await app.get('.watered!')) as Bundle[]
+      assertEquals(again.length, 1)
+      assertEquals((again[0].watered as { by: string }).by, 'wake')
+    } finally {
+      await k.stop()
+    }
+  },
+)
