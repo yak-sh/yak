@@ -12,9 +12,12 @@ import {
   connector,
   kernel,
   meta,
+  num,
   seed,
   signed,
   signIn,
+  txt,
+  vocabFile,
 } from './probe.ts'
 import { FREE, monthOf } from './meter.ts'
 import { minted } from './mcp-probe.ts'
@@ -32,7 +35,7 @@ slow('a read with no app composes every app the caller can reach', async () => {
       who: ReturnType<typeof connector>,
       slug: string,
       comp: string,
-      cols: Record<string, string>,
+      cols: Record<string, unknown>,
       access?: string,
     ) => {
       await who.tool('app_new', {
@@ -44,13 +47,13 @@ slow('a read with no app composes every app the caller can reach', async () => {
         app: slug,
         files: [{
           path: 'vocab.json',
-          content: JSON.stringify({ [comp]: cols }),
+          content: vocabFile({ [comp]: cols }),
         }],
       })
       await who.tool('app_deploy', { app: slug })
     }
-    await made(agent, 'recipes', 'recipe', { serves: 'number' })
-    await made(agent, 'lending', 'loan', { to: 'text' })
+    await made(agent, 'recipes', 'recipe', { serves: num })
+    await made(agent, 'lending', 'loan', { to: txt })
 
     // ONE entity, its title and recipe in one app, its loan in the other:
     // the eid is minted by the caller, so it names the same thing in both.
@@ -227,7 +230,7 @@ slow('a read with no app composes every app the caller can reach', async () => {
     // bundle he reads — even though it is written on the same eid.
     let maya = await signIn(k)
     let hers = connector(k, maya.cookie)
-    await made(hers, 'diary', 'entryline', { note: 'text' }, 'private')
+    await made(hers, 'diary', 'entryline', { note: txt }, 'private')
     await hers.tool('graph_apply', {
       app: 'diary',
       entities: [{ entity: { eid: cake }, entryline: { note: 'he baked it' } }],
@@ -260,20 +263,20 @@ slow('a write with no app routes each component to its own app', async () => {
     let made = async (
       slug: string,
       comp: string,
-      cols: Record<string, string>,
+      cols: Record<string, unknown>,
     ) => {
       await agent.tool('app_new', { slug, title: slug })
       await agent.tool('app_files', {
         app: slug,
         files: [{
           path: 'vocab.json',
-          content: JSON.stringify({ [comp]: cols }),
+          content: vocabFile({ [comp]: cols }),
         }],
       })
       await agent.tool('app_deploy', { app: slug })
     }
-    await made('recipes', 'recipe', { serves: 'number' })
-    await made('lending', 'loan', { to: 'text' })
+    await made('recipes', 'recipe', { serves: num })
+    await made('lending', 'loan', { to: txt })
     let rows = async (filter: string, app?: string) =>
       JSON.parse(
         await agent.tool('graph_query', { filter, ...(app ? { app } : {}) }),

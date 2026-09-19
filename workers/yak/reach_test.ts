@@ -100,8 +100,16 @@ let where = async () => {
     { space: nora, app: reading, who: owner },
     { space: nora, app: lending, who: owner },
   ]
-  await deploy(env, reach[0], { book: { pages: 'number', shelf: 'text' } })
-  await deploy(env, reach[1], { loan: { to: 'text' } })
+  await deploy(env, reach[0], {
+    $defs: {
+      book: {
+        properties: { pages: { type: 'number' }, shelf: { type: 'string' } },
+      },
+    },
+  })
+  await deploy(env, reach[1], {
+    $defs: { loan: { properties: { to: { type: 'string' } } } },
+  })
   return { env, reach }
 }
 

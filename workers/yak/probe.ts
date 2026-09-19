@@ -602,6 +602,22 @@ export let meta = (k: Kernel, cookie: string) => {
   }
 }
 
+// An app's `vocab.json`, as a probe writes one: the document, without every
+// test spelling `$defs` and `properties` around two columns. A column is its
+// JSON Schema — {@link txt}, {@link num} and {@link when} are the three a probe
+// reaches for.
+export let vocabFile = (
+  defs: Record<string, Record<string, unknown>>,
+): string =>
+  JSON.stringify({
+    $defs: Object.fromEntries(
+      Object.entries(defs).map(([name, props]) => [name, { properties: props }]),
+    ),
+  })
+export let txt = { type: 'string' }
+export let num = { type: 'number' }
+export let when = { type: 'string', format: 'date-time' }
+
 // A person with spaces and apps, made through their own agent's doors: they
 // sign in, then space_new and app_new. The first app in a space answers its
 // bare hostname. Returns who they are, and the eids by slug.

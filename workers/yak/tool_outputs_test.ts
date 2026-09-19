@@ -101,7 +101,11 @@ Deno.test('isolated public MCP calls return structured text for narratives, list
       space: 'schema-test',
       app: 'notes',
       files: [
-        { path: 'vocab.json', content: '{"note":{"title":"text"}}' },
+        {
+          path: 'vocab.json',
+          content:
+            '{"$defs": {"note": {"properties": {"title": {"type": "string"}}}}}',
+        },
       ],
     })
     await call('app_deploy', { space: 'schema-test', app: 'notes' })

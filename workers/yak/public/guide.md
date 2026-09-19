@@ -170,7 +170,8 @@ matters there, ask for a name on the page and save it in your own row.
 
 `created.at` is when this store first saw the row and cannot be given a past
 moment, so anything IMPORTED or seeded carries its own date in a `time` column
-of its own — `{ "jotting": { "written": "time" } }` — and the page draws that.
+of its own — `{"$defs": {"jotting": {"properties": {"written":
+{"type": "string", "format": "date-time"}}}}}` — and the page draws that.
 The stamp is the store's record; the date is the row's.
 
 ## Files
@@ -205,10 +206,13 @@ cached forever because they can never change.
       draw(p.photo.caption, `./api/blob/${p.photo.blob}`)
     }
 
-(`photo` is the app's own component —
-`{"photo": {"caption": "text", "blob":
-"text"}}` in its `vocab.json`; see
-below.) A row points at bytes by their eid, and `./api/blob/<eid>` is where they
+(`photo` is the app's own component, declared in its `vocab.json` —
+
+    { "$defs": { "photo": { "properties": {
+        "caption": { "type": "string" },
+        "blob":    { "type": "string" } } } } }
+
+see below.) A row points at bytes by their eid, and `./api/blob/<eid>` is where they
 are, which is what `url` already holds.
 
 The upload writes a row of its own as well, so `query('.attachment!')` lists
@@ -301,7 +305,10 @@ is one of `contains`, `requires`, `about`, `referenced`, `supersedes`.
 An app names its own components in a `vocab.json` at its root, and `app_deploy`
 plants them in that app's store:
 
-    { "recipe": { "title": "text", "serves": "number", "minutes": "number" } }
+    { "$defs": { "recipe": { "properties": {
+        "title":   { "type": "string" },
+        "serves":  { "type": "number" },
+        "minutes": { "type": "number" } } } } }
 
 After the deploy `recipe` is a component like any other — write it in a bundle,
 read it back in the row, filter on it:
@@ -314,7 +321,9 @@ read it back in the row, filter on it:
 
     let quick = await query('.recipe.minutes<=30')
 
-A column is one of `text`, `number`, `bool`, `time`, `url`. A later deploy may
+A column is a JSON Schema: `{"type": "string"}` for text, `{"type": "number"}`,
+`{"type": "boolean"}`, `{"type": "string", "format": "date-time"}` for a moment,
+`{"type": "string", "format": "uri"}` for an address. A later deploy may
 add a column, but one that already has rows is never dropped or retyped. A whole
 component the manifest stops naming is dropped if it holds no rows and kept if
 it holds any — so a name you tried once and thought better of does not stay in
@@ -725,7 +734,12 @@ article — and keep it. Two pieces, and a `worker.js` is what makes it possible
   site cannot write here, today, with or without a token.
 
 Keep where it came from, in a component of your own —
-`{"source": {"url": "url", "at": "time"}}` — and make the entity's eid the
+
+    { "$defs": { "source": { "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "at":  { "type": "string", "format": "date-time" } } } } }
+
+— and make the entity's eid the
 address's own hash, so clipping the same page twice patches one row instead of
 making two. When a site refuses a robot, save the link and the title the browser
 already had and tell the person plainly; answer 200, not 5xx, or every blocked
