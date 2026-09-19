@@ -36,8 +36,9 @@ export type RuleDecl = {
   before?: string[]
   /** the phase it runs in. `rules` — the default — is the declared half of
    * `apply()`, before persistence. `effect` is a rule nothing in `apply()`
-   * runs: a post-commit runner asks it for its bindings and does the work
-   * (@yaks/tools' call/result runner is the one such runner). */
+   * runs: it is a PATTERN to register a post-commit handler on (@yaks/effects
+   * `on`), or to ask once as a sweep — @yaks/tools' two, which say what a
+   * call that still wants running is. */
   phase?: string
   /** what it is for, in a line */
   description?: string
