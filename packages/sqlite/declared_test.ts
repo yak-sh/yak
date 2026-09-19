@@ -137,3 +137,27 @@ Deno.test('what a rule writes is stamped and journaled like anything else', () =
   let [held] = one.storage.tx((tx) => tx.get(['p1'])) as Bundle[]
   assertEquals(held.shelf, { aisle: 'Z', slot: null, height: null })
 })
+
+Deno.test('a rule declared in a vocabulary runs with no wiring at all', () => {
+  // No `declared` list, no code: the rule is a `$defs` entry the plugin ships
+  // beside its components, exactly as an app's manifest would.
+  let s = storage(mem(), shop)
+  s.install()
+  let one = graph({
+    storage: s,
+    vocab: shop,
+    plugins: [{
+      name: 'shop',
+      vocab: [{
+        $defs: {
+          unshelved: { rule: true, match: '.product, +!shelf, +shelf.aisle=Z' },
+        },
+      }],
+    }],
+  })
+  let out = one.apply([{
+    entity: { eid: 'p1' },
+    product: { price: 9 },
+  }]) as Bundle[]
+  assertEquals(at(out, 'p1', 'shelf'), { aisle: 'Z' })
+})

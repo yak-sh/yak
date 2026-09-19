@@ -152,7 +152,9 @@ export let storable = (doc: VocabDoc): string[] => {
     // nothing, and only a marked component is checked as a table. An entry
     // with columns and no marker is the forgotten marker, said once here so a
     // deploy refuses where it can still teach.
-    if (!object(schema) || schema.tool === true) continue
+    if (!object(schema) || schema.tool === true || schema.rule === true) {
+      continue
+    }
     if (schema.component !== true) {
       if (schema.properties || schema.type == 'object') {
         errs.push(

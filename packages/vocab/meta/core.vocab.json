@@ -13,6 +13,14 @@
       "description": "true = this $defs entry declares a TOOL: one named thing an agent can ask the graph to do. Its implementation is the module's, keyed by the entry name (or noun_verb); the declaration is the part that travels.",
       "const": true
     },
+    "rule": {
+      "description": "true = this $defs entry declares a RULE: a query the graph runs over every batch, and nothing else. No implementation anywhere \u2014 the match IS the rule, and what its `+` words say is what it writes.",
+      "const": true
+    },
+    "match": {
+      "description": "A rule's query: one or more ordinary query patterns separated by `;`, one per entity, joined by the variables they share. `$call .call, results=; +result.call=$call`.",
+      "type": "string"
+    },
     "noun": {
       "description": "A tool's resource word, one lowercase word \u2014 what it acts on. A CLI answers to either order (`session list`, `list session`).",
       "type": "string"
@@ -31,11 +39,20 @@
     },
     "death": {
       "description": "What the reaper does to this reference when its target entity dies.",
-      "enum": ["cascade", "detach", "release", "keep"]
+      "enum": [
+        "cascade",
+        "detach",
+        "release",
+        "keep"
+      ]
     },
     "sync": {
       "description": "Who hears about a write to this component. \"server\" (the default) sends it to the server, which owns it and fans it out to subscribers; \"none\" keeps it on the writing node; \"peers\" sends it to the server, which RELAYS it to subscribers without owning it.",
-      "enum": ["none", "server", "peers"],
+      "enum": [
+        "none",
+        "server",
+        "peers"
+      ],
       "default": "server"
     },
     "durable": {
@@ -61,9 +78,11 @@
       "type": "boolean"
     },
     "before": {
-      "description": "Kind names this kind sorts before. kindOrder is alphabetical, topologically refined by these constraints.",
+      "description": "Kind names this kind sorts before. kindOrder is alphabetical, topologically refined by these constraints. On a RULE it names the rules this one runs before, so order among rules touching one entity is declared rather than registration-incidental.",
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "wire": {
       "description": "false = a readable-not-writable component (the spine, `entity`). Default true.",
@@ -78,32 +97,55 @@
     "aliases": {
       "description": "Input spellings that resolve to an enum member; output always speaks the canonical member.",
       "type": "object",
-      "additionalProperties": { "type": "string" }
+      "additionalProperties": {
+        "type": "string"
+      }
     },
     "unique": {
       "description": "The uniqueness a race is decided by. On a COLUMN, true = no two rows of the component may share the value. On a COMPONENT, the composite uniques as column lists: [[\"space\", \"slug\"]], or {\"cols\": [\"key\"], \"present\": [\"key\"]} for a unique over the rows that hold the key (a partial index).",
       "anyOf": [
-        { "type": "boolean" },
+        {
+          "type": "boolean"
+        },
         {
           "type": "array",
-          "items": { "type": "array", "items": { "type": "string" } }
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       ]
     },
     "identity": {
-      "description": "What the entity's own id is DERIVED from. On a COLUMN, true = this component's entities are identified by this value: the eid is sha256(\"<component>|<value>\") worn as a UUID, so writing the same value twice is one entity and uniqueness is a fact about ids rather than a race. On a COMPONENT, the column list a composite identity is spelled across, in derivation order: [\"space\", \"slug\"]. One tuple, never a list of them — an entity has one id.",
+      "description": "What the entity's own id is DERIVED from. On a COLUMN, true = this component's entities are identified by this value: the eid is sha256(\"<component>|<value>\") worn as a UUID, so writing the same value twice is one entity and uniqueness is a fact about ids rather than a race. On a COMPONENT, the column list a composite identity is spelled across, in derivation order: [\"space\", \"slug\"]. One tuple, never a list of them \u2014 an entity has one id.",
       "anyOf": [
-        { "type": "boolean" },
-        { "type": "array", "items": { "type": "string" } }
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       ]
     },
     "index": {
       "description": "An index to read by, carrying no uniqueness. On a COLUMN, true = index it. Stored refs are always indexed: true is redundant and false does not opt out. On a COMPONENT, the composite indexes as column lists: [[\"app\", \"version\"]], or {\"cols\": [...], \"present\": [...]} for a partial index over the rows that hold those columns.",
       "anyOf": [
-        { "type": "boolean" },
+        {
+          "type": "boolean"
+        },
         {
           "type": "array",
-          "items": { "type": "array", "items": { "type": "string" } }
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       ]
     }

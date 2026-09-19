@@ -303,15 +303,16 @@ export let loadVocab = (
   // Merge every doc's COMPONENT entries into one table; a name declared twice
   // is a conflict (a word has one home). `$defs` is JSON Schema's own reuse
   // slot, so an entry says what it is: `component: true` is a component,
-  // `tool: true` is a tool declaration (tools.ts `toolsIn` reads those, and
-  // this loader passes over them), and anything else is an ordinary subschema
+  // `tool: true` is a tool declaration (tools.ts `toolsIn` reads those) and
+  // `rule: true` is a rule (rules.ts `rulesIn` does), both of which this
+  // loader passes over, and anything else is an ordinary subschema
   // somebody `$ref`s. An entry with COLUMNS and no marker is the one case that
   // refuses rather than being ignored: it is a component whose marker was
   // forgotten, and planting nothing for it silently loses the word.
   let defs: Record<string, PropSchema> = {}
   for (let doc of docs) {
     for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
-      if (schema?.tool === true) continue
+      if (schema?.tool === true || schema?.rule === true) continue
       if (schema?.component !== true) {
         if (schema?.properties || schema?.type == 'object') {
           throw new Error(

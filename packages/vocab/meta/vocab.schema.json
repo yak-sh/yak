@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yaks.sh/vocab/meta",
   "title": "yaks vocab file",
-  "description": "The meta-schema a vocab document validates against: a JSON Schema 2020-12 document whose $defs entries are DISCRIMINATED — an entry marked \"component\": true is a component (an object schema whose properties are storable columns: scalar, reference, or closed set; no nesting, no arrays), an entry marked \"tool\": true is a tool declaration (noun, verb, description, input), and an entry marked neither is an ordinary reusable subschema this meta-model says nothing about. Only the CORE keyword shapes are inlined, so this file validates standalone; a file using an extension vocabulary's keywords validates against extendMeta([thoseKeywords]) instead.",
+  "description": "The meta-schema a vocab document validates against: a JSON Schema 2020-12 document whose $defs entries are DISCRIMINATED \u2014 an entry marked \"component\": true is a component (an object schema whose properties are storable columns: scalar, reference, or closed set; no nesting, no arrays), an entry marked \"tool\": true is a tool declaration (noun, verb, description, input), an entry marked \"rule\": true is a rule declaration (the query it matches, and the rules it runs before), and an entry marked neither is an ordinary reusable subschema this meta-model says nothing about. Only the CORE keyword shapes are inlined, so this file validates standalone; a file using an extension vocabulary's keywords validates against extendMeta([thoseKeywords]) instead.",
   "$vocabulary": {
     "https://json-schema.org/draft/2020-12/vocab/core": true,
     "https://json-schema.org/draft/2020-12/vocab/applicator": true,
@@ -10,49 +10,138 @@
     "https://yaks.sh/vocab/core": true
   },
   "type": "object",
-  "required": ["$defs"],
+  "required": [
+    "$defs"
+  ],
   "properties": {
-    "$schema": { "type": "string" },
-    "$id": { "type": "string" },
+    "$schema": {
+      "type": "string"
+    },
+    "$id": {
+      "type": "string"
+    },
     "$vocabulary": {
       "type": "object",
-      "additionalProperties": { "type": "boolean" }
+      "additionalProperties": {
+        "type": "boolean"
+      }
     },
-    "title": { "type": "string" },
-    "description": { "type": "string" },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
     "$defs": {
       "type": "object",
-      "propertyNames": { "pattern": "^[a-z][a-z0-9_]{0,39}$" },
-      "additionalProperties": { "$ref": "#/$defs/entry" }
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,39}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/entry"
+      }
     }
   },
   "$defs": {
     "entry": {
-      "description": "One $defs entry, by its marker: a component, a tool, or an ordinary subschema nothing here constrains. An entry cannot be both.",
+      "description": "One $defs entry, by its marker: a component, a tool, a rule, or an ordinary subschema nothing here constrains. An entry wears one marker, never two.",
       "allOf": [
         {
-          "if": { "type": "object", "required": ["component"] },
-          "then": { "$ref": "#/$defs/component" }
+          "if": {
+            "type": "object",
+            "required": [
+              "component"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/component"
+          }
         },
         {
-          "if": { "type": "object", "required": ["tool"] },
-          "then": { "$ref": "#/$defs/tool" }
+          "if": {
+            "type": "object",
+            "required": [
+              "tool"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/tool"
+          }
         },
-        { "not": { "type": "object", "required": ["component", "tool"] } }
+        {
+          "if": {
+            "type": "object",
+            "required": [
+              "rule"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/rule"
+          }
+        },
+        {
+          "not": {
+            "type": "object",
+            "required": [
+              "component",
+              "tool"
+            ]
+          }
+        },
+        {
+          "not": {
+            "type": "object",
+            "required": [
+              "component",
+              "rule"
+            ]
+          }
+        },
+        {
+          "not": {
+            "type": "object",
+            "required": [
+              "tool",
+              "rule"
+            ]
+          }
+        }
       ]
     },
-    "cols": { "type": "array", "items": { "$ref": "#/$defs/composite" } },
+    "cols": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/composite"
+      }
+    },
     "composite": {
       "description": "One composite index entry: the column names, or an object naming them plus the columns a row must hold for the index to see it (a partial index).",
       "anyOf": [
-        { "type": "array", "items": { "type": "string" } },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         {
           "type": "object",
           "properties": {
-            "cols": { "type": "array", "items": { "type": "string" } },
-            "present": { "type": "array", "items": { "type": "string" } }
+            "cols": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "present": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           },
-          "required": ["cols"],
+          "required": [
+            "cols"
+          ],
           "additionalProperties": false
         }
       ]
@@ -60,53 +149,130 @@
     "component": {
       "type": "object",
       "properties": {
-        "component": { "const": true },
-        "type": { "const": "object" },
-        "title": { "type": "string" },
-        "description": { "type": "string" },
+        "component": {
+          "const": true
+        },
+        "type": {
+          "const": "object"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
         "properties": {
           "type": "object",
           "propertyNames": {
             "pattern": "^[a-z][a-z0-9_]{0,39}$",
-            "not": { "enum": ["entity", "eid"] }
+            "not": {
+              "enum": [
+                "entity",
+                "eid"
+              ]
+            }
           },
-          "additionalProperties": { "$ref": "#/$defs/column" }
+          "additionalProperties": {
+            "$ref": "#/$defs/column"
+          }
         },
-        "required": { "type": "array", "items": { "type": "string" } },
-        "kind": { "type": "boolean" },
-        "before": { "type": "array", "items": { "type": "string" } },
-        "wire": { "type": "boolean" },
-        "sync": { "enum": ["none", "server", "peers"] },
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "kind": {
+          "type": "boolean"
+        },
+        "before": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "wire": {
+          "type": "boolean"
+        },
+        "sync": {
+          "enum": [
+            "none",
+            "server",
+            "peers"
+          ]
+        },
         "durable": {
           "type": "string",
           "pattern": "^(forever|connection|[0-9]+(\\.[0-9]+)?(ms|s|m|h|d))$"
         },
-        "bare": { "type": "boolean" },
-        "unique": { "$ref": "#/$defs/cols" },
-        "index": { "$ref": "#/$defs/cols" },
-        "identity": { "type": "array", "items": { "type": "string" } },
-        "prefix": { "type": "string", "pattern": "^[A-Z]$" },
-        "by_name": { "type": "boolean" }
+        "bare": {
+          "type": "boolean"
+        },
+        "unique": {
+          "$ref": "#/$defs/cols"
+        },
+        "index": {
+          "$ref": "#/$defs/cols"
+        },
+        "identity": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "prefix": {
+          "type": "string",
+          "pattern": "^[A-Z]$"
+        },
+        "by_name": {
+          "type": "boolean"
+        }
       },
       "additionalProperties": false,
-      "required": ["component"]
+      "required": [
+        "component"
+      ]
     },
     "tool": {
       "description": "A tool declaration: what the tool is CALLED and what it takes. The run is the module's.",
       "type": "object",
       "properties": {
-        "tool": { "const": true },
-        "noun": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
-        "verb": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
-        "name": { "type": "string", "minLength": 1 },
-        "title": { "type": "string" },
-        "description": { "type": "string" },
+        "tool": {
+          "const": true
+        },
+        "noun": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "verb": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
         "input": {
           "type": "object",
-          "propertyNames": { "pattern": "^[a-z][a-z0-9_]{0,39}$" },
-          "additionalProperties": { "$ref": "#/$defs/arg" }
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]{0,39}$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/arg"
+          }
         },
-        "required": { "type": "array", "items": { "type": "string" } },
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "options": {
           "type": "object",
           "additionalProperties": false,
@@ -114,78 +280,217 @@
             "positional": {
               "type": "array",
               "uniqueItems": true,
-              "items": { "type": "string" }
+              "items": {
+                "type": "string"
+              }
             },
             "short": {
               "type": "object",
-              "propertyNames": { "pattern": "^[a-zA-Z]$" },
-              "additionalProperties": { "type": "string" }
+              "propertyNames": {
+                "pattern": "^[a-zA-Z]$"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
             },
-            "rest": { "type": "string" }
+            "rest": {
+              "type": "string"
+            }
           }
         },
-        "readOnly": { "type": "boolean" },
-        "destructive": { "type": "boolean" },
-        "idempotent": { "type": "boolean" },
-        "openWorld": { "type": "boolean" }
+        "readOnly": {
+          "type": "boolean"
+        },
+        "destructive": {
+          "type": "boolean"
+        },
+        "idempotent": {
+          "type": "boolean"
+        },
+        "openWorld": {
+          "type": "boolean"
+        }
       },
-      "required": ["tool", "noun", "verb", "description"],
+      "required": [
+        "tool",
+        "noun",
+        "verb",
+        "description"
+      ],
       "additionalProperties": false
     },
     "column": {
       "type": "object",
       "properties": {
-        "type": { "enum": ["string", "number", "integer", "boolean"] },
-        "format": { "type": "string" },
-        "enum": { "type": "array", "items": { "type": "string" } },
+        "type": {
+          "enum": [
+            "string",
+            "number",
+            "integer",
+            "boolean"
+          ]
+        },
+        "format": {
+          "type": "string"
+        },
+        "enum": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "const": true,
         "default": true,
-        "description": { "type": "string" },
-        "examples": { "type": "array" },
-        "ref": { "type": "string" },
-        "death": { "enum": ["cascade", "detach", "release", "keep"] },
-        "computed": { "type": "boolean" },
-        "stamped": { "type": "boolean" },
-        "search": { "type": "boolean" },
-        "bare": { "type": "boolean" },
-        "unique": { "type": "boolean" },
-        "index": { "type": "boolean" },
-        "identity": { "type": "boolean" },
+        "description": {
+          "type": "string"
+        },
+        "examples": {
+          "type": "array"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "death": {
+          "enum": [
+            "cascade",
+            "detach",
+            "release",
+            "keep"
+          ]
+        },
+        "computed": {
+          "type": "boolean"
+        },
+        "stamped": {
+          "type": "boolean"
+        },
+        "search": {
+          "type": "boolean"
+        },
+        "bare": {
+          "type": "boolean"
+        },
+        "unique": {
+          "type": "boolean"
+        },
+        "index": {
+          "type": "boolean"
+        },
+        "identity": {
+          "type": "boolean"
+        },
         "aliases": {
           "type": "object",
-          "additionalProperties": { "type": "string" }
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false,
-      "dependentRequired": { "ref": ["death"] }
+      "dependentRequired": {
+        "ref": [
+          "death"
+        ]
+      }
     },
     "arg": {
       "type": "object",
       "properties": {
-        "type": { "enum": ["string", "number", "integer", "boolean", "array"] },
-        "format": { "type": "string" },
-        "enum": { "type": "array", "items": { "type": "string" } },
+        "type": {
+          "enum": [
+            "string",
+            "number",
+            "integer",
+            "boolean",
+            "array"
+          ]
+        },
+        "format": {
+          "type": "string"
+        },
+        "enum": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "const": true,
         "default": true,
-        "description": { "type": "string" },
-        "examples": { "type": "array" },
-        "ref": { "type": "string" },
-        "death": { "enum": ["cascade", "detach", "release", "keep"] },
-        "computed": { "type": "boolean" },
-        "stamped": { "type": "boolean" },
-        "search": { "type": "boolean" },
-        "bare": { "type": "boolean" },
-        "unique": { "type": "boolean" },
-        "index": { "type": "boolean" },
-        "identity": { "type": "boolean" },
+        "description": {
+          "type": "string"
+        },
+        "examples": {
+          "type": "array"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "death": {
+          "enum": [
+            "cascade",
+            "detach",
+            "release",
+            "keep"
+          ]
+        },
+        "computed": {
+          "type": "boolean"
+        },
+        "stamped": {
+          "type": "boolean"
+        },
+        "search": {
+          "type": "boolean"
+        },
+        "bare": {
+          "type": "boolean"
+        },
+        "unique": {
+          "type": "boolean"
+        },
+        "index": {
+          "type": "boolean"
+        },
+        "identity": {
+          "type": "boolean"
+        },
         "aliases": {
           "type": "object",
-          "additionalProperties": { "type": "string" }
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "items": true
       },
       "additionalProperties": false,
-      "description": "One tool argument: the same declaration a column takes, so a completion reads an argument the way it reads a column — an enum offers its members, a `ref` offers the entities of that kind, a text argument marked `search` offers what the index finds."
+      "description": "One tool argument: the same declaration a column takes, so a completion reads an argument the way it reads a column \u2014 an enum offers its members, a `ref` offers the entities of that kind, a text argument marked `search` offers what the index finds."
+    },
+    "rule": {
+      "description": "A rule declaration: the QUERY it matches, and nothing else. `match` is one or more ordinary query patterns separated by `;`, one per entity \u2014 the sigils say the rest (`+comp` ensures, `+!comp` gates so it fires once, `*comp` is its write set, `$name` names an entity, a `$name` value is that same variable). `before` names the rules this one runs before, so order among rules touching one entity is declared rather than registration-incidental.",
+      "type": "object",
+      "properties": {
+        "rule": {
+          "const": true
+        },
+        "match": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "before": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "rule",
+        "match"
+      ],
+      "additionalProperties": false
     }
   }
 }

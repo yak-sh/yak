@@ -145,6 +145,10 @@ export type PropSchema = {
   // reusable subschema — the loader plants neither a table nor a tool for it.
   component?: boolean
   tool?: boolean
+  rule?: boolean
+  // A rule declaration's own word: the query it matches. `before` is shared
+  // with a kind's ordering and means the same thing — what this runs before.
+  match?: string
   // A tool declaration's own words: what it is called, and what it takes.
   noun?: string
   verb?: string

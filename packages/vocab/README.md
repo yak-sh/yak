@@ -267,3 +267,33 @@ Handlers remain code and receive the existing graph Tool context. The older
 opaque/Zod argument bag remains supported by existing adapters, but cannot be
 combined with `inputSchema` on the same tool. JSON output declarations and a
 uniform migration of legacy tools are not part of this first input pilot.
+
+## Rules
+
+A `$defs` entry marked `rule: true` is a RULE: a query the graph runs over every
+batch, and there is nothing else to it.
+
+```json
+{
+  "$defs": {
+    "settle": {
+      "rule": true,
+      "description": "every call gets a result",
+      "match": "$c .call, results=; +result.call=$c",
+      "before": ["sweep"]
+    }
+  }
+}
+```
+
+`match` is one or more ordinary query patterns separated by `;`, one per entity,
+joined by the variables they share. The sigils say the rest — `+comp` ensures,
+`+!comp` gates so it fires once, `*comp` is its write set, `$name` names an
+entity, and a `$name` in a value is that same variable. `before` names the rules
+this one runs before, so order is declared rather than incidental.
+
+`rulesIn(docs)` reads them, the way `toolsIn` reads tool declarations, and
+`loadVocab` passes over both. The difference is that there is nothing to join a
+rule to: a tool says what it is called and a module says what it does, while a
+rule's match IS what it does. `@yaks/graph` reads a plugin's own documents for
+them, so an app that ships one in its manifest needs no wiring at all.

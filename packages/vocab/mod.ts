@@ -19,6 +19,9 @@
 //   order.ts     the derived ordering (alphabetical + topological over `before`)
 //   lifetime.ts  the two words a component says about its own state: `sync`
 //                (who hears about a write) and `durable` (how long it lives)
+//   rules.ts     rulesIn(docs) → the rules a vocabulary declares: a `$defs`
+//                entry marked `rule: true` is a query the graph runs, and
+//                there is no implementation to join it to
 
 export * from './types.ts'
 export * from './order.ts'
@@ -27,3 +30,4 @@ export * from './vocab.ts'
 export * from './validate.ts'
 export * from './meta.ts'
 export * from './keywords.ts'
+export * from './rules.ts'

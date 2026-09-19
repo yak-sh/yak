@@ -41,7 +41,7 @@
 // other — the audit hooks see it, wearing a `Checked` — so a hook that wrote
 // inside the transaction is never left believing its rows are still there.
 
-import type { Vocab } from '@yaks/vocab'
+import { rulesIn, type Vocab } from '@yaks/vocab'
 // getRandomValues, never crypto.randomUUID: a page on plain http mints too.
 import { mint as fresh } from '@yaks/id'
 import { type Bundle, type Change, comps, type Eid } from './bundle.ts'
@@ -215,8 +215,13 @@ export let graph = (opts: Options): Graph => {
   let stamping = [...provenance(opts.provenance), ...marks(vocab)]
   // The DECLARED rules, read once per apply: a plugin registered since the
   // last one is in, and a rule that will not parse says so before the batch
-  // opens a transaction.
-  let declaring = () => ready(plugins.flatMap((p) => p.declared ?? []))
+  // opens a transaction. A plugin's own vocabulary is read for them too, so
+  // an app that ships `rule: true` in its manifest needs no wiring at all.
+  let declaring = () =>
+    ready(plugins.flatMap((p) => [
+      ...(p.declared ?? []),
+      ...rulesIn(p.vocab ?? []),
+    ]))
   let ruled = (phase: Phase): Rule[] =>
     [...stamping, ...plugins.flatMap((p) => p.rules ?? [])]
       .filter((r) => r.phase == phase)
