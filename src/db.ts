@@ -101,7 +101,6 @@ import {
   normalDdl,
   normalized,
   type Patch as JournalPatch,
-  undone,
 } from '@yaks/journal'
 import { Bounced as LeaseBounced } from '@yaks/session'
 import {
@@ -1683,9 +1682,6 @@ let byEid = `entity = (select id from entity where eid = ?)`
 // `select ${refEid('client.actor')} as actor from client`. A null id (detached
 // ref) projects to null, the same absence the eid column used to carry.
 let refEid = (col: string) => `(select eid from entity where id = ${col})`
-// The inverse, for a WRITE or a lookup that binds an eid where the column
-// holds a spine id: `insert … values (${spineId})`, `where jc.entity = ${spineId}`.
-let spineId = `(select id from entity where eid = ?)`
 
 let tableExists = (db: Sql, t: string) =>
   !!prep(db, `select 1 from sqlite_master where type = 'table' and name = ?`)

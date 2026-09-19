@@ -10,7 +10,7 @@
 // the package's two.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import type { Bundle, Graph } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
 import { graph, isPromise } from '@yaks/graph'
 import { storage } from '../sqlite/mod.ts'
 import { mem } from '../sqlite/harness.ts'

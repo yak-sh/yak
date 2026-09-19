@@ -173,8 +173,50 @@ export let normalDdl = (spine = 'entity'): string => `
 let written = (value: Comp): [string, unknown][] =>
   Object.entries(value).filter(([column]) => column != 'eid')
 
-/** The normalized journal bound to one store. */
-export type Normal = ReturnType<typeof normalized>
+/** The normalized journal bound to one store: the writer, and the questions a
+ * log is kept to answer. */
+export type Normal = {
+  /** write one batch down inside the caller's transaction; answers its seq */
+  write: (
+    meta: { at: string; by?: Eid | null; via?: Eid | null; note?: unknown },
+    applied: Patch[],
+  ) => number
+  /** one batch's operations, whole or cut to one entity, in applied order */
+  patches: (seq: number, target?: Eid) => Patch[]
+  /** the batches that touched one entity, newest first, cut to it */
+  entries: (target: Eid, n?: number) => Entry[]
+  /** every batch one instrument wrote, newest first, whole */
+  by: (via: Eid, n?: number) => Entry[]
+  /** the batches after a cursor, oldest first — the feed */
+  since: (cursor?: number) => Entry[]
+  /** one batch as the package's own Batch, both sides of every movement */
+  at: (seq: number) => Batch | undefined
+  /** what happened to one entity, oldest first, as Batch */
+  history: (target: Eid, n?: number) => Batch[]
+  /** one entity's components as of just before a batch */
+  before: (target: Eid, seq: number) => Record<string, Comp>
+  /** the last batch that touched one entity, or 0 */
+  latest: (target: Eid) => number
+  /** every recorded write of one column, oldest first */
+  wrote: (
+    comp: string,
+    column: string,
+  ) => { target: Eid; value: unknown; seq: number }[]
+  /** the highest seq the log holds, or 0 */
+  tip: () => number
+  /** has anything touched this entity since a batch? */
+  touchedSince: (target: Eid, seq: number) => boolean
+  /** does the log still read its text through this content? */
+  holds: (ref: number) => boolean
+  /** every recorded value containing this text, oldest first */
+  seek: (text: string) => Hit[]
+  /** rewrite one recorded inline value in place */
+  scrubValue: (field: number, value: string) => void
+  /** repoint one recorded content-addressed value */
+  scrubRef: (field: number, ref: number) => void
+  /** the eid→spine-id fragment, for a host that must reach the same rows */
+  spineId: string
+}
 
 /**
  * Bind the normalized journal to a store.
@@ -186,7 +228,7 @@ export type Normal = ReturnType<typeof normalized>
  * j.since(cursor)                         // Entry[], the feed
  * ```
  */
-export let normalized = (opts: NormalOpts) => {
+export let normalized = (opts: NormalOpts): Normal => {
   let rows = opts.rows
   let table = opts.spine?.table ?? 'entity'
   let idCol = opts.spine?.id ?? 'id'
