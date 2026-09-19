@@ -194,6 +194,20 @@ let dbOf = (config: Config): string => {
 let docsOf = (mod: Module): VocabDoc[] =>
   !mod.vocab ? [] : Array.isArray(mod.vocab) ? mod.vocab : [mod.vocab]
 
+// The plugins' words, with the invocation's own added where they are missing.
+// A word declared twice is a refusal (@yaks/vocab), and rightly — two
+// spellings of one component is not something to guess about — so what is
+// added here is the difference, never a second copy.
+let said = (docs: VocabDoc[]): VocabDoc[] => {
+  let taken = new Set(docs.flatMap((d) => Object.keys(d.$defs ?? {})))
+  let $defs = Object.fromEntries(
+    Object.entries(toolsDoc.$defs ?? {}).filter(([name]) => !taken.has(name)),
+  )
+  return Object.keys($defs).length
+    ? [{ title: 'invocation', $defs }, ...docs]
+    : docs
+}
+
 // Exactly one plugin may say who is calling; two would mean the door's answer
 // depends on import order, which is not an answer.
 let doorman = (mods: Module[], config: Config): Authenticate => {
@@ -228,10 +242,12 @@ export let compose = async (
 ): Promise<Served> => {
   let path = dbOf(config)
   let mods = await Promise.all((config.plugins ?? []).map(load))
-  // The words an invocation is written in come with the HOST, not with a
-  // plugin: what was asked of this server is its own transcript, and a
-  // composition whose plugins happen not to mention `call` still keeps one.
-  let docs = [toolsDoc, ...mods.flatMap(docsOf)]
+  // The words an invocation is written in come with the HOST, not with
+  // whichever plugin happened to mention them: what was asked of this server
+  // is its own transcript. A plugin that speaks them already — a harness,
+  // whose transcripts ARE calls — keeps its own spelling, so only the words
+  // nobody supplied are added.
+  let docs = said(mods.flatMap(docsOf))
   let vocab = loadVocab(docs, mods.flatMap((m) => m.keywords ?? []))
 
   if (path != ':memory:') {
