@@ -205,9 +205,9 @@ slow(
         openWorldHint: false,
       })
       assertEquals(hints('mail_send')?.openWorldHint, true)
-      // The generic tier promises the shape of its answer, so a caller reads a
-      // described value instead of parsing prose (@yaks/mcp `outputSchema`).
-      // The mail tools answer bundles too, so they promise the same.
+      // And none of them promises the SHAPE of its answer (T-37596): an answer
+      // is bundles, in the vocabulary the caller already reads, so there is no
+      // second schema to declare or to drift from what a tool really says.
       for (
         let name of [
           'graph_apply',
@@ -219,7 +219,7 @@ slow(
         ]
       ) {
         let one = tools.find((t: { name: string }) => t.name == name)
-        assert(one.outputSchema, `${name} says what it answers`)
+        assertEquals(one.outputSchema, undefined, `${name} promises no shape`)
       }
 
       // What a model reads before anything else: the address, the four
@@ -1136,9 +1136,9 @@ slow(
       // so it wears its request instead.
       let asOf = async (args: unknown = app) =>
         await agent.tool('app_errors', args)
-      let listing = (said: string) =>
+      let open = (said: string) =>
         said.split('\n').filter((l) => l.startsWith('- '))
-      let breaks = listing(await asOf())
+      let breaks = open(await asOf())
       // Each line is the id, when, the app and deploy it happened on, then
       // where it was and what it said (unseen.ts `line`).
       assertEquals(
@@ -1164,11 +1164,11 @@ slow(
       let whisk = breaks.find((l) => l.includes('/recipes/index.html:42'))!
       let after = await asOf({ ...app, fixed: [whisk.split(' ')[1]] })
       assertStringIncludes(after, 'archived 1')
-      assertEquals(listing(after).length, 3)
+      assertEquals(open(after).length, 3)
       assert(!after.includes('whisk'), 'archived is not listed')
 
       // The agent's own door is the same one, by the id it read off a line.
-      let said = listing(after)
+      let said = open(after)
         .find((l) => l.includes('fold is not a function'))!
       assertStringIncludes(
         await agent.tool('app_errors', { ...app, fixed: [said.split(' ')[1]] }),
@@ -1290,12 +1290,12 @@ slow(
       // Both spaces, oldest first, each app under the one it lives in — and
       // the count of what is open and the address are on the app's own line,
       // which the match above reads.
-      let said = String(listing.content[0].text)
+      let all = String(listing.content[0].text)
       assert(
-        said.indexOf('jeff — ') < said.indexOf('jeff-work — '),
+        all.indexOf('jeff — ') < all.indexOf('jeff-work — '),
         'the space it started with comes first',
       )
-      assertStringIncludes(said, '(garden)')
+      assertStringIncludes(all, '(garden)')
       // Its garden went to the trash a moment ago, so the space has no apps
       // and one thing in the trash — with the days it has to change its mind
       // (erase.ts, T-34430).

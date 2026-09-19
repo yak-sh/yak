@@ -171,6 +171,21 @@ slow('an app declares its own commands, and command runs them', async () => {
       eid: jeff.person,
       name: jeff.name,
     })
+    // And the reply carries that answer as what it IS: a tool answers BUNDLES,
+    // so the words are one bundle's `content{body}` and the bundle says which
+    // call it came from. An app's own declared command goes down the same path
+    // as every other tool here, and this is where that shows.
+    let reply = await agent.call('tools/call', {
+      name: 'command',
+      arguments: { name: 'leaderboard' },
+    })
+    let answer = reply.structuredContent.result as {
+      content: { body: string }
+      output: { source: string }
+    }[]
+    assertEquals(answer.length, 1)
+    assertEquals(answer[0].content.body, reply.content[0].text)
+    assert(answer[0].output.source, 'the call it answered')
     // An argument the command declared and the call left out is refused by
     // the declaration, naming the argument, and no half-written row lands.
     let short = await assertRejects(

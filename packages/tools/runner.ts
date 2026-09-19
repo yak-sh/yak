@@ -45,7 +45,6 @@ import {
   type Graph,
   type NamedTool,
   namedTool,
-  type Plugin,
   type Ready,
   ready,
   signed,
@@ -117,10 +116,8 @@ export type Opts = {
   now?: () => number
 }
 
-/** A live runner: the words it writes in, and the doors a host calls through. */
+/** A live runner: the rules a sweep asks, and the doors a host calls through. */
 export type Runner = {
-  /** register this on the graph the calls are written to */
-  plugin: Plugin
   /** the rules a scheduled call is found by — what an effect registers on */
   rules: Ready[]
   /** the tools it runs, named */
@@ -398,9 +395,6 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   return {
     rules: plans,
     tools,
-    // The words a call is written in, and nothing else: a tool is run by
-    // whoever asks for it, not by a hook this plugin hides in a graph.
-    plugin: { name: 'tools', vocab: [toolsDoc] },
     // Once per runner, however many callers ask: a tool row is the same row
     // every time (its id is derived from the name), and writing it again would
     // move an `updated` stamp for nothing.

@@ -254,7 +254,6 @@ let overGraph = (tool: typeof declared[number]): Word => ({
     let h = open()
     try {
       let r = runner(h.g, { tools: declared, host: h.g })
-      h.g.use(r.plugin)
       await r.ensure()
       c.out(worded(answerOf(
         await r.call([{
