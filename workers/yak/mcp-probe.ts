@@ -46,8 +46,6 @@ export let HELLO = {
 }
 
 export let GUIDE = 'https://yaks.app/guide.md'
-export let APPS = 'ui://yaks/apps'
-export let ERRORS = 'ui://yaks/errors'
 
 // The base64url a PKCE challenge is written in.
 export let b64u = (b: ArrayBuffer) =>

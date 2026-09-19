@@ -85,7 +85,7 @@ An app is an index.html and whatever files sit beside it, served live at
 4. Give the person the URL.
 
 app_list is what they already have — every app, its address and what is
-broken in it — and it draws itself where they can see it.
+broken in it.
 
 An app is readable by anyone with the link and writable by its members. When
 it is for other people too, say so: app_new (or app_set) takes access 'open',

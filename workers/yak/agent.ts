@@ -115,8 +115,8 @@ export let outputOf = (
   schema == undefined ? undefined : z.object(inputOf(schema, env))
 
 /**
- * A platform tool's answer: the sentence it always said, and the view's data
- * beside it where it draws one.
+ * A platform tool's answer: the sentence it always said, and the value it
+ * answers beside it where it has one.
  *
  * What is unseen in the space it worked in (unseen.ts) rides on the sentence —
  * every break not yet served, once, then the month's ceiling. It rode on the
@@ -149,22 +149,16 @@ export let answered = async (ctx: Ctx, out: Out): Promise<Intent> => {
 export let running = (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>) =>
   t.run(ctx, args).then((out) => answered(ctx, out))
 
-// What the transport says about a tool beside its schemas: the page a host
-// renders its answer in (MCP Apps), and what it declares about signing in
-// where that is not the door's own (preauth.ts NOAUTH — every other tool takes
-// the door's, stamped by @yaks/mcp from `Options.security`).
-let metaOf = (t: Sugar): Pick<Tool, 'meta'> => {
-  let meta = {
-    ...(t.view
-      ? { ui: { resourceUri: t.view, visibility: t.visibility ?? ['model'] } }
-      : {}),
-    ...(t.security ? { securitySchemes: t.security } : {}),
-  }
-  return Object.keys(meta).length ? { meta } : {}
-}
+// What the transport says about a tool beside its schemas: what it declares
+// about signing in where that is not the door's own (preauth.ts NOAUTH — every
+// other tool takes the door's, stamped by @yaks/mcp from `Options.security`).
+// The platform draws no page of its own; an app's view is named by the command
+// that has one (declared.ts), never by a tool on this list.
+let metaOf = (t: Sugar): Pick<Tool, 'meta'> =>
+  t.security ? { meta: { securitySchemes: t.security } } : {}
 
 /** One of the platform's own tools, as a graph `Tool`. The answer is the same
- * sentence it always was, and the view's data beside it where it draws one. */
+ * sentence it always was, and the value it answers beside it. */
 export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   name: t.name,
   title: t.title,

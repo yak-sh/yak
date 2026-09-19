@@ -75,9 +75,8 @@ export let once = <T>(ctx: Ctx, key: string, work: () => Promise<T>) => {
 export type Args = Record<string, unknown>
 
 // What a tool answers: the text, the space it worked in (so the door can
-// append what is unseen there), and, for a tool with a view, the same answer
-// as data — the host hands it to the iframe as the result's
-// structuredContent (mcp.ts, MCP Apps spec §Notifications).
+// append what is unseen there), and the same answer as data, which the
+// transport carries as the result's structuredContent (agent.ts).
 export type Out = { text: string; space?: Space; data?: unknown }
 
 export type Shape = {
@@ -93,8 +92,6 @@ export type Tool = {
   // permission prompt reads it instead of the snake_case name.
   title: string
   description: string
-  // The `ui://` resource that draws this tool's answer, if it has one.
-  view?: string
   // What this one DOES, as the four MCP hints (@yaks/graph `Tool`, emitted by
   // @yaks/mcp `annotated`). A host reads them to decide what it may call
   // without asking, so they say what the tool does and not what would be
@@ -110,10 +107,6 @@ export type Tool = {
   // JSON Schema, like `input` — agent.ts turns both into the Zod the MCP SDK
   // wants, so nothing here depends on a validation library.
   output?: Shape
-  // Who may call it (MCP Apps §Tools, `_meta.ui.visibility`): the model
-  // always; add 'app' for a tool a view's own button calls back through the
-  // host, which the host refuses for any tool that does not say so.
-  visibility?: ('model' | 'app')[]
   // What it declares about signing in (`_meta.securitySchemes`), where that is
   // not what the door declares for everything it lists: a tool anybody may
   // call says `noauth` (preauth.ts NOAUTH, mcp.ts SIGNIN).

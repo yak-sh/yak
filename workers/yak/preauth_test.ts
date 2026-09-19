@@ -114,11 +114,9 @@ Deno.test('a protected method, tool or page is not answered here', async () => {
       ['prompts/get', { name: 'make' }],
       ['prompts/get', {}],
       ['logging/setLevel', { level: 'error' }],
-      // The platform's own views, an app's own view, a guide page nobody
-      // wrote — and an asset that is not the guide, which is what says the
-      // read is a named list and not a way to fetch the site.
-      ['resources/read', { uri: 'ui://yaks/apps' }],
-      ['resources/read', { uri: 'ui://yaks/errors' }],
+      // An app's own view, a guide page nobody wrote — and an asset that is
+      // not the guide, which is what says the read is a named list and not a
+      // way to fetch the site.
       ['resources/read', { uri: 'ui://mine/runs/leaderboard.html' }],
       ['resources/read', { uri: 'https://yaks.app/guide/nope.md' }],
       ['resources/read', { uri: 'https://yaks.app/index.html' }],

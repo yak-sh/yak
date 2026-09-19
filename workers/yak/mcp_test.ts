@@ -20,7 +20,7 @@ import {
 import { PAGES, uriOf } from './guide.ts'
 import { PROMPTS } from './prompts.ts'
 import { sha256 } from './versions.ts'
-import { APPS, ERRORS, facing, GUIDE, minted } from './mcp-probe.ts'
+import { facing, GUIDE, minted } from './mcp-probe.ts'
 
 slow(
   'the connector: tools, a space made, an app served, errors seen',
@@ -284,7 +284,7 @@ slow(
       let { resources } = await agent.call('resources/list')
       assertEquals(
         resources.map((r: { uri: string }) => r.uri),
-        [GUIDE, ...PAGES.map((p) => uriOf(p.slug)), APPS, ERRORS],
+        [GUIDE, ...PAGES.map((p) => uriOf(p.slug))],
       )
       // The description is the only thing an agent sees before choosing, so
       // it is what the listing must carry.
@@ -358,61 +358,29 @@ slow(
       assertStringIncludes(missed, 'querying')
       assertStringIncludes(missed, map)
 
-      // The first MCP App view: a ui:// resource the host renders, named by
-      // the tool whose answer it draws (T-32492).
-      assertEquals(
-        tools.find((t: { name: string }) => t.name == 'app_list')._meta.ui
-          .resourceUri,
-        APPS,
-      )
-      let view = resources.find((r: { uri: string }) => r.uri == APPS)
-      assertEquals(view.mimeType, 'text/html;profile=mcp-app')
-      let drawn = (await agent.call('resources/read', { uri: APPS }))
-        .contents[0]
-      assertEquals(drawn.mimeType, 'text/html;profile=mcp-app')
-      assertStringIncludes(drawn.text, 'ui/notifications/tool-result')
-      assertStringIncludes(drawn.text, 'ui/initialize')
-      // What a host is told ABOUT the page, on the listing and on the bytes
-      // portable CSP plus the OpenAI-only sandbox origin, and an empty
-      // allowlist, since this page is one file that fetches nothing. Missing,
-      // ChatGPT stamps it "CSP off" and the widget fails to load (T-34433).
-      for (let said of [view, drawn]) {
-        assertEquals(said._meta.ui.domain, undefined)
-        assertEquals(said._meta.ui.csp, {})
-        assertEquals(said._meta['openai/widgetDomain'], 'https://yaks.app')
-        assertEquals(said._meta['openai/widgetCSP'], {
-          connect_domains: [],
-          resource_domains: [],
-        })
+      // The platform draws nothing of its own (T-37572): no `ui://` view of
+      // its own on the resource list, and no tool naming one. A page a host
+      // merely READS carries no render metadata either; only an app's own
+      // view does (declared.ts).
+      for (let name of ['app_list', 'app_errors']) {
+        assertEquals(
+          tools.find((t: { name: string }) => t.name == name)._meta?.ui,
+          undefined,
+        )
       }
-      // And a page a host merely READS carries none of it.
       assertEquals(
         (resources.find((r: { uri: string }) => r.uri == GUIDE))._meta,
         undefined,
+      )
+      await assertRejects(
+        () => agent.call('resources/read', { uri: 'ui://yaks/apps' }),
+        Error,
       )
       await assertRejects(
         () => agent.call('resources/read', { uri: 'https://yaks.app/nope' }),
         Error,
         'not found',
       )
-
-      // The second view (T-32601), and the one thing its cards need that a
-      // listing does not: the host only lets a view call a tool back when
-      // the tool says `app` in its visibility.
-      let errors = tools.find((t: { name: string }) => t.name == 'app_errors')
-      assertEquals(errors._meta.ui.resourceUri, ERRORS)
-      assertEquals(errors._meta.ui.visibility, ['model', 'app'])
-      let cards = (await agent.call('resources/read', { uri: ERRORS }))
-        .contents[0]
-      assertEquals(cards.mimeType, 'text/html;profile=mcp-app')
-      assertStringIncludes(cards.text, 'ui/notifications/tool-result')
-      assertStringIncludes(cards.text, "name: 'app_errors'")
-      assertEquals(cards._meta.ui.domain, undefined)
-      assertEquals(cards._meta.ui.csp, {})
-      // Both views accept the host's alternate result bridge.
-      for (let page of [drawn.text, cards.text]) {
-        assertStringIncludes(page, 'window.openai')
-      }
 
       // The doors a PERSON picks by name (T-32981): declared beside tools,
       // listed with the arguments a client asks them to fill in, and got as

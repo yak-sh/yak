@@ -8,8 +8,7 @@
 // agent saying so ({@link archive}) archives it.
 // Reads and marks go through the store's own doors with the caller vouched,
 // never SQL; the apps of a space come from the directory part. The same
-// rows fold into `cards` for the errors view (public/errors.html), where the
-// person's own button archives one through `archive`.
+// rows fold into `cards`, the structured half of the `app_errors` answer.
 import type { Bundle } from '@yaks/graph'
 import { idOf } from '../../src/types.ts'
 import * as dirPart from './directory.ts'
@@ -241,7 +240,7 @@ export let spot = (stack = '') => {
 // The same message from the same place is ONE break — a render loop that
 // throws every frame writes twenty rows and is one thing to fix — so the
 // entities fold together and the card keeps all their eids, which is what
-// the view's fixed button hands back to `fixed`.
+// `fixed` takes back.
 export type Card = {
   eids: string[]
   app: string
@@ -381,8 +380,8 @@ export let serve = async (
   return seen
 }
 
-// Closed: the mark that stops an item showing, here, in the unseen section,
-// and in the view.
+// Closed: the mark that stops an item showing, here and in the unseen
+// section.
 let close = async (env: Env, space: Space, app: App, who: Who, hits: Hit[]) => {
   await graphAt(env, space, app, who).mark(hits, 'archived')
   return hits.length
@@ -402,8 +401,8 @@ let moment = (word: string) =>
 
 // One word of what a caller says is behind them, against one open break.
 //
-// An id is the plainest — the human id off a line, or the eid a card carries,
-// since the view's button hands back the whole fold. But listing ids is
+// An id is the plainest — the human id off a line, or an eid a card carries,
+// since a card names every eid in its fold. But listing ids is
 // exactly what nobody can do cheaply when a page filed six breaks for a file
 // that did not exist yet (T-34338), so a word may be a BOUND instead, and one
 // word closes the lot: `all`, `v<n>` for everything up to and including that

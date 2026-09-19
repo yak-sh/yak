@@ -1531,15 +1531,10 @@ let recently = async (ctx: Ctx) => {
   }
 }
 
-// The views a tool's answer draws itself in — `ui://` resources the door
-// serves from public/apps.html and public/errors.html (mcp.ts) and the host
-// renders in an iframe.
-export let APPS_VIEW = 'ui://yaks/apps'
-export let ERRORS_VIEW = 'ui://yaks/errors'
-
 // The type a view is served under: text/html with the profile the MCP Apps
 // spec requires, which is how a host tells a page it renders from a page it
-// merely reads. An app's own view (declared.ts, T-32687) wears the same one.
+// merely reads. Only an app's own view wears it (declared.ts, T-32687): the
+// platform draws nothing of its own.
 export let VIEW_MIME = 'text/html;profile=mcp-app'
 
 // The origins a view is allowed to reach, by what it reaches them for (MCP
@@ -3088,9 +3083,6 @@ let OURS: Row[] = [
     name: 'app_errors',
     destructive: false,
     idempotent: true,
-    view: ERRORS_VIEW,
-    // The view's fixed button calls this tool back to archive a break.
-    visibility: ['model', 'app'],
     input: {
       type: 'object',
       properties: {
@@ -3118,7 +3110,7 @@ let OURS: Row[] = [
     },
     run: async (ctx, args) => {
       // Two words for one act, because the two sentences differ: `fixed` is
-      // "I have fixed these" — what the view's button says — and `seen` is
+      // "I have fixed these" and `seen` is
       // "these are behind me", which is how a page's six breaks from before
       // its file existed are answered without typing six ids (T-34338). Both
       // archive, so both go through one door.
@@ -3149,7 +3141,6 @@ let OURS: Row[] = [
   {
     name: 'app_list',
     readOnly: true,
-    view: APPS_VIEW,
     input: {
       type: 'object',
       properties: {

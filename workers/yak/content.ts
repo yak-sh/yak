@@ -334,7 +334,7 @@ export let WORDS: Record<string, Words> = {
   'app_errors': {
     'title': 'What is broken',
     'description':
-      "Everything still broken in the app: what a page threw in someone's browser, what a request threw on the way, and what the platform reported. Each is an entity in the app store. New ones also ride the end of your next reply, once. Pass `fixed` with the ids you have fixed and they are archived, which is what stops them showing here and there; pass `seen` to say the same about breaks you are done with without listing every id — `all`, `v3` for everything up to and including that deploy, or a day. It draws itself where the person can see it, with the same button on each break.",
+      "Everything still broken in the app: what a page threw in someone's browser, what a request threw on the way, and what the platform reported. Each is an entity in the app store. New ones also ride the end of your next reply, once. Pass `fixed` with the ids you have fixed and they are archived, which is what stops them showing here and there; pass `seen` to say the same about breaks you are done with without listing every id — `all`, `v3` for everything up to and including that deploy, or a day.",
   },
   'app_list': {
     'title': 'Every app they have',

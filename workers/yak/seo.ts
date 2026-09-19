@@ -71,8 +71,7 @@ export let CONNECTOR = connector()
 //
 // `style-guide.html` is deliberately absent and carries `robots: noindex`
 // instead: it is the design reference, public because it costs nothing to be,
-// and a search result for it helps nobody. The apps and errors pages are not
-// pages at all — they are the MCP widgets' bytes (mcp.ts).
+// and a search result for it helps nobody.
 export let SITE = [
   '/',
   '/pricing',

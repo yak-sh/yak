@@ -21,7 +21,7 @@ import {
 } from './probe.ts'
 import { PAGES, uriOf } from './guide.ts'
 import { PROMPTS } from './prompts.ts'
-import { APPS, b64u, ERRORS, facing, GUIDE, HELLO } from './mcp-probe.ts'
+import { b64u, facing, GUIDE, HELLO } from './mcp-probe.ts'
 
 // Nobody has signed in, and the door still says what this place is (T-33030).
 // Owner, 2026-09-03, setting up the ChatGPT connector: "i selected 'mixed
@@ -285,11 +285,8 @@ slow('the door before anyone signs in', async () => {
     // shared, so it stays a person's own.
     await shut('prompts/get', { name: PROMPTS[0].name })
     await shut('logging/setLevel', { level: 'error' })
-    // The platform's own views, the app's own page, and an asset that is not
-    // the guide — the public read is a named list, not a way to fetch the
-    // site.
-    await shut('resources/read', { uri: APPS })
-    await shut('resources/read', { uri: ERRORS })
+    // The app's own page, and an asset that is not the guide — the public
+    // read is a named list, not a way to fetch the site.
     await shut('resources/read', { uri: view })
     await shut('resources/read', { uri: 'https://yaks.app/index.html' })
     await shut('resources/read', { uri: 'https://yaks.app/guide/nope.md' })
@@ -402,7 +399,7 @@ slow('the door before anyone signs in', async () => {
       uri: string
     }[]).map((r) => r.uri)
     assert(pages.every((p) => mine.includes(p.uri)), 'the guide is still hers')
-    assert(mine.includes(APPS) && mine.includes(view))
+    assert(mine.includes(view), "the app's own view is hers")
   } finally {
     await k.stop()
   }

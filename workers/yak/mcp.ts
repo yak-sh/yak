@@ -87,77 +87,18 @@ import * as dirPart from './directory.ts'
 import { directory, url } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { instructions, pageFor, UNDO } from './guide.ts'
-import { url as hostUrl } from './host.ts'
 import { asking, challenge, unauthorized } from './identity.ts'
 import { narrowed } from './grants.ts'
 import { listViews, readView } from './declared.ts'
-import { answer, asset, type Doc, docs, SIGNIN } from './preauth.ts'
+import { answer, asset, docs, SIGNIN } from './preauth.ts'
 import type { Reach } from './reach.ts'
 import { PROMPTS } from './prompts.ts'
 import { says } from './route.ts'
 import { connector } from './seo.ts'
 import { type Entry, prompted, standing } from './standing.ts'
-import {
-  APPS_VIEW,
-  type Ctx,
-  ERRORS_VIEW,
-  inReach,
-  uiMeta,
-  VIEW_MIME,
-} from './tools.ts'
+import { type Ctx, inReach, VIEW_MIME } from './tools.ts'
 import { listen, rostered } from './stream.ts'
 import { type Clock, clock, timed } from './timing.ts'
-
-// The views this door offers beside the guide, whose resources are
-// preauth.ts's — the guide is world-readable and served to anybody, and these
-// two are a signed-in person's own.
-//
-// The first is an MCP App view (T-32492, spec 2026-01-26 §Resources): a
-// `ui://` page the host renders in a sandboxed iframe and hands the tool's
-// answer to over postMessage. app_list links to it by `_meta.ui.resourceUri`
-// below; its bytes are public/apps.html, served from the same assets. The
-// mimeType is the profile the spec requires, not plain text/html.
-//
-// Both views are ONE FILE each — every style and every script inline — so the
-// policy they declare is the whole truth about them: a sandbox origin of our
-// own, and an empty allowlist, because neither page fetches anything. Saying
-// nothing at all is what a host reads as no policy, and ChatGPT renders that
-// as a red "CSP off" or fails the widget outright (T-34433, T-34350).
-let platformView = (env: Env) => uiMeta(hostUrl(env))
-
-let appsDoc = (env: Env): Doc => ({
-  uri: APPS_VIEW,
-  name: 'apps',
-  title: 'Your apps',
-  description: 'Every app the person has here, as a page they can look at.',
-  mimeType: VIEW_MIME,
-  page: hostUrl(env, '/apps.html'),
-  _meta: platformView(env),
-})
-
-// And the second (T-32601): what is still broken, one card per break,
-// each with the button that archives it — the view calls `app_errors` back
-// through the host to do it, which is why that tool says `app` in its
-// visibility below.
-let errorsDoc = (env: Env): Doc => ({
-  uri: ERRORS_VIEW,
-  name: 'errors',
-  title: 'What is broken',
-  description: 'Every break still open in an app, as cards with a fixed ' +
-    'button.',
-  mimeType: VIEW_MIME,
-  page: hostUrl(env, '/errors.html'),
-  _meta: platformView(env),
-})
-
-// A signed-in caller reads all of them, the public ones included: the whole
-// list opens with what anybody may read, so the public surface is a subset of
-// this one rather than a second surface beside it.
-let resources = (env: Env): Doc[] => [
-  ...docs(env),
-  appsDoc(env),
-  errorsDoc(env),
-]
 
 type Rpc = {
   jsonrpc: '2.0'
@@ -200,28 +141,21 @@ let refused = (req: Request, id: unknown, env: Env) => {
 // Everything this door serves that is not a tool, registered on the same
 // server the package built (@yaks/mcp `extend`).
 //
-// The resources are the guide and its deep pages, which anybody may read, plus
-// the two views a signed-in person's own answers draw in — and the pages an
-// app of theirs declares (declared.ts, T-32687), which only someone who can
-// reach that app is told about. The prompts are the doors a PERSON picks by
-// name (prompts.ts, T-32981).
+// The resources are the guide and its deep pages, which anybody may read, and
+// the pages an app declares (declared.ts, T-32687), which only someone who can
+// reach that app is told about. The platform draws nothing of its own. The
+// prompts are the doors a PERSON picks by name (prompts.ts, T-32981).
 let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
-  for (let doc of resources(ctx.env)) {
-    // A view's `_meta` rides on the listing AND on the bytes: the listing is
-    // what a host reads to decide, the content item is what governs the frame
-    // it then builds, and the spec has it repeated on both.
-    let its = doc._meta ? { _meta: doc._meta } : {}
+  for (let doc of docs(ctx.env)) {
     server.registerResource(doc.name, doc.uri, {
       title: doc.title,
       description: doc.description,
       mimeType: doc.mimeType,
-      ...its,
     }, async () => ({
       contents: [{
         uri: doc.uri,
         mimeType: doc.mimeType,
         text: await (await asset(ctx.env, doc.page)).text(),
-        ...its,
       }],
     }))
   }

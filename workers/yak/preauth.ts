@@ -147,10 +147,6 @@ export type Doc = {
   description: string
   mimeType: string
   page: string
-  // What a host is told about a page it RENDERS (tools.ts `uiMeta`) — the
-  // sandbox origin and the domains it may reach. A guide page is read, never
-  // rendered, so none of these carry it; the two `ui://` views do (mcp.ts).
-  _meta?: Record<string, unknown>
 }
 
 // The guide is how an app is built here, and how its pages save and list
@@ -181,10 +177,9 @@ let deep = (env: Host = {}): Doc[] =>
     page: uriOf(p.slug, env),
   }))
 
-// The public resources: the guide and its pages, and nothing else. A `ui://`
-// view is a page a host renders for a signed-in person's own answer, and an
-// app's own view belongs to whoever can reach that app — neither is here, so
-// neither can be read from here.
+// The public resources: the guide and its pages, and nothing else. An app's
+// own `ui://` view belongs to whoever can reach that app (declared.ts), so it
+// is not here and cannot be read from here.
 export let docs = (env: Host = {}): Doc[] => [guide(env), ...deep(env)]
 export let DOCS = docs()
 

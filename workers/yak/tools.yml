@@ -368,8 +368,7 @@ app_errors:
     they are archived, which is what stops them showing here and there; pass
     `seen` to say the same about breaks you are done with without listing
     every id — `all`, `v3` for everything up to and including that deploy,
-    or a day. It draws itself where the person can see it, with the same
-    button on each break.
+    or a day.
 
 app_list:
   title: Every app they have

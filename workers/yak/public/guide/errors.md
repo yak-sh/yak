@@ -202,10 +202,10 @@ say whether those are still true.
 Archiving is a write, so it needs a writer. Reading the list does not: a viewer
 of the space still gets to see what is broken.
 
-It also draws itself where the person can see it, folding breaks that share an
-app, a message and a place into one card with a count — a render loop that threw
-twenty times is one thing to fix — with a button on each that calls the tool
-back to archive the whole fold.
+Beside the lines it answers the same breaks as data, folding the ones that share
+an app, a message and a place into one card with a count — a render loop that
+threw twenty times is one thing to fix — and a card names every id in its fold,
+so archiving one archives the lot.
 
 You will rarely archive by hand, because **new bytes close what the old ones
 broke.** Every `app_deploy`, `app_install` and `app_rollback` archives every
