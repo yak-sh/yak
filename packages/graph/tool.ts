@@ -1,12 +1,15 @@
 /** Transport-independent identity for graph tools. */
-import type { Intent, Tool, ToolCtx } from './plugin.ts'
+import type { Bundle } from './bundle.ts'
+import type { Tool, ToolCtx } from './plugin.ts'
 
 /** The three fields that decide what a tool is CALLED — the only part of a
  * tool naming reads, so it costs nothing to ask about one whose context and
  * result are somebody else's. */
 export type ToolId = { name?: string; noun?: string; verb?: string }
 
-export type NamedTool<C = ToolCtx, R = Intent> = Tool<C, R> & { name: string }
+export type NamedTool<C = ToolCtx, R = Bundle[]> = Tool<C, R> & {
+  name: string
+}
 
 export const toolName = (tool: ToolId): string => {
   if (tool.noun != null || tool.verb != null) {
