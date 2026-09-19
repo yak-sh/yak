@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-// The local tier, across a reload: what a component declares `persist: local`
+// The vault, across a reload: what a component declares `sync: none` and keeps
 // is written through and comes back, what it declares `none` does not, and
 // what the server owns was never this vault's business.
 

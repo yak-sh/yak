@@ -24,6 +24,7 @@ import type {
   VocabDoc,
 } from './types.ts'
 import type { Keywords } from './keywords.ts'
+import { kept, said, type Sync } from './lifetime.ts'
 import { kindOrder as deriveKindOrder } from './order.ts'
 
 /** A word this vocabulary does not know. One sentence for every door, minted
@@ -132,7 +133,7 @@ let columnOf = (
     death,
     stamped: !!s.stamped,
     search: s.search === true,
-    persist: s.persist !== false,
+    computed: s.computed === true,
     identity: s.identity === true,
     affinity: affinityOf(category, scalar, s.type),
     // A reference carries an FK to entity(id) unless its death is 'keep' — a
@@ -232,7 +233,7 @@ let indexesOf = (
   }
   for (let [prop, s] of Object.entries(comp.properties ?? {})) {
     // A computed column has no cell to index.
-    if (!cols(prop)?.persist) continue
+    if (cols(prop)?.computed !== false) continue
     if (s.unique === true) add([prop], true)
     else if (s.index === true) add([prop], false)
   }
@@ -241,11 +242,11 @@ let indexesOf = (
   // An identity is unique by construction — two rows sharing the value would
   // be one entity — so the index says out loud what the derivation already
   // guarantees, and a store that somehow held two says so at the row.
-  add(identityOf(comp).filter((p) => cols(p)?.persist), true)
+  add(identityOf(comp).filter((p) => cols(p)?.computed === false), true)
   let leading = new Set([...out.values()].map((i) => i.cols[0]))
   for (let prop of Object.keys(comp.properties ?? {})) {
     let col = cols(prop)
-    if (col?.persist && col.category == 'ref' && !leading.has(prop)) {
+    if (col && !col.computed && col.category == 'ref' && !leading.has(prop)) {
       add([prop], false)
     }
   }
@@ -278,6 +279,19 @@ let shapeOf = (v: Vocab, comp: string): string => {
   })
   return `${comp} has ${said.join(', ')}`
 }
+
+/**
+ * Who hears about a write to a component — `server` for a component this
+ * vocabulary has never heard of, which is the same answer an undeclared one
+ * gives, so a caller never has to special-case the unknown.
+ */
+export let syncOf = (v: Vocab, comp: string): Sync =>
+  v.comp(comp)?.sync ?? 'server'
+
+/** How long one of a component's values lives — `forever` for an unknown
+ * component. */
+export let durableOf = (v: Vocab, comp: string): string =>
+  v.comp(comp)?.durable ?? 'forever'
 
 export let loadVocab = (
   input: VocabDoc | VocabDoc[],
@@ -324,13 +338,15 @@ export let loadVocab = (
       wire: d.wire !== false,
       kind: !!d.kind,
       before: d.before ?? [],
-      // A computed column (persist: false) is readable, never writable — like a
-      // stamped one, but with no storage either.
+      // A computed column is readable, never writable — like a stamped one,
+      // but with no storage either.
       writable: entries.filter((p) => {
         let s = props(name)[p]
-        return !s.stamped && s.persist !== false
+        return !s.stamped && s.computed !== true
       }),
       stamped: entries.filter((p) => props(name)[p].stamped),
+      sync: said(d.sync),
+      durable: kept(d.durable),
       keywords: carried(d, compWords),
     }
   }

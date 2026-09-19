@@ -19,7 +19,7 @@
             "stopped",
             "failed"
           ],
-          "persist": false,
+          "computed": true,
           "description": "what the newest entry says: pending awaits the model, running awaits an answer, settled has nothing to do"
         }
       }

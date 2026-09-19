@@ -153,7 +153,9 @@ export let upsertSql = (
   patch: Comp,
   absent = false,
 ): Sql => {
-  let cols = Object.keys(patch).filter((c) => v.column(comp, c)?.persist)
+  let cols = Object.keys(patch).filter((c) =>
+    v.column(comp, c)?.computed === false
+  )
   if (!cols.length) {
     return {
       sql: `insert or ignore into "${comp}" (entity)
@@ -232,7 +234,9 @@ let patchOne = (
   // INSERT checks NOT NULL before ON CONFLICT. Update existing rows first,
   // then insert only absent ones: partial patches need no invented defaults
   // or read/merge, and the same ordered statements work in a D1 batch.
-  let cols = Object.keys(comp).filter((c) => v.column(name, c)?.persist)
+  let cols = Object.keys(comp).filter((c) =>
+    v.column(name, c)?.computed === false
+  )
   let params: Param[] = []
   let sets = cols.map((c) => {
     let ref = comp[c] != null && isRef(v, name, c)

@@ -25,7 +25,7 @@ Deno.test('the components this package ships', () => {
 
 Deno.test('status is readable and routable, and nobody can write it', () => {
   let status = team.column('task', 'status')!
-  assertEquals(status.persist, false)
+  assertEquals(status.computed, true)
   assertEquals(status.values, ['cancelled', 'done', 'open'])
   // The vocabulary is a file now, so the ladder and the enum are two
   // spellings of one list — this is what keeps them the same list.

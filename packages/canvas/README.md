@@ -41,19 +41,18 @@ hook; reference deletion is enforced by the graph vocabulary.
 
 ## Where each piece lives
 
-Every component declares a [@yaks/sync](https://jsr.io/@yaks/sync) `persist`
-tier, and all of them are `wire`.
+Every component says who hears about a write, and all of them say `server`.
 
-| component                                     | tier   | why                                                  |
-| --------------------------------------------- | ------ | ---------------------------------------------------- |
-| `canvas`, `card`, `pin`                       | `wire` | shared spatial content                               |
-| `layout`, `pane`                              | `wire` | a named arrangement, meant to be reopened and shared |
-| `client`, `camera`, `cursor`, `fold`, `shelf` | `wire` | per-window, but something else has to read them      |
+| component                                     | sync     | why                                                  |
+| --------------------------------------------- | -------- | ---------------------------------------------------- |
+| `canvas`, `card`, `pin`                       | `server` | shared spatial content                               |
+| `layout`, `pane`                              | `server` | a named arrangement, meant to be reopened and shared |
+| `client`, `camera`, `cursor`, `fold`, `shelf` | `server` | per-window, but something else has to read them      |
 
-Per-window components also use `wire`, allowing another client to restore or
-inspect a viewport and tools to update a selection. Applications should use
-local persistence for transient state that should not be replicated, such as an
-in-progress drag.
+Per-window components also sync to the `server`, allowing another client to
+restore or inspect a viewport and tools to update a selection. Applications
+should declare `sync: none` for transient state that should not be replicated,
+such as an in-progress drag.
 
 ## The geometry is plain functions
 

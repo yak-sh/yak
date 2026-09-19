@@ -20,7 +20,7 @@ Deno.test('fleet vocabulary: memoized per handle without planting app vocabulary
   assertStrictEquals(fleetVocabOf(b), second)
   assertNotStrictEquals(first, second)
   assertEquals(first.route('priority'), second.route('priority'))
-  assertEquals(first.column('task', 'status')!.persist, false)
+  assertEquals(first.column('task', 'status')!.computed, true)
   assertEquals(ownsVocab(a), false)
   assertEquals(vocabOf(a), {})
 })

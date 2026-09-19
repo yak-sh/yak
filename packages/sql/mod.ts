@@ -14,7 +14,7 @@
 // layout and value lowerings that ARE dialect-specific live behind a `Dialect`
 // (./sqlite.ts); a SQLite layout is the one shipped.
 //
-// Computed columns — a vocab marks them `persist: false`, their value derived
+// Computed columns — a vocab marks them `computed: true`, their value derived
 // downstream — are supplied by the caller through a DERIVED hook (./derived.ts).
 // A registered expression is what lets a computed column (a status rolled up
 // from other rows, say) compile through the index instead of a JS scan.

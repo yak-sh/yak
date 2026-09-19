@@ -6,6 +6,8 @@
 // Nothing here is application-specific: `Death`, `Scalar`, and the keyword
 // names are the meta-model, and any set of components is one instance of it.
 
+import type { Sync } from './lifetime.ts'
+
 // What the reaper does to a reference column when its TARGET entity dies. The
 // four words are the whole vocabulary — a reference without one is refused, so
 // an undeclared behavior cannot exist.
@@ -54,7 +56,9 @@ export type Column = {
   /** this text column's words are indexed: a bare-word search matches them
    * (@yaks/fts reads it). A column nobody declares is never searched. */
   search: boolean
-  persist: boolean // false = computed/never-stored (query-only rank, aggregates)
+  /** derived, never stored: no column holds it and nobody writes it, but a
+   * reader still sees it (a query-only rank, an aggregate, a derived status) */
+  computed: boolean
   /** this column is what the entity's own id is derived from — see the
    * `identity` keyword and `Vocab.identity` */
   identity: boolean
@@ -83,6 +87,11 @@ export type CompInfo = {
   before: string[] // kinds this kind sorts before (feeds kindOrder)
   writable: string[] // wire-writable column names
   stamped: string[] // server-owned column names
+  /** who hears about a write to it — see {@link Sync} */
+  sync: Sync
+  /** how long one of its values lives: `forever`, `disconnect`, or a duration
+   * (lifetime.ts `ms` reads the span out of one) */
+  durable: string
   keywords: Record<string, unknown> // registered extension keywords, verbatim
 }
 
@@ -144,11 +153,13 @@ export type PropSchema = {
   // string; the storable check is what refuses a word outside the four)
   ref?: string
   death?: string
-  // On a COLUMN, `false` marks it computed. On a COMPONENT the word is an
-  // extension vocabulary's (@yaks/sync reads it as a tier), so a string is a
-  // legal spelling too — the loader carries it, it never reads it.
-  persist?: boolean | string
+  // true = derived, never stored (on a COLUMN)
+  computed?: boolean
   stamped?: boolean
+  // On a COMPONENT: who hears about a write, and how long the value lives
+  // (lifetime.ts).
+  sync?: string
+  durable?: string
   // true = this text column is full-text indexed (@yaks/fts reads it).
   search?: boolean
   kind?: boolean

@@ -2,10 +2,9 @@
 import { type Client, client, type Vault, type Watch } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
 import doc from './frontend/vocab.json' with { type: 'json' }
-import { syncKeywords } from '@yaks/sync'
 import { signal } from '@preact/signals'
 
-export let frontendVocab = loadVocab([doc], [syncKeywords])
+export let frontendVocab = loadVocab([doc])
 
 export let frontend = (vault: Vault | false = false): Frontend => {
   // No URL or socket: the local vault is never replicated to the backend.

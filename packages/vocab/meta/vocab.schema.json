@@ -64,6 +64,11 @@
         "kind": { "type": "boolean" },
         "before": { "type": "array", "items": { "type": "string" } },
         "wire": { "type": "boolean" },
+        "sync": { "enum": ["none", "server", "peers"] },
+        "durable": {
+          "type": "string",
+          "pattern": "^(forever|disconnect|[0-9]+(\\.[0-9]+)?(ms|s|m|h|d))$"
+        },
         "bare": { "type": "boolean" },
         "unique": { "$ref": "#/$defs/cols" },
         "index": { "$ref": "#/$defs/cols" },
@@ -85,7 +90,7 @@
         "examples": { "type": "array" },
         "ref": { "type": "string" },
         "death": { "enum": ["cascade", "detach", "release", "keep"] },
-        "persist": { "type": "boolean" },
+        "computed": { "type": "boolean" },
         "stamped": { "type": "boolean" },
         "search": { "type": "boolean" },
         "bare": { "type": "boolean" },

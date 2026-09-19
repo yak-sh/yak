@@ -28,7 +28,7 @@ export type Pick = (column: Column) => boolean
 // a table: a computed column has no row to index, and a number or a reference
 // has no words even where a document said otherwise.
 export let searched: Pick = (c) =>
-  c.search && c.persist && c.category == 'scalar' && c.scalar == 'text'
+  c.search && !c.computed && c.category == 'scalar' && c.scalar == 'text'
 
 // The indexed fields of a vocabulary, by component then declaration order.
 export let fields = (vocab: Vocab, pick: Pick = searched): Field[] =>

@@ -108,7 +108,7 @@ Deno.test('storable refuses an identity nothing could derive', () => {
       type: 'object',
       properties: {
         version: { type: 'string', identity: true, stamped: true },
-        rank: { type: 'number', identity: true, persist: false },
+        rank: { type: 'number', identity: true, computed: true },
       },
     },
   }))
@@ -131,7 +131,7 @@ Deno.test('storable refuses search on anything but stored prose', () => {
         cook: { type: 'string', ref: 'entity', death: 'detach', search: true },
         course: { enum: ['starter', 'main'], search: true },
         made: { type: 'string', format: 'date-time', search: true },
-        rank: { type: 'number', persist: false, search: true },
+        rank: { type: 'number', computed: true, search: true },
       },
     },
   }))
@@ -226,7 +226,7 @@ Deno.test('storable refuses a required or present column that is not there', () 
       unique: [{ cols: ['key'], present: ['ghost'] }],
       properties: {
         key: { type: 'string' },
-        rank: { type: 'number', persist: false },
+        rank: { type: 'number', computed: true },
       },
     },
   }))
@@ -252,5 +252,24 @@ Deno.test('storable admits a literal or clock default and refuses the rest', () 
   ])
   assertEquals(one({ a: { type: 'string', default: ['x'] } }), [
     'row.a has a default no column can hold (a literal, or {"now": true})',
+  ])
+})
+
+Deno.test('a relay owns nothing, so it cannot keep a value forever', () => {
+  let one = (comp: PropSchema) => storable(doc({ presence: comp }))
+  assertEquals(
+    one({ type: 'object', sync: 'peers', durable: 'disconnect' }),
+    [],
+  )
+  assertEquals(one({ type: 'object', sync: 'peers', durable: '5s' }), [])
+  assertEquals(one({ type: 'object', sync: 'none', durable: '250ms' }), [])
+  assertEquals(one({ type: 'object', sync: 'peers', durable: 'forever' }), [
+    'presence syncs to peers and is durable forever — a relay hands a value on without owning it, so it has nowhere to keep one; say "disconnect" or a duration, or sync to the server',
+  ])
+  assertEquals(one({ type: 'object', sync: 'everyone' }), [
+    'presence syncs "everyone" — a component syncs to none, server, peers',
+  ])
+  assertEquals(one({ type: 'object', sync: 'peers', durable: 'a while' }), [
+    'presence is durable "a while" — say "forever", "disconnect", or a duration such as "5s" or "2m"',
   ])
 })

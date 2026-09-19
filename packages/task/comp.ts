@@ -13,7 +13,7 @@
 // Five things are worth saying about the shapes, because each is a decision
 // somebody would otherwise make differently.
 //
-// STATUS IS NOT STORED. `task.status` is declared `persist: false`: it is
+// STATUS IS NOT STORED. `task.status` is declared `computed: true`: it is
 // readable and filterable, and no writer sets it. Its value is read off the
 // `completed` and `cancelled` marks (./status.ts), which is why finishing a task
 // is writing a fact with a time and an author rather than overwriting a word.

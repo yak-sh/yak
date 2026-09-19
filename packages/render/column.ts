@@ -27,7 +27,7 @@ export let declared = (vocab: Vocab, ctx: Context): Column => {
 
 /** Computed and server-owned values can be shown, never patched by an editor. */
 export let writable = (vocab: Vocab, c: Column): boolean =>
-  !!vocab.comp(c.comp)?.wire && !c.stamped && c.persist
+  !!vocab.comp(c.comp)?.wire && !c.stamped && !c.computed
 
 /** Project the declaration, independently of the entity's current value. */
 export let column = (vocab: Vocab, ctx: Context): Bundle => {

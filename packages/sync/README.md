@@ -92,12 +92,11 @@ round trip before the delete renders.
 ## Three tiers, one apply()
 
 A client holds three kinds of state at once: what the server owns, what this
-browser owns, and what dies with the tab. Which is which is declared **on the
-component**, as a vocabulary keyword:
+browser owns, and what dies with the tab. Which is which the component says
+itself, in the two core [@yaks/vocab](https://jsr.io/@yaks/vocab) keywords:
 
 ```json
 {
-  "$vocabulary": { "https://yaks.sh/vocab/sync": true },
   "$defs": {
     "recipe": {
       "type": "object",
@@ -105,24 +104,33 @@ component**, as a vocabulary keyword:
     },
     "draft": {
       "type": "object",
-      "persist": "local",
+      "sync": "none",
       "properties": { "text": { "type": "string" } }
     }
   }
 }
 ```
 
-| `persist` | what it means                                |
-| --------- | -------------------------------------------- |
-| `"wire"`  | synced to the server — **the default**       |
-| `"local"` | kept by this client, never sent              |
-| `"none"`  | ephemeral: held only while the process lives |
+| `sync`     | who hears about a write                                 |
+| ---------- | ------------------------------------------------------- |
+| `"server"` | the server, which owns it and fans it out — **default** |
+| `"peers"`  | the server, which relays it without owning it           |
+| `"none"`   | nobody: it stays on the node that wrote it              |
 
-Register the keyword when you load the vocabulary
-(`loadVocab(docs, [syncKeywords])`) and a component's tier is readable as
-`tierOf(vocab, 'draft')`. All three tiers ride the same `apply()`: a batch that
-writes a recipe and its unsaved draft in one call commits once, and only the
-recipe crosses the wire.
+| `durable`      | how long the value lives                                     |
+| -------------- | ------------------------------------------------------------ |
+| `"forever"`    | storage — the server's, or this client's vault — **default** |
+| `"disconnect"` | memory, for as long as the writing connection lives          |
+| `"5s"`, `"2m"` | the same, plus a timer restarted on each write               |
+
+They are core keywords, so nothing has to be registered:
+`syncOf(vocab,
+'draft')` and `durableOf(vocab, 'draft')` read them back, and
+`local(vocab,
+'draft')` answers `vault` or `memory` for a component that never
+leaves. All of them ride the same `apply()`: a batch that writes a recipe and
+its unsaved draft in one call commits once, and only the recipe crosses the
+wire.
 
 What is sent is narrower than what was written, in three ways, and each is the
 same idea — the server is not interested in the local graph's opinion of itself:

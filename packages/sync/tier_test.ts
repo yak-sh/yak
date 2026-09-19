@@ -8,14 +8,14 @@ import type { Bundle } from '@yaks/graph'
 import { box } from './harness.ts'
 import { backoff } from './socket.ts'
 import { asking, clean, echo, echoed } from './mark.ts'
-import { inverse, outward, tierOf } from './tier.ts'
+import { inverse, local, outward, syncOf } from './tier.ts'
 
 // A bundle as the effect phase sees it: marked with what stood before it.
 let sent = (b: Bundle, was: Bundle | null = null) => asking(b, was)
 
 Deno.test('a component says which tier it persists to; wire is the default', () => {
-  assertEquals(tierOf(box, 'recipe'), 'wire')
-  assertEquals(tierOf(box, 'draft'), 'local')
+  assertEquals(syncOf(box, 'recipe'), 'server')
+  assertEquals(local(box, 'draft'), 'vault')
 })
 
 Deno.test('only wire-tier components are told to the server', () => {

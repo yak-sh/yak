@@ -24,7 +24,7 @@
  * window apply to). {@link filter} compiles the same query into a per-bundle
  * test, for a caller re-checking one bundle that changed.
  *
- * A column a vocabulary declares but never stores (`persist: false`) is read
+ * A column a vocabulary declares but never stores (`computed: true`) is read
  * through `opts.computed` — `comp.prop` → the value for one bundle — the way
  * @yaks/sql reads it through its `derived` hook, so an application states the
  * rule once and both evaluators answer alike.

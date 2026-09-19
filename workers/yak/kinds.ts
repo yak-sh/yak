@@ -27,7 +27,7 @@ import { wordOf } from './vocab.ts'
 let colsOf = (schema: PropSchema): Record<string, PropType> =>
   Object.fromEntries(
     Object.entries(schema.properties ?? {})
-      .filter(([, s]) => !s.stamped && s.persist !== false)
+      .filter(([, s]) => !s.stamped && s.computed !== true)
       .map(([col, s]) => [col, wordOf(s) as PropType]),
   )
 

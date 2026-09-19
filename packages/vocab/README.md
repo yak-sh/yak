@@ -13,24 +13,26 @@ A vocab is a JSON Schema document. Each component is an object schema in
 vocabulary (declared via JSON Schema's own `$vocabulary` mechanism,
 `meta/core.vocab.json`) adds what a component table needs:
 
-| keyword    | on     | says                                                              |
-| ---------- | ------ | ----------------------------------------------------------------- |
-| `ref`      | column | the entity kind a string references (`"project"`, `"entity"`)     |
-| `death`    | column | `cascade` \| `detach` \| `release` \| `keep` when the target dies |
-| `persist`  | column | `false` = computed, never stored (a query-only rank)              |
-| `stamped`  | column | `true` = server-owned: readable, never wire-writable              |
-| `search`   | column | `true` = this text column's words are full-text indexed           |
-| `store`    | column | `"blob"` = a content-addressed markdown body                      |
-| `aliases`  | column | input spellings that resolve to an enum member                    |
-| `bare`     | both   | `false` = never claims its bare filter spelling; qualified only   |
-| `unique`   | both   | column: no two rows share it. comp: `[["space","slug"]]`          |
-| `index`    | both   | the same two spellings, without the uniqueness                    |
-| `required` | comp   | native: the columns every row holds (NOT NULL)                    |
-| `default`  | column | native: the row's fallback; `{"now": true}` is the clock          |
-| `identity` | both   | the entity's id is DERIVED from this. comp: `["space","slug"]`    |
-| `kind`     | comp   | this component names a display kind                               |
-| `before`   | comp   | kinds this kind sorts before (feeds the derived kindOrder)        |
-| `wire`     | comp   | `false` = readable-not-writable component (entity metadata)       |
+| keyword    | on     | says                                                                |
+| ---------- | ------ | ------------------------------------------------------------------- |
+| `ref`      | column | the entity kind a string references (`"project"`, `"entity"`)       |
+| `death`    | column | `cascade` \| `detach` \| `release` \| `keep` when the target dies   |
+| `computed` | column | `true` = derived, never stored (a query-only rank)                  |
+| `stamped`  | column | `true` = server-owned: readable, never wire-writable                |
+| `search`   | column | `true` = this text column's words are full-text indexed             |
+| `store`    | column | `"blob"` = a content-addressed markdown body                        |
+| `aliases`  | column | input spellings that resolve to an enum member                      |
+| `bare`     | both   | `false` = never claims its bare filter spelling; qualified only     |
+| `unique`   | both   | column: no two rows share it. comp: `[["space","slug"]]`            |
+| `index`    | both   | the same two spellings, without the uniqueness                      |
+| `required` | comp   | native: the columns every row holds (NOT NULL)                      |
+| `default`  | column | native: the row's fallback; `{"now": true}` is the clock            |
+| `identity` | both   | the entity's id is DERIVED from this. comp: `["space","slug"]`      |
+| `kind`     | comp   | this component names a display kind                                 |
+| `before`   | comp   | kinds this kind sorts before (feeds the derived kindOrder)          |
+| `wire`     | comp   | `false` = readable-not-writable component (entity metadata)         |
+| `sync`     | comp   | who hears a write: `none` \| `server` (default) \| `peers`          |
+| `durable`  | comp   | how long a value lives: `forever` (default) \| `disconnect` \| `5s` |
 
 Native keywords reach the table as written: `type: integer` stores with integer
 affinity where a plain `number` stores real, `enum` is a CHECK on the column,
@@ -164,7 +166,7 @@ v.comps // wire-writable component names, alphabetical
 v.kinds // kindOrder: alphabetical + topological over `before`
 v.column('task', 'project')
 // { category: 'ref', ref: 'project', death: 'detach',
-//   affinity: 'integer', fk: true, stamped: false, persist: true, … }
+//   affinity: 'integer', fk: true, stamped: false, computed: false, … }
 v.route('title') // { comp: 'doc', prop: 'title' }   bare prop → its home
 v.route('eid') // { comp: 'entity', prop: 'eid' }  the entity identity
 v.aim('comment.target.doc.title') // [{comment,target}, {doc,title}]  path → hops

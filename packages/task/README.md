@@ -82,7 +82,7 @@ g.apply([{ entity: { eid: 't2' }, completed: {}, $actor: { by: dana } }])
 
 ## The status rule is said once
 
-`task.status` is declared `persist: false` — no column holds it. Its value is
+`task.status` is declared `computed: true` — no column holds it. Its value is
 the first mark the task has, and that one ordered list is what all three readers
 are built from:
 

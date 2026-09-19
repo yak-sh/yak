@@ -73,7 +73,7 @@ let typeOf = (col: Column): string =>
 let notesOf = (vocab: Vocab, col: Column): string[] => {
   let notes: string[] = []
   if (col.stamped) notes.push('server-owned: readable, never written here')
-  if (!col.persist) notes.push('computed: read, never stored')
+  if (col.computed) notes.push('computed: read, never stored')
   if (
     vocab.indexes(col.comp).some((i) =>
       i.unique && i.cols.length == 1 && i.cols[0] == col.prop

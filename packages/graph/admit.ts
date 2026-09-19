@@ -37,7 +37,7 @@ export class Refused extends Error {
 
 // The columns a caller may write on a component: its wire-writable ones, plus
 // the server-owned ones when the caller is trusted. A computed column
-// (`persist: false`) is in neither — it is derived, so there is nothing to
+// (`computed: true`) is in neither — it is derived, so there is nothing to
 // write — and is dropped like a stamped one.
 let allowed = (v: Vocab, comp: string, trusted: boolean): Set<string> => {
   let info = v.comp(comp)!

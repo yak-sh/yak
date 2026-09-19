@@ -138,26 +138,26 @@ The snapshot is a new array only when the result changed, so React re-renders
 when the result changes and not otherwise. To track loading independently, use
 `useSyncExternalStore(watch.subscribe, () => watch.ready)` as well.
 
-## Three tiers, one apply()
+## Two words, one apply()
 
 A client holds state the server owns, state this browser owns, and state that
-dies with the tab. Which is which is declared on the component, as
-[@yaks/sync](https://jsr.io/@yaks/sync)'s `persist` keyword:
+dies with the tab. Which is which the component says itself, in
+[@yaks/vocab](https://jsr.io/@yaks/vocab)'s `sync` and `durable` keywords:
 
 ```json
 {
   "$defs": {
     "draft": {
       "type": "object",
-      "persist": "local",
+      "sync": "none",
       "properties": { "text": { "type": "string" } }
     }
   }
 }
 ```
 
-- **`wire`** (the default) is the server's. @yaks/sync posts it and applies what
-  comes back.
+- **`sync: server`** (the default) is the server's. @yaks/sync posts it and
+  applies what comes back.
 - **`local`** is this browser's. It is written through to IndexedDB after each
   commit and loaded back at boot — a draft survives a reload, and it is not sent
   to the server.
@@ -231,7 +231,7 @@ worker, a test, or a CLI holding a working set gets the same live queries.
 [@yaks/match](https://jsr.io/@yaks/match) judges a bundle against a query;
 [@yaks/query](https://jsr.io/@yaks/query) is the grammar both sides speak;
 [@yaks/sync](https://jsr.io/@yaks/sync) is the wire to the server, and the
-`persist` keyword that says which state goes over it.
+`sync` keyword that says which state goes over it.
 
 ## License
 

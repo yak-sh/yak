@@ -17,7 +17,7 @@
             "done",
             "open"
           ],
-          "persist": false,
+          "computed": true,
           "description": "where the task stands — read off the completed and cancelled marks, never written"
         }
       }

@@ -389,7 +389,7 @@ Deno.test('a chain with a hop that is no reference is declined by both', () => {
 
 // ---- a computed column, one rule, both evaluators ---------------------------
 //
-// `task.status` (@yaks/task) is declared `persist: false`: no row holds it, and
+// `task.status` (@yaks/task) is declared `computed: true`: no row holds it, and
 // its value is read off the marks a task wears. The package states that rule
 // ONCE and hands each side its own reader — `derived()` the SQL expression,
 // `compute()` the function over a bundle — so this is the agreement that makes

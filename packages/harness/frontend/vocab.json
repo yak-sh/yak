@@ -1,7 +1,4 @@
 {
-  "$vocabulary": {
-    "https://yaks.sh/vocab/sync": true
-  },
   "$defs": {
     "entity": {
       "properties": {
@@ -11,7 +8,8 @@
       }
     },
     "keyboard": {
-      "persist": "none",
+      "sync": "none",
+      "durable": "disconnect",
       "properties": {
         "mode": {
           "type": "string"
@@ -85,7 +83,8 @@
       }
     },
     "frontend": {
-      "persist": "none",
+      "sync": "none",
+      "durable": "disconnect",
       "properties": {
         "selected": {
           "type": "string"
@@ -117,7 +116,8 @@
       }
     },
     "visual": {
-      "persist": "none",
+      "sync": "none",
+      "durable": "disconnect",
       "properties": {
         "surface": {
           "type": "string"
@@ -137,7 +137,8 @@
       }
     },
     "composer": {
-      "persist": "none",
+      "sync": "none",
+      "durable": "disconnect",
       "properties": {
         "mode": {
           "enum": [
@@ -148,7 +149,8 @@
       }
     },
     "feedback": {
-      "persist": "none",
+      "sync": "none",
+      "durable": "disconnect",
       "properties": {
         "error": {
           "type": "string"
@@ -156,7 +158,8 @@
       }
     },
     "viewport": {
-      "persist": "none",
+      "sync": "none",
+      "durable": "disconnect",
       "properties": {
         "item": {
           "type": "string"
@@ -197,7 +200,7 @@
       }
     },
     "pendingDraft": {
-      "persist": "local",
+      "sync": "none",
       "properties": {
         "text": {
           "type": "string"
@@ -214,7 +217,7 @@
       }
     },
     "savedDraft": {
-      "persist": "local",
+      "sync": "none",
       "properties": {
         "text": {
           "type": "string"
@@ -228,7 +231,7 @@
       }
     },
     "recovery": {
-      "persist": "local",
+      "sync": "none",
       "properties": {
         "selected": {
           "type": "string"
@@ -239,7 +242,8 @@
       }
     },
     "draft": {
-      "persist": "none",
+      "sync": "none",
+      "durable": "disconnect",
       "properties": {
         "text": {
           "type": "string"

@@ -8,7 +8,8 @@ import metaDoc from './meta/vocab.schema.json' with { type: 'json' }
 // A JSON Schema document, held loosely — validators own the tight shape.
 export type JsonSchema = Record<string, unknown>
 
-// The core yaks keywords: ref, death, persist, stamped, kind, before, wire,
+// The core yaks keywords: ref, death, computed, stamped, search, sync, durable,
+// kind, before, wire,
 // bare, aliases — what a component table needs beyond native JSON Schema.
 export let coreVocabulary: JsonSchema = coreDoc
 

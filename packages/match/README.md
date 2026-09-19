@@ -62,7 +62,7 @@ answer alike.
 
 ## Computed columns
 
-A column a vocabulary declares but never stores (`persist: false`) has no value
+A column a vocabulary declares but never stores (`computed: true`) has no value
 in a bundle to read: its formula belongs to the application, not the schema. So
 this package takes it the way [@yaks/sql](https://jsr.io/@yaks/sql) takes its
 `derived` hook — from the caller, keyed `comp.prop`:
@@ -154,7 +154,7 @@ query is compiled, before a bundle is read:
   column — or a chain of them followed through the set — being the steps.)
 - **`.count!`, `.distinct=`, `.tally=`** — an aggregate is a row shape, not a
   selection of entities. Count what comes back instead.
-- **A computed column** (`persist: false` in the vocabulary) **nobody
+- **A computed column** (`computed: true` in the vocabulary) **nobody
   registered** — no bundle holds its value and no rule was handed in for it.
   Register it through `opts.computed` (above) and it answers; @yaks/sql declines
   the same column for the same reason when its `derived` hook has no entry.

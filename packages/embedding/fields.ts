@@ -28,7 +28,7 @@ export type Pick = (column: Column) => boolean
  * read, and a number, a stamp or a reference is not prose.
  */
 export let textual: Pick = (c) =>
-  c.persist && c.category == 'scalar' && c.scalar == 'text'
+  !c.computed && c.category == 'scalar' && c.scalar == 'text'
 
 /** The embedded fields of a vocabulary, by component then declaration order. */
 export let fields = (vocab: Vocab, pick: Pick = textual): Field[] =>

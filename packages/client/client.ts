@@ -150,10 +150,9 @@ let ordinary = (): Vault | null => globalThis.indexedDB ? idb() : null
  * import { client } from '@yaks/client'
  * import { mint } from '@yaks/id'
  * import { loadVocab } from '@yaks/vocab'
- * import { syncKeywords } from '@yaks/sync'
  * import { signal } from '@preact/signals'
  *
- * let vocab = loadVocab(recipeBox, [syncKeywords])
+ * let vocab = loadVocab(recipeBox)
  * let box = client(vocab, [], { url: 'https://recipes.example', signal })
  *
  * let dinners = box.watch('.course=dinner&.serves>4')
@@ -161,7 +160,7 @@ let ordinary = (): Vault | null => globalThis.indexedDB ? idb() : null
  * ```
  *
  * The vocabulary must be the one your server speaks, loaded with
- * `syncKeywords` so each component's `persist` tier is readable.
+ * nothing extra: `sync` and `durable` are core keywords.
  */
 export let client = (
   vocab: Vocab,

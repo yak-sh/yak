@@ -21,7 +21,7 @@
 // board nobody has written a filter for should show.
 //
 // Writing `task.status` itself needs no refusal here: it is declared
-// `persist: false`, and @yaks/graph's `admit` phase drops a computed column
+// `computed: true`, and @yaks/graph's `admit` phase drops a computed column
 // before this hook ever sees the batch.
 //
 // It runs at `precondition`, inside the transaction and before a row has moved,

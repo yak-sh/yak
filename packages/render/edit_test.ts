@@ -27,7 +27,7 @@ let vocab = loadVocab({
         enabled: { type: 'boolean' },
         data: { type: 'string', format: 'json' },
         updated: { type: 'string', stamped: true },
-        rank: { type: 'number', persist: false },
+        rank: { type: 'number', computed: true },
       },
     },
     spine: { wire: false, properties: { num: { type: 'number' } } },

@@ -28,7 +28,7 @@ Deno.test('columns interrogate to their whole shape', () => {
     death: undefined,
     stamped: false,
     search: false,
-    persist: true,
+    computed: false,
     identity: false,
     affinity: 'real',
     fk: false,
@@ -283,14 +283,14 @@ Deno.test('a computed column reads but never writes', () => {
         kind: true,
         properties: {
           priority: { type: 'number' },
-          status: { enum: ['open', 'done'], persist: false },
+          status: { enum: ['open', 'done'], computed: true },
         },
       },
     },
   })
   assertEquals(w.comp('task')?.writable, ['priority'])
   assertEquals(w.route('status'), { comp: 'task', prop: 'status' })
-  assertEquals(w.column('task', 'status')?.persist, false)
+  assertEquals(w.column('task', 'status')?.computed, true)
   assert(w.check('task', { status: 'open' }).length == 1)
 })
 
@@ -337,7 +337,7 @@ Deno.test('indexes merge the column flag with the composite lists', () => {
           version: { type: 'number' },
           hot: { type: 'boolean', index: true },
           // computed: no cell to index
-          rank: { type: 'number', persist: false, index: true },
+          rank: { type: 'number', computed: true, index: true },
         },
       },
       alias: { type: 'object', properties: { slug: { type: 'string' } } },
@@ -388,7 +388,7 @@ Deno.test('every stored reference is indexed without an opt-in', () => {
           explicit: { ...ref, index: true },
           off: { ...ref, index: false },
           unique: { ...ref, unique: true },
-          computed: { ...ref, persist: false },
+          computed: { ...ref, computed: true },
           scalar: { type: 'string' },
         },
       },

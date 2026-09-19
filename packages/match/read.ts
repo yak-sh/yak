@@ -92,7 +92,7 @@ export type Read = { read: (b: Bundle) => unknown; tag: Tag }
 
 /**
  * The computed-column registry, keyed `comp.prop`: the rule that READS a column
- * the vocabulary declares but never stores (`persist: false`). It is the
+ * the vocabulary declares but never stores (`computed: true`). It is the
  * in-memory twin of {@link https://jsr.io/@yaks/sql/doc/~/Derived | @yaks/sql}'s
  * `derived` hook — the formula belongs to the application, not the schema, so
  * both compilers take it from the caller and one rule answers on both sides.
@@ -128,6 +128,6 @@ export let column = (
   // declares the column, the caller only says how to read it.
   let own = computed[`${name}.${prop}`]
   if (own) return { read: (b) => held(own(b)), tag: tagOf(col) }
-  if (!col.persist) return null
+  if (col.computed) return null
   return { read: (b) => held(comp(b, name)?.[prop]), tag: tagOf(col) }
 }

@@ -1,11 +1,12 @@
-// The local tier: the state this browser owns.
+// The vault: the state this browser owns and keeps.
 //
 // A client graph holds three kinds of state at once, and the component says
-// which is which (@yaks/sync's `persist` keyword): `wire` belongs to the
-// server, `local` belongs to THIS browser, `none` dies with the tab. The wire
-// tier is @yaks/sync's business. This file is the local one — the components
-// nobody else will ever send back, so if this process does not write them down
-// they are gone at the next reload.
+// which is which in two words (@yaks/vocab's `sync` and `durable`): a
+// `sync: server` component belongs to the server, a `sync: none` one belongs
+// to THIS node, and of those the ones that are `durable: forever` are the
+// vault's — nobody else will ever send them back, so if this process does not
+// write them down they are gone at the next reload. A `sync: none` component
+// that lasts only until `disconnect` stays in memory and never reaches here.
 //
 // A vault is not a `Storage`. Storage answers queries, and a query is answered
 // here by the map @yaks/ram already holds; what is missing is durability, so
@@ -23,7 +24,12 @@
 import type { Bundle, Comp, Eid, Graph, Plugin } from '@yaks/graph'
 import { comps, dead, detached, then } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { echo, tierOf } from '@yaks/sync'
+import { echo, local } from '@yaks/sync'
+
+// The components this file is responsible for: nobody else's to send, and
+// declared to outlive the tab.
+let vaulted = (vocab: Vocab, comp: string): boolean =>
+  local(vocab, comp) == 'vault'
 
 /** One entity as a vault keeps it: its identity, and the local-tier components
  * it wears. */
@@ -93,7 +99,7 @@ export let localComps = (
 ): Record<string, Comp> =>
   Object.fromEntries(
     comps(b).flatMap(([name, comp]) =>
-      comp && tierOf(vocab, name) == 'local' ? [[name, comp]] : []
+      comp && vaulted(vocab, name) ? [[name, comp]] : []
     ),
   )
 
@@ -102,7 +108,7 @@ export let localComps = (
 let concerns = (bundles: Bundle[], vocab: Vocab) =>
   bundles.some((b) =>
     b[KEPT] === undefined &&
-    (dead(b) || comps(b).some(([name]) => tierOf(vocab, name) == 'local'))
+    (dead(b) || comps(b).some(([name]) => vaulted(vocab, name)))
   )
 
 /**
@@ -154,7 +160,7 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
           for (let b of bundles) {
             if (
               dead(b) ||
-              comps(b).some(([name]) => tierOf(vocab, name) == 'local')
+              comps(b).some(([name]) => vaulted(vocab, name))
             ) loading.add(b.entity.eid)
           }
         }

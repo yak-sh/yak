@@ -1,8 +1,8 @@
 # Frontend graph pilot
 
 Each mounted frontend owns a local-only `@yaks/client` over RAM. Most UI
-components declare `persist: none`. Draft recovery records declare
-`persist: local` and use the client vault. No URL or socket is configured.
+components declare `sync: none, durable: disconnect`. Draft recovery records
+declare `sync: none` and use the client vault. No URL or socket is configured.
 Identical local entity IDs in two clients deliberately refer to different
 frontend instances. `App` also accepts an application-owned `frontend` so other
 controls/tests can read and mutate the same state.
@@ -130,9 +130,9 @@ requested with `?`. Modified legacy actions remain aliases, not a second mode.
 
 The terminal host opens a `@yaks/client` Vault before mounting the UI. Only
 `savedDraft`, `pendingDraft`, and `recovery` enter it; domain replicas, prompt
-context, visual selections, and credentials do not. The vocabulary explicitly
-registers `syncKeywords`; declaring `persist` without registering the extension
-would silently use the default wire tier.
+context, visual selections, and credentials do not. `sync` and `durable` are
+core vocabulary keywords, so a component that says neither silently syncs to the
+server and is kept forever.
 
 Drafts include source text, cursor, and message/task mode for each session and
 for the unsent new-session composer. The last selected session and local yank

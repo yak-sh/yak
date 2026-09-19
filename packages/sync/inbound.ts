@@ -16,7 +16,7 @@ import { comps, dead, detached, then, transient } from '@yaks/graph'
 import { echo } from './mark.ts'
 import type { Frame } from './socket.ts'
 import { type Coverage, covers } from './coverage.ts'
-import { tierOf } from './tier.ts'
+import { outbound } from './tier.ts'
 
 // A patch that takes server components off an entity, preserving local state. The
 // entity is then invisible to every query, which is the local shape of "no
@@ -25,7 +25,7 @@ let bare = (graph: Graph, b: Bundle): Bundle[] => {
   if (dead(b)) return [] // already in the grave; nothing left to take
   let out: Bundle = { entity: { eid: b.entity.eid } }
   for (let [name] of comps(b)) {
-    if (tierOf(graph.vocab, name) == 'wire') out[name] = null
+    if (outbound(graph.vocab, name)) out[name] = null
   }
   return comps(out).length ? [out] : []
 }
@@ -94,7 +94,7 @@ export let snapshot = (
         let keep = (name: string, prop?: string) =>
           opts.preserve?.(b.entity.eid, name, prop) ?? false
         for (let [name, comp] of comps(previous.get(b.entity.eid) ?? out)) {
-          if (tierOf(graph.vocab, name) != 'wire') continue
+          if (!outbound(graph.vocab, name)) continue
           if (!covers(scope, name)) continue
           if (
             b[name] == null && (scope === true || scope[name] === true) &&
@@ -112,7 +112,7 @@ export let snapshot = (
         }
         for (let [name, comp] of comps(b)) {
           if (
-            tierOf(graph.vocab, name) != 'wire' || !covers(scope, name)
+            !outbound(graph.vocab, name) || !covers(scope, name)
           ) continue
           out[name] = comp == null ? null : {
             ...(out[name] as Comp ?? {}),

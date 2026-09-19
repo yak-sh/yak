@@ -145,7 +145,7 @@ Deno.test('parity: the work spellings route the same through both', () => {
 Deno.test('parity: status is computed and unwritable on both sides', () => {
   for (let v of [MINE, FLEET]) {
     let status = v.column('task', 'status')!
-    assertEquals(status.persist, false)
+    assertEquals(status.computed, true)
     assert(!v.comp('task')!.writable.includes('status'))
   }
   // The members agree as a SET; the package orders them most-decisive-first

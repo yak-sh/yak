@@ -383,7 +383,7 @@ let words = (ctx: Ctx, value: string): Test => {
     ctx.v.columns(c)
       .map((p) => ctx.v.column(c, p)!)
       .filter((col) =>
-        col.persist && col.category == 'scalar' && col.scalar == 'text'
+        !col.computed && col.category == 'scalar' && col.scalar == 'text'
       )
       .map((col) => [c, col.prop] as [string, string])
   )

@@ -10,10 +10,10 @@ import {
   delivered,
   echoed,
   land,
+  outbound,
   type Replica,
   snapshot,
   type SubscribeOpts,
-  tierOf,
 } from '@yaks/sync'
 import type { Watches } from './watch.ts'
 import type { Saved } from './vault.ts'
@@ -232,7 +232,7 @@ export let retention = (
       if (!row || dead(row)) continue
       let patch: Bundle = { entity: row.entity }
       for (let [name] of comps(row)) {
-        if (tierOf(graph.vocab, name) == 'wire') patch[name] = null
+        if (outbound(graph.vocab, name)) patch[name] = null
       }
       store.tx((tx) => {
         tx.patch([patch])
@@ -283,7 +283,7 @@ export let retention = (
       let cuts: Bundle = { entity: b.entity }
       let rest: Bundle = { entity: b.entity }
       for (let [name, comp] of comps(b)) {
-        if (tierOf(graph.vocab, name) !== 'wire') continue
+        if (!outbound(graph.vocab, name)) continue
         if (!covered(eid, name)) {
           cuts[name] = null
           continue
@@ -324,7 +324,7 @@ export let retention = (
       let b = held(eid)
       let wire = b && !dead(b)
         ? Object.fromEntries(
-          comps(b).filter(([name]) => tierOf(graph.vocab, name) == 'wire'),
+          comps(b).filter(([name]) => outbound(graph.vocab, name)),
         )
         : {}
       if (b && !dead(b) && (Object.keys(wire).length || known.has(eid))) {
@@ -352,7 +352,7 @@ export let retention = (
           loading?.add(eid)
           if (
             comps(held(eid) ?? { entity: { eid } }).some(([name]) =>
-              tierOf(graph.vocab, name) == 'wire'
+              outbound(graph.vocab, name)
             )
           ) known.add(eid)
           if (!comps(held(eid) ?? { entity: { eid } }).length) known.add(eid)

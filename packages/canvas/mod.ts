@@ -30,11 +30,11 @@
  * caused it. There is no hook and no orphan sweep.
  *
  * ## Where each piece lives
- * Every component declares a {@link https://jsr.io/@yaks/sync | @yaks/sync}
- * `persist` tier. All of them are `wire`. The shared ones obviously so — a
+ * Every component declares a {@link https://jsr.io/@yaks/vocab | @yaks/vocab}
+ * `sync` word. All of them say `server`. The shared ones obviously so — a
  * wall nobody else can see is not a wall. The per-window ones (`camera`,
  * `cursor`, `fold`, `shelf`, `client`) are the interesting call: they
- * describe ONE window, so `local` looks right, and it is wrong. Something
+ * describe ONE window, so `sync: none` looks right, and it is wrong. Something
  * other than that window has to read them — a second tab restoring the
  * viewport it left, a directory of who is looking at what, a tool that moves
  * somebody's open card by writing their `cursor`.

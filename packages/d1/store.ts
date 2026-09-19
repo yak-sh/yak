@@ -123,7 +123,7 @@ let merged = (v: Vocab, held: Bundle, b: Bundle): Bundle => {
       continue
     }
     let kept = Object.entries(comp)
-      .filter(([p]) => v.column(name, p)?.persist)
+      .filter(([p]) => v.column(name, p)?.computed === false)
     out[name] = {
       ...(out[name] as Comp | undefined ?? {}),
       ...Object.fromEntries(kept),

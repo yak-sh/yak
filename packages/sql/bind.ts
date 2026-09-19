@@ -22,7 +22,7 @@
 // keyset on the anchor entity's own place in it),
 // `.count`/`.distinct`/`.tally` aggregates,
 // `.fields` projections, and the `.refs=` backlink union. A column the schema
-// marks computed (`persist: false`) reads through the DERIVED hook or, absent a
+// marks computed (`computed: true`) reads through the DERIVED hook or, absent a
 // registration, DECLINES — the binder never invents a value it cannot read.
 //
 // The WALK (`.fork.from->S-7`) compiles here when its path is a reference
@@ -216,7 +216,7 @@ let readCol = (ctx: Ctx, comp: string, prop: string, owner: string): Read => {
     return { expr: dc.expr(owner), tag: dc.tag }
   }
   let col = ctx.v.column(comp, prop)
-  if (col && !col.persist) return null // computed, no expression to read it
+  if (col?.computed) return null // computed, no expression to read it
   let expr = ctx.d.col(comp, prop, ctx.v)
   if (expr == null) return null
   return {
@@ -327,7 +327,8 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   let col = ctx.v.column(hop.comp, hop.prop)
   if (
     op == '' && value && !value.includes('..') &&
-    value.split(',').every(Boolean) && col?.category == 'ref' && col.persist &&
+    value.split(',').every(Boolean) && col?.category == 'ref' &&
+    !col.computed &&
     !ctx.derived[`${hop.comp}.${hop.prop}`] && ctx.d.refCol
   ) {
     return raw(ctx.d.refEq(
@@ -347,7 +348,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   // absence (`=` empty) or a not-equals must still see the rows without it.
   // A derived column carries its own null handling (updated.at reads the
   // journal, not a table row), so only a stored column says it.
-  let needsComp = hop.comp != 'entity' && !!col?.persist &&
+  let needsComp = hop.comp != 'entity' && col?.computed === false &&
     !ctx.derived[`${hop.comp}.${hop.prop}`] && (
       op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
       ((op == '' || op == '~') && flat(p.value) != '')
@@ -446,7 +447,7 @@ let leafRead = (ctx: Ctx, leaf: Hop, target: string): Read => {
   let dc = ctx.derived[key]
   if (dc) return { expr: dc.expr(target), tag: dc.tag }
   let col = ctx.v.column(leaf.comp, leaf.prop)
-  if (col && !col.persist) return null
+  if (col?.computed) return null
   if (leaf.comp == 'entity') {
     return {
       expr:

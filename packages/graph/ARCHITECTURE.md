@@ -167,8 +167,8 @@ share a persistence or synchronization policy.
 - Domain facts such as task completion and session entries normally persist.
 - Selection, draft text, expansion state, and a viewport's item-relative anchor
   can live in a private local client graph. Configure persistence explicitly;
-  `persist: 'none'` marks components that should remain ephemeral where
-  supported.
+  `sync: 'none'` with a `durable` short of forever marks components that should
+  remain ephemeral where supported.
 - Parsed text, line-layout caches, DOM references, and event handlers are
   rendering implementation details, not necessarily graph data.
 

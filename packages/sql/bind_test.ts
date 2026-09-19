@@ -10,7 +10,7 @@ import type { VocabDoc } from '@yaks/vocab'
 import { ARMS, compile, type Derived, raw, Unsupported } from './mod.ts'
 
 // The spine, a doc, and a task with a stored priority and a COMPUTED status
-// (persist: false) — the smallest vocab that exercises routing, a scalar, and
+// (computed: true) — the smallest vocab that exercises routing, a scalar, and
 // the derived hook.
 let doc: VocabDoc = {
   $defs: {
@@ -33,7 +33,7 @@ let doc: VocabDoc = {
       before: ['doc'],
       properties: {
         priority: { type: 'number', format: 'priority' },
-        status: { enum: ['open', 'wip', 'done'], persist: false },
+        status: { enum: ['open', 'wip', 'done'], computed: true },
       },
     },
     note: {

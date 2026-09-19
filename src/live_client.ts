@@ -21,7 +21,9 @@ let browserVocab = () => {
     for (let def of Object.values(doc.$defs ?? {})) {
       def.properties ??= {}
       def.properties.eid = { type: 'string' }
-      for (let prop of Object.values(def.properties ?? {})) prop.persist = true
+      for (let prop of Object.values(def.properties ?? {})) {
+        prop.computed = false
+      }
     }
   }
   return loadVocab(docs, fleetKeywords)

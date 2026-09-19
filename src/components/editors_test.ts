@@ -156,7 +156,7 @@ Deno.test('column overlays use the entity registry and retain its view walk', ()
     assert('Render' in selected)
     assertEquals(selected, columnView(e, comp, col, 'Board.Edit'))
   }
-  assertEquals(vocab.column('task', 'status')!.persist, false)
+  assertEquals(vocab.column('task', 'status')!.computed, true)
   let before = registry.renderers
   let custom = {
     view: 'Inline.Edit',

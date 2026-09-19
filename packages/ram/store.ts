@@ -117,7 +117,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   // names none is still a component: its presence is the fact.
   let stored = (comp: string, patch: Comp): Comp =>
     Object.fromEntries(
-      Object.entries(patch).filter(([p]) => vocab.column(comp, p)?.persist),
+      Object.entries(patch).filter(([p]) =>
+        vocab.column(comp, p)?.computed === false
+      ),
     )
 
   let all = (): Bundle[] => [...rows.values()].map(bundleOf)

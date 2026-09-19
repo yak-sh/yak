@@ -91,7 +91,7 @@ type Draft = {
 // declares and storage keeps. A computed column has no value to restore.
 let kept = (vocab: Vocab, comp: string): Set<string> =>
   new Set(
-    vocab.columns(comp).filter((c) => vocab.column(comp, c)?.persist !== false),
+    vocab.columns(comp).filter((c) => vocab.column(comp, c)?.computed !== true),
   )
 
 // A component as the journal writes it down: the columns worth keeping, with

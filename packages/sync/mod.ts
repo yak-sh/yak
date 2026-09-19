@@ -27,18 +27,20 @@
  * If the server is merely unreachable, nothing is undone: the batch may have
  * landed and the answer been lost.
  *
- * ## Three tiers, one apply()
+ * ## Two words, one apply()
  * A client holds state the server owns, state this browser owns, and state
- * that dies with the tab. Which is which is declared on the component, as a
- * vocabulary keyword ({@link syncKeywords}):
+ * that dies with the tab. Which is which the component says itself, in the two
+ * core vocabulary keywords:
  *
  * ```json
- * { "$defs": { "draft": { "type": "object", "persist": "local",
+ * { "$defs": { "draft": { "type": "object", "sync": "none",
  *     "properties": { "text": { "type": "string" } } } } }
  * ```
  *
- * `wire` (the default) syncs; `local` and `none` never leave the process. All
- * three ride the same `apply()`.
+ * `sync` says who hears about a write — `server` (the default) and `peers` go
+ * out, `none` stays here — and `durable` says how long the value lives:
+ * `forever` (the default) is the vault, `disconnect` or a duration is memory.
+ * All of them ride the same `apply()`.
  *
  * ## Reading is a subscription
  * {@link Sync.subscribe} opens a saved query on the server's `/ws`. Its answer
@@ -83,14 +85,7 @@ export {
   wire,
   type WireOpts,
 } from './socket.ts'
-export {
-  inverse,
-  outward,
-  SYNC_URI,
-  syncKeywords,
-  type Tier,
-  tierOf,
-} from './tier.ts'
+export { durableOf, inverse, local, outbound, outward, syncOf } from './tier.ts'
 export {
   asked,
   asking,

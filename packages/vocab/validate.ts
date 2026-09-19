@@ -13,6 +13,7 @@
 
 import type { Composite, PropSchema, VocabDoc } from './types.ts'
 import { composite, type Vocab } from './vocab.ts'
+import { lives, SYNC, type Sync } from './lifetime.ts'
 
 let NAME = /^[a-z][a-z0-9_]{0,39}$/
 
@@ -86,7 +87,7 @@ let storableDefault = (comp: string, prop: string, s: PropSchema): string[] => {
 let WORDLESS = ['date-time', 'uri', 'query', 'json']
 let searched = (comp: string, prop: string, s: PropSchema): string[] =>
   s.search !== true ||
-    (s.persist !== false && s.ref == null && s.enum == null &&
+    (s.computed !== true && s.ref == null && s.enum == null &&
       (s.type == null || s.type == 'string') &&
       !WORDLESS.includes(s.format ?? ''))
     ? []
@@ -107,6 +108,31 @@ let signed = (comp: string, s: PropSchema): string[] => {
   return PROVENANCE.filter((c) => !props[c].stamped).map((c) =>
     `${comp}.${c} is wire-writable — a component carrying the whole {at, by, via} is a mark the server signs, so mark every one of them "stamped": true`
   )
+}
+
+// What a component says about its own state, checked as a PAIR. Each word is
+// legal on its own — the meta-schema already refuses a misspelling — but one
+// combination is a contradiction: a relay does not own durable data, so a
+// component cannot ask the server to forward a value without keeping it AND to
+// keep it forever.
+let lived = (comp: string, s: PropSchema): string[] => {
+  let errs: string[] = []
+  if (s.sync != null && !SYNC.includes(s.sync as Sync)) {
+    errs.push(
+      `${comp} syncs "${s.sync}" — a component syncs to ${SYNC.join(', ')}`,
+    )
+  }
+  if (s.durable != null && !lives(s.durable)) {
+    errs.push(
+      `${comp} is durable "${s.durable}" — say "forever", "disconnect", or a duration such as "5s" or "2m"`,
+    )
+  }
+  if (s.sync == 'peers' && s.durable == 'forever') {
+    errs.push(
+      `${comp} syncs to peers and is durable forever — a relay hands a value on without owning it, so it has nowhere to keep one; say "disconnect" or a duration, or sync to the server`,
+    )
+  }
+  return errs
 }
 
 // The columns an identity is spelled across, both spellings together — the
@@ -140,6 +166,7 @@ export let storable = (doc: VocabDoc): string[] => {
       if (object(s)) errs.push(...searched(comp, prop, s))
     }
     errs.push(...signed(comp, schema))
+    errs.push(...lived(comp, schema))
     for (let c of composites(schema)) {
       for (let col of [...c.cols, ...(c.present ?? [])]) {
         if (!(schema.properties ?? {})[col]) {
@@ -153,7 +180,7 @@ export let storable = (doc: VocabDoc): string[] => {
       let c = (schema.properties ?? {})[col]
       if (!c) {
         errs.push(`${comp} requires ${col}, which is no column of ${comp}`)
-      } else if (c.persist === false) {
+      } else if (c.computed === true) {
         errs.push(`${comp}.${col} is computed — it cannot be required`)
       }
     }
@@ -164,7 +191,7 @@ export let storable = (doc: VocabDoc): string[] => {
       let c = (schema.properties ?? {})[col]
       if (!c) {
         errs.push(`${comp} is identified by ${col}, which is no column of it`)
-      } else if (c.persist === false || c.stamped) {
+      } else if (c.computed === true || c.stamped) {
         errs.push(
           `${comp}.${col} is ${
             c.stamped ? 'server-owned' : 'computed'

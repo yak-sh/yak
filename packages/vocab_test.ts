@@ -16,7 +16,6 @@ import { assert, assertEquals } from '@std/assert'
 import { blobKeywords } from '@yaks/blob'
 import { edgeKeywords } from '@yaks/edge'
 import { idKeywords } from '@yaks/id'
-import { syncKeywords } from '@yaks/sync'
 import {
   CORE_URI,
   type Keywords,
@@ -44,7 +43,7 @@ for (let e of Deno.readDirSync(here)) {
 
 // The keyword vocabularies a file may name, by the URI it names them with.
 let words: Record<string, Keywords> = Object.fromEntries(
-  [blobKeywords, edgeKeywords, idKeywords, syncKeywords].map((k) => [k.uri, k]),
+  [blobKeywords, edgeKeywords, idKeywords].map((k) => [k.uri, k]),
 )
 
 let compsOf = (d: VocabDoc) => Object.keys(d.$defs ?? {})

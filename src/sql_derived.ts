@@ -1,6 +1,6 @@
 // The fleet's @yaks/sql derived-column registrations: the computed columns the
 // generic compiler cannot know because their formulas are ours, not the
-// schema's. `@yaks/sql` marks such a column `persist: false` in the vocabulary
+// schema's. `@yaks/sql` marks such a column `computed: true` in the vocabulary
 // and takes its read expression from here (see @yaks/sql/derived.ts), so
 // `.status=open` — the most common board filter — compiles through the index
 // instead of falling to a JS scan of every task.

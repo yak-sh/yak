@@ -1,6 +1,6 @@
 // The derived status, said ONCE and read by both evaluators.
 //
-// `task.status` is declared `persist: false` — there is no column holding it.
+// `task.status` is declared `computed: true` — there is no column holding it.
 // Its value is the first mark the task wears (./words.ts), and that one list is
 // what everything here is built from:
 //

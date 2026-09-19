@@ -1,52 +1,51 @@
-// Which components leave the process. A client graph holds three kinds of
-// state at once — what the server owns, what this browser owns, and what only
-// this render owns — and mixing them in one `apply()` is the whole point of
-// running the graph in a page. So the tier is declared ONCE, on the component,
-// as a vocabulary keyword:
+// What one committed batch says to the server. A client graph holds three
+// kinds of state at once — what the server owns, what this browser owns, and
+// what only this render owns — and mixing them in one `apply()` is the whole
+// point of running the graph in a page. Which kind a component is, it says
+// itself, in the two core vocabulary keywords (@yaks/vocab lifetime.ts):
 //
-//   persist: "wire"    (the default) synced to the server
-//   persist: "local"   kept by this client, never sent
-//   persist: "none"    ephemeral — held while the process lives
+//   sync: "server"  (the default) the server owns it and fans it out
+//   sync: "peers"   the server relays it to subscribers without owning it
+//   sync: "none"    it stays on this node
 //
-// A component with no declaration syncs, because the common case is data the
-// server owns, and a vocabulary shared with a server would otherwise have to
-// repeat the word on every component.
+//   durable: "forever"     (the default) storage — the server's, or the vault
+//   durable: "disconnect"  memory, for as long as this connection lives
+//   durable: "5s"          the same, plus a timer
 //
-// This module also decides what one committed batch says to the server, which
-// is narrower than what it said locally: only wire-tier components, only the
-// columns a client may write (a stamp is the server's to make), and only the
-// bundles the caller actually sent — a cascade's casualties and the stamp
-// phase's provenance are the local graph reporting on itself, and the server
-// will reach the same conclusions from the same patch.
+// A component with no declaration syncs to the server and is kept forever,
+// because the common case is data the server owns.
+//
+// What a batch says OUTWARD is narrower than what it said locally: only
+// components that leave this node, only the columns a client may write (a
+// stamp is the server's to make), and only the bundles the caller actually
+// sent — a cascade's casualties and the stamp phase's provenance are the local
+// graph reporting on itself, and the server will reach the same conclusions
+// from the same patch.
 
 import type { Bundle, Comp } from '@yaks/graph'
 import { comps, dead } from '@yaks/graph'
-import type { Keywords, Vocab } from '@yaks/vocab'
-import doc from './meta/sync.vocab.json' with { type: 'json' }
+import { durableOf, type Sync, syncOf, type Vocab } from '@yaks/vocab'
 import { asked, before } from './mark.ts'
 
-/** The URI a vocab file declares under `$vocabulary` to use `persist`. */
-export let SYNC_URI = 'https://yaks.sh/vocab/sync'
+export { durableOf, type Sync, syncOf }
+
+/** Whether a component's writes leave this node at all — a `sync: none`
+ * component is the local graph talking to itself. */
+export let outbound = (vocab: Vocab, comp: string): boolean =>
+  syncOf(vocab, comp) != 'none'
 
 /**
- * The `persist` keyword vocabulary, ready to register:
- * `loadVocab(docs, [syncKeywords])` carries each component's declared tier onto
- * `v.comp(name).keywords.persist`, which is where {@link tierOf} reads it.
+ * Where a component's state lives on THIS node, for the components nobody else
+ * will ever send back: the VAULT when it is durable forever (it survives a
+ * reload), process MEMORY otherwise (it goes with the tab, or with its timer).
+ * A component that syncs is neither — the server is what sends it back.
  */
-export let syncKeywords: Keywords = { uri: SYNC_URI, comp: ['persist'], doc }
-
-/** Where a component's data lives: on the server, in this client, or nowhere
- * past this process. */
-export type Tier = 'wire' | 'local' | 'none'
-
-/**
- * The tier a component is declared at — `wire` when it says nothing, so a
- * vocabulary written for a server needs no sync keyword at all to sync.
- */
-export let tierOf = (vocab: Vocab, comp: string): Tier => {
-  let said = String(vocab.comp(comp)?.keywords.persist)
-  return said == 'local' || said == 'none' ? said : 'wire'
-}
+export let local = (vocab: Vocab, comp: string): 'vault' | 'memory' | null =>
+  outbound(vocab, comp)
+    ? null
+    : durableOf(vocab, comp) == 'forever'
+    ? 'vault'
+    : 'memory'
 
 // The columns of one patch a client may write. A stamped column is the
 // server's own (it will write its own `created`), and a computed one has no
@@ -60,7 +59,7 @@ let writable = (vocab: Vocab, name: string, patch: Comp): Comp => {
 
 /**
  * One committed batch, reduced to what the server should be told: the bundles
- * the caller asked for, carrying their wire-tier components and the columns a
+ * the caller asked for, carrying their outbound components and the columns a
  * client may write. A bundle left with nothing to say drops out, and a batch
  * that is entirely local returns empty — nothing is posted at all.
  *
@@ -75,7 +74,7 @@ export let outward = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
     if (b.$was) out.$was = b.$was
     if (dead(b)) out.$delete = true
     for (let [name, patch] of comps(b)) {
-      if (tierOf(vocab, name) != 'wire') continue
+      if (!outbound(vocab, name)) continue
       if (patch == null) {
         out[name] = null // dropping a component needs no columns
         continue

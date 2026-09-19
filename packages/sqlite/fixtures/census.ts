@@ -7,7 +7,7 @@ import { tombstoned } from '@yaks/graph'
 
 let read1 = (v: Vocab, comp: string, derived: Derived): Column[] =>
   v.columns(comp).map((p) => v.column(comp, p)!)
-    .filter((c) => c.persist || derived[`${comp}.${c.prop}`])
+    .filter((c) => !c.computed || derived[`${comp}.${c.prop}`])
 
 // The projected read for one component: each scalar straight off the row, each
 // reference joined back to its target's eid, keyed by the owner eid. A

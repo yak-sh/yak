@@ -15,11 +15,9 @@ import { ram } from '@yaks/ram'
 import { api, type Handler } from '@yaks/api'
 import type { Connect, Socket } from './socket.ts'
 import { type Sync, sync } from './sync.ts'
-import { syncKeywords } from './tier.ts'
 import type { Trouble } from './outbound.ts'
 
 let doc: VocabDoc = {
-  $vocabulary: { 'https://yaks.sh/vocab/sync': true },
   $defs: {
     entity: {
       type: 'object',
@@ -55,13 +53,14 @@ let doc: VocabDoc = {
     // What this cook has typed and not saved. Never leaves the browser.
     draft: {
       type: 'object',
-      persist: 'local',
+      sync: 'none',
       properties: { text: { type: 'string' } },
     },
     // The words in the search box: gone when the tab closes.
     sieve: {
       type: 'object',
-      persist: 'none',
+      sync: 'none',
+      durable: 'disconnect',
       properties: { text: { type: 'string' } },
     },
     created: {
@@ -82,7 +81,7 @@ let doc: VocabDoc = {
 }
 
 /** The recipe-box vocabulary this package's tests read and write against. */
-export let box: Vocab = loadVocab(doc, [syncKeywords])
+export let box: Vocab = loadVocab(doc)
 
 /** A graph over a fresh map. `adopt` is what a CLIENT store needs: the numbers
  * come from the server, not from this map. */

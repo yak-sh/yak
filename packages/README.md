@@ -200,8 +200,8 @@ In dependency order:
 - **[@yaks/sync](./sync)** — the other end of that transport: a plugin that
   forwards a client graph's committed writes to a server, applies what the
   server pushes back, and reconciles — or reverts — the optimistic write in
-  between. A `persist` keyword says per component which state syncs, which stays
-  in the browser, and which dies with the tab.
+  between. A `sync` keyword says per component which state syncs, which stays in
+  the browser, and which dies with the tab.
 - **[@yaks/canvas](./canvas)** — the interface as data: a `canvas` of `card`s
   each `pin`ned somewhere, the `camera` a window looks through, a `cursor`,
   split `layout`s of `pane`s, folds and a shelf — layout stored, queried, shared

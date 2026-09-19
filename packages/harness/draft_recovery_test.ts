@@ -156,13 +156,13 @@ Deno.test('new-session acknowledgement keeps newer text in the created session, 
 })
 
 Deno.test('draft vocabulary registers local and ephemeral tiers, not default wire tier', async () => {
-  const { tierOf } = await import('@yaks/sync')
+  const { local } = await import('@yaks/sync')
   const { frontendVocab } = await import('./frontend.ts')
-  assertEquals(tierOf(frontendVocab, 'savedDraft'), 'local')
-  assertEquals(tierOf(frontendVocab, 'pendingDraft'), 'local')
-  assertEquals(tierOf(frontendVocab, 'recovery'), 'local')
-  assertEquals(tierOf(frontendVocab, 'draft'), 'none')
-  assertEquals(tierOf(frontendVocab, 'visual'), 'none')
+  assertEquals(local(frontendVocab, 'savedDraft'), 'vault')
+  assertEquals(local(frontendVocab, 'pendingDraft'), 'vault')
+  assertEquals(local(frontendVocab, 'recovery'), 'vault')
+  assertEquals(local(frontendVocab, 'draft'), 'memory')
+  assertEquals(local(frontendVocab, 'visual'), 'memory')
 })
 
 Deno.test('independent pending new sessions keep recovery ownership separate', async () => {

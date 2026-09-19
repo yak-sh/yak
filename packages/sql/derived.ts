@@ -1,5 +1,5 @@
 // The derived-column hook. Some columns are declared in a vocabulary but never
-// STORED — a vocab marks them `persist: false` — because their value is
+// STORED — a vocab marks them `computed: true` — because their value is
 // computed downstream from other rows. `@yaks/sql` cannot know those formulas
 // (they belong to the application, not the schema), so it takes them from the
 // caller: a `Derived` map from `comp.prop` to the SQL expression that reads the
@@ -10,7 +10,7 @@
 // whose read differs from its storage — e.g. a column that falls back to
 // another when it was never written. The binder consults this map before the
 // ordinary column lowering, so an override wins whether or not the column is
-// `persist: false`.
+// `computed: true`.
 //
 // Example — a computed `order.total`, summed from the order's line items:
 //

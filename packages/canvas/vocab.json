@@ -4,7 +4,7 @@
     "camera": {
       "type": "object",
       "kind": true,
-      "persist": "wire",
+      "sync": "server",
       "description": "where one window is looking at one canvas — shared so another tab, or a tool, can read and move it",
       "properties": {
         "client": {
@@ -45,13 +45,13 @@
       "type": "object",
       "kind": true,
       "by_name": true,
-      "persist": "wire",
+      "sync": "server",
       "description": "a plane things are arranged on"
     },
     "card": {
       "type": "object",
       "kind": true,
-      "persist": "wire",
+      "sync": "server",
       "description": "one entity shown on a canvas",
       "properties": {
         "target": {
@@ -69,7 +69,7 @@
     "client": {
       "type": "object",
       "kind": true,
-      "persist": "wire",
+      "sync": "server",
       "description": "one open window — what a camera, a cursor, a fold and a shelf each belong to",
       "properties": {
         "user_agent": {
@@ -92,7 +92,7 @@
     "cursor": {
       "type": "object",
       "kind": true,
-      "persist": "wire",
+      "sync": "server",
       "description": "what one window has open — shared, so a tool can move somebody there by writing it",
       "properties": {
         "client": {
@@ -116,7 +116,7 @@
     "fold": {
       "type": "object",
       "kind": true,
-      "persist": "wire",
+      "sync": "server",
       "description": "the sections of a list one window has collapsed",
       "properties": {
         "client": {
@@ -142,7 +142,7 @@
       "kind": true,
       "prefix": "L",
       "by_name": true,
-      "persist": "wire",
+      "sync": "server",
       "description": "a named split of the screen into panes",
       "properties": {
         "root": {
@@ -156,7 +156,7 @@
     "pane": {
       "type": "object",
       "kind": true,
-      "persist": "wire",
+      "sync": "server",
       "description": "one region of a layout: a split, or something shown",
       "properties": {
         "layout": {
@@ -201,7 +201,7 @@
     },
     "pin": {
       "type": "object",
-      "persist": "wire",
+      "sync": "server",
       "description": "where a card sits on a canvas",
       "properties": {
         "canvas": {
@@ -234,7 +234,7 @@
     },
     "shelf": {
       "type": "object",
-      "persist": "wire",
+      "sync": "server",
       "description": "what one window is holding, off the canvas",
       "properties": {
         "client": {

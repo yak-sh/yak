@@ -19,11 +19,11 @@
 // `pin` (which cascades on the canvas) goes with the wall. Nothing sweeps
 // orphans because none are left behind.
 //
-// TIERS. Every component says where its data lives, as @yaks/sync's `persist`
+// TIERS. Every component says where its data lives, in @yaks/vocab's `sync`
 // keyword. The per-window ones — `camera`, `cursor`, `fold`, `shelf`, and the
 // `client` they hang off — are the interesting call: they describe ONE
-// window, so `local` looks right, and it is wrong. They are `wire` because
-// something other than that window has to read and write them: a second tab
+// window, so `sync: none` looks right, and it is wrong. They say `server`
+// because something else has to read and write them: a second tab
 // restoring the viewport it left, a directory of who is looking at what, a
 // tool that moves somebody's open card by writing their `cursor`. State that
 // never leaves the tab can do none of that.
@@ -136,7 +136,7 @@ export type Cursor = {
 
 /**
  * The canvas vocabulary, to load beside your own:
- * `loadVocab([canvasDoc, ...mine], [idKeywords, nameKeywords, syncKeywords])`.
+ * `loadVocab([canvasDoc, ...mine], [idKeywords, nameKeywords])`.
  *
  * It declares nothing about what a card SHOWS — `card.target` points at any
  * entity in your own vocabulary — only where things sit and who is looking.

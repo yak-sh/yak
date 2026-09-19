@@ -259,11 +259,11 @@ export let appsDoc: VocabDoc = {
       properties: {
         // READ, never written: what the entity WEARS says its state, so a
         // task is done because it wears `completed`, not because a column was
-        // set to a word. `persist: false` says there is no column at all;
+        // set to a word. `computed: true` says there is no column at all;
         // {@link appDerived} is the expression that reads it.
         status: {
           enum: ['open', 'wip', 'done', 'cancelled'],
-          persist: false,
+          computed: true,
         },
       },
     },

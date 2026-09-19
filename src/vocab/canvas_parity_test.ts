@@ -23,14 +23,19 @@
 // carve-out is grounded in a describing package facing an undescribed manifest.
 
 import { assert, assertEquals } from '@std/assert'
-import { type Column, loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import {
+  type Column,
+  loadVocab,
+  syncOf,
+  type Vocab,
+  type VocabDoc,
+} from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
-import { syncKeywords, tierOf } from '@yaks/sync'
 import { schema } from '@yaks/sqlite'
 import { canvasDoc } from '@yaks/canvas'
 import { fleetDocs, fleetKeywords } from './fleet_vocab.ts'
 
-let keywords = [...fleetKeywords, syncKeywords]
+let keywords = [...fleetKeywords]
 let load = (docs: VocabDoc[]): Vocab => loadVocab(docs, keywords)
 
 // The whole fleet, as it is; and the whole fleet with this one document
@@ -114,7 +119,7 @@ Deno.test('parity: the SQLite schema, statement for statement', () => {
 })
 
 Deno.test('every canvas comp syncs — the per-window ones included', () => {
-  for (let name of ours) assertEquals(tierOf(swapped, name), 'wire', name)
+  for (let name of ours) assertEquals(syncOf(swapped, name), 'server', name)
 })
 
 Deno.test('divergence: the package describes its columns, the manifest does not', () => {

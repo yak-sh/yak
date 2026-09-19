@@ -54,7 +54,7 @@ structure never changes, only the leaf column lowerings behind a `Dialect`
 
 ## Computed columns
 
-A column a vocabulary marks `persist: false` has no stored value — its formula
+A column a vocabulary marks `computed: true` has no stored value — its formula
 belongs to the application, not the schema. Supply those through the **derived
 hook** (`derived.ts`): a `Derived` map from `comp.prop` to the SQL expression
 that reads it. A registered expression compiles a computed column through the

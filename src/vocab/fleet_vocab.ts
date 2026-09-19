@@ -11,7 +11,7 @@
 // Deliberate divergences the meta-model does not carry, applied here: log comps
 // yield their bare spellings (query.ts filters them from routing), the curated
 // bareShy/sharedRefs list yields a few more, and the derived columns (task.status,
-// updated.at) are declared computed (persist: false) — readable, routable, never
+// updated.at) are declared computed (computed: true) — readable, routable, never
 // stored.
 
 import { loadVocab } from '@yaks/vocab'
@@ -218,14 +218,14 @@ export let fleetDocs = (): VocabDoc[] => {
     if (def) def.wire = false
   }
   // The fleet's derived columns (types.ts derivedProps) are hand-written fleet
-  // logic, not manifest data: declared computed (persist: false) — readable,
+  // logic, not manifest data: declared computed (computed: true) — readable,
   // routable, never writable, value computed downstream.
   for (let [comp, ps] of Object.entries(derivedProps)) {
     let def = docs.map((d) => d.$defs?.[comp]).find((x) => x)
     for (let [p, t] of Object.entries(ps)) {
       def!.properties![p] = {
         ...propOf(t as PropType as ManifestType),
-        persist: false,
+        computed: true,
       }
     }
   }

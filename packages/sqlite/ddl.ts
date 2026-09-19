@@ -146,7 +146,7 @@ let grownDdl = (c: Column): string => {
 let stored = (v: Vocab, comp: string): Column[] =>
   v.columns(comp)
     .map((prop) => v.column(comp, prop)!)
-    .filter((c) => c.persist)
+    .filter((c) => !c.computed)
 
 // One component's table. The `entity` owner is the primary key, so a component
 // is worn at most once per entity. A tag component (no stored columns) is just

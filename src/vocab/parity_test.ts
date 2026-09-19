@@ -8,7 +8,7 @@
 // Known, deliberate divergences (the fleet layers rules the meta-model does
 // not carry): the log partition (log comps don't claim bare spellings), the
 // curated bareShy/sharedRefs bare-routing lists, and derived value COMPUTATION
-// (statusOf) — the derived column itself is declared here as persist: false.
+// (statusOf) — the derived column itself is declared here as computed: true.
 
 import { assert, assertEquals } from '@std/assert'
 import type { Column } from '@yaks/vocab'
@@ -151,7 +151,7 @@ Deno.test('parity: the kinds whose title is a name, read through @yaks/names', (
 
 Deno.test('parity: derived status is readable, never writable', () => {
   let status = v.column('task', 'status')!
-  assertEquals(status.persist, false)
+  assertEquals(status.computed, true)
   assertEquals(status.values, ['open', 'wip', 'done', 'cancelled'])
   assert(!v.comp('task')!.writable.includes('status'))
 })

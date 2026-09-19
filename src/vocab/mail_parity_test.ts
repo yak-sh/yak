@@ -65,7 +65,7 @@ let shape = (c: Column) => ({
   ref: c.ref,
   death: c.death,
   stamped: c.stamped,
-  persist: c.persist,
+  computed: c.computed,
   affinity: c.affinity,
   fk: c.fk,
 })

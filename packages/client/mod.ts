@@ -17,9 +17,8 @@
  * import { client } from '@yaks/client'
  * import { mint } from '@yaks/id'
  * import { loadVocab } from '@yaks/vocab'
- * import { syncKeywords } from '@yaks/sync'
  *
- * let vocab = loadVocab(recipeBox, [syncKeywords])
+ * let vocab = loadVocab(recipeBox)
  * let box = client(vocab, [], { url: 'https://recipes.example' })
  *
  * box.mutate([{
@@ -47,7 +46,7 @@
  * reactive; listeners hear readiness changes even for an empty answer.
  *
  * ## Three tiers, one apply()
- * A component's `persist` keyword (@yaks/sync's) says where its state lives:
+ * A component's `sync` and `durable` keywords say where its state lives:
  * `wire` is the server's and syncs, `local` is this browser's and is kept in
  * IndexedDB ({@link idb}), `none` dies with the tab. All three ride the same
  * `apply()`, and the local tier is back in the graph by the time
