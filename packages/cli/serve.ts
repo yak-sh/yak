@@ -33,6 +33,7 @@ import {
 } from '@yaks/graph'
 import {
   answerOf,
+  faulted,
   reconcile,
   type Runner,
   runner,
@@ -338,20 +339,19 @@ export let words = (host: Served): Word[] =>
       //
       // The `tool` rows a call's `to` points at come first, once per process.
       await host.runner.ensure()
-      let answer = answerOf(
-        await host.runner.call([{
-          entity: { eid: '$call' },
-          call: {
-            to: toolEid(tool.name),
-            args: JSON.stringify(args ?? {}),
-          },
-          ...(host.config.actor ? { $actor: { by: host.config.actor } } : {}),
-        }]),
-      )
-      c.out(worded(answer))
+      let landed = await host.runner.call([{
+        entity: { eid: '$call' },
+        call: {
+          to: toolEid(tool.name),
+          args: JSON.stringify(args ?? {}),
+        },
+        ...(host.config.actor ? { $actor: { by: host.config.actor } } : {}),
+      }])
+      c.out(worded(answerOf(landed)))
       // A refusal is data now, not a throw: the words are printed either way
-      // and the exit code is what says which it was.
-      return answer.some((b) => b.error || b.exception) ? 1 : 0
+      // and the exit code is what says which it was — the runner's own word,
+      // since a tool that ANSWERS fault rows did not fail.
+      return faulted(landed) ? 1 : 0
     },
   }))
 

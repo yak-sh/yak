@@ -122,14 +122,19 @@ export let ledger = (host: Graph): Graph => {
   let door: Graph = {
     ...self,
     use: (plugin) => (self.use(plugin), door),
+    // The CALLER's data first, the invocation's bookkeeping after. Two
+    // stores are two transactions — nothing can make one batch of them — so
+    // the order is what decides how a half-landed batch reads: a write the
+    // store refuses takes the whole apply with it before a `result` or an
+    // `execution{done}` has been written, which is what lets the runner
+    // record the refusal as this call's failure. The other way round, a
+    // refusal was already a success by the time it was raised.
     apply: async (change: Change) => {
       let batch = (Array.isArray(change) ? change : [change]) as Bundle[]
       let here = batch.filter(mine)
       let there = batch.filter((b) => !mine(b))
-      let [kept, sent] = await Promise.all([
-        here.length ? self.apply(here) : [],
-        there.length ? host.apply(there) : [],
-      ])
+      let sent = there.length ? await host.apply(there) : []
+      let kept = here.length ? await self.apply(here) : []
       return [...sent, ...kept]
     },
   }

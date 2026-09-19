@@ -5,7 +5,14 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, graph, type Tool } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { callDoc, runner, toolDoc, toolEid, UnfinishedCall } from './mod.ts'
+import {
+  callDoc,
+  faulted,
+  runner,
+  toolDoc,
+  toolEid,
+  UnfinishedCall,
+} from './mod.ts'
 
 let echo: Tool = {
   noun: 'example',
@@ -126,6 +133,23 @@ Deno.test('a batch the graph refuses is the call failing, not a call left claime
   assertEquals(answer.some((b) => b.exception || b.error), true)
   assertEquals((await g.read('.execution'))[0].execution, { state: 'failed' })
   assertEquals((await g.read('.result')).length, 1)
+})
+
+Deno.test('a tool that ANSWERS a fault has not failed', async () => {
+  let { g, r } = world([{
+    ...echo,
+    readOnly: true,
+    inputSchema: { type: 'object', properties: {} },
+    // A listing of what broke: entities wearing the very words a failure
+    // wears. The runner's own `execution` is what says whether the CALL
+    // failed, so a host reads that and not the shape of the answer.
+    run: (_, ctx) => ctx.read('.error'),
+  }])
+  await r.ensure()
+  await g.apply([{ entity: { eid: 'b1' }, error: { code: 'broke' } }])
+  let landed = await r.call(called('example_echo'))
+  assertEquals(landed.some((b) => b.error), true)
+  assertEquals(faulted(landed), false)
 })
 
 Deno.test('a reading tool answers entities and writes none of them', async () => {

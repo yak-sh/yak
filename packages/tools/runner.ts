@@ -154,6 +154,15 @@ let who = (call: Bundle): Entity | null => {
 }
 
 /**
+ * Did this call FAIL? The runner's own word for it — `execution{state}` on the
+ * call — and not a guess from the answer's shape: a tool that reads break rows
+ * answers entities wearing `error` and `exception`, and a listing of faults is
+ * not a fault.
+ */
+export let faulted = (landed: Bundle[]): boolean =>
+  landed.some((b) => (b.execution as Comp | undefined)?.state == 'failed')
+
+/**
  * What a call ANSWERED, as a host renders it: the tool's own bundles, with the
  * runner's bookkeeping left out. The result entity carries a copy of the prose
  * so a transcript reads one line per answer; a host showing the answer itself

@@ -27,7 +27,14 @@ import {
   type Tool,
   toolsOf,
 } from '@yaks/graph'
-import { answerOf, type Runner, runner, toolEid, worded } from '@yaks/tools'
+import {
+  answerOf,
+  faulted,
+  type Runner,
+  runner,
+  toolEid,
+  worded,
+} from '@yaks/tools'
 import type { BundleOpts, Depth } from './schema.ts'
 import { core, type CoreOpts, pointing, type Search } from './tools.ts'
 import type { Guide } from './words.ts'
@@ -134,8 +141,7 @@ export type Options = {
 //
 // An answer carrying an `error` or an `exception` is the tool's refusal, and
 // it comes back as an error rather than a success that reads like an apology.
-let said = (answer: Bundle[]): CallToolResult => {
-  let failed = answer.some((b) => b.error || b.exception)
+let said = (answer: Bundle[], failed: boolean): CallToolResult => {
   return {
     // A refusal says where the words are: a client holding a tool list from
     // before a column moved learns it here and nowhere else.
@@ -320,13 +326,12 @@ export let server = (opts: Options): McpServer => {
       let out: CallToolResult
       try {
         await ready()
-        out = said(answerOf(
-          await run.call([{
-            entity: { eid: '$call' },
-            call: { to: toolEid(t.name), args: JSON.stringify(args ?? {}) },
-            ...(actor ? { $actor: { by: actor.eid } } : {}),
-          }]),
-        ))
+        let landed = await run.call([{
+          entity: { eid: '$call' },
+          call: { to: toolEid(t.name), args: JSON.stringify(args ?? {}) },
+          ...(actor ? { $actor: { by: actor.eid } } : {}),
+        }])
+        out = said(answerOf(landed), faulted(landed))
       } catch (err) {
         out = failed(err)
       }
