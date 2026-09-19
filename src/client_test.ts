@@ -1765,14 +1765,14 @@ Deno.test('claimant resolves through the session entity', () => {
 Deno.test('wrapChanges: unfinished gets the trail, done goes quiet', () => {
   let cs = wrapChanges(all, 'sess-x') // T1 is wip → notice + release
   assertEquals(cs.filter((c) => c.name == 'claim').length, 1)
-  // A lease lapse is machinery, not speech (D-13858): a NOTICE, never a comment.
+  // A lease lapse is machinery, not speech (D-13858): a SIGNAL, never a comment.
   assertEquals(cs.filter((c) => c.name == 'comment').length, 0)
-  assertEquals(cs.filter((c) => c.name == 'notice').length, 1)
+  assertEquals(cs.filter((c) => c.name == 'signal').length, 1)
   assertEquals(
     cs.find((c) => c.name == 'doc')?.comp?.body,
     '⚑ lease lapsed: session S-1 ended before this was done',
   )
-  assertEquals(cs.find((c) => c.name == 'notice')?.comp, {
+  assertEquals(cs.find((c) => c.name == 'signal')?.comp, {
     target: T1,
     event: 'lapse',
   })
@@ -1782,7 +1782,7 @@ Deno.test('wrapChanges: unfinished gets the trail, done goes quiet', () => {
   let quiet = wrapChanges(rows(done), 'sess-x')
   // finished work releases without a notice — only the brief rides along
   // (fixture S is docless and held a claim, so it earns the stub)
-  assertEquals(quiet.filter((c) => c.name == 'notice'), [])
+  assertEquals(quiet.filter((c) => c.name == 'signal'), [])
   assertEquals(quiet[0], { eid: T1, name: 'claim', comp: null })
   assertEquals(wrapChanges(all, 'sess-unknown'), [])
 })
@@ -1797,7 +1797,7 @@ Deno.test('lapseChanges: one lapse notice per session, never a re-mint', () => {
   let body = '⚑ lease lapsed: session S-1 ended before this was done'
   // First lapse mints the notice and releases the claim.
   let first = lapseChanges(all, by(S))
-  assertEquals(first.filter((c) => c.name == 'notice').length, 1)
+  assertEquals(first.filter((c) => c.name == 'signal').length, 1)
   assertEquals(first.find((c) => c.name == 'doc')?.comp?.body, body)
   assertEquals(first.filter((c) => c.name == 'claim' && !c.comp).length, 1)
 
@@ -1807,11 +1807,11 @@ Deno.test('lapseChanges: one lapse notice per session, never a re-mint', () => {
   let notice: Change[] = [
     { eid: N, name: 'entity', comp: { eid: N, num: 9 } },
     { eid: N, name: 'doc', comp: { title: '', body } },
-    { eid: N, name: 'notice', comp: { target: T1, event: 'lapse' } },
+    { eid: N, name: 'signal', comp: { target: T1, event: 'lapse' } },
   ]
   let relapsed = rows({ changes: [...snap.changes, ...notice] })
   let again = lapseChanges(relapsed, relapsed.find((r) => r.eid == S)!)
-  assertEquals(again.filter((c) => c.name == 'notice'), [])
+  assertEquals(again.filter((c) => c.name == 'signal'), [])
   assertEquals(again.filter((c) => c.name == 'doc'), [])
   assertEquals(again, [{ eid: T1, name: 'claim', comp: null }])
 
@@ -1828,7 +1828,7 @@ Deno.test('lapseChanges: one lapse notice per session, never a re-mint', () => {
     ],
   })
   let dist = lapseChanges(two, two.find((r) => r.eid == other)!)
-  assertEquals(dist.filter((c) => c.name == 'notice').length, 1)
+  assertEquals(dist.filter((c) => c.name == 'signal').length, 1)
   assertEquals(
     dist.find((c) => c.name == 'doc')?.comp?.body,
     '⚑ lease lapsed: session S-42 ended before this was done',

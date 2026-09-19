@@ -192,7 +192,7 @@ let scene = (task: string): Change[] => {
   let c = uuid()
   return [
     { eid: c, name: 'doc', comp: { title: '', body } },
-    { eid: c, name: 'notice', comp: { target: task, event: 'scene' } },
+    { eid: c, name: 'signal', comp: { target: task, event: 'scene' } },
   ]
 }
 

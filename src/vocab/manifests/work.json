@@ -172,8 +172,8 @@
         "doc",
         "knock",
         "memory",
-        "notice",
-        "role"
+        "role",
+        "signal"
       ],
       "prefix": "T"
     },

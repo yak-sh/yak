@@ -1,11 +1,11 @@
 // The delivery door. Presence is process/lifecycle truth; delivery is a
 // separate transport decision. A reachable door can surface graph content
 // now. A queued door has a live session but must leave content pending for an
-// adapter (Codex's tmux notice is intentionally not content delivery).
+// adapter (Codex's tmux signal is intentionally not content delivery).
 //
 // `notified` remains human inbox read-state. Agent routes derive attention
 // from claims, context entries, and transcript references; neither a queued
-// route nor a successful wake-up notice may mint a human stamp.
+// route nor a successful wake-up signal may mint a human stamp.
 // SERVER-ONLY (imports db).
 import { db } from './live_db.ts'
 import { commOf } from './proc.ts'

@@ -1429,11 +1429,11 @@ let settleComments = (task: string, via: string) =>
        and b.via = (select id from entity where eid = ?)`,
   ).all(task, via) as { body: string }[]).map((c) => c.body)
 
-// A lease lapse is machinery, not speech (D-13858): it lands as a NOTICE on
+// A lease lapse is machinery, not speech (D-13858): it lands as a SIGNAL on
 // the task, not a comment — same target, same instrument, off the thread.
 let settleNotices = (task: string, via: string) =>
   (db.prepare(
-    `select d.body from notice n join doc_value d on d.entity = n.entity
+    `select d.body from signal n join doc_value d on d.entity = n.entity
      join created b on b.entity = n.entity
      where n.target = (select id from entity where eid = ?)
        and b.via = (select id from entity where eid = ?)`,
@@ -1599,7 +1599,7 @@ slow(
     recover(cast)
     await running.get(eid)!.done
     assertEquals(row(eid)?.status, 'failed')
-    // The dead session's lease is gone and the lapse is a NOTICE on the task's
+    // The dead session's lease is gone and the lapse is a SIGNAL on the task's
     // trail (D-13858) — the same words task wrap leaves for an interactive end.
     assertEquals(
       db.prepare(

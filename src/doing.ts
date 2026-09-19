@@ -65,7 +65,7 @@ import {
   watched,
 } from './sessions.ts'
 import { superviseServices, watchProcesses } from './processes.ts'
-import { nativeSweep, noticeAccepted } from './tmux.ts'
+import { nativeSweep, signalAccepted } from './tmux.ts'
 import { codexClock } from './codex_auth.ts'
 import { retryCredential } from './managed_codex.ts'
 import { registerSystem, systemSweep } from './system_jobs.ts'
@@ -233,7 +233,7 @@ export let wireDoing = (d: Doing) => {
       'forked it, so there is no exit code to report)',
   })
   on('session', {
-    changed: { turn: noticeAccepted(cast) },
+    changed: { turn: signalAccepted(cast) },
     doc: 'a busy native-TUI turn after a submitted wake-up records ' +
       'acceptance; graph message content remains pending until task_context ' +
       'surfaces it',
@@ -331,9 +331,9 @@ export let wireDoing = (d: Doing) => {
     doc: 'a comment about a persona-watched target marks it wanted — the ' +
       'dispatch sweep instantiates the persona (D-21239)',
   })
-  on('notice', {
+  on('signal', {
     created: ruled(cast),
-    doc: 'a notice about a persona-watched target marks it wanted (D-21239)',
+    doc: 'a signal about a persona-watched target marks it wanted (D-21239)',
   })
   on('knock', {
     created: ruled(cast),

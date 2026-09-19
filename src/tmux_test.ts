@@ -3,17 +3,17 @@ import { assertEquals } from '@std/assert'
 Deno.env.set('DB_PATH', ':memory:')
 let {
   capturePane,
-  CODEX_NOTICE,
+  CODEX_SIGNAL,
   emptyComposer,
-  noticeAccepted,
+  signalAccepted,
   notify,
   paneInfo,
-  sendNotice,
+  sendSignal,
 } = await import('./tmux.ts')
 let {
   beginNotice,
-  noticeOf,
-} = await import('./notice_attempt.ts')
+  signalOf,
+} = await import('./signal_attempt.ts')
 let { apply } = await import('./db.ts')
 let { db } = await import('./live_db.ts')
 type NativeSession = import('./tmux.ts').NativeSession
@@ -77,9 +77,9 @@ let base = (): NativeSession => ({
   pid: 321,
   pane: '%42',
   turn: 'idle',
-  notice_at: null,
-  notice_accepted_at: null,
-  notice_token: null,
+  signal_at: null,
+  signal_accepted_at: null,
+  signal_token: null,
 })
 
 let harness = (over: Partial<NotifyDeps> = {}) => {
@@ -108,7 +108,7 @@ let harness = (over: Partial<NotifyDeps> = {}) => {
   return { deps, failed, marked, sent }
 }
 
-Deno.test('notify sends only the constant notice after every guard passes', async () => {
+Deno.test('notify sends only the constant signal after every guard passes', async () => {
   let secret = 'sender said deploy with credential xyz'
   let h = harness({ pending: () => secret ? '2026-07-27T11:59:00Z' : null })
   assertEquals(await notify(base(), h.deps), 'sent')
@@ -116,8 +116,8 @@ Deno.test('notify sends only the constant notice after every guard passes', asyn
     'session-eid',
     'opaque-attempt',
   ]])
-  assertEquals(h.sent, [['%42', CODEX_NOTICE]])
-  assertEquals(CODEX_NOTICE.includes(secret), false)
+  assertEquals(h.sent, [['%42', CODEX_SIGNAL]])
+  assertEquals(CODEX_SIGNAL.includes(secret), false)
 })
 
 Deno.test('notify fails closed on identity, pane, turn, and composer ambiguity', async () => {
@@ -172,7 +172,7 @@ Deno.test('accepted wakes wait for a newer pending horizon', async () => {
     let session of ([
       {
         ...base(),
-        notice: {
+        signal: {
           state: 'pending',
           eid: 'pending',
           submitted: new Date(now - 1_000).toISOString(),
@@ -180,7 +180,7 @@ Deno.test('accepted wakes wait for a newer pending horizon', async () => {
       },
       {
         ...base(),
-        notice: {
+        signal: {
           state: 'accepted',
           eid: 'accepted',
           submitted: new Date(now - 60_000).toISOString(),
@@ -197,7 +197,7 @@ Deno.test('accepted wakes wait for a newer pending horizon', async () => {
   assertEquals(
     await notify({
       ...base(),
-      notice: {
+      signal: {
         state: 'pending',
         eid: 'swallowed',
         submitted: new Date(now - 6_000).toISOString(),
@@ -212,7 +212,7 @@ Deno.test('accepted wakes wait for a newer pending horizon', async () => {
   assertEquals(
     await notify({
       ...base(),
-      notice: {
+      signal: {
         state: 'accepted',
         eid: 'old-horizon',
         submitted: new Date(now - 60_000).toISOString(),
@@ -229,12 +229,12 @@ Deno.test('a failed tmux command records the attempt for retry', async () => {
   assertEquals(h.marked.length, 1)
   assertEquals(h.failed, [[
     'opaque-attempt',
-    'tmux did not accept the notice command',
+    'tmux did not accept the signal command',
   ]])
   assertEquals(h.sent, [])
 })
 
-Deno.test('notice attempts survive a fresh read with identity and both clocks', () => {
+Deno.test('signal attempts survive a fresh read with identity and both clocks', () => {
   let session = crypto.randomUUID()
   let token = crypto.randomUUID()
   apply(db, [{
@@ -245,17 +245,17 @@ Deno.test('notice attempts survive a fresh read with identity and both clocks', 
   let casted: import('./types.ts').Change[] = []
   beginNotice(session, token, (changes) => casted.push(...changes))
 
-  let submitted = noticeOf(session)
-  if (!submitted || !('eid' in submitted)) throw new Error('notice missing')
+  let submitted = signalOf(session)
+  if (!submitted || !('eid' in submitted)) throw new Error('signal missing')
   assertEquals(submitted.state, 'pending')
   assertEquals(submitted.eid, token)
   assertEquals(Number.isFinite(Date.parse(submitted.submitted)), true)
   assertEquals(
     db.prepare(
-      `select notice_at from session
+      `select signal_at from session
        where entity = (select id from entity where eid = ?)`,
     ).get(session),
-    { notice_at: null },
+    { signal_at: null },
   )
   assertEquals(
     db.prepare(
@@ -265,12 +265,12 @@ Deno.test('notice attempts survive a fresh read with identity and both clocks', 
     { to: session },
   )
 
-  noticeAccepted((changes) => casted.push(...changes))(session, {
+  signalAccepted((changes) => casted.push(...changes))(session, {
     turn: 'busy',
   })
-  let accepted = noticeOf(session)
-  if (!accepted || !('eid' in accepted)) throw new Error('notice missing')
-  if (accepted.state != 'accepted') throw new Error('notice not accepted')
+  let accepted = signalOf(session)
+  if (!accepted || !('eid' in accepted)) throw new Error('signal missing')
+  if (accepted.state != 'accepted') throw new Error('signal not accepted')
   assertEquals(accepted.eid, token)
   assertEquals(Number.isFinite(Date.parse(accepted.accepted)), true)
   assertEquals(
@@ -283,7 +283,7 @@ Deno.test('notice attempts survive a fresh read with identity and both clocks', 
   assertEquals(casted.some((c) => c.eid == token), true)
 })
 
-Deno.test('a pre-migration notice remains readable until the first entity attempt', () => {
+Deno.test('a pre-migration signal remains readable until the first entity attempt', () => {
   let session = crypto.randomUUID()
   let submitted = '2026-07-27T11:59:00Z'
   apply(db, [{
@@ -292,21 +292,21 @@ Deno.test('a pre-migration notice remains readable until the first entity attemp
     comp: { id: crypto.randomUUID(), pane: '%old' },
   }])
   db.prepare(`
-    update session set notice_at = ?, notice_token = ?
+    update session set signal_at = ?, signal_token = ?
     where entity = (select id from entity where eid = ?)
   `).run(submitted, 'old-token', session)
   let legacy = {
-    notice_at: submitted,
-    notice_accepted_at: null,
-    notice_token: 'old-token',
+    signal_at: submitted,
+    signal_accepted_at: null,
+    signal_token: 'old-token',
   }
-  assertEquals(noticeOf(session, legacy), {
+  assertEquals(signalOf(session, legacy), {
     state: 'legacy-pending',
     submitted,
   })
-  noticeAccepted(() => {})(session, { turn: 'busy' })
+  signalAccepted(() => {})(session, { turn: 'busy' })
   let accepted = db.prepare(`
-    select notice_accepted_at as at from session
+    select signal_accepted_at as at from session
     where entity = (select id from entity where eid = ?)
   `).get(session) as { at: string | null }
   assertEquals(Number.isFinite(Date.parse(accepted.at ?? '')), true)
@@ -330,14 +330,14 @@ Deno.test('tmux commands bind one pane and send literal text plus Enter', async 
     mode: false,
   })
   assertEquals(await capturePane('%42', run), EMPTY)
-  assertEquals(await sendNotice('%42', CODEX_NOTICE, run), true)
+  assertEquals(await sendSignal('%42', CODEX_SIGNAL, run), true)
   assertEquals(calls[2], [
     'send-keys',
     '-t',
     '%42',
     '-l',
     '--',
-    CODEX_NOTICE,
+    CODEX_SIGNAL,
     ';',
     'run-shell',
     'sleep 0.15',

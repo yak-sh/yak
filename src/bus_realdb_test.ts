@@ -135,7 +135,7 @@ slow(
     let got = await bus('sess-real', '/w')
     let line = got.lines.find((l) => l.includes('lease lapsed on T-4'))
     assertEquals(!!line, true)
-    assertEquals(line!.includes('notice'), true) // UNTRUSTED notice … : …
+    assertEquals(line!.includes('signal'), true) // UNTRUSTED notice … : …
 
     // The inbox carries it too — addressed like a comment on the claimed task.
     let box = await inboxRows('sess-real', '/w')
@@ -146,7 +146,7 @@ slow(
     // reads) never returns it: a notice is not a comment.
     let thread = await query([`.comment.target=${T}`])
     assertEquals(thread.some((r) => r.eid == N), false)
-    assertEquals(thread.some((r) => !!r.comps.notice), false)
+    assertEquals(thread.some((r) => !!r.comps.signal), false)
   },
 )
 

@@ -111,18 +111,18 @@ Deno.test('channelEvents: one-pass indexing feeds every branch', () => {
 // notice about the session entity or an unrelated entity reaches nobody here.
 Deno.test('channelEvents: notices serve beside comments', () => {
   let batch: Change[] = [
-    { eid: 'nz', name: 'notice', comp: { target: 'S', event: 'lapse' } },
+    { eid: 'nz', name: 'signal', comp: { target: 'S', event: 'lapse' } },
     { eid: 'nz', name: 'doc', comp: { title: '', body: 'lease lapsed' } },
     { eid: 'nz', name: 'created', comp: { by: 'U-1' } },
-    { eid: 'nt', name: 'notice', comp: { target: 'TASK', event: 'sweep' } },
+    { eid: 'nt', name: 'signal', comp: { target: 'TASK', event: 'sweep' } },
     { eid: 'nt', name: 'doc', comp: { title: '', body: 'sweep found it' } },
     { eid: 'nt', name: 'created', comp: { by: 'U-2' } },
     // about an entity this session does not claim — dropped
-    { eid: 'nx', name: 'notice', comp: { target: 'OTHER', event: 'scene' } },
+    { eid: 'nx', name: 'signal', comp: { target: 'OTHER', event: 'scene' } },
     { eid: 'nx', name: 'doc', comp: { title: '', body: 'not for me' } },
   ]
   let evs = channelEvents(batch, ctx)
-  assertEquals(evs.map((e) => e.meta.kind), ['notice'])
+  assertEquals(evs.map((e) => e.meta.kind), ['signal'])
   // on the claimed task: names the task, byline from created
   assertEquals(evs[0].content, 'sweep found it')
   assertEquals(evs[0].meta.on, 'T-9')

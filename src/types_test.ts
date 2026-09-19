@@ -61,7 +61,7 @@ Deno.test('death words: every reference declares, the sets hold', () => {
       // process that wrote it (T-35323)
       'content.source',
       // a notice dies with the entity it is about (D-13858)
-      'notice.target',
+      'signal.target',
       // both ends: a standing instruction is meaningless without the
       // actor who gave it or the thread it is about
       'subscription.actor',

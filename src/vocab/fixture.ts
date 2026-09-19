@@ -29,7 +29,7 @@ let plain = [
   'subModes',
   'verdicts',
   'grades',
-  'noticeKinds',
+  'signalKinds',
   'kindOrder',
   'edges',
   'governed',

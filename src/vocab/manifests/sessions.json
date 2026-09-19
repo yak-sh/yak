@@ -402,9 +402,9 @@
         }
       },
       "stamped": {
-        "notice_at": "time",
-        "notice_accepted_at": "time",
-        "notice_token": "text",
+        "signal_at": "time",
+        "signal_accepted_at": "time",
+        "signal_token": "text",
         "origin": {
           "enum": [
             "external",

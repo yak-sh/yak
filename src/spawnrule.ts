@@ -2,7 +2,7 @@
 // table, and the watcher's type picks the delivery mode. A HUMAN's watch is a
 // delivery subscription — inboxItem (client.ts) reads it at query time,
 // exactly as before. A PERSONA's watch is a spawn rule: an event about the
-// watched target (a comment, a notice, a knock, an arrived letter)
+// watched target (a comment, a signal, a knock, an arrived letter)
 // instantiates the persona as a run instead of notifying anyone.
 //
 // The match never spawns inline — it marks the target wanted: a `wants` edge,

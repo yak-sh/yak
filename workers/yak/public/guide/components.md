@@ -454,12 +454,12 @@ These are the names, all of them:
     error exception exit failed favorite feedback fetch filed finding fixer
     fold fork generation goal grant graph_query headers hook hostname image
     imported installed key knock layout lease mail member memory message meta
-    meter model nofix notice notified noverify opaque opened order output pane
-    patch person persona pin plan process product project prompt proposed
-    provider published quarantined reads reasoning recall recalled redaction
-    referenced references repo report requires response result resume retired
-    review role run runner runtime satisfies service session setting settled
-    shelf signin space spawn stderr stop stop_request subscription supersedes
+    meter model nofix notified noverify opaque opened order output pane patch
+    person persona pin plan process product project prompt proposed provider
+    published quarantined reads reasoning recall recalled redaction referenced
+    references repo report requires response result resume retired review role
+    run runner runtime satisfies service session setting settled shelf signal
+    signin space spawn stderr stop stop_request subscription supersedes
     supervises task task_context timeout tool updated usage venture verifier
     wake wants web worked worktree yield
 

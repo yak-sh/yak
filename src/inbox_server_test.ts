@@ -54,7 +54,7 @@ let Ct1 = uid(11) // a comment on a claimed task
 let Ct2 = uid(12) // a comment on the muted claimed task — mute wins
 let Cw = uid(13) // a comment on the watched task — watch pulls it in
 let Ca = uid(14) // an archived comment on the venture — never in the inbox
-let Nv = uid(20) // a notice about the venture — addressed like a comment
+let Nv = uid(20) // a signal about the venture — addressed like a comment
 let Ks = uid(21) // a knock aimed at the session
 let Min = uid(30) // an arrived letter to the venture (scope + to_addr arms)
 let Mout = uid(31) // an outbound letter (no message_id) — born read, never inbox
@@ -63,7 +63,7 @@ let Sm = uid(41) // the mute subscription
 
 // One graph exercising every arm of the union AND every override: direct
 // venture/claim/session address, watch (include though unaddressed), mute (drop
-// though addressed), an archived screen, a notice, a knock, arrived vs outbound
+// though addressed), an archived screen, a signal, a knock, arrived vs outbound
 // mail. Both readers (browsing actor V, working session S1) read off it.
 let world = () => {
   let db = bareDb()
@@ -123,7 +123,7 @@ let world = () => {
     }),
     ...ent(Nv, 20, {
       doc: { title: '', body: 'lease lapsed' },
-      notice: { target: V, event: 'lapse' },
+      signal: { target: V, event: 'lapse' },
       created: { at: '2026-01-03', by: V },
     }),
     ...ent(Ks, 21, {
@@ -175,7 +175,7 @@ Deno.test('server inbox == client predicate for a browsing actor', async () => {
   let who = readerAt(await actorRows(V, localQuery(db)), V)
   let got = await served(db, who)
   assertEquals(ids(got), ids(want))
-  // Not vacuous, and the overrides bite: venture comment/notice, arrived mail,
+  // Not vacuous, and the overrides bite: venture comment/signal, arrived mail,
   // and the watched-task comment are IN; the muted, archived, and outbound rows
   // are OUT.
   assertEquals(ids(got).includes(Cv), true)
@@ -276,7 +276,7 @@ slow(
       }),
       ...ent(RN, 104, {
         doc: { title: '', body: 'about the venture' },
-        notice: { target: RV, event: 'lapse' },
+        signal: { target: RV, event: 'lapse' },
         created: { at: '2026-02-02', by: RV },
       }),
     ])
@@ -287,8 +287,8 @@ slow(
     // The browser's corresponding subscription arm speaks the shared query
     // grammar and receives the same ordinary row shape as every graph read.
     let { query } = await import('./client.ts')
-    let got = ids(await query([`.notice.target=${RV}`, '.archived=']))
-    assertEquals(got.includes(RN), true) // the venture notice reached the loop
+    let got = ids(await query([`.signal.target=${RV}`, '.archived=']))
+    assertEquals(got.includes(RN), true) // the venture signal reached the loop
 
     // Text retrieval is the same /query row shape with a transient rank
     // component. No parallel search response contract survives the migration.

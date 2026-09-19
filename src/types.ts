@@ -51,7 +51,7 @@ export let subModes = ['watch', 'mute'] as const
 export let verdicts = ['approved', 'rejected', 'changes_requested'] as const
 export let grades = ['frontier', 'mid', 'small'] as const
 export let transports = ['process', 'http'] as const
-export let noticeKinds = ['lapse', 'sweep', 'scene', 'wake'] as const
+export let signalKinds = ['lapse', 'sweep', 'scene', 'wake'] as const
 export let effectStates = ['pending', 'leased', 'delivered', 'failed'] as const
 export let appAccess = ['public', 'open', 'private'] as const
 export let planTiers = ['free', 'plus'] as const
@@ -424,10 +424,6 @@ export let comps: Record<string, Record<string, PropType>> = {
     offered: 'bool',
   },
   nofix: {},
-  notice: {
-    target: { eid: 'entity', death: 'cascade' },
-    event: { enum: noticeKinds },
-  },
   notified: {},
   noverify: {},
   opaque: {
@@ -593,6 +589,10 @@ export let comps: Record<string, Record<string, PropType>> = {
   settled: {},
   shelf: {
     client: { eid: 'client', death: 'release' },
+  },
+  signal: {
+    target: { eid: 'entity', death: 'cascade' },
+    event: { enum: signalKinds },
   },
   signin: {},
   space: {
@@ -857,9 +857,9 @@ export let stamped: Record<string, Record<string, PropType>> = {
     serving_model: 'text',
   },
   session: {
-    notice_at: 'time',
-    notice_accepted_at: 'time',
-    notice_token: 'text',
+    signal_at: 'time',
+    signal_accepted_at: 'time',
+    signal_token: 'text',
     origin: { enum: ['external', 'managed'] },
     branch: 'text',
     base_revision: 'text',
@@ -962,10 +962,10 @@ export let kindOrder = [
   'task',
   'knock',
   'memory',
-  'notice',
   'role',
   'claim',
   'persona',
+  'signal',
   'wake',
   'web',
   'doc',
@@ -1590,9 +1590,9 @@ export type Session = {
   pid?: number | null // the provider process it runs in (hook-stamped)
   pane?: string | null // native terminal address, revalidated before use
   turn?: string | null // idle|busy, announced by provider lifecycle hooks
-  notice_at?: string | null // server-submitted native-TUI wake-up
-  notice_accepted_at?: string | null // later busy hook accepted it
-  notice_token?: string | null // opaque attempt id, never message content
+  signal_at?: string | null // server-submitted native-TUI wake-up
+  signal_accepted_at?: string | null // later busy hook accepted it
+  signal_token?: string | null // opaque attempt id, never message content
   transcript?: string | null // provider-owned JSONL — an external log
   agent_type?: string | null // set when launched `claude --agent <name>`
   source?: string | null // boot mode: startup|resume|clear|compact|fork
@@ -2000,11 +2000,12 @@ export type Commit = {
   message?: string
 }
 
-// A notice: a doc EMITTED about its target, not said (D-13858). Same aim
+// A signal: a doc EMITTED about its target, not said (D-13858). Same aim
 // column as comment, and `event` names what happened; the words ride the
 // doc. Delivered by the bus and inbox beside comments, but never a comment
-// — off the mail relay, out of the conversation thread.
-export type Notice = {
+// — off the mail relay, out of the conversation thread. The word is the
+// fleet's because @yaks/session spells a passive transcript line `notice`.
+export type Signal = {
   eid: string
   target: string
   event: string
@@ -2252,7 +2253,7 @@ export type EntCore = {
   redaction?: Redaction
   comment?: Comment
   commit?: Commit
-  notice?: Notice
+  signal?: Signal
   meta?: { eid: string }
   review?: Review
   alias?: Alias

@@ -585,10 +585,10 @@ let passRecord = (to: string, r: Pass, cast: Cast): string => {
       ? [{ eid: to, name: 'dream', comp: { floor: r.floor } } as Change]
       : []),
     { eid, name: 'doc', comp: { title: '', body } },
-    { eid, name: 'notice', comp: { target: to, event: 'sweep' } },
+    { eid, name: 'signal', comp: { target: to, event: 'sweep' } },
   ], cast)
   let row = db.prepare(
-    `select d.body from notice n
+    `select d.body from signal n
       join entity e on e.id = n.entity
       join doc_value d on d.entity = n.entity
      where e.eid = ? and n.target = ${idOf}`,

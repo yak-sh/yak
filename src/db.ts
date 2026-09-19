@@ -919,11 +919,11 @@ export let derived = [
   'resume',
   'chat',
   'dream',
-  // A notice (D-13858): {target FK cascade, kind text} — an entity-keyed spine,
-  // every column nullable, wholly PropType-expressible, so it derives.
-  'notice',
+  // A signal (D-13858): {target FK cascade, event word} — an entity-keyed
+  // spine, every column nullable, wholly PropType-expressible, so it derives.
+  'signal',
   // A commit (M-31946 §7): {target FK cascade, sha/repo/message text} — the
-  // notice shape with three nullable text columns, so it derives.
+  // signal shape with three nullable text columns, so it derives.
   'commit',
   // A tracked process (T-35323, @yaks/process): {pid number, command/cwd text}
   // — three nullable columns on an entity-keyed spine, so it derives.
@@ -1278,6 +1278,17 @@ export let hasTable = (db: Sql, table: string) =>
 export let renameTable = (db: Sql, from: string, to: string) => {
   if (!hasTable(db, from) || hasTable(db, to)) return
   db.exec(`alter table ${sqlName(from)} rename to ${sqlName(to)}`)
+}
+
+// The column twin: a renamed component takes its columns' names with it where
+// another component spelled them (session.signal_at → session.signal_at).
+export let renameCol = (db: Sql, table: string, from: string, to: string) => {
+  if (!hasCol(db, table, from) || hasCol(db, table, to)) return
+  db.exec(
+    `alter table ${sqlName(table)} rename column ${sqlName(from)} to ${
+      sqlName(to)
+    }`,
+  )
 }
 
 export let hasCol = (db: Sql, table: string, col: string) =>
@@ -1770,6 +1781,10 @@ export let migrate = <D extends Sql>(db: D): D => {
       // rename — the old spelling is gone from the code, so it survives only
       // here, as the guard that carries the rows across once.
       renameTable(db, 'error', 'failed')
+      renameTable(db, 'notice', 'signal')
+      renameCol(db, 'session', 'signal_at', 'signal_at')
+      renameCol(db, 'session', 'signal_accepted_at', 'signal_accepted_at')
+      renameCol(db, 'session', 'signal_token', 'signal_token')
       db.exec(schema)
       // The doc projection ordinary reads take: title and body, resolved
       // through the blob backend. It names its columns rather than starring
@@ -1852,9 +1867,9 @@ export let migrate = <D extends Sql>(db: D): D => {
       addCol('session', 'pid', 'pid integer')
       addCol('session', 'pane', 'pane text')
       addCol('session', 'turn', 'turn text')
-      addCol('session', 'notice_at', 'notice_at text')
-      addCol('session', 'notice_accepted_at', 'notice_accepted_at text')
-      addCol('session', 'notice_token', 'notice_token text')
+      addCol('session', 'signal_at', 'signal_at text')
+      addCol('session', 'signal_accepted_at', 'signal_accepted_at text')
+      addCol('session', 'signal_token', 'signal_token text')
       // A provider-owned transcript JSONL — an external session's log file.
       addCol('session', 'transcript', 'transcript text')
       // Self-reported at SessionStart (types.ts): what kind of session, how it booted.

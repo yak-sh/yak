@@ -630,7 +630,7 @@ let settled = (eid: string, status: string, cast: Cast) => {
     .filter((r) => !parkedWaiting(eid, r.eid))
   let heldEids = held.map((r) => r.eid)
   let lapses = heldEids.length
-    ? evalGraph(db, `.notice.event=lapse&.notice.target=${heldEids.join(',')}`)
+    ? evalGraph(db, `.signal.event=lapse&.signal.target=${heldEids.join(',')}`)
       .hits
     : []
   let spoke = evalGraph(db, `.created.via=${eid}&.comment.target!`).hits
@@ -3005,7 +3005,7 @@ export let reapLeases = (cast: Cast) => {
   let lapseNotes = claimed.length
     ? evalGraph(
       db,
-      `.notice.event=lapse&.notice.target=${
+      `.signal.event=lapse&.signal.target=${
         claimed.map((r) => r.eid).join(',')
       }`,
     ).hits

@@ -10,7 +10,7 @@
         "failed"
       ]
     },
-    "noticeKinds": {
+    "signalKinds": {
       "rank": 140,
       "values": [
         "lapse",
@@ -224,21 +224,6 @@
       }
     },
     "meta": {},
-    "notice": {
-      "kind": true,
-      "before": [
-        "doc"
-      ],
-      "cols": {
-        "target": {
-          "eid": "entity",
-          "death": "cascade"
-        },
-        "event": {
-          "enum": "noticeKinds"
-        }
-      }
-    },
     "notified": {
       "stamped": {
         "at": "time",
@@ -325,6 +310,21 @@
       "cols": {
         "key": "text",
         "value": "text"
+      }
+    },
+    "signal": {
+      "kind": true,
+      "before": [
+        "doc"
+      ],
+      "cols": {
+        "target": {
+          "eid": "entity",
+          "death": "cascade"
+        },
+        "event": {
+          "enum": "signalKinds"
+        }
       }
     },
     "supersedes": {},

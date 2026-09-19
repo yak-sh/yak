@@ -4,7 +4,7 @@
 import type { Reader } from './client.ts'
 
 const POLICY =
-  'comment.target,notice.target,knock.target,deliver.to,mail.target,mail.to_addr,mail.message_id,opened.at,archived.at'
+  'comment.target,signal.target,knock.target,deliver.to,mail.target,mail.to_addr,mail.message_id,opened.at,archived.at'
 
 let valuesOf = (values: (string | undefined)[]) =>
   [...new Set(values.filter((v): v is string => !!v))].sort()
@@ -30,7 +30,7 @@ export let inboxQueries = (who: Reader, unreadOnly = false): string[] => {
   }
   return [
     select('comment.target', targets),
-    select('notice.target', targets),
+    select('signal.target', targets),
     select('deliver.to', [who.actor], '&.knock!'),
     select('knock.target', watched, exclude('deliver.to', [who.actor])),
     select(
@@ -60,11 +60,11 @@ export let inboxCountQueries = (who: Reader): string[] => {
       ? `.${prop}=${JSON.stringify(got)}&.archived=&.opened=${extra}&.count!`
       : ''
   }
-  let mail = '&.comment=&.notice=&.knock=&.mail.message_id!='
+  let mail = '&.comment=&.signal=&.knock=&.mail.message_id!='
   return [
     select('comment.target', [who.actor]),
-    select('notice.target', [who.actor], '&.comment='),
-    select('deliver.to', [who.actor], '&.knock!&.comment=&.notice='),
+    select('signal.target', [who.actor], '&.comment='),
+    select('deliver.to', [who.actor], '&.knock!&.comment=&.signal='),
     select('mail.target', [who.scope], mail),
     select(
       'mail.to_addr',

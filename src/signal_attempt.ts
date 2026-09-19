@@ -1,6 +1,6 @@
 // The server-owned ledger for content-free session wake attempts. An attempt
-// is an ordinary notice deliverable: its eid is the opaque retry token,
-// created.at is submission, and delivered.at or error settles it. This module
+// is an ordinary signal deliverable: its eid is the opaque retry token,
+// created.at is submission, and delivered.at or failed settles it. This module
 // also carries the one-release read fallback for the retired Session triple.
 import { apply } from './db.ts'
 import { delivered, errored } from './deliver.ts'
@@ -10,7 +10,7 @@ import type { Change } from './types.ts'
 let RETRY_MS = 5_000
 type Cast = (changes: Change[]) => void
 
-export type NoticeAttempt =
+export type SignalAttempt =
   | {
     state: 'pending'
     eid: string
@@ -39,21 +39,21 @@ export type NoticeAttempt =
   }
 
 export type LegacyNotice = {
-  notice_at: string | null
-  notice_accepted_at: string | null
-  notice_token: string | null
+  signal_at: string | null
+  signal_accepted_at: string | null
+  signal_token: string | null
 }
 
 // The latest attempt is an indexed target lookup. History remains available,
 // but retry and acceptance only care about the newest token, exactly as the
 // overwritten Session triple did.
-export let noticeOf = (
+export let signalOf = (
   session: string,
   legacy?: LegacyNotice,
-): NoticeAttempt | undefined => {
+): SignalAttempt | undefined => {
   let row = db.prepare(`
     select o.eid, c.at as submitted, d.at as accepted, x.at as failed
-    from notice n
+    from signal n
     join entity o on o.id = n.entity
     join created c on c.entity = n.entity
     join deliver v on v.entity = n.entity
@@ -87,18 +87,18 @@ export let noticeOf = (
     }
     return { state: 'pending', eid: row.eid, submitted: row.submitted }
   }
-  if (!legacy?.notice_at) return
-  return legacy.notice_accepted_at
+  if (!legacy?.signal_at) return
+  return legacy.signal_accepted_at
     ? {
       state: 'legacy-accepted',
-      submitted: legacy.notice_at,
-      accepted: legacy.notice_accepted_at,
+      submitted: legacy.signal_at,
+      accepted: legacy.signal_accepted_at,
     }
-    : { state: 'legacy-pending', submitted: legacy.notice_at }
+    : { state: 'legacy-pending', submitted: legacy.signal_at }
 }
 
-export let noticeDue = (
-  attempt: NoticeAttempt | undefined,
+export let signalDue = (
+  attempt: SignalAttempt | undefined,
   now: number,
   pendingAt: string,
 ) => {
@@ -116,7 +116,7 @@ export let noticeDue = (
 export let beginNotice = (session: string, token: string, cast: Cast) => {
   let out = apply(db, [{
     eid: token,
-    name: 'notice',
+    name: 'signal',
     comp: { target: session, event: 'wake' },
   }, {
     eid: token,

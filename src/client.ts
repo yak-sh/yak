@@ -2736,8 +2736,8 @@ export let commentChanges = (
 // instead of `comment`. That one difference is the whole point: it is out of
 // the conversation thread and off the mail relay (fanout only ever looks at
 // comments), yet the bus and the inbox deliver it where a comment on the same
-// target would land. `event` is one of noticeKinds — what happened.
-export let noticeChanges = (
+// target would land. `event` is one of signalKinds — what happened.
+export let signalChanges = (
   all: Row[],
   target: string,
   event: string,
@@ -2753,7 +2753,7 @@ export let noticeChanges = (
   return [
     ...(s?.changes ?? []),
     { eid, name: 'doc', comp: { title: '', body } },
-    { eid, name: 'notice', comp: { target, event } },
+    { eid, name: 'signal', comp: { target, event } },
   ]
 }
 
@@ -2846,7 +2846,7 @@ export type Reader = {
 // watch/mute sets are asked about.
 export let aboutOf = (r: Row) =>
   String(
-    r.comps.comment?.target ?? r.comps.notice?.target ??
+    r.comps.comment?.target ?? r.comps.signal?.target ??
       r.comps.mail?.target ?? r.comps.knock?.target ?? '',
   )
 
@@ -2884,7 +2884,7 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
   // A notice reaches the same doors a comment does — claimed work, the
   // session itself, or the actor for an operator loop — but it was emitted,
   // not said (D-13858). Same addressing, different provenance.
-  let n = r.comps.notice
+  let n = r.comps.signal
   if (n) {
     let t = String(n.target ?? '')
     return t == who.session || !!who.claims?.has(t) ||
@@ -4262,7 +4262,7 @@ export let inboxFor = async (
     // A notice is addressed exactly like a comment (D-13858) — about the
     // session, a claimed task, or the operator's actor — so it rides the
     // same recipient list into the same inboxItem screen.
-    ask('notice.target', comments),
+    ask('signal.target', comments),
     // WHO a knock is for is the shared deliver.to now; wakes/outbound mail
     // it also returns are screened back out by inboxItem (no wake arm, and
     // the mail arm demands an inbound message_id).
@@ -4270,7 +4270,7 @@ export let inboxFor = async (
     ask('mail.target', boxes, directMail),
     ask('mail.to_addr', addrs, directMail),
     ask('comment.target', watched),
-    ask('notice.target', watched),
+    ask('signal.target', watched),
     ask('knock.target', watched),
     ask('mail.target', watched),
   ])
@@ -4540,7 +4540,7 @@ export let busRows = async (who: Reader, q: Querier = query) => {
     // A notice (D-13858) is addressed like a comment, so it rides the same
     // `held` list. Its own arm keeps busRows the SUPERSET of channelEvents'
     // branch.
-    q([`.notice.target=${held}`]),
+    q([`.signal.target=${held}`]),
     // WHO a knock is for is the shared deliver.to; the same facet a wake/mail
     // wears, so keep only the knock rows the bus renders.
     q([`.deliver.to=${mine.join(',')}`]),
@@ -4614,7 +4614,7 @@ export let releaseChange = (row: Row): Change => ({
 })
 
 // The one release truth: a session ended — every claim it holds drops,
-// and tasks it did NOT finish get a NOTICE saying so (the simple audit:
+// and tasks it did NOT finish get a SIGNAL saying so (the simple audit:
 // no timers, no heartbeats, just "ended before done" on the record).
 // A lease lapse is machinery, not speech (D-13858), so it is a notice, not
 // a comment: it reaches the inbox and the bus but stays out of the task's
@@ -4637,7 +4637,7 @@ export let lapseChanges = (all: Row[], sess: Row): Change[] => {
   let name = idOf(sess)
   let lapsed = (target: string, body: string) =>
     all.some((r) =>
-      r.comps.notice?.event == 'lapse' && r.comps.notice?.target == target &&
+      r.comps.signal?.event == 'lapse' && r.comps.signal?.target == target &&
       r.comps.doc?.body == body
     )
   return all.filter((r) => r.comps.claim?.session == sess.eid)
@@ -4646,7 +4646,7 @@ export let lapseChanges = (all: Row[], sess: Row): Change[] => {
       let mint = !settled(taskStatus(r)) && !lapsed(r.eid, body)
       return [
         // the session exists — skip the mint, keep doc + notice
-        ...(mint ? noticeChanges(all, r.eid, 'lapse', body, id).slice(-2) : []),
+        ...(mint ? signalChanges(all, r.eid, 'lapse', body, id).slice(-2) : []),
         releaseChange(r),
       ]
     })

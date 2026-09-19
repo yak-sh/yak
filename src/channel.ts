@@ -495,7 +495,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
     // comment: it carries its own words in a doc, never rode a conversation,
     // and fanout cannot see it. `kind` names what happened; the byline is the
     // emitter.
-    if (c.name == 'notice') {
+    if (c.name == 'signal') {
       let at = str(c.comp.target)
       if (!mine(at)) continue
       let took = ctx.claimedAt?.(at)
@@ -505,7 +505,7 @@ export let channelEvents = (changes: Change[], ctx: Ctx): Event[] => {
       if (told(c.eid)) continue
       let from = byline(created.get(c.eid), ctx.idOf)
       let meta: Record<string, string> = {
-        kind: 'notice',
+        kind: 'signal',
         from: cleanAttr(from),
         on: cleanAttr(ctx.idOf(at) ?? at),
       }

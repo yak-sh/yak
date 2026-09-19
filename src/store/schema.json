@@ -161,7 +161,7 @@
   },
   {
     "kind": "exec",
-    "sql": "create table if not exists \"notice\" (\n    entity integer primary key references entity(id),\n    \"target\" integer references entity(id),\n    \"event\" text\n  );"
+    "sql": "create table if not exists \"signal\" (\n    entity integer primary key references entity(id),\n    \"target\" integer references entity(id),\n    \"event\" text\n  );"
   },
   {
     "kind": "exec",
@@ -685,15 +685,15 @@
   },
   {
     "kind": "addColumn",
-    "table": "notice",
+    "table": "signal",
     "col": "target",
-    "sql": "alter table notice add column \"target\" integer references entity(id)"
+    "sql": "alter table signal add column \"target\" integer references entity(id)"
   },
   {
     "kind": "addColumn",
-    "table": "notice",
+    "table": "signal",
     "col": "event",
-    "sql": "alter table notice add column \"event\" text"
+    "sql": "alter table signal add column \"event\" text"
   },
   {
     "kind": "addColumn",
@@ -1208,20 +1208,20 @@
   {
     "kind": "addColumn",
     "table": "session",
-    "col": "notice_at",
-    "sql": "alter table \"session\" add column notice_at text"
+    "col": "signal_at",
+    "sql": "alter table \"session\" add column signal_at text"
   },
   {
     "kind": "addColumn",
     "table": "session",
-    "col": "notice_accepted_at",
-    "sql": "alter table \"session\" add column notice_accepted_at text"
+    "col": "signal_accepted_at",
+    "sql": "alter table \"session\" add column signal_accepted_at text"
   },
   {
     "kind": "addColumn",
     "table": "session",
-    "col": "notice_token",
-    "sql": "alter table \"session\" add column notice_token text"
+    "col": "signal_token",
+    "sql": "alter table \"session\" add column signal_token text"
   },
   {
     "kind": "addColumn",
@@ -1801,10 +1801,6 @@
   },
   {
     "kind": "exec",
-    "sql": "create index if not exists notice_target on \"notice\" (\"target\");"
-  },
-  {
-    "kind": "exec",
     "sql": "create index if not exists notified_by on \"notified\" (\"by\");"
   },
   {
@@ -1966,6 +1962,10 @@
   {
     "kind": "exec",
     "sql": "create unique index if not exists shelf_client on \"shelf\" (\"client\");"
+  },
+  {
+    "kind": "exec",
+    "sql": "create index if not exists signal_target on \"signal\" (\"target\");"
   },
   {
     "kind": "exec",
