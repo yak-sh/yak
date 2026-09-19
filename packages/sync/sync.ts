@@ -22,6 +22,7 @@ import type { Bundle, Eid, Graph, Plugin } from '@yaks/graph'
 import { dead, then } from '@yaks/graph'
 import { asking, clean, echoed } from './mark.ts'
 import { type Fetch, post, type Report } from './outbound.ts'
+import { relayed } from './tier.ts'
 import { land } from './inbound.ts'
 import {
   type Ask,
@@ -180,7 +181,13 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
       // The marks come off what the caller gets back — they were this
       // package's note to itself, not part of anybody's data.
       effect: (bundles) => {
-        if (bundles.length && !bundles.some(echoed)) send(bundles)
+        if (bundles.length && !bundles.some(echoed)) {
+          send(bundles)
+          // The relay half goes up the socket instead: the server holds it
+          // under this connection and clears it when the connection closes,
+          // so the connection has to be the one that wrote it.
+          w.relay(relayed(bundles, graph.vocab))
+        }
         return bundles.map(clean)
       },
     },

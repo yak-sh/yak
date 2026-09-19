@@ -8,17 +8,22 @@ import type { Bundle } from '@yaks/graph'
 import { box } from './harness.ts'
 import { backoff } from './socket.ts'
 import { asking, clean, echo, echoed } from './mark.ts'
-import { inverse, local, outward, syncOf } from './tier.ts'
+import { durableOf, inverse, local, outward, relayed, syncOf } from './tier.ts'
 
 // A bundle as the effect phase sees it: marked with what stood before it.
 let sent = (b: Bundle, was: Bundle | null = null) => asking(b, was)
 
-Deno.test('a component says which tier it persists to; wire is the default', () => {
-  assertEquals(syncOf(box, 'recipe'), 'server')
-  assertEquals(local(box, 'draft'), 'vault')
+Deno.test('a component says who hears it and how long it lives', () => {
+  assertEquals([syncOf(box, 'recipe'), durableOf(box, 'recipe')], [
+    'server',
+    'forever',
+  ])
+  assertEquals(local(box, 'draft'), 'vault') // sync: none, durable: forever
+  assertEquals(local(box, 'sieve'), 'memory') // sync: none, until disconnect
+  assertEquals(local(box, 'pointing'), null) // it leaves; not this node's
 })
 
-Deno.test('only wire-tier components are told to the server', () => {
+Deno.test('only server-tier components are told to the server', () => {
   let batch = [sent({
     entity: { eid: 'r1' },
     recipe: { serves: 4 },
@@ -98,4 +103,36 @@ Deno.test('the reconnect wait doubles, up to the ceiling', () => {
   assertEquals(backoff(250, 30_000), 500)
   assertEquals(backoff(20_000, 30_000), 30_000)
   assertEquals(backoff(30_000, 30_000), 30_000)
+})
+
+Deno.test('the relay half goes to the peers, and only it', () => {
+  let batch = [sent({
+    entity: { eid: 'r1' },
+    recipe: { serves: 4 },
+    draft: { text: 'half a lemon?' },
+    pointing: { x: 3, y: 9 },
+  })]
+  // The server is told the recipe and nothing else.
+  assertEquals(outward(batch, box), [
+    { entity: { eid: 'r1' }, recipe: { serves: 4 } },
+  ])
+  // The peers are told the finger and nothing else.
+  assertEquals(relayed(batch, box), [
+    { entity: { eid: 'r1' }, pointing: { x: 3, y: 9 } },
+  ])
+})
+
+Deno.test('a relay carries no precondition and no death: it guards nothing', () => {
+  let batch = [
+    sent({ entity: { eid: 'r1' }, pointing: { x: 1, y: 2 } }, {
+      entity: { eid: 'r1' },
+      pointing: { x: 0, y: 0 },
+    }),
+  ]
+  assertEquals(relayed(batch, box), [
+    { entity: { eid: 'r1' }, pointing: { x: 1, y: 2 } },
+  ])
+  // Clearing it is the component set to null, the same as anywhere else.
+  let off = [sent({ entity: { eid: 'r1' }, pointing: null })]
+  assertEquals(relayed(off, box), [{ entity: { eid: 'r1' }, pointing: null }])
 })

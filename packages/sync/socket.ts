@@ -67,6 +67,17 @@ export type Frame = {
   peerGone?: Eid[]
   /** entities that left the set — deleted, or no longer matching */
   gone?: Eid[]
+  /**
+   * `sync: peers` components the server is relaying: somebody's cursor, a
+   * caret, a presence dot. Never stored, on either end. A value cleared by its
+   * writer — or by that writer's connection closing — arrives as the component
+   * set to `null`.
+   *
+   * Not to be confused with `peers` above, which is this package's older word
+   * for a join's payload riders. The two are unrelated; this one is the
+   * `sync: peers` tier.
+   */
+  relay?: Bundle[]
   /** why the subscription was refused, when it was */
   refused?: { error: string; message: string; [k: string]: unknown }
   /** the first frame after a reopen: the set as it now stands, whole */
@@ -101,6 +112,15 @@ export type Wire = {
   subscribe: (query: Ask, id?: string) => string
   /** drop one subscription */
   unsubscribe: (id: string) => void
+  /**
+   * Hand a batch of `sync: peers` components to the server to RELAY. It is the
+   * one write that crosses this seam, and it crosses here because its lifetime
+   * is this socket's: the server holds it under this connection and clears it
+   * when the connection closes. A relay frame sent while the socket is down is
+   * DROPPED, never queued — ephemeral state has no backlog worth replaying,
+   * and the next write carries the current value.
+   */
+  relay: (bundles: Bundle[]) => void
   /** whether the socket is open right now */
   connected: () => boolean
   /** close the socket and stop reconnecting */
@@ -227,6 +247,9 @@ export let wire = (opts: WireOpts): Wire => {
       members.delete(id)
       resetting.delete(id)
       send({ unsubscribe: id })
+    },
+    relay: (bundles) => {
+      if (bundles.length) send({ relay: bundles })
     },
     connected: () => socket?.readyState == OPEN,
     close: () => {

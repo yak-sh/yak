@@ -57,24 +57,22 @@ let writable = (vocab: Vocab, name: string, patch: Comp): Comp => {
   )
 }
 
-/**
- * One committed batch, reduced to what the server should be told: the bundles
- * the caller asked for, carrying their outbound components and the columns a
- * client may write. A bundle left with nothing to say drops out, and a batch
- * that is entirely local returns empty — nothing is posted at all.
- *
- * A `$was` precondition rides along, so the guard the local graph just
- * enforced is enforced again against the server's copy; the identity is sent as
- * the `eid` alone, because `num` belongs to whoever is storing it.
- */
-export let outward = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
+// One committed batch, reduced to the components that sync one way: the
+// bundles the caller asked for, carrying the columns a client may write. A
+// bundle left with nothing to say drops out.
+let leaving = (
+  bundles: Bundle[],
+  vocab: Vocab,
+  sync: Sync,
+  marks: boolean,
+): Bundle[] =>
   bundles.flatMap((b) => {
     if (!asked(b)) return []
     let out: Bundle = { entity: { eid: b.entity.eid } }
-    if (b.$was) out.$was = b.$was
-    if (dead(b)) out.$delete = true
+    if (marks && b.$was) out.$was = b.$was
+    if (marks && dead(b)) out.$delete = true
     for (let [name, patch] of comps(b)) {
-      if (!outbound(vocab, name)) continue
+      if (syncOf(vocab, name) != sync) continue
       if (patch == null) {
         out[name] = null // dropping a component needs no columns
         continue
@@ -86,6 +84,33 @@ export let outward = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
     }
     return comps(out).length || out.$delete ? [out] : []
   })
+
+/**
+ * One committed batch, reduced to what the SERVER should be told — the
+ * `sync: server` components, the ones it owns and stores. A batch that is
+ * entirely local returns empty and nothing is posted at all.
+ *
+ * A `$was` precondition rides along, so the guard the local graph just
+ * enforced is enforced again against the server's copy; the identity is sent as
+ * the `eid` alone, because `num` belongs to whoever is storing it.
+ */
+export let outward = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
+  leaving(bundles, vocab, 'server', true)
+
+/**
+ * One committed batch, reduced to what the PEERS should be told — the
+ * `sync: peers` components, which the server hands on without keeping.
+ *
+ * These go up the SOCKET, not through `/apply`. Their lifetime is that
+ * socket's: `durable: disconnect` means the server clears them when it closes,
+ * so the connection the value arrived on has to be the one holding it. A
+ * second reason is traffic — a caret or a cursor moves faster than a POST
+ * should — and a third is that there is nothing to guard: a relay value has no
+ * stored `was` to check against, and no death to cascade, so neither mark is
+ * sent.
+ */
+export let relayed = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
+  leaving(bundles, vocab, 'peers', false)
 
 /**
  * The inverse of one committed batch: what to patch back when the server

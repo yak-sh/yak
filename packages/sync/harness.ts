@@ -63,6 +63,14 @@ let doc: VocabDoc = {
       durable: 'disconnect',
       properties: { text: { type: 'string' } },
     },
+    // Where this cook's finger is on the page: everyone else sees it, nobody
+    // stores it, and it goes with the tab.
+    pointing: {
+      type: 'object',
+      sync: 'peers',
+      durable: 'disconnect',
+      properties: { x: { type: 'number' }, y: { type: 'number' } },
+    },
     created: {
       type: 'object',
       properties: {
