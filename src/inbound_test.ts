@@ -571,6 +571,26 @@ Deno.test('inbound mail never delivers: arrival is a record, not an ask', async 
   Deno.env.delete('TASKS_MAIL_CMD')
 })
 
+// The window a mint opens: the wire batch (doc + mail) commits BEFORE the
+// arrival stamp lands, so created(mail) can reach a letter whose message_id
+// has not been written yet. The RECIPIENT is the race-free half of the same
+// question — an arrival never carries `deliver {to}` — and without it six
+// arrivals were stamped a delivery failure whose message was an empty id
+// refused as an ambiguous alias (T-37612).
+Deno.test('a mail with no recipient is not a send: a pre-stamp arrival stays clean', async () => {
+  let eid = uid()
+  applyNumbered(db, [
+    { eid, name: 'doc', comp: { title: 'feedback', body: 'five questions' } },
+    { eid, name: 'mail', comp: {} },
+  ])
+  await mailed(cast)(eid, {})
+  assertEquals(deliveredRow(eid), undefined)
+  assertEquals(
+    db.prepare(`select * from failed where ${OWNED}`).get(eid),
+    undefined,
+  )
+})
+
 // The isolation predicate, pure: live is the default graph and nothing
 // else, and the mail opt-in never crosses over to it — so persona-sync
 // and embed, gated on isLive, stay inert on any probe (T-14612).

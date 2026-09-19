@@ -174,6 +174,15 @@ export let mailed =
     // message_id mark (inbound.ts stamps it) is what keeps what arrived
     // from echoing back out. The boot sweep's predicate screens it too.
     if (row.message_id) return
+    // The same question, asked race-free: an ask to SEND carries a RECIPIENT,
+    // the shared `deliver {to}` facet written in the very batch that mints the
+    // mail comp. An arrival carries none — and its message_id is stamped just
+    // AFTER that batch commits (inbound.ts mint), so this effect can reach a
+    // letter whose inbound mark has not landed yet and mistake it for an
+    // outbound one. Six arrivals were stamped a delivery failure that way
+    // (T-37612). No recipient, nothing to send.
+    let recipient = toOf(eid)
+    if (!recipient) return
     if (flying.has(eid)) return // a concurrent fire is already delivering
     flying.add(eid)
     let doc = db.prepare(`select title, body from doc_value where ${OWNED}`)
@@ -185,7 +194,7 @@ export let mailed =
     // itself for the legacy rows migration carried over verbatim).
     let addr: string
     try {
-      addr = addressOf(toOf(eid))
+      addr = addressOf(recipient)
     } catch (e) {
       return settle(eid, {}, { error: (e as Error).message }, cast)
     }

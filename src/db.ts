@@ -1338,6 +1338,12 @@ export let resolveId = (
   db: Sql,
   id: string,
 ): string | undefined => {
+  // An empty reference names nothing, and must never reach the alias scan:
+  // that scan asks whether the space-padded `slugs` set CONTAINS ' '||id||' ',
+  // and for an empty id that is two spaces — which every alias row with no
+  // extra slugs contains. A missing id came back as "ambiguous alias" naming
+  // two unrelated projects (T-37612).
+  if (!id?.trim()) return undefined
   let numOf = (n: number) =>
     (prep(db, 'select eid from entity where num = ?').get(n) as
       | { eid: string }
@@ -1407,7 +1413,7 @@ export let resolveId = (
   if (aliases.length > 1) {
     throw new Error(
       `${id} is an ambiguous alias — matches ${
-        aliases.map((hit) => shortId(hit.eid)).join(', ')
+        aliases.map((hit) => `${human(db, hit.eid)} (${hit.eid})`).join(', ')
       }; use an eid`,
     )
   }

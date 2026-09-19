@@ -997,6 +997,34 @@ Deno.test('alias: every slug resolves, one primary, each globally unique', () =>
   assertEquals(resolveId(db, 'second'), b)
 })
 
+// The empty reference: a missing id is ABSENCE, not a name. It used to reach
+// the alias scan, whose whole-token membership test (' '||slugs||' ' contains
+// ' '||id||' ') matches every alias with no extra slugs when id is empty — so
+// a mail with no recipient was refused as "ambiguous alias" naming two
+// unrelated projects (T-37612), with an empty name in front of the message.
+Deno.test('an empty reference names nothing; an ambiguous alias names itself', () => {
+  let a = uid(), b = uid()
+  apply(db, [
+    { eid: a, name: 'doc', comp: { title: 'One' } },
+    { eid: a, name: 'alias', comp: { slug: 'one-box' } },
+    { eid: b, name: 'doc', comp: { title: 'Two' } },
+    { eid: b, name: 'alias', comp: { slug: 'two-box' } },
+  ])
+  for (let empty of ['', ' ', '\n']) {
+    assertEquals(resolveId(db, empty), undefined)
+  }
+  // A genuinely ambiguous alias still refuses — naming the alias asked for and
+  // each entity by the id every other door speaks.
+  db.prepare('update alias set slugs = ? where slug in (?, ?)')
+    .run('both-boxes', 'one-box', 'two-box')
+  assertThrows(
+    () => resolveId(db, 'both-boxes'),
+    Error,
+    'both-boxes is an ambiguous alias',
+  )
+  assertThrows(() => resolveId(db, 'both-boxes'), Error, human(db, a))
+})
+
 Deno.test('typed rejection rolls back; optional empty scalars clear', () => {
   let s = uid()
   apply(db, [{
