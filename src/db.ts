@@ -93,6 +93,16 @@ import { type Derived, raw, STOCK } from '@yaks/sql'
 import { blobRead } from '@yaks/blob'
 import { fleetVocab } from './vocab/fleet_vocab.ts'
 import { Stale as CoreStale } from '@yaks/graph'
+import {
+  type Batch as JournalBatch,
+  type Entry as JournalRecord,
+  type Hit as JournalHit,
+  type Normal,
+  normalDdl,
+  normalized,
+  type Patch as JournalPatch,
+  undone,
+} from '@yaks/journal'
 import { Bounced as LeaseBounced } from '@yaks/session'
 import {
   auditFleetBounce,
@@ -807,70 +817,14 @@ let schema = `
     unique (jrow, handler)
   );
   ${tombstoneDdl};
-  -- The journal (D-18860/D-18861) -- log data, not graph (like tool_call
-  -- below): the record OF the wire, never part of it, written inside apply()'s
-  -- transaction. Three append-only tables with no eid of their own, never in
-  -- snapshot() or a client cache, not vocabulary components (so no
-  -- codegen); read per-entity via journalOf(), per-batch via
-  -- journalSince(). The symmetry: telemetry records READS, the journal records
-  -- WRITES.
-  --
-  -- journal_tx: one row per applied batch, its provenance (ts, actor, via,
-  -- trace). Its id is the transaction's durable total-order identity --
-  -- monotonic, so ordering never rests on ts alone -- and the cursor every
-  -- delta client holds. actor and via are spine ids like every other
-  -- reference (the actor it resolved to; the session or client that wrote),
-  -- null when unowned.
-  create table if not exists journal_tx (
-    id    integer primary key,
-    ts    text not null,
-    actor integer references entity(id),
-    via   integer references entity(id),
-    trace text
-  );
-  -- journal_change: one ordered operation per Change in the batch. (tx, ordinal)
-  -- reproduces the exact applied order within a transaction. operation is
-  -- upsert (comp != null -- a present component, an empty one being an upsert
-  -- with no field rows) or remove (comp == null -- a component removal, or
-  -- entity death when component = 'entity'). component is the wire component
-  -- name, entity its spine id. A spine row outlives its entity (a death is
-  -- retained, D-18866), so every change names one.
-  create table if not exists journal_change (
-    id        integer primary key,
-    tx        integer not null references journal_tx(id),
-    ordinal   integer not null,
-    entity    integer not null references entity(id),
-    component text not null,
-    operation text not null
-  );
-  -- journal_field: ordered after-image rows, one per field an operation wrote.
-  -- present = 1 records a written value (JSON-encoded in value, so a present
-  -- null -- present=1, value='null' -- stays distinct from a tombstone);
-  -- present = 0 is a TOMBSTONE (value null), emitted for each then-present
-  -- field when its component is removed, so field history, predecessor lookup,
-  -- diffs and undo stay self-contained and no value leaks across a component
-  -- removal and later recreation (D-18861). An upsert with no fields (empty
-  -- component presence) writes none -- its journal_change alone marks it.
-  -- ordinal is the field's order within its change. A content-addressed
-  -- field (doc.body) carries no text: ref names the content's blob entity,
-  -- the one copy blob_text keeps, and value stays null -- history shares the
-  -- graph's bytes instead of repeating them. An eid field is never
-  -- journaled: it is the row's own identity, already the change's entity.
-  create table if not exists journal_field (
-    id       integer primary key,
-    change   integer not null references journal_change(id),
-    ordinal  integer not null,
-    field    text not null,
-    present  integer not null,
-    value    text,
-    ref      integer references entity(id)
-  );
-  -- Reconstruct a batch in order (by tx), per-entity history and predecessor
-  -- lookup (by entity+component), and the field rows of a change (by change).
-  create index if not exists journal_change_tx on journal_change(tx, ordinal);
-  create index if not exists journal_change_ent on journal_change(entity, component);
-  create index if not exists journal_field_change on journal_field(change, ordinal);
-  create index if not exists journal_field_ref on journal_field(ref) where ref is not null;
+  -- The journal, now @yaks/journal's normalized layout (packages/journal/
+  -- normalized.ts), which is where its prose lives. Log data, not graph (like
+  -- tool_call below): the record OF the wire, never part of it, written inside
+  -- apply()'s transaction. No eid of its own, never in snapshot() or a client
+  -- cache, not a vocabulary component (so no codegen). The tables and indexes
+  -- are unchanged, so this is not a migration -- the fleet simply stopped
+  -- keeping its own copy of them.
+${normalDdl()}
   -- The store's own key/value (@yaks/sqlite meta.ts), named by the package's
   -- own constant so the two can never drift apart. Not graph: no eid, no
   -- components, so snapshot() (which walks the comps vocabulary) never carries
@@ -1084,6 +1038,34 @@ export let textBlob = (db: Sql, value: string): number => {
   prep(db, 'insert or ignore into blob_text (entity, value) values (?, ?)')
     .run(id, value)
   return id
+}
+
+// The journal, bound once per connection: @yaks/journal's normalized layout
+// over this store's spine, told the one thing it cannot know — which column is
+// content-addressed here. doc.body is the only one, so history refs the blob
+// the graph already keeps instead of repeating every revision of every
+// document. Every journal read and write in the fleet goes through this handle;
+// no fleet file issues journal SQL of its own.
+let journals = new WeakMap<Sql, Normal>()
+let jrnOf = (db: Sql): Normal => {
+  let held = journals.get(db)
+  if (!held) {
+    journals.set(
+      db,
+      held = normalized({
+        rows: (sql, params) =>
+          prep(db, sql).all(...params as never[]) as Record<string, unknown>[],
+        cas: {
+          at: (comp, column) => comp == 'doc' && column == 'body',
+          put: (text) => textBlob(db, text),
+          table: 'blob_text',
+          key: 'entity',
+          value: 'value',
+        },
+      }),
+    )
+  }
+  return held
 }
 
 // Mint a bare entity; components hang off the returned eid.
@@ -4296,15 +4278,17 @@ let casBlobs = (logged: Change[]): string[] =>
       : []
   )
 
-// The journal write (D-18860/D-18861): journal_tx keeps the batch's provenance
-// and mints the transaction id -- an integer primary key, so the next rowid,
-// which is the log's monotonic total order and the cursor delta clients hold;
-// journal_change one ordered operation per Change; journal_field the ordered
-// after-image, present rows for an upsert and tombstones for a removal. Derived
-// wholly from `logged` plus the append-only field log itself, so it touches
-// nothing in the change loop. Called inside the caller's transaction; the
-// A failure propagates through apply()'s transaction, rolling graph and
-// journal back together. Returns the transaction id.
+// The journal write: one batch down into @yaks/journal's normalized tables,
+// answering its seq -- the log's monotonic total order and the cursor every
+// delta client holds. Derived wholly from `logged`, so it touches nothing in
+// the change loop. Called inside the caller's transaction: a failure
+// propagates through apply()'s, rolling graph and journal back together.
+//
+// The fleet's own words to the package: an eid is the wire's spelling and the
+// tables store spine ids, which the package's own spine fragment resolves; a
+// change carrying `eid` inside its comp is a server-synthesized convenience,
+// and the row's identity is already the change's entity, so the package drops
+// it.
 let journalWrite = (
   db: Sql,
   ts: string,
@@ -4312,67 +4296,11 @@ let journalWrite = (
   via: string | null,
   trace: string | null,
   logged: Change[],
-): number => {
-  // Provenance and every change name spine ids, resolved here from the eids
-  // the wire speaks: a death retains its spine row (D-18866), so each logged
-  // eid resolves, and an actor or via resolves or is null (unowned).
-  let tx = Number(
-    prep(
-      db,
-      `insert into journal_tx (ts, actor, via, trace)
-       values (?, ${spineId}, ${spineId}, ?)`,
-    ).run(ts, actor, via, trace).lastInsertRowid,
+): number =>
+  jrnOf(db).write(
+    { at: ts, by: actor, via, note: trace },
+    logged.map((c) => ({ target: c.eid, comp: c.name, value: c.comp ?? null })),
   )
-  let insChange = prep(
-    db,
-    `insert into journal_change (tx, ordinal, entity, component, operation)
-     values (?, ?, ${spineId}, ?, ?)`,
-  )
-  let insField = prep(
-    db,
-    `insert into journal_field (change, ordinal, field, present, value, ref)
-     values (?, ?, ?, ?, ?, ?)`,
-  )
-  // The fields (eid, component) still shows as present: newest after-image wins
-  // — journal_field.id is monotonic, so the max-id row per field is the latest
-  // in total order (and reads THIS batch's earlier upserts, uncommitted but
-  // visible on the same connection).
-  let present = prep(
-    db,
-    `select field from (
-       select jf.field as field, jf.present as present,
-              row_number() over (partition by jf.field order by jf.id desc) as rn
-       from journal_field jf join journal_change jc on jc.id = jf.change
-       where jc.entity = ${spineId} and jc.component = ?
-     ) where rn = 1 and present = 1`,
-  )
-  logged.forEach(({ eid, name, comp }, ordinal) => {
-    let change = Number(
-      insChange.run(tx, ordinal, eid, name, comp == null ? 'remove' : 'upsert')
-        .lastInsertRowid,
-    )
-    if (comp == null) {
-      // A component removal tombstones every field it still had, so field
-      // history stays self-contained across a removal and a later recreation.
-      ;(present.all(eid, name) as { field: string }[]).forEach(({ field }, i) =>
-        insField.run(change, i, field, 0, null, null)
-      )
-    } else {
-      // An upsert records one present after-image per field, JSON-encoded so a
-      // present null (present=1, value='null') stays distinct from a tombstone.
-      // An empty component writes none — its journal_change alone marks presence.
-      // A content-addressed text lands as a ref to its blob (the bytes the
-      // graph already holds); an `eid` field is the change's entity, not a
-      // field, and is not recorded.
-      journalFields(comp).forEach(([field, v], i) =>
-        casField(name, field, v)
-          ? insField.run(change, i, field, 1, null, textBlob(db, v))
-          : insField.run(change, i, field, 1, JSON.stringify(v), null)
-      )
-    }
-  })
-  return tx
-}
 
 // The journal door for a server STAMP — a write the wire may not carry
 // (frozen_at and kin), made by direct SQL beside this call. delta()
@@ -4440,11 +4368,11 @@ export type RedactionResult = {
   firstSeen?: string
 }
 
-// Every present after-image in the journal that carries the value, with the
-// transaction it rode: journal_field is the one historical copy. The
-// JSON-escaped spelling narrows the scan; the decoded compare is the authority,
-// and only content columns count (scrubbable) -- a structural string that
-// happens to contain the value is not forgotten, it is replay.
+// Every recorded value that carries the literal, with the batch it rode:
+// @yaks/journal's seek over the log, which is the one historical copy. Only
+// CONTENT columns count (scrubbable) -- a structural string that happens to
+// contain the value is not forgotten, it is replay -- and whether a column is
+// content is fleet policy, so the screening happens here and not in the log.
 type RedactionHit = {
   id: number
   eid: string | null
@@ -4457,32 +4385,22 @@ type RedactionHit = {
   // its own — scrubbed by repointing, never by rewriting shared bytes.
   blob: string | null
 }
-let redactionHits = (db: Sql, value: string): RedactionHit[] => {
-  let encoded = JSON.stringify(value).slice(1, -1)
-  let rows = prep(
-    db,
-    `select jf.id as id, jf.value as value, bt.value as text, jf.field as field,
-            ${refEid('jc.entity')} as eid, jc.component as component,
-            ${refEid('jf.ref')} as blob, jt.id as tx, jt.ts as ts
-       from journal_field jf
-       join journal_change jc on jc.id = jf.change
-       join journal_tx jt on jt.id = jc.tx
-       left join blob_text bt on bt.entity = jf.ref
-      where jf.present = 1
-        and (instr(jf.value, ?) > 0 or instr(bt.value, ?) > 0)
-      order by jf.id`,
-  ).all(encoded, value) as (Omit<RedactionHit, 'decoded'> & {
-    value: string | null
-    text: string | null
-  })[]
-  return rows.flatMap(({ value: raw, text, ...f }) => {
-    if (!scrubbable(f.component, f.field)) return []
-    let decoded = text ?? JSON.parse(raw ?? 'null')
-    return typeof decoded == 'string' && decoded.includes(value)
-      ? [{ ...f, decoded }]
+let redactionHits = (db: Sql, value: string): RedactionHit[] =>
+  jrnOf(db).seek(value).flatMap((h: JournalHit) =>
+    scrubbable(h.comp, h.column) && typeof h.value == 'string' &&
+      h.value.includes(value)
+      ? [{
+        id: h.field,
+        eid: h.target,
+        component: h.comp,
+        field: h.column,
+        tx: h.seq,
+        ts: h.at,
+        decoded: h.value,
+        blob: h.content,
+      }]
       : []
-  })
-}
+  )
 
 // Garbage-collect unreferenced content-addressed text (D-18862/D-18864). A
 // blob's in-db text backend (blob_text) holds the canonical bytes doc.body and
@@ -4525,12 +4443,20 @@ export let collectBlobText = (
       where not exists (select 1 from doc where body = bt.entity)
         and not exists (select 1 from attachment where blob = bt.entity)
         and not exists (select 1 from image where entity = bt.entity)
-        and not exists (select 1 from journal_field where ref = bt.entity)
         ${scope}`,
   ).all(...(only ?? [])) as { eid: string; id: number }[]
+  // Whether the log still reads its text through this row is the journal's
+  // own question, asked per candidate rather than as a correlated subquery:
+  // the candidates are the strandings of one act, never the whole backend.
+  let j = jrnOf(db)
   let del = prep(db, 'delete from blob_text where entity = ?')
-  for (let o of orphans) del.run(o.id)
-  return orphans.map((o) => o.eid)
+  let freed: string[] = []
+  for (let o of orphans) {
+    if (j.holds(o.id)) continue
+    del.run(o.id)
+    freed.push(o.eid)
+  }
+  return freed
 }
 
 // Forget one doc value everywhere the graph's write record carried it. This is
@@ -4610,8 +4536,7 @@ export let redact = (
     // rewritten, so the tx/change chain stays navigable and reads [redacted].
     // A ref'd field is repointed at the clean content instead, and the blobs
     // it left are collected below once nothing else holds them.
-    let scrubField = prep(db, 'update journal_field set value = ? where id = ?')
-    let scrubRef = prep(db, 'update journal_field set ref = ? where id = ?')
+    let j = jrnOf(db)
     let txs = new Set<number>()
     let stranded = new Set<string>()
     // Every blob this act lands or collects: content-addressed rows written
@@ -4622,10 +4547,10 @@ export let redact = (
     for (let h of hits) {
       let clean = h.decoded.replaceAll(value, REDACTED)
       if (h.blob) {
-        scrubRef.run(textBlob(db, clean), h.id)
+        j.scrubRef(h.id, textBlob(db, clean))
         blobs.add(sha(clean))
         stranded.add(h.blob)
-      } else scrubField.run(JSON.stringify(clean), h.id)
+      } else j.scrubValue(h.id, JSON.stringify(clean))
       replacements += h.decoded.split(value).length - 1
       txs.add(h.tx)
       firstSeen ??= h.ts
@@ -4750,109 +4675,50 @@ export let redact = (
     }
   }, true)
 
-// A single entity's history, newest first: the transactions that touched the
-// entity, each cut down to its changes -- a journal_change (entity, component)
-// index seek, then the batch rebuilt from its field rows.
+// A single entity's history, newest first: the batches that touched it, each
+// cut down to its own changes. The reading is @yaks/journal's, projected back
+// to the fleet's flat wire spelling — one recorded operation is one Change.
 export type JournalEntry = {
-  // The journal rowid — the batch's id, the handle `task undo` reverses. Blessed
-  // rather than added as a column: the rowid is already stable within an epoch,
-  // and a db restore mints a fresh epoch precisely to retire stale cursors.
+  // The batch's seq — the handle `task undo` reverses. The log's own integer
+  // id, stable within an epoch, and a db restore mints a fresh epoch precisely
+  // to retire stale cursors.
   id: number
   ts: string
   actor: string | null
   via: string | null
   changes: Change[]
 }
-// The read side of the journal (D-18860/D-18861): the Change[] a batch
-// applied, reconstructed from journal_change + journal_field — the record
-// every history/replay/undo reader reads. An operation is `remove`
-// (comp: null — a component removal, or entity death when component='entity')
-// or `upsert` (comp rebuilt from its present after-image field rows, each
-// JSON-decoded, in field order; an empty component has no field rows and
-// rebuilds as {}). The one thing the JSON batch carried that this does NOT is
-// `was` — apply()'s per-column CAS
+
+// One recorded operation lowered to the fleet's wire shape. The one thing the
+// JSON batch carried that this does NOT is `was` — apply()'s per-column CAS
 // guard, a write-time precondition and never history (D-18861: canonical rows
 // do not duplicate before-values). No reader reads `was` back (historyLine
 // shows comp keys, delta column-merges, inverseBatch recomputes its own via
-// wasOf), so its absence is behavior-neutral. Every reader below joins the
-// spine to speak the eid the wire speaks; a change that names no entity (a
-// purged spine, see the schema) has none and so is not read.
-type ChangeRow = {
-  id: number
-  eid: string
-  component: string
-  operation: string
-}
-let changeRows = `select jc.id as id, e.eid as eid, jc.component as component,
-          jc.operation as operation
-   from journal_change jc join entity e on e.id = jc.entity`
-let rebuildChanges = (db: Sql, rows: ChangeRow[]): Change[] => {
-  // A ref'd field reads its text back through the content it names.
-  let fieldsOf = prep(
-    db,
-    `select jf.field as field, jf.value as value, bt.value as text
-     from journal_field jf left join blob_text bt on bt.entity = jf.ref
-     where jf.change = ? and jf.present = 1 order by jf.ordinal`,
-  )
-  return rows.map((ch) => {
-    if (ch.operation == 'remove') {
-      return { eid: ch.eid, name: ch.component, comp: null }
-    }
-    let comp: Record<string, unknown> = {}
-    for (
-      let f of fieldsOf.all(ch.id) as {
-        field: string
-        value: string | null
-        text: string | null
-      }[]
-    ) comp[f.field] = f.text ?? JSON.parse(f.value ?? 'null')
-    return { eid: ch.eid, name: ch.component, comp }
-  })
-}
+// wasOf), so its absence is behavior-neutral.
+let asChange = (p: JournalPatch): Change => ({
+  eid: p.target,
+  name: p.comp,
+  comp: p.value as Change['comp'],
+})
+
+let asEntry = (r: JournalRecord): JournalEntry => ({
+  id: r.seq,
+  ts: r.at,
+  actor: r.by,
+  via: r.via,
+  changes: r.patches.map(asChange),
+})
 
 // One journaled batch reconstructed whole (all eids) or, with `eid`, screened
-// to that entity's own changes — both in applied order (journal_change.ordinal).
-let normalizedBatch = (
-  db: Sql,
-  tx: number,
-  eid?: string,
-): Change[] =>
-  rebuildChanges(
-    db,
-    (eid == null
-      ? prep(db, `${changeRows} where jc.tx = ? order by jc.ordinal`).all(tx)
-      : prep(
-        db,
-        `${changeRows} where jc.tx = ? and e.eid = ? order by jc.ordinal`,
-      ).all(tx, eid)) as ChangeRow[],
-  )
+// to that entity's own changes — both in applied order.
+let normalizedBatch = (db: Sql, tx: number, eid?: string): Change[] =>
+  jrnOf(db).patches(tx, eid).map(asChange)
 
 export let journalOf = (
   db: Sql,
   eid: string,
   limit = 50,
-): JournalEntry[] =>
-  (prep(
-    db,
-    `select jc.tx as tx, jt.ts as ts, ${refEid('jt.actor')} as actor,
-            ${refEid('jt.via')} as via
-     from journal_change jc join journal_tx jt on jt.id = jc.tx
-     where jc.entity = ${spineId}
-     group by jc.tx
-     order by jc.tx desc limit ?`,
-  ).all(eid, limit) as {
-    tx: number
-    ts: string
-    actor: string | null
-    via: string | null
-  }[])
-    .map((r) => ({
-      id: r.tx,
-      ts: r.ts,
-      actor: r.actor,
-      via: r.via,
-      changes: normalizedBatch(db, r.tx, eid),
-    }))
+): JournalEntry[] => jrnOf(db).entries(eid, limit).map(asEntry)
 
 // The same record cut by instrument instead of what: every batch a session
 // or client wrote, whole (no per-eid filtering — a wrap ledger wants the
@@ -4861,62 +4727,7 @@ export let journalBy = (
   db: Sql,
   via: string,
   limit = 500,
-): JournalEntry[] =>
-  (prep(
-    db,
-    `select id, ts, ${refEid('actor')} as actor, ${refEid('via')} as via
-     from journal_tx
-     where via = ${spineId} order by id desc limit ?`,
-  ).all(via, limit) as {
-    id: number
-    ts: string
-    actor: string | null
-    via: string | null
-  }[])
-    .map((r) => ({
-      id: r.id,
-      ts: r.ts,
-      actor: r.actor,
-      via: r.via,
-      changes: normalizedBatch(db, r.id),
-    }))
-
-// One entity's component state as of just BEFORE journal rowid `before`, rebuilt
-// by column-merging that entity's own journal slice (rowid < before, oldest
-// first) — per-entity and bounded, never a whole-log scan. A present component
-// key exists; its value is the merged columns. undo restores from this: the
-// value to put back is the value a batch found when it wrote.
-let stateBefore = (
-  db: Sql,
-  eid: string,
-  before: number,
-): Record<string, Record<string, unknown>> => {
-  // This entity's own changes across every batch below `before`, oldest first
-  // (journal_change (entity, component) index, then applied order) — per-entity
-  // and bounded, never a whole-log scan. Reconstructed from the normalized
-  // rows, so the corrupt-gap batch (no journal_change) is skipped like every
-  // other reader.
-  let changes = rebuildChanges(
-    db,
-    prep(
-      db,
-      `${changeRows} where jc.entity = ${spineId} and jc.tx < ?
-       order by jc.tx, jc.ordinal`,
-    ).all(eid, before) as ChangeRow[],
-  )
-  let state: Record<string, Record<string, unknown>> = {}
-  for (let c of changes) {
-    // A death mid-window can't precede a valid target (a tombstone voids
-    // later writes), but resetting keeps the reconstruction honest if seen.
-    if (c.name == 'entity') {
-      if (!c.comp) state = {}
-      continue
-    }
-    if (c.comp == null) delete state[c.name]
-    else state[c.name] = { ...(state[c.name] ?? {}), ...c.comp }
-  }
-  return state
-}
+): JournalEntry[] => jrnOf(db).by(via, limit).map(asEntry)
 
 // The guard tokens for the columns a change wrote: sha of each value AS READ
 // BACK, null for a column it cleared. A bool reads back true/false whatever
@@ -4978,14 +4789,15 @@ export let inverseBatch = (db: Sql, id: number): Change[] => {
     )
       .map((c) => c.eid),
   )
-  let touchedSince = prep(
-    db,
-    `select 1 from journal_change where entity = ${spineId} and tx > ? limit 1`,
-  )
+  // The state each entity was in just before this batch, and whether anything
+  // has touched it since: both are @yaks/journal's own questions over the
+  // normalized log, bounded to one entity and never a scan.
+  let j = jrnOf(db)
+  let touchedSince = (eid: string) => j.touchedSince(eid, id)
   let priors = new Map<string, Record<string, Record<string, unknown>>>()
-  let priorOf = (eid: string) => {
+  let priorOf = (eid: string): Record<string, Record<string, unknown>> => {
     let p = priors.get(eid)
-    if (!p) priors.set(eid, p = stateBefore(db, eid, id))
+    if (!p) priors.set(eid, p = j.before(eid, id))
     return p
   }
 
@@ -4994,7 +4806,7 @@ export let inverseBatch = (db: Sql, id: number): Change[] => {
   // that fires before the restore would clear the very column the restore
   // guards, refusing the whole undo.
   let deaths = [...born].map((eid) => {
-    if (touchedSince.get(eid, id)) {
+    if (touchedSince(eid)) {
       throw new Error(
         `${human(db, eid)} was modified after #${id} — undo refused`,
       )
@@ -5020,7 +4832,7 @@ export let inverseBatch = (db: Sql, id: number): Change[] => {
       c.comp && Object.keys(c.comp).every((k) => k == 'eid') &&
       c.name == 'task' && !priorOf(c.eid)[c.name]
     ) {
-      if (touchedSince.get(c.eid, id)) {
+      if (touchedSince(c.eid)) {
         throw new Error(
           `${human(db, c.eid)} was modified after #${id} — undo refused`,
         )
@@ -5260,41 +5072,41 @@ export let mutate = <T extends Mutation>(
 
 // The rowid of the latest batch that touched an entity — what `task undo <e>`
 // reverses. 0 when the entity has no history.
-export let lastBatch = (db: Sql, eid: string): number =>
-  Number(
-    (prep(
-      db,
-      `select max(tx) as id from journal_change where entity = ${spineId}`,
-    ).get(eid) as { id: number | null } | undefined)?.id ?? 0,
-  )
+export let lastBatch = (db: Sql, eid: string): number => jrnOf(db).latest(eid)
 
-// History is paid for only by the explicit local backfill operation. The result is
-// ordinary graph changes, so the caller can land and broadcast them through
-// apply() rather than growing a second persistence path.
-export let historicalWorked = (db: Sql): Change[] =>
-  (prep(
+// History is paid for only by the explicit local backfill operation. The result
+// is ordinary graph changes, so the caller can land and broadcast them through
+// apply() rather than growing a second persistence path. Every claim the log
+// ever recorded is @yaks/journal's `wrote`; which of those pairs is still a
+// live session working a live task, and which sentence is already said, is the
+// fleet's own question over the fleet's own tables.
+export let historicalWorked = (db: Sql): Change[] => {
+  let isSession = prep(
     db,
-    `
-    select distinct
-      json_extract(sess.value, '$') as parent,
-      te.eid as child
-    from journal_change jc
-    join journal_field sess
-      on sess.change = jc.id and sess.field = 'session' and sess.present = 1
-    join entity se on se.eid = json_extract(sess.value, '$')
-    join session s on s.entity = se.id
-    join entity te on te.id = jc.entity
-    join task t on t.entity = te.id
-    left join (${sentences('worked')}) d
-      on d.parent = se.id
-     and d.child = te.id
-    where jc.component = 'claim'
-      and jc.operation = 'upsert'
-      and d.parent is null
-    order by parent, child
-  `,
-  ).all() as { parent: string; child: string }[])
-    .flatMap((r) => link(r.parent, 'worked', r.child))
+    `select 1 from session s join entity e on e.id = s.entity where e.eid = ?`,
+  )
+  let isTask = prep(
+    db,
+    `select 1 from task t join entity e on e.id = t.entity where e.eid = ?`,
+  )
+  // The sentence already stands when its edge row does — not merely when the
+  // spine survives it, which a graph predating the edge can leave behind.
+  let said = prep(
+    db,
+    `select 1 from edge e join entity x on x.id = e.entity where x.eid = ?`,
+  )
+  let pairs = new Set<string>()
+  for (let w of jrnOf(db).wrote('claim', 'session')) {
+    if (typeof w.value == 'string') pairs.add(`${w.value} ${w.target}`)
+  }
+  return [...pairs].sort().flatMap((pair) => {
+    let [parent, child] = pair.split(' ')
+    return isSession.get(parent) && isTask.get(child) &&
+        !said.get(edgeEid(parent, 'worked', child))
+      ? link(parent, 'worked', child)
+      : []
+  })
+}
 
 // Session entries are a lazy graph partition: root clients never receive
 // their eids or any facets/provenance hung from them. A Session subscription
@@ -5338,32 +5150,24 @@ export type JournalRow = {
   trace: Trace | null
 }
 
+// The feed: every batch past a cursor, oldest first, read through
+// @yaks/journal. The writer's Trace rides back in the batch's note, revived
+// here — null when the writer asked for no effects.
 export let journalSince = (db: Sql, since: number): JournalRow[] =>
-  (prep(
-    db,
-    `select id, ts, ${refEid('actor')} as actor, ${refEid('via')} as via, trace
-     from journal_tx
-     where id > ? order by id`,
-  ).all(since) as {
-    id: number
-    ts: string
-    actor: string | null
-    via: string | null
-    trace: string | null
-  }[]).map((r) => {
-    let t = r.trace
-      ? JSON.parse(r.trace) as {
+  jrnOf(db).since(since).map((r) => {
+    let t = r.note
+      ? JSON.parse(r.note) as {
         created?: string[]
         removed?: [string, string[]][]
         numbered?: string[]
       }
       : null
     return {
-      rowid: Number(r.id),
-      ts: r.ts,
-      actor: r.actor,
+      rowid: r.seq,
+      ts: r.at,
+      actor: r.by,
       via: r.via,
-      batch: normalizedBatch(db, r.id),
+      batch: r.patches.map(asChange),
       ...(t?.numbered?.length ? { numbered: t.numbered } : {}),
       trace: t?.created
         ? { created: new Set(t.created), removed: new Map(t.removed) }
@@ -5837,9 +5641,7 @@ export let vocabHash = vocabHashOf(comps, stamped)
 // client can bridge to the catch-up delta. Read from journal_tx, the SAME
 // id-space journalSince/delta seek, so the cursor and the reader can never
 // drift apart. 0 on an empty journal.
-export let cursorOf = (db: Sql): number =>
-  (prep(db, 'select max(id) as m from journal_tx')
-    .get() as { m: number | null }).m ?? 0
+export let cursorOf = (db: Sql): number => jrnOf(db).tip()
 
 // Whether a returning client's held cursor can NO LONGER be trusted for a
 // delta, so the server must full-resnapshot instead. Three ways it goes stale,

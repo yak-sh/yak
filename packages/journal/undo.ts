@@ -13,8 +13,8 @@
 // tombstoned, never erased, and its id can never be reused — so an undo that
 // would resurrect one is refused rather than half-applied.
 
-import type { Actor, Bundle, Change, Comp, Eid, Graph } from '@yaks/graph'
-import { then, TOMBSTONE } from '@yaks/graph'
+import type { Actor, Bundle, Change, Comp, Eid, Graph, Was } from '@yaks/graph'
+import { then, token, TOMBSTONE } from '@yaks/graph'
 import type { Batch, Source } from './read.ts'
 import { at } from './read.ts'
 
@@ -33,10 +33,20 @@ export class Final extends Error {
 // One side of a batch, as a change. The deltas are replayed in order onto a
 // component table per entity, which is what makes a batch that touched the
 // same component twice come out as one bundle holding where it ended up.
-let side = (batch: Batch, want: 'before' | 'after'): Change => {
+let side = (batch: Batch, want: 'before' | 'after', guard = false): Change => {
   let order: Eid[] = []
   let held = new Map<Eid, Map<string, Comp | null>>()
   let died = new Set<Eid>()
+  // What the batch LEFT in each column, hashed: the guard an undo carries so a
+  // column somebody else has moved since refuses the whole reversal rather
+  // than quietly clobbering it. Only the backward side wants one — replaying
+  // forward is a recast, not a write.
+  let was = new Map<Eid, Was>()
+  let guarded = (eid: Eid, comp: string, column: string, after: unknown) => {
+    let w = was.get(eid)
+    if (!w) was.set(eid, w = {})
+    w[comp] = { ...w[comp], [column]: token(after) }
+  }
   let of = (eid: Eid): Map<string, Comp | null> => {
     let t = held.get(eid)
     if (!t) {
@@ -58,6 +68,7 @@ let side = (batch: Batch, want: 'before' | 'after'): Change => {
       table.set(d.comp, whole == null ? null : { ...(whole as Comp) })
       continue
     }
+    if (guard) guarded(d.target, d.comp, d.column, d.after)
     let cur = table.get(d.comp)
     if (cur === null) continue // the component is not there on this side
     table.set(d.comp, { ...(cur ?? {}), [d.column]: d[want] ?? null })
@@ -70,7 +81,18 @@ let side = (batch: Batch, want: 'before' | 'after'): Change => {
     }
     let b: Bundle = { entity: { eid } }
     for (let [comp, value] of held.get(eid)!) b[comp] = value
-    if (Object.keys(b).length > 1) out.push(b)
+    if (Object.keys(b).length == 1) continue
+    let w = was.get(eid)
+    // A guard names only columns this bundle restores: a component the undo
+    // removes whole has no column to hold a token.
+    if (w) {
+      let mine: Was = {}
+      for (let [comp, cols] of Object.entries(w)) {
+        if (b[comp] != null) mine[comp] = cols
+      }
+      if (Object.keys(mine).length) b.$was = mine
+    }
+    out.push(b)
   }
   return out
 }
@@ -83,12 +105,20 @@ let side = (batch: Batch, want: 'before' | 'after'): Change => {
  */
 export let applied = (batch: Batch): Change => side(batch, 'after')
 
+/** How an undo is built. */
+export type UndoneOpts = {
+  /** carry a `$was` guard on every restored column, hashed from the value the
+   * batch left there, so a column that moved since refuses the reversal */
+  guard?: boolean
+}
+
 /**
  * The change that reverses a batch: every column back to the value it held,
  * every component that went restored whole, every component that appeared
  * dropped. Throws {@link Final} if the batch deleted an entity.
  */
-export let undone = (batch: Batch): Change => side(batch, 'before')
+export let undone = (batch: Batch, opts: UndoneOpts = {}): Change =>
+  side(batch, 'before', opts.guard)
 
 /**
  * Undo a committed batch by its `seq`: build the inverse from what was written
@@ -109,7 +139,7 @@ export let undo =
   (g: Graph) => (seq: number, actor?: Actor): Bundle[] | Promise<Bundle[]> =>
     then(at(g as Source)(seq), (batch) => {
       if (!batch) throw new Error(`no journal batch #${seq}`)
-      let change = undone(batch)
+      let change = undone(batch, { guard: true })
       if (!change.length) return []
       if (actor) change[0] = { ...change[0], $actor: actor }
       return g.apply(change, { trusted: true })
