@@ -84,6 +84,26 @@ await d.idle(session.entity.eid)
 `deno task session:spike` runs exactly that against the model and prints the
 transcript through the package's `Line` and `Status` renderers.
 
+## When something runs the session
+
+A session is still identity only. What a host knows because it RUNS one is said
+beside it, each comp about one thing, so a row is gone when the fact is:
+
+```
+spawn{provider, model, effort, persona, role, task}  what was asked for
+runner{name, kind, origin}                           what runs it, and how it arrived
+runtime{pid, pane, transcript, process, …}           where it is running, right now
+run{status, started_at, input_at, …}                 it is going
+settled{at, status, exit_code, stop_reason}          it ended, once
+yield{final_text, usage_json, stderr}                what it produced
+```
+
+`spawn` is the ASK and `using` is what is in force — a session started on one
+model and switched to another says both. `runtime` is gone when nothing is
+running; `settled` appears once and does not change. Where the session works is
+[@yaks/git](../git)'s `worktree`, and who supervises it is an edge, not a
+column.
+
 ## A lock is a lease, not a patch
 
 A `claim{session}` is a session's lock, and it is stored on the entity it locks
@@ -217,23 +237,14 @@ without loading transcript prose.
 ## Recorded tool execution
 
 Tool invocation vocabulary and execution live in `@yaks/tools`. `sessionDoc`
-includes the invocation declarations for compatibility. A tool there is a
-function from bundles to bundles, so `react` builds a `runner` for the step and
-wraps each session tool: the words it answers become a `content{body}` entity
-wearing `output{source}`, and the runner lands them beside the
-`result{call,
-ms}` entry the transcript reads. The runner's plugin is
-deliberately NOT registered on a session graph — a transcript's calls are run in
-order, one at a time, and an effect-phase runner would race that. A call naming
-a tool this session does not serve is answered by a tool that refuses, so the
-refusal is an `error{code}` and a result like any other answer rather than a
-call left open.
+includes the invocation declarations for compatibility. Session execution calls
+the shared executor under its existing scheduling lock; it does not install a
+second tool observer. A precommit membership rule adds `entry.session` to
+results that reference transcript calls, before the independent sequence
+allocator runs.
 
-A precommit membership rule adds `entry.session` to results that reference
-transcript calls, before the independent sequence allocator runs.
-
-A durable `execution.state = running` without a result requires explicit
-recovery; it is not automatically replayed (`UnfinishedCall`). Tools retain
-their existing trusted session context, including fork and wait behavior. See
+A durable `execution.state = started` without a result requires explicit
+recovery; it is not automatically replayed. Tools retain their existing trusted
+session context, including fork and wait behavior. See
 [tool execution](../tools/README.md) for non-session callers and recovery
 limitations.

@@ -1,42 +1,115 @@
 {
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/id": true,
+    "https://yaks.sh/vocab/blob": true,
+    "https://yaks.sh/vocab/kernel": true
+  },
   "title": "session",
   "$defs": {
-    "session": {
+    "archived": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "description": "a transcript the daemon reacts to. Identity only: who runs it is `created.by`; what it is doing is read off its entries, never stored",
+      "description": "Hidden from ordinary listings, without stopping execution or deleting history.",
       "properties": {
-        "id": {
+        "at": {
           "type": "string",
-          "description": "the runner’s own name for it"
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was archived"
         },
-        "status": {
-          "enum": [
-            "empty",
-            "pending",
-            "running",
-            "settled",
-            "stopped",
-            "failed"
-          ],
-          "computed": true,
-          "description": "what the newest entry says: pending awaits the model, running awaits an answer, settled has nothing to do"
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who archived it — kept as history when that entity is deleted"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the instrument it was written through — the session or client the write came in on"
         }
       }
     },
-    "fork": {
+    "ask": {
       "component": true,
       "type": "object",
-      "description": "this session continues another transcript from one of its entries",
+      "description": "the model was asked here, from the prefix ending at `through`; what the provider keeps about it rides in that provider's own comp beside this one",
       "properties": {
-        "from": {
+        "to": {
+          "type": "string",
+          "ref": "model",
+          "death": "keep",
+          "description": "the model entity asked"
+        },
+        "through": {
           "type": "string",
           "ref": "entry",
           "death": "keep",
-          "description": "the entry this fork continues from: the parent's entries up to it are this transcript's prefix"
+          "description": "the last entry of the prefix it was asked with"
         }
       }
+    },
+    "attempt": {
+      "component": true,
+      "description": "Provider request lifecycle. Unfinished dispatched attempts are ambiguous on restart, never automatically replayed.",
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "inflight",
+            "completed",
+            "interrupted"
+          ]
+        }
+      }
+    },
+    "attention": {
+      "component": true,
+      "type": "object",
+      "bare": false,
+      "properties": {},
+      "description": "a line that wants to be read before the next ask"
+    },
+    "brief": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "store": "blob"
+        }
+      },
+      "description": "the session’s own account of itself, written at the end and quoted in the next one"
+    },
+    "cancel": {
+      "component": true,
+      "type": "object",
+      "bare": false,
+      "properties": {
+        "target": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        }
+      },
+      "description": "a line that withdraws an earlier one"
+    },
+    "checkpoint": {
+      "component": true,
+      "type": "object",
+      "bare": false,
+      "properties": {
+        "through": {
+          "type": "string",
+          "ref": "entry",
+          "death": "keep"
+        }
+      },
+      "description": "everything through this entry is settled: a compaction boundary"
     },
     "claim": {
       "component": true,
@@ -48,7 +121,6 @@
           "type": "string",
           "ref": "session",
           "death": "release",
-          "bare": false,
           "description": "the session holding it — when that session’s entity dies the lock goes and the entity lives"
         },
         "at": {
@@ -69,7 +141,6 @@
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "bare": false,
           "stamped": true,
           "description": "the contested entity"
         },
@@ -77,7 +148,6 @@
           "type": "string",
           "ref": "session",
           "death": "keep",
-          "bare": false,
           "stamped": true,
           "description": "the session whose write was refused"
         },
@@ -85,7 +155,6 @@
           "type": "string",
           "ref": "session",
           "death": "keep",
-          "bare": false,
           "stamped": true,
           "description": "the session that already held the lock"
         },
@@ -97,10 +166,33 @@
         }
       }
     },
+    "dispatch": {
+      "component": true,
+      "type": "object",
+      "description": "durable child pool admission; queued intent survives daemon restart",
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "args": {
+          "type": "string"
+        },
+        "order": {
+          "type": "number"
+        }
+      }
+    },
     "entry": {
       "component": true,
       "type": "object",
       "kind": true,
+      "lazy": true,
+      "unique": [
+        [
+          "session",
+          "seq"
+        ]
+      ],
       "description": "one line of a transcript; the comp beside it says what kind",
       "properties": {
         "session": {
@@ -113,13 +205,403 @@
           "type": "number",
           "description": "Positive integer position; omit on append to allocate atomically. Explicit fractional or occupied positions are refused."
         }
+      }
+    },
+    "fork": {
+      "component": true,
+      "type": "object",
+      "description": "this session continues another transcript from one of its entries",
+      "properties": {
+        "from": {
+          "type": "string",
+          "ref": "entry",
+          "death": "keep",
+          "bare": false,
+          "description": "the entry this fork continues from: the parent's entries up to it are this transcript's prefix"
+        }
+      }
+    },
+    "generation": {
+      "component": true,
+      "type": "object",
+      "bare": false,
+      "unique": [
+        [
+          "through"
+        ]
+      ],
+      "properties": {
+        "through": {
+          "type": "string",
+          "ref": "entry",
+          "death": "keep"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "effort": {
+          "type": "string"
+        },
+        "serving_model": {
+          "type": "string",
+          "stamped": true
+        }
       },
+      "description": "what actually answered one ask — kept beside the ask, because `using` can change mid-transcript"
+    },
+    "imported": {
+      "component": true,
+      "type": "object",
+      "bare": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "stamped": true
+        },
+        "line": {
+          "type": "number",
+          "stamped": true
+        }
+      },
+      "description": "a line that came from somewhere else — which transcript, and which line of it"
+    },
+    "lease": {
+      "component": true,
+      "type": "object",
+      "bare": false,
+      "properties": {
+        "holder": {
+          "type": "string",
+          "ref": "runner",
+          "death": "keep",
+          "stamped": true
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      },
+      "description": "a runner holding this for a while, so two do not run it at once"
+    },
+    "message": {
+      "component": true,
+      "type": "object",
+      "bare": false,
+      "properties": {
+        "role": {
+          "enum": [
+            "user",
+            "agent"
+          ]
+        }
+      },
+      "description": "a transcript line somebody said: the role says which side"
+    },
+    "notice": {
+      "component": true,
+      "type": "object",
+      "description": "passive transcript context, included in the next ask without requesting one",
+      "properties": {
+        "child": {
+          "type": "string",
+          "ref": "session",
+          "death": "keep"
+        },
+        "task": {
+          "type": "string",
+          "description": "the task that prompted this notice"
+        }
+      }
+    },
+    "reasoning": {
+      "component": true,
+      "type": "object",
+      "bare": false,
+      "properties": {},
+      "description": "a line the model thought rather than said"
+    },
+    "resume": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "actor": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "rank": {
+          "type": "number",
+          "stamped": true
+        }
+      },
+      "description": "set aside by an actor to come back to, with its place in the stack"
+    },
+    "run": {
+      "component": true,
+      "type": "object",
       "index": [
         [
-          "session",
-          "seq"
+          "started_at"
         ]
-      ]
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "starting",
+            "running",
+            "stopping"
+          ],
+          "stamped": true
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "stop_requested_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "input_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      },
+      "description": "a transcript that is going: when it started, when it was last spoken to, and whether a stop was asked for"
+    },
+    "runner": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "bare": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "the runner’s name (`claude`, `codex`, a harness)"
+        },
+        "kind": {
+          "type": "string",
+          "description": "the agent type it runs as, when its runner has them"
+        },
+        "origin": {
+          "enum": [
+            "external",
+            "managed"
+          ],
+          "stamped": true,
+          "description": "managed: something here started it. external: it arrived already running"
+        }
+      },
+      "description": "what runs it: the runner by name, the kind of agent it runs as, and how it arrived"
+    },
+    "runtime": {
+      "component": true,
+      "type": "object",
+      "index": [
+        [
+          "pid"
+        ]
+      ],
+      "properties": {
+        "pid": {
+          "type": "number",
+          "description": "the process id, while it lives"
+        },
+        "pane": {
+          "type": "string",
+          "description": "the terminal pane showing it"
+        },
+        "transcript": {
+          "type": "string",
+          "description": "the log file the runner appends to"
+        },
+        "provider_session_id": {
+          "type": "string",
+          "stamped": true,
+          "description": "the provider’s own name for the conversation, for resuming it"
+        },
+        "serving_model": {
+          "type": "string",
+          "stamped": true,
+          "description": "the model the provider actually served"
+        },
+        "process": {
+          "type": "string",
+          "ref": "process",
+          "death": "detach",
+          "description": "the process it is, when something supervises one"
+        }
+      },
+      "description": "where this transcript is running right now — gone when it is not"
+    },
+    "session": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "prefix": "S",
+      "description": "a transcript something reacts to. Identity only: where it runs is `runtime`, what it is doing is `run`, how it ended is `settled`, and what it produced is `yield`",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "the runner’s own name for it"
+        },
+        "actor": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "who it speaks as — the identity that survives a /clear, where `created.by` is the run"
+        },
+        "operator": {
+          "type": "boolean",
+          "description": "true when a person is driving this transcript rather than an agent"
+        },
+        "standing": {
+          "type": "string",
+          "stamped": true,
+          "description": "a session that stays: named here rather than ended when its work is done"
+        },
+        "status": {
+          "enum": [
+            "empty",
+            "pending",
+            "running",
+            "settled",
+            "stopped",
+            "failed"
+          ],
+          "computed": true,
+          "description": "what the newest entry says: pending awaits the model, running awaits an answer, settled has nothing to do"
+        }
+      }
+    },
+    "settled": {
+      "component": true,
+      "type": "object",
+      "index": [
+        [
+          "at"
+        ]
+      ],
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "status": {
+          "enum": [
+            "completed",
+            "failed",
+            "interrupted",
+            "lost"
+          ],
+          "stamped": true
+        },
+        "exit_code": {
+          "type": "number",
+          "stamped": true
+        },
+        "stop_reason": {
+          "type": "string",
+          "stamped": true
+        }
+      },
+      "description": "how it ended, once. `at` is when, and `status` says whether it finished, failed, was interrupted, or was simply lost"
+    },
+    "spawn": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "the provider asked for"
+        },
+        "model": {
+          "type": "string",
+          "description": "the model asked for"
+        },
+        "effort": {
+          "type": "string",
+          "description": "the effort asked for"
+        },
+        "persona": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "the voice it was asked to wear"
+        },
+        "role": {
+          "type": "string",
+          "ref": "role",
+          "death": "keep",
+          "description": "the role it was hired into"
+        },
+        "task": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "the work it was spawned for"
+        }
+      },
+      "description": "the request a session was started FROM — what was asked for, not what is in force"
+    },
+    "spawned": {
+      "component": true,
+      "type": "object",
+      "description": "a child session delegated by a parent; fork independently selects an inherited prefix",
+      "properties": {
+        "parent": {
+          "type": "string",
+          "ref": "session",
+          "death": "keep",
+          "bare": false
+        },
+        "call": {
+          "type": "string",
+          "ref": "entry",
+          "death": "keep",
+          "bare": false
+        }
+      }
+    },
+    "stop": {
+      "component": true,
+      "type": "object",
+      "description": "a mark in the transcript: the daemon performs nothing after it",
+      "properties": {}
+    },
+    "stop_request": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "doc"
+      ],
+      "properties": {
+        "target": {
+          "type": "string",
+          "ref": "session",
+          "death": "cascade"
+        }
+      },
+      "description": "ask a session to stop. A request, not a switch: the run ends by settling"
     },
     "using": {
       "component": true,
@@ -147,126 +629,38 @@
         }
       }
     },
-    "ask": {
+    "yield": {
       "component": true,
       "type": "object",
-      "description": "the model was asked here, from the prefix ending at `through`; what the provider keeps about it rides in that provider's own comp beside this one",
       "properties": {
-        "to": {
+        "final_text": {
           "type": "string",
-          "ref": "model",
-          "death": "keep",
-          "description": "the model entity asked"
+          "store": "blob",
+          "stamped": true
         },
-        "through": {
+        "usage_json": {
           "type": "string",
-          "ref": "entry",
-          "death": "keep",
-          "description": "the last entry of the prefix it was asked with"
+          "stamped": true
+        },
+        "stderr": {
+          "type": "string",
+          "store": "blob",
+          "stamped": true
         }
-      }
+      },
+      "description": "what a run produced: its last words, what it cost, and anything it said on stderr"
     },
-    "stop": {
-      "component": true,
-      "type": "object",
-      "description": "a mark in the transcript: the daemon performs nothing after it",
-      "properties": {}
+    "turnStates": {
+      "enum": [
+        "idle",
+        "busy"
+      ]
     },
-    "spawned": {
-      "component": true,
-      "type": "object",
-      "description": "a child session delegated by a parent; fork independently selects an inherited prefix",
-      "properties": {
-        "parent": {
-          "type": "string",
-          "ref": "session",
-          "death": "keep",
-          "bare": false
-        },
-        "call": {
-          "type": "string",
-          "ref": "entry",
-          "death": "keep",
-          "bare": false
-        }
-      }
-    },
-    "notice": {
-      "component": true,
-      "type": "object",
-      "description": "passive transcript context, included in the next ask without requesting one",
-      "properties": {
-        "child": {
-          "type": "string",
-          "ref": "session",
-          "death": "keep"
-        },
-        "task": {
-          "type": "string",
-          "description": "the task that prompted this notice"
-        }
-      }
-    },
-    "archived": {
-      "component": true,
-      "description": "Hidden from ordinary listings, without stopping execution or deleting history.",
-      "type": "object",
-      "properties": {
-        "at": {
-          "type": "string",
-          "format": "date-time",
-          "stamped": true,
-          "description": "when it was archived"
-        },
-        "by": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true,
-          "description": "who archived it — kept as history when that entity is deleted"
-        },
-        "via": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true,
-          "description": "the instrument it was written through — the session or client the write came in on"
-        }
-      }
-    },
-    "dispatch": {
-      "component": true,
-      "type": "object",
-      "description": "durable child pool admission; queued intent survives daemon restart",
-      "properties": {
-        "state": {
-          "type": "string"
-        },
-        "args": {
-          "type": "string"
-        },
-        "order": {
-          "type": "number"
-        }
-      }
-    },
-    "attempt": {
-      "component": true,
-      "description": "Provider request lifecycle. Unfinished dispatched attempts are ambiguous on restart, never automatically replayed.",
-      "properties": {
-        "state": {
-          "type": "string",
-          "enum": [
-            "inflight",
-            "completed",
-            "interrupted"
-          ]
-        }
-      }
+    "messageRoles": {
+      "enum": [
+        "user",
+        "agent"
+      ]
     }
-  },
-  "$vocabulary": {
-    "https://yaks.sh/vocab/core": true,
-    "https://yaks.sh/vocab/blob": true
   }
 }
