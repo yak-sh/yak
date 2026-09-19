@@ -50,11 +50,7 @@ Deno.test('graph MCP definitions persist; rename keeps identity, edits and remov
     }])
     assertEquals(await registry.tools(), [])
     // A captured handler belongs to its earlier request, even after configuration changed.
-    const value = await original.run({ html: '<h1>kept</h1>' }, {
-      graph: h.g,
-      actor: null,
-      read: h.g.read.bind(h.g),
-    })
+    const value = await original.reply({ html: '<h1>kept</h1>' })
     assert(JSON.stringify(value).includes('mockup/1'))
     await h.g.apply([{
       entity: { eid: '0c300000-0000-4000-8000-000000000001' },
@@ -212,13 +208,8 @@ Deno.test('reconfiguration changes tool identity without retargeting previously 
     const [next] = await registry.tools()
     assertEquals(old.name, next.name)
     assert(old.meta?.eid !== next.meta?.eid)
-    const ctx = {
-      graph: h.g,
-      actor: null,
-      read: h.g.read.bind(h.g),
-    }
-    await old.run({ html: 'old' }, ctx)
-    await next.run({ html: 'new' }, ctx)
+    await old.reply({ html: 'old' })
+    await next.reply({ html: 'new' })
     assertEquals(a.calls.filter((c) => c.method === 'tools/call').length, 1)
     assertEquals(b.calls.filter((c) => c.method === 'tools/call').length, 1)
   } finally {

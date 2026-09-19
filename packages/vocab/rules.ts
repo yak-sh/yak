@@ -34,6 +34,12 @@ export type RuleDecl = {
   match: string
   /** what this rule runs before, so order is declared and never incidental */
   before?: string[]
+  /** the phase it runs in. `rules` — the default — is the declared half of
+   * `apply()`, before persistence. `effect` is a rule nothing in `apply()`
+   * runs: it is a PATTERN to register a post-commit handler on (@yaks/effects
+   * `on`), or to ask once as a sweep — @yaks/tools' two, which say what a
+   * call that still wants running is. */
+  phase?: string
   /** what it is for, in a line */
   description?: string
 }
@@ -61,6 +67,7 @@ export let rulesIn = (input: VocabDoc | VocabDoc[]): RuleDecl[] => {
         name,
         match,
         ...(Array.isArray(entry.before) ? { before: entry.before } : {}),
+        ...(typeof entry.phase == 'string' ? { phase: entry.phase } : {}),
         ...(typeof entry.description == 'string'
           ? { description: entry.description }
           : {}),

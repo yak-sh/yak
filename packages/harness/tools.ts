@@ -1,5 +1,5 @@
-import { validateToolInput } from '@yaks/vocab/tools'
-import { land, toolName } from '@yaks/graph'
+import { toolName } from '@yaks/graph'
+import { answerOf, runner, toolEid, worded } from '@yaks/tools'
 import { artifactTools } from './artifact_tools.ts'
 import type { ImageOptions } from './images.ts'
 import { valueTools } from '@yaks/blob'
@@ -10,8 +10,13 @@ import { valueTools } from '@yaks/blob'
 // the only thing missing between them is a dialect. A graph tool says its
 // arguments in Zod, because that is what MCP's SDK takes; a model wants JSON
 // Schema. So this file is one conversion and one adapter: `parametersOf` says a
-// tool's arguments the way a model reads them, and `graphTools` hands each
-// tool the {@link ToolCtx} it expects and flattens what it answers to text.
+// tool's arguments the way a model reads them, and `graphTools` WRITES A CALL
+// for each one and says what answered it.
+//
+// The model never reaches a tool function here either. A call is an entity
+// signed as the SESSION that asked, so what the tool writes is written in the
+// agent's name and not the daemon's, and the transcript's own record of the
+// call is the same entity @yaks/tools' runner answered.
 //
 // The conversion is not hand-written. `shapeOf` (@yaks/mcp) is where a tool's
 // Zod shape already comes from, and `zod-to-json-schema` is what the MCP SDK
@@ -21,7 +26,7 @@ import { valueTools } from '@yaks/blob'
 // resolve `$ref` against.
 
 import { sessionCwd, workspace } from './workspace.ts'
-import type { Entity, Graph, Tool as GraphTool, ToolCtx } from '@yaks/graph'
+import type { Entity, Graph, Tool as GraphTool } from '@yaks/graph'
 import { shapeOf } from '@yaks/mcp'
 import { core, type Depth } from '@yaks/mcp'
 import { shellTools } from '@yaks/process'
@@ -45,12 +50,6 @@ export let parametersOf = (tool: GraphTool): Record<string, unknown> => {
   return json
 }
 
-// A tool's answer as the transcript keeps it. Bundles are the usual answer, and
-// a model reads JSON as well as it reads anything; a tool that already speaks
-// prose is left alone.
-let said = (out: unknown): string =>
-  typeof out == 'string' ? out : JSON.stringify(out, null, 1)
-
 /**
  * The generic graph tier as tools a model may call: `graph_apply`,
  * `graph_query`, `graph_show`, `graph_schema`. The agent reads and writes the
@@ -60,22 +59,27 @@ export let graphTools = (
   g: Graph,
   opts: { actor?: Entity | null; depth?: Depth } = {},
 ): Tool[] => {
-  let ctx: ToolCtx = {
-    graph: g,
-    actor: opts.actor ?? null,
-    read: (query, o) => g.read(query, o),
-  }
-  return core({ vocab: g.vocab, depth: opts.depth ?? 'names' }).map((t) => ({
+  let tier = core({ vocab: g.vocab, depth: opts.depth ?? 'names' })
+  // A runner: these calls are this agent's own, and `call()` runs them here.
+  // Nothing sweeps a queue from inside an agent — a call somebody else wrote
+  // is a daemon's to notice, by registering the same rules as effects.
+  let r = runner(g, { tools: tier, host: g })
+  return tier.map((t) => ({
     name: toolName(t),
     description: t.description,
     parameters: parametersOf(t),
-    // This is a HOST: the tool says what it wants done and the landing is
-    // here, signed as whoever the call is for.
+    // A call, signed as the session that asked: the runner runs the function
+    // and lands what it answered in that session's name.
     run: async (args: Record<string, unknown>, call) => {
-      let actor = call?.session ? { eid: call.session } : ctx.actor
-      let mine = { ...ctx, actor }
-      let intent = await t.run(validateToolInput(t, args), mine)
-      return said(await land(intent, mine))
+      let actor = call?.session ? { eid: call.session } : opts.actor ?? null
+      await r.ensure()
+      return worded(answerOf(
+        await r.call([{
+          entity: { eid: '$call' },
+          call: { to: toolEid(toolName(t)), args: JSON.stringify(args ?? {}) },
+          ...(actor ? { $actor: { by: actor.eid } } : {}),
+        }]),
+      ))
     },
   }))
 }

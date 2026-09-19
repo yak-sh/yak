@@ -179,25 +179,13 @@ import {
   type Sown,
   type Text,
 } from './seed.ts'
-import {
-  archive,
-  cards,
-  healed,
-  line,
-  openIn,
-  rewrote,
-  serve,
-} from './unseen.ts'
+import { archive, healed, line, openIn, rewrote, serve } from './unseen.ts'
 import {
   atCeiling,
-  builds,
   ceilings,
   countedSandbox,
-  FILES,
-  letters,
   monthOf,
   size,
-  spent,
   standing,
 } from './meter.ts'
 import {
@@ -1571,8 +1559,8 @@ export let uiMeta = (domain: string, csp: Csp = {}) => ({
 // an agent chooses one (guide.ts `brief`).
 // One command's arguments, as a signature a model reads: the required ones,
 // then the optional ones marked `?`. It is the same JSON Schema `command`
-// takes in `args` (store/tools.ts `schemaOf`), said the short way — the schema
-// itself rides on the answer's data for anything that wants it whole.
+// takes in `args` (store/tools.ts `schemaOf`), said the short way — which is
+// the only way it is said, since an answer is bundles and carries no schema.
 let argsOf = (input: unknown) => {
   let s = (input ?? {}) as {
     properties?: Record<string, unknown>
@@ -3124,18 +3112,7 @@ let OURS: Row[] = [
         ...(gone ? [`archived ${gone}`] : []),
         ...seen.map(line),
       ]
-      return {
-        text: said.join('\n') || 'no open errors',
-        space,
-        data: {
-          space: space.slug,
-          app: app.slug,
-          title: app.title,
-          url: url(space, app, ctx.env),
-          version: app.version ?? 0,
-          errors: cards(seen),
-        },
-      }
+      return { text: said.join('\n') || 'no open errors', space }
     },
   },
   {
@@ -3184,7 +3161,6 @@ let OURS: Row[] = [
         })),
       )
       let lines: string[] = []
-      let out = []
       for (let { space, role } of seats) {
         let mine = every.filter((a) => a.space == space.eid)
         let apps = mine.filter((a) => !a.trashed)
@@ -3193,16 +3169,21 @@ let OURS: Row[] = [
         // NOTHING under it is answering however true the rest of the listing
         // still is — every app is kept exactly as it is, and that address is
         // where the person restores it.
+        // What the caller IS here — the directory's `member` row, which this
+        // listing already read to answer at all. Said out loud because
+        // membership is the directory's fact: a client that asked an app's
+        // `/me` for it instead would wake a Durable Object per space to learn
+        // what this one answer already knows (T-35384).
         lines.push(
-          `${space.slug} — https://${spaceHost(ctx.env, space.slug)}/${
-            space.trashed
-              ? ` — IN THE TRASH, ${
-                daysLeft(space.trashed)
-              } days left: nothing here answers until space_restore(space: '${space.slug}')`
-              : ''
-          }`,
+          `${space.slug} — https://${spaceHost(ctx.env, space.slug)}/ — you ` +
+            `are ${role == 'owner' ? 'the owner' : `a ${role}`}${
+              space.trashed
+                ? ` — IN THE TRASH, ${
+                  daysLeft(space.trashed)
+                } days left: nothing here answers until space_restore(space: '${space.slug}')`
+                : ''
+            }`,
         )
-        let listed = []
         for (let app of apps) {
           let held = bound.filter((b) => b.app == app.eid)
           let errors = broken.get(app.eid) ?? 0
@@ -3212,25 +3193,10 @@ let OURS: Row[] = [
           // The one the bare hostname opens, said where the person can see
           // it — the space line above is that address (T-32947).
           let front = app.home
-          listed.push({
-            slug: app.slug,
-            title: app.title,
-            url: url(space, app, ctx.env),
-            // The other address it has (directory.ts `mailbox`): where its
-            // letters leave from and where a reader writes back. Said here
-            // because this is the listing a person is shown when they ask
-            // what they have, and an address nobody is told is no address.
-            mail: mailbox(space, app, ctx.env),
-            version: app.version ?? 0,
-            errors,
-            usage: its,
-            home: front,
-            bindings: held.map(({ name, type, resource }) => ({
-              name,
-              type,
-              resource,
-            })),
-          })
+          // The other address it has (directory.ts `mailbox`) is on the line
+          // too: where its letters leave from and where a reader writes back.
+          // Said here because this is the listing a person is shown when they
+          // ask what they have, and an address nobody is told is no address.
           lines.push(
             `- ${app.title} (${app.slug}) v${app.version ?? 0}${
               errors ? `, ${errors} open` : ''
@@ -3264,39 +3230,9 @@ let OURS: Row[] = [
             )
           }
         }
-        out.push({
-          slug: space.slug,
-          title: space.title,
-          url: `https://${spaceHost(ctx.env, space.slug)}/`,
-          // What the caller IS here — the directory's `member` row, which
-          // this listing already read to answer at all. Said out loud because
-          // membership is the directory's fact: a client that asked an app's
-          // `/me` for it instead would wake a Durable Object per space to
-          // learn what this one answer already knows (T-35384).
-          role,
-          apps: listed,
-          trash: bin.map((a) => ({
-            slug: a.slug,
-            title: a.title,
-            days: daysLeft(a.trashed!),
-          })),
-          tier: space.tier ?? 'free',
-          settings_url: planSettings(space.slug, ctx.env),
-          usage: spent(space),
-          // The letters and the builds are the allowances every plan carries,
-          // so they are beside the app, visit and data ceilings
-          // (meter.ts). `usage.builds` counts against the monthly allowance.
-          ceilings: {
-            ...(ceilings(space.tier, space.slug) ?? {}),
-            files: FILES[space.tier ?? 'free'],
-            emails: letters(space.tier),
-            builds: builds(space.tier),
-          },
-        })
       }
       return {
         text: lines.join('\n'),
-        data: { spaces: out },
         // Only one space in hand has an unseen channel to append to.
         space: seats.length == 1 ? seats[0]!.space : undefined,
       }
@@ -3344,12 +3280,19 @@ let OURS: Row[] = [
           seen.add(one.at)
           lines.push(`${lines.length ? '\n' : ''}## ${one.at}`)
         }
-        lines.push(`${one.name}(${argsOf(one.input)}) — ${one.description}`)
+        // Whether it READS or writes, in the line: half of these commands
+        // mutate and half do not, and a model choosing between them is owed
+        // that before it picks. It used to ride as a field on the answer, and
+        // an answer is bundles now, so it is said in the words like the rest.
+        lines.push(
+          `${one.name}(${argsOf(one.input)}) ${
+            one.readOnly ? 'reads' : 'writes'
+          } — ${one.description}`,
+        )
       }
       return {
         text: `${lines.join('\n')}\n\nRun one with command(name, args) — and ` +
           'app too where two apps spell the same command.',
-        data: { commands: all },
       }
     },
   },
@@ -3426,7 +3369,6 @@ let OURS: Row[] = [
             `to compare paid plans: ${settings}. Sign in if asked; you will ` +
             `return to settings. No domain or DNS changes have been made.`,
           space,
-          data: { code: 'plan_required', settings_url: settings },
         }
       }
       // One hostname is one place. Whose it is stays out of the refusal
@@ -3492,15 +3434,6 @@ let OURS: Row[] = [
           `${reading(how)}\n\nDNS usually takes minutes and can take a day; ` +
           'the certificate is issued within minutes of the record ' +
           `resolving. domain_status(hostname: '${host}') says where it is.`,
-        data: {
-          hostname: host,
-          serves: place(space, app),
-          url: `https://${host}/`,
-          stage,
-          apex: apex(host),
-          records: recs,
-          steps: how,
-        },
         space,
       }
     },
@@ -3581,11 +3514,7 @@ let OURS: Row[] = [
           steps: how ?? [],
         })
       }
-      return {
-        text: lines.join('\n\n'),
-        data: { domains: out },
-        space,
-      }
+      return { text: lines.join('\n\n'), space }
     },
   },
   {
@@ -4395,7 +4324,7 @@ let OURS: Row[] = [
         markdown = `There is no guide page \`${asked}\`. The pages are ` +
           `${SLUGS}. Here is the map.\n\n${markdown}`
       }
-      return { text: markdown, data: { page: page?.slug ?? 'guide', markdown } }
+      return { text: markdown }
     },
   },
   // And the tools anybody may call, signed in or not (preauth.ts, T-33030):

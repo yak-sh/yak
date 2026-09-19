@@ -146,9 +146,12 @@ export type PropSchema = {
   component?: boolean
   tool?: boolean
   rule?: boolean
-  // A rule declaration's own word: the query it matches. `before` is shared
-  // with a kind's ordering and means the same thing — what this runs before.
+  // A rule declaration's own words: the query it matches, and the phase it
+  // runs in (`rules` by default; `effect` is a rule a post-commit runner asks
+  // for). `before` is shared with a kind's ordering and means the same thing —
+  // what this runs before.
   match?: string
+  phase?: string
   // A tool declaration's own words: what it is called, and what it takes.
   noun?: string
   verb?: string

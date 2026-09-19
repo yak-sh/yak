@@ -1,4 +1,11 @@
-// The generic graph tier: five tools, and every one of them speaks bundles.
+// The generic graph tier: five tools, and every one of them speaks bundles —
+// in and out. What a tool is HANDED is the call's own bundle (its arguments
+// ride on `ctx.args`, parsed and checked by the runner); what it answers is
+// bundles, which for the reads here are the entities they found. The two
+// answers that are not entities — the schema and the batch a write asks for —
+// say so in their own way: `graph_schema` answers one `content{body}` entity
+// carrying the schema as JSON, and `graph_apply` answers the batch it landed,
+// which the runner lands as the caller.
 //
 // There is no sugar here for any particular domain — no `book_shelve`, no
 // `task_done`. A bundle already says everything such a tool would say, and an
@@ -20,14 +27,8 @@ import {
   type ToolCtx,
 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import {
-  type BundleOpts,
-  bundleSchema,
-  type Depth,
-  outputSchema,
-  showSchema,
-} from './schema.ts'
-import { detail, type Guide, index, ofKind, schemaSchema } from './words.ts'
+import { type BundleOpts, bundleSchema, type Depth } from './schema.ts'
+import { detail, type Guide, index, ofKind } from './words.ts'
 
 /**
  * Ranked full-text search, when the host has it. Compose
@@ -75,6 +76,15 @@ export type CoreOpts = {
   scope?: Record<string, Schema>
 }
 
+// An answer that is not entities, as the one entity it CAN be: prose (here,
+// JSON) that says it came from this call. The schema is the only such answer
+// in this tier — a vocabulary is not rows in the store it describes.
+let told = (ctx: ToolCtx, value: unknown): Bundle[] => [{
+  entity: { eid: '$said' },
+  content: { body: JSON.stringify(value, null, 2) },
+  output: { source: ctx.call },
+}]
+
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 let num = (v: unknown): number | undefined =>
   typeof v == 'number' && Number.isFinite(v) ? v : undefined
@@ -99,22 +109,23 @@ let batch = (v: unknown): Bundle[] => {
   })
 }
 
-// A write refused for a word this graph does not know, pointed at the door
-// that has the words. The input schema is OPEN (schema.ts) precisely so a
-// client's cached copy cannot refuse a column that now exists — which leaves
-// the server the only authority on what a component takes, and this the only
-// place a caller learns its picture was stale.
-// The refusal is matched by its WORDS rather than its class: a graph may be a
-// composition over stores of its own, where admission ran on the far side of a
-// hop and what arrives here is the sentence it wrote, not the error it threw.
-export let pointed = (err: unknown): never => {
-  let said = err instanceof Error ? err.message : ''
-  if (!said.includes('unknown column')) throw err
-  throw new Refused(
-    `${said}. Your tool list may be from before this word moved — ` +
-      'graph_schema says what this graph knows right now.',
-  )
-}
+/**
+ * A refusal for a word this graph does not know, pointed at the door that has
+ * the words. The input schema is OPEN (schema.ts) precisely so a client's
+ * cached copy cannot refuse a column that now exists — which leaves the server
+ * the only authority on what a component takes, and this the only place a
+ * caller learns its picture was stale.
+ *
+ * It reads the refusal's WORDS rather than its class: the refusal is landed by
+ * the runner as an entity's prose long before a door renders it, and a graph
+ * may be a composition over stores of its own, where admission ran on the far
+ * side of a hop and what arrives is the sentence it wrote.
+ */
+export let pointing = (said: string): string =>
+  said.includes('unknown column')
+    ? `${said}. Your tool list may be from before this word moved — ` +
+      'graph_schema says what this graph knows right now.'
+    : said
 
 // The entities, then everything pointing at them, each one whole and each one
 // once. `.refs=<id>` is the query grammar's backlink union, so the incoming
@@ -152,15 +163,7 @@ let gather = async (
  */
 export let core = (opts: CoreOpts): Tool[] => {
   let { vocab, column } = opts
-  let depth = opts.depth ?? 'full'
-  let bundle = bundleSchema(vocab, { depth, column })
-  let bundles = outputSchema(z.array(bundle))
-  // What `apply()` answers is the batch AS APPLIED, and a batch may say
-  // `comp: null` — drop this component — which no read ever answers.
-  let applied = outputSchema(
-    z.array(bundleSchema(vocab, { depth, nulls: true, column })),
-  )
-  // And what it TAKES: the same bundle, closed over what a client may write.
+  // What a write TAKES: the same bundle, closed over what a client may write.
   // Always `full` — a write door that leaves a column's type to the reader is
   // the door an agent guesses at (T-34153).
   let writes = z.array(
@@ -207,10 +210,10 @@ export let core = (opts: CoreOpts): Tool[] => {
       input: {
         change: writes.describe('the bundles to apply, atomically'),
       },
-      output: applied,
-      // The tool does not write: it says what to land and the server lands it
-      // signed as the actor, answering the batch as applied.
-      run: (args) => ({ change: batch(args.change) }),
+      // The tool does not write: the bundles it answers ARE the write, landed
+      // by the runner signed as the caller, and the batch as applied is what
+      // comes back.
+      run: (_, ctx) => batch(ctx.args.change),
     },
     {
       name: 'graph_query',
@@ -231,14 +234,13 @@ export let core = (opts: CoreOpts): Tool[] => {
         ),
         limit: z.number().optional().describe('at most this many entities'),
       },
-      output: bundles,
-      run: async (args, ctx) => {
-        let line = [str(args.q), ...strings(args.filters)]
+      run: async (_, ctx) => {
+        let line = [str(ctx.args.q), ...strings(ctx.args.filters)]
           .map((s) => s.trim()).filter(Boolean)
-        let n = num(args.limit)
+        let n = num(ctx.args.limit)
         if (n) line.push(`.limit=${n}`)
         if (!line.length) throw new Refused('graph_query needs a query line')
-        return { result: await ctx.read(line.join('&')) }
+        return await ctx.read(line.join('&'))
       },
     },
     {
@@ -259,12 +261,10 @@ export let core = (opts: CoreOpts): Tool[] => {
           'also gather what points at them (default: true)',
         ),
       },
-      output: outputSchema(showSchema(bundle)),
-      run: async (args, ctx) => {
-        let ids = strings(args.ids)
+      run: async (_, ctx) => {
+        let ids = strings(ctx.args.ids)
         if (!ids.length) throw new Refused('graph_show needs at least one id')
-        let found = await gather(ctx, ids, args.backrefs !== false)
-        return { result: { bundles: found } }
+        return await gather(ctx, ids, ctx.args.backrefs !== false)
       },
     },
     {
@@ -287,14 +287,15 @@ export let core = (opts: CoreOpts): Tool[] => {
           'a display kind, answered as the words an entity of it wears',
         ),
       },
-      output: outputSchema(schemaSchema),
-      run: (args, ctx) => {
+      run: (_, ctx) => {
         let v = ctx.graph.vocab
         let named = [
-          ...(typeof args.component == 'string' ? [args.component] : []),
-          ...strings(args.component),
+          ...(typeof ctx.args.component == 'string'
+            ? [ctx.args.component]
+            : []),
+          ...strings(ctx.args.component),
         ]
-        let kind = str(args.kind)
+        let kind = str(ctx.args.kind)
         for (let name of [...named, ...(kind ? [kind] : [])]) {
           if (v.comp(name)) continue
           throw new Refused(
@@ -308,13 +309,14 @@ export let core = (opts: CoreOpts): Tool[] => {
               `${v.kinds.join(', ')}; ask for it as component instead`,
           )
         }
-        return {
-          result: kind
+        return told(
+          ctx,
+          kind
             ? ofKind(v, kind, opts.guide)
             : named.length
             ? { comps: named.map((name) => detail(v, name, opts.guide)) }
             : index(v),
-        }
+        )
       },
     },
   ]
@@ -334,11 +336,10 @@ export let core = (opts: CoreOpts): Tool[] => {
         words: z.string().describe('what to search for'),
         limit: z.number().optional().describe('at most this many entities'),
       },
-      output: bundles,
-      run: async (args) => {
-        let words = str(args.words).trim()
+      run: async (_, ctx) => {
+        let words = str(ctx.args.words).trim()
         if (!words) throw new Refused('search needs words')
-        return { result: await find(words, { limit: num(args.limit) }) }
+        return await find(words, { limit: num(ctx.args.limit) })
       },
     })
   }

@@ -4,9 +4,25 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { modelDoc } from '@yaks/model'
 import { effects } from '@yaks/effects'
-import { executeCall } from '@yaks/tools'
+import { runner } from '@yaks/tools'
+import type { Bundle, Graph } from '@yaks/graph'
 import { sessionDoc } from './comp.ts'
 import { sessions } from './plugin.ts'
+
+// One tool, answering the words it was told to, at the entity a call names.
+let saying = (g: Graph, at: string, say: () => unknown) =>
+  runner(g, {
+    tools: [{
+      eid: at,
+      name: 'echo',
+      description: 'say it back',
+      run: async (_: Bundle[], ctx): Promise<Bundle[]> => [{
+        entity: { eid: '$said' },
+        content: { body: String(await say()) },
+        output: { source: ctx.call },
+      }],
+    }],
+  })
 
 Deno.test('result membership is joined before sequence allocation and observers', async () => {
   const vocab = loadVocab([sessionDoc, modelDoc])
@@ -25,7 +41,7 @@ Deno.test('result membership is joined before sequence allocation and observers'
       call: { to: 't', args: '{}' },
     },
   ])
-  await executeCall(g, 'c', { resolve: () => ({ run: () => 'hello' }) })
+  await saying(g, 't', () => 'hello').run('c')
   const [result] = await g.read('.result')
   assertEquals(result.entry, { session: 's', seq: 2 })
   assertEquals(observed, [result.entity.eid])
@@ -81,15 +97,11 @@ Deno.test('independent callers can complete out of order without losing transcri
   ])
   let release!: () => void
   const gate = new Promise<void>((resolve) => release = resolve)
-  const slow = executeCall(g, 'a', {
-    resolve: () => ({
-      run: async () => {
-        await gate
-        return 'a'
-      },
-    }),
-  })
-  await executeCall(g, 'b', { resolve: () => ({ run: () => 'b' }) })
+  const slow = saying(g, 't', async () => {
+    await gate
+    return 'a'
+  }).run('a')
+  await saying(g, 't', () => 'b').run('b')
   release()
   await slow
   const results = await g.read('.result .order=entry.seq')

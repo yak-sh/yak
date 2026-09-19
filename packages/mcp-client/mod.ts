@@ -285,13 +285,32 @@ export const connect = (server: Server, options: Options = {}): Connection => {
           t.description ?? t.name
         }`,
         inputSchema: t.inputSchema,
-        output: t.outputSchema,
         readOnly: t.annotations?.readOnlyHint,
         destructive: t.annotations?.destructiveHint,
         idempotent: t.annotations?.idempotentHint,
         openWorld: t.annotations?.openWorldHint,
         meta: { server: server.name, remoteName: t.name },
-        run: (args) => call(t.name, args),
+        // A tool on another server answers in ITS words, and this graph holds
+        // words as prose: the reply's text blocks, and its structured content
+        // where it sent any, as one entity saying which call produced it. A
+        // host that needs the reply whole — artifacts, resources, the error
+        // flag — asks the connection's own `call` instead.
+        run: async (_bundles, ctx) => {
+          let reply = await call(t.name, ctx.args)
+          let blocks = (reply.content ?? []) as Record<string, unknown>[]
+          let said = blocks
+            .filter((block) => block.type == 'text')
+            .map((block) => String(block.text ?? ''))
+          if (reply.structuredContent != null) {
+            said.push(JSON.stringify(reply.structuredContent))
+          }
+          return [{
+            entity: { eid: '$said' },
+            content: { body: said.join('\n') },
+            output: { source: ctx.call },
+            ...(reply.isError ? { error: { code: 'mcp_tool' } } : {}),
+          }]
+        },
       })))
     },
     close: (): Promise<void> =>

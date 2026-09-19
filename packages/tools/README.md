@@ -1,114 +1,127 @@
 # @yaks/tools
 
-Execute recorded tool calls against a graph and store their outcomes. The
-package uses `Tool` from `@yaks/graph`; it does not define another command
-contract or require an agent, session, provider, or MCP connection.
+A tool is a function from BUNDLES to BUNDLES. A CALL is the record of having
+asked one. This package runs the function and keeps the record.
+
+```ts
+let tool = (bundles, ctx) => [{
+  entity: { eid: '$said' },
+  content: { body: `hello ${ctx.args.name}` },
+  output: { source: ctx.call },
+}]
+```
+
+What it is handed is the call's own bundle and whatever the caller attached to
+it; what it answers is the bundles that ARE the answer — entities it found,
+entities it wants made, prose as `content{body}`. Its arguments ride on the
+context, parsed out of `call.args` and checked against the declaration. It never
+writes: the runner lands what it answered, signed as whoever wrote the call.
 
 ## Vocabulary
 
 `toolsDoc` declares:
 
-- `tool{name, description}`: a registered tool's graph identity.
-- `call{to, args, id?, source?}`: a tool reference and JSON arguments. `id` is
-  an optional transport correlation ID; `source` is optional provenance.
-- `execution{state}`: `started` before the handler runs, `completed` with its
-  result.
-- `result{call, ms}`: a result's call reference and execution duration.
-- `content{body}`, `output{source}`, `error{code}`, and `exception`: prose, what
+- `tool{name, description}`: a registered tool's graph identity — what a call
+  points at. `toolEid(name)` derives it, so the rows are the same rows every
+  time a host writes them.
+- `call{to, args, id?, source?}`: a tool and its arguments as JSON. `id` is an
+  optional transport correlation id; `source` is optional provenance.
+- `execution{state}`: `running` while the runner holds the call, `done` or
+  `failed` when the answer lands.
+- `result{call, ms}`: what answered a call, and how long it took. It carries a
+  `content{body}` copy of the answer's prose, so a transcript reads one line per
+  answer.
+- `content{body}`, `output{source}`, `error{code}` and `exception`: prose, what
   produced it, and diagnostics.
 
 `callDoc` omits `tool`, and `toolDoc` contains only `tool`, for applications
 that compose existing vocabularies. Import `@yaks/tools/vocab` when only
-declarations are needed; it does not load the executor or JSON Schema validator.
+declarations are needed; it loads no runner and no JSON Schema validator.
 
-## Execute a call
+## The rules
 
-```ts
-import { graph, type ToolCtx } from '@yaks/graph'
-import { ram } from '@yaks/ram'
-import { loadVocab } from '@yaks/vocab'
-import { executeCall, graphInvocation, toolsDoc } from '@yaks/tools'
+Two rules the vocabulary declares, in the ordinary query grammar, name the calls
+that still want running:
 
-const vocab = loadVocab([toolsDoc])
-const g = graph({ vocab, storage: ram(vocab) })
-const context: ToolCtx = {
-  graph: g,
-  actor: null,
-  read: (query) => g.read(query),
-}
-await g.apply([
-  { entity: { eid: 'echo' }, tool: { name: 'text_echo' } },
-  {
-    entity: { eid: 'request' },
-    call: { to: 'echo', args: '{"text":"hello"}' },
-  },
-])
-await executeCall(g, 'request', {
-  resolve: (id) =>
-    id === 'echo'
-      ? graphInvocation({
-        noun: 'text',
-        verb: 'echo',
-        description: 'Return the supplied text',
-        inputSchema: {
-          type: 'object',
-          required: ['text'],
-          properties: { text: { type: 'string' } },
-        },
-        run: (args) => args.text,
-      }, context)
-      : undefined,
-})
+```
+call_ready  $call .call, !results, !wake;         +result.call=$call
+call_woken  $call .call, .wake, .fired, !results; +result.call=$call
 ```
 
-`graphInvocation` preserves the caller-supplied authorization context and uses
-the shared JSON Schema validator. Legacy per-property schemas with a `parse`
-method are also supported. Other schemas need an explicit adapter; they are not
-inferred. An `Invocation` can instead supply `run`, `inputSchema`, optional
-additional validation, and output formatting directly. This supports existing
-host tool interfaces without making the executor depend on them.
+A call with no result and no wake is due now; one wearing a wake is due once it
+has fired. In a graph that knows no wakes the first clause says nothing and the
+second rule is inert — one text, right in both.
 
-The default result formatter preserves strings and JSON-serializes other values.
-Binary artifacts belong in external blob storage; handlers return references.
+The result entity is the rule's own emit, so its id is DERIVED from the firing:
+answering the same call twice patches one entity instead of making two.
 
-## Scheduling and sessions
+These rules are not machinery this package hides. They are what a host
+REGISTERS, one effect each, when it wants the calls nobody is waiting on:
 
-The host decides when a call is eligible and invokes `executeCall`. It can do so
-from a command, a worker queue, or a handler registered with `@yaks/effects`.
-Importing this package does not start an observer, worker, or daemon. Keep a
-single scheduling owner; the executor does not provide a distributed scheduler.
+```ts
+for (let rule of r.rules) fx.on(rule.plan, (e) => r.run(e.entity.eid))
+```
 
-`@yaks/session` uses this same executor under its existing execution lock and
-shutdown/drain handling. Its own precommit rule adds `entry{session}` to results
-whose calls belong to a transcript. A separate sequencing rule assigns `seq`.
-Results of non-session calls remain ordinary graph entities. Tool failure
-diagnostics reference their call through `output.source` and receive the same
-session association when applicable.
+## Run it
 
-The session adapter supplies trusted session context for tools such as fork and
-wait. Pool slot release/reacquisition remains the scheduler's responsibility.
-Tool registries are resolved by the host; callers should provide the handler
-snapshot appropriate to the issued call.
+```ts
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { runner, toolEid, toolsDoc } from '@yaks/tools'
 
-## Failure and recovery
+let vocab = loadVocab([toolsDoc, mine])
+let g = graph({ vocab, storage: ram(vocab) })
+let r = runner(g, { tools: [echo] })
+await r.ensure()
 
-Concurrent calls to `executeCall` on the same Graph share one promise. A durable
-precondition protects the start record against another graph writer. Calls with
-existing results return those results without executing again.
+let answer = await r.call([{
+  entity: { eid: '$call' },
+  call: { to: toolEid('text_echo'), args: '{"text":"hello"}' },
+  $actor: { by: me },
+}])
+```
 
-Malformed arguments, validation failures, and missing tools produce an `error`
-and a paired result. Handlers can throw `CallError` for other expected refusals.
-Unexpected handler errors produce an `exception`, notify the supplied reporter,
-and still produce a paired result.
+`call()` writes the call — the transcript comes first, because what was asked
+stands whether or not an answer ever does — then runs the function here, for
+this caller, and lands what it answered beside a result. `run(call)` runs one
+that is already in the graph; `drive()` runs every call the rules select, which
+is what a boot sweep is; `answerOf(landed)` is the answer without the runner's
+bookkeeping, `worded(bundles)` is the prose it carries, and `faulted(landed)` is
+whether the CALL failed — not whether the answer mentions a failure.
 
-A started call without a recorded result throws `UnfinishedCall`. The executor
-never automatically retries it. A process can fail after an external action
-succeeds but before its result commits; there is no exactly-once guarantee.
-Inspect or reconcile that outcome explicitly. Existing session orphan-call
-recovery still applies to older calls that lack execution records.
+## Who a tool writes as
 
-Result persistence failures propagate and leave the start record intact. A
-reporter must not throw if the host expects failure results to be recorded.
-Results commit individually; hosts must wait for all required results before
-requesting another model turn. The session scheduler enforces this using its
-existing open-call checks and per-session execution serialization.
+Whoever wrote the call, read off the call's `created.by` provenance stamp — not
+the process running it. So a tool's writes are decided about the person asking,
+and a ledger's vocabulary has to declare `created` for the actor to reach one.
+
+## At most once, and what a crash leaves
+
+`execution{state}` is the claim: `running` under a `$was` that the column was
+absent, so a second host loses the race rather than running the tool twice, and
+`done` or `failed` when the answer lands. A call left `running` by a process
+that died has no result, so the same rule still selects it — `reconcile(runner)`
+at boot re-drives it, claiming over `running` this time. That is the whole
+sweep: one query, the rule's own.
+
+There is no exactly-once. A process can fail after an external action succeeded
+and before its result commits; `run()` on a claimed call throws `UnfinishedCall`
+rather than repeating it, and the boot pass gives it one more attempt.
+
+A tool that throws lands an `error{code}` (a `CallError`, which is an expected
+refusal) or a bare `exception` (a defect, also reported), with the prose as
+`content{body}` and `output{source}` naming the call — and a result beside it,
+so whoever is waiting always hears something.
+
+## Scheduling
+
+Importing this package starts no observer and registers no hook. A host that
+wants the calls nobody here is waiting on — one another process wrote, one
+wearing a wake that has now fired — registers the two rules as effects
+(@yaks/effects `on`), one registration each, and that is the whole of the
+asynchronous case. `reconcile(runner)` at boot finishes what a crash left
+claimed, by asking the same queries once.
+
+Keep a single scheduling owner per graph. `@yaks/session`'s daemon drives its
+own transcript's calls in order, through `run()`, and registers nothing.

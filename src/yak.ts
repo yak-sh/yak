@@ -194,26 +194,19 @@ let asked = async (address: string, note: (l: string) => void) => {
   return word
 }
 
-type Space = {
-  slug: string
-  title: string
-  url: string
-  tier: string
-  // The caller's own role here, which the listing answers because membership
-  // is the DIRECTORY's fact and it read that row already (workers/yak
-  // tools.ts `app_list`). One question, every space.
-  role: string | null
-  apps: { slug: string }[]
-}
-
-let spacesOf = async (at: Account): Promise<Space[]> => {
-  let out = await rpc(at.session)('tools/call', {
-    name: 'app_list',
-    arguments: {},
-  })
-  saidBy(out)
-  return (out.structuredContent?.spaces ?? []) as Space[]
-}
+// What this account HAS, as the connector says it: one `app_list`, whose
+// answer is the listing a person reads — every space, the caller's own role in
+// each (the DIRECTORY's fact, read once, T-35384) and the apps under it. It is
+// the tool's own sentence rather than a shape this end re-formats: a tool
+// answers bundles now and its words are the prose they carry, so there is
+// nothing here to spell a second time.
+let listingOf = async (at: Account): Promise<string> =>
+  saidBy(
+    await rpc(at.session)('tools/call', {
+      name: 'app_list',
+      arguments: {},
+    }),
+  ).trim()
 
 // One account, named the way `--as` names one.
 let one = (all: Account[], want: string): Account => {
@@ -379,20 +372,13 @@ let verbs: Word[] = [
         }`,
       )
       c.out(`zone      ${zone()}`)
-      let spaces = await spacesOf(at)
-      if (!spaces.length) {
+      let listing = await listingOf(at)
+      if (!listing) {
         c.out('spaces    (none)')
         return 0
       }
       c.out('spaces')
-      for (let s of spaces) {
-        c.out(
-          `  ${s.slug.padEnd(16)} ${(s.role ?? '?').padEnd(8)} ` +
-            `${String(s.apps.length).padStart(2)} apps  ${
-              (s.tier ?? 'free').padEnd(5)
-            }  ${s.url}`,
-        )
-      }
+      for (let line of listing.split('\n')) c.out(`  ${line}`)
       return 0
     },
   },

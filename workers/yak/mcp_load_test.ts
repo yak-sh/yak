@@ -314,8 +314,8 @@ slow('store_load reads a CSV as rows of one component', async () => {
     // comes with it.
     let shown = JSON.parse(
       await agent.tool('graph_show', { ids: ['lentil'], backrefs: true }),
-    ) as { bundles: { entity: { eid: string } }[] }
-    assert(shown.bundles.some((b) => b.entity.eid == soup.entity.eid))
+    ) as { entity: { eid: string } }[]
+    assert(shown.some((b) => b.entity.eid == soup.entity.eid))
 
     // A header the component has no column for names itself, and says the
     // two ways out.

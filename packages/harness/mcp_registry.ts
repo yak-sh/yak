@@ -1,7 +1,7 @@
 /** Graph-owned definitions; runtime handles are refreshed before discovery or authorization. */
 import type { Graph } from '@yaks/graph'
-import type { Tool } from '@yaks/graph'
 import { checkNamespaces, checkToolNames, type Server } from '@yaks/mcp-client'
+import type { Remote } from './mcp_auth.ts'
 import { graphToolEid, graphToolName, serverOf } from '@yaks/mcp-client/graph'
 import {
   authorizedMCP,
@@ -81,7 +81,7 @@ export const graphMCP = (g: Graph) => {
   }
   return {
     refresh,
-    tools: async (): Promise<Tool[]> => {
+    tools: async (): Promise<Remote[]> => {
       await refresh()
       const result = (await Promise.all([...live].map(async ([id, item]) => {
         try {

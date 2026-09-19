@@ -59,7 +59,7 @@
     "output": {
       "component": true,
       "type": "object",
-      "description": "what produced the prose beside it: the ask, for a model’s own words, the call whose failure this reports, or the stream it came off (@yaks/process). Worn only by an output; prose a person or a system wrote has none",
+      "description": "what produced the prose beside it: the ask, for a model\u2019s own words, the call whose failure this reports, or the stream it came off (@yaks/process). Worn only by an output; prose a person or a system wrote has none",
       "properties": {
         "source": {
           "type": "string",
@@ -115,13 +115,14 @@
     "execution": {
       "component": true,
       "type": "object",
-      "description": "Execution of a recorded call. A started call without a result is not automatically replayed.",
+      "description": "How a recorded call is going. `running` is the runner\u2019s claim on it \u2014 a second host, or a re-entry, leaves it alone; a row still `running` when a process starts is a run that was interrupted, and the boot pass re-drives it.",
       "properties": {
         "state": {
           "type": "string",
           "enum": [
-            "started",
-            "completed"
+            "running",
+            "done",
+            "failed"
           ]
         }
       }
@@ -139,6 +140,18 @@
           "type": "string"
         }
       }
+    },
+    "call_ready": {
+      "rule": true,
+      "phase": "effect",
+      "match": "$call .call, !results, !wake; +result.call=$call",
+      "description": "a call nobody has answered and nobody scheduled: run the tool it names and attach the result"
+    },
+    "call_woken": {
+      "rule": true,
+      "phase": "effect",
+      "match": "$call .call, .wake, .fired, !results; +result.call=$call",
+      "description": "a scheduled call whose wake has fired and nobody has answered: run it now. Inert in a graph that knows no wakes, where the pair is one rule and every call is due when it is written"
     }
   }
 }

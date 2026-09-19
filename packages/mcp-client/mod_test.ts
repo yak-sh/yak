@@ -1,8 +1,18 @@
 /// <reference lib="deno.ns" />
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
+import type { Bundle, ToolCtx } from '@yaks/graph'
 import { clients, connect, nameOf } from './mod.ts'
 
 import { fixture } from './testing.ts'
+
+// What the runner hands a tool: the call's arguments, and the call itself.
+// A remote proxy reads nothing else.
+let asking = (args: Record<string, unknown> = {}): ToolCtx =>
+  ({ args, call: 'c1' }) as unknown as ToolCtx
+
+// The words a proxied tool answered — the prose of the one bundle it made.
+let words = (out: Bundle[]): string =>
+  String((out[0]?.content as { body?: unknown })?.body ?? '')
 
 Deno.test('portable client initializes, exposes unchanged schema and invokes exact remote name', async () => {
   const f = fixture()
@@ -17,10 +27,15 @@ Deno.test('portable client initializes, exposes unchanged schema and invokes exa
       properties: { html: { type: 'string' } },
       required: ['html'],
     })
-    const out = await t.run({ html: '<h1>mockup</h1>' }, {} as never)
-    assertEquals((out as { structuredContent: unknown }).structuredContent, {
-      saved: '<h1>mockup</h1>',
-    })
+    // A remote answer is prose to this graph: the words the server wrote,
+    // in a bundle that says which call produced them.
+    const out = await t.run([], asking({ html: '<h1>mockup</h1>' }))
+    // Every text block the server wrote, which is what it wrote for a reader.
+    assert(words(out).includes('https://example.test/mockup/1'))
+    assertEquals(
+      (out[0].output as { source?: unknown }).source,
+      'c1',
+    )
     assert(f.calls.some((x) => x.method === 'notifications/initialized'))
     assertEquals(
       f.calls.find((x) => x.method === 'tools/call')?.params.name,
@@ -199,7 +214,7 @@ Deno.test('graph Tool is usable through the CLI adapter without any session runt
       noun: 'mockup',
       verb: 'publish',
       run: async (args: Record<string, unknown>) => {
-        lines.push(JSON.stringify(await tool.run(args, {} as never)))
+        lines.push(JSON.stringify(await tool.run([], asking(args))))
         return 0
       },
     }
@@ -268,13 +283,13 @@ Deno.test('about tool accepts declared draft-07 input and output through SDK val
   try {
     const [tool] = await c.tools()
     const { validateToolInput } = await import('@yaks/vocab/tools')
-    const result = await tool.run(validateToolInput(tool, {}), {} as never)
-    assertEquals((result as { structuredContent: unknown }).structuredContent, {
-      text: 'about',
-    })
+    const result = await tool.run([], asking(validateToolInput(tool, {})))
+    assert(words(result).includes('about'))
     assertEquals(called, 1)
     invalid = true
-    await assertRejects(async () => await tool.run({}, {} as never))
+    // The remote's own outputSchema still governs the remote's reply: a
+    // server that breaks its published contract is refused at this hop.
+    await assertRejects(async () => await tool.run([], asking()))
   } finally {
     await c.close()
   }

@@ -46,9 +46,8 @@ export let rules = (host: Host): Plugin[] => {
   ]
 }
 
-/** The runs behind the tools vocab.json declares. */
+/** The runs behind the tools vocab.json declares. The answer is the entities
+ * themselves — a tool that finds transcripts answers transcripts. */
 export let runs: Runs = {
-  session_list: async (_args, ctx) => ({
-    result: await ctx.read(parse('.session')),
-  }),
+  session_list: (_bundles, ctx) => ctx.read(parse('.session')),
 }

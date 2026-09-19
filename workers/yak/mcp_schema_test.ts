@@ -7,7 +7,16 @@ import {
 } from '@std/assert'
 import { Ajv } from 'ajv'
 import { slow, until } from '../../src/testing.ts'
-import { connector, kernel, num, signIn, txt, vocabFile } from './probe.ts'
+import {
+  commandsIn,
+  connector,
+  kernel,
+  num,
+  rowsIn,
+  signIn,
+  txt,
+  vocabFile,
+} from './probe.ts'
 import { hearing, HELLO } from './mcp-probe.ts'
 
 // An app's OWN tools (T-32685): a tools.json beside vocab.json, planted by
@@ -68,15 +77,7 @@ slow('an app declares its own commands, and command runs them', async () => {
     // What the app can be ASKED to do, said by the one fixed tool (T-34541):
     // the commands, the app each belongs to, and the arguments each takes.
     let commands = async (args: Record<string, unknown> = {}) =>
-      (await agent.call('tools/call', { name: 'commands', arguments: args }))
-        .structuredContent.commands as {
-          at: string
-          name: string
-          description: string
-          readOnly: boolean
-          input: { required: string[] }
-          view?: string
-        }[]
+      commandsIn(await agent.tool('commands', args))
     let all = await commands()
     // The two it declared, and the two its `jog` is worth (kinds.ts).
     assertEquals(all.map((c) => c.name), [
@@ -91,16 +92,16 @@ slow('an app declares its own commands, and command runs them', async () => {
     // the person called it, and a model choosing reads the words.
     assertStringIncludes(log.description, 'Run club')
     assertStringIncludes(log.description, `${space}.yaks.app/runs/`)
-    assertEquals(log.input.required, ['who', 'miles'])
-    assertEquals(log.readOnly, false)
+    // Its arguments as the listing spells them, required ones bare.
+    assertEquals(log.args, 'who, miles')
+    assert(log.writes, 'logging a run is a write')
 
     // The app's own MCP App view (T-32687): the command names the page, the
     // door serves it out of the app's own files under the profile, and a
     // `<base>` at the app's address keeps the stylesheet beside it working.
     let view = `ui://${space}/runs/leaderboard.html`
     let board0 = all.find((c) => c.name == 'leaderboard')!
-    assertEquals(board0.view, view)
-    assertEquals(board0.readOnly, true)
+    assert(!board0.writes, 'a leaderboard only reads')
     let listed = (await agent.call('resources/list')).resources
       .find((r: { uri: string }) => r.uri == view)
     assertEquals(listed.mimeType, 'text/html;profile=mcp-app')
@@ -162,15 +163,29 @@ slow('an app declares its own commands, and command runs them', async () => {
     assertEquals(rows[0].created.by, { eid: jeff.person, name: jeff.name })
     // And the read half answers the listing a page gets — the same byline,
     // through the declared tool's own query.
-    let board = await agent.call('tools/call', {
+    let board = await agent.tool('command', { name: 'leaderboard' })
+    assertStringIncludes(board, 'leaderboard: 1 row')
+    // The rows are said once, under the sentence, and they still carry who
+    // wrote them: a command runs as the person who asked for it.
+    assertEquals(rowsIn<Run>(board)[0].created.by, {
+      eid: jeff.person,
+      name: jeff.name,
+    })
+    // And the reply carries that answer as what it IS: a tool answers BUNDLES,
+    // so the words are one bundle's `content{body}` and the bundle says which
+    // call it came from. An app's own declared command goes down the same path
+    // as every other tool here, and this is where that shows.
+    let reply = await agent.call('tools/call', {
       name: 'command',
       arguments: { name: 'leaderboard' },
     })
-    assertStringIncludes(board.content[0].text, 'leaderboard: 1 row')
-    assertEquals(
-      (board.structuredContent.rows as Run[])[0].created.by,
-      { eid: jeff.person, name: jeff.name },
-    )
+    let answer = reply.structuredContent.result as {
+      content: { body: string }
+      output: { source: string }
+    }[]
+    assertEquals(answer.length, 1)
+    assertEquals(answer[0].content.body, reply.content[0].text)
+    assert(answer[0].output.source, 'the call it answered')
     // An argument the command declared and the call left out is refused by
     // the declaration, naming the argument, and no half-written row lands.
     let short = await assertRejects(
@@ -289,14 +304,7 @@ slow('a kind an app declares is two commands, with no tools.json', async () => {
 
     // They are ordinary declared commands: the app's title and address on the
     // sentence, and the read half marked read-only.
-    let listed = async () =>
-      (await agent.call('tools/call', { name: 'commands', arguments: {} }))
-        .structuredContent.commands as {
-          name: string
-          description: string
-          readOnly: boolean
-          input: { properties: Record<string, unknown>; required?: string[] }
-        }[]
+    let listed = async () => commandsIn(await agent.tool('commands'))
     let all = await listed()
     let add = all.find((t) => t.name == 'add_recipe')!
     let find = all.find((t) => t.name == 'find_recipe')!
@@ -306,19 +314,13 @@ slow('a kind an app declares is two commands, with no tools.json', async () => {
         `${space}.yaks.app/box/`,
     )
     assertStringIncludes(find.description, `Find recipes in ${space}/box.`)
-    assertEquals(add.readOnly, false)
-    assertEquals(find.readOnly, true)
-    // The kind's own columns are the arguments, and only the title is owed.
-    assertEquals(Object.keys(add.input.properties), [
-      'title',
-      'body',
-      'alias',
-      'serves',
-      'cuisine',
-    ])
-    assertEquals(add.input.required, ['title'])
-    // Nothing at all is owed to the find.
-    assertEquals(find.input.required ?? [], [])
+    assert(add.writes, 'adding a recipe writes it')
+    assert(!find.writes, 'finding them does not')
+    // The kind's own columns are the arguments, and only the title is owed —
+    // the optional ones wear the `?` the listing marks them with.
+    assertEquals(add.args, 'title, body?, alias?, serves?, cuisine?')
+    // Nothing at all is owed to the find: every argument it takes wears `?`.
+    assertEquals(find.args.split(', ').filter((a) => !a.endsWith('?')), [])
 
     // Adding writes the row: the kind, the title, the columns given — and the
     // name it answers to afterwards.
@@ -343,11 +345,9 @@ slow('a kind an app declares is two commands, with no tools.json', async () => {
       args: { title: 'Toast' },
     })
     let found = async (args: Record<string, unknown>) =>
-      (await agent.call('tools/call', {
-        name: 'command',
-        arguments: { name: 'find_recipe', args },
-      }))
-        .structuredContent.rows as { doc: { title: string } }[]
+      rowsIn<{ doc: { title: string } }>(
+        await agent.tool('command', { name: 'find_recipe', args }),
+      )
     assertEquals((await found({})).map((r) => r.doc.title), [
       'Lemon cake',
       'Toast',
@@ -479,13 +479,8 @@ slow(
 
       // What differs is the COMMANDS, which are a caller's own: his app's, and
       // nothing of hers — her app is in her space, and he is nobody there.
-      let commands = async (
-        agent: ReturnType<typeof connector>,
-      ) => ((await agent.call('tools/call', {
-        name: 'commands',
-        arguments: {},
-      }))
-        .structuredContent.commands as { at: string; name: string }[])
+      let commands = async (agent: ReturnType<typeof connector>) =>
+        commandsIn(await agent.tool('commands'))
       // Each app's own, and the two every word it declares is worth beside
       // them (kinds.ts).
       assertEquals((await commands(club.agent)).map((c) => c.name), [

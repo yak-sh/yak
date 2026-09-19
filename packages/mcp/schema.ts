@@ -196,17 +196,3 @@ export let bundleSchema = (
     // growth with `tools/list_changed` and the roster line (roster.ts), and a
     // client re-reads.
   }).passthrough()
-
-/** `graph_show`'s answer: the entities and their backrefs, each as a bundle. */
-export let showSchema = (bundle: z.ZodTypeAny): z.ZodTypeAny =>
-  z.object({
-    bundles: z.array(bundle),
-  })
-
-/**
- * A tool's declared output: its structured result under `result`. MCP's
- * `structuredContent` must be an object, so an answer that is a list rides
- * under a key rather than being one.
- */
-export let outputSchema = (result: z.ZodTypeAny): z.ZodTypeAny =>
-  z.object({ result })
