@@ -198,7 +198,7 @@ variable by the compiler, which is where `parse()` has always left meaning.
 `reads(match, vocab)` names the components the plan touches — what a batch
 overlay has to cover for the statement to see a batch that has not landed
 (`@yaks/sqlite`'s `overlay()`). That is the whole of "rules run before
-persistence": the same statement, a different set of tables underneath.
+persistence": the same statement, reading different sources underneath.
 
 ### A rule with no code at all
 
@@ -231,6 +231,26 @@ settles because a rule fires AT MOST ONCE per
 bound)`: a repeat is not a slow fixpoint, it is a
 rule that failed to gate itself, and it is refused by name and by binding. That
 refusal is the whole termination argument.
+
+### A template is a rule with its variables supplied
+
+There is no template object, and no `{{hole}}` — the graph already had
+variables. `filled(match, args)` merges a rule's match with the arguments read
+as a bindings-only query, and where a bound variable SITS decides what it does:
+
+```ts
+filled('+foo.bar=$x', { x: 5 }) // makes an entity with foo.bar = 5
+filled('$p .product, +!sale', { p: 'p1' }) // constrains: that product, no other
+```
+
+In a match clause a bound variable CONSTRAINS (the column must equal it); in a
+`+` clause it SUPPLIES (the column is written with it); in both it does both.
+That was already how variables worked — this is only the merge.
+
+`invoked(tx, vocab, template, args)` runs it: the same engine the `rules` phase
+runs, asked outright with an empty batch instead of about one. An empty batch is
+also why an invocation has no batch anchor — there is nothing for it to be
+about.
 
 Nothing a rule writes is written by the rule. The patches join the batch and
 `mutate` writes them, so a rule's output is admitted, stamped, journaled,

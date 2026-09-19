@@ -220,41 +220,43 @@ to `storage()`. SQLite does not depend on FTS or create its indexes.
 
 A rule is a query, and a query reads tables — so a rule judged against a batch
 that has not been written yet needs the batch to BE a table. `overlay()` makes
-it one:
+it one, as a `with` prefix the statement carries:
 
 ```ts
 import { overlay } from '@yaks/sqlite'
 
 let over = overlay(driver, vocab, batch, ['result', 'call'])
-try {
-  // every compiled statement here reads the graph with the batch in it
-} finally {
-  over.drop()
-}
+driver.query(over.with + sql, [...over.params, ...params])
 ```
 
-Each covered component gets a temp table holding the batch's own rows and a temp
-VIEW of the component's own name over `main`'s rows minus the ones the batch
-moved, unioned with those. SQLite resolves an unqualified name in `temp` before
-`main`, so the same SQL from the same dialect reads the overlay while it stands
-— `@yaks/sql` never learns one exists, and there is no second compiler. A patch
-is folded into the committed row once, here; a dropped component and a deleted
-entity leave the view; an entity the batch mints gets a NEGATIVE integer id
-(storage hands out positive ones), so a rule can join two entities the same
-batch created.
+Each covered component gets a common table expression — the committed rows the
+batch did not touch, unioned with the batch's own — and the rule's dialect
+points that component's name at it (`over.at`). Nothing is created, nothing is
+dropped, and nothing outside the statement can see it. A patch is folded into
+the committed row once, here; a dropped component and a deleted entity leave the
+CTE; an entity the batch mints gets a NEGATIVE integer id (storage hands out
+positive ones), so a rule can join two entities the same batch created.
 
-It costs the BATCH, never the database: nothing is copied, and the fourth test
-in `overlay_test.ts` measures it (10 statements, ~1.8 ms for a 20-bundle batch
-over a graph of 2,000). Pass the components your rules name — raising a table is
-DDL, and DDL makes SQLite re-prepare held statements.
+It was temp tables shadowing the committed ones until an app-declared rule was
+run inside a deployed Worker: a Durable Object's SQLite refuses a temp object
+outright (`not authorized: SQLITE_AUTH`). A CTE runs wherever SQL does, and it
+took the shadowing hazard with it — while a temp table stood, an unqualified
+INSERT would have landed in it.
 
-While an overlay stands, an unqualified INSERT would land in a temp table, so
-nothing writes between raising it and dropping it: `@yaks/graph`'s `rules` phase
-reads, and `mutate` writes after.
+It costs the BATCH, never the database: the CTE NAMES the committed table for
+every row the batch never touched, so nothing is copied, and the fourth test in
+`overlay_test.ts` measures it — three statements over a graph of 2 and a graph
+of 2,002. Pass the components your rules name; a component nobody touched needs
+no overlay at all.
 
-A seam, named and not built: these overlay tables are the shape a browser cache
-already keeps, so the same compiled rule could one day run locally against a
-local overlay. Nothing here assumes a server; nothing here builds that either.
+What this asks of `@yaks/sql` is only that a dialect be believed: `table()`,
+`source()` for correlated subqueries, and `refEqAt()` for reference equality all
+route through it, so a dialect that reads a component from somewhere else is
+followed everywhere rather than only at the top-level joins.
+
+A seam, named and not built: an overlay is a query, so a browser that keeps its
+cache as tables could run the same compiled rule against the same shape locally.
+Nothing here assumes a server; nothing here builds that either.
 
 ### The store's own key/value
 
