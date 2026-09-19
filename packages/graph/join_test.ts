@@ -1,195 +1,69 @@
+// A rule's match, READ: the patterns a source says, the variables they share,
+// and the components a batch overlay has to cover for it. What the plan lowers
+// to is a storage's business (@yaks/sqlite's rules_test.ts runs it).
+
 import { assertEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
-import { ram } from '@yaks/ram'
-import { graph } from './graph.ts'
-import { joinRule } from './join.ts'
-import type { Bundle } from './bundle.ts'
-const vocab = loadVocab([{
+import { match, reads } from './join.ts'
+
+let vocab = loadVocab([{
   $defs: {
-    session: {
-      component: true,
-      properties: {},
-    },
-    call: {
-      component: true,
-      properties: {},
-    },
-    entry: {
-      component: true,
-      properties: {
-        session: { type: 'string', ref: 'session' },
-        seq: { type: 'number' },
-      },
-    },
+    entity: { component: true, wire: false, properties: {} },
+    session: { component: true, properties: {} },
+    call: { component: true, properties: {} },
     result: {
       component: true,
       properties: { call: { type: 'string', ref: 'call' } },
     },
-    source: {
-      component: true,
-      properties: { key: { type: 'string' }, value: { type: 'string' } },
-    },
-    target: {
-      component: true,
-      properties: { key: { type: 'string' } },
-    },
-    label: {
-      component: true,
-      properties: { value: { type: 'string' } },
-    },
+    doc: { component: true, kind: true, properties: { title: {} } },
   },
 }])
-const rule = '$call .entry{$session} .call; .result{$call} +!entry{$session}'
-const call: Bundle = { entity: { eid: 'c' }, call: {}, entry: { session: 's' } }
-const result: Bundle = { entity: { eid: 'r' }, result: { call: 'c' } }
-Deno.test('bounded join adds only missing membership and never sequence or new entities', () => {
-  const plan = joinRule(rule, vocab)
-  assertEquals(plan.run([[call], [result]]), [{
-    entity: { eid: 'r' },
-    entry: { session: 's' },
+
+Deno.test('a source is patterns, split on the one thing that separates them', () => {
+  let m = match('$call .call; .result, result.call=$call')
+  assertEquals(m.patterns.length, 2)
+  assertEquals(m.patterns[0].entity, 'call')
+  assertEquals(m.patterns[1].entity, undefined)
+  assertEquals(m.patterns[1].binds, [{
+    path: ['result', 'call'],
+    name: 'call',
   }])
-  assertEquals(
-    plan.run([[call], [{ ...result, entry: { session: 'other' } }]]),
-    [],
-  )
-  assertEquals(
-    plan.run([[call], [{ ...result, result: { call: 'missing' } }]]),
-    [],
-  )
-  assertEquals(plan.run([[call, call], [result]]).length, 1)
-  assertEquals(
-    plan.run([[{ ...call, result: { call: 'c' } }], [{
-      ...call,
-      result: { call: 'c' },
-    }]]),
-    [],
-  )
-})
-Deno.test('second domain uses shared scalar bindings; ambiguous writes refuse', () => {
-  const plan = joinRule(
-    '.source{$key, $value}; .target{$key} +!label{$value}',
-    vocab,
-  )
-  const a = { entity: { eid: 'a' }, source: { key: 'x', value: 'one' } }
-  const b = { entity: { eid: 'b' }, source: { key: 'x', value: 'two' } }
-  const t = { entity: { eid: 't' }, target: { key: 'x' } }
-  assertEquals(plan.run([[a], [t]]), [{
-    entity: { eid: 't' },
-    label: { value: 'one' },
-  }])
-  assertThrows(() => plan.run([[a, b], [t]]), Error, 'Ambiguous')
-  assertThrows(
-    () => joinRule('.source{$key}; .target{$key} +!label{$value}', vocab),
-    Error,
-    'Unbound',
-  )
-  assertThrows(
-    () => joinRule('.entry{seq: $x}; .target{key: $x}', vocab),
-    Error,
-    'Incompatible',
-  )
-  assertThrows(
-    () => joinRule('.source{unknown: $x}', vocab),
-    Error,
-    'Unknown property',
-  )
-  assertThrows(
-    () => joinRule(rule, vocab, { candidates: 1 }).run([[call], [result]]),
-    Error,
-    'candidate limit',
-  )
-  assertThrows(
-    () => joinRule(rule, vocab, { steps: 1 }).run([[call], [result]]),
-    Error,
-    'step limit',
-  )
-})
-Deno.test('transaction host supplies indexed views; separate sequence rule precedes effects', async () => {
-  const plan = joinRule(rule, vocab)
-  const seen: Bundle[] = []
-  const g = graph({
-    vocab,
-    storage: ram(vocab),
-    plugins: [{
-      name: 'explicit-join-pilot',
-      hooks: {
-        precondition: async (batch, tx) => {
-          // This host knows the reference direction: only touched result targets.
-          const targets = batch.filter((b) => b.result)
-          const ids = targets.map((b) =>
-            String((b.result as { call: string }).call)
-          )
-          const stored = await tx.get([
-            ...ids,
-            ...targets.map((b) => b.entity.eid),
-          ])
-          const merged = new Map(stored.map((b) => [b.entity.eid, b]))
-          for (const b of batch) {
-            merged.set(b.entity.eid, { ...merged.get(b.entity.eid), ...b })
-          }
-          const patches = plan.run([
-            ids.flatMap((id) => merged.has(id) ? [merged.get(id)!] : []),
-            targets.map((b) => merged.get(b.entity.eid)!),
-          ])
-          return [...batch, ...patches]
-        },
-        effect: async (batch, tx) => {
-          seen.push(...await tx.get(batch.map((b) => b.entity.eid)))
-          return batch
-        },
-      },
-      rules: [{
-        phase: 'stamp',
-        match: '.entry .entry.seq=',
-        run: () => ({ entry: { seq: 7 } }),
-      }],
-    }],
-  })
-  await g.apply([{ entity: { eid: 's' }, session: {} }, call])
-  seen.length = 0
-  await g.apply([result])
-  const [row] = await g.read('.result')
-  assertEquals(row.entry, { session: 's', seq: 7 })
-  assertEquals(seen.find((b) => b.entity.eid == 'r')?.entry, row.entry)
-  await g.apply([{ entity: { eid: 'r2' }, result: { call: 'c2' } }, {
-    ...call,
-    entity: { eid: 'c2' },
-  }])
-  assertEquals((await g.read('.result')).length, 2)
+  assertEquals(m.vars, ['call'])
 })
 
-Deno.test('self joins and repeated entity variables use identity equality', () => {
-  const a = {
-    entity: { eid: 'a' },
-    source: { key: 'x', value: 'one' },
-    target: { key: 'x' },
-  }
-  const b = { ...a, entity: { eid: 'b' } }
-  const plan = joinRule(
-    '$same .source{$value}; $same .target +!label{$value}',
-    vocab,
-  )
-  assertEquals(plan.run([[a], [b, a]]), [{
-    entity: { eid: 'a' },
-    label: { value: 'one' },
-  }])
-  assertEquals(plan.run([[a], [b]]), [])
-  assertEquals(
-    joinRule('.target +!label{$value}; .source{$value}', vocab).run([[a], [a]]),
-    [{ entity: { eid: 'a' }, label: { value: 'one' } }],
-  )
+Deno.test('the sigils still say what they always said', () => {
+  let m = match('.call, +!result, *result, #Now')
+  assertEquals(m.patterns[0].gates, ['result'])
+  assertEquals(m.patterns[0].writes, ['result'])
+  assertEquals(m.patterns[0].resources, ['Now'])
 })
 
-Deno.test('null values do not bind and inconsistent candidate views refuse', () => {
-  const plan = joinRule(rule, vocab)
+Deno.test('a variable in a value leaves the filter, because a literal $x matches nothing', () => {
+  let m = match('.doc.title=$t')
+  assertEquals(m.patterns[0].filter.clauses, [])
+  assertEquals(m.patterns[0].binds, [{ path: ['doc', 'title'], name: 't' }])
+  assertEquals(m.vars, ['t'])
+})
+
+Deno.test('an ordinary predicate is left alone for the query compiler', () => {
+  let m = match('.doc.title=Dune')
+  assertEquals(m.patterns[0].binds, [])
+  assertEquals(m.patterns[0].filter.clauses.length, 1)
+})
+
+Deno.test('a pattern names one entity', () => {
+  assertThrows(() => match('$a $b .call'), Error, 'names one entity')
+})
+
+Deno.test('a rule needs a pattern', () => {
+  assertThrows(() => match('  ;  '), Error, 'needs a pattern')
+})
+
+Deno.test('what a match reads is what an overlay must cover', () => {
   assertEquals(
-    plan.run([[{ ...call, entry: { session: null } }], [result]]),
-    [],
+    reads(match('$c .call; .result, result.call=$c, +!doc'), vocab).sort(),
+    ['call', 'doc', 'result'],
   )
-  assertThrows(
-    () => plan.run([[call], [{ ...call, entry: { session: 'different' } }]]),
-    Error,
-    'Conflicting candidate',
-  )
-  assertThrows(() => plan.run([[call]]), Error, 'candidate set')
+  // A bare word is routed: `.title` is the `doc` component's column.
+  assertEquals(reads(match('.title=Dune'), vocab), ['doc'])
 })

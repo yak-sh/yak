@@ -178,9 +178,24 @@ command framework.
 for shared validation and optional positional/short-flag presentation. Tool
 nouns are independent of graph component names.
 
-## Experimental multi-entity rules
+## Multi-entity rules
 
-The optional `joinRule()` evaluator accepts host-supplied, bounded candidate
-sets and produces patches on matched entities. It does not register effects or
-scan storage. See [JOIN_RULES.md](./JOIN_RULES.md) for syntax, transaction
-examples, and the unresolved planning and phase-ordering boundaries.
+A rule about more than one entity is written as several ordinary query patterns
+separated by `;`, one per entity, joined by the variables they share:
+
+```text
+$call .call; .result, result.call=$call
+```
+
+`match(source)` reads that into a PLAN — the patterns, their gates, and where
+each variable is filled from — and a storage lowers the plan to ONE statement
+through its own compiler (`@yaks/sqlite`'s `statement()`, through `@yaks/sql`'s
+path-to-join binding, where a gate is a `left join … is null`). Nothing was
+added to the grammar to say any of it: `$name` alone is a clause the sigils
+already spell, and a value whose raw text begins with `$` is read as the same
+variable by the compiler, which is where `parse()` has always left meaning.
+
+`reads(match, vocab)` names the components the plan touches — what a batch
+overlay has to cover for the statement to see a batch that has not landed
+(`@yaks/sqlite`'s `overlay()`). That is the whole of "rules run before
+persistence": the same statement, a different set of tables underneath.

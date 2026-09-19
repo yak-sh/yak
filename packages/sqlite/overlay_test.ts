@@ -3,7 +3,7 @@
 // takes any other day — so what these assert is that a rule needs no second
 // evaluator to see a batch that has not landed.
 
-import { assert, assertEquals } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import { mem, shop } from './harness.ts'
 import { overlay } from './overlay.ts'
 import { read } from './read.ts'
@@ -83,53 +83,54 @@ Deno.test('a reference to an entity the same batch mints resolves', () => {
 })
 
 Deno.test('the overlay costs the batch, never the database', () => {
-  let { driver, s } = shopFloor()
-  // A graph big enough that copying it would show: 2,000 committed products.
-  s.tx((tx) =>
-    tx.patch(
-      Array.from({ length: 2000 }, (_, i) => ({
-        entity: { eid: `x${i}` },
-        doc: { title: `t${i}` },
-        product: { price: i },
-      })),
-    )
-  )
-  let batch = Array.from({ length: 20 }, (_, i) => ({
-    entity: { eid: `n${i}` },
-    doc: { title: `fresh${i}` },
-    product: { price: 100000 + i },
-  }))
-  let statements = 0
-  let counted = {
-    ...driver,
-    query: (sql: string, params: Parameters<typeof driver.query>[1]) => {
-      statements++
-      return driver.query(sql, params)
-    },
-    exec: (sql: string) => {
-      statements++
-      return driver.exec(sql)
-    },
+  // The same batch, raised over a graph of 2 and a graph of 2,002. What it
+  // costs must be the same both times — a wall clock would only say how loaded
+  // the box is, so what is asserted is the statements, which is the thing that
+  // does not scale.
+  let cost = (size: number) => {
+    let { driver, s } = shopFloor()
+    if (size) {
+      s.tx((tx) =>
+        tx.patch(
+          Array.from({ length: size }, (_, i) => ({
+            entity: { eid: `x${i}` },
+            doc: { title: `t${i}` },
+            product: { price: i },
+          })),
+        )
+      )
+    }
+    let batch = Array.from({ length: 20 }, (_, i) => ({
+      entity: { eid: `n${i}` },
+      doc: { title: `fresh${i}` },
+      product: { price: 100000 + i },
+    }))
+    let statements = 0
+    let counted = {
+      ...driver,
+      query: (sql: string, params: Parameters<typeof driver.query>[1]) => {
+        statements++
+        return driver.query(sql, params)
+      },
+      exec: (sql: string) => {
+        statements++
+        return driver.exec(sql)
+      },
+    }
+    let over = overlay(counted, shop, batch)
+    let raising = statements
+    try {
+      assertEquals(read(counted, shop, '.product.price>=100000').length, 20)
+    } finally {
+      over.drop()
+    }
+    return raising
   }
-  // Raised twice: the first pays SQLite's statement preparation, the second is
-  // what a batch costs from then on.
-  overlay(counted, shop, batch).drop()
-  statements = 0
-  let at = performance.now()
-  let over = overlay(counted, shop, batch)
-  let raised = performance.now() - at
-  try {
-    // Three statements per covered component (create, insert, view) plus the
-    // spine's three, plus one committed-row read per component and one id
-    // lookup: a constant, not a function of the 2,000 rows already there.
-    assert(statements <= 16, `${statements} statements`)
-    assertEquals(read(counted, shop, '.product.price>=100000').length, 20)
-  } finally {
-    over.drop()
-  }
-  // A bound, not a benchmark: raising it is a millisecond or two for a batch
-  // this size, and it must not scale with a database free to be enormous.
-  assert(raised < 25, `${raised}ms to raise the overlay`)
+  // Three statements per covered component (create, insert, view) plus the
+  // spine's three, one committed-row read per component, and one id lookup —
+  // ten, whatever is already in the file.
+  assertEquals(cost(0), 10)
+  assertEquals(cost(2000), 10)
 })
 
 Deno.test('an overlay covers what will be read and nothing else', () => {
