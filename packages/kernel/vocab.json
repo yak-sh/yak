@@ -1,0 +1,296 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/id": true,
+    "https://yaks.sh/vocab/edge": true
+  },
+  "title": "kernel",
+  "$defs": {
+    "about": {
+      "component": true,
+      "type": "object",
+      "relation": "about",
+      "properties": {},
+      "description": "the relation an edge wears: this is about that"
+    },
+    "comment": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "properties": {
+        "target": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade"
+        }
+      },
+      "description": "words aimed at any entity — the doc beside it says them"
+    },
+    "created": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      },
+      "description": "who made it, when, and through what"
+    },
+    "decided": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "verdict": {
+          "enum": [
+            "approved",
+            "declined"
+          ]
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      },
+      "description": "the decision itself: approved or declined, by whom and when"
+    },
+    "delegates": {
+      "component": true,
+      "type": "object",
+      "relation": "delegates",
+      "properties": {},
+      "description": "the relation an edge wears: this handed that off"
+    },
+    "entity": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "properties": {
+        "num": {
+          "type": "number",
+          "stamped": true,
+          "description": "the number this graph minted for it, counting up"
+        },
+        "archetype": {
+          "type": "string",
+          "ref": "archetype",
+          "death": "keep",
+          "stamped": true,
+          "description": "which set of components it wears — the archetype row, not a kind"
+        }
+      },
+      "description": "every entity has one: the number this graph minted for it, and the archetype its set of components makes"
+    },
+    "favorite": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      },
+      "description": "somebody keeps it close"
+    },
+    "image": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "w": {
+          "type": "number"
+        },
+        "h": {
+          "type": "number"
+        }
+      },
+      "description": "the bitmap an artifact is, at the size it is"
+    },
+    "opened": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      },
+      "description": "somebody looked at it"
+    },
+    "proposed": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      },
+      "description": "put forward for a decision, by whom and when"
+    },
+    "quarantined": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      },
+      "description": "set aside as harmful to act on: readable, never handed out as guidance"
+    },
+    "reads": {
+      "component": true,
+      "type": "object",
+      "relation": "reads",
+      "properties": {},
+      "description": "the relation an edge wears: this reads that"
+    },
+    "redaction": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "prefix": "X",
+      "properties": {
+        "target": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "column": {
+          "enum": [
+            "title",
+            "body"
+          ],
+          "stamped": true,
+          "description": "which column was replaced"
+        },
+        "hash": {
+          "type": "string",
+          "stamped": true,
+          "description": "the digest of what was there, so a claim about it can still be checked"
+        }
+      },
+      "description": "one column of one entity, replaced — the hash proves what was there without keeping it"
+    },
+    "references": {
+      "component": true,
+      "type": "object",
+      "relation": "referenced",
+      "properties": {},
+      "description": "the relation an edge wears: this refers to that"
+    },
+    "supersedes": {
+      "component": true,
+      "type": "object",
+      "relation": "supersedes",
+      "properties": {},
+      "description": "the relation an edge wears: this replaces that"
+    },
+    "supervises": {
+      "component": true,
+      "type": "object",
+      "relation": "supervises",
+      "properties": {},
+      "description": "the relation an edge wears: this oversees that"
+    },
+    "updated": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      },
+      "description": "who last changed it, when, and through what"
+    },
+    "wants": {
+      "component": true,
+      "type": "object",
+      "relation": "wants",
+      "properties": {},
+      "description": "the relation an edge wears: this wants that"
+    },
+    "worked": {
+      "component": true,
+      "type": "object",
+      "relation": "worked",
+      "properties": {},
+      "description": "the relation an edge wears: this worked on that"
+    }
+  }
+}

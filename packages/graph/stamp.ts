@@ -21,31 +21,12 @@
 // all is stamped not at all. Nothing here assumes a shape.
 
 import type { Vocab } from '@yaks/vocab'
-import type { Actor, Bundle, Comp, Entity } from './bundle.ts'
+import type { Actor, Bundle, Comp } from './bundle.ts'
 import type { State } from './state.ts'
 import type { Bound, Patch, Rule } from './rules.ts'
 
 /** The actor a batch names: the first `$actor` component in it. A batch speaks
  * with one voice, so the first one found is the writer for the whole batch. */
-/**
- * A batch as one actor's. Whatever `$actor` the bundles carried is dropped:
- * who is writing is the DOOR's word, never the client's — and it is a door
- * (@yaks/api's `/apply`, @yaks/tools' runner landing what a tool answered)
- * that says it.
- *
- * ```ts
- * signed([{ entity: { eid: 'b1' } }], { eid: 'm1' })
- * // [{ entity: { eid: 'b1' }, $actor: { by: 'm1' } }]
- * ```
- */
-export let signed = (change: Bundle[], who: Entity | null): Bundle[] =>
-  change.map((b) => {
-    let out: Bundle = { ...b }
-    delete out.$actor
-    if (who) out.$actor = { by: who.eid }
-    return out
-  })
-
 export let actorOf = (bundles: Bundle[]): Actor =>
   bundles.find((b) => b.$actor)?.$actor ?? {}
 

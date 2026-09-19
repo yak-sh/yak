@@ -1,100 +1,39 @@
 {
   "$vocabulary": {
     "https://yaks.sh/vocab/core": true,
-    "https://yaks.sh/vocab/edge": true
+    "https://yaks.sh/vocab/id": true,
+    "https://yaks.sh/vocab/edge": true,
+    "https://yaks.sh/vocab/blob": true,
+    "https://yaks.sh/vocab/kernel": true
   },
   "title": "task",
   "$defs": {
-    "task": {
+    "accept": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "description": "a thing to do",
       "properties": {
-        "status": {
+        "body": {
           "type": "string",
-          "enum": [
-            "cancelled",
-            "done",
-            "open"
-          ],
-          "computed": true,
-          "description": "where the task stands — read off the completed and cancelled marks, never written"
+          "store": "blob",
+          "bare": false,
+          "description": "the conditions, in prose"
         }
-      }
+      },
+      "description": "what finishing this means — written when the work is asked for, not after"
     },
-    "filed": {
+    "blocked": {
       "component": true,
       "type": "object",
-      "description": "optional portfolio filing, separate from being a task",
+      "description": "something outside the graph is in the way. A facet, never a status: a blocked task is still open work.",
       "properties": {
-        "priority": {
-          "type": "number",
-          "format": "priority",
-          "description": "queue order — lower is more urgent"
+        "on": {
+          "type": "string",
+          "description": "what it is waiting on, said in words"
         },
-        "project": {
-          "type": "string",
-          "ref": "project",
-          "death": "detach",
-          "description": "what it is filed under; deleting the project frees the task rather than taking it along"
-        },
-        "assignee": {
-          "type": "string",
-          "ref": "entity",
-          "death": "detach",
-          "description": "whose queue this task is filed in"
-        },
-        "domain": {
-          "type": "string",
-          "description": "the work area this task is filed in"
-        }
-      }
-    },
-    "project": {
-      "component": true,
-      "type": "object",
-      "kind": true,
-      "description": "something tasks are grouped under",
-      "properties": {}
-    },
-    "board": {
-      "component": true,
-      "type": "object",
-      "kind": true,
-      "description": "a saved filter over the tasks — membership is never stored",
-      "properties": {
-        "query": {
-          "type": "string",
-          "format": "query",
-          "description": "the filter that IS the board; the empty query selects nothing"
-        }
-      }
-    },
-    "completed": {
-      "component": true,
-      "type": "object",
-      "description": "the mark a finished task wears",
-      "properties": {
-        "at": {
+        "since": {
           "type": "string",
           "format": "date-time",
-          "stamped": true,
-          "description": "when it was finished"
-        },
-        "by": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true,
-          "description": "who finished it — kept as history when that entity is deleted"
-        },
-        "via": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true,
-          "description": "the instrument it was written through — the session or client the write came in on"
+          "stamped": true
         }
       }
     },
@@ -106,15 +45,15 @@
         "at": {
           "type": "string",
           "format": "date-time",
-          "stamped": true,
-          "description": "when it was called off"
+          "description": "when it was called off",
+          "stamped": true
         },
         "by": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "stamped": true,
-          "description": "who called it off — kept as history when that entity is deleted"
+          "description": "who called it off — kept as history when that entity is deleted",
+          "stamped": true
         },
         "reason": {
           "type": "string",
@@ -129,30 +68,80 @@
         }
       }
     },
-    "blocked": {
+    "completed": {
       "component": true,
       "type": "object",
-      "description": "something outside the graph is in the way. A facet, never a status: a blocked task is still open work.",
+      "index": [
+        [
+          "at"
+        ]
+      ],
+      "description": "the mark a finished task wears",
       "properties": {
-        "on": {
+        "at": {
           "type": "string",
-          "description": "what it is waiting on, said in words"
+          "format": "date-time",
+          "description": "when it was finished",
+          "stamped": true
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "who finished it — kept as history when that entity is deleted",
+          "stamped": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the instrument it was written through — the session or client the write came in on"
         }
       }
-    },
-    "requires": {
-      "component": true,
-      "type": "object",
-      "relation": true,
-      "description": "this task waits for that one",
-      "properties": {}
     },
     "contains": {
       "component": true,
       "type": "object",
-      "relation": true,
+      "relation": "contains",
       "description": "that task is part of this one",
       "properties": {}
+    },
+    "requires": {
+      "component": true,
+      "type": "object",
+      "relation": "requires",
+      "description": "this task waits for that one",
+      "properties": {}
+    },
+    "task": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "prefix": "T",
+      "governed": true,
+      "description": "a thing to do",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "cancelled",
+            "done",
+            "open"
+          ],
+          "computed": true,
+          "description": "where the task stands — read off the completed and cancelled marks, never written"
+        }
+      }
+    },
+    "statuses": {
+      "description": "every word a task's derived status can be, the host's extra marks included: `wip` is what a task under a live claim reads as, contributed by whoever ships the claim (see MARKS).",
+      "enum": [
+        "open",
+        "wip",
+        "done",
+        "cancelled"
+      ]
     }
   }
 }

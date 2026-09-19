@@ -1,12 +1,18 @@
 /** Host composition: shared MCP connections and the existing yak credential store. */
 import { graphMCP } from './mcp_registry.ts'
-import { type Graph, toolName } from '@yaks/graph'
+import { type Graph, type Tool as GraphTool, toolName } from '@yaks/graph'
 import { type Tool, type ToolContext, ToolError } from '@yaks/session'
 import { images } from './images.ts'
 
 export const mcpTools = (g: Graph) => {
   const connections = graphMCP(g)
   const store = images({}).store
+  const ctx = {
+    graph: g,
+    actor: null,
+    apply: g.apply.bind(g),
+    read: g.read.bind(g),
+  }
   const render = async (
     value: unknown,
     call?: ToolContext,
@@ -102,14 +108,14 @@ export const mcpTools = (g: Graph) => {
   return {
     refresh: connections.refresh,
     snapshot: async (): Promise<Tool[]> =>
-      (await connections.tools()).map((t) => ({
+      (await connections.tools()).map((t: GraphTool) => ({
         eid: String(t.meta?.eid),
         name: toolName(t),
         description: t.description,
         parameters: t.inputSchema!,
         run: async (args, call) => {
           try {
-            return await render(await t.reply(args), call)
+            return await render(await t.run(args, ctx), call)
           } catch (error) {
             if (error instanceof ToolError) throw error
             throw new ToolError(

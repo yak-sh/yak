@@ -1,0 +1,189 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/id": true,
+    "https://yaks.sh/vocab/names": true,
+    "https://yaks.sh/vocab/kernel": true
+  },
+  "title": "project",
+  "$defs": {
+    "board": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "prefix": "B",
+      "by_name": true,
+      "description": "a saved filter over the tasks — membership is never stored",
+      "properties": {
+        "query": {
+          "type": "string",
+          "format": "query",
+          "description": "the filter that IS the board; the empty query selects nothing"
+        }
+      }
+    },
+    "filed": {
+      "component": true,
+      "type": "object",
+      "description": "optional portfolio filing, separate from being a task",
+      "properties": {
+        "priority": {
+          "type": "number",
+          "format": "priority",
+          "description": "queue order — lower is more urgent"
+        },
+        "project": {
+          "type": "string",
+          "ref": "project",
+          "death": "detach",
+          "description": "what it is filed under; deleting the project frees the task rather than taking it along"
+        },
+        "assignee": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "whose queue this task is filed in"
+        },
+        "domain": {
+          "type": "string",
+          "well": "domains",
+          "description": "the work area this task is filed in"
+        }
+      }
+    },
+    "project": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "prefix": "P",
+      "by_name": true,
+      "description": "something tasks are grouped under",
+      "properties": {
+        "color": {
+          "type": "string"
+        }
+      }
+    },
+    "repo": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "the checkout on this host"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "where it is published"
+        },
+        "base_branch": {
+          "type": "string",
+          "description": "what work branches from and lands into"
+        },
+        "gate": {
+          "type": "string",
+          "description": "the command a change must pass before it lands"
+        },
+        "push": {
+          "type": "boolean",
+          "description": "whether landing also pushes"
+        }
+      },
+      "description": "a project's source: where its checkout is, what it branches from, and how a change is proven and published"
+    },
+    "venture": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "phase": {
+          "enum": [
+            "incubating",
+            "idea",
+            "building",
+            "launching",
+            "live",
+            "hold",
+            "paused",
+            "shuttered",
+            "killed"
+          ],
+          "description": "where it is: a phase, not a status — nothing here is done"
+        },
+        "paused_from": {
+          "enum": [
+            "incubating",
+            "idea",
+            "building",
+            "launching",
+            "live",
+            "hold",
+            "paused",
+            "shuttered",
+            "killed"
+          ],
+          "description": "the phase it was paused from, so resuming puts it back"
+        },
+        "hold_from": {
+          "enum": [
+            "incubating",
+            "idea",
+            "building",
+            "launching",
+            "live",
+            "hold",
+            "paused",
+            "shuttered",
+            "killed"
+          ],
+          "description": "the phase it was held from, so releasing puts it back"
+        },
+        "run_mode": {
+          "enum": [
+            "long-loop",
+            "cold",
+            "cron"
+          ],
+          "description": "long-loop: an agent stays on it. cold: it is picked up. cron: on a schedule"
+        },
+        "agent_model": {
+          "type": "string"
+        },
+        "operated_by": {
+          "type": "string",
+          "description": "who runs it day to day"
+        },
+        "tagline": {
+          "type": "string",
+          "description": "one line saying what it is"
+        },
+        "site": {
+          "type": "string",
+          "format": "uri",
+          "description": "where it lives on the web"
+        }
+      },
+      "description": "a business being built: a phase it is in, how it is run, and where it lives"
+    },
+    "ventureModes": {
+      "enum": [
+        "long-loop",
+        "cold",
+        "cron"
+      ]
+    },
+    "ventureStates": {
+      "enum": [
+        "incubating",
+        "idea",
+        "building",
+        "launching",
+        "live",
+        "hold",
+        "paused",
+        "shuttered",
+        "killed"
+      ]
+    }
+  }
+}

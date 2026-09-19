@@ -1,0 +1,58 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/kernel": true
+  },
+  "title": "design",
+  "$defs": {
+    "architecture": {
+      "component": true,
+      "type": "object",
+      "governed": true,
+      "properties": {},
+      "description": "what stands: the shape a system HAS, rather than one being proposed"
+    },
+    "design": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "alias"
+      ],
+      "properties": {},
+      "description": "a change being proposed: what it is, said in the doc beside it. `proposed` and `decided` carry the lifecycle"
+    },
+    "review": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "comment",
+        "doc"
+      ],
+      "properties": {
+        "verdict": {
+          "enum": [
+            "approved",
+            "rejected",
+            "changes_requested"
+          ],
+          "aliases": {
+            "approve": "approved",
+            "reject": "rejected",
+            "changes": "changes_requested"
+          },
+          "description": "approved, rejected, or approved once these changes are made"
+        }
+      },
+      "description": "one reading of a design: the verdict, and the words beside it"
+    },
+    "verdicts": {
+      "enum": [
+        "approved",
+        "rejected",
+        "changes_requested"
+      ]
+    }
+  }
+}

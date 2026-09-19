@@ -14,6 +14,7 @@ import type { Runs } from '@yaks/graph/tools'
 import { parse } from '@yaks/query'
 import { sessionDerived, sessions, taskMarks } from '@yaks/session'
 import { processes } from '@yaks/process'
+import { projects } from '@yaks/project'
 import type { Derived } from '@yaks/sql'
 import { derived as taskDerived, tasks } from '@yaks/task'
 import type { Vocab } from '@yaks/vocab'
@@ -39,13 +40,15 @@ export let rules = (host: Host): Plugin[] => {
     blobs(host.vocab, sqliteBlobs(host.sql)),
     sessions(),
     edges(host.vocab),
-    tasks(host.vocab, taskMarks),
+    tasks(),
+    projects(host.vocab, taskMarks),
     processes(),
   ]
 }
 
-/** The runs behind the tools vocab.json declares. The answer is the entities
- * themselves — a tool that finds transcripts answers transcripts. */
+/** The runs behind the tools vocab.json declares. */
 export let runs: Runs = {
-  session_list: (_bundles, ctx) => ctx.read(parse('.session')),
+  session_list: async (_args, ctx) => ({
+    result: await ctx.read(parse('.session')),
+  }),
 }

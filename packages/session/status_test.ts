@@ -196,11 +196,10 @@ Deno.test('the SQL view answers the same word as the rule', () => {
     let [s] = g.read(`.session.status=${want}`) as Bundle[]
     assertEquals(s?.entity.eid, S, `${name} filters as ${want}`)
     let [read] = g.read(`.session.id=one`) as Bundle[]
-    assertEquals(
-      read.session,
-      { id: 'one', status: want },
-      `${name} reads as ${want}`,
-    )
+    // The two words this package owns. A host composing its own columns onto
+    // `session` (the fleet does) reads those beside them, and they are its.
+    let { id, status } = read.session as { id: string; status: string }
+    assertEquals({ id, status }, { id: 'one', status: want }, `${name} reads`)
   }
 })
 

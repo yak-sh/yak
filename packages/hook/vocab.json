@@ -1,0 +1,70 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/id": true,
+    "https://yaks.sh/vocab/blob": true
+  },
+  "title": "hook",
+  "$defs": {
+    "hook": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "doc"
+      ],
+      "prefix": "H",
+      "properties": {
+        "source": {
+          "type": "string",
+          "stamped": true,
+          "description": "who sent it"
+        },
+        "event": {
+          "type": "string",
+          "stamped": true,
+          "description": "what they called it"
+        },
+        "payload": {
+          "type": "string",
+          "store": "blob",
+          "stamped": true,
+          "description": "the body exactly as delivered"
+        },
+        "spool_id": {
+          "type": "string",
+          "stamped": true,
+          "description": "the sender’s own id for this delivery, so a retry is the same row"
+        },
+        "received_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it reached us"
+        },
+        "method": {
+          "type": "string",
+          "stamped": true,
+          "description": "the HTTP method it arrived by"
+        },
+        "path": {
+          "type": "string",
+          "stamped": true,
+          "description": "the path it arrived on"
+        },
+        "headers": {
+          "type": "string",
+          "store": "blob",
+          "stamped": true,
+          "description": "the headers, as sent"
+        },
+        "sig_ok": {
+          "type": "boolean",
+          "stamped": true,
+          "description": "whether its signature checked out"
+        }
+      },
+      "description": "an event another system delivered, kept as it arrived — the payload is the body it sent, not our reading of it"
+    }
+  }
+}

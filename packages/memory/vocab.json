@@ -1,16 +1,44 @@
 {
   "$vocabulary": {
-    "https://yaks.sh/vocab/core": true
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/id": true,
+    "https://yaks.sh/vocab/kernel": true
   },
   "title": "memory",
   "$defs": {
+    "feedback": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep"
+        }
+      },
+      "description": "this memory records a correction somebody gave, and who gave it"
+    },
     "memory": {
       "component": true,
       "type": "object",
       "kind": true,
-      "before": ["doc"],
+      "before": [
+        "doc"
+      ],
+      "prefix": "M",
+      "governed": true,
       "description": "one thing a person said about how they want something built or handled, kept in their own words. The words themselves are the entity's doc.body, verbatim; this says where they belong and what is needed to read them. The byline is the entity's created{at, by}",
       "properties": {
+        "scope": {
+          "type": "string",
+          "ref": "project",
+          "death": "keep"
+        },
+        "last_confirmed_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
         "space": {
           "type": "string",
           "ref": "entity",

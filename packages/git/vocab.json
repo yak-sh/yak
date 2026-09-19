@@ -10,7 +10,7 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "one git object — its entity id IS its SHA-1 object id, so writing the same object twice writes one row",
+      "description": "one git object \u2014 its entity id IS its SHA-1 object id, so writing the same object twice writes one row",
       "properties": {
         "type": {
           "type": "string",
@@ -26,7 +26,7 @@
         "size": {
           "type": "number",
           "bare": false,
-          "description": "the body's length in bytes — the number in that same header"
+          "description": "the body's length in bytes \u2014 the number in that same header"
         }
       }
     },
@@ -38,7 +38,7 @@
         "sha": {
           "type": "string",
           "bare": false,
-          "description": "the SHA-256 of the bytes — for a git blob it is the app file's own address, never a re-encoded copy"
+          "description": "the SHA-256 of the bytes \u2014 for a git blob it is the app file's own address, never a re-encoded copy"
         }
       }
     },
@@ -46,7 +46,7 @@
       "component": true,
       "type": "object",
       "edge": true,
-      "description": "a tree holds a child under a name — the walk a pack's reachability needs",
+      "description": "a tree holds a child under a name \u2014 the walk a pack's reachability needs",
       "properties": {
         "name": {
           "type": "string",
@@ -64,7 +64,7 @@
       "component": true,
       "type": "object",
       "edge": true,
-      "description": "this commit follows that one — `ord` on the edge carries parent order",
+      "description": "this commit follows that one \u2014 `ord` on the edge carries parent order",
       "properties": {}
     },
     "compat": {
@@ -76,7 +76,7 @@
     "ref": {
       "component": true,
       "type": "object",
-      "description": "where one branch of one repository stands — one row per repository and branch name, so moving a branch patches the row that was there",
+      "description": "where one branch of one repository stands \u2014 one row per repository and branch name, so moving a branch patches the row that was there",
       "properties": {
         "app": {
           "type": "string",
@@ -86,7 +86,7 @@
         },
         "name": {
           "type": "string",
-          "description": "the branch's full name — `refs/heads/main`, never `main`"
+          "description": "the branch's full name \u2014 `refs/heads/main`, never `main`"
         },
         "commit": {
           "type": "string",
@@ -184,6 +184,65 @@
           "description": "original base expression, while base is the pinned commit oid"
         }
       }
+    },
+    "commit": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "prefix": "G",
+      "properties": {
+        "target": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "description": "the work this commit is about"
+        },
+        "sha": {
+          "type": "string",
+          "description": "the full object id"
+        },
+        "repo": {
+          "type": "string",
+          "description": "which repository, by name"
+        },
+        "message": {
+          "type": "string",
+          "description": "the whole commit message, not its first line"
+        }
+      },
+      "description": "a landed commit, attached to the work it is about: the sha IS its eid, so recording the same commit twice is one entity"
+    },
+    "anchor": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "paths": {
+          "type": "string",
+          "description": "the paths it speaks about"
+        },
+        "sha": {
+          "type": "string",
+          "description": "the sha it was true at"
+        },
+        "symbol": {
+          "type": "string",
+          "description": "the symbol it names, when it names one"
+        },
+        "hunk": {
+          "type": "string",
+          "store": "blob",
+          "description": "the text it quoted"
+        },
+        "start": {
+          "type": "number",
+          "description": "first line"
+        },
+        "end": {
+          "type": "number",
+          "description": "last line"
+        }
+      },
+      "description": "a promise about source: the paths and sha a document was written against, so freshness is re-derived from git rather than stored"
     }
   }
 }

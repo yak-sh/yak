@@ -4,7 +4,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
-import { connect, text } from './harness.ts'
+import { connect, result } from './harness.ts'
 import { detail } from './words.ts'
 
 type Word = {
@@ -25,41 +25,25 @@ let asked = async (
   let client = await connect(opts)
   let out = await client.callTool({ name: 'graph_schema', arguments: args })
   await client.close()
-  // The schema is not rows in the store it describes, so it comes back as
-  // prose — the words of the one content bundle the tool answered.
   return {
-    said: out.isError
-      ? {} as { comps: Word[]; kinds?: string[]; kind?: string }
-      : JSON.parse(text(out)) as {
-        comps: Word[]
-        kinds?: string[]
-        kind?: string
-      },
-    error: out.isError ? text(out) : '',
+    said: result(out) as { comps: Word[]; kinds?: string[]; kind?: string },
+    error: out.isError
+      ? String((out.content as { text: string }[])[0].text)
+      : '',
   }
 }
 
 Deno.test('bare, it is the index: every word, its line, its columns', async () => {
   let { said } = await asked()
-  // The shop's words, and the words a CALL is written in — a graph that
-  // serves tools knows both (@yaks/tools `toolsDoc`).
   assertEquals(said.comps.map((c) => c.name), [
     'book',
-    'call',
-    'content',
     'created',
     'doc',
     'entity',
-    'error',
-    'exception',
-    'execution',
-    'output',
-    'result',
     'review',
-    'tool',
     'updated',
   ])
-  assertEquals(said.kinds, ['book', 'doc', 'review', 'tool'])
+  assertEquals(said.kinds, ['book', 'doc', 'review'])
   let book = said.comps.find((c) => c.name == 'book')!
   assertEquals(book.description, 'a book on sale here')
   // Names only — the index is the thing an agent can read whole.

@@ -1,0 +1,15 @@
+{
+  "name": "@yaks/platform",
+  "version": "0.1.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "What a hosting platform keeps about the apps it serves — spaces, apps, deploys, hostnames, plans and meters.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
+}

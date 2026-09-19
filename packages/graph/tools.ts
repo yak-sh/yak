@@ -18,15 +18,14 @@
 
 import { toolsIn } from '@yaks/vocab/tools'
 import type { VocabDoc } from '@yaks/vocab'
-import type { Bundle } from './bundle.ts'
-import type { Tool, ToolCtx } from './plugin.ts'
+import type { Intent, Tool, ToolCtx } from './plugin.ts'
 import { type NamedTool, toolName } from './tool.ts'
 
 /** What a declaration is missing: the run. Keyed by the entry's own name, or
  * by `noun_verb` for a module that spells it that way. */
-export type Runs<C = ToolCtx, R = Bundle[]> = Record<string, Tool<C, R>['run']>
+export type Runs<C = ToolCtx, R = Intent> = Record<string, Tool<C, R>['run']>
 
-export let loadTools = <C = ToolCtx, R = Bundle[]>(
+export let loadTools = <C = ToolCtx, R = Intent>(
   docs: VocabDoc | VocabDoc[],
   runs: Runs<C, R>,
 ): NamedTool<C, R>[] =>

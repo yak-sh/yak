@@ -28,19 +28,10 @@ import {
   type Entity,
   type Graph,
   graph,
+  land,
   type NamedTool,
   type Plugin,
 } from '@yaks/graph'
-import {
-  answerOf,
-  faulted,
-  reconcile,
-  type Runner,
-  runner,
-  toolEid,
-  toolsDoc,
-  worded,
-} from '@yaks/tools'
 import { loadTools, type Runs } from '@yaks/graph/tools'
 import {
   type Keywords,
@@ -107,7 +98,7 @@ export type Route = {
  * ```ts
  * // export let vocab = [mailDoc]
  * // export let rules = (host) => [mail(host.vocab)]
- * // export let runs = { mail_send: (bundles, ctx) => [] }
+ * // export let runs = { mail_send: (args, ctx) => ({ change: [] }) }
  * // export let effects = () => [{ comp: 'mail', created: (e) => deliver(e) }]
  * // export let routes = [{ method: 'POST', path: '/inbound', handle }]
  * ```
@@ -136,9 +127,6 @@ export type Module = {
 export type Served = Host & {
   /** every tool declared and implemented across the modules */
   tools: NamedTool[]
-  /** the one thing that calls a tool function here: the doors and the command
-   * line both write a CALL and read what answered it (@yaks/tools) */
-  runner: Runner
   /** the post-commit registry the modules registered on */
   fx: Effects
   /** the doors, as one request handler */
@@ -194,20 +182,6 @@ let dbOf = (config: Config): string => {
 let docsOf = (mod: Module): VocabDoc[] =>
   !mod.vocab ? [] : Array.isArray(mod.vocab) ? mod.vocab : [mod.vocab]
 
-// The plugins' words, with the invocation's own added where they are missing.
-// A word declared twice is a refusal (@yaks/vocab), and rightly — two
-// spellings of one component is not something to guess about — so what is
-// added here is the difference, never a second copy.
-let said = (docs: VocabDoc[]): VocabDoc[] => {
-  let taken = new Set(docs.flatMap((d) => Object.keys(d.$defs ?? {})))
-  let $defs = Object.fromEntries(
-    Object.entries(toolsDoc.$defs ?? {}).filter(([name]) => !taken.has(name)),
-  )
-  return Object.keys($defs).length
-    ? [{ title: 'invocation', $defs }, ...docs]
-    : docs
-}
-
 // Exactly one plugin may say who is calling; two would mean the door's answer
 // depends on import order, which is not an answer.
 let doorman = (mods: Module[], config: Config): Authenticate => {
@@ -242,12 +216,7 @@ export let compose = async (
 ): Promise<Served> => {
   let path = dbOf(config)
   let mods = await Promise.all((config.plugins ?? []).map(load))
-  // The words an invocation is written in come with the HOST, not with
-  // whichever plugin happened to mention them: what was asked of this server
-  // is its own transcript. A plugin that speaks them already — a harness,
-  // whose transcripts ARE calls — keeps its own spelling, so only the words
-  // nobody supplied are added.
-  let docs = said(mods.flatMap(docsOf))
+  let docs = mods.flatMap(docsOf)
   let vocab = loadVocab(docs, mods.flatMap((m) => m.keywords ?? []))
 
   if (path != ':memory:') {
@@ -304,21 +273,6 @@ export let compose = async (
       docs,
       Object.assign({}, ...mods.map((m) => m.runs ?? {})) as Runs,
     )
-    // The one RUNNER over this graph. A door calls a tool and records the ask
-    // and the answer as it goes; what this adds is the calls NOBODY here is
-    // waiting on — one written by another process through `/apply`, or one
-    // wearing a wake that has now fired. Each rule is one effect registration
-    // over committed changes, and a call this graph has no tool for is left
-    // alone for whoever does. The `tool` rows a call points at are written on
-    // the first call and at boot, never at compose: a one-shot command opens a
-    // host to ask one question and should not write to say hello.
-    let run = runner(g, {
-      tools,
-      report: (err) => console.error('tool failed —', err),
-    })
-    for (let rule of run.rules) {
-      fx.on(rule.plan, (e) => run.run(e.entity.eid), { doc: rule.rule.name })
-    }
     let routes = mods.flatMap((m) => m.routes ?? [])
     let authenticate = doorman(mods, config)
     let door = api({ graph: g, authenticate })
@@ -336,15 +290,7 @@ export let compose = async (
       // `/apply`, `/query` and `/ws` and refuse the rest in the wire's shape.
       return route ? route.handle(request) : door(request)
     }
-    return {
-      ...host,
-      graph: g,
-      tools,
-      runner: run,
-      fx,
-      handler,
-      close: () => db.close(),
-    }
+    return { ...host, graph: g, tools, fx, handler, close: () => db.close() }
   } catch (error) {
     db.close()
     throw error
@@ -357,25 +303,20 @@ export let words = (host: Served): Word[] =>
   host.tools.map((tool) => ({
     ...tool,
     run: async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
-      // The command line WRITES A CALL, signed as whoever this host says it
-      // is, and prints what answered it — the prose the answer carries, or
-      // the bundles themselves as JSON. Calling the tool is the runner's.
-      //
-      // The `tool` rows a call's `to` points at come first, once per process.
-      await host.runner.ensure()
-      let landed = await host.runner.call([{
-        entity: { eid: '$call' },
-        call: {
-          to: toolEid(tool.name),
-          args: JSON.stringify(args ?? {}),
-        },
-        ...(host.config.actor ? { $actor: { by: host.config.actor } } : {}),
-      }])
-      c.out(worded(answerOf(landed)))
-      // A refusal is data now, not a throw: the words are printed either way
-      // and the exit code is what says which it was — the runner's own word,
-      // since a tool that ANSWERS fault rows did not fail.
-      return faulted(landed) ? 1 : 0
+      // The command line is a HOST: the tool says what it wants done, the
+      // landing happens here, and what it answers is printed.
+      let call = {
+        graph: host.graph,
+        actor: host.config.actor ? { eid: host.config.actor } : null,
+        read: (
+          query: Parameters<Graph['read']>[0],
+          opts?: unknown,
+        ) => host.graph.read(query, opts as undefined),
+      }
+      let intent = await tool.run(args, call)
+      let value = await land(intent, call)
+      if (value !== undefined) c.out(JSON.stringify(value, null, 2))
+      return 0
     },
   }))
 
@@ -386,12 +327,6 @@ export let serve = async (
   onListen?: (addr: Deno.NetAddr, host: Served) => void,
 ): Promise<{ host: Served; server: Deno.HttpServer }> => {
   let host = await compose(config)
-  // Boot: the `tool` rows a call points at, and then what a crash left
-  // claimed and unanswered, finished. Here rather than in `compose`, because
-  // BOOT is the server starting — a one-shot command composes the same host
-  // and must not reach into calls another process is running.
-  await host.runner.ensure()
-  await reconcile(host.runner)
   let server = Deno.serve({
     port: config.port ?? 8787,
     hostname: config.hostname,

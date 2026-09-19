@@ -1,0 +1,245 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/id": true,
+    "https://yaks.sh/vocab/names": true,
+    "https://yaks.sh/vocab/kernel": true
+  },
+  "title": "persona",
+  "$defs": {
+    "bug": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "fault": {
+          "type": "string"
+        },
+        "hits": {
+          "type": "number"
+        },
+        "last": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "a fault seen more than once: what broke, how often, and when last"
+    },
+    "finding": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "hits": {
+          "type": "number"
+        },
+        "last": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "something a verifier saw, counted: what it was, how often, and when last"
+    },
+    "fixer": {
+      "component": true,
+      "type": "object",
+      "properties": {},
+      "description": "this role fixes what verification found"
+    },
+    "nofix": {
+      "component": true,
+      "type": "object",
+      "properties": {},
+      "description": "leave this one alone: a fixer does not take it"
+    },
+    "noverify": {
+      "component": true,
+      "type": "object",
+      "properties": {},
+      "description": "skip verification here"
+    },
+    "person": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "alias",
+        "doc",
+        "email"
+      ],
+      "prefix": "U",
+      "by_name": true,
+      "properties": {},
+      "description": "a human being, as this graph knows them"
+    },
+    "persona": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "alias",
+        "doc"
+      ],
+      "prefix": "N",
+      "by_name": true,
+      "governed": true,
+      "properties": {
+        "home": {
+          "type": "string",
+          "ref": "project",
+          "death": "detach",
+          "description": "the project it speaks for"
+        }
+      },
+      "description": "a voice an agent wears: the doc beside it IS the voice"
+    },
+    "role": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "alias",
+        "claim",
+        "doc",
+        "persona"
+      ],
+      "prefix": "R",
+      "by_name": true,
+      "properties": {
+        "state": {
+          "enum": [
+            "running",
+            "stopped",
+            "paused",
+            "disabled",
+            "retired",
+            "held"
+          ],
+          "description": "running, stopped, paused, disabled, retired, or held"
+        },
+        "surface": {
+          "enum": [
+            "native",
+            "managed"
+          ],
+          "description": "native: it runs here. managed: something else runs it"
+        },
+        "scope": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "what it is responsible for"
+        },
+        "checkout": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "the worktree it works in"
+        },
+        "schedule": {
+          "type": "string",
+          "description": "when it runs, when it runs on a schedule"
+        },
+        "wake_policy": {
+          "enum": [
+            "always",
+            "attention",
+            "scheduled",
+            "manual"
+          ],
+          "description": "always, only when something wants attention, on its schedule, or by hand"
+        },
+        "wake_target": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "what waking it looks at"
+        },
+        "retry_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when to try again after a failure"
+        },
+        "quiet": {
+          "type": "number",
+          "description": "seconds of silence before it is considered idle"
+        },
+        "cooldown": {
+          "type": "number",
+          "description": "seconds to wait between runs"
+        },
+        "cap": {
+          "type": "number",
+          "description": "the most runs it may take"
+        },
+        "applied_hash": {
+          "type": "string",
+          "stamped": true,
+          "description": "the digest of the persona text last applied"
+        },
+        "applied_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when that text was applied"
+        },
+        "stopped_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "decision": {
+          "type": "string",
+          "stamped": true
+        },
+        "reason": {
+          "type": "string",
+          "stamped": true
+        },
+        "observed": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "decided_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      },
+      "description": "a persona hired into standing work: what it watches, how it is woken, and how often"
+    },
+    "verifier": {
+      "component": true,
+      "type": "object",
+      "properties": {},
+      "description": "this role verifies work rather than doing it"
+    },
+    "roleStates": {
+      "enum": [
+        "running",
+        "stopped",
+        "paused",
+        "disabled",
+        "retired",
+        "held"
+      ]
+    },
+    "roleSurfaces": {
+      "enum": [
+        "native",
+        "managed"
+      ]
+    },
+    "wakePolicies": {
+      "enum": [
+        "always",
+        "attention",
+        "scheduled",
+        "manual"
+      ]
+    }
+  }
+}

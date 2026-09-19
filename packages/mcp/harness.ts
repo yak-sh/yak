@@ -9,7 +9,6 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { toolsDoc } from '@yaks/tools'
 import { type Options, server } from './server.ts'
 
 let doc: VocabDoc = {
@@ -74,11 +73,8 @@ let doc: VocabDoc = {
   },
 }
 
-// The shop's own words, and the words a CALL is written in: this server
-// writes `call{to, args}` into the graph and awaits what answers it, so the
-// ledger's vocabulary has to know them (@yaks/tools `toolsDoc`).
 /** The bookshop vocabulary the package's tests read and write against. */
-export let shop: Vocab = loadVocab([doc, toolsDoc])
+export let shop: Vocab = loadVocab(doc)
 
 /** A graph over a fresh in-memory store. */
 export let shopGraph = (): Graph => graph({ storage: ram(shop), vocab: shop })
@@ -101,16 +97,10 @@ export let comp = (b: Bundle, name: string): Record<string, unknown> => {
   return c && typeof c == 'object' ? { ...c } : {}
 }
 
-/** The BUNDLES a tool answered with — what rides under `result`. */
+/** The structured `result` a tool answered with. */
 export let result = (out: { structuredContent?: unknown }): unknown => {
   let said = out.structuredContent
   return said && typeof said == 'object' && 'result' in said
     ? said.result
     : undefined
-}
-
-/** The words of a reply: its first text block. */
-export let text = (out: { content?: unknown }): string => {
-  let blocks = out.content
-  return Array.isArray(blocks) ? String(blocks[0]?.text ?? '') : ''
 }

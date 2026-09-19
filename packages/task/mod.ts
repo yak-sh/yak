@@ -63,6 +63,5 @@
 export * from './words.ts'
 export * from './comp.ts'
 export * from './status.ts'
-export * from './guard.ts'
 export * from './deps.ts'
 export * from './plugin.ts'

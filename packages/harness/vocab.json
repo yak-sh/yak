@@ -1,69 +1,9 @@
 {
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true
+  },
   "title": "harness",
   "$defs": {
-    "entity": {
-      "component": true,
-      "type": "object",
-      "wire": false,
-      "properties": {
-        "num": {
-          "type": "number",
-          "stamped": true
-        }
-      }
-    },
-    "created": {
-      "component": true,
-      "type": "object",
-      "properties": {
-        "at": {
-          "type": "string",
-          "format": "date-time",
-          "stamped": true,
-          "description": "when it was written"
-        },
-        "by": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true,
-          "description": "the actor that wrote it, from the batch's $actor"
-        },
-        "via": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true,
-          "description": "the instrument it was written through — the session or client the write came in on"
-        }
-      }
-    },
-    "updated": {
-      "component": true,
-      "type": "object",
-      "properties": {
-        "at": {
-          "type": "string",
-          "format": "date-time",
-          "stamped": true,
-          "description": "when it was last touched"
-        },
-        "by": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true,
-          "description": "the actor that wrote it, from the batch's $actor"
-        },
-        "via": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true,
-          "description": "the instrument it was written through — the session or client the write came in on"
-        }
-      }
-    },
     "home": {
       "component": true,
       "type": "object",
@@ -82,9 +22,9 @@
     },
     "session_list": {
       "tool": true,
+      "description": "List sessions in the connected graph.",
       "noun": "session",
       "verb": "list",
-      "description": "List sessions in the connected graph.",
       "input": {},
       "readOnly": true
     }

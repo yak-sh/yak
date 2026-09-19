@@ -36,29 +36,15 @@ export type Ctx = {
   reads: Reads
   out: (line: string) => void
   note: (line: string) => void
-  /** Every word this run can reach, the ones that cost a round trip included.
+  /** Every tool this run can reach, the ones that cost a round trip included.
    * Asked once; a table that cannot be had is simply absent. */
-  all: () => Promise<Word[]>
+  all: () => Promise<Tool<Ctx, number>[]>
   /** The usage page — every tool one line each, and why a table is missing. */
   page: () => Promise<string>
 }
 
-/**
- * A word this command runs: a tool's DECLARATION — its name, its schema, how
- * the line spells it — with a run of its own.
- *
- * A graph tool is `(bundles, ctx) => bundles` and only @yaks/tools' runner
- * calls one. A word is the other end of the wire: it takes the arguments a
- * line parsed into, prints, and answers an exit code. Same declaration, so a
- * word is still listed, completed and helped from the one schema; different
- * run, because a command line is not a call.
- */
-export type Word = Omit<Tool<Ctx, number>, 'run'> & {
-  run: (
-    args: Record<string, unknown>,
-    c: Ctx,
-  ) => number | Promise<number>
-}
+/** A word this command runs. */
+export type Word = Tool<Ctx, number>
 
 /** What a program brings besides its tools. */
 export type Opts = {

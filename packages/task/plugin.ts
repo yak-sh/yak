@@ -1,23 +1,15 @@
-// The package as a graph plugin: the components, and the board guard over them.
-//
-// It takes the loaded vocabulary because a board's query is checked against the
-// SCHEMA, not against this package — a board filtering `.author=dana` is only
-// valid if the graph has an author column, and only the loaded vocabulary knows.
-// So a graph is built in two steps, the way @yaks/edge's is: load the documents,
-// then hand the same vocabulary to the plugin.
+// The package as a graph plugin: the components, and the stamp a finished task
+// gets. What a task is FILED under, and the board that is a saved filter over
+// the filing, are @yaks/project's — and so is the guard over a board's query.
 
-import { type Plugin, then } from '@yaks/graph'
+import type { Plugin } from '@yaks/graph'
 import { completing } from './completion.ts'
-import type { Vocab } from '@yaks/vocab'
 import { taskDoc } from './comp.ts'
-import { guarding } from './guard.ts'
-import { type Mark, MARKS } from './words.ts'
 
 /**
- * The task plugin: the `task`, `filed`, `project`, `board`, `completed`,
- * `cancelled` and `blocked` components, the `requires` and `contains` relations, and a
- * `precondition` hook that refuses a board whose query would quietly match
- * nothing.
+ * The task plugin: the `task`, `completed`, `cancelled` and `blocked`
+ * components, the `requires` and `contains` relations, and the `precondition`
+ * hook that stamps a completion with its moment and its author.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
@@ -44,14 +36,8 @@ import { type Mark, MARKS } from './words.ts'
  * {@link https://jsr.io/@yaks/task/doc/~/compute | compute} for the in-memory
  * one.
  */
-export let tasks = (vocab: Vocab, marks: Mark[] = MARKS): Plugin => ({
+export let tasks = (): Plugin => ({
   name: '@yaks/task',
   vocab: [taskDoc],
-  hooks: {
-    precondition: (bundles, tx, err) =>
-      then(
-        guarding(vocab, marks)(bundles, tx, err),
-        (checked) => completing(checked, tx),
-      ),
-  },
+  hooks: { precondition: (bundles, tx) => completing(bundles, tx) },
 })

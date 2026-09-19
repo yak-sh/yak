@@ -1,0 +1,15 @@
+{
+  "name": "@yaks/hook",
+  "version": "0.1.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "An event another system delivered, kept as it arrived: the payload, the route it came in on, and whether it was signed.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
+}

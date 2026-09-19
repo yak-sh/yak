@@ -2,7 +2,7 @@
 
 Task vocabulary, derived status, dependency checks, and write validation for
 graph entities. A task can also contain document text and application-specific
-components; filing under a project is optional.
+components; what it is filed under is [@yaks/project](../project)'s.
 
 ## Install
 
@@ -19,7 +19,7 @@ package is the four answers.
 **What is on the list?** An entity carrying `task{}` is a to-do item. It is a
 facet, not a record — the same entity carries your `doc`, your `estimate`,
 whatever else it is. Adding `task` to something makes it something to do without
-making it stop being what it was. Optional
+making it stop being what it was. Optional [@yaks/project](../project)'s
 `filed{project, priority, domain, assignee}` places it in a portfolio; a
 microtask needs only `doc` and `task`, with no filing.
 
@@ -29,10 +29,11 @@ computed from those marks, so finishing something records _when_ and _by whom_,
 and un-finishing it is dropping a component rather than guessing what the status
 used to say.
 
-**How do you look at the list?** A `board{query}` is a saved filter. Membership
-is never stored — nothing anywhere says "this task is on that board" — so a
-board is always current, and a task that starts matching is simply on it. The
-empty query selects nothing, on purpose.
+**How do you look at the list?** [@yaks/project](../project)'s `board{query}` is
+a saved filter over the portfolio. Membership is never stored — nothing anywhere
+says "this task is on that board" — so a board is always current, and a task
+that starts matching is simply on it. The empty query selects nothing, on
+purpose.
 
 **What is it waiting for?** `requires` and `contains` relate one task to another
 through [@yaks/edge](https://jsr.io/@yaks/edge), and `blocked{on}` says
@@ -136,8 +137,9 @@ children, not a recursive closure.
 
 ## The board guard
 
-A board that would quietly match nothing is refused when it is written, because
-an empty board looks exactly like a board whose filter is right and whose answer
+It lives in [@yaks/project](../project) now, beside the `board` it guards. A
+board that would quietly match nothing is refused when it is written, because an
+empty board looks exactly like a board whose filter is right and whose answer
 happens to be nothing. The plugin registers a `precondition` hook that catches
 both ways a query is wrong:
 
@@ -164,5 +166,5 @@ API.
 ## Interface
 
 `taskDoc`, `tasks`, `MARKS`, `Mark`, `Status`, `OPEN`, `statuses`, `settled`,
-`statusOf`, `compute`, `derived`, `unroutable`, `guarding`, `gated`, `openDeps`,
-`done`, and the component-name constants.
+`statusOf`, `compute`, `derived`, `gated`, `openDeps`, `done`, and the
+component-name constants.

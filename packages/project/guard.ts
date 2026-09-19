@@ -32,8 +32,8 @@ import type { Bundle, Comp, Hook } from '@yaks/graph'
 import { comps, Refused } from '@yaks/graph'
 import { parse, type Value } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import { type Mark, MARKS, statuses } from './words.ts'
-import { BOARD, TASK } from './comp.ts'
+import { type Mark, MARKS, statuses, TASK } from '@yaks/task'
+import { BOARD } from './comp.ts'
 
 // Every raw token a value names: a scalar is one, a list is its items, a range
 // is its ends. A time phrase is nobody's enum member and is left alone.
@@ -54,7 +54,7 @@ let tokens = (v: Value | null): string[] =>
  * ladder spells.
  *
  * ```ts
- * import { unroutable } from '@yaks/task'
+ * import { unroutable } from '@yaks/project'
  *
  * // unroutable('.status=open', vocab)     → null
  * // unroutable('.status=complete', vocab) → 'no such status: complete — …'

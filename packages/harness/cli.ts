@@ -10,8 +10,7 @@ import { tools as declared } from './declared.ts'
 // UI mounts, so a listing and a transcript cannot drift from what any other
 // door shows.
 
-import type { Comp, Eid } from '@yaks/graph'
-import { answerOf, runner, toolEid, worded } from '@yaks/tools'
+import { type Comp, type Eid, land } from '@yaks/graph'
 import { type Ctx, type Word } from '@yaks/cli'
 import { codexPaths, fromCodex, fromEnv } from '@yaks/openai'
 import { type Agent, agent, titleOf } from './run.ts'
@@ -245,22 +244,24 @@ export let own: Word[] = [
 ]
 
 // A tool the VOCABULARY declares (declared.ts) runs against a graph rather
-// than a command line, so a line typed here becomes a CALL in that graph and
-// what answered it is printed. The word order and the arguments are @yaks/cli's
+// than a command line, so it is run here and its structured result printed. The word order and the arguments are @yaks/cli's
 // either way — nothing about a graph tool is spelled twice.
 let overGraph = (tool: typeof declared[number]): Word => ({
   ...tool,
   run: async (args, c) => {
     let h = open()
     try {
-      let r = runner(h.g, { tools: declared, host: h.g })
-      await r.ensure()
-      c.out(worded(answerOf(
-        await r.call([{
-          entity: { eid: '$call' },
-          call: { to: toolEid(tool.name), args: JSON.stringify(args ?? {}) },
-        }]),
-      )))
+      // The command line is a HOST: the tool says what it wants done, the
+      // landing happens here, and what it answers is printed.
+      let call = {
+        graph: h.g,
+        actor: null,
+        read: (query: Parameters<typeof h.g.read>[0], opts?: unknown) =>
+          h.g.read(query, opts as undefined),
+      }
+      let intent = await tool.run(args, call)
+      let value = await land(intent, call)
+      if (value !== undefined) c.out(JSON.stringify(value, null, 2))
       return 0
     } finally {
       h.close()

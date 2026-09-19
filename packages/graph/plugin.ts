@@ -119,31 +119,40 @@ export type WriteHook = Hook & { independent?: boolean }
 export type Schema = object
 
 /**
- * What a {@link Tool} is handed beside the call's bundles: the graph to read,
- * who is asking, and the arguments the call carried.
- *
- * `actor` is the CALLER's, never the runner's: a tool that writes writes in
- * the name of whoever wrote the call, so authorization is decided about the
- * person asking (see {@link https://jsr.io/@yaks/tools | @yaks/tools}).
- *
- * There is no door to write through — a tool ANSWERS with bundles and the
- * runner lands them, signed, so a tool cannot write in somebody else's name by
- * accident and a host can refuse, batch, or replay what it was asked for.
+ * What a {@link Tool} is handed when it runs: the graph to READ, and who is
+ * asking. There is no door to write through — a tool ANSWERS with what it
+ * wants done ({@link Intent}) and the host lands it, signed as `actor`, so a
+ * tool cannot write in the client's name by accident and a host can refuse,
+ * batch, or replay what it was asked for.
  */
 export type ToolCtx = {
   /** the graph the tool works on (its vocabulary and storage included) */
   graph: Graph
-  /** the entity that wrote the call, or `null` for nobody */
+  /** the entity the transport authenticated, or `null` for nobody */
   actor: Entity | null
   /** a query → the matching entities as whole bundles */
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
-  /** the call's arguments, parsed out of `call.args` and checked against the
-   * tool's schema by the runner. The same values the call's bundle carries as
-   * JSON, so a tool reads them here rather than parsing its own input. */
-  args: Record<string, unknown>
-  /** the call entity being answered — what a bundle the tool makes says it
-   * came from (`output.source`) */
-  call: Eid
+}
+
+/**
+ * What a tool ASKS its host to do — the whole of what one answers with.
+ *
+ * A tool never writes; it says what should be written and the host lands it
+ * signed as the actor, answering the batch as applied. `result` is the other
+ * half: what a READ found, or an answer that is not what landed — words a
+ * person reads included, as a field of that answer rather than a channel of
+ * its own.
+ *
+ * ```ts
+ * run: () => ({ result: { text: 'two books here', books: 2 } })
+ * run: (args) => ({ change: [{ entity: { eid: '$b' }, book: args }] })
+ * ```
+ */
+export type Intent = {
+  /** bundles to land, atomically, signed as the actor */
+  change?: Bundle[]
+  /** the structured answer, where what landed is not it */
+  result?: unknown
 }
 
 /**
@@ -151,18 +160,13 @@ export type ToolCtx = {
  * way a plugin contributes components and hooks. A transport (@yaks/mcp) is
  * what lists it and calls it; this package only carries the declaration.
  *
- * A tool is a function from BUNDLES to BUNDLES. What it is handed is the
- * call's own bundle and whatever the caller attached to it; what it answers is
- * the bundles that ARE the answer — entities it found, entities it wants
- * made, prose as `content{body}`. The runner lands them beside the
- * `result{call}` entity in one batch.
+ * The arguments arrive as a plain bag — the transport has already checked them
+ * against `input` — and whatever `run` returns is the tool's structured result,
+ * which for most tools is bundles.
  */
-export type Tool<C = ToolCtx, R = Bundle[]> = {
+export type Tool<C = ToolCtx, R = Intent> = {
   /** Legacy transport name. Structured tools derive it from noun and verb. */
   name?: string
-  /** the entity a CALL names this tool at, where the graph keeps tool rows of
-   * its own. Derived from the name otherwise (@yaks/tools `toolEid`). */
-  eid?: Eid
   /** Resource word, independent of CLI word order or graph components. */
   noun?: string
   /** Operation word. Must be supplied together with noun. */
@@ -183,6 +187,10 @@ export type Tool<C = ToolCtx, R = Bundle[]> = {
   description: string
   /** one schema per named argument */
   input?: Record<string, Schema>
+  /** the shape of the structured result */
+  output?: Schema
+  /** JSON Schema describing the MCP structured result object. */
+  outputSchema?: Record<string, unknown>
   /** this tool only reads — a client may call it without asking first */
   readOnly?: boolean
   /** this tool can DELETE or otherwise irreversibly change what it touches, so
@@ -201,8 +209,8 @@ export type Tool<C = ToolCtx, R = Bundle[]> = {
    * to the client verbatim — an MCP `_meta`, say, naming the page a host
    * renders the answer in. Opaque here, like {@link Schema}. */
   meta?: Record<string, unknown>
-  /** say what the answer is: the call's bundles in, the answer's out */
-  run: (bundles: Bundle[], ctx: C) => R | Promise<R>
+  /** say what to do: the arguments in, the {@link Intent} out */
+  run: (args: Record<string, unknown>, ctx: C) => R | Promise<R>
 }
 
 /**

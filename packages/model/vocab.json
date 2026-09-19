@@ -1,14 +1,41 @@
 {
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/id": true,
+    "https://yaks.sh/vocab/names": true
+  },
   "title": "model",
   "$defs": {
     "provider": {
       "component": true,
       "type": "object",
       "kind": true,
+      "prefix": "Y",
+      "by_name": true,
       "description": "a service that runs models",
       "properties": {
         "name": {
           "type": "string"
+        },
+        "transport": {
+          "enum": [
+            "process",
+            "http"
+          ]
+        },
+        "credential": {
+          "type": "string"
+        },
+        "fallback": {
+          "type": "boolean"
+        },
+        "serves": {
+          "type": "string",
+          "ref": "provider",
+          "death": "cascade"
+        },
+        "offered": {
+          "type": "boolean"
         }
       }
     },
@@ -16,21 +43,44 @@
       "component": true,
       "type": "object",
       "kind": true,
+      "prefix": "O",
+      "by_name": true,
       "description": "a model a provider serves",
       "properties": {
         "name": {
           "type": "string",
           "description": "the name the provider knows it by"
         },
+        "vendor": {
+          "type": "string"
+        },
+        "grade": {
+          "enum": [
+            "frontier",
+            "mid",
+            "small"
+          ]
+        },
         "provider": {
           "type": "string",
           "ref": "provider",
           "death": "keep",
+          "bare": false,
           "description": "who serves it — kept when the provider entity is deleted, because every past ask names this model and a model with no provider still says which one answered"
+        },
+        "label": {
+          "type": "string"
+        },
+        "efforts": {
+          "type": "string"
         },
         "effort": {
           "type": "string",
+          "bare": false,
           "description": "the reasoning effort asked for unless a session says otherwise"
+        },
+        "offered": {
+          "type": "boolean"
         }
       }
     },
@@ -39,6 +89,22 @@
       "type": "object",
       "description": "provider-reported token counts for one completed model request, stored on its ask entry; not cumulative and not a live context estimate",
       "properties": {
+        "input": {
+          "type": "number",
+          "stamped": true
+        },
+        "cached": {
+          "type": "number",
+          "stamped": true
+        },
+        "output": {
+          "type": "number",
+          "stamped": true
+        },
+        "reasoning": {
+          "type": "number",
+          "stamped": true
+        },
         "input_tokens": {
           "type": "integer",
           "description": "input context tokens, including cached tokens"
@@ -60,6 +126,19 @@
           "description": "reasoning tokens within output tokens"
         }
       }
+    },
+    "grades": {
+      "enum": [
+        "frontier",
+        "mid",
+        "small"
+      ]
+    },
+    "transports": {
+      "enum": [
+        "process",
+        "http"
+      ]
     }
   }
 }

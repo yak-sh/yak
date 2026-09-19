@@ -205,7 +205,17 @@
     "./packages/harness",
     "./packages/tui",
     "./packages/context",
-    "./packages/mcp-client"
+    "./packages/mcp-client",
+    "./packages/kernel",
+    "./packages/platform",
+    "./packages/goal",
+    "./packages/design",
+    "./packages/hook",
+    "./packages/page",
+    "./packages/notify",
+    "./packages/persona",
+    "./packages/dreaming",
+    "./packages/project"
   ],
   "exclude": [
     "src/vendor",

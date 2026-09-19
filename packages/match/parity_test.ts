@@ -14,6 +14,7 @@ import { storage } from '@yaks/sqlite'
 import { fields, schema as ftsSchema, search } from '@yaks/fts'
 import { type Derived, type Extension, Unsupported } from '@yaks/sql'
 import { compute, derived as taskDerived, taskDoc } from '@yaks/task'
+import { projectDoc } from '@yaks/project'
 import { edgeDoc, edgeKeywords, link, traverse } from '@yaks/edge'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { matcher } from './match.ts'
@@ -419,7 +420,7 @@ let spine: VocabDoc = {
     },
   },
 }
-let todo: Vocab = loadVocab([taskDoc, spine])
+let todo: Vocab = loadVocab([taskDoc, projectDoc, spine])
 
 let ROWS: Bundle[] = [
   { entity: { eid: 't1' }, task: {}, filed: { priority: 1 } },

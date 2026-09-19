@@ -1,29 +1,41 @@
 {
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true
+  },
   "title": "artifact",
   "$defs": {
     "artifact": {
       "component": true,
+      "type": "object",
       "description": "A binary object in the configured external blob store.",
       "properties": {
+        "size": {
+          "type": "number"
+        },
         "address": {
           "type": "string"
         },
         "media_type": {
           "type": "string"
-        },
-        "size": {
-          "type": "number"
         }
       }
     },
     "attachment": {
       "component": true,
+      "type": "object",
+      "kind": true,
       "description": "An artifact produced by a model response; the entry belongs to its session.",
       "properties": {
         "artifact": {
           "type": "string",
           "ref": "artifact",
           "death": "keep"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
         },
         "audience": {
           "type": "string",

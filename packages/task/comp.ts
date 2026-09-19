@@ -2,15 +2,16 @@
 // your own.
 //
 //   task{}                            a to-do item, with derived status
-//   filed{project, priority, domain, assignee}  optional portfolio filing
-//   project{}                         something the tasks are grouped under
-//   board{query}                      a saved filter over them
 //   completed{at, by}                 it got done, when, and by whom
 //   cancelled{at, by, reason}         it got called off, and why
 //   blocked{on}                       something outside is in the way
 //   requires / contains               the two relations tasks state
 //
-// Five things are worth saying about the shapes, because each is a decision
+// What a task is filed UNDER — `project`, `filed`, the `board` that is a saved
+// filter over the filing — is @yaks/project's: a task is a task with nothing
+// filed, and a portfolio is a different idea from a to-do item.
+//
+// Four things are worth saying about the shapes, because each is a decision
 // somebody would otherwise make differently.
 //
 // STATUS IS NOT STORED. `task.status` is declared `computed: true`: it is
@@ -26,12 +27,6 @@
 // component an edge entity wears beside `edge{from, to}`. Neither carries
 // columns — the sentence is the whole of what they say.
 //
-// A BOARD IS ITS QUERY. `board{query}` holds a filter, and membership is never
-// stored — there is no row saying this task is on that board. So a board is
-// always current: a task that starts matching is on it, with nothing to
-// reconcile. The empty query selects nothing, which is what a board nobody has
-// written a filter for should show.
-//
 // BLOCKED IS A FACET, NOT A STATUS. `blocked{on}` says something OUTSIDE the
 // graph is in the way — waiting on a vendor, on a decision, on a person. It is
 // deliberately not a rung on the status ladder: a blocked task is still open
@@ -41,9 +36,7 @@
 //
 // THE MARKS DIE WITH NOBODY. `completed.by` and `cancelled.by` are `death: keep`
 // — deleting the person who finished a task does not unfinish it. The reference
-// stands as history. `filed.project` is `death: detach`: deleting a project frees
-// its tasks rather than deleting them, because they are not ABOUT the project,
-// they were only filed under it.
+// stands as history.
 //
 // The document itself is `./vocab.json` — plain JSON Schema, readable by
 // anything that reads JSON. This file re-exports it under the name callers
@@ -54,15 +47,6 @@ import doc from './vocab.json' with { type: 'json' }
 
 /** The component that makes an entity a task. */
 export let TASK = 'task'
-
-/** The optional portfolio filing: project, priority, domain and assignee. */
-export let FILED = 'filed'
-
-/** The component naming something tasks are grouped under. */
-export let PROJECT = 'project'
-
-/** The component carrying a board's saved query. */
-export let BOARD = 'board'
 
 /** The mark a finished task wears. */
 export let COMPLETED = 'completed'

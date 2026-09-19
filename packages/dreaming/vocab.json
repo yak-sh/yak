@@ -1,0 +1,78 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/id": true,
+    "https://yaks.sh/vocab/edge": true
+  },
+  "title": "dreaming",
+  "$defs": {
+    "dream": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "prefix": "Z",
+      "properties": {
+        "scope": {
+          "type": "string",
+          "ref": "project",
+          "death": "cascade",
+          "description": "the project it is filed under"
+        },
+        "floor": {
+          "type": "string",
+          "format": "date-time",
+          "description": "the earliest it should come back"
+        }
+      },
+      "description": "a standing intention with a floor under it: do not come back before this"
+    },
+    "meta": {
+      "component": true,
+      "type": "object",
+      "properties": {},
+      "description": "a quiet memo: said in the transcript, never delivered live, harvested by the dream"
+    },
+    "recall": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "number",
+          "stamped": true,
+          "description": "how many times it has surfaced"
+        },
+        "first_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it first did"
+        },
+        "last_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it last did"
+        }
+      },
+      "description": "how often something has surfaced, and when it last did"
+    },
+    "recalled": {
+      "component": true,
+      "type": "object",
+      "relation": "recalled",
+      "bare": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "ref": "entry",
+          "death": "keep"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "the relation an edge wears: this surfaced that, then"
+    }
+  }
+}

@@ -1,10 +1,21 @@
 {
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/id": true,
+    "https://yaks.sh/vocab/names": true
+  },
   "title": "canvas",
   "$defs": {
     "camera": {
       "component": true,
       "type": "object",
       "kind": true,
+      "unique": [
+        [
+          "client",
+          "canvas"
+        ]
+      ],
       "sync": "server",
       "description": "where one window is looking at one canvas — shared so another tab, or a tool, can read and move it",
       "properties": {
@@ -48,7 +59,8 @@
       "kind": true,
       "by_name": true,
       "sync": "server",
-      "description": "a plane things are arranged on"
+      "description": "a plane things are arranged on",
+      "properties": {}
     },
     "card": {
       "component": true,
@@ -97,6 +109,11 @@
       "component": true,
       "type": "object",
       "kind": true,
+      "unique": [
+        [
+          "client"
+        ]
+      ],
       "sync": "server",
       "description": "what one window has open — shared, so a tool can move somebody there by writing it",
       "properties": {
@@ -122,6 +139,12 @@
       "component": true,
       "type": "object",
       "kind": true,
+      "unique": [
+        [
+          "client",
+          "board"
+        ]
+      ],
       "sync": "server",
       "description": "the sections of a list one window has collapsed",
       "properties": {
@@ -244,6 +267,11 @@
     "shelf": {
       "component": true,
       "type": "object",
+      "unique": [
+        [
+          "client"
+        ]
+      ],
       "sync": "server",
       "description": "what one window is holding, off the canvas",
       "properties": {

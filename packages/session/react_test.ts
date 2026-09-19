@@ -226,30 +226,6 @@ Deno.test('two tool calls in one reply are both answered before the next ask', a
   )
 })
 
-Deno.test('a call for a tool this session does not serve is refused, not left open', async () => {
-  let g = world()
-  let { model } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
-  // The tool ROW is in the graph and the session serves no function for it.
-  assertEquals(await settle(g, ids.s, { model, tools: [], mint }), 'settled')
-  let entries = await transcript(g, ids.s)
-  // The refusal is an error beside the result, which is what any expected
-  // failure lands — the model hears it and the transcript goes on.
-  assertEquals(entries.map(kindOf), [
-    'input',
-    'ask',
-    'call',
-    'error',
-    'result',
-    'ask',
-    'output',
-  ])
-  let refused = entries.find((b) => kindOf(b) == 'result')!
-  assertEquals(
-    String((refused.content as Comp).body).includes('no such tool'),
-    true,
-  )
-})
-
 Deno.test('a fork must name an entry, a using a model', () => {
   let g = world()
   let bad = (b: Bundle) => {

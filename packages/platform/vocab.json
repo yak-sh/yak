@@ -1,0 +1,321 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true
+  },
+  "title": "platform",
+  "$defs": {
+    "app": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "unique": [
+        [
+          "space",
+          "slug"
+        ]
+      ],
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "space": {
+          "type": "string",
+          "ref": "space",
+          "death": "cascade"
+        },
+        "version": {
+          "type": "number"
+        },
+        "access": {
+          "enum": [
+            "public",
+            "open",
+            "private"
+          ],
+          "description": "public: anyone reads. open: anyone writes. private: only members"
+        }
+      },
+      "description": "one app in a space: its slug, the version serving, and who may open it"
+    },
+    "deploy": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "unique": [
+        [
+          "app",
+          "version"
+        ]
+      ],
+      "properties": {
+        "app": {
+          "type": "string",
+          "ref": "app",
+          "death": "cascade"
+        },
+        "version": {
+          "type": "number"
+        },
+        "files": {
+          "type": "string"
+        },
+        "worker": {
+          "type": "string"
+        }
+      },
+      "description": "one release of an app: the files it shipped and the worker built from them"
+    },
+    "hostname": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "unique": [
+        [
+          "name"
+        ]
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "app": {
+          "type": "string",
+          "ref": "app",
+          "death": "cascade"
+        },
+        "stage": {
+          "enum": [
+            "pending",
+            "active",
+            "error"
+          ],
+          "description": "pending while it is being set up, active once it serves, error if it cannot"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "a domain pointed at an app, and how far its setup got"
+    },
+    "installed": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "of": {
+          "type": "string",
+          "ref": "app",
+          "death": "detach"
+        },
+        "version": {
+          "type": "number"
+        }
+      },
+      "description": "a copy of somebody else’s app, at the version it was taken from"
+    },
+    "meter": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "month": {
+          "type": "string",
+          "description": "the month it counts, as YYYY-MM"
+        },
+        "requests": {
+          "type": "number"
+        },
+        "rows_read": {
+          "type": "number"
+        },
+        "rows_written": {
+          "type": "number"
+        },
+        "bytes": {
+          "type": "number"
+        },
+        "emails": {
+          "type": "number"
+        },
+        "builds": {
+          "type": "number"
+        },
+        "tokens": {
+          "type": "number"
+        },
+        "seconds": {
+          "type": "number"
+        },
+        "built": {
+          "type": "number"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "what a space used in one month"
+    },
+    "plan": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "properties": {
+        "tier": {
+          "enum": [
+            "free",
+            "plus"
+          ],
+          "stamped": true,
+          "description": "free or plus"
+        },
+        "customer": {
+          "type": "string",
+          "stamped": true
+        },
+        "subscription": {
+          "type": "string",
+          "stamped": true
+        },
+        "status": {
+          "type": "string",
+          "stamped": true
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "ending": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        }
+      },
+      "description": "what a space pays for, and the subscription behind it"
+    },
+    "published": {
+      "component": true,
+      "type": "object",
+      "unique": [
+        [
+          "name"
+        ]
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "number"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "about": {
+          "type": "string"
+        }
+      },
+      "description": "the app is in the gallery under this name, from this version"
+    },
+    "report": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "properties": {
+        "app": {
+          "type": "string",
+          "ref": "app",
+          "death": "keep"
+        },
+        "space": {
+          "type": "string",
+          "ref": "space",
+          "death": "keep"
+        },
+        "version": {
+          "type": "number"
+        },
+        "release": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "description": "an error a deployed app reported about itself"
+    },
+    "signin": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "properties": {
+        "email": {
+          "type": "string",
+          "stamped": true
+        },
+        "code": {
+          "type": "string",
+          "stamped": true
+        },
+        "expires": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "tries": {
+          "type": "number",
+          "stamped": true
+        }
+      },
+      "description": "a sign-in in progress: the code mailed out, when it expires, and how many tries are left"
+    },
+    "space": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "unique": [
+        [
+          "slug"
+        ]
+      ],
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "home": {
+          "type": "string",
+          "ref": "app",
+          "death": "detach"
+        }
+      },
+      "description": "somebody’s corner of the platform, at its own slug"
+    },
+    "appAccess": {
+      "enum": [
+        "public",
+        "open",
+        "private"
+      ]
+    },
+    "hostnameStages": {
+      "enum": [
+        "pending",
+        "active",
+        "error"
+      ]
+    },
+    "planTiers": {
+      "enum": [
+        "free",
+        "plus"
+      ]
+    }
+  }
+}

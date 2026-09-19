@@ -1830,7 +1830,17 @@
           "npm:@cloudflare/workers-types@^4.20260702.1"
         ]
       },
+      "packages/design": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/doc": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/dreaming": {
         "dependencies": [
           "jsr:@std/assert@1"
         ]
@@ -1871,6 +1881,11 @@
           "jsr:@std/assert@1"
         ]
       },
+      "packages/goal": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/graph": {
         "dependencies": [
           "jsr:@std/assert@1",
@@ -1889,6 +1904,11 @@
           "npm:zod@^3.24.0"
         ]
       },
+      "packages/hook": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/html": {
         "dependencies": [
           "jsr:@std/assert@1",
@@ -1905,6 +1925,11 @@
       "packages/journal": {
         "dependencies": [
           "jsr:@db/sqlite@0.13.0",
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/kernel": {
+        "dependencies": [
           "jsr:@std/assert@1"
         ]
       },
@@ -1965,6 +1990,11 @@
           "jsr:@std/assert@1"
         ]
       },
+      "packages/notify": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/oauth": {
         "dependencies": [
           "jsr:@std/assert@1"
@@ -1980,6 +2010,21 @@
           "jsr:@std/assert@1"
         ]
       },
+      "packages/page": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/persona": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/platform": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/preact": {
         "dependencies": [
           "jsr:@std/assert@1",
@@ -1989,6 +2034,11 @@
         ]
       },
       "packages/process": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
+      "packages/project": {
         "dependencies": [
           "jsr:@std/assert@1"
         ]

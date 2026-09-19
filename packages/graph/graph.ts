@@ -224,16 +224,11 @@ export let graph = (opts: Options): Graph => {
   // read too.
   let declaring = () => {
     let seen = new Set(vocab.docs)
-    // A rule DECLARING another phase is not this phase's to run: @yaks/tools'
-    // call/result rules name `effect`, and the runner that asks them for their
-    // bindings is post-commit. Saying nothing means the declared half of
-    // `apply()`, which is what a rule is unless it says otherwise.
-    let here = (r: { phase?: string }) => !r.phase || r.phase == 'rules'
     return ready([
-      ...rulesIn(vocab.docs).filter(here),
+      ...rulesIn(vocab.docs),
       ...plugins.flatMap((p) => [
         ...(p.declared ?? []),
-        ...rulesIn((p.vocab ?? []).filter((d) => !seen.has(d))).filter(here),
+        ...rulesIn((p.vocab ?? []).filter((d) => !seen.has(d))),
       ]),
     ])
   }

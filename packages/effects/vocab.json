@@ -30,11 +30,10 @@
           "enum": [
             "created",
             "changed",
-            "removed",
-            "matched"
+            "removed"
           ],
           "stamped": true,
-          "description": "what happened to it, or `matched` where a pattern held over it"
+          "description": "what happened to it"
         },
         "state": {
           "enum": [

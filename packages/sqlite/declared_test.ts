@@ -3,7 +3,6 @@
 // these.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { effects } from '@yaks/effects'
 import { graph, invoked } from '@yaks/graph'
 import type { Bundle } from '@yaks/graph'
 import { mem, shop } from './harness.ts'
@@ -206,29 +205,4 @@ Deno.test('a template with no argument for a variable still joins on it', () => 
     invoked(tx, shop, '$p .product; .review, review.product=$p, +shelf', {})
   ) as Bundle[]
   assertEquals(made.map((b) => b.entity.eid), ['r1'])
-})
-
-// A pattern EFFECT over the same store: a match is a query, and a storage
-// that answers bindings answers one that joins two entities.
-
-Deno.test('an effect on a joining pattern fires over a real store', async () => {
-  let s = storage(mem(), shop)
-  s.install()
-  let fx = effects(shop)
-  let g = graph({ storage: s, vocab: shop, plugins: [fx] })
-  let seen: string[] = []
-  // Every review of a product that is on a shelf: two entities, joined by the
-  // column between them, which no component-and-kind registration can say.
-  fx.on('$p .product, .shelf; .review, review.product=$p', (e) => {
-    seen.push(`${e.entity.eid} ${e.vars?.p}`)
-  })
-  await g.apply([{ entity: { eid: 'p1' }, product: { sku: 'A' } }])
-  await g.apply([{
-    entity: { eid: 'r1' },
-    review: { product: 'p1', stars: 5 },
-  }])
-  // Not yet: the product is on no shelf.
-  assertEquals(seen, [])
-  await g.apply([{ entity: { eid: 'p1' }, shelf: { aisle: 'Z', slot: 1 } }])
-  assertEquals(seen, ['p1 p1'])
 })

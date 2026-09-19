@@ -484,10 +484,6 @@
           "items": {
             "type": "string"
           }
-        },
-        "phase": {
-          "type": "string",
-          "description": "the phase it runs in: `rules` (the default) is the declared half of apply(), before persistence; `effect` is a pattern a post-commit handler is registered on (@yaks/effects) or a sweep asks once (@yaks/tools). Only the `rules` half is run by apply() itself."
         }
       },
       "required": [

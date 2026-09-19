@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yaks.sh/vocab/kernel",
+  "title": "yaks kernel keyword vocabulary",
+  "description": "The three things a graph of work says about its own words that the core meta-model does not: which facets a project governs, which log lines never ride a boot snapshot, and which text column completes out of a named well.",
+  "$defs": {
+    "governed": {
+      "description": "true = a durable work or knowledge facet governed by project-rooted edge paths: what a project's reach is computed over.",
+      "type": "boolean"
+    },
+    "lazy": {
+      "description": "true = this component never rides a boot snapshot; a reader asks for its rows by the partition they belong to.",
+      "type": "boolean"
+    },
+    "well": {
+      "description": "The named well a text column's completions are drawn from, beside the column's own live distinct values. The name is the well's, registered by whoever holds the values — the schema stays declarative.",
+      "type": "string"
+    }
+  }
+}

@@ -8,10 +8,9 @@ import { assert, assertEquals } from '@std/assert'
 import { z } from 'zod'
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
-import { toolsDoc } from '@yaks/tools'
 import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/harness.ts'
-import { comp, connect, result, shopGraph, text } from './harness.ts'
+import { comp, connect, result, shopGraph } from './harness.ts'
 import { roster } from './server.ts'
 import { rosterLine, rosterVersion } from './roster.ts'
 
@@ -163,51 +162,29 @@ Deno.test('filters and limit join the query line', async () => {
 })
 
 Deno.test('the server signs the batch, never the client', async () => {
-  let graph = shopGraph()
-  let client = await connect({ graph, actor: ada })
+  let client = await connect({ actor: ada })
   await called(client, 'graph_apply', {
     change: [{ ...spring, $actor: { by: 'villain' } }],
   })
-  // What LANDED is what this is about: the call was written as the door's
-  // actor, and the runner signed the tool's bundles with the same name.
-  assertEquals(comp((await graph.read('.price=12'))[0], 'created').by, 'm1')
-})
-
-Deno.test('a tool runs as whoever called it', async () => {
-  let graph = shopGraph()
-  let seen: string | null = null
-  graph.use({
-    name: 'shelf',
-    tools: [{
-      name: 'shelve',
-      description: 'put a book on the shelf',
-      input: {},
-      run: (_, ctx) => {
-        seen = ctx.actor?.eid ?? null
-        return [{ entity: { eid: 'b1' }, book: { status: 'shelved' } }]
-      },
-    }],
-  })
-  let client = await connect({ graph, actor: ada })
-  await called(client, 'shelve')
-  // The tool was handed the caller, not the process running it…
-  assertEquals(seen, 'm1')
-  // …and what it answered is written in that name.
-  let [shelved] = await graph.read('.status=shelved')
-  assertEquals(comp(shelved, 'created').by, 'm1')
-  await client.close()
+  let found = bundles(result(
+    await called(client, 'graph_query', {
+      q: '.price=12',
+    }),
+  ))
+  assertEquals(comp(found[0], 'created').by, 'm1')
 })
 
 Deno.test('an unattributed server leaves the actor off', async () => {
-  let graph = shopGraph()
-  let client = await connect({ graph })
+  let client = await connect()
   await called(client, 'graph_apply', {
     change: [{ ...spring, $actor: { by: 'villain' } }],
   })
-  assertEquals(
-    comp((await graph.read('.price=12'))[0], 'created').by,
-    undefined,
-  )
+  let found = bundles(result(
+    await called(client, 'graph_query', {
+      q: '.price=12',
+    }),
+  ))
+  assertEquals(comp(found[0], 'created').by, undefined)
 })
 
 Deno.test('graph_show answers only bundles, including what points at the entity', async () => {
@@ -217,17 +194,24 @@ Deno.test('graph_show answers only bundles, including what points at the entity'
     review: { stars: 5, book: 'b1' },
   }])
   let client = await connect({ graph })
-  let out = bundles(result(await called(client, 'graph_show', { ids: ['b1'] })))
-  assertEquals(out.map((b) => b.entity.eid), ['b1', 'r1'])
-  assertEquals(comp(out[1], 'review'), { stars: 5, book: 'b1' })
+  let out = result(await called(client, 'graph_show', { ids: ['b1'] }))
+  assert(out && typeof out == 'object' && 'bundles' in out)
+  assertEquals(Object.keys(out), ['bundles'])
+  assertEquals(bundles(out.bundles).map((b) => b.entity.eid), ['b1', 'r1'])
+  assertEquals(comp(bundles(out.bundles)[1], 'review'), {
+    stars: 5,
+    book: 'b1',
+  })
 
-  let alone = bundles(result(
+  let alone = result(
     await called(client, 'graph_show', {
       ids: ['b1'],
       backrefs: false,
     }),
-  ))
-  assertEquals(alone.map((b) => b.entity.eid), ['b1'])
+  )
+  assert(alone && typeof alone == 'object' && 'bundles' in alone)
+  assertEquals(Object.keys(alone), ['bundles'])
+  assertEquals(bundles(alone.bundles).map((b) => b.entity.eid), ['b1'])
   await client.close()
 })
 
@@ -262,7 +246,7 @@ let wideDoc: VocabDoc = {
 }
 
 Deno.test('graph_show gathers backrefs over a vocabulary wider than a compound', async () => {
-  let wide = loadVocab([wideDoc, toolsDoc])
+  let wide = loadVocab(wideDoc)
   let store = storage(mem(), wide)
   store.install()
   let g = graph({ storage: store, vocab: wide })
@@ -272,10 +256,14 @@ Deno.test('graph_show gathers backrefs over a vocabulary wider than a compound',
     { entity: { eid: 'b2' }, n8: { of: 'a1' } },
   ])
   let client = await connect({ graph: g })
-  let out = bundles(result(
+  let out = result(
     await called(client, 'graph_show', { ids: ['a1'], backrefs: true }),
-  ))
-  assertEquals(out.map((b) => b.entity.eid).sort(), ['a1', 'b1', 'b2'])
+  )
+  assert(out && typeof out == 'object' && 'bundles' in out)
+  assertEquals(
+    bundles(out.bundles).map((b) => b.entity.eid).sort(),
+    ['a1', 'b1', 'b2'],
+  )
   await client.close()
 })
 
@@ -283,29 +271,19 @@ Deno.test('graph_show gathers backrefs over a vocabulary wider than a compound',
 // and answers the vocabulary it was built over.
 Deno.test('graph_schema hands over the words of this graph', async () => {
   let client = await connect()
-  // A vocabulary is not rows in the store it describes, so the schema comes
-  // back as the one thing it can be: prose, in a content bundle.
-  let out = JSON.parse(text(await called(client, 'graph_schema'))) as {
+  let out = result(await called(client, 'graph_schema')) as {
     comps: { name: string }[]
     kinds: string[]
   }
   assertEquals(out.comps.map((c) => c.name), [
     'book',
-    'call',
-    'content',
     'created',
     'doc',
     'entity',
-    'error',
-    'exception',
-    'execution',
-    'output',
-    'result',
     'review',
-    'tool',
     'updated',
   ])
-  assertEquals(out.kinds, ['book', 'doc', 'review', 'tool'])
+  assertEquals(out.kinds, ['book', 'doc', 'review'])
 })
 
 Deno.test('a refusal is the tool error the agent reads, not a broken call', async () => {
@@ -345,27 +323,25 @@ Deno.test('a plugin contributes tools the way it contributes components', async 
       name: 'shelve',
       description: 'put a book on the shelf',
       input: {},
-      run: () => [{ entity: { eid: 'b1' }, book: { status: 'shelved' } }],
+      run: () => ({
+        change: [{ entity: { eid: 'b1' }, book: { status: 'shelved' } }],
+      }),
     }],
   })
   let client = await connect({ graph, actor: ada })
   let names = await listed(client)
   assert(names.includes('shelve'))
-  let out = bundles(result(await called(client, 'shelve')))
-  assertEquals(out.map((b) => b.entity.eid), ['b1'])
+  await called(client, 'shelve')
   let found = bundles(result(
     await called(client, 'graph_query', {
       q: '.status=shelved',
     }),
   ))
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
-  assertEquals(
-    comp((await graph.read('.status=shelved'))[0], 'created').by,
-    'm1',
-  )
+  assertEquals(comp(found[0], 'created').by, 'm1')
 })
 
-Deno.test('a tool whose answer is words says them as content, and its bundles beside', async () => {
+Deno.test('a tool that says its own words says them, and its data beside', async () => {
   let graph = shopGraph()
   graph.use({
     name: 'shelf',
@@ -373,13 +349,7 @@ Deno.test('a tool whose answer is words says them as content, and its bundles be
       name: 'stocktake',
       description: 'count the shelf',
       meta: { ui: { resourceUri: 'ui://shop/shelf' } },
-      // An answer that is not entities is the one entity it can be: prose
-      // that says which call produced it.
-      run: (_, ctx) => [{
-        entity: { eid: '$said' },
-        content: { body: 'two books here' },
-        output: { source: ctx.call },
-      }],
+      run: () => ({ result: { text: 'two books here', books: 2 } }),
     }],
   })
   let client = await connect({ graph })
@@ -392,14 +362,15 @@ Deno.test('a tool whose answer is words says them as content, and its bundles be
     { ui: { resourceUri: 'ui://shop/shelf' } },
   )
 
-  let out = await called(client, 'stocktake')
-  // The words are the reply's text; the bundle that carried them is its
-  // structure, and it says which call it came from.
-  assertEquals(text(out), 'two books here')
-  let [said] = bundles(result(out))
-  assertEquals(comp(said, 'content').body, 'two books here')
-  let [call] = await graph.read('.call')
-  assertEquals(comp(said, 'output').source, call.entity.eid)
+  let out = await called(client, 'stocktake') as {
+    content: { text: string }[]
+    structuredContent?: unknown
+  }
+  // Its words are its text block, and the answer they are a field of rides
+  // beside them — unwrapped, because the page a host renders it in was named
+  // by this tool and reads the answer's own shape.
+  assertEquals(out.content[0].text, 'two books here')
+  assertEquals(out.structuredContent, { text: 'two books here', books: 2 })
   await client.close()
 })
 
@@ -499,21 +470,13 @@ Deno.test('every tool says how a client signs in for it', async () => {
       description: 'what this shop is',
       input: {},
       meta: { securitySchemes: [{ type: 'noauth' }] },
-      run: (_, ctx) => [{
-        entity: { eid: '$said' },
-        content: { body: 'a bookshop' },
-        output: { source: ctx.call },
-      }],
+      run: () => ({ result: { text: 'a bookshop' } }),
     }, {
       name: 'shelve',
       description: 'put a book on the shelf',
       input: {},
       meta: { ui: { resourceUri: 'ui://shelf' } },
-      run: (_, ctx) => [{
-        entity: { eid: '$said' },
-        content: { body: 'shelved' },
-        output: { source: ctx.call },
-      }],
+      run: () => ({ result: { text: 'shelved' } }),
     }],
   })
   let client = await connect({

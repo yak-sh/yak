@@ -8,10 +8,12 @@ import { openrouterDoc } from '@yaks/openrouter'
 import { mcpDoc } from '@yaks/mcp-client/graph'
 import { blobKeywords } from '@yaks/blob'
 import { docDoc } from '@yaks/doc'
+import { spineDoc } from '@yaks/kernel'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
 import { modelDoc } from '@yaks/model'
 import { openaiDoc } from '@yaks/openai'
 import { processDoc } from '@yaks/process'
+import { projectDoc } from '@yaks/project'
 import { sessionDoc } from '@yaks/session'
 import { taskDoc } from '@yaks/task'
 import {
@@ -30,8 +32,10 @@ export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
 /** Every document the harness is made of: the words a transcript is made of
  * (@yaks/session), what serves it (@yaks/model, @yaks/openai), the programs it
  * starts (@yaks/process), and the work it is doing (@yaks/doc, @yaks/edge,
- * @yaks/task). */
+ * @yaks/task) — over @yaks/kernel's spine, which is where `entity` and the two
+ * stamps live. */
 export let docs: VocabDoc[] = [
+  spineDoc,
   harnessDoc,
   mcpDoc,
   checkoutDoc,
@@ -43,6 +47,7 @@ export let docs: VocabDoc[] = [
   openaiDoc,
   openrouterDoc,
   processDoc,
+  projectDoc,
   taskDoc,
 ]
 

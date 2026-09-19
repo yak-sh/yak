@@ -13,6 +13,7 @@ import { type Graph, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
+import { projectDoc, projects } from '@yaks/project'
 import { taskDoc } from './comp.ts'
 import { tasks } from './plugin.ts'
 import type { Mark } from './words.ts'
@@ -42,10 +43,10 @@ let doc: VocabDoc = {
   },
 }
 
-/** The team's vocabulary: this package's components, `doc`, edges, and their
- * own. */
+/** The team's vocabulary: this package's components, the portfolio they are
+ * filed in (@yaks/project), `doc`, edges, and their own. */
 export let team: Vocab = loadVocab(
-  [docDoc, edgeDoc, taskDoc, doc],
+  [docDoc, edgeDoc, taskDoc, projectDoc, doc],
   [edgeKeywords],
 )
 
@@ -60,7 +61,7 @@ export let teamGraph = (
   g: graph({
     storage,
     vocab: team,
-    plugins: [edges(team), tasks(team, marks)],
+    plugins: [edges(team), tasks(), projects(team, marks)],
   }),
   storage,
 })

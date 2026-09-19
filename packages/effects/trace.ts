@@ -22,9 +22,8 @@ import type { Ask, Bundle, Comp, Eid, Entity, Tx } from '@yaks/graph'
 import { comps, dead, doomed, then } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 
-/** What woke a handler: one of the three things that can happen to a
- * component, or a PATTERN that now holds over what the batch committed. */
-export type Kind = 'created' | 'changed' | 'removed' | 'matched'
+/** What happened to one component: it appeared, it moved, or it went. */
+export type Kind = 'created' | 'changed' | 'removed'
 
 /**
  * One committed component change, as an effect sees it.
@@ -42,8 +41,6 @@ export type Event = {
   name: string
   /** the columns the change carried (absent on `removed`) */
   comp?: Comp
-  /** what each variable bound, for a `matched` event whose pattern named some */
-  vars?: Record<string, unknown>
 }
 
 /** What each entity carried before the batch: component names, by eid. */

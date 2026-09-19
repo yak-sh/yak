@@ -1,0 +1,15 @@
+{
+  "name": "@yaks/design",
+  "version": "0.1.0",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "A proposal, the review it gets, and the architecture that stands once it is decided.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
+}

@@ -95,13 +95,14 @@ In dependency order:
 - **[@yaks/git](./git)** — git objects as entities: an object's eid IS its SHA-1
   object id, with its SHA-256 name beside it as a key, its body in a @yaks/blob
   store, and the two walks a pack makes (`entry`, `parent`) as edges — plus the
-  builders that turn a `path → sha256` manifest into trees and a commit.
+  builders that turn a `path → sha256` manifest into trees and a commit. Source
+  as a graph says it too: the `repository` and `worktree` a checkout is, the
+  landed `commit` attached to the work it is about, and the `anchor` a document
+  makes into source.
 - **[@yaks/effects](./effects)** — what a graph DOES about what it commits:
-  handlers run after the transaction, each isolated, with an optional durable
-  ledger. Registered on a component and one of the three things that happen to
-  it (`created`/`changed`/`removed`), or on a PATTERN — any query, run wherever
-  the batch just made it hold, so nothing has to be derived into the graph to
-  trigger an effect. The mechanism — it ships no effect of its own.
+  `created`/`changed`/`removed` handlers per component, run after the
+  transaction, each isolated, with an optional durable ledger. The mechanism —
+  it ships no effect of its own.
 - **[@yaks/journal](./journal)** — who wrote what, when: every committed batch
   recorded inside its own transaction, in three append-only tables off the
   spine, after-images only — and the three things that fall out: the history of
@@ -112,12 +113,10 @@ In dependency order:
   rendering are written once. Its `body` NAMES `@yaks/blob`'s `store` keyword
   without depending on the package that reads it — content-addressed where blob
   is composed in, plain text everywhere else.
-- **[@yaks/tools](./tools)** — a tool is a function from bundles to bundles, and
-  this runs one and keeps the record: the `tool` registered, the `call` that
-  asked for it, the `execution` it is claimed under and the `result` it comes to
-  rest as. A host calls the function itself; the calls nobody is waiting on —
-  scheduled, or left by a crash — are found by registering the rules this
-  vocabulary declares as effects.
+- **[@yaks/tools](./tools)** — a tool call as entities: the `tool` registered,
+  the `call` asking for it, the `execution` state it moves through and the
+  `result` it comes to rest as — run against a graph, independent of any session
+  or provider transport.
 - **[@yaks/member](./member)** — who belongs and what they may touch: a space
   roster (`member`), per-thing grants (`grant`), an access mode (`access`), the
   `precondition` hook that refuses a write the actor's role does not allow, and
@@ -146,6 +145,11 @@ In dependency order:
 - **[@yaks/openai](./openai)** — that seam over OpenAI's Responses API: one
   streamed exchange over `fetch`, a bearer from `OPENAI_API_KEY` or the Codex
   sign-in, the two endpoints those bearers open.
+- **[@yaks/kernel](./kernel)** — the base words a graph of work wears: the
+  entity spine, the provenance marks (`created`, `updated`, `decided`,
+  `quarantined`…), the things attached to an entity (`comment`, `image`,
+  `favorite`) and the relation tags its edges say — plus the keywords the core
+  meta-model does not describe (`governed`, `lazy`, `well`).
 - **[@yaks/task](./task)** — a to-do list as a component domain: tasks,
   projects, boards that are saved queries rather than stored membership, and a
   status nobody writes — read off the `completed` and `cancelled` marks a task
@@ -163,6 +167,29 @@ In dependency order:
   `memory` on a `doc` whose body is the sentence itself with a few lines of
   context, the filter line that recalls them, and the passage handed to an agent
   at the start of its next conversation.
+- **[@yaks/persona](./persona)** — who is speaking and what they are for: the
+  people a graph knows, the personas an agent wears, and the roles those
+  personas are hired into, with the checks a role runs and what they found.
+- **[@yaks/project](./project)** — a portfolio: the `project` work is filed
+  under, the `filed` that files it, the `board` that is a saved filter over it,
+  and the `venture` being built.
+- **[@yaks/goal](./goal)** — a purpose that is never finished, and the
+  `satisfies` edge that says which work satisfied it.
+- **[@yaks/design](./design)** — what was proposed, the review it got, and the
+  architecture that stands.
+- **[@yaks/dreaming](./dreaming)** — what an agent returns to when nothing is
+  asking: a `dream` with a floor under it, and the `recall` it consolidates.
+- **[@yaks/notify](./notify)** — how somebody is told: a knock, what they watch
+  or mute, and an open chat.
+- **[@yaks/hook](./hook)** — an event another system delivered, kept as it
+  arrived.
+- **[@yaks/page](./page)** — a page as witnessed: its address, and when its
+  bytes were frozen.
+- **[@yaks/platform](./platform)** — what a hosting platform keeps about the
+  apps it serves: `space`, `app`, `deploy`, `published`, `hostname`,
+  `installed`, `plan`, `meter`, `signin` and `report`. Belonging to a space is
+  [@yaks/member](./member)'s `member`, and the access ladder over it is its
+  `grant` — two facts, not one enum.
 - **[@yaks/api](./api)** — the transport: a plain `Request` → `Response` handler
   over a graph (`/apply`, `/query`, `/ws`), where the door authenticates the
   writer, and a subscription is a saved query whose answer is pushed again when
@@ -218,12 +245,22 @@ In dependency order:
 
 ## Domain plugins
 
-`@yaks/doc`, `@yaks/member`, `@yaks/session`, `@yaks/process`, `@yaks/task`,
-`@yaks/wake`, `@yaks/mail`, `@yaks/memory`, `@yaks/tools`, `@yaks/context` and
-`@yaks/canvas` ship components rather than machinery. Each is a `vocab.json`
-(JSON Schema 2020-12, loaded by `@yaks/vocab`) plus, where it needs one, a graph
-plugin or an effect — the same shape a customer app declares its own components
-in, so an app's entities and these compose by eid with nothing in between.
+`@yaks/kernel`, `@yaks/doc`, `@yaks/member`, `@yaks/session`, `@yaks/process`,
+`@yaks/task`, `@yaks/wake`, `@yaks/mail`, `@yaks/memory`, `@yaks/tools`,
+`@yaks/context`, `@yaks/canvas`, `@yaks/platform`, `@yaks/persona`,
+`@yaks/project`, `@yaks/goal`, `@yaks/design`, `@yaks/dreaming`, `@yaks/notify`,
+`@yaks/hook` and `@yaks/page` ship components rather than machinery. Each is a
+`vocab.json` (JSON Schema 2020-12, loaded by `@yaks/vocab`) plus, where it needs
+one, a graph plugin or an effect — the same shape a customer app declares its
+own components in, so an app's entities and these compose by eid with nothing in
+between.
+
+These are designed for the use-case, not ported from the fleet server: that
+server is being dismantled, and `docs/transition.md` says, one row per fleet
+component, which package component its rows become when its data is exported
+into a plugin-powered graph — or why nothing takes them. A word has ONE home, so
+all of these load together with no name declared twice
+(`bin/transition_test.ts`).
 
 ## How they compose
 
@@ -261,9 +298,8 @@ on its own:
   own code.
 - `@yaks/effects` is the other end of a write: the graph's phases decide what a
   batch MEANS, and this decides what to do about it once it is true — a
-  notification, a receipt, a spawned process — registered per component or as a
-  pattern over what committed, run post-commit, and isolated so a broken
-  observer never breaks a write.
+  notification, a receipt, a spawned process — registered per component, run
+  post-commit, and isolated so a broken observer never breaks a write.
 - `@yaks/journal` is the memory of the same write: it records what each batch
   moved in tables of its own, inside the transaction, so a refused batch leaves
   nothing and a committed one always left a record. History, undo and the delta

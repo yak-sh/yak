@@ -1,4 +1,4 @@
-import { CallError, runner, UnfinishedCall } from '@yaks/tools'
+import { executeCall, UnfinishedCall } from '@yaks/tools'
 export { CallError as ToolError } from '@yaks/tools'
 import { transient } from '@yaks/graph'
 // The daemon's one step. `react(graph, session)` reads the newest entry of a
@@ -21,14 +21,7 @@ import { transient } from '@yaks/graph'
 // provider keeps about an ask is its own comp on the ask entry (`model.mark`),
 // which is why the question is the model's to answer.
 
-import type {
-  Actor,
-  Bundle,
-  Comp,
-  Eid,
-  Graph,
-  Tool as GraphTool,
-} from '@yaks/graph'
+import type { Actor, Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import {
   type Item,
   MODEL,
@@ -260,64 +253,25 @@ export let react = async (
   }
   if (open.length) {
     const added: Bundle[] = []
-    // The runner is what runs a call — here and everywhere else (@yaks/tools).
-    // A session tool answers a STRING and this is where that becomes bundles:
-    // the words it said, wearing `output{source}` so the answer names the call
-    // it came from. The runner lands them beside the `result{call, ms}` entity
-    // it derives, and that result is the transcript's entry.
-    //
-    // Its plugin is deliberately not registered on this graph: a call here is
-    // run in the order the transcript asked for, one at a time, and an
-    // effect-phase runner would race that.
-    const at = new Map(open.map((b) => [b.entity.eid, b]))
-    // What a session tool is, said as a graph tool: the words it answers wear
-    // `content` and `output{source}`, so the answer names the call it came
-    // from and the runner lands it like any other.
-    const served = (eid: Eid, tool: Tool): GraphTool => ({
-      eid,
-      name: tool.name,
-      description: tool.description ?? '',
-      inputSchema: tool.parameters,
-      run: async (bundles, ctx) => [{
-        entity: { eid: '$said' },
-        [CONTENT]: {
-          body: String(
-            await tool.run(ctx.args, {
-              session,
-              call: at.get(ctx.call) ?? bundles[0],
-              entries,
-            }),
-          ),
-        },
-        [OUTPUT]: { source: ctx.call },
-      }],
-    })
-    // A call naming a tool this session does not serve is answered by a tool
-    // that refuses. The runner leaves a call it has no word for alone —
-    // another runner may own it — and here nobody else does, so the refusal is
-    // a word in this table and lands as every other answer does.
-    const unserved = (to: Eid): GraphTool => ({
-      eid: to,
-      name: to,
-      description: 'a tool this session does not serve',
-      run: () => {
-        throw new CallError('tool', 'no such tool: ' + to)
-      },
-    })
-    const table: GraphTool[] = [
-      ...open
-        .map((b) => String(comp(b, CALL)?.to))
-        .filter((to) => !toolEntities.has(to))
-        .map(unserved),
-      ...[...toolEntities].map(([eid, tool]) => served(eid, tool)),
-    ]
-    const run = runner(g, {
-      tools: table,
-      report: (error) => deps.report?.(error, session, 'tool'),
-    })
     for (const pending of open) {
       try {
-        added.push(...await run.run(pending.entity.eid))
+        added.push(
+          ...await executeCall(g, pending.entity.eid, {
+            resolve: (target) => {
+              const tool = toolEntities.get(target)
+              return tool
+                ? {
+                  run: (args) =>
+                    tool.run(args, { session, call: pending, entries }),
+                  format: String,
+                  inputSchema: tool.parameters,
+                }
+                : undefined
+            },
+            mint,
+            report: (error) => deps.report?.(error, session, 'tool'),
+          }),
+        )
       } catch (error) {
         if (!(error instanceof UnfinishedCall)) throw error
         return append([line(

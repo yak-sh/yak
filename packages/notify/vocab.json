@@ -1,0 +1,91 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/id": true
+  },
+  "title": "notify",
+  "$defs": {
+    "chat": {
+      "component": true,
+      "type": "object",
+      "unique": [
+        [
+          "actor",
+          "target"
+        ]
+      ],
+      "properties": {
+        "actor": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach"
+        },
+        "target": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach"
+        }
+      },
+      "description": "an open conversation between an actor and a thing — one per pair"
+    },
+    "knock": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "prefix": "K",
+      "properties": {
+        "target": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade"
+        }
+      },
+      "description": "a nudge pointed at a thing, with the words that rode along"
+    },
+    "subscription": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "unique": [
+        [
+          "actor",
+          "target"
+        ]
+      ],
+      "properties": {
+        "actor": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade"
+        },
+        "target": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade"
+        },
+        "mode": {
+          "enum": [
+            "watch",
+            "mute"
+          ],
+          "description": "watch: tell me. mute: do not"
+        }
+      },
+      "description": "what one actor watches, or mutes, about one thing"
+    },
+    "subModes": {
+      "enum": [
+        "watch",
+        "mute"
+      ]
+    },
+    "signalKinds": {
+      "enum": [
+        "lapse",
+        "sweep",
+        "scene",
+        "wake"
+      ]
+    }
+  }
+}

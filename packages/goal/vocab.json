@@ -1,0 +1,35 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/id": true,
+    "https://yaks.sh/vocab/edge": true
+  },
+  "title": "goal",
+  "$defs": {
+    "goal": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "doc"
+      ],
+      "prefix": "V",
+      "properties": {
+        "scope": {
+          "type": "string",
+          "ref": "project",
+          "death": "keep",
+          "description": "the project it holds for; absent means everywhere"
+        }
+      },
+      "description": "a purpose that is never finished — work `satisfies` it rather than completing it"
+    },
+    "satisfies": {
+      "component": true,
+      "type": "object",
+      "relation": "satisfies",
+      "properties": {},
+      "description": "the relation an edge wears: doing this served that purpose"
+    }
+  }
+}

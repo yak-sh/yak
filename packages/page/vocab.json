@@ -1,0 +1,30 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true
+  },
+  "title": "page",
+  "$defs": {
+    "web": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "doc"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "the canonical address"
+        },
+        "frozen_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when its bytes were captured, if they were"
+        }
+      },
+      "description": "a page as witnessed: the address it was at, and when its bytes were frozen"
+    }
+  }
+}
