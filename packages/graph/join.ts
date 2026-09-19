@@ -29,6 +29,7 @@
 import {
   type And,
   bare,
+  type Clause,
   declared,
   eq,
   parse,
@@ -260,3 +261,59 @@ export let bound = (source: string): Record<string, unknown> =>
       [name, v],
     ) => [name, v.kind == 'scalar' || v.kind == 'time' ? v.raw : v]),
   )
+
+/**
+ * This match as THIS vocabulary can ask it, or `null` where it cannot be asked
+ * at all.
+ *
+ * A word a vocabulary has no entry for cannot be worn by anything in its
+ * graph. So a clause saying that word is ABSENT holds for every entity here
+ * and comes out; one saying it is PRESENT holds for none, and the pattern it
+ * sits in is inert. That is what lets ONE rule text be right in two graphs:
+ * `!wake` says nothing where nothing is ever scheduled, and gates the answer
+ * where something is.
+ */
+export let asked = (m: Match, v: Vocab): Match | null => {
+  // Does this vocabulary have the word at all? Asked of its own tables rather
+  // than through `aim`, which reads a BARE word as an undeclared component on
+  // purpose — a bundle may carry one before its schema is loaded, and that
+  // tolerance is exactly what this question must not inherit.
+  let known = (path: string[]): boolean => {
+    if (v.assoc(path[0]) || v.comp(path[0])) return true
+    try {
+      v.aim(path.join('.'))
+      return true
+    } catch {
+      return false
+    }
+  }
+  // `!comp` and `.col=` alike: the value-less `=` the grammar reads as absent.
+  let gone = (c: Pred): boolean =>
+    c.op == '=' && c.value?.kind == 'scalar' && c.value.raw === ''
+  let prune = (c: Clause): Clause | boolean => {
+    if (c.kind == 'and' || c.kind == 'or') {
+      let kids = c.clauses.map(prune)
+      let all = c.kind == 'and'
+      if (kids.some((k) => k === !all)) return !all
+      let kept = kids.filter((k) => k !== all) as Clause[]
+      return kept.length ? { ...c, clauses: kept } : all
+    }
+    if (c.kind != 'pred' || known(c.path)) return c
+    return gone(c)
+  }
+  let patterns: Pattern[] = []
+  for (let p of m.patterns) {
+    if (p.makes || !p.filter.clauses.length) {
+      patterns.push(p)
+      continue
+    }
+    if (p.binds.some((b) => !known(b.path))) return null
+    let filter = prune(p.filter)
+    if (filter === false) return null
+    patterns.push({
+      ...p,
+      filter: filter === true ? { kind: 'and', clauses: [] } : filter as And,
+    })
+  }
+  return { ...m, patterns }
+}

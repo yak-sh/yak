@@ -128,6 +128,21 @@ export type Storage = {
 export let detached = (storage: Storage): Tx => ({
   read: (query, opts) => storage.read(query, opts),
   get: (eids) => storage.tx((tx) => tx.get(eids)),
+  // A match is a question about what is committed, which is exactly what
+  // there is to ask out here: an effect registered on a PATTERN
+  // (@yaks/effects) asks it after the batch landed. A store that cannot
+  // answer one says so when it is asked rather than by being missing, since
+  // whether it can is not known until a transaction is open.
+  bindings: (matches, batch, covers) =>
+    storage.tx((tx) => {
+      if (!tx.bindings) {
+        throw new Error(
+          'this storage answers no bindings — a match is a ' +
+            'query, and it has nothing to say about one',
+        )
+      }
+      return tx.bindings(matches, batch, covers)
+    }),
   patch: (bundles) => storage.tx((tx) => tx.patch(bundles)),
   remove: (entities) => storage.tx((tx) => tx.remove(entities)),
 })

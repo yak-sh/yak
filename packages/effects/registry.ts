@@ -28,8 +28,8 @@
 // loop that invites is stopped by the generation the door marks and this file
 // reads — never by a rule each handler has to remember.
 
-import type { Bundle, Hook, Plugin, Tx } from '@yaks/graph'
-import { isPromise, over, then } from '@yaks/graph'
+import type { Bundle, Comp, Eid, Hook, Match, Plugin, Tx } from '@yaks/graph'
+import { asked, isPromise, match, over, reads, then } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import {
   before,
@@ -75,6 +75,11 @@ export type Slot = Policy & {
   kind: Kind
   /** the column that has to have moved, for a `changed` slot that names one */
   column?: string
+  /** a `matched` slot's pattern: the query it was registered as, read */
+  plan?: Match
+  /** the components that pattern reads — a batch that moved none of them
+   * cannot have changed whether it holds, so it is not asked */
+  watch?: string[]
   /** the handler itself */
   run: Handler
 }
@@ -143,8 +148,22 @@ export type Effects = Plugin & {
   /** Whether this registry consumer owns a registered slot. Reconcilers must
    * check before claiming or settling durable work. Unknown ids return false. */
   owns: (id: string) => boolean
-  /** Register related component hooks together. */
-  on: (comp: string, registration: Registration) => Effects
+  /**
+   * Register a handler. Two spellings, because there are two questions:
+   *
+   *   fx.on('post', { created, changed: { published }, removed })
+   *   fx.on('$call .call, !results', (e) => run(e.entity.eid))
+   *
+   * The first names a component and what has to happen to it; the second is a
+   * PATTERN — any query, any number of entities — and it runs wherever the
+   * batch just made it hold. Nothing has to be derived into the graph to wake
+   * it: if a call with no result is what you care about, that sentence is the
+   * registration.
+   */
+  on: {
+    (comp: string, registration: Registration): Effects
+    (pattern: string | Match, run: Handler, policy?: Policy): Effects
+  }
   /** Documentation derived from the actual registered slots. */
   docs: () => Description[]
   /** Dispatch events from an external committed journal. Runs start eagerly,
@@ -162,10 +181,25 @@ export type Effects = Plugin & {
 let warn: Report = (err, { handler }) =>
   console.warn(`effect ${handler} failed —`, err)
 
-// Whether a slot is watching for this event.
+// Whether a slot is watching for this event. A pattern slot watches no single
+// event: what it is about is asked of the graph (see `hits`).
 let watching = (s: Slot, e: Event): boolean =>
-  s.comp == e.name && s.kind == e.kind &&
+  s.kind != 'matched' && s.comp == e.name && s.kind == e.kind &&
   (s.kind != 'changed' || !s.column || (!!e.comp && s.column in e.comp))
+
+// What a pattern is ABOUT, in one word: the first component it requires. It
+// names the slot and rides on the event, so a pattern effect reads in a list
+// beside the component ones.
+let about = (plan: Match): string => {
+  for (let p of plan.patterns) {
+    for (let c of p.filter.clauses) {
+      if (c.kind == 'pred' && c.op == '!' && c.path.length == 1 && !c.value) {
+        return c.path[0]
+      }
+    }
+  }
+  return plan.patterns[0]?.entity ?? 'match'
+}
 
 /**
  * A registry of post-commit effects, as a plugin:
@@ -249,6 +283,85 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     return fx
   }
 
+  // Did this batch touch anything a pattern reads? A pattern holds or does
+  // not hold over the whole graph; only a batch that moved one of the
+  // components it reads can have CHANGED that, so nothing else asks.
+  let stirred = (s: Slot, seen: Event[]) =>
+    seen.some((e) => s.watch?.includes(e.name))
+
+  // A pattern's bindings, narrowed to this batch. The match is asked of the
+  // storage the ordinary way — a rule's match IS a query — and a binding is
+  // kept where the batch touched ANY entity it bound, so a handler wakes for
+  // what just happened rather than for every row that has held all along. Any
+  // of them, not the first: what makes `$post; .comment about=$post` newly
+  // true is usually the comment. What a crash left behind is a sweep's to
+  // find, not a batch's.
+  let hits = (
+    s: Slot,
+    bundles: Bundle[],
+    tx: Tx,
+  ): Event[] | Promise<Event[]> => {
+    let plan = s.plan!
+    let touched = new Set<Eid>(bundles.map((b) => b.entity.eid))
+    let one = plan.patterns.filter((p) => !p.makes)
+    if (one.length > 1 || plan.patterns.some((p) => p.binds.length)) {
+      if (!tx.bindings) {
+        throw new Error(
+          `effect ${s.id} joins entities and this storage answers no ` +
+            'bindings — a one-entity pattern is all it can be asked',
+        )
+      }
+      return then(
+        tx.bindings([plan], [], reads(plan, vocab)),
+        ([rows]) =>
+          rows
+            .filter((r) => r.entities.some((e) => e && touched.has(e)))
+            .map((r) => ({
+              kind: 'matched' as Kind,
+              // The subject: the first entity the match BOUND. A pattern that
+              // only writes binds nothing and its place is null (@yaks/graph
+              // `Binding`), so the event is about the first one there is.
+              entity: { eid: r.entities.find((e) => !!e)! },
+              name: s.comp,
+              vars: r.vars,
+            })),
+      )
+    }
+    return then(
+      tx.read(one[0].filter),
+      (rows) =>
+        rows
+          .filter((b) => touched.has(b.entity.eid))
+          .map((b) => ({
+            kind: 'matched' as Kind,
+            entity: b.entity,
+            name: s.comp,
+            comp: b[s.comp] as Comp | undefined,
+          })),
+    )
+  }
+
+  // A PATTERN registration. The query is read here and narrowed to the words
+  // this vocabulary knows (@yaks/graph `asked`), so one sentence is right in
+  // two graphs: a clause about a component that is not here says nothing where
+  // it cannot be worn, and a pattern that REQUIRES one is registered and inert
+  // — listed, documented, never woken.
+  let pattern = (what: string | Match, run: Handler, policy: Policy) => {
+    let written = typeof what == 'string' ? match(what) : what
+    let plan = asked(written, vocab)
+    let comp = about(written)
+    slots.push({
+      ...policy,
+      id: name(comp, 'matched'),
+      comp,
+      kind: 'matched',
+      plan: plan ?? undefined,
+      watch: plan ? reads(plan, vocab) : [],
+      run,
+    })
+    return fx
+  }
+
   // One handler run, isolated. `ok` says whether it completed, which is what a
   // reconciler needs and what dispatch ignores.
   let fire = (
@@ -282,13 +395,42 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     let gen = generation(bundles)
     if (gen > depth) return clean()
     let write = writer(gen)
-    let jobs = events(bundles).flatMap((e) =>
+    let seen = events(bundles)
+    let jobs = seen.flatMap((e) =>
       slots.filter((s) => selected(s) && watching(s, e)).map((s) =>
         [s, e] as [Slot, Event]
       )
     )
-    if (!jobs.length) return clean()
-    return then(over(jobs, ([s, e]) => fire(s, e, tx, write)), clean)
+    // The patterns this batch could have made hold. Asked after the delta
+    // handlers, so an effect that writes about a birth has already written
+    // when the pattern over that write is asked.
+    let asking = slots.filter((s) =>
+      s.kind == 'matched' && selected(s) && stirred(s, seen)
+    )
+    if (!jobs.length && !asking.length) return clean()
+    let ran = () => over(jobs, ([s, e]) => fire(s, e, tx, write))
+    if (!asking.length) return then(ran(), clean)
+    return then(
+      then(ran(), () =>
+        over(asking, (s) => {
+          try {
+            return then(
+              hits(s, bundles, tx),
+              (found) => over(found, (e) => fire(s, e, tx, write)),
+            )
+          } catch (err) {
+            // Asking the question is the registry's, not the handler's: a
+            // pattern this storage cannot answer is telemetry, never a broken
+            // batch (it committed).
+            report(err, {
+              handler: s.id,
+              event: { kind: 'matched', entity: { eid: '' }, name: s.comp },
+            })
+            return null
+          }
+        })),
+      clean,
+    )
   }
 
   let fx: Effects = {
@@ -315,16 +457,22 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       add(comp, 'removed', run, undefined, policy),
     slots: () => [...slots],
     owns: (id) => slots.some((s) => s.id == id && selected(s)),
-    on: (comp, registration) => {
-      let { created, changed, removed, ...policy } = registration
+    on: ((
+      what: string | Match,
+      second: Registration | Handler,
+      policy: Policy = {},
+    ) => {
+      if (typeof second == 'function') return pattern(what, second, policy)
+      let { created, changed, removed, ...rest } = second
+      let comp = what as string
       let group = `on:${slots.length}`
-      if (created) add(comp, 'created', created, undefined, policy, group)
+      if (created) add(comp, 'created', created, undefined, rest, group)
       for (let [col, run] of Object.entries(changed ?? {})) {
-        add(comp, 'changed', run, col, policy, group)
+        add(comp, 'changed', run, col, rest, group)
       }
-      if (removed) add(comp, 'removed', removed, undefined, policy, group)
+      if (removed) add(comp, 'removed', removed, undefined, rest, group)
       return fx
-    },
+    }) as Effects['on'],
     docs: () => describe(slots),
     dispatch: (events, tx = eventOnly, pass) => {
       let jobs = events.flatMap((e) =>
