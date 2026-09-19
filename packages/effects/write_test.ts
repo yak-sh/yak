@@ -7,8 +7,9 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Graph, Tx } from '@yaks/graph'
 import { detached, graph, isPromise } from '@yaks/graph'
-import { journal, journalDoc } from '@yaks/journal'
-import { ram } from '@yaks/ram'
+import { ddl, journal, log } from '@yaks/journal'
+import { mem } from '../sqlite/harness.ts'
+import { storage } from '../sqlite/mod.ts'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import { effects } from './registry.ts'
 import { ledger } from './durable.ts'
@@ -131,9 +132,12 @@ Deno.test('the generation marker never reaches the caller, or a column', () => {
 
 // The journal is a plugin like any other, so an effect's write is journaled
 // exactly because it is an apply() — the point of the door.
-let logged = (): { g: Graph; fx: ReturnType<typeof effects> } => {
+let logged = (): {
+  g: Graph
+  fx: ReturnType<typeof effects>
+  j: ReturnType<typeof log>
+} => {
   let vocab: Vocab = loadVocab([
-    journalDoc,
     {
       $defs: {
         entity: {
@@ -158,28 +162,31 @@ let logged = (): { g: Graph; fx: ReturnType<typeof effects> } => {
     },
   ])
   let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
-  let g = graph({
-    storage: ram(vocab),
-    vocab,
-    plugins: [journal(vocab), fx],
+  let db = mem()
+  let store = storage(db, vocab)
+  store.install()
+  db.exec(ddl())
+  let j = log({
+    rows: (sql, params) =>
+      db.query(sql, params as never[]) as Record<string, unknown>[],
   })
-  return { g, fx }
+  let g = graph({ storage: store, vocab, plugins: [journal(j), fx] })
+  return { g, fx, j }
 }
 
 Deno.test("the journal carries an effect's own write", () => {
-  let { g, fx } = logged()
+  let { g, fx, j } = logged()
   fx.created(
     'post',
     (_e, _tx, write) =>
       write([{ entity: { eid: 's1' }, subscriber: { email: 'ana@blog' } }]),
   )
   sync(g.apply([post('p1')]))
-  let deltas = (g.read('.delta.target=s1') as Bundle[])
-    .map((b) => (b.delta as Record<string, unknown>).column)
+  let deltas = j.history('s1').flatMap((b) => b.deltas.map((d) => d.column))
   // The component appearing, and the column it appeared with.
   assertEquals(deltas, [null, 'email'])
   // Its own batch row, not a line tacked onto the one that woke it.
-  assertEquals((g.read('.batch!') as Bundle[]).length, 2)
+  assertEquals(j.tip(), 2)
 })
 
 // At-most-once is the ledger's promise, and the write door does not change it:

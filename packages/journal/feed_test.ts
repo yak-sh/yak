@@ -3,76 +3,51 @@
 // batch that rebuilds into the bundles it committed — the two things a server
 // does with the journal (recast to subscribers, drive effects at most once).
 
-import { assert, assertEquals } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { isPromise } from '@yaks/graph'
-import { type Cursor, since } from './read.ts'
 import { applied } from './undo.ts'
-import { wikiGraph } from './harness.ts'
-
-let sync = <T>(out: T | Promise<T>): T => {
-  assert(!isPromise(out), 'apply() went async over a Map')
-  return out as T
-}
+import { sync, wikiGraph } from './harness.ts'
 
 let fixture = (n: number) => {
-  let g = wikiGraph()
+  let { g, j } = wikiGraph()
   for (let i = 1; i <= n; i++) {
     sync(g.apply([{ entity: { eid: `p${i}` }, page: { title: `page ${i}` } }]))
   }
-  return {
-    g,
-    feed: (cursor?: Cursor, size?: number) => sync(since(g)(cursor, size)),
-  }
+  return { g, j }
 }
 
-Deno.test('the feed pages by cursor and never repeats a batch', () => {
+Deno.test('the feed hands out the batches after a cursor, in order', () => {
   let f = fixture(5)
-  let seen: number[] = []
-  let cursor: Cursor | undefined
-  for (let i = 0; i < 4; i++) {
-    let page = f.feed(cursor, 2)
-    seen.push(...page.batches.map((b) => b.seq))
-    cursor = page.cursor
-  }
-  assertEquals(seen, [1, 2, 3, 4, 5], 'every batch once, in order')
-  assertEquals(cursor, { seq: 5 })
+  assertEquals(f.j.since(0).map((e) => e.seq), [1, 2, 3, 4, 5])
+  assertEquals(f.j.since(3).map((e) => e.seq), [4, 5])
 })
 
-Deno.test('an exhausted feed hands the cursor straight back', () => {
+Deno.test('an exhausted feed is empty, and the tip is the cursor', () => {
   let f = fixture(2)
-  let page = f.feed({ seq: 2 })
-  assertEquals(page.batches, [])
-  assertEquals(page.cursor, { seq: 2 })
+  assertEquals(f.j.tip(), 2)
+  assertEquals(f.j.since(2), [])
 })
 
-Deno.test('a page carries only its own batches deltas', () => {
+Deno.test('a batch carries only its own operations', () => {
   let f = fixture(3)
-  let page = f.feed({ seq: 1 }, 1)
-  assertEquals(page.batches.length, 1)
-  assertEquals(page.batches[0].seq, 2)
-  assertEquals(
-    page.batches[0].deltas.map((d) => d.target),
-    ['p2', 'p2'],
-    'the appearing component, then its column',
-  )
+  let [second] = f.j.since(1)
+  assertEquals(second.seq, 2)
+  assertEquals(second.patches.map((p) => p.target), ['p2'])
 })
 
 Deno.test('a batch from the feed recasts as the bundles it committed', () => {
-  let g = wikiGraph()
+  let { g, j } = wikiGraph()
   let change: Bundle[] = [
     { entity: { eid: 'p1' }, page: { title: 'Kickoff' } },
     { entity: { eid: 'n1' }, note: { text: 'aside', page: 'p1' } },
   ]
   sync(g.apply(change))
-  let page = sync(since(g)())
-  assertEquals(page.batches.map(applied), [change])
+  assertEquals(j.since(0).map((e) => applied(j.at(e.seq)!)), [change])
 })
 
 Deno.test('a feed drains what was committed while it was away', () => {
   let f = fixture(2)
-  let first = f.feed()
+  let cursor = f.j.since(0).at(-1)!.seq
   sync(f.g.apply([{ entity: { eid: 'p9' }, page: { title: 'late' } }]))
-  let next = f.feed(first.cursor)
-  assertEquals(next.batches.map((b) => b.seq), [3])
+  assertEquals(f.j.since(cursor).map((e) => e.seq), [3])
 })

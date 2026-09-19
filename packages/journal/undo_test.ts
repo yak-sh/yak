@@ -5,25 +5,17 @@
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
-import { isPromise } from '@yaks/graph'
-import { history } from './read.ts'
-import { at } from './read.ts'
-import { applied, Final, undo } from './undo.ts'
-import { wikiGraph } from './harness.ts'
-
-let sync = <T>(out: T | Promise<T>): T => {
-  assert(!isPromise(out), 'apply() went async over a Map')
-  return out as T
-}
+import { applied, Final, undo, undone } from './undo.ts'
+import { sync, wikiGraph } from './harness.ts'
 
 let fixture = () => {
-  let g = wikiGraph()
+  let { g, j } = wikiGraph()
   return {
     g,
+    j,
     apply: (change: Bundle[]) => sync(g.apply(change)),
-    past: (eid: string) => sync(history(g)(eid)),
     back: (seq: number, by?: string) =>
-      sync(undo(g)(seq, by ? { by } : undefined)),
+      sync(undo(g, j)(seq, by ? { by } : undefined)),
     page: (eid: string) =>
       (sync(g.read('.kind=page')).find((b) => b.entity.eid == eid)
         ?.page ?? null) as Comp | null,
@@ -43,7 +35,7 @@ Deno.test('an undo is itself in history, with its own actor', () => {
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Retro' } }])
   f.back(2, 'ada')
-  let past = f.past('p1')
+  let past = f.j.history('p1')
   assertEquals(past.map((b) => b.seq), [1, 2, 3])
   assertEquals(past[2].by, 'ada')
   assertEquals(past[2].deltas.map((d) => `${d.before}→${d.after}`), [
@@ -65,6 +57,17 @@ Deno.test('undo of a create drops the component it brought', () => {
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
   f.back(1)
   assertEquals(f.page('p1'), null)
+})
+
+Deno.test('an undo guards every column it restores', () => {
+  let f = fixture()
+  f.apply([{ entity: { eid: 'p1' }, page: { title: 'One' } }])
+  f.apply([{ entity: { eid: 'p1' }, page: { title: 'Two' } }])
+  let [back] = undone(f.j.at(2)!, { guard: true })
+  assertEquals(back.page, { title: 'One' })
+  // The guard names the value the batch LEFT, so a column somebody else has
+  // moved since refuses the reversal instead of clobbering it.
+  assert(back.$was?.page?.title)
 })
 
 Deno.test('undo of a delete is refused — death is final', () => {
@@ -89,7 +92,7 @@ Deno.test('applied() rebuilds the batch as committed', () => {
     { entity: { eid: 'p1' }, page: { title: 'Kickoff', text: 'body' } },
     { entity: { eid: 'n1' }, note: { text: 'aside', page: 'p1' } },
   ])
-  assertEquals(applied(sync(at(f.g)(1))!), [
+  assertEquals(applied(f.j.at(1)!), [
     { entity: { eid: 'p1' }, page: { title: 'Kickoff', text: 'body' } },
     { entity: { eid: 'n1' }, note: { text: 'aside', page: 'p1' } },
   ])
@@ -99,7 +102,5 @@ Deno.test('applied() rebuilds a death as a death', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
   f.apply([{ entity: { eid: 'p1' }, $delete: true }])
-  assertEquals(applied(sync(at(f.g)(2))!), [
-    { entity: { eid: 'p1' }, $delete: true },
-  ])
+  assertEquals(applied(f.j.at(2)!), [{ entity: { eid: 'p1' }, $delete: true }])
 })

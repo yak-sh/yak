@@ -1,31 +1,29 @@
-// The journal as three relational tables instead of entities on the spine.
+// The journal's tables: three of them, append-only, off the spine.
 //
-// `./record.ts` writes a batch and a delta per movement as ORDINARY ENTITIES,
-// which is what makes the log queryable with the same grammar as everything
-// else and storable by any adapter — a Map in a browser tab included. On a
-// graph with hundreds of thousands of entities that shape costs a spine row
-// and a minted id per column that moved, and keeps both sides of every write
-// where only one of them is news. This module is the other trade: three
-// append-only tables OFF the spine, integer ids, AFTER-IMAGES only, with the
-// before-value derived at read time from the entity's own slice of the log.
-// Same questions, same answers, a third of the bytes.
+//   journal_tx     one row per committed batch — its id IS the total order
+//                  and the cursor
+//   journal_change one ordered operation per component patched or removed
+//   journal_field  one ordered after-image per column an operation wrote
 //
-//   tx     one row per committed batch — its id IS the total order and cursor
-//   change one ordered operation per component patched or removed
-//   field  one ordered after-image per column an operation wrote
+// After-images ONLY: what a write left, never both sides of it. The before-
+// value a history read wants is derived from the entity's own slice of the log
+// (`before()`), which is bounded to one entity and never a scan — and that is
+// what keeps the log a third of the size of one that stores both sides. A
+// column whose text the graph already keeps under a content address is
+// recorded by its ADDRESS ({@link Cas}), so a log of every revision of every
+// document costs a row, not the document.
 //
-// A reading is never needed to write, so there is no `precondition` phase and
+// Nothing is read in order to write, so there is no precondition phase and
 // nothing rides forward on the batch: the log is derived wholly from what was
-// applied. What it costs instead is that `before` is a read — bounded to one
-// entity's own slice, never a scan of the log.
+// applied, inside the caller's own transaction. A refused batch leaves no
+// trace; a committed one always has a row.
 //
 // The host is one function wide: `rows(sql, params)`. No platform API, no
-// driver object, no transaction of its own — the caller owns the transaction,
-// so a refused batch leaves no trace exactly as it does in `./record.ts`.
+// driver object, no transaction of its own — the caller owns the transaction.
 
 import type { Bundle, Comp, Eid, Plugin, Tx } from '@yaks/graph'
 import { actorOf, comps, dead } from '@yaks/graph'
-import type { Batch, Delta } from './read.ts'
+import type { Batch, Delta, Entry, Patch } from './batch.ts'
 import { dec, enc } from './value.ts'
 
 /** A parameterized statement, run for its rows: the whole of the host. A
@@ -34,38 +32,6 @@ export type Rows = (
   sql: string,
   params: unknown[],
 ) => Record<string, unknown>[]
-
-/**
- * One recorded operation: a component patched to `value`, or removed when
- * `value` is null. The unit the tables store natively and the unit a wire that
- * speaks component patches replays — a batch is a list of these, in the order
- * they were applied.
- */
-export type Patch = {
-  /** the entity the operation was about */
-  target: Eid
-  /** the component it patched, or `entity` for the spine itself */
-  comp: string
-  /** the columns it wrote, or `null` for a removal */
-  value: Comp | null
-}
-
-/** One committed batch as the tables hold it: its provenance, the note the
- * writer left beside it, and what it did. */
-export type Entry = {
-  /** its place in the total order — the cursor a feed pages by */
-  seq: number
-  /** when it committed, ISO-8601 */
-  at: string
-  /** the actor it resolved to, or null when unowned */
-  by: Eid | null
-  /** the instrument it was written through */
-  via: Eid | null
-  /** whatever the writer wrote down beside the batch, verbatim */
-  note: string | null
-  /** what it did, in the order it did it */
-  patches: Patch[]
-}
 
 /**
  * A column whose text the graph already stores once, under a content address.
@@ -85,7 +51,7 @@ export type Cas = {
 }
 
 /**
- * One recorded value a {@link Normal.seek} found: where it sits in the log,
+ * One recorded value a {@link Log.seek} found: where it sits in the log,
  * the value as stored, and the content address when the column is
  * content-addressed.
  */
@@ -106,8 +72,8 @@ export type Hit = {
   content: Eid | null
 }
 
-/** How a normalized journal is bound. */
-export type NormalOpts = {
+/** How the log is bound to a store. */
+export type LogOpts = {
   /** the statement runner — the whole host */
   rows: Rows
   /** the spine: where an eid becomes the integer the tables store */
@@ -134,7 +100,7 @@ export type NormalOpts = {
 // predecessor lookup and undo stay self-contained and no value leaks across a
 // removal and a later recreation. `ref` names content-addressed bytes the
 // graph already holds, and then `value` stays null.
-export let normalDdl = (spine = 'entity'): string => `
+export let ddl = (spine = 'entity'): string => `
   create table if not exists journal_tx (
     id    integer primary key,
     ts    text not null,
@@ -173,9 +139,9 @@ export let normalDdl = (spine = 'entity'): string => `
 let written = (value: Comp): [string, unknown][] =>
   Object.entries(value).filter(([column]) => column != 'eid')
 
-/** The normalized journal bound to one store: the writer, and the questions a
- * log is kept to answer. */
-export type Normal = {
+/** The log bound to one store: the writer, and the questions a journal is
+ * kept to answer. */
+export type Log = {
   /** write one batch down inside the caller's transaction; answers its seq */
   write: (
     meta: { at: string; by?: Eid | null; via?: Eid | null; note?: unknown },
@@ -219,16 +185,16 @@ export type Normal = {
 }
 
 /**
- * Bind the normalized journal to a store.
+ * Bind the log to a store.
  *
  * ```ts
- * let j = normalized({ rows: (sql, p) => db.prepare(sql).all(...p) })
+ * let j = log({ rows: (sql, p) => db.prepare(sql).all(...p) })
  * j.write({ at, by, via, note }, patches) // inside the caller's transaction
  * j.history('T-1')                        // Batch[], oldest first
  * j.since(cursor)                         // Entry[], the feed
  * ```
  */
-export let normalized = (opts: NormalOpts): Normal => {
+export let log = (opts: LogOpts): Log => {
   let rows = opts.rows
   let table = opts.spine?.table ?? 'entity'
   let idCol = opts.spine?.id ?? 'id'
@@ -619,27 +585,26 @@ export let normalized = (opts: NormalOpts): Normal => {
 export { dec, enc }
 
 /**
- * The normalized journal as a plugin, so a graph can keep this log the way it
- * keeps the other one:
+ * The log as a plugin, so a graph keeps a journal by saying so:
  *
  * ```ts
- * let j = normalized({ rows })
- * graph({ storage, vocab, plugins: [journaling(j)] })
+ * let j = log({ rows })
+ * graph({ storage, vocab, plugins: [journal(j)] })
  * ```
  *
- * It hooks the `journal` phase alone — no reading is needed to write an
- * after-image log, which is the whole of the difference from `./record.ts`.
- * The batch is written as APPLIED: one row per component the bundles patched
- * or removed, in the order they arrived.
+ * It hooks the `journal` phase alone: an after-image log needs no reading to
+ * write, so nothing is gathered before the batch and nothing rides forward on
+ * it. The batch is written as APPLIED — one row per component the bundles
+ * patched or removed, in the order they arrived.
  */
-export let journaling = (
-  n: Normal,
+export let journal = (
+  n: Log,
   opts: { now?: () => string; skip?: string[]; name?: string } = {},
 ): Plugin => {
   let clock = opts.now ?? (() => new Date().toISOString())
   let skip = new Set(opts.skip ?? ['created', 'updated'])
   return {
-    name: opts.name ?? '@yaks/journal/normalized',
+    name: opts.name ?? '@yaks/journal',
     hooks: {
       journal: (bundles: Bundle[], _tx: Tx) => {
         let applied: Patch[] = []

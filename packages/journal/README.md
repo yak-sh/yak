@@ -1,8 +1,8 @@
 # @yaks/journal
 
-A graph plugin that records committed changes as queryable `batch` and `delta`
-components. It supports entity history, cursor-based change feeds, and undo.
-Records are written in the graph transaction using its storage adapter.
+A graph plugin that records every committed batch in three append-only tables
+beside the graph's own. It answers entity history, a cursor-based change feed,
+and undo. Rows are written inside the graph's own transaction.
 
 For bundle structure, write phases, and adapter responsibilities, see the
 [graph architecture](../graph/ARCHITECTURE.md).
@@ -22,37 +22,37 @@ the plugin is enabled; it does not reconstruct earlier changes.
 
 ## What it records
 
-A `journal` plugin hooks two phases of `apply()`. At `precondition` it reads the
-state the batch is about to change; at `journal`, inside the same transaction,
-it replays the batch as applied against that reading and writes down what moved
-— as two components of its own:
+The plugin hooks one phase of `apply()`: at `journal`, inside the transaction
+that just wrote, it records the batch AS APPLIED.
 
-| component                                              | one per                              |
-| ------------------------------------------------------ | ------------------------------------ |
-| `batch{seq, at, by, via}`                              | committed batch                      |
-| `delta{seq, ord, target, comp, column, before, after}` | changed column or component presence |
+| table            | one row per                                 |
+| ---------------- | ------------------------------------------- |
+| `journal_tx`     | committed batch — its id is the total order |
+| `journal_change` | component the batch patched or removed      |
+| `journal_field`  | column that change wrote — its after-image  |
 
-They are ordinary components, so the log is queried with the same grammar as
-everything else and stored by whatever adapter the graph is bound to — SQLite, a
-Durable Object, a Map in a browser tab. Because the writing happens inside the
-transaction, a batch that was refused leaves no trace and a batch that committed
-always has one.
+The tables are OFF the spine: no entity, no minted id, never in a bundle or a
+client cache. They hold AFTER-IMAGES only — what a write left, never both sides
+of it. The before-value a history read wants is derived from the entity's own
+slice of the log, bounded to one entity and never a scan, which is what keeps
+the log a third of the size of one that stores both sides. Because the writing
+happens inside the transaction, a batch that was refused leaves no trace and a
+batch that committed always has a row.
 
-A delta names its batch by `seq` — the total order and the cursor at once — so a
-page of batches and every delta in it are two reads over a range, however many
-entities the batches touched. `ord` is the order within a batch, written down
-rather than left to whatever order an adapter returns rows in.
+Nothing is read in order to write, so there is no precondition phase and nothing
+rides forward on the batch. The host is one function wide — `rows(sql, params)`
+— and the journal owns no transaction of its own: the caller owns it.
 
 ## What it answers
 
 ```ts
 import { graph } from '@yaks/graph'
-import { ram } from '@yaks/ram'
-import { loadVocab } from '@yaks/vocab'
-import { history, journal, journalDoc, since, undo } from '@yaks/journal'
+import { storage } from '@yaks/sqlite'
+import { ddl, journal, log, undo } from '@yaks/journal'
 
-let vocab = loadVocab([journalDoc, pages])
-let g = graph({ storage: ram(vocab), vocab, plugins: [journal(vocab)] })
+db.exec(ddl())
+let j = log({ rows: (sql, p) => db.prepare(sql).all(...p) })
+let g = graph({ storage: store, vocab, plugins: [journal(j)] })
 
 g.apply([
   { entity: { eid: 'p1' }, page: { title: 'Kickoff' }, $actor: { by: 'ada' } },
@@ -61,7 +61,7 @@ g.apply([
   { entity: { eid: 'p1' }, page: { title: 'Retro' }, $actor: { by: 'bo' } },
 ])
 
-history(g)('p1')
+j.history('p1')
 // [ { seq: 1, at: '…', by: 'ada', via: null, deltas: [
 //       { target: 'p1', comp: 'page', column: null,    before: null, after: {} },
 //       { target: 'p1', comp: 'page', column: 'title', before: null,
@@ -69,57 +69,30 @@ history(g)('p1')
 //   { seq: 2, …, by: 'bo', deltas: [ { …, before: 'Kickoff',
 //                                      after: 'Retro' } ] } ]
 
-undo(g)(2) // the title is 'Kickoff' again — and that is batch 3
-since(g)({ seq: 0 }) // { batches, cursor }
+undo(g, j)(2) // the title is 'Kickoff' again — and that is batch 3
+j.since(0) // every batch after the cursor, oldest first
 ```
 
-- **`history(src)(eid)`** — every batch that touched one entity, oldest first,
-  each with its actor, its moment, and the deltas about that entity.
-- **`undo(g)(seq)`** — the inverse of a batch, applied through the graph, so an
-  undo is admitted, stamped and journaled like any other write and undoing it
-  again is a redo. A batch that deleted an entity is refused (`Final`): a
-  deleted entity is tombstoned, never erased, and its id can never be reused.
-- **`since(src)(cursor)`** — the batches after a cursor and the cursor that
-  follows them. `applied(batch)` turns one back into the bundles it committed,
-  which a server can send to its subscribers; a consumer that stores the cursor
-  BEFORE it does the work drives effects at most once.
-
-`src` is anything that answers a query with bundles — a `Graph`, a `Storage`, a
-client cache — so the reading half needs no privileged access to the writing
-half.
-
-## Two layouts, one answer
-
-`journal(vocab)` keeps the log as entities — a `batch` and a `delta` per
-movement — which is what makes it queryable with the same grammar as everything
-else and storable by any adapter, a Map in a browser tab included. On a graph
-with hundreds of thousands of entities that costs a spine row and a minted id
-per column that moved, and keeps both sides of every write where only one of
-them is news.
-
-`normalized({ rows })` is the other trade: three append-only tables OFF the
-spine, integer ids, after-images only, with the before-value derived at read
-time from one entity's own slice of the log. Same questions, same answers, a
-third of the bytes. Its host is one function wide — `rows(sql, params)` — and it
-owns no transaction, so a refused batch leaves no trace either way.
-`journaling(n)` registers it as a plugin; `normalDdl()` is its schema.
-
-```ts
-import { journaling, normalized } from '@yaks/journal'
-
-let log = normalized({ rows: (sql, p) => db.prepare(sql).all(...p) })
-db.exec(normalDdl())
-let g = graph({ storage, vocab, plugins: [journaling(log)] })
-
-log.history('p1') // the same Batch[] history(g)('p1') answers
-```
+- **`j.history(eid)`** — every batch that touched one entity, oldest first, each
+  with its actor, its moment, and the deltas about that entity.
+- **`undo(g, j)(seq)`** — the inverse of a batch, applied through the graph, so
+  an undo is admitted, stamped and journaled like any other write and undoing it
+  again is a redo. Every restored column carries a `$was` guard, so a column
+  somebody else has moved since refuses the reversal. A batch that deleted an
+  entity is refused (`Final`): a deleted entity is tombstoned, never erased, and
+  its id can never be reused.
+- **`j.since(cursor)`** — the batches after a cursor, oldest first, with `j.at`
+  and `applied(batch)` turning one back into the bundles it committed, which a
+  server can send to its subscribers; a consumer that stores the cursor BEFORE
+  it does the work drives effects at most once.
+- **`j.before(eid, seq)`**, **`j.wrote(comp, column)`**, **`j.seek(text)`** —
+  the state an entity was in before a batch, every value one column ever held
+  anywhere, and every recorded value containing some text (what a redaction
+  starts from; `j.scrubValue` and `j.scrubRef` rewrite one in place).
 
 A column whose text the graph already stores once under a content address is
 recorded by ADDRESS (`cas`), so the log shares the graph's bytes instead of
 keeping every revision of every document twice.
-
-`packages/journal/normalized_test.ts` writes one corpus through both and holds
-their answers equal, before-values included.
 
 ## Limitations and recording rules
 
@@ -127,20 +100,17 @@ their answers equal, before-values included.
   repeat, column for column, what the batch row already holds, so they are
   skipped by default (`skip` says otherwise).
 - **A death is recorded whole**: every component the entity carried, with what
-  it held, and then the `tombstone` component added on deletion. History
-  outlives the entity — `delta.target` keeps its reference past the target's
-  death.
+  it held, and then the `tombstone` the entity now wears. History outlives the
+  entity — a change keeps its spine reference past the target's death.
 - **It is not a backup.** It records what moved, not the whole entity, so a
   graph journaled from its first write can answer anything and one that started
   journaling later answers from there on.
-- **One reading per batch.** A batch that already carries a `$prior` reading — a
-  second journal, a plugin that read first — keeps it.
-  [@yaks/effects](https://jsr.io/@yaks/effects) takes a lighter reading of its
-  own (component names, no values), which a journal cannot use; the two do not
-  disturb each other.
+- **It needs a SQL store.** The rows are tables, not bundles, so the host is a
+  database — the same one the graph is stored in, or another; the journal only
+  ever asks it to run a statement.
 
 ## Compatibility
 
-Browser-compatible: no platform API, no Deno or Node namespace. Synchronous over
-a synchronous storage adapter, a promise over an asynchronous one — the same
-sync pass-through the rest of the stack has.
+Browser-compatible: no platform API, no Deno or Node namespace — the host hands
+in `rows(sql, params)` and the journal calls nothing else. Synchronous
+throughout, like the embedded databases it is written against.

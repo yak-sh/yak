@@ -5,7 +5,6 @@
     "strict": true
   },
   "imports": {
-    "@yaks/query": "../query/mod.ts",
     "@yaks/vocab": "../vocab/mod.ts",
     "@yaks/graph": "../graph/mod.ts"
   }

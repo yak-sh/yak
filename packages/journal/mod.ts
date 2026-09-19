@@ -10,68 +10,62 @@
  * down.
  *
  * ## What it records
- * A `journal` plugin hooks two phases of `apply()`. Before the batch writes it
- * reads the state it is about to change; inside the same transaction, after
- * the batch has written, it records what moved as two components of its own:
+ * Three append-only tables beside the graph's own, OFF the spine — no entity,
+ * no minted id, never in a bundle or a client cache: the record OF the wire,
+ * not part of it.
  *
- * - `batch{seq, at, by, via}` — one per committed batch: its place in the
- *   total order, the moment, and the actor from the batch's `$actor`;
- * - `delta{seq, target, comp, column, before, after}` — one per column that
- *   moved, or per component that appeared or went.
+ * - `journal_tx` — one row per committed batch: its id is the total order and
+ *   the cursor, with the moment and the actor from the batch's `$actor`;
+ * - `journal_change` — one ordered row per component the batch patched or
+ *   removed;
+ * - `journal_field` — one ordered AFTER-IMAGE per column that row wrote.
  *
- * They are ordinary components, so the log is queryable with the same grammar
- * as everything else, stored by whatever adapter the graph is bound to, and
- * carried by the same bundles. It is written INSIDE the transaction: a batch
- * that was refused leaves no trace, and a batch that committed always has one.
+ * After-images only. The before-value a history read wants is derived from the
+ * entity's own slice of the log, bounded to one entity and never a scan, which
+ * is what keeps the log a third of the size of one that stores both sides. It
+ * is written INSIDE the caller's transaction: a batch that was refused leaves
+ * no trace, and a batch that committed always has a row.
  *
  * ## What it answers
  * ```ts
  * import { graph } from '@yaks/graph'
- * import { ram } from '@yaks/ram'
- * import { loadVocab } from '@yaks/vocab'
- * import { history, journal, journalDoc, since, undo } from '@yaks/journal'
+ * import { storage } from '@yaks/sqlite'
+ * import { ddl, journal, log, undo } from '@yaks/journal'
  *
- * let vocab = loadVocab([journalDoc, pages])
- * let g = graph({ storage: ram(vocab), vocab, plugins: [journal(vocab)] })
+ * db.exec(ddl())
+ * let j = log({ rows: (sql, p) => db.query(sql, p) })
+ * let g = graph({ storage: store, vocab, plugins: [journal(j)] })
  *
  * g.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' },
  *           $actor: { by: 'ada' } }])
  *
- * history(g)('p1')     // every batch that touched the page, oldest first
- * undo(g)(1)           // the inverse batch, applied — and journaled in turn
- * since(g)({ seq: 0 }) // { batches, cursor } — the feed
+ * j.history('p1')   // every batch that touched the page, oldest first
+ * j.since(0)        // the feed: the batches after a cursor, oldest first
+ * undo(g, j)(1)     // the inverse batch, applied — and journaled in turn
  * ```
  *
- * - {@link history} — the changes to one entity, in order, each with its
+ * - {@link Log.history} — the changes to one entity, in order, each with its
  *   actor and its moment.
  * - {@link undo} — the inverse of a batch, applied through the graph, so an
  *   undo is a write like any other and undoing it is a redo. A batch that
  *   deleted an entity is refused ({@link Final}): a death is final.
- * - {@link since} — the batches after a cursor and the cursor that follows.
+ * - {@link Log.since} — the batches after a cursor, oldest first.
  *   {@link applied} turns one back into the bundles it committed, which is
  *   what a server recasts to its subscribers, and a consumer that stores the
  *   cursor before it works drives effects at most once.
- *
- * ## Two layouts
- * {@link journal} keeps the log as entities. {@link normalized} keeps the
- * same log as three relational tables off the spine, after-images only, for a
- * graph where a row and a minted id per movement is the wrong trade;
- * {@link journaling} registers it as a plugin and it answers the same
- * `history`, `at` and feed. `normalized_test.ts` holds the two equal.
  *
  * ## What it is not
  * It is not a backup and not a state machine: it records what moved, not the
  * whole entity, so a graph that was journaled from its first write can answer
  * anything and one that started journaling later answers from there on. It
- * imports no platform API, so the same journal runs on a server, in a worker,
- * and in a browser tab.
+ * imports no platform API — the host is one function wide, `rows(sql,
+ * params)` — so the same journal runs on a server, in a worker, and over an
+ * embedded database.
  *
  * @module
  */
 
-export * from './vocab.ts'
 export * from './value.ts'
-export * from './record.ts'
-export * from './read.ts'
+export * from './batch.ts'
+export * from './log.ts'
 export * from './undo.ts'
-export * from './normalized.ts'

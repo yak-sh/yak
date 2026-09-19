@@ -101,9 +101,10 @@ In dependency order:
   transaction, each isolated, with an optional durable ledger. The mechanism —
   it ships no effect of its own.
 - **[@yaks/journal](./journal)** — who wrote what, when: every committed batch
-  recorded inside its own transaction as `batch`/`delta` components, and the
-  three things that fall out — the history of one entity, the inverse of a batch
-  (undo), and a cursor feed of what has committed since.
+  recorded inside its own transaction, in three append-only tables off the
+  spine, after-images only — and the three things that fall out: the history of
+  one entity, the inverse of a batch (undo), and a cursor feed of what has
+  committed since.
 - **[@yaks/doc](./doc)** — the words a person reads: `doc{title, body}`, the one
   component a task, a letter and a recipe all wear, so search, editing and
   rendering are written once. Its `body` NAMES `@yaks/blob`'s `store` keyword
@@ -259,9 +260,9 @@ on its own:
   notification, a receipt, a spawned process — registered per component, run
   post-commit, and isolated so a broken observer never breaks a write.
 - `@yaks/journal` is the memory of the same write: it records what each batch
-  moved as components of its own, inside the transaction, so a refused batch
-  leaves nothing and a committed one always left a record. History, undo and the
-  delta feed a live client replays are three readings of that one log.
+  moved in tables of its own, inside the transaction, so a refused batch leaves
+  nothing and a committed one always left a record. History, undo and the delta
+  feed a live client replays are three readings of that one log.
 - `@yaks/doc` is the smallest domain plugin there is — one component, no hooks —
   and it is here because a base word deserves one home: `@yaks/mail` keeps a
   letter's subject and body in it, and anything else with a title reads through

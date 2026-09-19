@@ -2,7 +2,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { archetypeDoc, archetypes, eidOf } from '@yaks/archetype'
 import { type Bundle, graph, type Plugin } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
-import { journal, journalDoc } from '@yaks/journal'
+import { ddl, journal, log } from '@yaks/journal'
 import {
   backfill,
   componentTables,
@@ -148,27 +148,33 @@ Deno.test('archetype: dry run and late rollback cannot poison cached sets', () =
   )
 })
 
-Deno.test('archetype: journal sees descriptor creations, and its own rows are classified', () => {
-  let v = loadVocab([archetypeDoc, domain, journalDoc])
+Deno.test('archetype: the journal sees a descriptor creation, once', () => {
+  let v = loadVocab([archetypeDoc, domain])
   let d = mem()
   let s = storage(d, v)
   s.install()
-  let g = graph({ storage: s, vocab: v, plugins: [journal(v), archetypes()] })
+  d.exec(ddl())
+  let j = log({
+    rows: (sql, params) => d.query(sql, params as never[]),
+  })
+  let g = graph({ storage: s, vocab: v, plugins: [journal(j), archetypes()] })
   g.apply([{ entity: { eid: 'a' }, task: {} }])
   assertEquals(
     d.query('select count(*) as n from entity where archetype is null', [])[0]
       .n,
     0,
   )
-  assert(d.query("select * from delta where comp = 'archetype'", []).length > 0)
-  let before =
-    d.query("select count(*) as n from delta where comp = 'archetype'", [])[0].n
+  let descriptors = () =>
+    d.query(
+      "select count(*) as n from journal_change where component = 'archetype'",
+      [],
+    )[0].n as number
+  assert(descriptors() > 0)
+  let before = descriptors()
+  // A descriptor is minted once: the second batch finds the same archetype and
+  // writes nothing new about it.
   g.apply([{ entity: { eid: 'a' }, task: {} }])
-  assertEquals(
-    d.query("select count(*) as n from delta where comp = 'archetype'", [])[0]
-      .n,
-    before,
-  )
+  assertEquals(descriptors(), before)
 })
 
 Deno.test('archetype: additive boot, physical hidden table, idempotent backfill, retirement', () => {

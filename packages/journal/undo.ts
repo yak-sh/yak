@@ -14,9 +14,9 @@
 // would resurrect one is refused rather than half-applied.
 
 import type { Actor, Bundle, Change, Comp, Eid, Graph, Was } from '@yaks/graph'
-import { then, token, TOMBSTONE } from '@yaks/graph'
-import type { Batch, Source } from './read.ts'
-import { at } from './read.ts'
+import { token, TOMBSTONE } from '@yaks/graph'
+import type { Batch } from './batch.ts'
+import type { Log } from './log.ts'
 
 /** A refused undo: the batch deleted an entity, and death is final. */
 export class Final extends Error {
@@ -121,26 +121,27 @@ export let undone = (batch: Batch, opts: UndoneOpts = {}): Change =>
   side(batch, 'before', opts.guard)
 
 /**
- * Undo a committed batch by its `seq`: build the inverse from what was written
- * down and apply it through the graph, so the undo is admitted, stamped and
- * journaled like any other write.
+ * Undo a committed batch by its `seq`: read it back out of the log, build the
+ * inverse from what was written down, and apply it through the graph — so the
+ * undo is admitted, stamped and journaled like any other write.
  *
  * ```ts
- * undo(g)(7, { by: 'ada' })
+ * undo(g, j)(7, { by: 'ada' })
  * ```
  *
  * Throws {@link Final} if the batch deleted an entity, and a plain `Error` if
  * no batch has that seq. The inverse is applied as trusted, since restoring a
  * column the server owns is the graph's own reconstruction, not a client's
- * write. A batch whose entities have moved on since is not detected here: pass
- * the undo through a `$was` guard yourself if you need one.
+ * write. Every restored column carries a `$was` guard, so a column somebody
+ * else has moved since refuses the whole reversal rather than clobbering it.
  */
 export let undo =
-  (g: Graph) => (seq: number, actor?: Actor): Bundle[] | Promise<Bundle[]> =>
-    then(at(g as Source)(seq), (batch) => {
-      if (!batch) throw new Error(`no journal batch #${seq}`)
-      let change = undone(batch, { guard: true })
-      if (!change.length) return []
-      if (actor) change[0] = { ...change[0], $actor: actor }
-      return g.apply(change, { trusted: true })
-    }) as Bundle[] | Promise<Bundle[]>
+  (g: Graph, j: Log) =>
+  (seq: number, actor?: Actor): Bundle[] | Promise<Bundle[]> => {
+    let batch = j.at(seq)
+    if (!batch) throw new Error(`no journal batch #${seq}`)
+    let change = undone(batch, { guard: true })
+    if (!change.length) return []
+    if (actor) change[0] = { ...change[0], $actor: actor }
+    return g.apply(change, { trusted: true })
+  }
