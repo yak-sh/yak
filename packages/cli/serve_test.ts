@@ -1,6 +1,8 @@
-import { assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
+import type { Comp } from '@yaks/graph'
+import { toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
-import { compose, type Module, read } from './serve.ts'
+import { compose, type Module, read, words } from './serve.ts'
 
 let doc: VocabDoc = {
   title: 'shop',
@@ -14,6 +16,16 @@ let doc: VocabDoc = {
     // Provenance, so a write shows whose it was: the stamp phase fills what
     // the vocabulary declares.
     created: {
+      component: true,
+      type: 'object',
+      properties: {
+        at: { type: 'string', stamped: true },
+        by: { type: 'string', stamped: true },
+      },
+    },
+    // Its other half: an entity that is touched twice is stamped twice, and
+    // a call is — written, claimed, answered (@yaks/graph `stamps`).
+    updated: {
       component: true,
       type: 'object',
       properties: {
@@ -35,6 +47,13 @@ let doc: VocabDoc = {
       input: {},
       readOnly: true,
     },
+    book_add: {
+      tool: true,
+      noun: 'book',
+      verb: 'add',
+      description: 'shelve one',
+      input: { title: { type: 'string' } },
+    },
   },
 }
 
@@ -45,6 +64,14 @@ let shop: Module = {
   runs: {
     // A tool answers BUNDLES: the entities it found, and nothing else.
     book_list: (_, ctx) => ctx.read('.book'),
+    // And a writing one answers the entity it wants made. It never writes
+    // itself: what it answers is landed for it, as whoever asked.
+    book_add: (_, ctx) => [{
+      entity: { eid: '$made' },
+      book: { title: String(ctx.args.title) },
+      content: { body: `shelved ${ctx.args.title}` },
+      output: { source: ctx.call },
+    }],
   },
   routes: [{
     method: 'GET',
@@ -113,7 +140,7 @@ Deno.test('compose takes each facet: vocab, tools, routes, and the doors', async
   )
   try {
     assertEquals(host.vocab.comp('book')?.name, 'book')
-    assertEquals(host.tools.map((t) => t.name), ['book_list'])
+    assertEquals(host.tools.map((t) => t.name), ['book_list', 'book_add'])
 
     let applied = await host.handler(
       new Request('http://h/apply', {
@@ -171,7 +198,7 @@ Deno.test('a rule sees the graph it is part of, and an effect fires on a commit'
   let seen: string[] = []
   let mod: Module = {
     vocab: doc,
-    runs: { book_list: () => [] },
+    runs: { book_list: () => [], book_add: () => [] },
     rules: (host) => [{
       name: 'watcher',
       // The graph is live by the time a hook runs, not while it is built.
@@ -191,6 +218,75 @@ Deno.test('a rule sees the graph it is part of, and an effect fires on a commit'
   try {
     await host.graph.apply([{ entity: { eid: 'b2' }, book: { title: 'Ada' } }])
     assertEquals(seen, ['function', 'b2'])
+  } finally {
+    host.close()
+  }
+})
+
+// The whole host path, in one place: a word calls the tool HERE, the ask and
+// the answer are written down as they go, and a call somebody else wrote is
+// run by the effect the server registers.
+
+Deno.test('a word calls the tool, and the call is the transcript', async () => {
+  let said: string[] = []
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'], actor: 'me' },
+    only({ shop }),
+  )
+  try {
+    let add = words(host).find((w) => w.name == 'book_add')!
+    let code = await add.run({ title: 'Spring' }, {
+      out: (line: string) => said.push(line),
+      err: () => {},
+    } as never)
+    assertEquals(code, 0)
+    assertEquals(said, ['shelved Spring'])
+
+    // What was asked, and what came back, both written down — and the book
+    // the tool answered is signed as the person who asked, not the server.
+    let [call] = await host.graph.read('.call')
+    assertEquals((call.call as Comp).to, toolEid('book_add'))
+    assertEquals((call.created as Comp).by, 'me')
+    assertEquals((call.execution as Comp).state, 'done')
+    let [result] = await host.graph.read('.result')
+    assertEquals((result.result as Comp).call, call.entity.eid)
+    let [book] = await host.graph.read('.book')
+    assertEquals((book.created as Comp).by, 'me')
+  } finally {
+    host.close()
+  }
+})
+
+Deno.test('a call written through the door is run by the effect', async () => {
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'], actor: 'me' },
+    only({ shop }),
+  )
+  try {
+    await host.runner.ensure()
+    // Nobody is waiting on this one: it is a write like any other, through
+    // the door a client uses. The rules are registered as effects, so the
+    // call is run because it MATCHED, not because somebody awaited it.
+    let wrote = await host.handler(
+      new Request('http://h/apply', {
+        method: 'POST',
+        body: JSON.stringify([{
+          entity: { eid: 'c1' },
+          call: {
+            to: toolEid('book_add'),
+            args: JSON.stringify({ title: 'Later' }),
+          },
+        }]),
+      }),
+    )
+    assertEquals(wrote.status, 200)
+    let [result] = await host.graph.read('.result')
+    assertEquals((result.result as Comp).call, 'c1')
+    assert(
+      (await host.graph.read('.book')).some((b) =>
+        (b.book as Comp).title == 'Later'
+      ),
+    )
   } finally {
     host.close()
   }

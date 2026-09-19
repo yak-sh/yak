@@ -38,6 +38,7 @@ import {
   type Runner,
   runner,
   toolEid,
+  toolsDoc,
   worded,
 } from '@yaks/tools'
 import { loadTools, type Runs } from '@yaks/graph/tools'
@@ -227,7 +228,10 @@ export let compose = async (
 ): Promise<Served> => {
   let path = dbOf(config)
   let mods = await Promise.all((config.plugins ?? []).map(load))
-  let docs = mods.flatMap(docsOf)
+  // The words an invocation is written in come with the HOST, not with a
+  // plugin: what was asked of this server is its own transcript, and a
+  // composition whose plugins happen not to mention `call` still keeps one.
+  let docs = [toolsDoc, ...mods.flatMap(docsOf)]
   let vocab = loadVocab(docs, mods.flatMap((m) => m.keywords ?? []))
 
   if (path != ':memory:') {
