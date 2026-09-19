@@ -4720,6 +4720,17 @@ export let journalOf = (
   limit = 50,
 ): JournalEntry[] => jrnOf(db).entries(eid, limit).map(asEntry)
 
+// The same history at the package's own fidelity: every batch that touched an
+// entity as @yaks/journal's Batch, with both sides of every movement (the
+// before-value derived from that entity's own slice of the log). journalOf
+// above is this record flattened to the fleet's wire spelling; this is the
+// door anything that wants the log's full answer reads.
+export let journalHistory = (
+  db: Sql,
+  eid: string,
+  limit = 50,
+): JournalBatch[] => jrnOf(db).history(eid, limit)
+
 // The same record cut by instrument instead of what: every batch a session
 // or client wrote, whole (no per-eid filtering — a wrap ledger wants the
 // batch's full sentence). Newest first, like journalOf.

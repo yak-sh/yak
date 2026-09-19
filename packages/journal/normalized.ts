@@ -23,7 +23,8 @@
 // driver object, no transaction of its own — the caller owns the transaction,
 // so a refused batch leaves no trace exactly as it does in `./record.ts`.
 
-import type { Comp, Eid } from '@yaks/graph'
+import type { Bundle, Comp, Eid, Plugin, Tx } from '@yaks/graph'
+import { actorOf, comps, dead } from '@yaks/graph'
 import type { Batch, Delta } from './read.ts'
 import { dec, enc } from './value.ts'
 
@@ -574,3 +575,51 @@ export let normalized = (opts: NormalOpts) => {
 }
 
 export { dec, enc }
+
+/**
+ * The normalized journal as a plugin, so a graph can keep this log the way it
+ * keeps the other one:
+ *
+ * ```ts
+ * let j = normalized({ rows })
+ * graph({ storage, vocab, plugins: [journaling(j)] })
+ * ```
+ *
+ * It hooks the `journal` phase alone — no reading is needed to write an
+ * after-image log, which is the whole of the difference from `./record.ts`.
+ * The batch is written as APPLIED: one row per component the bundles patched
+ * or removed, in the order they arrived.
+ */
+export let journaling = (
+  n: Normal,
+  opts: { now?: () => string; skip?: string[]; name?: string } = {},
+): Plugin => {
+  let clock = opts.now ?? (() => new Date().toISOString())
+  let skip = new Set(opts.skip ?? ['created', 'updated'])
+  return {
+    name: opts.name ?? '@yaks/journal/normalized',
+    hooks: {
+      journal: (bundles: Bundle[], _tx: Tx) => {
+        let applied: Patch[] = []
+        for (let b of bundles) {
+          let target = b.entity.eid
+          if (dead(b)) {
+            applied.push({ target, comp: 'entity', value: null })
+            continue
+          }
+          for (let [comp, value] of comps(b)) {
+            if (skip.has(comp)) continue
+            applied.push({ target, comp, value: value ?? null })
+          }
+        }
+        if (!applied.length) return bundles
+        let actor = actorOf(bundles)
+        n.write(
+          { at: clock(), by: actor.by ?? null, via: actor.via ?? null },
+          applied,
+        )
+        return bundles
+      },
+    },
+  }
+}
