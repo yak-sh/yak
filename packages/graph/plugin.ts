@@ -30,6 +30,12 @@ import type { VocabDoc } from '@yaks/vocab'
  *   derived from the content) and rewrite the references to it.
  * - `precondition` — the `$was` guard, and any other "may this batch land"
  *   check that has to read (a lease, a quota). The transaction is open.
+ * - `rules` — the DECLARED half: a rule is a query, and here the batch is
+ *   readable as tables (a storage's batch OVERLAY), so a rule is judged
+ *   against the graph with this batch already in it and its `+` half joins
+ *   the batch as patches. Before persistence on purpose — a component that is
+ *   never stored (`sync: peers`) is visible to a rule and can be produced by
+ *   one only while the batch is still a batch.
  * - `mutate` — the patches go in.
  * - `cascade` — a delete takes its dependents with it; detached references let
  *   go. Casualties are synthesized into the batch.
@@ -45,6 +51,7 @@ export type Phase =
   | 'admit'
   | 'mint'
   | 'precondition'
+  | 'rules'
   | 'mutate'
   | 'cascade'
   | 'stamp'
@@ -59,6 +66,7 @@ export let PHASES: Phase[] = [
   'admit',
   'mint',
   'precondition',
+  'rules',
   'mutate',
   'cascade',
   'stamp',
@@ -71,6 +79,7 @@ export let PHASES: Phase[] = [
 /** The phases that run inside the batch's transaction. */
 export let INSIDE: Phase[] = [
   'precondition',
+  'rules',
   'mutate',
   'cascade',
   'stamp',

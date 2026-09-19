@@ -544,3 +544,25 @@ Deno.test('provenance policy narrows an attribution-only vocabulary, including e
   assertEquals(at(out, 'a', 'created'), { by: 'author' })
   assertEquals(at(out, 'b', 'created'), { by: null })
 })
+
+Deno.test('the rules phase runs after the guard and before the patches land', () => {
+  let seen: string[] = []
+  let one = g([{
+    name: 'watcher',
+    hooks: {
+      precondition: (b) => (seen.push('precondition'), b),
+      // What a rule produces here joins the batch; `mutate` writes it like
+      // anything else, which is what makes the stamps land on it too.
+      rules: (b) => (
+        seen.push('rules'),
+          [...b, { entity: { eid: 'b2' }, doc: { title: 'derived' } }]
+      ),
+      journal: (b) => (seen.push('journal'), b),
+    },
+  }])
+  let out = sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]))
+  assertEquals(seen, ['precondition', 'rules', 'journal'])
+  let [derived] = one.storage.tx((tx) => tx.get(['b2'])) as Bundle[]
+  assertEquals(comp(derived, 'doc').title, 'derived')
+  assert(at(out, 'b2', 'created'), "a rule's entity is stamped like any other")
+})

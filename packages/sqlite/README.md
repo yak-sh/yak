@@ -216,6 +216,46 @@ Full-text search is opt-in: the application runs `schema(fields)` from
 `@yaks/fts` after installing storage, and passes `{ extend: [search(fields)] }`
 to `storage()`. SQLite does not depend on FTS or create its indexes.
 
+### The batch as a world: the overlay
+
+A rule is a query, and a query reads tables — so a rule judged against a batch
+that has not been written yet needs the batch to BE a table. `overlay()` makes
+it one:
+
+```ts
+import { overlay } from '@yaks/sqlite'
+
+let over = overlay(driver, vocab, batch, ['result', 'call'])
+try {
+  // every compiled statement here reads the graph with the batch in it
+} finally {
+  over.drop()
+}
+```
+
+Each covered component gets a temp table holding the batch's own rows and a temp
+VIEW of the component's own name over `main`'s rows minus the ones the batch
+moved, unioned with those. SQLite resolves an unqualified name in `temp` before
+`main`, so the same SQL from the same dialect reads the overlay while it stands
+— `@yaks/sql` never learns one exists, and there is no second compiler. A patch
+is folded into the committed row once, here; a dropped component and a deleted
+entity leave the view; an entity the batch mints gets a NEGATIVE integer id
+(storage hands out positive ones), so a rule can join two entities the same
+batch created.
+
+It costs the BATCH, never the database: nothing is copied, and the fourth test
+in `overlay_test.ts` measures it (10 statements, ~1.8 ms for a 20-bundle batch
+over a graph of 2,000). Pass the components your rules name — raising a table is
+DDL, and DDL makes SQLite re-prepare held statements.
+
+While an overlay stands, an unqualified INSERT would land in a temp table, so
+nothing writes between raising it and dropping it: `@yaks/graph`'s `rules` phase
+reads, and `mutate` writes after.
+
+A seam, named and not built: these overlay tables are the shape a browser cache
+already keeps, so the same compiled rule could one day run locally against a
+local overlay. Nothing here assumes a server; nothing here builds that either.
+
 ### The store's own key/value
 
 Some facts belong to the STORE, not to anything in it: the epoch a returning

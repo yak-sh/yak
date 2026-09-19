@@ -314,7 +314,6 @@ export let words = (host: Served): Word[] =>
         ) => host.graph.read(query, opts as undefined),
       }
       let intent = await tool.run(args, call)
-      if (intent.msg) c.out(intent.msg)
       let value = await land(intent, call)
       if (value !== undefined) c.out(JSON.stringify(value, null, 2))
       return 0

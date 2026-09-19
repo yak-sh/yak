@@ -16,6 +16,7 @@
 //   ───────────────────  the transaction opens
 //   gather      core     every read the batch is going to need, in one call
 //   precondition core    the `$was` guard   (a lease check is a hook here)
+//   rules       rules    the declared half, over the batch as an overlay
 //   mutate      core     the patches go in
 //   cascade     core     death spreads; casualties join the batch
 //   stamp       core     created / updated
@@ -393,6 +394,10 @@ export let graph = (opts: Options): Graph => {
             each(
               [
                 phase('precondition', held, (b) => guard(b, held, vocab)),
+                // The declared rules, before a row of the batch is written:
+                // what they produce joins the batch and `mutate` writes it
+                // like anything else.
+                phase('rules', held, undefined, holds),
                 phase('mutate', held, (b) => {
                   checks = plugins.flatMap((p) =>
                     p.beforeWrite ? [p.beforeWrite(b)] : []
