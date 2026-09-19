@@ -37,6 +37,7 @@ import {
   MARKS,
   taskDoc,
 } from '@yaks/task'
+import { projectDoc } from '@yaks/project'
 
 import { link } from '../edge.ts'
 
@@ -70,7 +71,11 @@ let ref = (kind: string, death: string): PropSchema => ({
 let time = (): PropSchema => ({ type: 'string', format: 'date-time' })
 
 // A deep-enough copy to add columns to without touching the package's export.
+// The portfolio words (`project`, `filed`, `board`) are @yaks/project's, not
+// the to-do list's; the fleet's work domain is both packages together, so both
+// documents are merged here the way a host composes them.
 let doc: VocabDoc = JSON.parse(JSON.stringify(taskDoc))
+doc.$defs = { ...JSON.parse(JSON.stringify(projectDoc)).$defs, ...doc.$defs }
 let defs = doc.$defs!
 let add = (comp: string, props: Record<string, PropSchema>) => {
   defs[comp].properties = { ...defs[comp].properties, ...props }

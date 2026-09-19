@@ -140,7 +140,6 @@ import { PLUGINS } from './plugins.ts'
 import type { Env } from './env.ts'
 import { seeded } from './wake.ts'
 import type { Binding } from './post.ts'
-import { ledger } from './ledger.ts'
 import { doorOf, GIT_STORE, type Namespace, PLATFORM_STORE } from './door.ts'
 import { type Meta, metaOf } from './meta.ts'
 import { apex, url } from './host.ts'
@@ -666,20 +665,10 @@ export class Store {
   }
 
   /** What this object holds, and the seam that says who is asking it — the
-   * values @yaks/mcp's mount is built out of, so the agent door is the same
-   * graph under the same `Authenticate` as the page door (T-33812).
-   *
-   * The third is where a CALL is RECORDED (ledger.ts). @yaks/tools writes one
-   * as the transcript of having asked, and an app's store speaks its own app's
-   * words — not `call`, `result` or `tool` — so the record lives in a graph of
-   * its own for the life of this door rather than as three tables in
-   * everybody's app. */
-  get door(): { graph: Graph; authenticate: Authenticate; calls: Graph } {
-    return {
-      graph: this.#graph,
-      authenticate: this.#auth,
-      calls: ledger(this.#graph),
-    }
+   * two values @yaks/mcp's mount is built out of, so the agent door is the
+   * same graph under the same `Authenticate` as the page door (T-33812). */
+  get door(): { graph: Graph; authenticate: Authenticate } {
+    return { graph: this.#graph, authenticate: this.#auth }
   }
 
   #get(k: Word): string | null {

@@ -29,6 +29,7 @@ import * as dirPart from './directory.ts'
 import { inApp } from './tool.ts'
 import type { Address } from './post.ts'
 import { letters } from './letters.ts'
+import { appVocab } from './vocab.ts'
 import { clock } from './timing.ts'
 import { KERNEL, meta } from './meta.ts'
 import { stages } from '../../bin/app-deploy-time.ts'
@@ -89,24 +90,24 @@ Deno.test('staging tool URLs and app mail use the same configured host', async (
     'test.yaks.fyi is on yaks.fyi',
   )
 
-  let [listing, sending] = letters(ctx)
+  let [listing, sending] = letters(ctx, appVocab())
   assertStringIncludes(sending.description!, '<space>.<app>@yaks.fyi')
-  // A tool takes the call's bundles and its arguments ride on the host
-  // (@yaks/tools): these two answer the letters themselves.
-  let out = await sending.run([], {
-    args: {
-      space: 'ada',
-      app: 'recipes',
-      to: 'ana@books.example',
-      title: 'Dinner',
-      body: 'Bring pudding.',
-    },
-  } as never) as unknown as { mail: { from: string } }[]
-  assertEquals(out[0].mail.from, 'ada.recipes@yaks.fyi')
-  let sent = await listing.run([], {
-    args: { space: 'ada', app: 'recipes', direction: 'sent' },
-  } as never) as unknown as { mail: { from: string } }[]
-  assertEquals(sent.map((l) => l.mail.from), ['ada.recipes@yaks.fyi'])
+  let out = await sending.run({
+    space: 'ada',
+    app: 'recipes',
+    to: 'ana@books.example',
+    title: 'Dinner',
+    body: 'Bring pudding.',
+  }, {} as never)
+  let letter = out.result as { mail: { from: string } }
+  assertEquals(letter.mail.from, 'ada.recipes@yaks.fyi')
+  let sent = await listing.run({
+    space: 'ada',
+    app: 'recipes',
+    direction: 'sent',
+  }, {} as never)
+  let rows = sent.result as { mail: { from: string } }[]
+  assertEquals(rows.map((l) => l.mail.from), ['ada.recipes@yaks.fyi'])
   let { store } = await inApp(ctx, { space: 'ada', app: 'recipes' })
   let read = await store('/query?q=.mail!', {}, {
     'x-yak-person': ctx.person,
@@ -140,17 +141,14 @@ Deno.test('app_list says the caller’s role in each space it lists', async () =
   let bo = { env, dir, person: (await dir.personAt('bo@books.example'))! }
   await call(bo, 'space_new', { slug: 'bo', title: 'Bo' })
 
-  // The seat is on the space's own line — a tool answers words and the
-  // bundles they ride on, and a second structured copy of them is gone.
   let seen = async (as: Ctx) =>
-    (await call(as, 'app_list', {})).text
-      .split('\n')
-      .filter((l) => l.includes(' — you are '))
-      .map((l) => [l.split(' — ')[0], l.split(' — you are ')[1]])
-  assertEquals(await seen(ada), [['ada', 'the owner']])
+    ((await call(as, 'app_list', {})).data as {
+      spaces: { slug: string; role: string }[]
+    }).spaces.map((s) => [s.slug, s.role])
+  assertEquals(await seen(ada), [['ada', 'owner']])
   // Hers is her own; his is the seat she gave him, said as the directory
   // spells it — never guessed at from the fact that he can see it at all.
-  assertEquals(await seen(bo), [['ada', 'a viewer'], ['bo', 'the owner']])
+  assertEquals(await seen(bo), [['ada', 'viewer'], ['bo', 'owner']])
 })
 
 let bytes = (s: string) => new TextEncoder().encode(s)
@@ -468,17 +466,13 @@ Deno.test('one read of the bindings still lands each on its own app', async () =
     },
   }], KERNEL)
   let said = await call(ctx, 'app_list', {})
-  // Each app's line, and the binding lines indented under it: the binding
-  // named `recipes-db` sits under recipes and nothing sits under garden.
-  let lines = said.text.split('\n')
-  let under = (slug: string) =>
-    lines.slice(lines.findIndex((l) => l.includes(`(${slug})`)) + 1)
-      .filter((l) => l.startsWith('  ') || !l.startsWith('- '))
-      .slice(0, 1)
-      .filter((l) => l.startsWith('  '))
-  assertEquals(under('recipes').length, 1)
-  assertStringIncludes(under('recipes')[0], 'DB')
-  assertEquals(under('garden').length, 0)
+  let listed = (said.data as {
+    spaces: { apps: { slug: string; bindings: unknown[] }[] }[]
+  }).spaces[0].apps
+  assertEquals(
+    listed.map((a) => [a.slug, a.bindings.length]),
+    [['recipes', 1], ['garden', 0]],
+  )
 })
 
 Deno.test('free custom domains return plan settings before provisioning', async () => {
@@ -497,8 +491,10 @@ Deno.test('free custom domains return plan settings before provisioning', async 
       hostname: 'recipes.example.com',
       ...args,
     })
-    assertStringIncludes(result.text, 'Custom domains require Plus')
-    assertStringIncludes(result.text, 'https://ada.yaks.fyi/_yaks/billing')
+    assertEquals(result.data, {
+      code: 'plan_required',
+      settings_url: 'https://ada.yaks.fyi/_yaks/billing',
+    })
     assertStringIncludes(result.text, 'Sign in if asked')
     assertEquals(result.text.includes('checkout'), false)
     assertEquals(await dir.serves('recipes.example.com'), null)
@@ -543,7 +539,7 @@ Deno.test('paid and comped domain attachment still provisions normally', async (
         hostname: slug + '.example.com',
       })
       assertStringIncludes(result.text, 'CNAME')
-      assertEquals(result.text.includes('require Plus'), false)
+      assertEquals((result.data as { code?: string }).code, undefined)
       assertEquals((await dir.serves(slug + '.example.com'))?.space.slug, slug)
     }
     assertEquals(provisions, 2)

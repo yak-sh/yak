@@ -38,7 +38,6 @@
 // conversation that ships one app costs one build and one that ships nothing
 // costs none. What the meter is holding is meter.ts's (T-34241); the page is
 // somebody else's (T-34242).
-import { worded } from '@yaks/tools'
 import { running } from './agent.ts'
 import { directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -227,10 +226,13 @@ export let roster = (ctx: Ctx): { fn: Fn; run: Run }[] =>
     run: running(ctx, t),
   }))
 
-// The words in an answer: a platform tool answers bundles, and its sentence
-// is the prose one of them carries (@yaks/tools `worded`), so this is where
-// the model's line comes from.
-let words = worded
+// The words in an answer: a platform tool's sentence is a FIELD of what it
+// answers (`text`), never a second channel beside it, so this is where the
+// model's line comes from.
+let words = (intent: { result?: unknown }): string => {
+  let r = intent.result as { text?: unknown } | undefined
+  return typeof r?.text == 'string' ? r.text : ''
+}
 
 // One tool, run. A refusal is the tool's own sentence handed back to the
 // model, exactly as MCP hands it one (`isError` with the text): a bad

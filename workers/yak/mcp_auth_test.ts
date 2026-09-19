@@ -556,8 +556,8 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
         ids: [run],
         backrefs: false,
       }),
-    ) as { entity: { eid: string } }[]
-    assertEquals(shown[0].entity.eid, run)
+    ) as { bundles: { entity: { eid: string } }[] }
+    assertEquals(shown.bundles[0].entity.eid, run)
     let found = JSON.parse(
       await anon.tool('search', {
         space: 'ada',

@@ -114,8 +114,35 @@ Deno.test('parity: the id prefixes', () => {
   assertEquals(prefixes(swapped), prefixes(today))
 })
 
+// The manifest declares four unique indexes on the per-window comps; the
+// fleet's projection to a vocabulary document does not carry `indexes` at all,
+// so `today` cannot emit them and `swapped` can. Both sides are compared
+// without the index statements the package adds, and the divergence is asserted
+// on its own below.
+let ADDED = /^create unique index[^(]+on "(camera|cursor|fold|shelf)"/
+let less = (sql: string[]) => sql.filter((s) => !ADDED.test(s))
+
 Deno.test('parity: the SQLite schema, statement for statement', () => {
-  assertEquals(schema(swapped), schema(today))
+  assertEquals(
+    less(schema(swapped)),
+    less(schema(today)).filter((s) =>
+      // a unique index over (client, …) subsumes the ref index on `client`, so
+      // the package emits one statement where the projection emits two
+      !/^create index if not exists (camera|cursor|fold|shelf)_client /.test(s)
+    ),
+  )
+})
+
+Deno.test('divergence: the package declares the unique indexes the manifest says', () => {
+  // canvas.json says one camera per (client, canvas), one cursor and one shelf
+  // per client, one fold per (client, board). The package says the same thing
+  // in its own document; the fleet's projection drops it, so today's db carries
+  // those indexes from db.ts rather than from its vocabulary.
+  assertEquals(
+    schema(swapped).filter((s) => ADDED.test(s)).length,
+    4,
+  )
+  assertEquals(schema(today).filter((s) => ADDED.test(s)), [])
 })
 
 Deno.test('every canvas comp syncs — the per-window ones included', () => {

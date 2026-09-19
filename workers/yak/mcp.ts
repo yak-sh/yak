@@ -86,7 +86,6 @@ import { anonymous, asked, opened, READS, scope } from './anon.ts'
 import * as dirPart from './directory.ts'
 import { directory, url } from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { ledger } from './ledger.ts'
 import { instructions, pageFor, UNDO } from './guide.ts'
 import { asking, challenge, unauthorized } from './identity.ts'
 import { narrowed } from './grants.ts'
@@ -339,10 +338,6 @@ let door = async (ctx: Ctx, session: string) => {
   ctx.standing = apps.notes
   let opts = {
     graph,
-    // Where the CALL this door is about to serve is written (ledger.ts): its
-    // own in-memory graph, because the one above is a composition over other
-    // people's stores and a question is not their data.
-    calls: ledger(graph),
     column,
     // What a READ answers is left at names here, while the write door is
     // typed whole (@yaks/mcp, T-34153). Measured over a space of three apps:
@@ -468,7 +463,6 @@ let stranger = async (
   let { graph, column } = await reaching(ctx, reach)
   let opts = {
     graph,
-    calls: ledger(graph),
     column,
     schema: 'names' as const,
     guide: (comp: string) => pageFor(comp, env),

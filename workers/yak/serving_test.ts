@@ -45,7 +45,7 @@ import { call, type Ctx, wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { sweep } from './usage.ts'
-import { FREE, monthOf, PLUS, size } from './meter.ts'
+import { FREE, monthOf, PLUS } from './meter.ts'
 
 let SECRET = 'a probe secret'
 
@@ -2135,11 +2135,10 @@ Deno.test('photo and file uploads enforce space R2 limits from actual bytes', as
     let listing = await call({ env, dir, person: ADA }, 'app_list', {
       space: 'ada',
     })
-    // What the space stands at, in the listing's own words (meter.ts
-    // `standing`) — the structured copy of it went with the output schemas.
-    assertStringIncludes(
-      listing.text,
-      `${size(cap - 2)} of ${size(cap)} photos and files`,
-    )
+    let data = listing.data as {
+      spaces: { usage: { files: number }; ceilings: { files: number } }[]
+    }
+    assertEquals(data.spaces[0].usage.files, cap - 2)
+    assertEquals(data.spaces[0].ceilings.files, cap)
   }
 })

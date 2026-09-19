@@ -195,19 +195,14 @@ export type Seen = { app: App; hit: Hit }
 
 let broke = (h: Hit) => h.exception ?? h.error ?? {}
 
-// One line: id, when, the PLACE to open, the deploy, the message. An item
-// written before exceptions carried their own request still reads: its doc's
-// title said the same thing.
-//
-// The place is the file and line where there is one ({@link spot}), the route
-// where there is not — the same precedence a card reads it with, and the line
-// is the only place anyone sees it now that an answer is bundles and nothing
-// carries a second structured copy.
+// One line: id, when, the route it happened on, the deploy, the message. An
+// item written before exceptions carried their own request still reads: its
+// doc's title said the same thing.
 export let line = ({ app, hit }: Seen) => {
   let e = broke(hit)
   let id = idOf({ eid: hit.entity.eid, kind: hit.kind, num: hit.entity.num })
   let facet = hit.exception ? 'exception' : 'error'
-  let where = spot(e.stack) || e.request || hit.doc?.title || ''
+  let where = e.request ?? hit.doc?.title ?? ''
   return `- ${id} ${e.at ?? ''} ${facet} ${app.slug}${
     e.version ? ` v${e.version}` : ''
   }: ${where} — ${e.message ?? ''}`

@@ -8,7 +8,6 @@ import {
 import { slow, until } from '../../src/testing.ts'
 import {
   client,
-  commandsIn,
   connector,
   kernel,
   letters,
@@ -69,11 +68,10 @@ slow('the front page moves, and only the owner moves it', async () => {
       'second (second) v0: https://front.yaks.app/ · front@yaks.app — ' +
         'the front page',
     )
-    // And the other one still stands at a path of its own: being the front
-    // page is where an app is, so the listing says it by saying the address.
-    assertStringIncludes(
-      listing.content[0].text,
-      'first (first) v0: https://front.yaks.app/first/',
+    assertEquals(
+      listing.structuredContent.spaces[0].apps
+        .map((a: { slug: string; home: boolean }) => [a.slug, a.home]),
+      [['first', false], ['second', true]],
     )
 
     // Cleared: both apps stand at their own addresses, and the space's own
@@ -382,7 +380,9 @@ slow('an app goes to the trash, and app_restore brings it back', async () => {
     // What the app can be asked to do — its commands leave every list the day
     // it goes in the trash and come back with it (T-34430, T-34541).
     let listed = async () =>
-      commandsIn(await agent.tool('commands')).map((c) => c.name)
+      (((await agent.call('tools/call', { name: 'commands', arguments: {} }))
+        .structuredContent?.commands ?? []) as { name: string }[])
+        .map((c) => c.name)
     let page = () => k.at('binlab.yaks.app', '/notes/')
 
     await agent.tool('app_new', { ...at, slug: 'notes', title: 'Notes' })
@@ -502,7 +502,9 @@ slow(
       let agent = connector(k, them.cookie)
       let at = { space: 'binspace', app: 'notes' }
       let listed = async () =>
-        commandsIn(await agent.tool('commands')).map((c) => c.name)
+        (((await agent.call('tools/call', { name: 'commands', arguments: {} }))
+          .structuredContent?.commands ?? []) as { name: string }[])
+          .map((c) => c.name)
       let page = (path = '/notes/') => k.at('binspace.yaks.app', path)
 
       await agent.tool('app_new', { ...at, slug: 'notes', title: 'Notes' })

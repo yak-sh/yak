@@ -49,14 +49,14 @@ slow("an app's letters, listed and sent through the connector", async () => {
     // And the app writes one of its own. The answer is the letter as applied,
     // leaving from the app's own address whatever the tool was handed, and
     // addressed to an ENTITY rather than to a string.
-    let [sent] = JSON.parse(
+    let sent = JSON.parse(
       await agent.tool('mail_send', {
         app: 'recipes',
         to: 'ana@books.example',
         title: 'Thanks for the pudding',
         body: 'It went in **one** sitting.',
       }),
-    ) as Letter[]
+    ) as Letter
     assertEquals(sent.mail.from, 'jeff.recipes@yaks.app')
     assertEquals(sent.doc.title, 'Thanks for the pudding')
     assert(sent.deliver!.to, 'the letter names a recipient entity')
@@ -116,14 +116,14 @@ slow("an app's letters, listed and sent through the connector", async () => {
 
     // A second letter to the same address hangs off the recipient the app
     // already has, rather than a second row for one person.
-    let [again] = JSON.parse(
+    let again = JSON.parse(
       await agent.tool('mail_send', {
         app: 'recipes',
         to: 'ana@books.example',
         title: 'One more thing',
         body: 'Bring the tin back.',
       }),
-    ) as Letter[]
+    ) as Letter
     assertEquals(again.deliver!.to, sent.deliver!.to)
 
     // Only a member sends: the platform tier is the space's, and an app that

@@ -208,9 +208,8 @@ export let runCommand = async (
 }
 
 // The act itself: the template filled, sent the page's way, and answered as
-// one sentence with the rows under it. A command's answer used to ride twice —
-// the sentence, and the same rows again as structured content — and a tool
-// answers bundles now, so the rows are said once, in the words.
+// one sentence plus the rows or the ids as `structuredContent` — the same
+// answer a view would draw (T-32687 gives an entry a `view`).
 let ran = async (
   ctx: Ctx,
   space: Space,
@@ -227,7 +226,8 @@ let ran = async (
     return {
       text: `${name}: ${
         Array.isArray(rows) ? `${n} ${n == 1 ? 'row' : 'rows'}` : 'answered'
-      } in ${at(space, app)}\n\n${JSON.stringify(rows, null, 2)}`,
+      } in ${at(space, app)}`,
+      data: Array.isArray(rows) ? { rows } : rows as Record<string, unknown>,
     }
   }
   let out = await door.apply(
@@ -245,6 +245,7 @@ let ran = async (
     text: `${name}: wrote ${ids.length} ${
       ids.length == 1 ? 'entity' : 'entities'
     } in ${at(space, app)}${said.length ? `: ${said.join(', ')}` : ''}`,
+    data: { entities: ids, aliases },
   }
 }
 

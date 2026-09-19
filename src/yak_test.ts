@@ -176,18 +176,14 @@ Deno.test('an account with no address asks the platform once, and the answer is 
 // shape of the asking: one /mcp call and no per-space door, however many
 // spaces come back. Asking each space its own role was seconds of sequential
 // round trips, one Durable Object woken apiece.
-//
-// A tool answers BUNDLES now and its words are the prose they carry, which is
-// what the reply says as its text — so the listing is that sentence and
-// `whoami` prints it rather than re-formatting a shape.
-let listing = (spaces: string[]) =>
+let listing = (spaces: unknown[]) =>
   JSON.stringify({
     jsonrpc: '2.0',
     id: 1,
-    result: { content: [{ type: 'text', text: spaces.join('\n') }] },
+    result: { content: [], structuredContent: { spaces } },
   })
 
-let asking = async (spaces: string[]) => {
+let asking = async (spaces: unknown[]) => {
   let hit: string[] = []
   let path = Deno.makeTempFileSync()
   Deno.writeTextFileSync(
@@ -215,13 +211,14 @@ let asking = async (spaces: string[]) => {
   }
 }
 
-let space = (slug: string, role: string, apps: number) =>
-  [
-    `${slug} — https://${slug}.yaks.app/ — you are ${
-      role == 'owner' ? 'the owner' : `a ${role}`
-    }`,
-    ...Array.from({ length: apps }, (_, i) => `- a${i} (a${i}) v1`),
-  ].join('\n')
+let space = (slug: string, role: string, apps: number) => ({
+  slug,
+  title: slug,
+  url: `https://${slug}.yaks.app/`,
+  tier: 'free',
+  role,
+  apps: Array.from({ length: apps }, (_, i) => ({ slug: `a${i}` })),
+})
 
 Deno.test('whoami asks the listing once and no space its own role', async () => {
   let { hit, said } = await asking([

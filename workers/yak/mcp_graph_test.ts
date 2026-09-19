@@ -454,11 +454,17 @@ slow('app_list answers what the month cost', async () => {
     assertStringIncludes(said, 'metered (free tier')
     assertStringIncludes(said, '1 of 5 apps')
 
-    // And the other address every app has (T-34149), in the words: nobody
-    // should have to derive a mailbox from a slug. An app is a directory row
-    // rather than an entity in the caller's graph, so the listing says it in
-    // the sentence and there is nowhere else for it to be.
+    // And the other address every app has (T-34149), in the words and in the
+    // rows: nobody should have to derive a mailbox from a slug.
     assertStringIncludes(said, 'metered.recipes@yaks.app')
+    let listing = await agent.call('tools/call', {
+      name: 'app_list',
+      arguments: { space: 'metered' },
+    })
+    assertEquals(
+      listing.structuredContent.spaces[0].apps[0].mail,
+      'metered.recipes@yaks.app',
+    )
   } finally {
     await k.stop()
   }

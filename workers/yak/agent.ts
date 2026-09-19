@@ -24,10 +24,11 @@
 // follows (tools.ts `homesIn`): the schema an agent reads is the words it can
 // actually write.
 import { z } from 'zod'
+import { platformOutput, structuredOutput } from './tool_outputs.ts'
 import type {
   Bundle,
-  Eid,
   Graph,
+  Intent,
   Plugin,
   Row,
   Storage,
@@ -103,43 +104,38 @@ export let inputOf = (
 }
 
 /**
- * A platform tool's answer, as BUNDLES: one entity carrying the sentence it
- * always said, saying which call produced it.
- *
- * These tools answer PROSE — that is what a platform verb has to say, and the
- * rows it worked on live in a directory nobody's reach holds — so the bundle
- * is `content{body}` with `output{source}` beside it, which is exactly what
- * the vocabulary has for an answer somebody's words. The structured `data` a
- * tool used to answer beside its text is gone with the output schemas: every
- * one of them said a second time what the text already says, and a reply's
- * structure is its bundles now.
+ * A tool's `output` the same way: the object it answers beside its words. A
+ * tool that says nothing about its answer declares nothing, which is what
+ * leaves the reply plain text.
+ */
+export let outputOf = (
+  schema: unknown,
+  env: Host = {},
+): z.ZodTypeAny | undefined =>
+  schema == undefined ? undefined : z.object(inputOf(schema, env))
+
+/**
+ * A platform tool's answer: the sentence it always said, and the value it
+ * answers beside it where it has one.
  *
  * What is unseen in the space it worked in (unseen.ts) rides on the sentence —
  * every break not yet served, once, then the month's ceiling. It rode on the
  * DOOR before (mcp.ts `call`) and rides on the tool now, because the door no
  * longer knows what a space is.
  */
-export let answered = async (
-  ctx: Ctx,
-  out: Out,
-  call?: Eid,
-): Promise<Bundle[]> => {
+export let answered = async (ctx: Ctx, out: Out): Promise<Intent> => {
   // Nobody signed in has no space to be told what is unseen in (anon.ts): the
   // breaks in an app are its members', and a stranger is not one.
-  let text = !out.space || !ctx.person ? out.text : out.text +
-    unseenBlock(
-      await serve(ctx.env, out.space, {
-        person: ctx.person,
-        role: await ctx.dir.role(out.space, ctx.person),
-      }),
-    ) + await ceiling(ctx.env, out.space)
-  return [{
-    entity: { eid: '$said' },
-    content: { body: text },
-    // A call to say it came from, where there is one: the builder runs these
-    // same tools in its own loop (builder.ts), with nothing to point at.
-    ...(call ? { output: { source: call } } : {}),
-  }]
+  if (!out.space || !ctx.person) {
+    return { result: structuredOutput(out.text, out.data) }
+  }
+  let who = {
+    person: ctx.person,
+    role: await ctx.dir.role(out.space, ctx.person),
+  }
+  const text = out.text + unseenBlock(await serve(ctx.env, out.space, who)) +
+    await ceiling(ctx.env, out.space)
+  return { result: structuredOutput(text, out.data) }
 }
 
 /**
@@ -150,9 +146,8 @@ export let answered = async (
  * ({@link sugared}) and the builder we run ourselves (builder.ts) — and a
  * second spelling of these two lines is a second `app_new`.
  */
-export let running =
-  (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>, call?: Eid) =>
-    t.run(ctx, args).then((out) => answered(ctx, out, call))
+export let running = (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>) =>
+  t.run(ctx, args).then((out) => answered(ctx, out))
 
 // What the transport says about a tool beside its schemas: what it declares
 // about signing in where that is not the door's own (preauth.ts NOAUTH — every
@@ -163,7 +158,7 @@ let metaOf = (t: Sugar): Pick<Tool, 'meta'> =>
   t.security ? { meta: { securitySchemes: t.security } } : {}
 
 /** One of the platform's own tools, as a graph `Tool`. The answer is the same
- * sentence it always was, worn as the one bundle that carries words. */
+ * sentence it always was, and the value it answers beside it. */
 export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   name: t.name,
   title: t.title,
@@ -176,13 +171,19 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   ...(t.destructive == null ? {} : { destructive: t.destructive }),
   ...(t.idempotent ? { idempotent: true } : {}),
   ...(t.openWorld ? { openWorld: true } : {}),
+  // What it answers, where it says: an intent's `result` carries this tool's
+  // own words as `text`, so the reply says them and hands the answer over in
+  // this very shape (@yaks/mcp `said`) — which is the shape the page a host
+  // renders it in reads, and the shape `yak` parses.
+  output: t.output
+    ? (outputOf(t.output, ctx.env) as z.AnyZodObject).extend({
+      text: z.string(),
+    }).passthrough()
+    : platformOutput(t.name),
   // The page a host renders this answer in (MCP Apps): the tool names it, the
   // transport hands it over verbatim, and a host without views ignores it.
   ...metaOf(t),
-  // The runner hands a tool the call's bundles and a host; what a platform
-  // verb reads is its ARGUMENTS, which the runner has already checked, and the
-  // call it is answering.
-  run: (_, c) => running(ctx, t)(c.args, c.call),
+  run: (args) => running(ctx, t)(args),
 })
 
 /**
@@ -206,12 +207,14 @@ export let platform = (ctx: Ctx): Plugin => ({
 
 /**
  * The post room's own verbs, as a second plugin (letters.ts): `mail_list` and
- * `mail_send`. They are apart from the table above because they answer the
- * letters themselves as BUNDLES, where every other verb there answers words.
+ * `mail_send`. They are apart from the table above because they answer
+ * BUNDLES, so they are described in the vocabulary the caller's apps declare
+ * rather than in a sentence — which is a thing only this side of the door,
+ * holding the loaded vocabulary, can do.
  */
-export let post = (ctx: Ctx): Plugin => ({
+export let post = (ctx: Ctx, vocab: Vocab): Plugin => ({
   name: 'yak/mail',
-  tools: letters(ctx),
+  tools: letters(ctx, vocab),
 })
 
 /**
@@ -478,7 +481,7 @@ export let reaching = async (
   // list and none to send, and hears that as the sign-in challenge rather than
   // as two tools that are not there. One roster, one order, whoever is asking
   // (`platform`, T-34541).
-  let plugins = [platform(ctx), post(ctx)]
+  let plugins = [platform(ctx), post(ctx, vocab)]
   let self: Graph = {
     vocab,
     storage,

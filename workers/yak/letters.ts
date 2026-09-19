@@ -22,7 +22,9 @@
 // knowing any of them exist (graph.ts `#posting`, meter.ts).
 import { z } from 'zod'
 import type { Bundle, Tool } from '@yaks/graph'
+import { bundleSchema, outputSchema } from '@yaks/mcp'
 import { canon, parts } from '@yaks/mail'
+import type { Vocab } from '@yaks/vocab'
 import { mailbox } from './directory.ts'
 import { type Reach, read, written } from './reach.ts'
 import { apex, type Host } from './host.ts'
@@ -102,7 +104,7 @@ let known = async (
   return one?.entity?.eid ?? null
 }
 
-let listing = (ctx: Ctx): Tool => ({
+let listing = (ctx: Ctx, vocab: Vocab): Tool => ({
   name: 'mail_list',
   readOnly: true,
   title: "An app's letters",
@@ -121,8 +123,8 @@ let listing = (ctx: Ctx): Tool => ({
     ),
     limit: z.number().optional().describe('at most this many (default: 20)'),
   },
-  run: async (_, c) => {
-    let args = c.args
+  output: outputSchema(z.array(bundleSchema(vocab))),
+  run: async (args) => {
     let { space, app, who } = await inApp(ctx, args)
     let said = args.direction == null ? 'all' : String(args.direction)
     let which = side(said, mailbox(space, app, ctx.env))
@@ -132,11 +134,13 @@ let listing = (ctx: Ctx): Tool => ({
       [{ space, app, who }],
       `${LETTER}${which}&.limit=${num(args.limit) ?? 20}`,
     )
-    return (Array.isArray(rows) ? rows as Bundle[] : []).sort(newest)
+    return {
+      result: (Array.isArray(rows) ? rows as Bundle[] : []).sort(newest),
+    }
   },
 })
 
-let sending = (ctx: Ctx): Tool => ({
+let sending = (ctx: Ctx, vocab: Vocab): Tool => ({
   name: 'mail_send',
   title: "Send from an app's address",
   // A letter to a stranger's inbox: it leaves the platform, and no second
@@ -167,8 +171,8 @@ let sending = (ctx: Ctx): Tool => ({
     title: z.string().describe('the subject line'),
     body: z.string().describe('the words, as markdown'),
   },
-  run: async (_, c) => {
-    let args = c.args
+  output: outputSchema(bundleSchema(vocab, { nulls: true })),
+  run: async (args) => {
     let { space, app, who } = await inApp(ctx, args, true)
     let mine: Reach = { space, app, who }
     let to = str(args.to, 'to')
@@ -207,13 +211,16 @@ let sending = (ctx: Ctx): Tool => ({
     // The letter went through the APP's own door, vouched as the caller, so
     // what comes back is the answer — there is nothing left for the host to
     // land on the platform's own graph.
-    return [letter]
+    return { result: letter }
   },
 })
 
 /**
- * The two mail tools, bound to this caller. They ride the platform plugin
- * (agent.ts) beside the app_* family, since a mailbox is a fact about an app,
- * and they answer BUNDLES where the rest of that family answers words.
+ * The two mail tools, bound to this caller and described in the vocabulary
+ * their apps declare. They ride the platform plugin (agent.ts) beside the
+ * app_* family, since a mailbox is a fact about an app.
  */
-export let letters = (ctx: Ctx): Tool[] => [listing(ctx), sending(ctx)]
+export let letters = (ctx: Ctx, vocab: Vocab): Tool[] => [
+  listing(ctx, vocab),
+  sending(ctx, vocab),
+]

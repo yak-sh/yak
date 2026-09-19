@@ -205,9 +205,9 @@ slow(
         openWorldHint: false,
       })
       assertEquals(hints('mail_send')?.openWorldHint, true)
-      // And none of them promises the SHAPE of its answer (T-37596): an answer
-      // is bundles, in the vocabulary the caller already reads, so there is no
-      // second schema to declare or to drift from what a tool really says.
+      // The generic tier promises the shape of its answer, so a caller reads a
+      // described value instead of parsing prose (@yaks/mcp `outputSchema`).
+      // The mail tools answer bundles too, so they promise the same.
       for (
         let name of [
           'graph_apply',
@@ -219,7 +219,7 @@ slow(
         ]
       ) {
         let one = tools.find((t: { name: string }) => t.name == name)
-        assertEquals(one.outputSchema, undefined, `${name} promises no shape`)
+        assert(one.outputSchema, `${name} says what it answers`)
       }
 
       // What a model reads before anything else: the address, the four
@@ -327,9 +327,10 @@ slow(
       // the tool list.
       let guide = tools.find((t: { name: string }) => t.name == 'guide')
       assertEquals(guide.annotations.readOnlyHint, true)
-      // What it answers is the page itself, which the two reads below check
-      // byte for byte against what the web serves — there is no second schema
-      // saying so, because an answer is bundles now.
+      assertEquals(
+        guide.outputSchema.required.sort(),
+        ['markdown', 'page', 'text'],
+      )
       for (let p of PAGES) assertStringIncludes(guide.description, p.slug)
       let map = await agent.tool('guide')
       assertEquals(map, await (await k.at('yaks.app', '/guide.md')).text())
@@ -339,6 +340,16 @@ slow(
         await agent.tool('guide', { page: 'mail' }),
         await (await k
           .at('yaks.app', '/guide/mail.md')).text(),
+      )
+      // The structured answer says which page it is, beside the words.
+      let answered = await agent.call('tools/call', {
+        name: 'guide',
+        arguments: { page: 'mail' },
+      })
+      assertEquals(answered.structuredContent.page, 'mail')
+      assertEquals(
+        answered.structuredContent.markdown,
+        answered.content[0].text,
       )
       // A name that is no page is a typo, not a refusal: the map, with one
       // line above it naming what there is.
@@ -817,8 +828,8 @@ slow(
           ids: ['recipe:lemon-cakes'],
           backrefs: false,
         }),
-      ) as { entity: { eid: string } }[]
-      assertEquals(shown.map((b) => b.entity.eid), [once])
+      ) as { bundles: { entity: { eid: string } }[] }
+      assertEquals(shown.bundles.map((b) => b.entity.eid), [once])
       // and it goes when the entity does — the name is released, not
       // tombstoned, so it could be claimed again (what the rest of this test
       // counts is the app's own rows, and this one was ours).
@@ -1134,40 +1145,44 @@ slow(
       // times. A break whose report carried no stack has no address to open,
       // so it wears its request instead.
       let asOf = async (args: unknown = app) =>
-        await agent.tool('app_errors', args)
-      let open = (said: string) =>
-        said.split('\n').filter((l) => l.startsWith('- '))
-      let breaks = open(await asOf())
-      // Each line is the id, when, the app and deploy it happened on, then
-      // where it was and what it said (unseen.ts `line`).
+        await agent.call('tools/call', { name: 'app_errors', arguments: args })
+      let seen = await asOf()
+      let breaks = seen.structuredContent.errors as {
+        eids: string[]
+        message: string
+        where: string
+        version: number
+        count: number
+      }[]
+      assertEquals(seen.structuredContent.app, 'recipes')
       assertEquals(
-        breaks.map((l) => l.slice(l.indexOf(': ') + 2)).sort(),
+        breaks.map((b) => `${b.message} @ ${b.where} x${b.count}`).sort(),
         [
-          '/recipes/cook.js:7 — fold is not a function',
-          '/recipes/index.html:42 — whisk is not a function',
-          'page /recipes/ — knead is not a function',
-          'page /recipes/ — sift is not a function',
+          'fold is not a function @ /recipes/cook.js:7 x1',
+          'knead is not a function @ page /recipes/ x1',
+          'sift is not a function @ page /recipes/ x1',
+          'whisk is not a function @ /recipes/index.html:42 x1',
         ],
       )
       // v7: two files, a vocabulary, the word it dropped, the column it
       // renamed, the same words written again as YAML — every deploy above
       // bumped it, and a break wears the version it happened on.
-      assert(
-        breaks.every((l) => l.includes(' recipes v7: ')),
-        'the app and the deploy it happened on',
-      )
+      assert(breaks.every((b) => b.version == 7), 'the deploy it happened on')
 
       // The fixed button: the view calls this same tool back through the
       // host with the card's eids, and what it gets is the listing that is
       // left — so the break stops showing here and in every later reply.
-      let whisk = breaks.find((l) => l.includes('/recipes/index.html:42'))!
-      let after = await asOf({ ...app, fixed: [whisk.split(' ')[1]] })
-      assertStringIncludes(after, 'archived 1')
-      assertEquals(open(after).length, 3)
-      assert(!after.includes('whisk'), 'archived is not listed')
+      let whisk = breaks.find((b) => b.where == '/recipes/index.html:42')!
+      let after = await asOf({ ...app, fixed: whisk.eids })
+      assertStringIncludes(after.content[0].text, 'archived 1')
+      assertEquals(after.structuredContent.errors.length, 3)
+      assert(
+        !after.content[0].text.includes('whisk'),
+        'archived is not listed',
+      )
 
       // The agent's own door is the same one, by the id it read off a line.
-      let said = open(after)
+      let said = String(after.content[0].text).split('\n')
         .find((l) => l.includes('fold is not a function'))!
       assertStringIncludes(
         await agent.tool('app_errors', { ...app, fixed: [said.split(' ')[1]] }),
@@ -1286,22 +1301,25 @@ slow(
         listing.content[0].text,
         /Recipes \(cookbook\) v\d+, 2 open: https:\/\/jeff\.yaks\.app\/cookbook\//,
       )
-      // Both spaces, oldest first, each app under the one it lives in — and
-      // the count of what is open and the address are on the app's own line,
-      // which the match above reads.
-      let all = String(listing.content[0].text)
-      assert(
-        all.indexOf('jeff — ') < all.indexOf('jeff-work — '),
-        'the space it started with comes first',
-      )
-      assertStringIncludes(all, '(garden)')
+      let { spaces } = listing.structuredContent
+      assertEquals(spaces.map((s: { slug: string }) => s.slug), [
+        'jeff',
+        'jeff-work',
+      ])
+      assertEquals(spaces[0].apps.map((a: { slug: string }) => a.slug), [
+        'cookbook',
+        'garden',
+      ])
+      assertEquals(spaces[0].apps[0].errors, 2)
+      assertEquals(spaces[0].apps[0].url, 'https://jeff.yaks.app/cookbook/')
+      assertEquals(spaces[1].apps, [])
       // Its garden went to the trash a moment ago, so the space has no apps
       // and one thing in the trash — with the days it has to change its mind
       // (erase.ts, T-34430).
       assertEquals(
         (await agent.tool('app_list', { space: 'jeff-work' })).split('\n'),
         [
-          'jeff-work — https://jeff-work.yaks.app/ — you are the owner',
+          'jeff-work — https://jeff-work.yaks.app/',
           '- no apps yet',
           'Trash — app_restore brings one back; erased for good when its ' +
           'days run out',
