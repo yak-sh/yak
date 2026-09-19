@@ -262,7 +262,7 @@ Deno.test('claude: a non-Bash tool_use keeps its real name and a detail', () => 
   )
   assertEquals(b.specs, [{
     call: { key: 't2' },
-    tool: { name: 'Read', detail: '/etc/hosts' },
+    tool_use: { name: 'Read', detail: '/etc/hosts' },
   }])
 })
 
@@ -378,7 +378,7 @@ Deno.test('codex: a failed mcp tool call carries its message on stderr, not erro
     },
     s,
   )
-  assertEquals(b.specs[0].tool, {
+  assertEquals(b.specs[0].tool_use, {
     name: 'tasks.task_comment',
     detail: '{"id":"T-1"}',
   })
@@ -529,7 +529,7 @@ Deno.test('native codex: a non-shell function_call keeps its name and a detail',
     s,
   )
   assertEquals(b.specs[0].call, { key: 'p1' })
-  assertEquals(b.specs[0].tool.name, 'apply_patch')
+  assertEquals(b.specs[0].tool_use.name, 'apply_patch')
   assert(!('bash' in b.specs[0]))
 })
 

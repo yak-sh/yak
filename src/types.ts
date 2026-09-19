@@ -143,7 +143,7 @@ export let sessionComps: Record<string, Record<string, PropType>> = {
   timeout: {
     ms: 'number',
   },
-  tool: {
+  tool_use: {
     name: 'text',
     detail: 'text',
   },
@@ -624,7 +624,7 @@ export let comps: Record<string, Record<string, PropType>> = {
   timeout: {
     ms: 'number',
   },
-  tool: {
+  tool_use: {
     name: 'text',
     detail: 'text',
   },
@@ -1702,9 +1702,11 @@ export type Output = {
   phase?: string | null
 }
 export type Call = { eid: string; key: string }
-// Provider-neutral named tool (D-16704): an imported tool call with no
-// first-class facet keeps its real name and a one-line arg preview.
-export type Tool = { eid: string; name: string; detail?: string | null }
+// Provider-neutral named tool use (D-16704): an imported tool call with no
+// first-class facet keeps its real name and a one-line arg preview. The word
+// is the transcript's own — @yaks/tools' `tool` is the registered tool ENTITY
+// a call points at, and this is the block in the log that used one.
+export type ToolUse = { eid: string; name: string; detail?: string | null }
 export type Bash = { eid: string; command: string; cwd?: string | null }
 export type Fetch = {
   eid: string
@@ -2217,7 +2219,7 @@ export type EntCore = {
   generation?: Generation
   output?: Output
   call?: Call
-  tool?: Tool
+  tool_use?: ToolUse
   bash?: Bash
   fetch?: Fetch
   patch?: Patch

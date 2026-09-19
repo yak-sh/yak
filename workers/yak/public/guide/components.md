@@ -460,8 +460,8 @@ These are the names, all of them:
     references repo report requires response result resume retired review role
     run runner runtime satisfies service session setting settled shelf signal
     signin space spawn stderr stop stop_request subscription supersedes
-    supervises task task_context timeout tool updated usage venture verifier
-    wake wants web worked worktree yield
+    supervises task task_context timeout tool_use updated usage venture
+    verifier wake wants web worked worktree yield
 
 When your first choice is taken, ask what the word is FOR and name that: the
 taken word is the general one, yours is the specific one. Not `card` but

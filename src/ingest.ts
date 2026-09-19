@@ -159,7 +159,7 @@ let claudeBlock = (
     let input = b.input as Record<string, unknown> | undefined
     let spec: EntrySpec = name == 'Bash'
       ? { call: { key }, bash: { command: scrub(input?.command) } }
-      : { call: { key }, tool: { name, detail: gist(b.input) } }
+      : { call: { key }, tool_use: { name, detail: gist(b.input) } }
     return { spec, id, call: key ? [key, id] : undefined }
   }
   if (b.type == 'tool_result') {
@@ -344,7 +344,7 @@ export let codexEntries = (e: Event, _state: IngestState): Batch => {
     )
     return codexTool(
       {
-        tool: {
+        tool_use: {
           name: `${it.server ?? ''}.${it.tool ?? ''}`,
           detail: gist(it.arguments),
         },
@@ -364,7 +364,7 @@ export let codexEntries = (e: Event, _state: IngestState): Batch => {
     return {
       specs: [{
         call: { key },
-        tool: { name: 'web_search', detail: scrub(it.query ?? it.action) },
+        tool_use: { name: 'web_search', detail: scrub(it.query ?? it.action) },
       }],
       ids: [uuid()],
       calls: key ? [[key, uuid()]] : [],
@@ -436,7 +436,7 @@ let codexCall = (
   let id = uuid()
   let spec: EntrySpec = command != null
     ? { call: { key }, bash: { command: scrub(command) } }
-    : { call: { key }, tool: { name: name || 'tool', detail: gist(args) } }
+    : { call: { key }, tool_use: { name: name || 'tool', detail: gist(args) } }
   return { specs: [spec], ids: [id], calls: key ? [[key, id]] : [] }
 }
 
@@ -536,7 +536,7 @@ let fakeEntries = (e: Event, _state: IngestState): Batch => {
     return {
       specs: [{
         call: { key: String(e.id ?? '') },
-        tool: { name: String(e.name ?? ''), detail: scrub(e.detail) },
+        tool_use: { name: String(e.name ?? ''), detail: scrub(e.detail) },
       }],
       ids: [uuid()],
       calls: [],

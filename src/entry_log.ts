@@ -45,8 +45,8 @@ let toolName = (comps: EntryRow['comps']) =>
     ? 'graph_query'
     : comps.apply
     ? 'graph_apply'
-    : comps.tool
-    ? text(comps.tool.name)
+    : comps.tool_use
+    ? text(comps.tool_use.name)
     : 'tool'
 
 let detail = (comps: EntryRow['comps']) =>
@@ -147,7 +147,7 @@ let shown = (
     return {
       kind: 'tool',
       name: toolName(c),
-      detail: c.tool ? clip(c.tool.detail) : detail(c),
+      detail: c.tool_use ? clip(c.tool_use.detail) : detail(c),
     }
   }
   if (c.result) {

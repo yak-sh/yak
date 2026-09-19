@@ -518,7 +518,7 @@ let schema = `
   -- first-class facet (bash/patch/fetch/task_context/graph_query/apply) keeps
   -- its real name and a one-line arg detail here. Wire-writable like the
   -- other tool facets; a wholly new table = create-if-not-exists.
-  create table if not exists tool (
+  create table if not exists tool_use (
     entity    integer primary key references entity(id),
     name   text not null,
     detail text
@@ -1782,6 +1782,7 @@ export let migrate = <D extends Sql>(db: D): D => {
       // here, as the guard that carries the rows across once.
       renameTable(db, 'error', 'failed')
       renameTable(db, 'notice', 'signal')
+      renameTable(db, 'tool', 'tool_use')
       renameCol(db, 'session', 'signal_at', 'signal_at')
       renameCol(db, 'session', 'signal_accepted_at', 'signal_accepted_at')
       renameCol(db, 'session', 'signal_token', 'signal_token')

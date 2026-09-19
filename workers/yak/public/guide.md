@@ -350,8 +350,8 @@ taken:
     references repo report requires response result resume retired review role
     run runner runtime satisfies service session setting settled shelf signal
     signin space spawn stderr stop stop_request subscription supersedes
-    supervises task task_context timeout tool updated usage venture verifier
-    wake wants web worked worktree yield
+    supervises task task_context timeout tool_use updated usage venture
+    verifier wake wants web worked worktree yield
 
 Anything the columns don't cover still lives in `doc.body`: it is text, so
 markdown or JSON both keep there.

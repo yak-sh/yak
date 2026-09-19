@@ -85,11 +85,11 @@ Deno.test('graph log renders ordered calls, results, model, and usage', () => {
 
 Deno.test('an imported tool call keeps its real name and arg preview', () => {
   // A tool facet with no first-class kind (bash/patch/…): toolName() reads
-  // c.tool.name and the bare-call arm renders its one-line detail (D-16704).
+  // c.tool_use.name and the bare-call arm renders its one-line detail (D-16704).
   let log = graphLog([
     row('call', 1, {
       call: { key: 'call-1' },
-      tool: { name: 'web_search', detail: 'query: everforest palette' },
+      tool_use: { name: 'web_search', detail: 'query: everforest palette' },
     }),
   ])
   assertEquals(log.entries[0].row, {

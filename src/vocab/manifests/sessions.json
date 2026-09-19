@@ -511,7 +511,7 @@
         "ms": "number"
       }
     },
-    "tool": {
+    "tool_use": {
       "log": true,
       "cols": {
         "name": "text",
