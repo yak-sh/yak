@@ -1,17 +1,14 @@
 import { assertEquals, assertThrows } from '@std/assert'
 import { load, select } from '@yaks/plugin'
-import {
-  commandPlugin,
-  commandTools,
-  defineCommands,
-  resolveCommand,
-} from '@yaks/cli/structured'
-import type { Ctx } from '@yaks/cli'
-import type { ToolCtx } from '@yaks/graph'
+import { argsFor, unique, wordFor } from '@yaks/cli'
+import { namedTool, type ToolCtx } from '@yaks/graph'
 import { connect } from '../mcp/harness.ts'
 import { open } from './store.ts'
 import { commands } from './commands.ts'
+import { tools as cliTools } from './cli.ts'
 import manifest from './plugin.ts'
+
+let reads = { file: () => '', stdin: () => '' }
 
 Deno.test('manifest contributions share one command between CLI and MCP over a graph', async () => {
   const loaded = await load([{
@@ -31,18 +28,16 @@ Deno.test('manifest contributions share one command between CLI and MCP over a g
     apply: (b) => h.g.apply(b),
   }
   const results: unknown[] = []
-  const cli = commandPlugin(declarations, async (c, args) => {
-    assertEquals(args, {})
-    results.push(await c.run({}, context))
-    return 0
-  })
-  const ctx = { args: ['list'], note: () => {} } as unknown as Ctx
-  const listed = (await cli.verbs(ctx)).find((v) => v.noun === 'session')!
-  assertEquals(await listed.run({}, ctx), 0)
+  // The same declaration reaches a command line and a transport: @yaks/cli
+  // resolves either word order and reads the line through its input schema.
+  const found = wordFor(declarations, ['session', 'list'])!
+  assertEquals(found.verb, declarations[0])
   assertEquals(
-    resolveCommand(declarations, ['list', 'session'])?.command,
+    wordFor(declarations, ['list', 'session'])?.verb,
     declarations[0],
   )
+  assertEquals(await argsFor(found.verb, found.args, reads), {})
+  results.push(await found.verb.run({}, context))
   const client = await connect({
     graph: h.g,
     tools: [...declarations],
@@ -68,22 +63,21 @@ Deno.test('manifest contributions share one command between CLI and MCP over a g
 
 Deno.test('noun and verb traversal is automatic and collision checked', () => {
   const c = commands[0]
-  assertEquals(commandTools([c])[0].name, 'session_list')
-  assertEquals(resolveCommand([c], ['session', 'list', 'extra'])?.args, [
-    'extra',
-  ])
-  assertEquals(resolveCommand([c], ['list', 'session'])?.command, c)
-  assertEquals(resolveCommand([c], ['list']), undefined)
-  assertThrows(() => defineCommands([c, c]), Error, 'duplicate')
+  assertEquals(namedTool(c).name, 'session_list')
+  assertEquals(wordFor([c], ['session', 'list', 'extra'])?.args, ['extra'])
+  assertEquals(wordFor([c], ['list', 'session'])?.verb, c)
+  assertEquals(wordFor([c], ['list']), undefined)
+  assertThrows(() => unique([c, c]), Error, 'two tools answer to')
   assertThrows(
-    () => defineCommands([c, { ...c, noun: 'list', verb: 'session' }]),
+    () => unique([c, { ...c, noun: 'list', verb: 'session' }]),
     Error,
-    'Ambiguous',
+    'two tools answer to',
   )
+  // And every word the command itself carries is reachable and unambiguous.
+  unique(cliTools)
 })
 
 Deno.test('JSON Schema tool uses identical metadata and constraints through MCP and provider adapter', async () => {
-  const { argsFor } = await import('@yaks/cli')
   const { parametersOf } = await import('./tools.ts')
   const { toolDefinition } = await import('@yaks/vocab/tools')
   const tool = {
@@ -112,10 +106,7 @@ Deno.test('JSON Schema tool uses identical metadata and constraints through MCP 
     ) => t.name === 'example_list')!
     assertEquals(listed.inputSchema, tool.inputSchema)
     assertEquals(parametersOf(tool), tool.inputSchema)
-    const args = await argsFor(tool, ['root', '-n', '3'], {
-      file: () => '',
-      stdin: () => '',
-    })
+    const args = await argsFor(tool, ['root', '-n', '3'], reads)
     const response = await c.callTool({ name: 'example_list', arguments: args })
     assertEquals(response.isError, undefined)
     assertEquals(JSON.stringify(response).includes('root'), true)

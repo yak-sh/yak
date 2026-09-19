@@ -13,13 +13,16 @@
  * let { tools } = await ask('tools/list') as { tools: [] }
  * ```
  *
- * A box with verbs of its own adds a PLUGIN and runs the same command:
+ * A box with words of its own hands them over and runs the same command:
  *
  * ```ts
- * import { main, PLUGINS } from '@yaks/cli/yak'
+ * import { main } from '@yaks/cli/yak'
  *
- * Deno.exit(await main(Deno.args, [mine, ...PLUGINS]))
+ * Deno.exit(await main(Deno.args, mine))
  * ```
+ *
+ * A command that is not `yak` at all is `cli(tools, opts)` — the tools, and
+ * what the program calls itself.
  *
  * @module
  */
@@ -68,14 +71,16 @@ export {
   wordOf,
 } from './tool.ts'
 export {
+  cli,
   type Ctx,
-  type Found,
-  type Part,
-  parts,
-  type Plugin,
+  globals,
+  helpTool,
+  type Opts,
+  unique,
   usage,
-  verbFor,
-} from './plugin.ts'
-export { platform, printed, rosterOf } from './platform.ts'
-export { commands } from './commands.ts'
-export { built, globals, HOST, main, PLUGINS, run } from './yak.ts'
+  type Word,
+  wordFor,
+} from './run.ts'
+export { listed, printed, rosterOf } from './platform.ts'
+export { appStray, appTools } from './commands.ts'
+export { HOST, main, own, TOOLS, YAK } from './yak.ts'

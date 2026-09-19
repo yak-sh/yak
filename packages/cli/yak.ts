@@ -1,17 +1,15 @@
-// The `yak` command. It knows four verbs of its own — `help`, `login`,
-// `logout`, `apply` — and everything else arrives through a PLUGIN
-// (plugin.ts): a table of verbs contributed at boot, rendered by one usage
-// beside these. Two ride here — the server's own tools (platform.ts) and the
-// apps' commands (commands.ts) — and a box that has more, like the account
-// verbs an owner's checkout carries, adds them by calling `main` with a longer
-// list.
+// The `yak` command. It knows four words of its own — `help`, `login`,
+// `logout`, `apply` — and everything else arrives as more TOOLS: the apps'
+// commands (commands.ts) sit beside them in the list, and the server's own
+// tools (platform.ts) are the table that costs a round trip, so run.ts asks
+// for them only on a line that reaches them.
 //
 //   yak app_list
 //   yak app_files --app recipes --path index.html --content @index.html
 //   yak recipes add_recipe title='Lemon cake' serves=4
 //   cat bundles.ndjson | yak apply
 //
-// The platform plugin is why there is no list of tools in this package: it
+// The platform table is why there is no list of tools in this package: it
 // reads `tools/list` at run time, so the CLI cannot drift from the connector
 // an agent is talking to, and a tool a release adds is a subcommand the day it
 // ships without anybody publishing this package again.
@@ -19,71 +17,27 @@
 // Exit codes are the contract a script reads: 0 said, 1 the tool or the door
 // refused, 2 the command line was wrong.
 
-import type { Tool } from '@yaks/graph'
-import { argsFor, type Reads, Usage } from './args.ts'
+import { Usage } from './args.ts'
 import { bundlesIn, chunks } from './apply.ts'
-import { commands } from './commands.ts'
-import { type Ctx, parts, type Plugin, usage, verbFor } from './plugin.ts'
-import { platform, printed, rosterOf } from './platform.ts'
-import { doorUrl, rpc, timed } from './rpc.ts'
+import { appStray, appTools } from './commands.ts'
+import { cli, type Ctx, helpTool, type Opts, type Word } from './run.ts'
+import { listed, printed, rosterOf } from './platform.ts'
 import type { Result } from './roster.ts'
-import { safe, toolHelp } from './show.ts'
-import { forgetToken, saveToken, tokenFor } from './store.ts'
+import { forgetToken, saveToken } from './store.ts'
 
 /** The platform this command talks to unless told otherwise. */
 export let HOST = 'yaks.app'
 
-let out = (line: string) => console.log(safe(line))
-let note = (line: string) => console.error(safe(line))
-
-let reads: Reads = {
-  file: (path) => Deno.readTextFile(path),
-  stdin: () => new Response(Deno.stdin.readable).text(),
-}
-
-/** The flags this program keeps for itself, lifted out of the line before a
- * verb ever sees it. */
-export let globals = (
-  argv: string[],
-): {
-  host: string
-  json: boolean
-  help: boolean
-  timing: boolean
-  rest: string[]
-} => {
-  let host = Deno.env.get('YAKS_HOST') ?? HOST
-  let json = false
-  let help = false
-  // A whole shell asks for the timing line with YAKS_TIMING=1; one command
-  // asks with the flag.
-  let timing = Deno.env.get('YAKS_TIMING') == '1'
-  let rest: string[] = []
-  for (let i = 0; i < argv.length; i++) {
-    let a = argv[i]
-    if (a == '--json') json = true
-    else if (a == '--help' || a == '-h') help = true
-    else if (a == '--timing') timing = true
-    else if (a == '--host') host = argv[++i] ?? host
-    else if (a.startsWith('--host=')) host = a.slice(7)
-    else rest.push(a)
-  }
-  return { host, json, help, timing, rest }
-}
-
-let HEAD = 'yak — the tools this server lists, and the verbs this box adds'
+let HEAD = 'yak — the tools this server lists, and the words this box adds'
 
 let TAIL = `  --host <host>   which server (default $YAKS_HOST, else ${HOST})
   --json          print the structured result instead of the words
   --timing        a line on stderr per answer, with its Server-Timing
                   (or YAKS_TIMING=1)
-  --help          this, or a verb's own
+  --help          this, or a word's own
 
 A value that is @path is that file, and - is stdin. $YAKS_TOKEN is the
 bearer when it is set; otherwise the one \`yak login\` wrote.`
-
-let page = async (c: Ctx): Promise<string> =>
-  [HEAD, '', usage(await parts(c.plugins, c)), '', TAIL].join('\n')
 
 // `apply` is graph_apply with a door for a stream: a batch is atomic, and a
 // file of bundles is a load rather than one batch, so it goes over in chunks.
@@ -117,142 +71,74 @@ let applied = async (
   return code
 }
 
-/** The command's own four words, which shadow a word any plugin names. */
-export let built: Plugin = {
+/** What a plain `yak` is, besides its tools. */
+export let YAK: Opts = {
   name: 'yak',
-  about: 'the command itself',
-  verbs: (): Tool<Ctx, number>[] => [
-    {
-      name: 'help',
-      description: 'every word, one line each — or one word’s own page',
-      inputSchema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          words: { type: 'array', items: { type: 'string' } },
-        },
-      },
-      options: { rest: 'words' },
-      readOnly: true,
-      run: async (args, c) => {
-        let words = (args.words ?? []) as string[]
-        if (!words.length) {
-          c.out(await page(c))
-          return 0
-        }
-        let found = await verbFor(
-          c.plugins,
-          { ...c, args: words.slice(1) },
-          words[0],
-        )
-        if (!found) throw new Usage(`nothing here is called ${words[0]}`)
-        c.out(toolHelp(found.verb))
-        return 0
-      },
-    },
-    {
-      name: 'login',
-      description: 'remember a bearer for this host',
-      inputSchema: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['token'],
-        properties: { token: { type: 'string' } },
-      },
-      options: { positional: ['token'] },
-      run: (args, c) => {
-        c.out(
-          `bearer for ${c.host} kept in ${
-            saveToken(c.host, String(args.token))
-          }`,
-        )
-        return 0
-      },
-    },
-    {
-      name: 'logout',
-      description: 'forget it',
-      inputSchema: { type: 'object', additionalProperties: false },
-      run: (_args, c) => {
-        forgetToken(c.host)
-        c.out(`forgot the bearer for ${c.host}`)
-        return 0
-      },
-    },
-    {
-      name: 'apply',
-      description: 'bundles as NDJSON, in batches of 50',
-      inputSchema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          file: { type: 'string', description: '@file, or - for stdin' },
-          change: { type: 'array', description: 'one batch, inline' },
-        },
-      },
-      options: { positional: ['file'] },
-      destructive: true,
-      run: applied,
-    },
-  ],
+  about: HEAD,
+  notes: TAIL,
+  host: HOST,
+  more: listed,
+  stray: appStray,
 }
+
+/** The command's own four words, which shadow a tool any table names. */
+export let own: Word[] = [
+  helpTool(YAK),
+  {
+    name: 'login',
+    description: 'remember a bearer for this host',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['token'],
+      properties: { token: { type: 'string' } },
+    },
+    options: { positional: ['token'] },
+    run: (args, c) => {
+      c.out(
+        `bearer for ${c.host} kept in ${saveToken(c.host, String(args.token))}`,
+      )
+      return 0
+    },
+  },
+  {
+    name: 'logout',
+    description: 'forget it',
+    inputSchema: { type: 'object', additionalProperties: false },
+    run: (_args, c) => {
+      forgetToken(c.host)
+      c.out(`forgot the bearer for ${c.host}`)
+      return 0
+    },
+  },
+  {
+    name: 'apply',
+    description: 'bundles as NDJSON, in batches of 50',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        file: { type: 'string', description: '@file, or - for stdin' },
+        change: { type: 'array', description: 'one batch, inline' },
+      },
+    },
+    options: { positional: ['file'] },
+    destructive: true,
+    run: applied,
+  },
+]
 
 /** What a plain install carries, in precedence order. The apps' commands come
- * before the tools because one of those tools is `command` itself: the raw one
- * takes the app's arguments as a JSON object, and the verb here takes them the
- * way a person types them. */
-export let PLUGINS: Plugin[] = [built, commands, platform]
+ * after this command's own words and before the server's tools, because one of
+ * those tools is `command` itself: the raw one takes the app's arguments as a
+ * JSON object, and the word here takes them the way a person types them. */
+export let TOOLS: Word[] = [...own, ...appTools]
 
-/** Run one command line. Answers the exit code. */
-export let run = async (
+/** One line, from argv to an exit code — the refusal printed on the way. A
+ * box with words of its own passes them, and they shadow everything here. */
+export let main = (
   argv: string[],
-  plugins: Plugin[] = PLUGINS,
-): Promise<number> => {
-  let { host, json, help, timing, rest } = globals(argv)
-  let [word, ...args] = rest
-  let c: Ctx = {
-    host,
-    word: word ?? '',
-    args,
-    json,
-    help,
-    ask: rpc({
-      url: doorUrl(host),
-      token: tokenFor(host),
-      fetch: timing ? timed(note) : undefined,
-    }),
-    reads,
-    out,
-    note,
-    plugins,
-  }
-  // The one thing that must work with no network and nobody signed in.
-  if (!word) {
-    out(await page(c))
-    return 0
-  }
-  let found = await verbFor(plugins, c, word)
-  if (!found) {
-    throw new Usage(`${host} has nothing called ${word} — try \`yak help\``)
-  }
-  if (help) {
-    out(toolHelp(found.verb))
-    return 0
-  }
-  return await found.verb.run(await argsFor(found.verb, found.args, reads), c)
-}
-
-/** One line, from argv to an exit code — the refusal printed on the way. */
-export let main = async (
-  argv: string[],
-  plugins: Plugin[] = PLUGINS,
-): Promise<number> => {
-  try {
-    return await run(argv, plugins)
-  } catch (e) {
-    note(`yak: ${(e as Error).message}`)
-    return e instanceof Usage ? 2 : 1
-  }
-}
+  extra: readonly Word[] = [],
+): Promise<number> => cli([...extra, ...TOOLS], { ...YAK, argv })
 
 if (import.meta.main) Deno.exit(await main(Deno.args))

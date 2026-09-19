@@ -12,7 +12,7 @@ import { doorUrl, initialize, rpc, timed, Unauthorized } from './rpc.ts'
 import { saidBy } from './roster.ts'
 import { toolHelp } from './show.ts'
 import type { Listed as Tool } from './tool.ts'
-import { globals } from './yak.ts'
+import { globals } from './run.ts'
 
 let reads: Reads = { file: () => '', stdin: () => '' }
 

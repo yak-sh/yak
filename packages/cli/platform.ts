@@ -9,8 +9,7 @@
 // way back through is read here too — `printed` is the one place a tool's
 // answer becomes stdout, an exit code, and a cache that is still true.
 
-import type { Tool } from '@yaks/graph'
-import type { Ctx, Plugin } from './plugin.ts'
+import type { Ctx, Word } from './run.ts'
 import { initialize, type Rpc } from './rpc.ts'
 import { type Result, rosterAfter, saidBy } from './roster.ts'
 import { cached, forget, remember, type Roster } from './store.ts'
@@ -66,7 +65,7 @@ export let printed = (
 
 // One tool the server listed, as a tool this command runs: its published
 // schema IS the grammar of the line, and running it is the call.
-let toolOf = (roster: Roster, t: Listed): Tool<Ctx, number> => ({
+let toolOf = (roster: Roster, t: Listed): Word => ({
   name: t.name,
   ...(t.title ?? t.annotations?.title
     ? { title: t.title ?? t.annotations?.title }
@@ -87,12 +86,9 @@ let toolOf = (roster: Roster, t: Listed): Tool<Ctx, number> => ({
     ),
 })
 
-/** Every tool this server lists, as a subcommand. */
-export let platform: Plugin = {
-  name: 'platform',
-  about: 'the tools this server lists',
-  verbs: async (c: Ctx) => {
-    let roster = await rosterOf(c.host, c.ask)
-    return roster.tools.map((t) => toolOf(roster, t))
-  },
+/** Every tool this server lists, as a subcommand. The table that costs a
+ * round trip (run.ts `more`), so a line that never reaches it pays nothing. */
+export let listed = async (c: Ctx): Promise<Word[]> => {
+  let roster = await rosterOf(c.host, c.ask)
+  return roster.tools.map((t) => toolOf(roster, t))
 }

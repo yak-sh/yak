@@ -635,16 +635,18 @@ compatibility check when an older binary first opens the file.
 ## Package composition pilot
 
 The `./plugin` export supplies a lazy manifest containing session vocabulary,
-session rules, and one structured command. Hosts can select these contributions
+session rules, and one graph tool. Hosts can select these contributions
 independently using `@yaks/plugin`; importing the manifest opens no database and
 starts no services. It is not yet a complete replacement for harness startup.
 
-The existing executable also accepts `session list` and `list session`,
-returning session bundles as JSON. The same definition can be exposed as MCP
-`session_list` directly through the MCP adapter. Both CLI word orders derive
-from the same Tool noun/verb fields, without alias declarations. Existing
-commands remain available. See [the design and limits](../plugin/DESIGN.md). No
-daemon, installer, or `:` command interface is added in this pilot.
+The executable accepts `session list` and `list session`, returning session
+bundles as JSON. The same definition is exposed as MCP `session_list` through
+the MCP adapter. Both CLI word orders derive from the same Tool noun/verb
+fields, without alias declarations. `bin.ts` hands `@yaks/cli`'s `cli()` one
+flat list — the graph's tools, then the harness's own words — and there is no
+plugin registration in between. See
+[the design and limits](../plugin/DESIGN.md). No daemon, installer, or `:`
+command interface is added in this pilot.
 
 Mouse clicks select session rows, **New session**, and task rows in the sidebar.
 A claimed task opens its worker session; an unclaimed task selects only the row.

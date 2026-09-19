@@ -11,7 +11,7 @@ import {
   assertThrows,
 } from '@std/assert'
 import { argsFor, type Ctx } from '@yaks/cli'
-import { known, owner, verbs } from './yak.ts'
+import { known, verbs } from './yak.ts'
 import { ADMIN, envOf, Refused } from './yaks_account.ts'
 import {
   boundaries,
@@ -29,17 +29,16 @@ import {
 
 let verb = (name: string) => verbs.find((v) => v.name == name)!
 
-let ctx = (args: string[]): Ctx => ({
+let ctx = (_args: string[]): Ctx => ({
   host: 'yaks.test',
-  word: '',
-  args,
   json: false,
   help: false,
   ask: () => Promise.resolve({}),
   reads: { file: () => '', stdin: () => '' },
   out: () => {},
   note: () => {},
-  plugins: [owner],
+  all: () => Promise.resolve(verbs),
+  page: () => Promise.resolve(''),
 })
 
 // The line, as the command runs one: the tool's own input schema is the

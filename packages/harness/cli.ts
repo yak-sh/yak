@@ -1,21 +1,20 @@
-import { commandPlugin } from '@yaks/cli/structured'
 import { commands } from './commands.ts'
-// The verbs, over @yaks/cli's plugin seam: start a transcript, say something
-// more to one, list them, read one back, and ask what the credential can
-// reach. Five words and no state of their own — each one opens the graph, does
-// the one thing, and closes it, because the file IS the harness and two
-// commands a minute apart are the same harness.
+// The tools @yaks/cli runs: start a transcript, say something more to one,
+// list them, read one back, and ask what the credential can reach. A handful
+// of words and no state of their own — each one opens the graph, does the one
+// thing, and closes it, because the file IS the harness and two commands a
+// minute apart are the same harness.
 //
 // Nothing is printed by hand. An entry prints through @yaks/render's session
 // views and @yaks/text (run.ts `line`), the same trees a browser or a terminal
 // UI mounts, so a listing and a transcript cannot drift from what any other
 // door shows.
 
-import type { Comp, Eid, Tool } from '@yaks/graph'
-import type { Ctx, Plugin } from '@yaks/cli'
+import type { Comp, Eid } from '@yaks/graph'
+import { type Ctx, type Word } from '@yaks/cli'
 import { codexPaths, fromCodex, fromEnv } from '@yaks/openai'
 import { type Agent, agent, titleOf } from './run.ts'
-import { dbPath, open } from './store.ts'
+import { open } from './store.ts'
 
 type Args = Record<string, unknown>
 let word = (args: Args, name: string): string | undefined => {
@@ -182,87 +181,92 @@ let howto = (props: Record<string, unknown>) => ({
   },
 })
 
-/** The harness's tools, for a `yak` (or a `harness`) that carries them. */
-export let plugin: Plugin = {
-  name: '@yaks/harness',
-  about: `the harness — its own graph at ${dbPath()}`,
-  verbs: (): Tool<Ctx, number>[] => [
-    {
-      name: 'new',
-      description: 'start a transcript and run it until it settles',
-      inputSchema: {
-        ...howto({
-          prompt: { type: 'string', description: 'what to do' },
-          effort: { type: 'string', description: 'how hard to think' },
-        }),
-        required: ['prompt'],
-      },
-      options: { positional: ['prompt'] },
-      run: start,
+/** The harness's own words, for a `yak` (or a `harness`) that carries them. */
+export let own: Word[] = [
+  {
+    name: 'new',
+    description: 'start a transcript and run it until it settles',
+    inputSchema: {
+      ...howto({
+        prompt: { type: 'string', description: 'what to do' },
+        effort: { type: 'string', description: 'how hard to think' },
+      }),
+      required: ['prompt'],
     },
-    {
-      name: 'send',
-      description: 'say something more to a transcript',
-      inputSchema: {
-        ...howto({
-          session: { type: 'string', description: 'the transcript' },
-          text: { type: 'string', description: 'what to say' },
-        }),
-        required: ['session', 'text'],
-      },
-      options: { positional: ['session', 'text'] },
-      run: send,
+    options: { positional: ['prompt'] },
+    run: start,
+  },
+  {
+    name: 'send',
+    description: 'say something more to a transcript',
+    inputSchema: {
+      ...howto({
+        session: { type: 'string', description: 'the transcript' },
+        text: { type: 'string', description: 'what to say' },
+      }),
+      required: ['session', 'text'],
     },
-    {
-      name: 'ls',
-      description: 'every session, with its status',
-      inputSchema: howto({}),
-      readOnly: true,
-      run: ls,
+    options: { positional: ['session', 'text'] },
+    run: send,
+  },
+  {
+    name: 'ls',
+    description: 'every session, with its status',
+    inputSchema: howto({}),
+    readOnly: true,
+    run: ls,
+  },
+  {
+    name: 'show',
+    description: 'one transcript, in full',
+    inputSchema: {
+      ...howto({ session: { type: 'string' } }),
+      required: ['session'],
     },
-    {
-      name: 'show',
-      description: 'one transcript, in full',
-      inputSchema: {
-        ...howto({ session: { type: 'string' } }),
-        required: ['session'],
-      },
-      options: { positional: ['session'] },
-      readOnly: true,
-      run: show,
-    },
-    {
-      name: 'tasks',
-      description: 'the open work in the harness graph',
-      inputSchema: howto({}),
-      readOnly: true,
-      run: tasks,
-    },
-    {
-      name: 'models',
-      description: 'the credential found, and what it reaches',
-      inputSchema: howto({}),
-      readOnly: true,
-      run: models,
-    },
-  ],
-}
+    options: { positional: ['session'] },
+    readOnly: true,
+    run: show,
+  },
+  {
+    name: 'tasks',
+    description: 'the open work in the harness graph',
+    inputSchema: howto({}),
+    readOnly: true,
+    run: tasks,
+  },
+  {
+    name: 'models',
+    description: 'the credential found, and what it reaches',
+    inputSchema: howto({}),
+    readOnly: true,
+    run: models,
+  },
+]
 
-/** Optional structured entrypoint alongside the existing short CLI tools. */
-export const structured = commandPlugin(commands, async (command, args, c) => {
-  const h = open()
-  try {
-    const result = await command.run(args, {
-      graph: h.g,
-      actor: null,
-      read: (query, opts) => h.g.read(query, opts),
-      apply: () => {
-        throw new Error('Read-only command context')
-      },
-    })
-    c.out(JSON.stringify(result, null, 2))
-    return 0
-  } finally {
-    h.close()
-  }
+// A tool DECLARED over the graph (commands.ts, and one day the vocabulary)
+// runs against a graph rather than a command line, so it is run here and its
+// structured result printed. The word order and the arguments are @yaks/cli's
+// either way — nothing about a graph tool is spelled twice.
+let overGraph = (tool: typeof commands[number]): Word => ({
+  ...tool,
+  run: async (args, c) => {
+    let h = open()
+    try {
+      let result = await tool.run(args, {
+        graph: h.g,
+        actor: null,
+        read: (query, opts) => h.g.read(query, opts),
+        apply: () => {
+          throw new Error('Read-only command context')
+        },
+      })
+      c.out(JSON.stringify(result, null, 2))
+      return 0
+    } finally {
+      h.close()
+    }
+  },
 })
+
+/** Every word `harness` answers to: the graph's tools, then its own. */
+export let tools: Word[] = [...commands.map(overGraph), ...own]

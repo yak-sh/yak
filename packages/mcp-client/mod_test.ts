@@ -183,7 +183,7 @@ Deno.test('401 does not retry a call, and error text excludes credential and bod
 })
 
 Deno.test('graph Tool is usable through the CLI adapter without any session runtime', async () => {
-  const { commandPlugin } = await import('@yaks/cli/structured')
+  const { cli } = await import('@yaks/cli')
   const f = fixture()
   const c = connect({ name: 'site', url: 'https://example.test/mcp' }, {
     fetch: f.fetcher,
@@ -191,21 +191,27 @@ Deno.test('graph Tool is usable through the CLI adapter without any session runt
   try {
     const [tool] = await c.tools()
     const lines: string[] = []
-    // A CLI host may explicitly assign a local spelling; the remote name stays opaque.
-    const plugin = commandPlugin(
-      [{ ...tool, noun: 'mockup', verb: 'publish' }],
-      async (tool, args, ctx) => {
-        ctx.out(JSON.stringify(await tool.run(args, {} as never)))
+    // A CLI host may explicitly assign a local spelling; the remote name stays
+    // opaque. The tool goes to `cli` as it is — the words, the schema and the
+    // run are all the tool's own.
+    const said = {
+      ...tool,
+      noun: 'mockup',
+      verb: 'publish',
+      run: async (args: Record<string, unknown>) => {
+        lines.push(JSON.stringify(await tool.run(args, {} as never)))
         return 0
       },
+    }
+    assertEquals(
+      await cli([said], {
+        argv: ['publish', 'mockup', '--html', '<b>demo</b>'],
+        out: (s: string) => lines.push(s),
+        note: (s: string) => lines.push(s),
+        reads: { file: () => '', stdin: () => '' },
+      }),
+      0,
     )
-    const ctx = {
-      args: ['publish', '--html', '<b>demo</b>'],
-      out: (s: string) => lines.push(s),
-      note: (s: string) => lines.push(s),
-    } as never
-    const verbs = await plugin.verbs(ctx)
-    assertEquals(await verbs[0].run({ html: '<b>demo</b>' }, ctx), 0)
     assert(lines.join('').includes('mockup/1'))
     assertEquals(
       f.calls.find((x) => x.method === 'tools/call')?.params.arguments,

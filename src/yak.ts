@@ -29,16 +29,7 @@
 // `codeFor`). Both are this repo, and neither is something a `deno install`
 // off jsr could reach.
 import { fileURLToPath } from 'node:url'
-import type { Tool } from '@yaks/graph'
-import type { Ctx } from '@yaks/cli'
-import {
-  forgetToken,
-  main,
-  type Plugin,
-  PLUGINS,
-  saveToken,
-  Usage,
-} from '@yaks/cli'
+import { forgetToken, main, saveToken, Usage, type Word } from '@yaks/cli'
 import {
   type Account,
   accountsIn,
@@ -270,7 +261,7 @@ let takes = (props: Record<string, unknown> = {}, required?: string[]) => ({
   properties: { ...NAMED, ...props },
 })
 
-let verbs: Tool<Ctx, number>[] = [
+let verbs: Word[] = [
   {
     name: 'deploys',
     title: 'yaks.app versions, commits, live times, and data boundaries',
@@ -669,13 +660,6 @@ let verbs: Tool<Ctx, number>[] = [
   },
 ]
 
-/** The accounts this box is signed in as, and what they may do. */
-export let owner: Plugin = {
-  name: 'owner',
-  about: 'this box’s accounts  [--as=ACCOUNT] [--admin] [--owner]',
-  verbs: () => verbs,
-}
-
 export { verbs }
 
 if (import.meta.main) {
@@ -684,5 +668,5 @@ if (import.meta.main) {
   // apex, through yaks_api.ts `sent`), so the same flag arms the same line
   // here, read rather than consumed.
   watching(Deno.args.includes('--timing'), Deno.env.get('YAKS_TIMING'))
-  Deno.exit(await main(Deno.args, [owner, ...PLUGINS]))
+  Deno.exit(await main(Deno.args, verbs))
 }

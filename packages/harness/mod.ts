@@ -10,7 +10,7 @@
  * open()          the file, the vocabulary, the plugins        (./store.ts)
  * harnessTools()  the shell (@yaks/process) + the graph tier (@yaks/mcp)
  * agent()         the seed, the daemon (@yaks/session), the doors (./run.ts)
- * plugin          the verbs, over @yaks/cli                      (./cli.ts)
+ * tools           the words, over @yaks/cli                      (./cli.ts)
  * ```
  *
  * — and every one of those four lines is a package doing its own job.
@@ -38,7 +38,7 @@
 export * from './store.ts'
 export * from './tools.ts'
 export * from './run.ts'
-export { plugin } from './cli.ts'
+export { own, tools } from './cli.ts'
 
 export { App, changes, type Opts as AppOpts, tui } from './app.ts'
 export { type Context, type Panel, panels, type UIAgent } from './panels.ts'

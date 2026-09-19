@@ -18,8 +18,7 @@
 // `--json` and `--host` unambiguous beside them: everything before the `=` is
 // somebody else's vocabulary.
 
-import type { Tool } from '@yaks/graph'
-import type { Ctx, Plugin } from './plugin.ts'
+import type { Ctx, Word } from './run.ts'
 import { printed } from './platform.ts'
 import type { Result } from './roster.ts'
 
@@ -60,7 +59,7 @@ let schema = (app: boolean): Record<string, unknown> => ({
   },
 })
 
-let verb: Tool<Ctx, number> = {
+let verb: Word = {
   name: 'command',
   title: 'run one of an app’s own commands',
   description: ABOUT,
@@ -76,28 +75,28 @@ let verb: Tool<Ctx, number> = {
 }
 
 /** The apps' commands, as tools of this command. */
-export let commands: Plugin = {
-  name: 'commands',
-  about: 'the apps’ own commands',
-  verbs: () => [verb],
-  // `yak <app> <command>`: only ever reached when no table named the word, so
-  // a tool of the same name always wins and a typo says what it says today.
-  stray: (c) => {
-    let name = c.args[0]
-    if (!name || name.startsWith('-')) return undefined
-    return {
-      name: c.word,
-      title: `a command of the ${c.word} app`,
-      description: ABOUT,
-      inputSchema: schema(false),
-      options: { positional: ['name'], rest: 'args' },
-      run: (args) =>
-        called(
-          c,
-          c.word,
-          String(args.name),
-          (args.args ?? {}) as Record<string, unknown>,
-        ),
-    }
-  },
+export let appTools: Word[] = [verb]
+
+/** `yak <app> <command>`: only ever reached when no table named the word, so a
+ * tool of the same name always wins and a typo says what it says today. */
+export let appStray = (
+  app: string,
+  args: string[],
+): Word | undefined => {
+  let name = args[0]
+  if (!name || name.startsWith('-')) return undefined
+  return {
+    name: app,
+    title: `a command of the ${app} app`,
+    description: ABOUT,
+    inputSchema: schema(false),
+    options: { positional: ['name'], rest: 'args' },
+    run: (given, c) =>
+      called(
+        c,
+        app,
+        String(given.name),
+        (given.args ?? {}) as Record<string, unknown>,
+      ),
+  }
 }

@@ -30,47 +30,48 @@ the selected server and its cached tool list.
 Four tools are the command's own and shadow a server tool of the same name:
 `help`, `login`, `logout`, `apply`.
 
-## Plugins
+## `cli(tools, opts)`
 
-Everything else arrives through a plugin, and a plugin is data: a name, the
-heading its tools sit under, and a table of tools contributed at boot.
-
-A tool here is a @yaks/graph `Tool` and nothing else — noun, verb, description,
+There is no registration shape between a tool and the command that runs it. A
+tool is a @yaks/graph `Tool` and nothing else — noun, verb, description,
 `inputSchema`, `run` — the same declaration an MCP transport lists. What a CLI
-tool is handed is this package's `Ctx` and what it answers with is an exit code,
-which is what `Tool<Ctx, number>` says. There is no second shape.
+tool is handed is this package's `Ctx`, and what it answers with is an exit
+code, which is what `Tool<Ctx, number>` (exported as `Word`) says.
 
 ```ts
-import type { Tool } from '@yaks/graph'
-import { type Ctx, main, type Plugin, PLUGINS } from '@yaks/cli/yak'
+import { cli, type Word } from '@yaks/cli'
 
-let mine: Plugin = {
-  name: 'mine',
-  about: 'local commands',
-  verbs: (): Tool<Ctx, number>[] => [{
-    name: 'ping',
-    description: 'say hello',
-    inputSchema: { type: 'object', additionalProperties: false },
-    run: (_args, c) => (c.out('hi'), 0),
-  }],
-}
+let mine: Word[] = [{
+  name: 'ping',
+  description: 'say hello',
+  inputSchema: { type: 'object', additionalProperties: false },
+  run: (_args, c) => (c.out('hi'), 0),
+}]
 
-Deno.exit(await main(Deno.args, [mine, ...PLUGINS]))
+Deno.exitCode = await cli(mine, { name: 'mine', about: 'local commands' })
 ```
+
+A `yak` with words of its own is the same call: `main(Deno.args, mine)` puts
+them in front of everything the package ships.
 
 The tool's own input schema is the whole grammar of the line: `argsFor` fills
 `options.positional` from the bare words, then `options.rest`, reads
 `--name value`, `--name=value` and a declared short `-n`, inflates `@path` and
 `-`, and checks the bag against the schema, which is also what fills its
-defaults. The usage line and `--help` page are drawn from that same schema.
+defaults. A two-word tool answers to either order — `session list` and
+`list session` are the same tool. The usage line and the `--help` page are drawn
+from that same schema, so no tool carries a hand-written argument string.
 
-`yak --help` renders every table on one page, one column throughout. The
-**first** plugin to name a word wins, so the order is the precedence and an
-application chooses precedence through plugin order. A plugin is asked for its
-table only until the word is found, so one that has to reach the network for its
-tools costs nothing on a line that never reaches it.
+The **first** tool to name a word wins, so the order of the list is the
+precedence and a box that carries its own `login` means it. `unique(tools)` is
+the check a contributor runs over its own table, where two words the same is a
+mistake rather than a choice.
 
-Two plugins ship here: the server's tools (above), and the apps' commands.
+Two opts cost more than a list does. `more` is a table that has to be fetched —
+the server's `tools/list` — asked only when the tools in hand did not name the
+word, so `yak login` still works with no server in sight, and drawn into the
+page as a reason when it cannot be had. `stray` is a tool for a first word
+nobody named, which is how `yak recipes add_recipe` finds an app.
 
 ## An app's own commands
 

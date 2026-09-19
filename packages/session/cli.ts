@@ -24,8 +24,7 @@ import { credential, openaiDoc, responses } from '@yaks/openai'
 import { ram } from '@yaks/ram'
 import { render } from '@yaks/text'
 import { loadVocab } from '@yaks/vocab'
-import { type Ctx, main, type Plugin } from '@yaks/cli'
-import type { Tool as GraphTool } from '@yaks/graph'
+import { cli, type Ctx, type Word } from '@yaks/cli'
 import { sessionDoc } from './comp.ts'
 import { daemon } from './daemon.ts'
 import { sessions } from './plugin.ts'
@@ -33,12 +32,14 @@ import { kindOf } from './status.ts'
 import { type Tool, transcript } from './react.ts'
 import { views } from './views.ts'
 
-let tools: Tool[] = [
+// What the MODEL may call mid-transcript — @yaks/session's own `Tool`, not a
+// command line's.
+let kit: Tool[] = [
   {
     name: 'list_tools',
     description: 'the names of the tools you can call here',
     parameters: { type: 'object', properties: {} },
-    run: () => tools.map((t) => t.name).join(', '),
+    run: () => kit.map((t) => t.name).join(', '),
   },
   {
     name: 'now',
@@ -70,7 +71,7 @@ let spike = async (
   let ids = { p: 'openai', m: MODEL, s: 'S1', f: 'S2' }
   let names = {
     [ids.m]: MODEL,
-    ...Object.fromEntries(tools.map((t) => [`tool:${t.name}`, t.name])),
+    ...Object.fromEntries(kit.map((t) => [`tool:${t.name}`, t.name])),
   }
   let ctx = { names, anchor: model.anchor }
   let show = (b: Bundle) =>
@@ -83,7 +84,7 @@ let spike = async (
 
   let d = daemon(g, fx, {
     model,
-    tools,
+    tools: kit,
     instructions: 'You are a terse assistant. Use the tools when asked.',
   }, (step) => step.added.forEach(show))
 
@@ -91,7 +92,7 @@ let spike = async (
   g.apply([
     { entity: { eid: ids.p }, provider: { name: 'openai' } },
     { entity: { eid: ids.m }, model: { name: MODEL, provider: ids.p } },
-    ...tools.map((t) => ({
+    ...kit.map((t) => ({
       entity: { eid: `tool:${t.name}` },
       tool: { name: t.name, description: t.description },
     })),
@@ -145,20 +146,24 @@ let spike = async (
 }
 
 /** The tool, for a `yak` that carries it. */
-export let plugin: Plugin = {
-  name: '@yaks/session',
-  about: 'a graph-native session, in memory',
-  verbs: (): GraphTool<Ctx, number>[] => [{
-    name: 'spike',
-    description: 'run one transcript against the model and print it',
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      properties: { prompt: { type: 'string', description: 'what to ask' } },
-    },
-    options: { positional: ['prompt'] },
-    run: spike,
-  }],
-}
+export let tools: Word[] = [{
+  name: 'spike',
+  description: 'run one transcript against the model and print it',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: { prompt: { type: 'string', description: 'what to ask' } },
+  },
+  options: { positional: ['prompt'] },
+  run: spike,
+}]
 
-if (import.meta.main) Deno.exit(await main(['spike', ...Deno.args], [plugin]))
+if (import.meta.main) {
+  Deno.exit(
+    await cli(tools, {
+      argv: ['spike', ...Deno.args],
+      name: 'session',
+      about: 'a graph-native session, in memory',
+    }),
+  )
+}

@@ -7,9 +7,10 @@
 //   deno task harness ls
 //   deno task harness show <session>
 
-import { main } from '@yaks/cli'
+import { cli, helpTool } from '@yaks/cli'
 import { diagnostics, uncaught } from './diagnostics.ts'
-import { plugin, structured } from './cli.ts'
+import { tools } from './cli.ts'
+import { dbPath } from './store.ts'
 
 if (import.meta.main) {
   let reporter = diagnostics()
@@ -28,7 +29,14 @@ if (import.meta.main) {
     if (!Deno.args.length) {
       let { tui } = await import('./app.ts')
       await tui()
-    } else Deno.exitCode = await main(Deno.args, [structured, plugin])
+    } else {
+      let opts = {
+        argv: Deno.args,
+        name: 'harness',
+        about: `harness — its own graph at ${dbPath()}`,
+      }
+      Deno.exitCode = await cli([helpTool(opts), ...tools], opts)
+    }
   } catch (error) {
     reporter.report(error, { phase: 'harness-main' })
     throw error
