@@ -1,14 +1,23 @@
 // The overlay: the batch, readable as tables, through the ordinary compiled
-// statements. Every read below goes through `read()` — the same door a query
-// takes any other day — so what these assert is that a rule needs no second
-// evaluator to see a batch that has not landed.
+// statements. Every read below goes through `matched()` — the same door a
+// rule takes — so what these assert is that a rule needs no second evaluator
+// to see a batch that has not landed.
 
 import { assertEquals } from '@std/assert'
+import { match } from '@yaks/graph'
 import { mem, shop } from './harness.ts'
-import { overlay } from './overlay.ts'
+import { type Overlay, overlay } from './overlay.ts'
+import { matched } from './rules.ts'
 import { read } from './read.ts'
 import { storage } from './mod.ts'
+import type { Driver } from './driver.ts'
 import type { Bundle } from '@yaks/graph'
+
+// One query, asked of the graph with the batch standing in it. No anchor: the
+// caller is asking the match outright, which is what these tests want to see.
+let seen = (driver: Driver, over: Overlay, source: string): string[] =>
+  matched(driver, match(source), shop, {}, { at: over.at }, over)
+    .map((b) => String(b.entities[0])).sort()
 
 let titles = (rows: Bundle[]): string[] =>
   rows.map((b) => String((b.doc as { title?: string })?.title ?? '')).sort()
@@ -37,19 +46,18 @@ Deno.test('a batch reads as rows before it is written', () => {
     // a component dropped
     { entity: { eid: 'p2' }, product: null },
   ])
-  try {
-    assertEquals(titles(read(driver, shop, '.product!')), ['Dune', 'Valis'])
-    // The patch folded into the committed row: the title it never mentioned
-    // is still there, and the price it did mention moved.
-    assertEquals(titles(read(driver, shop, '.product.price>10')), ['Dune'])
-    assertEquals(titles(read(driver, shop, '.doc!')), ['Dune', 'Ubik', 'Valis'])
-    // The fresh entity is a first-class row: it joins, it filters, it reads
-    // back by its own eid.
-    assertEquals(read(driver, shop, '.product.price=7')[0].entity.eid, 'p3')
-  } finally {
-    over.drop()
-  }
-  // And nothing of it survives: the committed graph is exactly as it was.
+  assertEquals(seen(driver, over, '.product!'), ['p1', 'p3'])
+  // The patch folded into the committed row: the title it never mentioned is
+  // still there, and the price it did mention moved.
+  assertEquals(seen(driver, over, '.product.price>10, .doc.title=Dune'), ['p1'])
+  assertEquals(seen(driver, over, '.doc!'), ['p1', 'p2', 'p3'])
+  // The fresh entity is a first-class row: it joins, it filters, it reads back
+  // by its own eid.
+  assertEquals(seen(driver, over, '.product.price=7'), ['p3'])
+
+  // And nothing of it is anywhere but in that statement: the committed graph
+  // is exactly as it was, and always was — the overlay is a `with` prefix, so
+  // there is nothing to take down.
   assertEquals(titles(read(driver, shop, '.product!')), ['Dune', 'Ubik'])
   assertEquals(read(driver, shop, '.product.price>10').length, 0)
 })
@@ -57,11 +65,7 @@ Deno.test('a batch reads as rows before it is written', () => {
 Deno.test('a deleted entity leaves every membership while the overlay stands', () => {
   let { driver } = shopFloor()
   let over = overlay(driver, shop, [{ entity: { eid: 'p2' }, $delete: true }])
-  try {
-    assertEquals(titles(read(driver, shop, '.doc!')), ['Dune'])
-  } finally {
-    over.drop()
-  }
+  assertEquals(seen(driver, over, '.doc!'), ['p1'])
   assertEquals(titles(read(driver, shop, '.doc!')), ['Dune', 'Ubik'])
 })
 
@@ -71,15 +75,9 @@ Deno.test('a reference to an entity the same batch mints resolves', () => {
     { entity: { eid: 'm1' }, doc: { title: 'Herbert' } },
     { entity: { eid: 'p3' }, product: { maker: 'm1' }, doc: { title: 'Dune' } },
   ])
-  try {
-    // The join is the point: a rule that reads `product.maker` on a batch's own
-    // entity is reading a reference to another entity of the same batch.
-    let found = read(driver, shop, '.product.maker=m1')
-    assertEquals(found.map((b) => b.entity.eid), ['p3'])
-    assertEquals((found[0].product as { maker: string }).maker, 'm1')
-  } finally {
-    over.drop()
-  }
+  // The join is the point: a rule that reads `product.maker` on a batch's own
+  // entity is reading a reference to another entity of the same batch.
+  assertEquals(seen(driver, over, '.product.maker=m1'), ['p3'])
 })
 
 Deno.test('the overlay costs the batch, never the database', () => {
@@ -100,11 +98,15 @@ Deno.test('the overlay costs the batch, never the database', () => {
         )
       )
     }
-    let batch = Array.from({ length: 20 }, (_, i) => ({
-      entity: { eid: `n${i}` },
-      doc: { title: `fresh${i}` },
-      product: { price: 100000 + i },
-    }))
+    let batch: Bundle[] = [
+      ...Array.from({ length: 20 }, (_, i) => ({
+        entity: { eid: `n${i}` },
+        doc: { title: `fresh${i}` },
+        product: { price: 100000 + i },
+      })),
+      // and one patch to a committed row, so the fold has something to read
+      { entity: { eid: 'p1' }, product: { price: 100042 } },
+    ]
     let statements = 0
     let counted = {
       ...driver,
@@ -118,19 +120,15 @@ Deno.test('the overlay costs the batch, never the database', () => {
       },
     }
     let over = overlay(counted, shop, batch)
-    let raising = statements
-    try {
-      assertEquals(read(counted, shop, '.product.price>=100000').length, 20)
-    } finally {
-      over.drop()
-    }
-    return raising
+    assertEquals(seen(counted, over, '.product.price>=100000').length, 21)
+    return statements
   }
-  // Three statements per covered component (create, insert, view) plus the
-  // spine's three, one committed-row read per component, and one id lookup —
-  // ten, whatever is already in the file.
-  assertEquals(cost(0), 10)
-  assertEquals(cost(2000), 10)
+  // One id lookup, one committed-row read for the one component a patch
+  // folds into, and the read itself. Three, whatever is already in the file:
+  // the CTE NAMES the committed table for every row the batch never touched,
+  // so nothing is copied and nothing is counted.
+  assertEquals(cost(0), 3)
+  assertEquals(cost(2000), 3)
 })
 
 Deno.test('an overlay covers what will be read and nothing else', () => {
@@ -138,17 +136,13 @@ Deno.test('an overlay covers what will be read and nothing else', () => {
   let over = overlay(driver, shop, [
     { entity: { eid: 'p1' }, doc: { title: 'Moved' }, product: { price: 99 } },
   ], ['product'])
-  try {
-    assertEquals(over.covers, ['product'])
-    // `product` is overlaid, so the batch's price is what a query sees…
-    assertEquals(read(driver, shop, '.product.price=99').length, 1)
-    // …and `doc` is not, so the committed title is what it still reads. A
-    // caller asks for the components its rules name; asking for fewer is not
-    // a smaller answer, it is a different world.
-    assertEquals(titles(read(driver, shop, '.doc!')), ['Dune', 'Ubik'])
-  } finally {
-    over.drop()
-  }
+  assertEquals(over.covers, ['product'])
+  // `product` is overlaid, so the batch's price is what a query sees…
+  assertEquals(seen(driver, over, '.product.price=99'), ['p1'])
+  // …and `doc` is not, so the committed title is what it still reads. A
+  // caller asks for the components its rules name; asking for fewer is not a
+  // smaller answer, it is a different world.
+  assertEquals(seen(driver, over, '.doc.title=Dune'), ['p1'])
 })
 
 Deno.test('a batch that mints nothing leaves the identity table alone', () => {
@@ -156,10 +150,7 @@ Deno.test('a batch that mints nothing leaves the identity table alone', () => {
   let over = overlay(driver, shop, [
     { entity: { eid: 'p1' }, product: { price: 99 } },
   ])
-  try {
-    assertEquals(over.covers, ['product'])
-    assertEquals(read(driver, shop, '.product.price=99').length, 1)
-  } finally {
-    over.drop()
-  }
+  assertEquals(over.covers, ['product'])
+  assertEquals(over.with.includes('_over_entity'), false)
+  assertEquals(seen(driver, over, '.product.price=99'), ['p1'])
 })

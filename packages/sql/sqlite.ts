@@ -38,6 +38,11 @@ export type Dialect = {
   live: () => Frag
   // The join source for a component and the ON key.
   table: (comp: string) => string
+  // The bare table expression for a component, with no alias — what a
+  // correlated subquery names. A dialect that reads a component from
+  // somewhere else (@yaks/sqlite's batch overlay) says so here, and every
+  // subquery in the binder follows it.
+  source?: (comp: string) => string
   ownerKey: (base: string) => string
   joinOn: (comp: string, base: string) => string
   // A column read expression. Refs project to an eid; `eid` reads the owner key;
@@ -82,6 +87,24 @@ let col = (comp: string, prop: string, v: Vocab): string | null => {
   return c.category == 'ref'
     ? `(select __re.eid from entity __re where __re.id = "${comp}"."${prop}")`
     : `"${comp}"."${prop}"`
+}
+
+/**
+ * Reference equality, reading the SPINE from `from`. A reference column stores
+ * an integer id, so an eid compares by looking that id up — and where the
+ * spine is read from is the dialect's business, not this lowering's: a batch
+ * overlay (@yaks/sqlite `prefixed`) hands its own and the comparison finds
+ * entities the batch has not written yet.
+ */
+export let refEqAt = (from: string): Dialect['refEq'] => (c, eids, negate) => {
+  let hit = `(${
+    eids.map(() => `${c} = (select id from ${from} where eid = ?)`).join(
+      ' or ',
+    )
+  })`
+  return negate
+    ? { sql: `(${c} is null or not ${hit})`, params: eids }
+    : { sql: hit, params: eids }
 }
 
 let asText = (c: string) => `cast(${c} as text)`
@@ -255,16 +278,7 @@ export let sqlite: Dialect = {
     let s = phrase(value)
     return s ? stampish(c, edge(c, op, s)) : null
   },
-  refEq: (c, eids, negate) => {
-    let hit = `(${
-      eids.map(() => `${c} = (select id from entity where eid = ?)`).join(
-        ' or ',
-      )
-    })`
-    return negate
-      ? { sql: `(${c} is null or not ${hit})`, params: eids }
-      : { sql: hit, params: eids }
-  },
+  refEq: refEqAt('"entity"'),
   refPresent: (c, negate) => ({
     sql: `${c} is ${negate ? '' : 'not '}null`,
     params: [],

@@ -95,15 +95,12 @@ Deno.test('the same statement reads a batch that has not landed', () => {
     { entity: { eid: 'p1' }, product: { price: 99 } },
   ]
   let over = overlay(driver, shop, batch, reads(m, shop))
-  try {
-    assertEquals(
-      matched(driver, m, shop).map((h) => h.entities).sort(),
-      [['p1', 'r1'], ['p2', 'r2']],
-    )
-  } finally {
-    over.drop()
-  }
-  // And with the batch gone, the same statement answers what is committed.
+  assertEquals(
+    matched(driver, m, shop, {}, { at: over.at }, over)
+      .map((h) => h.entities).sort(),
+    [['p1', 'r1'], ['p2', 'r2']],
+  )
+  // And without the overlay, the same statement answers what is committed.
   assertEquals(matched(driver, m, shop).map((h) => h.entities), [['p1', 'r1']])
 })
 
@@ -119,14 +116,12 @@ Deno.test('a gate over a batch sees what the batch will add', () => {
     ],
     reads(m, shop),
   )
-  try {
-    // The batch shelves both, so the rule that fires on "a product not on a
-    // shelf" has nothing left to fire on — which is exactly what makes a
-    // gated rule fire once and no more.
-    assertEquals(matched(driver, m, shop).length, 0)
-  } finally {
-    over.drop()
-  }
+  // The batch shelves both, so the rule that fires on "a product not on a
+  // shelf" has nothing left to fire on — which is exactly what makes a gated
+  // rule fire once and no more.
+  assertEquals(matched(driver, m, shop, {}, { at: over.at }, over).length, 0)
+  // …and without it, both are still unshelved.
+  assertEquals(matched(driver, m, shop).length, 2)
 })
 
 Deno.test('the components a match reads are what an overlay must cover', () => {

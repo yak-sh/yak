@@ -357,8 +357,8 @@ Deno.test('.refs= groups its arms and cuts them to what a compound may carry', (
   assertEquals(params, Array(8).fill('a1'))
   assert(
     sql.includes(
-      '"pair"."left" = (select id from entity where eid = ?) or ' +
-        '"pair"."right" = (select id from entity where eid = ?)',
+      '"pair"."left" = (select id from "entity" where eid = ?) or ' +
+        '"pair"."right" = (select id from "entity" where eid = ?)',
     ),
     sql,
   )
@@ -407,7 +407,7 @@ Deno.test('reference equality compares indexed keys, not projected eids', () => 
   for (let value of ['target', 'target,other']) {
     let { sql, params } = compile(parse(`.note.about=${value}`), v)
     assert(
-      sql.includes('"note"."about" = (select id from entity where eid = ?)'),
+      sql.includes('"note"."about" = (select id from "entity" where eid = ?)'),
       sql,
     )
     assert(!sql.includes('__re'), sql)
@@ -507,9 +507,9 @@ Deno.test('a shared reference equality unions its owners, other shapes decline',
   assert(
     sql.includes(
       '"entity"."id" in (select "camera"."entity" from "camera" where ' +
-        '"camera"."client" = (select id from entity where eid = ?) union ' +
+        '"camera"."client" = (select id from "entity" where eid = ?) union ' +
         'select "cursor"."entity" from "cursor" where ' +
-        '"cursor"."client" = (select id from entity where eid = ?))',
+        '"cursor"."client" = (select id from "entity" where eid = ?))',
     ),
     sql,
   )

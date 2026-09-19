@@ -367,7 +367,10 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
 // non-final hop must be a reference.
 // The table a subquery gives its OWN alias to: the storage name, never the
 // dialect's aliased source, since `as "__p1"` follows it.
-let source = (comp: string) => `"${comp}"`
+// The bare table a correlated subquery reads, through the dialect: a dialect
+// that renames or redirects a component's source (@yaks/sqlite's batch
+// overlay) is followed everywhere, not just at the top-level joins.
+let source = (ctx: Ctx, comp: string) => ctx.d.source?.(comp) ?? `"${comp}"`
 
 // A reference column's stored key, through the dialect — which is what lets a
 // dialect that renames its tables (a rule's per-pattern prefix, @yaks/sqlite
@@ -395,7 +398,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
       throw new Unsupported('a path', `.${h.comp}.${h.prop} is not a reference`)
     }
     target =
-      `(select "__p${i}"."${h.prop}" from ${source(h.comp)} as "__p${i}"` +
+      `(select "__p${i}"."${h.prop}" from ${source(ctx, h.comp)} as "__p${i}"` +
       ` where "__p${i}"."entity" = ${target})`
   }
   let leaf = hops[hops.length - 1]
@@ -419,7 +422,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
     )
     if (shape) return shape
     let owner = leaf.comp == 'entity' ? `"__pl"."id"` : `"__pl"."entity"`
-    let hit = `(select ${owner} from ${source(leaf.comp)} as "__pl"` +
+    let hit = `(select ${owner} from ${source(ctx, leaf.comp)} as "__pl"` +
       ` where ${owner} = ${target})`
     return raw({ sql: `${hit} is ${present ? 'not ' : ''}null`, params: [] })
   }
@@ -458,21 +461,25 @@ let leafRead = (ctx: Ctx, leaf: Hop, target: string): Read => {
   if (col?.computed) return null
   if (leaf.comp == 'entity') {
     return {
-      expr:
-        `(select "__pl"."${leaf.prop}" from "entity" as "__pl" where "__pl"."id" = ${target})`,
+      expr: `(select "__pl"."${leaf.prop}" from ${
+        source(ctx, 'entity')
+      } as "__pl" where "__pl"."id" = ${target})`,
       tag: 'text',
     }
   }
   if (col?.category == 'ref') {
     return {
-      expr: `(select "__pr"."eid" from ${source(leaf.comp)} as "__pl"` +
-        ` join entity "__pr" on "__pr"."id" = "__pl"."${leaf.prop}"` +
+      expr: `(select "__pr"."eid" from ${source(ctx, leaf.comp)} as "__pl"` +
+        ` join ${
+          source(ctx, 'entity')
+        } "__pr" on "__pr"."id" = "__pl"."${leaf.prop}"` +
         ` where "__pl"."entity" = ${target})`,
       tag: 'eid',
     }
   }
   return {
-    expr: `(select "__pl"."${leaf.prop}" from ${source(leaf.comp)} as "__pl"` +
+    expr:
+      `(select "__pl"."${leaf.prop}" from ${source(ctx, leaf.comp)} as "__pl"` +
       ` where "__pl"."entity" = ${target})`,
     tag: col ? tagOf(col) : 'text',
   }
@@ -522,7 +529,7 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
 // what a compound may carry (compound.ts). No columns selects nothing.
 let inRefs = (ctx: Ctx, cols: [string, string][], value: string): Cond => {
   if (!cols.length) return FALSE
-  let at = '(select id from entity where eid = ?)'
+  let at = `(select id from ${source(ctx, 'entity')} where eid = ?)`
   let sub = ([c, props]: Arm) =>
     `select ${ctx.d.ownerKey(c)} from ${ctx.d.table(c)} where ` +
     props.map((p) => `${refKey(ctx, c, p)} = ${at}`).join(' or ')
@@ -681,7 +688,7 @@ let walk = (ctx: Ctx, c: Walk): Cond => {
   let to = refKey(ctx, root.comp, root.prop)
   hops.slice(1).forEach((h, i) => {
     let a = `__w${i + 1}`
-    from += ` join ${source(h.comp)} as "${a}" on "${a}"."entity" = ${to}`
+    from += ` join ${source(ctx, h.comp)} as "${a}" on "${a}"."entity" = ${to}`
     to = `"${a}"."${h.prop}"`
   })
   let step = `select ${ctx.d.ownerKey(root.comp)} as "from", ${to} as "to"` +

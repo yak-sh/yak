@@ -1,27 +1,26 @@
 // The batch as a WORLD. A rule is a query, and a query reads tables — so for a
 // rule to be judged against a batch that has not been written yet, the batch
-// has to BE a table. This file makes it one: every component the batch touches
-// gets a temp table holding the batch's own rows, and a temp VIEW of the
-// component's name over `main`'s rows minus the ones the batch moved, unioned
-// with those. SQLite resolves an unqualified name in `temp` before `main`, so
-// every compiled statement — the very same SQL, from the very same dialect —
-// reads the overlay instead of the committed tables while it stands.
+// has to BE a table. This file makes it one: a `with` prefix of common table
+// expressions, one per component the batch moved, each saying
 //
-// That shadowing is the whole mechanism, and the reason there is no second
-// compiler: @yaks/sql never learns that an overlay exists. It is also why the
-// overlay's life is a BRACKET (`{ drop }`, always in a `finally`): while it
-// stands, an unqualified INSERT would land in the temp table, so nothing
-// writes between raising it and dropping it. Rules read; `mutate` writes after.
+//   the committed rows the batch did not touch    +    the batch's own rows
 //
-// What the view says, per component:
+// and a rule's statement reads those names instead of the real ones. Nothing
+// is created, nothing is dropped, and nothing outside the statement can see
+// it: the overlay is part of the query, not a state the database is left in.
 //
-//   committed rows the batch did not touch    +    the batch's rows
+// It was temp tables shadowing the real ones once, which was neater to read
+// and wrong in the one place it had to work: a Durable Object's SQLite refuses
+// a temp object outright (`not authorized: SQLITE_AUTH`), and a rule that only
+// runs on a server is not the rule this graph wanted. A CTE runs everywhere
+// SQL does, and it took the shadowing hazard with it — while a temp table
+// stood, an unqualified INSERT would have landed in it.
 //
 // A patch is a PATCH, so a touched row is the committed row with the patch
 // folded in — merged here, once, rather than by every rule. A `comp: null`
 // drops the component: the row is excluded from the committed arm and carries
-// no row of its own (`__gone`). A deleted entity leaves the spine overlay the
-// same way, so every membership loses it.
+// no row of its own. A deleted entity leaves the spine the same way, so every
+// membership loses it.
 //
 // The SPINE is overlaid too, because a batch mints entities that have no
 // integer id yet. They get a NEGATIVE one here — the id space storage hands
@@ -29,36 +28,41 @@
 // fresh entity resolves to it, which is what lets a rule join across two
 // entities the same batch created.
 //
-// COST is a property of the batch, never of the database: the temp tables hold
-// the batch's rows and the views name `main` for the rest, so nothing is
-// copied. See overlay_test.ts, which measures it.
+// COST is a property of the batch, never of the database: the CTE names the
+// committed table for everything it did not touch, so nothing is copied. Two
+// statements and a handful of binds, whatever is already in the file. See
+// overlay_test.ts, which measures it.
 //
-// The client seam, unbuilt on purpose: these overlay tables are the shape a
-// browser cache already keeps, so the same compiled rule could run locally
-// against a local overlay. Nothing here assumes a server — but nothing here
-// builds that either.
+// The client seam, unbuilt on purpose: this shape is a query, so a browser
+// that keeps its cache as tables could run the same compiled rule against the
+// same overlay. Nothing here assumes a server — but nothing here builds that
+// either.
 
 import type { Vocab } from '@yaks/vocab'
 import { type Bundle, comps, dead, type Eid } from '@yaks/graph'
-import { type Driver, effect, type Param } from './driver.ts'
+import type { Driver, Param } from './driver.ts'
 
-/** The prefix a batch's own rows are held under, in `temp`. */
+/** What an overlaid component's CTE is called. */
 export let OVER = '_over_'
 
-/** The column that says a row is the batch REMOVING something rather than
- * writing it. Two underscores: a component column is a plain identifier, so
- * this cannot be one. */
-export let GONE = '__gone'
-
-/** A standing overlay: what it covers, how a fresh entity was numbered, and
- * the way down. `drop` is idempotent and belongs in a `finally`. */
+/**
+ * A batch, readable. `with` is the prefix a statement carries, `params` the
+ * binds it consumes FIRST, and `at` names the source each component reads
+ * from — the overlay's where there is one, the committed table where the
+ * batch said nothing.
+ */
 export type Overlay = {
-  /** the components it shadows, `entity` included */
+  /** the `with` prefix, ready to put in front of a select (`''` when the
+   * batch moved nothing the caller asked about) */
+  with: string
+  /** the binds the prefix consumes, before the statement's own */
+  params: Param[]
+  /** the source a component reads from, quoted and ready to alias */
+  at: (comp: string) => string
+  /** the components this overlay covers */
   covers: string[]
-  /** the integer id each eid reads as while the overlay stands */
+  /** the integer id each eid reads as inside it */
   ids: Map<Eid, number>
-  /** take it down: every temp view and table this raised */
-  drop: () => void
 }
 
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
@@ -110,17 +114,11 @@ let named = (v: Vocab, bundles: Bundle[]): Eid[] => {
 }
 
 /**
- * Raise an overlay over a batch: the temp tables that hold it and the views
- * that shadow the committed ones. Every read through this driver sees the
- * graph WITH the batch in it until `drop()`.
+ * Read a batch as tables.
  *
  * ```ts
- * let over = overlay(driver, vocab, batch)
- * try {
- *   // every compiled query here reads the batch as though it had landed
- * } finally {
- *   over.drop()
- * }
+ * let over = overlay(driver, vocab, batch, ['product'])
+ * driver.query(over.with + sql, [...over.params, ...params])
  * ```
  */
 export let overlay = (
@@ -129,13 +127,9 @@ export let overlay = (
   bundles: Bundle[],
   only?: readonly string[],
 ): Overlay => {
-  // Raising a table is DDL, and DDL makes SQLite re-prepare every statement it
-  // holds — so the overlay covers what will be READ and nothing else. `only`
-  // is that list (a rule set's components); without it the whole batch is
-  // covered, which is what a caller asking for the batch itself wants.
   let wanted = only && new Set(only)
   // Which components the batch moved. A component nobody touched needs no
-  // shadow: the committed table is already the answer.
+  // overlay: the committed table is already the answer.
   let touched = new Map<string, Map<Eid, Record<string, unknown> | null>>()
   let gone = new Set<Eid>()
   let about = new Set<Eid>()
@@ -164,7 +158,7 @@ export let overlay = (
     let chunk = eids.slice(i, i + 500)
     for (
       let row of driver.query(
-        `select id, eid from main.entity where eid in (${
+        `select id, eid from entity where eid in (${
           chunk.map(() => '?').join(', ')
         })`,
         chunk,
@@ -179,119 +173,94 @@ export let overlay = (
     if (about.has(eid)) fresh.push(eid)
   }
 
-  let raised: string[] = []
-  let made: string[] = []
-  let drop = () => {
-    for (let name of raised.splice(0)) driver.exec(`drop view temp.${q(name)}`)
-    for (let name of made.splice(0)) driver.exec(`drop table temp.${q(name)}`)
-  }
-
-  // One component's half of the overlay: the temp table, its rows, the view.
-  let cover = (comp: string, cols: string[], key: string, rows: Param[][]) => {
-    let table = OVER + comp
-    let all = [key, ...cols]
-    driver.exec(
-      `create temp table ${q(table)} (${
-        all.map((c) => `${q(c)} integer`).join(', ')
-      }, ${q(GONE)} integer not null default 0)`,
-    )
-    made.push(table)
+  let parts: string[] = []
+  let params: Param[] = []
+  let covers: string[] = []
+  // One component's arm: the committed rows it did not touch, then its own.
+  let arm = (
+    comp: string,
+    cols: string[],
+    key: string,
+    from: string,
+    out: number[],
+    rows: Param[][],
+  ) => {
+    let list = [key, ...cols].map(q).join(', ')
+    let sql = `select ${list} from ${from}`
+    if (out.length) {
+      sql += ` where ${q(key)} not in (${out.map(() => '?').join(', ')})`
+      params.push(...out)
+    }
     if (rows.length) {
-      let holes = `(${all.map(() => '?').join(', ')}, ?)`
-      effect(
-        driver,
-        `insert into temp.${q(table)} (${all.map(q).join(', ')}, ${
-          q(GONE)
-        }) values ${rows.map(() => holes).join(', ')}`,
-        rows.flat(),
-      )
+      sql += ` union all values ${
+        rows.map(() => `(${[key, ...cols].map(() => '?').join(', ')})`).join(
+          ', ',
+        )
+      }`
+      for (let row of rows) params.push(...row)
     }
-    let list = all.map(q).join(', ')
-    driver.exec(
-      `create temp view ${q(comp)} as ` +
-        `select ${list} from main.${q(comp)} where ${q(key)} not in ` +
-        `(select ${q(key)} from temp.${q(table)}) ` +
-        `union all select ${list} from temp.${q(table)} where ${q(GONE)} = 0`,
-    )
-    raised.push(comp)
+    parts.push(`${q(OVER + comp)} as (${sql})`)
+    covers.push(comp)
   }
 
-  try {
-    // A temp table's declared affinity does not decide what it holds (SQLite
-    // stores what it is given), and the view's arms are unioned by position,
-    // so every column is raised the same way and the committed arm supplies
-    // the affinity that matters.
-    for (let [comp, rows] of touched) {
-      let cols = stored(vocab, comp)
-      let owners = [...rows.keys()].map((e) => ids.get(e)!).filter((id) =>
-        id > 0
-      )
-      // The committed row a patch folds into, read once per component.
-      let held = new Map<number, Record<string, unknown>>()
-      if (owners.length) {
-        for (
-          let row of driver.query(
-            `select entity, ${cols.map(q).join(', ')} from main.${q(comp)} ` +
-              `where entity in (${owners.map(() => '?').join(', ')})`,
-            owners,
-          )
-        ) held.set(Number(row.entity), row)
-      }
-      cover(
-        comp,
-        cols,
-        'entity',
-        [...rows].map(([eid, patch]) => {
-          let id = ids.get(eid)!
-          if (!patch) return [id, ...cols.map(() => null), 1]
-          let was = held.get(id) ?? {}
-          return [
-            id,
-            ...cols.map((c) =>
-              c in patch
-                ? lower(vocab, comp, c, patch[c], ids)
-                : (was[c] ?? null) as Param
-            ),
-            0,
-          ]
-        }),
-      )
+  for (let [comp, rows] of touched) {
+    let cols = stored(vocab, comp)
+    let owners = [...rows.keys()].map((e) => ids.get(e)!).filter((id) => id > 0)
+    // The committed row a patch folds into, read once per component.
+    let held = new Map<number, Record<string, unknown>>()
+    if (owners.length) {
+      for (
+        let row of driver.query(
+          `select entity, ${cols.map(q).join(', ')} from ${q(comp)} ` +
+            `where entity in (${owners.map(() => '?').join(', ')})`,
+          owners,
+        )
+      ) held.set(Number(row.entity), row)
     }
-    // The spine last, so the component views above read `main.entity` for the
-    // rows they were built from and this one for every read after — and only
-    // where the batch moved it: a batch that patches entities that all exist
-    // already leaves the identity table alone.
-    if (!fresh.length && !gone.size) {
-      return { covers: [...touched.keys()], ids, drop }
-    }
-    let spine = vocab.comp('archetype') ? SPINE : SPINE.slice(0, 3)
-    cover(
+    arm(
+      comp,
+      cols,
       'entity',
-      spine.slice(1),
-      'id',
-      [
-        ...fresh.map((eid) =>
-          [
-            ids.get(eid)!,
-            eid,
-            null,
-            ...(spine.length > 3 ? [null] : []),
-          ] as Param[]
-        ).map((r) => [...r, 0] as Param[]),
-        ...[...gone].map((eid) =>
-          [
-            ids.get(eid)!,
-            null,
-            null,
-            ...(spine.length > 3 ? [null] : []),
-            1,
-          ] as Param[]
-        ),
-      ],
+      q(comp),
+      [...rows.keys()].map((e) => ids.get(e)!),
+      [...rows].flatMap(([eid, patch]) => {
+        if (!patch) return []
+        let id = ids.get(eid)!
+        let was = held.get(id) ?? {}
+        return [[
+          id,
+          ...cols.map((c) =>
+            c in patch
+              ? lower(vocab, comp, c, patch[c], ids)
+              : (was[c] ?? null) as Param
+          ),
+        ]]
+      }),
     )
-  } catch (e) {
-    drop()
-    throw e
   }
-  return { covers: [...touched.keys(), 'entity'], ids, drop }
+
+  // The spine, where the batch moved it: a batch that patches entities that
+  // all exist already leaves the identity table alone.
+  if (fresh.length || gone.size) {
+    let cols = (vocab.comp('archetype') ? SPINE : SPINE.slice(0, 3)).slice(1)
+    arm(
+      'entity',
+      cols,
+      'id',
+      q('entity'),
+      [...gone].map((e) => ids.get(e)!),
+      fresh.map((
+        eid,
+      ) => [ids.get(eid)!, eid, null, ...cols.slice(2).map(() => null)]),
+    )
+  }
+
+  let over = new Set(covers)
+  return {
+    with: parts.length ? `with ${parts.join(', ')} ` : '',
+    params,
+    at: (comp) => over.has(comp) ? q(OVER + comp) : q(comp),
+    covers,
+    ids,
+  }
 }

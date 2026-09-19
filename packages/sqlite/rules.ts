@@ -26,7 +26,9 @@
 //
 // Run it against a batch OVERLAY (./overlay.ts) and the same statement reads
 // the graph with the batch in it. That is the whole of "rules run before
-// persistence": no flag, no second path, a different set of tables underneath.
+// persistence": no flag, no second path, a different set of tables underneath
+// — the overlay is a `with` prefix of CTEs and the dialect simply points each
+// covered component's name at its CTE, so what changes is a name.
 
 import type { Vocab } from '@yaks/vocab'
 import type { Binding, Bundle, Match } from '@yaks/graph'
@@ -38,13 +40,15 @@ import {
   type Cond,
   type Dialect,
   type Join,
+  or,
   raw,
+  refEqAt,
   rel,
   render,
   sqlite,
 } from '@yaks/sql'
 import { present } from '@yaks/query'
-import type { Driver, Row } from './driver.ts'
+import type { Driver, Param, Row } from './driver.ts'
 import { overlay } from './overlay.ts'
 
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
@@ -54,21 +58,27 @@ let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
  * of these bind two patterns into one statement without a single name in
  * common. The value lowerings are untouched — what a comparison MEANS is not
  * a matter of what a table is called.
+ *
+ * `at` says where a component is READ from, and defaults to the component's
+ * own table. An overlay passes its own, and every table name in the statement
+ * becomes that component's CTE without another line changing.
  */
-export let prefixed = (pre: string): Dialect => {
+export let prefixed = (pre: string, at: At = q): Dialect => {
   let own = (base: string) =>
     base == 'entity' ? `${q(pre + 'entity')}."id"` : `${q(pre + base)}."entity"`
   return {
     ...sqlite,
     name: `sqlite:${pre}`,
-    spine: `"entity" ${q(pre + 'entity')}`,
+    spine: `${at('entity')} ${q(pre + 'entity')}`,
     membership: `${q(pre + 'entity')}."eid" as eid`,
     live: () => ({
       sql: `not exists (select 1 from tombstone ${q(pre + 'tomb')} where ` +
         `${q(pre + 'tomb')}."entity" = ${q(pre + 'entity')}."id")`,
       params: [],
     }),
-    table: (comp) => `${q(comp)} ${q(pre + comp)}`,
+    table: (comp) => `${at(comp)} ${q(pre + comp)}`,
+    source: at,
+    refEq: refEqAt(at('entity')),
     ownerKey: own,
     joinOn: (comp, base) => `${q(pre + comp)}."entity" = ${own(base)}`,
     refCol: (comp, prop) => `${q(pre + comp)}.${q(prop)}`,
@@ -87,13 +97,23 @@ export let prefixed = (pre: string): Dialect => {
       let c = v.column(comp, prop)
       if (!c) return null
       return c.category == 'ref'
-        ? `(select __re.eid from entity __re where __re.id = ${q(pre + comp)}.${
-          q(prop)
-        })`
+        ? `(select __re.eid from ${at('entity')} __re where __re.id = ${
+          q(pre + comp)
+        }.${q(prop)})`
         : `${q(pre + comp)}.${q(prop)}`
     },
   }
 }
+
+/** Where a component is read from: its own table, or an overlay's CTE. */
+export type At = (comp: string) => string
+
+/**
+ * What a statement is asked AGAINST: the sources to read (an overlay's, or
+ * nothing for the committed graph) and the entity ids the batch moved, which
+ * every match is narrowed to.
+ */
+export type On = { at?: At; touched?: number[] }
 
 // Where a variable is filled from, and what kind of value fills it: an `id` is
 // an integer spine id (an entity, or a reference column), a `value` is the
@@ -116,11 +136,15 @@ export let statement = (
   m: Match,
   vocab: Vocab,
   opts: BindOpts = {},
+  on: On = {},
 ): Compiled => {
+  let at = on.at ?? q
+  let touched = on.touched
   let froms: string[] = []
   let joins: Join[] = []
   let conds: Cond[] = []
   let cols: string[] = []
+  let anchors: string[] = []
   let slots = new Map<string, Slot[]>()
   let slot = (name: string, s: Slot) => {
     let held = slots.get(name) ?? []
@@ -133,7 +157,7 @@ export let statement = (
     // per binding of the patterns that do match, so it contributes no table.
     if (p.makes) return
     let pre = `p${i}_`
-    let d = prefixed(pre)
+    let d = prefixed(pre, at)
     // A bound column has to be joined, and a bind implies the component is
     // there — so the presence says it, and @yaks/sql makes the join it always
     // would. A component the filter already named is joined once: the binder
@@ -151,12 +175,13 @@ export let statement = (
     joins.push(...r.joins)
     conds.push(r.where)
     cols.push(`${q(pre + 'entity')}."eid" as ${q(`e${i}`)}`)
+    anchors.push(`${q(pre + 'entity')}."id"`)
 
     // A gate: joined under a name of its own, and required to be missing.
     for (let comp of p.gates) {
       let as = `${pre}gate_${comp}`
       joins.push({
-        source: `${q(comp)} ${q(as)}`,
+        source: `${at(comp)} ${q(as)}`,
         on: `${q(as)}."entity" = ${q(pre + 'entity')}."id"`,
       })
       conds.push(raw({ sql: `${q(as)}."entity" is null`, params: [] }))
@@ -187,6 +212,23 @@ export let statement = (
       })
     }
   })
+
+  // The ANCHOR. A rule is about a batch, not about the file: without this the
+  // same statement asks the whole graph, and a rule with a standing gate would
+  // fire on every entity that ever failed to satisfy it. So at least one of
+  // its patterns must bind an entity the batch wrote — the same thing the
+  // coded effect rules have always required, said in SQL.
+  if (touched) {
+    let ids = touched.map(() => '?').join(', ')
+    conds.push(
+      or(...anchors.map((own) =>
+        raw({
+          sql: touched.length ? `${own} in (${ids})` : '0',
+          params: [...touched],
+        })
+      )),
+    )
+  }
 
   // The join proper: every slot of a variable is the same value. An id and a
   // value are not comparable — a reference stores an integer, a scalar stores
@@ -222,9 +264,14 @@ export let matched = (
   m: Match,
   vocab: Vocab,
   opts: BindOpts = {},
+  on: On = {},
+  prefix: { with: string; params: Param[] } = { with: '', params: [] },
 ): Binding[] => {
-  let s = statement(m, vocab, opts)
-  return driver.query(s.sql, s.params as (string | number)[]).map((
+  let s = statement(m, vocab, opts, on)
+  return driver.query(prefix.with + s.sql, [
+    ...prefix.params,
+    ...s.params,
+  ] as (string | number)[]).map((
     row: Row,
   ) => ({
     entities: m.patterns.map((p, i) => p.makes ? null : String(row[`e${i}`])),
@@ -237,8 +284,9 @@ export let matched = (
  * match against this graph with `batch` folded in.
  *
  * One overlay for the whole set — `covers` is what the rules read — and then
- * one statement per match under it. Raising a table is DDL, so raising one
- * overlay for every rule rather than one per rule is most of what this costs.
+ * one statement per match under it. The overlay is a `with` prefix, so it
+ * costs nothing to leave standing and nothing to take down: every statement
+ * here simply carries it.
  */
 export let bindings = (
   driver: Driver,
@@ -250,9 +298,15 @@ export let bindings = (
 ): Binding[][] => {
   if (!matches.length) return []
   let over = overlay(driver, vocab, batch, covers)
-  try {
-    return matches.map((m) => matched(driver, m, vocab, opts))
-  } finally {
-    over.drop()
-  }
+  // What the batch is ABOUT, as the ids the overlay speaks in: the anchor
+  // every match is narrowed to, so a rule asks about this batch rather than
+  // about the file. With NO batch there is nothing to be about and nothing to
+  // anchor to: the caller is asking the match outright, which is what a
+  // template invocation is.
+  let touched = batch.length
+    ? [...new Set(batch.map((b) => over.ids.get(b.entity.eid)!))]
+      .filter((id) => id !== undefined)
+    : undefined
+  let on = { at: over.at, touched }
+  return matches.map((m) => matched(driver, m, vocab, opts, on, over))
 }
