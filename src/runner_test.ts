@@ -314,7 +314,7 @@ Deno.test('an interrupted call replays a synthesized function_call_output', () =
       output: { source: 'old', key: 'call-item' },
       call: { key: 'call-key' },
       bash: { command: 'git commit' },
-      error: { message: 'runner disappeared; operation outcome is ambiguous' },
+      failed: { message: 'runner disappeared; operation outcome is ambiguous' },
     }),
     row('current', 4, {
       generation: { through: 'call', provider: 'codex', model: 'new' },
@@ -630,7 +630,7 @@ Deno.test('failed provider evidence never re-enters a later generation', () => {
     }),
     row('failed', 2, {
       generation: { through: 'user', provider: 'codex', model: 'old' },
-      error: { message: 'responses: incomplete — max_output_tokens' },
+      failed: { message: 'responses: incomplete — max_output_tokens' },
     }),
     row('partial', 3, {
       output: { source: 'failed' },
@@ -859,7 +859,7 @@ Deno.test('native turn retries body-read failures before recording one error', a
           ...state.log,
           fail: async (generation, message) => {
             await state.log.fail!(generation, message)
-            await state.log.append([{ error: {}, content: { body: message } }])
+            await state.log.append([{ failed: {}, content: { body: message } }])
           },
         },
         through: 'input',
@@ -927,7 +927,7 @@ Deno.test('native turn retries body-read failures before recording one error', a
     )
     assertEquals(bodies.every((body) => body == bodies[0]), true)
     assertEquals(
-      state.entries.filter((e) => e.comps.error).length,
+      state.entries.filter((e) => e.comps.failed).length,
       mode == 'recover' ? 0 : 1,
     )
     assertEquals(state.failures.length, mode == 'recover' ? 0 : 1)

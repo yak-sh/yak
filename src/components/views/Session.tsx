@@ -617,7 +617,7 @@ export let Session = ({ e }: { e: Ent }) => {
   let stream = native ? observation(e.eid) : undefined
   let live = native ? !s.base_revision || !!ready?.busy : awake(s)
   let status = state.status
-  let fault = e.exception?.message ?? e.error?.message
+  let fault = e.exception?.message ?? e.failed?.message
   // One read path (T-16824): the transcript is the session's entry partition
   // for every substrate — the subscription useSessionStanding opened, live
   // through the graph, never a /logs file-poll. The fallback log is only for

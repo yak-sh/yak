@@ -249,7 +249,7 @@ let readySql = `
   join entity o on o.id = e.entity
   where e.session = ${idOf}
     and not exists (select 1 from lease l where l.entity = e.entity)
-    and not exists (select 1 from error x where x.entity = e.entity)
+    and not exists (select 1 from failed x where x.entity = e.entity)
     and not exists (select 1 from cancel c where c.target = e.entity)
     and (
       (exists (select 1 from generation g where g.entity = e.entity)
@@ -360,7 +360,7 @@ export let reclaimEntry = (
        from lease l
        where l.${OWNED} and l.holder = ${idOf} and l.at = ? and l.until = ?
          and l.until <= ?
-         and not exists (select 1 from error x where x.entity = l.entity)
+         and not exists (select 1 from failed x where x.entity = l.entity)
          and not exists (select 1 from cancel c where c.target = l.entity)
          and (
            (exists (select 1 from generation g where g.entity = l.entity)
@@ -546,7 +546,7 @@ export let failEntry = (
 ): Change[] => {
   let comp = { eid: token.eid, at: clock().toISOString(), message }
   let changes: Change[] = [
-    { eid: token.eid, name: 'error', comp },
+    { eid: token.eid, name: 'failed', comp },
     { eid: token.eid, name: 'lease', comp: null },
   ]
   return db.transaction(() => {
@@ -554,7 +554,7 @@ export let failEntry = (
       return []
     }
     db.prepare(
-      `insert into error (entity, at, message) values (${idOf}, ?, ?)`,
+      `insert into failed (entity, at, message) values (${idOf}, ?, ?)`,
     )
       .run(token.eid, comp.at, message)
     db.prepare(`delete from lease where ${OWNED}`).run(token.eid)

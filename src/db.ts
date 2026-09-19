@@ -961,7 +961,7 @@ export let derived = [
   'signin',
   'deliver',
   'delivered',
-  'error',
+  'failed',
   'exception',
   'fixer',
   'verifier',
@@ -1265,6 +1265,21 @@ let seed = (db: Sql) => {
 // Does this table still carry that column? The one question both schema
 // guards ask, and the gate on every backfill that reads a retired column:
 // once the drop lands, the read that fed it must stop compiling away.
+// Is this table present at all? The guard a table RENAME needs, where hasCol
+// guards a column one.
+export let hasTable = (db: Sql, table: string) =>
+  !!prep(db, `select name from sqlite_master where type='table' and name = ?`)
+    .get(table)
+
+// A component that changed its NAME changes its table's name with it: the old
+// spelling is the guard, so the rename runs once and a db that never had the
+// old table sees nothing. SQLite rewrites every foreign key that pointed at the
+// old name, so this is the whole migration for a renamed component.
+export let renameTable = (db: Sql, from: string, to: string) => {
+  if (!hasTable(db, from) || hasTable(db, to)) return
+  db.exec(`alter table ${sqlName(from)} rename to ${sqlName(to)}`)
+}
+
 export let hasCol = (db: Sql, table: string, col: string) =>
   (prep(db, `select name from pragma_table_info('${table}')`)
     .all() as { name: string }[]).some((c) => c.name == col)
@@ -1749,6 +1764,12 @@ export let migrate = <D extends Sql>(db: D): D => {
       // The version check belongs after that wait: reading it before BEGIN lets
       // an older waiter overwrite a newer migrator's version after it commits.
       let stored = writableVersion(db)
+      // The renamed components (T-37576), before the schema string plants a
+      // fresh empty table under the new name: one word meant two things across
+      // the fleet manifests and the @yaks/* vocabularies, and a rename is a
+      // rename — the old spelling is gone from the code, so it survives only
+      // here, as the guard that carries the rows across once.
+      renameTable(db, 'error', 'failed')
       db.exec(schema)
       // The doc projection ordinary reads take: title and body, resolved
       // through the blob backend. It names its columns rather than starring
@@ -3984,7 +4005,7 @@ let fleetGuardHost = (db: Sql): GuardHost => ({
              exists (select 1 from lease l where l.entity = e.entity)
              or (
                not exists (select 1 from imported i where i.entity = e.entity)
-               and not exists (select 1 from error x where x.entity = e.entity)
+               and not exists (select 1 from failed x where x.entity = e.entity)
                and not exists (
                  select 1 from cancel z where z.target = e.entity
                )

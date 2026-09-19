@@ -597,21 +597,21 @@ Deno.test('server-owned facets: the wire cannot mint or erase them (T-15457)', (
   let t = uid()
   apply(db, [{ eid: t, name: 'task', comp: {} }])
   // A bare presence create is dropped, not admitted — no false fleet-health
-  // error, no forged delivery receipt. The effective batch omits it too.
-  for (let name of ['error', 'delivered', 'exception']) {
+  // failure, no forged delivery receipt. The effective batch omits it too.
+  for (let name of ['failed', 'delivered', 'exception']) {
     let out = apply(db, [{ eid: t, name, comp: {} }])
     assertEquals(comp(t, name), undefined)
     assertEquals(out.some((c) => c.name == name), false)
   }
-  // An effect stamps a real error by DIRECT SQL (deliver.ts's path). The wire
+  // An effect stamps a failure by DIRECT SQL (deliver.ts's path). The wire
   // then tries to erase the diagnosis with a component-delete — refused, so the
   // stamp stands.
   db.prepare(
-    `insert into error (entity, at, message) values (${idOf}, 'now', 'boom')`,
+    `insert into failed (entity, at, message) values (${idOf}, 'now', 'boom')`,
   ).run(t)
-  let out = apply(db, [{ eid: t, name: 'error', comp: null }])
-  assertEquals(comp(t, 'error')?.message, 'boom')
-  assertEquals(out.some((c) => c.name == 'error'), false)
+  let out = apply(db, [{ eid: t, name: 'failed', comp: null }])
+  assertEquals(comp(t, 'failed')?.message, 'boom')
+  assertEquals(out.some((c) => c.name == 'failed'), false)
 })
 
 Deno.test('review: a comment carries one canonical verdict', () => {

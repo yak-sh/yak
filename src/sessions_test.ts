@@ -96,7 +96,7 @@ let sayText = (e?: { row?: unknown }) =>
   String((e?.row as { text?: unknown } | undefined)?.text ?? '')
 let failure = (eid: string) =>
   (db.prepare(
-    'select message from error where entity = (select id from entity where eid = ?)',
+    'select message from failed where entity = (select id from entity where eid = ?)',
   ).get(eid) as
     | { message: string }
     | undefined)?.message
@@ -398,7 +398,7 @@ slow(
           c.name == 'session' && c.comp?.status == 'failed'
         )
       )
-      assert(failed?.changes.some((c) => c.name == 'error'))
+      assert(failed?.changes.some((c) => c.name == 'failed'))
     }
   },
 )
@@ -1504,7 +1504,7 @@ slow(
       new RegExp(`⚠ UNLANDED: 1 commit on ${branch} not in main`),
     )
     assertStringIncludes(said[0], tail)
-    assert(heard.some((c) => c.eid == eid && c.name == 'error'))
+    assert(heard.some((c) => c.eid == eid && c.name == 'failed'))
     // The commit self-attributes: the trailer is in the message (git-side)
     // and its sha rides the settle comment (graph-side) → `task search <sha>`.
     let sha = gitOut(tree, 'log', '-1', '--format=%h')
@@ -1852,7 +1852,7 @@ slow('an unavailable land verdict preserves the source refusal', async () => {
   let eid = plant([INIT, RESULT])
   let message = 'UNLANDED: 1 commit on lost-branch not in main — gate red'
   db.prepare(
-    `insert into error (entity, at, message)
+    `insert into failed (entity, at, message)
      values ((select id from entity where eid = ?), ?, ?)`,
   ).run(eid, new Date().toISOString(), message)
   recover(cast)

@@ -366,7 +366,7 @@ Deno.test('undispatched: an old pending deliverable warns; settled and fresh sta
     ent('mail', 3, {
       deliver: { to: 'e-9' },
       created: { at: old },
-      error: { at: old, message: 'no' },
+      failed: { at: old, message: 'no' },
     }),
     // fresh — inside the dispatch window
     ent('knock', 4, { deliver: { to: 'e-9' }, created: { at: fresh } }),

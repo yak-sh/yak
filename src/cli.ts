@@ -1668,7 +1668,7 @@ let colon = async (focus: string | undefined, argv: string[]) => {
       '.wake!',
       `.deliver.to=${to}`,
       '.delivered=',
-      '.error=',
+      '.failed=',
     ])
     let refs = [
       ...all,
@@ -1769,7 +1769,7 @@ let wakeCancel = async (rest: string[]) => {
     '.wake!',
     `.deliver.to=${who.eid}`,
     '.delivered=',
-    '.error=',
+    '.failed=',
     target ? `.wake.target=${target.eid}` : '.wake.target=',
   ])
   let where = target ? ` → ${idOf(target)}` : ''
@@ -1796,7 +1796,7 @@ let wakeRead = async (words: string[]) => {
     '.wake!',
     '.deliver!',
     '.delivered=',
-    '.error=',
+    '.failed=',
     ...(who ? [`.deliver.to=${who.eid}`] : []),
   ])
   let ids = wakes.flatMap((r) => [

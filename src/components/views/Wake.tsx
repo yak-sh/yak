@@ -22,7 +22,7 @@ let Frame = block('section', 'Wake', {
 })
 
 let state = (e: Ent) =>
-  e.delivered ? 'delivered' : e.error ? 'failed' : 'pending'
+  e.delivered ? 'delivered' : e.failed ? 'failed' : 'pending'
 
 export let WakeTitle = ({ e }: { e: Ent }) => {
   let status = state(e)
@@ -40,7 +40,7 @@ export let Wake = ({ e }: { e: Ent }) => {
   let to = e.deliver?.to
   let by = e.created?.by
   let status = state(e)
-  let outcome = e.delivered ?? e.error
+  let outcome = e.delivered ?? e.failed
   return (
     <Frame>
       <Frame.Moment mod={status}>
@@ -54,7 +54,7 @@ export let Wake = ({ e }: { e: Ent }) => {
           {e.delivered?.via && (
             <Frame.Detail>via {e.delivered.via}</Frame.Detail>
           )}
-          {e.error?.message && <Frame.Detail>{e.error.message}</Frame.Detail>}
+          {e.failed?.message && <Frame.Detail>{e.failed.message}</Frame.Detail>}
         </Frame.Outcome>
       </Frame.Moment>
       {to && (

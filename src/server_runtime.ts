@@ -920,7 +920,7 @@ let clientError = async (req: Request) => {
     let b = JSON.parse(await bounded(req, 16 * 1024))
     record(db, {
       source: 'web',
-      name: 'error',
+      name: 'failed',
       session_id: b.client ?? null,
       ok: false,
       error: String(b.message ?? 'error'),

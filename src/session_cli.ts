@@ -211,7 +211,7 @@ export let following = (got: Got) =>
  * Refuse graph-wide clauses rather than silently ignoring them locally. */
 export let followFilter = (raw?: string, spawn = false) => {
   let filters = raw == null
-    ? spawn ? ['.notify!', '.error!', '.stop!'] : ['.entry!']
+    ? spawn ? ['.notify!', '.failed!', '.stop!'] : ['.entry!']
     : [raw]
   let groups = filters.map((filter) => {
     let ps = parseQuery(filter, { notify: {} }).map((p) => {

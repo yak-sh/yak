@@ -24,7 +24,7 @@
         "via": "text"
       }
     },
-    "error": {
+    "failed": {
       "stamped": {
         "at": "time",
         "message": "text"

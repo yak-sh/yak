@@ -47,14 +47,14 @@ export let advanceable = (db: Sql, session?: string) =>
     where not exists (select 1 from lease l where l.entity = c.entity)
       and (
         exists (select 1 from delivered d where d.entity = c.entity)
-        or exists (select 1 from error x where x.entity = c.entity)
+        or exists (select 1 from failed x where x.entity = c.entity)
         or exists (select 1 from cancel z where z.target = c.entity)
       )
       and not exists (
         select 1 from output o join call k on k.entity = o.entity
         where o.source = c.entity
           and not exists (select 1 from result r where r.call = k.entity)
-          and not exists (select 1 from error x where x.entity = k.entity)
+          and not exists (select 1 from failed x where x.entity = k.entity)
           and not exists (select 1 from cancel z where z.target = k.entity)
       )
       and (
@@ -72,7 +72,7 @@ export let advanceable = (db: Sql, session?: string) =>
             )
         )
         or (
-          not exists (select 1 from error x where x.entity = c.entity)
+          not exists (select 1 from failed x where x.entity = c.entity)
           and not exists (select 1 from cancel z where z.target = c.entity)
           and exists (
             select 1 from output o join call k on k.entity = o.entity

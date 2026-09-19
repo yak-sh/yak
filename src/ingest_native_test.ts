@@ -63,7 +63,7 @@ let coords = (eid: string): [unknown, unknown][] =>
 let OWNED = `entity = (select id from entity where eid = ?)`
 let errorOf = (eid: string) =>
   String(
-    (db.prepare(`select message from error where ${OWNED}`).get(eid) as
+    (db.prepare(`select message from failed where ${OWNED}`).get(eid) as
       | { message: string | null }
       | undefined)?.message ?? '',
   )

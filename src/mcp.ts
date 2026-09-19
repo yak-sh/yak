@@ -1348,7 +1348,7 @@ ${
           out.changes?.find((c) => c.name == 'deliver')?.comp?.to ?? '',
         )
         let wakes = await io.query(
-          `.wake! .deliver.to=${to} .delivered= .error=`,
+          `.wake! .deliver.to=${to} .delivered= .failed=`,
         )
         let recipient = byEid(to) ?? {
           eid: to,
@@ -1453,8 +1453,8 @@ running or settled; stderr rides along when the child wrote any. ${BUS}`,
         ...(s.started_at ? [`started ${s.started_at}`] : []),
         ...(s.finished_at ? [`finished ${s.finished_at}`] : []),
         ...(s.exit_code == null ? [] : [`exit ${s.exit_code}`]),
-        ...(row.comps.error?.message
-          ? [`error: ${String(row.comps.error.message).slice(0, 200)}`]
+        ...(row.comps.failed?.message
+          ? [`error: ${String(row.comps.failed.message).slice(0, 200)}`]
           : []),
       ].join(' · ')
       let lines = out.flatMap((e) => {

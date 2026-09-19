@@ -95,7 +95,7 @@ Deno.test('wake coordinates pending, delivered, and failed states', () => {
     })
 
     cache.value = data('recipient', {
-      error: {
+      failed: {
         eid: 'wake',
         at: '2026-08-10T14:00:00Z',
         message: 'no door',

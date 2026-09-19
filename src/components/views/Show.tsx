@@ -239,11 +239,11 @@ export let Mail = ({ e }: { e: Ent }) => {
   let m = e.mail
   if (!m) return null
   let inbound = !!m.message_id
-  // The send outcome is the shared delivered/error facet (D-14945), not a
-  // mail column: delivered = sent, error = attempted-and-failed, neither =
+  // The send outcome is the shared delivered/failed facet (D-14945), not a
+  // mail column: delivered = sent, failed = attempted-and-failed, neither =
   // pending. received_at stays on the row as the arrival DATA.
   let sent = e.delivered?.at
-  let fault = e.error?.message
+  let fault = e.failed?.message
   return (
     <MailEl>
       <MailField name='from'>{m.from || '?'}</MailField>
@@ -268,10 +268,10 @@ export let Mail = ({ e }: { e: Ent }) => {
             <Stamp at={sent} />
           </MailField>
         )
-        : e.error
+        : e.failed
         ? (
           <MailField name='attempted'>
-            <Stamp at={e.error.at} />
+            <Stamp at={e.failed.at} />
           </MailField>
         )
         : <MailField name='status'>pending</MailField>}

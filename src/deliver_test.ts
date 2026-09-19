@@ -1,7 +1,7 @@
 // The delivery lifecycle (deliver.ts) against the singleton in-memory db: an
 // outcome must be JOURNALED (so a catch-up client replays it, not just the live
-// ones the cast reached) and MUTUALLY EXCLUSIVE (delivered XOR error — the
-// D-14945 tri-state, so a pending query and the .error health query can never
+// ones the cast reached) and MUTUALLY EXCLUSIVE (delivered XOR failed — the
+// D-14945 tri-state, so a pending query and the .failed health query can never
 // disagree about one deliverable). T-15458.
 Deno.env.set('DB_PATH', ':memory:')
 import { assertEquals, assertThrows } from '@std/assert'
@@ -36,17 +36,17 @@ Deno.test('delivered is journaled, so a catch-up client can replay it', () => {
   )
 })
 
-Deno.test('delivered clears a prior error (one outcome)', () => {
+Deno.test('delivered clears a prior failure (one outcome)', () => {
   let eid = mint()
   errored(eid, 'boom', () => {})
-  assertEquals(has(eid, 'error'), true)
+  assertEquals(has(eid, 'failed'), true)
   let casts: Change[] = []
   delivered(eid, 'local', (cs) => casts.push(...cs))
   assertEquals(has(eid, 'delivered'), true)
-  assertEquals(has(eid, 'error'), false) // the opposite facet is gone
+  assertEquals(has(eid, 'failed'), false) // the opposite facet is gone
   // and the clearing rides the batch, so caches shed the stale error too
   assertEquals(
-    casts.some((c) => c.name == 'error' && c.comp == null),
+    casts.some((c) => c.name == 'failed' && c.comp == null),
     true,
   )
 })
@@ -57,7 +57,7 @@ Deno.test('errored clears a prior delivered (the other edge)', () => {
   assertEquals(has(eid, 'delivered'), true)
   let casts: Change[] = []
   errored(eid, 'went wrong', (cs) => casts.push(...cs))
-  assertEquals(has(eid, 'error'), true)
+  assertEquals(has(eid, 'failed'), true)
   assertEquals(has(eid, 'delivered'), false)
   assertEquals(
     casts.some((c) => c.name == 'delivered' && c.comp == null),
@@ -71,7 +71,7 @@ for (let name of ['delivered', 'errored', 'healthy', 'excepted']) {
     if (name == 'errored') delivered(eid, 'prior', () => {})
     else errored(eid, 'prior', () => {})
     let state = () =>
-      ['delivered', 'error', 'exception'].map((c) => readComp(db, eid, c))
+      ['delivered', 'failed', 'exception'].map((c) => readComp(db, eid, c))
     let before = state()
     let cursor = cursorOf(db)
     let casts: Change[] = []

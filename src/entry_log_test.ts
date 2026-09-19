@@ -242,7 +242,7 @@ Deno.test('failed generations show their reason, not opaque evidence tags', () =
   let log = graphLog([
     row('generation', 1, {
       generation: { through: 'input', provider: 'codex', model: 'gpt' },
-      error: { message: 'responses: incomplete — max_output_tokens' },
+      failed: { message: 'responses: incomplete — max_output_tokens' },
     }),
     row('partial', 2, {
       output: { source: 'generation' },
@@ -481,15 +481,15 @@ Deno.test('a runner that died mid-call answers the call, never fails the Session
 })
 
 Deno.test('tool-loop boundaries stay nonterminal, including failed restart calls (T-37196)', () => {
-  for (let outcome of ['error', 'cancel', 'result', 'final']) {
+  for (let outcome of ['failed', 'cancel', 'result', 'final']) {
     let rows = [
       row('input', 1, { message: { role: 'user' } }),
       row('gen', 2, { generation: { through: 'input' }, delivered: {} }),
       row('call', 3, {
         output: { source: 'gen' },
         call: { key: 'tool' },
-        ...outcome == 'error'
-          ? { error: { message: 'ambiguous restart' } }
+        ...outcome == 'failed'
+          ? { failed: { message: 'ambiguous restart' } }
           : {},
       }),
       ...outcome == 'cancel'
@@ -523,7 +523,7 @@ Deno.test('tool-loop boundaries stay nonterminal, including failed restart calls
       row('input', 1, { message: { role: 'user' } }),
       row('gen', 2, {
         generation: { through: 'input' },
-        error: { message: 'fatal' },
+        failed: { message: 'fatal' },
       }),
     ]),
     { standing: 'terminal', end: 'failed' },

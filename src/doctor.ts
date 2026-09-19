@@ -466,7 +466,7 @@ export let undispatched = (
     return !isNaN(at) && now - at > minutes * 60_000
   }
   let stale = rows.filter((r) => {
-    if (!r.comps.deliver || r.comps.delivered || r.comps.error) return false
+    if (!r.comps.deliver || r.comps.delivered || r.comps.failed) return false
     if (r.comps.mail?.message_id || r.comps.mail?.received_at) return false // inbound: arrival is its settlement
     let due = r.comps.wake ? r.comps.wake.at : r.comps.created?.at
     return old(due)

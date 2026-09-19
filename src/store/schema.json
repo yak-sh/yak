@@ -233,7 +233,7 @@
   },
   {
     "kind": "exec",
-    "sql": "create table if not exists \"error\" (\n    entity integer primary key references entity(id),\n    \"at\" text,\n    \"message\" text\n  );"
+    "sql": "create table if not exists \"failed\" (\n    entity integer primary key references entity(id),\n    \"at\" text,\n    \"message\" text\n  );"
   },
   {
     "kind": "exec",
@@ -1081,15 +1081,15 @@
   },
   {
     "kind": "addColumn",
-    "table": "error",
+    "table": "failed",
     "col": "at",
-    "sql": "alter table error add column \"at\" text"
+    "sql": "alter table failed add column \"at\" text"
   },
   {
     "kind": "addColumn",
-    "table": "error",
+    "table": "failed",
     "col": "message",
-    "sql": "alter table error add column \"message\" text"
+    "sql": "alter table failed add column \"message\" text"
   },
   {
     "kind": "addColumn",

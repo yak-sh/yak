@@ -773,7 +773,7 @@ export let manuals = declare({
       'omitting it waits indefinitely. --interval is milliseconds (default 1000). ' +
       '--follow[=FILTER] implies --wait and prints only matching entries, ' +
       'one flushed line each, without spawn/settle receipts. Bare --follow ' +
-      'selects notify, error or stop; --follow=.error selects errors. ' +
+      'selects notify, failed or stop; --follow=.failed selects failures. ' +
       '--json makes each entry a complete JSONL bundle.',
     root: true,
     args: [arg('id', id)],
@@ -1066,7 +1066,7 @@ export let manuals = declare({
     args: [arg('id', id)],
     detail:
       'Bare --follow shows every entry; --follow=FILTER selects entries ' +
-      'with row-local query predicates (.error, .notify, .stop, or ' +
+      'with row-local query predicates (.failed, .notify, .stop, or ' +
       "'.content.body~=landed'). Component names without an operator mean " +
       'presence. Filters joined by & are ANDed. --json prints complete entry ' +
       'bundles as JSONL, without status receipts. Follow exits by the session outcome.',

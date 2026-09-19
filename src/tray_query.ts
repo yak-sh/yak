@@ -15,7 +15,7 @@ import type { Field } from './query.ts'
 // So the chrome asks for the columns it decides and paints with, and nothing
 // else: enough to tell awake from settled and recent from old (Tray `shown`),
 // sort by start, and give each dot its standing (session_status graphStanding —
-// which reads `error`/`exception` for PRESENCE, hence their timestamps). A
+// which reads `failed`/`exception` for PRESENCE, hence their timestamps). A
 // session's `provider`/`pid` are spawn-preferred through sessionOf, so both
 // spellings ride or the merge reads a stale one.
 export let dotFields: Field[] = [
@@ -32,7 +32,7 @@ export let dotFields: Field[] = [
   'run.started_at',
   'settled.status',
   'settled.at',
-  'error.at',
+  'failed.at',
   'exception.at',
 ].map((f) => {
   let [comp, prop] = f.split('.')

@@ -115,7 +115,7 @@ let statusOf = (eid: string) =>
     | undefined)?.status
 
 let errorOf = (eid: string) =>
-  (db.prepare(`select message from error where ${OWNED}`).get(eid) as
+  (db.prepare(`select message from failed where ${OWNED}`).get(eid) as
     | { message: string }
     | undefined)?.message
 

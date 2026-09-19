@@ -14,9 +14,9 @@ import { Dot } from './Dot.tsx'
 // bespoke index. The dot re-renders only when ITS wake membership changes; a
 // patch to any other entity (another session's wake included) triggers zero
 // re-render (T-17036).
-export let PENDING_WAKE = '.wake!&.delivered=&.error='
+export let PENDING_WAKE = '.wake!&.delivered=&.failed='
 let pendingWakeFor = (session: string) =>
-  `.wake! .deliver.to=${session} .delivered= .error=`
+  `.wake! .deliver.to=${session} .delivered= .failed=`
 // Every dot holds the ONE defining sub — every pending wake, with the session
 // it is aimed at — and reads its own session off those rows, so a strip or a
 // list of dots costs one server sub, not one per session (T-37445: a page
@@ -77,7 +77,7 @@ export let graphStanding = (
   waking = false,
 ) => {
   let s = e.session!
-  if (e.error || e.exception) return 'failed'
+  if (e.failed || e.exception) return 'failed'
   // s is the spawn-preferred view (sessionOf merges the canonical facet over
   // the legacy aliases), so this reads `spawn` and falls back to an old
   // snapshot's session.provider without a second lookup.

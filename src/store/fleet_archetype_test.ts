@@ -240,12 +240,12 @@ Deno.test('archetype stamp echoes and rollback leave no poisoned IDs', () => {
     () =>
       db.transaction(() => {
         stamp(db, () => {
-          db.prepare(`insert into error(entity, message)
+          db.prepare(`insert into failed(entity, message)
         select id, 'no' from entity where eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'`)
             .run()
           return [{
             eid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-            name: 'error',
+            name: 'failed',
             comp: { message: 'no' },
           }]
         })

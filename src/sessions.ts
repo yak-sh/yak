@@ -389,7 +389,7 @@ let pendingWake = (eid: string) =>
     `select 1 from deliver d
        join wake w on w.entity = d.entity
        left join delivered v on v.entity = d.entity
-       left join error x on x.entity = d.entity
+       left join failed x on x.entity = d.entity
      where d."to" = ${idOf} and v.entity is null and x.entity is null
      limit 1`,
   ).get(eid)
@@ -431,7 +431,7 @@ let edgeComp = new Set([
   'generation',
   'delivered',
   'lease',
-  'error',
+  'failed',
   'cancel',
   'attention',
 ])
@@ -677,7 +677,7 @@ let settled = (eid: string, status: string, cast: Cast) => {
       // or an `exception` break (a failed run) — a failed session wears the
       // latter.
       String(
-        sess?.comps.error?.message ?? sess?.comps.exception?.message ?? '',
+        sess?.comps.failed?.message ?? sess?.comps.exception?.message ?? '',
       ),
       stranded,
     ),
@@ -798,7 +798,7 @@ let commitShas = (row: Row): string[] => {
 }
 
 let failureOf = (row: Row) =>
-  (db.prepare(`select message from error where ${OWNED}`)
+  (db.prepare(`select message from failed where ${OWNED}`)
     .get(String(row.eid)) as { message: string | null } | undefined)?.message ??
     ''
 
@@ -1917,7 +1917,7 @@ export let landSpawnClaim = (
 // writes that deliberately ran without them.
 let spawnPending = `
   status is null and pid is null
-  and not exists (select 1 from error where error.entity = session.entity)
+  and not exists (select 1 from failed where failed.entity = session.entity)
   and exists (
     select 1 from journal_change c
     join journal_tx t on t.id = c.tx

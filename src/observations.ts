@@ -161,7 +161,7 @@ export let observedBy = (state: ObservationState, changes: Change[]) =>
     (change.name == 'output' &&
       String(change.comp?.source ?? '') == state.generation) ||
     (change.eid == state.generation &&
-      ['delivered', 'error'].includes(change.name)) ||
+      ['delivered', 'failed'].includes(change.name)) ||
     (change.name == 'cancel' &&
       String(change.comp?.target ?? '') == state.generation)
   )

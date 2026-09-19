@@ -208,7 +208,7 @@ export let fleetDocs = (): VocabDoc[] => {
       'imported',
       'resume',
       'delivered',
-      'error',
+      'failed',
       'exception',
       'redaction',
       'archetype',

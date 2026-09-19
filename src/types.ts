@@ -313,11 +313,11 @@ export let comps: Record<string, Record<string, PropType>> = {
   entry: {
     session: { eid: 'session', death: 'cascade' },
   },
-  error: {},
   exception: {},
   exit: {
     code: 'number',
   },
+  failed: {},
   favorite: {},
   feedback: {
     by: { eid: 'entity', death: 'keep' },
@@ -745,16 +745,16 @@ export let stamped: Record<string, Record<string, PropType>> = {
   entry: {
     seq: 'number',
   },
-  error: {
-    at: 'time',
-    message: 'text',
-  },
   exception: {
     at: 'time',
     message: 'text',
     stack: 'text',
     request: 'text',
     version: 'number',
+  },
+  failed: {
+    at: 'time',
+    message: 'text',
   },
   favorite: {
     at: 'time',
@@ -1851,11 +1851,11 @@ export type Email = { eid: string; address: string }
 // Addressing (D-14945): WHERE a deliverable goes. `to` names a graph
 // entity — the recipient a knock/wake/outbound-mail is aimed at. Shared
 // across the deliverable kinds, the intent half of the deliver/delivered/
-// error triad.
+// failed triad.
 export type Deliver = { eid: string; to: string }
 
 // A knock: the request column is the ask (what to look at); WHO looks is
-// the `deliver {to}` facet, and the outcome the shared `delivered`/`error`
+// the `deliver {to}` facet, and the outcome the shared `delivered`/`failed`
 // facet (deliver.ts) — neither a column here.
 export type Knock = {
   eid: string
@@ -1864,7 +1864,7 @@ export type Knock = {
 
 // A knock waiting on the clock: `at` absolute (resolved at mint). WHO to
 // wake is the `deliver {to}` facet; the outcome — the timer fired and
-// minted the knock, or why it couldn't — is the shared `delivered`/`error`
+// minted the knock, or why it couldn't — is the shared `delivered`/`failed`
 // facet. Neither a column here.
 export type Wake = {
   eid: string
@@ -1884,7 +1884,7 @@ export type Dream = {
 }
 
 // Mail, either direction: the request columns are the ask; the send
-// outcome is the shared `delivered`/`error` facet (deliver.ts). to_addr is
+// outcome is the shared `delivered`/`failed` facet (deliver.ts). to_addr is
 // the envelope copy — what delivery resolved and used. An INBOUND mail
 // carries message_id (the fleet spool's id, also the never-send mark),
 // received_at, and the edge's verified verdict.
@@ -1903,8 +1903,10 @@ export type Mail = {
 
 // The shared outcome and health facets (D-14945): `delivered` reached its
 // destination (`via` says how — cast S-9 / spawned S-9 / local / a
-// Message-ID), `error` says an effect failed (`message` says why).
-// Server-owned and effect-written; `.error` is the fleet health query.
+// Message-ID), `failed` says an effect failed (`message` says why). The word
+// is a MARK, beside `delivered`, because @yaks/tools spells a tool's own
+// expected outcome `error{code}` and one word answers to one idea.
+// Server-owned and effect-written; `.failed` is the fleet health query.
 export type Delivered = { eid: string; at?: string | null; via?: string | null }
 export type Failure = {
   eid: string
@@ -2268,7 +2270,7 @@ export type EntCore = {
   decided?: Decided
   proposed?: Stamp
   delivered?: Delivered
-  error?: Failure
+  failed?: Failure
   exception?: Exception
   bug?: Bug
   finding?: Finding

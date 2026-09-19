@@ -58,7 +58,7 @@ export let noticeOf = (
     join created c on c.entity = n.entity
     join deliver v on v.entity = n.entity
     left join delivered d on d.entity = n.entity
-    left join error x on x.entity = n.entity
+    left join failed x on x.entity = n.entity
     where n.target = (select id from entity where eid = ?)
       and v."to" = n.target and n.event = 'wake'
     order by c.at desc, n.entity desc limit 1

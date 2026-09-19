@@ -467,7 +467,7 @@ Deno.test('server-resolve: a reconnect reseed clears the sidecar', async () => {
 // triggers zero re-render (T-17036, the whole point).
 let pendingWakeQ = (session: string) =>
   resolveRefs(
-    parseQuery(`.wake! .deliver.to=${session} .delivered= .error=`),
+    parseQuery(`.wake! .deliver.to=${session} .delivered= .failed=`),
     findEid,
   )
 

@@ -426,11 +426,11 @@ Deno.test('failed leased work stays visible and cannot rerun', () => {
     failed.filter((c) => c.eid == generation && c.name != 'entity').map((c) =>
       c.name
     ),
-    ['error', 'lease'],
+    ['failed', 'lease'],
   )
   assertMatch(
     String(
-      readEntries(db, sid).find((e) => e.eid == generation)!.comps.error
+      readEntries(db, sid).find((e) => e.eid == generation)!.comps.failed
         .message,
     ),
     /provider unavailable/,

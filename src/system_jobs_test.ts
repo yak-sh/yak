@@ -80,10 +80,10 @@ Deno.test('jobs record observed work and recover from errors', () => {
   assertEquals(readComp(db, eid, 'role')?.decision, 'spawn')
   failure = true
   systemSweep(cast)
-  assertEquals(readComp(db, eid, 'error')?.message, 'Error: failed job')
+  assertEquals(readComp(db, eid, 'failed')?.message, 'Error: failed job')
   failure = false
   systemSweep(cast)
-  assertEquals(readComp(db, eid, 'error'), undefined)
+  assertEquals(readComp(db, eid, 'failed'), undefined)
 })
 
 Deno.test('decision time changes only with the decision or observed work', () => {
@@ -118,7 +118,7 @@ Deno.test('a job decision and its error roll back when journaling fails', () => 
       'journal unavailable',
     )
     assertEquals(readComp(db, eid, 'role'), before)
-    assertEquals(readComp(db, eid, 'error'), undefined)
+    assertEquals(readComp(db, eid, 'failed'), undefined)
     assertEquals(cursorOf(db), cursor)
     assertEquals(heard, [])
   } finally {

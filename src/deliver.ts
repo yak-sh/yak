@@ -51,8 +51,8 @@ export let delivered = (eid: string, via: string, cast: Cast) => {
     ]
     // One outcome at a time: success clears failure in the same transaction,
     // so graph queries and journal replay agree on the deliverable's state.
-    if (db.prepare(`delete from error where ${OWNED}`).run(eid).changes) {
-      changes.push({ eid, name: 'error', comp: null })
+    if (db.prepare(`delete from failed where ${OWNED}`).run(eid).changes) {
+      changes.push({ eid, name: 'failed', comp: null })
     }
     return changes
   })
@@ -98,17 +98,17 @@ export let errorChange = (
   message: string,
   at = now(),
 ): Change | undefined => {
-  let prior = db.prepare(`select at, message from error where ${OWNED}`).get(
+  let prior = db.prepare(`select at, message from failed where ${OWNED}`).get(
     eid,
   ) as
     | { at: string | null; message: string | null }
     | undefined
   if (prior?.message == message && prior.at) return
   db.prepare(
-    `insert into error (entity, at, message) values (${idOf}, ?, ?)
+    `insert into failed (entity, at, message) values (${idOf}, ?, ?)
      on conflict(entity) do update set at = excluded.at, message = excluded.message`,
   ).run(eid, at, message)
-  return { eid, name: 'error', comp: { eid, at, message } }
+  return { eid, name: 'failed', comp: { eid, at, message } }
 }
 
 // The BREAK facet (D-17077): something the code/process hit that it did not
@@ -188,9 +188,9 @@ export let healthy = (eid: string, cast: Cast) => {
 }
 
 export let healthChange = (eid: string): Change | undefined => {
-  if (!db.prepare(`select 1 from error where ${OWNED}`).get(eid)) return
-  db.prepare(`delete from error where ${OWNED}`).run(eid)
-  return { eid, name: 'error', comp: null }
+  if (!db.prepare(`select 1 from failed where ${OWNED}`).get(eid)) return
+  db.prepare(`delete from failed where ${OWNED}`).run(eid)
+  return { eid, name: 'failed', comp: null }
 }
 
 // Has this deliverable already settled? Either outcome present means the
@@ -199,7 +199,7 @@ export let healthChange = (eid: string): Change | undefined => {
 export let settled = (eid: string): boolean =>
   !!db.prepare(
     `select 1 from delivered where ${OWNED}
-     union all select 1 from error where ${OWNED}`,
+     union all select 1 from failed where ${OWNED}`,
   ).get(eid, eid)
 
 // WHERE this deliverable goes — the recipient off the shared `deliver {to}`
@@ -222,4 +222,4 @@ export let toOf = (eid: string): string =>
 // same thing everywhere it is asked.
 export let PENDING = (table: string) =>
   `not exists (select 1 from delivered where delivered.entity = ${table}.entity)
-   and not exists (select 1 from error where error.entity = ${table}.entity)`
+   and not exists (select 1 from failed where failed.entity = ${table}.entity)`

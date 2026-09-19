@@ -87,7 +87,7 @@ let activityOf = (rows: EntryRow[]) => {
     ),
   )
   let call = rows.findLast((row) =>
-    row.comps.call && !row.comps.error && !cancelled.has(row.eid) &&
+    row.comps.call && !row.comps.failed && !cancelled.has(row.eid) &&
     !results.has(row.eid)
   )
   if (call) {
@@ -98,7 +98,7 @@ let activityOf = (rows: EntryRow[]) => {
     }
   }
   let generation = rows.findLast((row) =>
-    row.comps.generation && !row.comps.error && !cancelled.has(row.eid) &&
+    row.comps.generation && !row.comps.failed && !cancelled.has(row.eid) &&
     !row.comps.delivered && !outputs.has(row.eid)
   )
   if (generation) {
@@ -116,7 +116,7 @@ let shown = (
   byEid: Map<string, EntryRow>,
 ): LogRow | undefined => {
   let c = row.comps
-  if (c.error) return { kind: 'error', text: text(c.error.message) }
+  if (c.failed) return { kind: 'error', text: text(c.failed.message) }
   if (c.message) {
     return {
       kind: 'say',
@@ -214,7 +214,7 @@ export let sessionStateOf = (
   let busy = rows.some((row) => {
     let c = row.comps
     if (c.lease) return true
-    if (c.error || cancelled.has(row.eid)) return false
+    if (c.failed || cancelled.has(row.eid)) return false
     if (c.generation) {
       return !c.delivered && !outputs.has(row.eid)
     }
@@ -240,7 +240,7 @@ export let sessionStateOf = (
   // is no lease, but this is NOT a terminal turn (not even if prose beside
   // the calls was labelled final_answer). Boot recovery exposes this gap.
   if (
-    generation && !generation.comps.error && !stopped &&
+    generation && !generation.comps.failed && !stopped &&
     rows.some((row) =>
       row.comps.call && row.comps.output?.source == generation.eid
     )
@@ -262,7 +262,7 @@ export let sessionStateOf = (
         turnEids.has(String(row.comps.cancel.target)))
     )
   ) return { standing: 'terminal', end: 'interrupted' }
-  if (turn.some((row) => row.comps.error)) {
+  if (turn.some((row) => row.comps.failed)) {
     return { standing: 'terminal', end: 'failed' }
   }
   return { standing: 'idle' }

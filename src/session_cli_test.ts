@@ -270,12 +270,12 @@ Deno.test('waitFor: the settled session, its brief, and the --json line', async 
 })
 
 Deno.test('follow filters use typed row predicates and a presence OR default (T-35492)', () => {
-  let es = ['input', 'notify', 'error', 'stop', 'call'].map((k, i) =>
+  let es = ['input', 'notify', 'failed', 'stop', 'call'].map((k, i) =>
     entry(i + 1, k)
   )
   assertEquals(es.filter(followFilter(undefined, true)), es.slice(1, 4))
   assertEquals(es.filter(followFilter()), es)
-  for (let [i, name] of ['notify', 'error', 'stop'].entries()) {
+  for (let [i, name] of ['notify', 'failed', 'stop'].entries()) {
     assertEquals(es.filter(followFilter(`.${name}`)), [es[i + 1]])
     assertEquals(es.filter(followFilter(`.${name}!`)), [es[i + 1]])
   }
@@ -288,7 +288,7 @@ Deno.test('follow filters use typed row predicates and a presence OR default (T-
     es.filter(followFilter('.entry.seq!=2')),
     es.filter((_, i) => i != 1),
   )
-  assertEquals(es.filter(followFilter('.error=')), es.filter((_, i) => i != 2))
+  assertEquals(es.filter(followFilter('.failed=')), es.filter((_, i) => i != 2))
   assert(
     followFilter('.content.body~=landed')(entry(9, 'output', 'Landed abc')),
   )
@@ -309,7 +309,7 @@ Deno.test('follow filters use typed row predicates and a presence OR default (T-
 Deno.test('spawn and tail parse bare/filtered follow, JSON, and redundant --wait (T-35492)', () => {
   for (let name of ['spawn', 'tail']) {
     for (
-      let option of ['--follow', '--follow=.error', '--follow=.entry.seq=2,4']
+      let option of ['--follow', '--follow=.failed', '--follow=.entry.seq=2,4']
     ) {
       let got = parse(name, manuals[name], [
         option,
@@ -431,12 +431,12 @@ Deno.test('entry JSONL uses the query bundle spine and strips storage eids (T-35
   })
 })
 
-Deno.test('native follower defaults to notify/error/stop, including a hidden stop (T-35492)', () => {
+Deno.test('native follower defaults to notify/failed/stop, including a hidden stop (T-35492)', () => {
   let r = row({ session: { id: 'native' } })
   let es = [
     entry(1, 'input', 'input'),
     entry(2, 'notify'),
-    entry(3, 'error'),
+    entry(3, 'failed'),
     entry(4, 'stop'),
   ]
   let show = entryFollower(

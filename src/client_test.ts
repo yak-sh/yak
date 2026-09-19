@@ -575,7 +575,7 @@ Deno.test('notices: comments, acted knocks, and verified operator mail surface t
       // surfaces the knock regardless, the same as its old acted_at receipt.
       {
         eid: K,
-        name: 'error',
+        name: 'failed',
         comp: { at: '2026-01-03', message: 'no channel' },
       },
       { eid: M, name: 'entity', comp: { eid: M, num: 45 } },

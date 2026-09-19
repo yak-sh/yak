@@ -29,7 +29,7 @@ let drow = (eid: string) =>
     | Record<string, string | null>
     | undefined
 let erow = (eid: string) =>
-  db.prepare(`select * from error where ${OWNED}`).get(eid) as
+  db.prepare(`select * from failed where ${OWNED}`).get(eid) as
     | Record<string, string | null>
     | undefined
 

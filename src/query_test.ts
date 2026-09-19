@@ -74,10 +74,10 @@ Deno.test('quarantine needs an explicit facet before a row is listed', () => {
   assertEquals(listed(hidden, parseQuery('.quarantined.at>=today')), true)
 })
 
-Deno.test('the shared error facet is a fleet-wide health predicate', () => {
-  let failed = row({}, { error: { message: 'boom' } })
-  assertEquals(matchQuery(failed, parseQuery('.error!')), true)
-  assertEquals(matchQuery(row({}), parseQuery('.error!')), false)
+Deno.test('the shared failed facet is a fleet-wide health predicate', () => {
+  let failed = row({}, { failed: { message: 'boom' } })
+  assertEquals(matchQuery(failed, parseQuery('.failed!')), true)
+  assertEquals(matchQuery(row({}), parseQuery('.failed!')), false)
 })
 
 // `.kind=` is the first SCOPE — a virtual prop resolving to the kindPreds

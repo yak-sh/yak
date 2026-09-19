@@ -196,7 +196,7 @@ Seed a fortnight of a guestbook and every `created.at` says today, truthfully:
 today is when you wrote them here. Draw `jotting.written`.
 
 **`exception`** — `at`, `message`, `stack`, `request`, `version`, all
-server-set. **`error`** — `at`, `message`, server-set. The kernel's own rows
+server-set. **`failed`** — `at`, `message`, server-set. The kernel's own rows
 about your app: what a route threw, what a page reported. Nothing you write.
 They stay out of every listing unless the filter names one (`.exception!`), and
 `app_errors` is the door meant for them.
@@ -449,19 +449,19 @@ These are the names, all of them:
     about accept access alias anchor app apply archetype architecture archived
     attachment attention bash blob blocked board bounced brief bug call camera
     cancel cancelled canvas card chat checkpoint claim client comment commit
-    completed conflict contains content created cursor decided delegates deliver
-    delivered deploy design doc dream edge effect email entity entry error
-    exception exit favorite feedback fetch filed finding fixer fold fork
-    generation goal grant graph_query headers hook hostname image imported
-    installed key knock layout lease mail member memory message meta meter model
-    nofix notice notified noverify opaque opened order output pane patch person
-    persona pin plan process product project prompt proposed provider published
-    quarantined reads reasoning recall recalled redaction referenced references
-    repo report requires response result resume retired review role run runner
-    runtime satisfies service session setting settled shelf signin space spawn
-    stderr stop stop_request subscription supersedes supervises task
-    task_context timeout tool updated usage venture verifier wake wants web
-    worked worktree yield
+    completed conflict contains content created cursor decided delegates
+    deliver delivered deploy design doc dream edge effect email entity entry
+    error exception exit failed favorite feedback fetch filed finding fixer
+    fold fork generation goal grant graph_query headers hook hostname image
+    imported installed key knock layout lease mail member memory message meta
+    meter model nofix notice notified noverify opaque opened order output pane
+    patch person persona pin plan process product project prompt proposed
+    provider published quarantined reads reasoning recall recalled redaction
+    referenced references repo report requires response result resume retired
+    review role run runner runtime satisfies service session setting settled
+    shelf signin space spawn stderr stop stop_request subscription supersedes
+    supervises task task_context timeout tool updated usage venture verifier
+    wake wants web worked worktree yield
 
 When your first choice is taken, ask what the word is FOR and name that: the
 taken word is the general one, yours is the specific one. Not `card` but

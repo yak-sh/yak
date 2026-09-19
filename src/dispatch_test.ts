@@ -215,7 +215,7 @@ Deno.test('asked: terminal history without a fresh generation still suppresses',
 Deno.test('attempt eligibility consumes exactly one fresh resume generation', () => {
   let failed = mk(S1, 6, ago(60), {
     session: { id: 'old', requested_task: T1, status: 'failed' },
-    error: { at: ago(59), message: 'transport failed' },
+    failed: { at: ago(59), message: 'transport failed' },
   })
   let stale = rows(graph([
     ...failed,
@@ -255,7 +255,7 @@ Deno.test('attempt eligibility consumes exactly one fresh resume generation', ()
   assertEquals(attemptEligible(later, T1, NOW + 60_000, 60_000), true)
   // Failure evidence is input, never a mutation target.
   assertEquals(
-    fresh.find((r) => r.eid == S1)?.comps.error?.message,
+    fresh.find((r) => r.eid == S1)?.comps.failed?.message,
     'transport failed',
   )
 })

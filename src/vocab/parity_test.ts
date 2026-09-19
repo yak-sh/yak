@@ -71,7 +71,7 @@ Deno.test('parity: the writable component list', () => {
     'imported',
     'resume',
     'delivered',
-    'error',
+    'failed',
     'exception',
     'redaction',
   ]

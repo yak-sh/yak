@@ -369,7 +369,7 @@ export let PAGES: Page[] = [...OURS, ...pagesOf(PLUGINS)]
 let COVERS: Record<string, string[]> = {
   mail: ['mail', 'email', 'deliver', 'delivered', 'bounced'],
   entities: ['edge'],
-  errors: ['exception', 'error', 'archived'],
+  errors: ['exception', 'failed', 'archived'],
   files: ['blob', 'image', 'attachment'],
   components: ['doc', 'task', 'filed', 'project', 'comment', 'favorite', 'web'],
 }

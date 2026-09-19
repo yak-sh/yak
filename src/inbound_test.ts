@@ -565,7 +565,7 @@ Deno.test('inbound mail never delivers: arrival is a record, not an ask', async 
     `select o.eid as eid from mail m join entity o on o.id = m.entity
        where m.message_id is null
        and not exists (select 1 from delivered d where d.entity = m.entity)
-       and not exists (select 1 from error e where e.entity = m.entity)`,
+       and not exists (select 1 from failed e where e.entity = m.entity)`,
   ).all() as { eid: string }[]
   assertEquals(pending.some((p) => p.eid == eid), false)
   Deno.env.delete('TASKS_MAIL_CMD')

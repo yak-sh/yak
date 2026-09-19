@@ -509,7 +509,7 @@ export let attentionPrompt =
 // what makes a killed graph-native session un-resumable. The persisted log stays
 // honest (an errored call, no fabricated result); this note lives only in replay.
 let interruptedResult = (row: EntryRow) => {
-  let message = row.comps.error?.message
+  let message = row.comps.failed?.message
   let why = typeof message == 'string' && message ? `: ${message}` : ''
   return `Tool call interrupted before its result was recorded${why}. ` +
     'The outcome is unknown; assume it may not have completed.'

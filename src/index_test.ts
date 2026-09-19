@@ -77,7 +77,7 @@ Deno.test('anchor picks the reverse-index set for an eid-ref equality', () => {
     w3: { wake: {}, deliver: { to: 's1' }, delivered: {} },
   }, [])
   // .deliver.to=s1 anchors on the reverse set {w1,w3}, smaller than byComp[wake]
-  let a = anchor(ix, parseQuery('.wake! .deliver.to=s1 .delivered= .error='))
+  let a = anchor(ix, parseQuery('.wake! .deliver.to=s1 .delivered= .failed='))
   assertEquals(a, new Set(['w1', 'w3']))
 })
 

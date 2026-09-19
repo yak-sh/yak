@@ -50,7 +50,7 @@ let parkWakes = (sessionEid: string): string[] =>
        join wake w on w.entity = d.entity
        join entity e on e.id = d.entity
        left join delivered v on v.entity = d.entity
-       left join error x on x.entity = d.entity
+       left join failed x on x.entity = d.entity
      where d."to" = (select id from entity where eid = ?)
        and v.entity is null and x.entity is null`,
   ).all(sessionEid) as { eid: string }[]).map((r) => r.eid)

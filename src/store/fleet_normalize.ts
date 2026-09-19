@@ -31,7 +31,7 @@ export let fleetNormalizers = (host: Host): Plugin[] => {
           where dl."to" = (select id from entity where eid = ?)
             and w.target is null and o.eid != ?
             and not exists (select 1 from delivered d where d.entity = w.entity)
-            and not exists (select 1 from error e where e.entity = w.entity)
+            and not exists (select 1 from failed e where e.entity = w.entity)
         `)
         let toOf = new Map<string, string>()
         for (let b of bundles) {

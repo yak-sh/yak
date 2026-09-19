@@ -64,13 +64,13 @@ Deno.test('freeze: failures stamp shared health and successful storage clears it
   assertEquals(res.status, 502)
   assertEquals(
     db.prepare(
-      'select message from error where entity = (select id from entity where eid = ?)',
+      'select message from failed where entity = (select id from entity where eid = ?)',
     ).get(eid),
     { message: 'Error: network refused' },
   )
-  assert(heard.some((c) => c.eid == eid && c.name == 'error'))
+  assert(heard.some((c) => c.eid == eid && c.name == 'failed'))
   assert(
-    delta(db, before).changes.some((c) => c.eid == eid && c.name == 'error'),
+    delta(db, before).changes.some((c) => c.eid == eid && c.name == 'failed'),
   )
 
   before = delta(db, 0).cursor
@@ -78,14 +78,14 @@ Deno.test('freeze: failures stamp shared health and successful storage clears it
   await store(eid, PAGE, (c) => heard.push(...c))
   assertEquals(
     db.prepare(
-      'select 1 from error where entity = (select id from entity where eid = ?)',
+      'select 1 from failed where entity = (select id from entity where eid = ?)',
     ).get(eid),
     undefined,
   )
-  assert(heard.some((c) => c.eid == eid && c.name == 'error' && !c.comp))
+  assert(heard.some((c) => c.eid == eid && c.name == 'failed' && !c.comp))
   assert(
     delta(db, before).changes.some((c) =>
-      c.eid == eid && c.name == 'error' && !c.comp
+      c.eid == eid && c.name == 'failed' && !c.comp
     ),
   )
 })

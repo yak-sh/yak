@@ -107,7 +107,7 @@ Deno.test('graph-native reads an OLD snapshot with no spawn facet', () => {
 // regression the O(1) facet introduced: a finished session with a null/idle
 // `standing` (killed, log had no clean final answer, or the boot backfill hasn't
 // reached it) was misdisplaying as idle instead of completed, fleet-wide.
-let finished = (standing?: string, failure?: 'error' | 'exception'): Ent => ({
+let finished = (standing?: string, failure?: 'failed' | 'exception'): Ent => ({
   eid: 'session',
   num: 1,
   kind: 'session',
@@ -119,8 +119,8 @@ let finished = (standing?: string, failure?: 'error' | 'exception'): Ent => ({
     finished_at: '2026-07-01T00:00:00Z',
     provider: 'codex',
   },
-  ...(failure == 'error'
-    ? { error: { eid: 'session', at: '2026-07-01T00:00:00Z', message: 'x' } }
+  ...(failure == 'failed'
+    ? { failed: { eid: 'session', at: '2026-07-01T00:00:00Z', message: 'x' } }
     : failure == 'exception'
     ? {
       exception: {
@@ -140,7 +140,7 @@ Deno.test('a finished native session reads completed, never idle', () => {
   assertEquals(graphStanding(finished('idle')), 'completed') // killed / no final answer
   assertEquals(graphStanding(finished('terminal')), 'completed')
   assertEquals(graphStanding(finished('busy')), 'completed') // a stale busy facet on an ended session
-  assertEquals(graphStanding(finished(undefined, 'error')), 'failed')
+  assertEquals(graphStanding(finished(undefined, 'failed')), 'failed')
   assertEquals(graphStanding(finished(undefined, 'exception')), 'failed')
   // a pending wake cannot revive a finished session
   assertEquals(graphStanding(finished(undefined), true), 'completed')

@@ -117,7 +117,7 @@ export let graphBusy = (db: Sql, eid: string) =>
        exists (select 1 from lease l where l.entity = e.entity)
        or (
          not exists (select 1 from imported i where i.entity = e.entity)
-         and not exists (select 1 from error x where x.entity = e.entity)
+         and not exists (select 1 from failed x where x.entity = e.entity)
          and not exists (select 1 from cancel z where z.target = e.entity)
          and (
            (exists (select 1 from generation g where g.entity = e.entity)
@@ -246,7 +246,7 @@ export let retryCredential = (
             (select eid from entity where id = e.session) as session
      from entry e
      join entity o on o.id = e.entity
-     join error x on x.entity = e.entity
+     join failed x on x.entity = e.entity
      join generation g on g.entity = e.entity
      where x.message like ?
        and not exists (select 1 from lease l where l.entity = e.entity)
@@ -263,13 +263,13 @@ export let retryCredential = (
   for (let row of stuck) {
     let changes = stamp(db, () => {
       if (
-        !db.prepare(`delete from error where ${OWNED}`).run(row.eid).changes
+        !db.prepare(`delete from failed where ${OWNED}`).run(row.eid).changes
       ) {
         return []
       }
       // The generation and its session become healthy together on replay.
       return [
-        { eid: row.eid, name: 'error', comp: null },
+        { eid: row.eid, name: 'failed', comp: null },
         ...faultChanges(db, row.session, null, clock),
       ]
     })
@@ -594,7 +594,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
             `select 1 from deliver d join wake w on w.entity = d.entity
            where d."to" = (select id from entity where eid = ?)
              and not exists (select 1 from delivered v where v.entity = d.entity)
-             and not exists (select 1 from error x where x.entity = d.entity)`,
+             and not exists (select 1 from failed x where x.entity = d.entity)`,
           ).get(session)
         ) return []
         let rows = readEntries(db, session)
@@ -667,7 +667,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         `select o.eid as request, s.eid as session from stop_request r
          join entity o on o.id = r.entity join entity s on s.id = r.target
          where not exists (select 1 from delivered d where d.entity = r.entity)
-           and not exists (select 1 from error x where x.entity = r.entity)`,
+           and not exists (select 1 from failed x where x.entity = r.entity)`,
       ).all() as { request: string; session: string }[]
     ) stop(row.request, row.session)
     let recovered = expire()
@@ -850,7 +850,7 @@ export let managedCodex = (options: ManagedCodexOptions) => {
         `select 1 from stop_request r
          where r.${OWNED} and r.target = (select id from entity where eid = ?)
            and not exists (select 1 from delivered d where d.entity = r.entity)
-           and not exists (select 1 from error x where x.entity = r.entity)`,
+           and not exists (select 1 from failed x where x.entity = r.entity)`,
       ).get(request, session)
       if (!pending) return true
       let work = new Set(readyEntries(db, session).map((row) => row.eid))

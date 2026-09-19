@@ -387,7 +387,7 @@ slow('the generation dispatcher routes by provider to its runner', async () => {
   })
   await codex.start(sid, noCodeJob())
   assertEquals(ran, 1)
-  assert(!readEntries(db, sid).some((row) => row.comps.error))
+  assert(!readEntries(db, sid).some((row) => row.comps.failed))
 
   // A provider with no registered runner never reaches the transport; the
   // dispatch miss becomes a clear failed entry instead of a silent no-op.
@@ -417,7 +417,7 @@ slow('the generation dispatcher routes by provider to its runner', async () => {
   assertEquals(reached, 0)
   let generation = readEntries(db, cid).find((row) => row.comps.generation)!
   let error = db.prepare(
-    'select message from error where entity = (select id from entity where eid = ?)',
+    'select message from failed where entity = (select id from entity where eid = ?)',
   ).get(
     generation.eid,
   ) as { message: string } | undefined
@@ -469,7 +469,7 @@ slow('the generation dispatcher routes by provider to its runner', async () => {
   assertEquals(claudeSaw.length, 1)
   let claudeGen = readEntries(db, clid).find((row) => row.comps.generation)!
   assertEquals(claudeSaw[0], claudeGen.eid)
-  assert(!readEntries(db, clid).some((row) => row.comps.error))
+  assert(!readEntries(db, clid).some((row) => row.comps.failed))
   assert(
     readEntries(db, clid).some((row) =>
       row.comps.content?.body == 'from claude'
@@ -512,10 +512,10 @@ slow('a Session past one entry page still runs its next turn', async () => {
   await service.start(sid, noCodeJob())
   let rows = readEntries(db, sid)
   assertEquals(rows.at(-1)!.comps.content?.body, 'fresh answer')
-  assert(!rows.some((row) => row.comps.error))
+  assert(!rows.some((row) => row.comps.failed))
   assertEquals(
     db.prepare(
-      'select message from error where entity = (select id from entity where eid = ?)',
+      'select message from failed where entity = (select id from entity where eid = ?)',
     ).get(sid),
     undefined,
   )
@@ -1120,7 +1120,7 @@ slow('a failed generation consumes its wake and accepts the next', async () => {
   // it, so a healed Session carries neither health facet.
   assertEquals(
     db.prepare(
-      'select 1 from error where entity = (select id from entity where eid = ?)',
+      'select 1 from failed where entity = (select id from entity where eid = ?)',
     ).get(sid),
     undefined,
   )
@@ -1178,7 +1178,7 @@ slow(
     // A break, not a known error: it wears `exception`, not `error`.
     assertEquals(
       db.prepare(
-        'select 1 from error where entity = (select id from entity where eid = ?)',
+        'select 1 from failed where entity = (select id from entity where eid = ?)',
       ).get(sid),
       undefined,
     )
@@ -1713,7 +1713,7 @@ Deno.test('restart reclaims a lost generation without minting another', async ()
   assertEquals(calls, 1)
   assertEquals(rows.filter((row) => row.comps.generation).length, 1)
   assertEquals(
-    rows.find((row) => row.eid == generation)?.comps.error,
+    rows.find((row) => row.eid == generation)?.comps.failed,
     undefined,
   )
   assertEquals(
@@ -1841,7 +1841,7 @@ slow('restart reclaims task_context on the same call entry', async () => {
     rows.find((row) => row.comps.result?.call == context)?.comps.content.body,
     'current task context',
   )
-  assertEquals(rows.find((row) => row.eid == context)?.comps.error, undefined)
+  assertEquals(rows.find((row) => row.eid == context)?.comps.failed, undefined)
   db.close()
 })
 
@@ -1900,7 +1900,7 @@ Deno.test('restart leaves an uncertain side-effecting call recoverable', async (
   let row = rows.find((row) => row.eid == call)!
   // The ambiguity is the call's RESULT, not an error on the entry: an error
   // there would end the Session, and the model never gets to recover.
-  assertEquals(row.comps.error, undefined)
+  assertEquals(row.comps.failed, undefined)
   assertEquals(row.comps.lease, undefined)
   let answer = rows.find((row) => row.comps.result?.call == call)!
   assertMatch(String(answer.comps.content.body), /restarted mid-call/)
@@ -1979,7 +1979,7 @@ Deno.test('restart reattaches a shell on its original call and feeds its exit to
   await service.sweep()
   let rows = readEntries(db, sid)
   let row = rows.find((row) => row.eid == call)!
-  assertEquals(row.comps.error, undefined)
+  assertEquals(row.comps.failed, undefined)
   assertEquals(resumed, [call])
   let results = rows.filter((row) => row.comps.result?.call == call)
   assertEquals(results.length, 1)
@@ -2100,7 +2100,7 @@ slow(
     let rows = readEntries(db, sid)
     // Reconciliation happened: an interrupted result closes the orphaned call.
     let callRow = rows.find((row) => row.eid == call)!
-    assertEquals(callRow.comps.error, undefined)
+    assertEquals(callRow.comps.failed, undefined)
     let answers = rows.filter((row) => row.comps.result?.call == call)
     assertEquals(answers.length, 1)
     assertMatch(String(answers[0].comps.content.body), /restarted mid-call/)
@@ -2117,7 +2117,7 @@ slow(
     assertEquals(rows.at(-1)?.comps.content?.body, 'recovered and landed')
     assertEquals(
       db.prepare(
-        'select 1 from error where entity = (select id from entity where eid = ?)',
+        'select 1 from failed where entity = (select id from entity where eid = ?)',
       ).get(sid),
       undefined,
     )
@@ -2184,7 +2184,7 @@ slow('restart settles durable generation and call evidence', async () => {
   )
   assertEquals(
     db.prepare(
-      'select 1 from error where entity = (select id from entity where eid = ?)',
+      'select 1 from failed where entity = (select id from entity where eid = ?)',
     ).get(generation),
     undefined,
   )
@@ -2192,7 +2192,7 @@ slow('restart settles durable generation and call evidence', async () => {
   let rows = readEntries(db, sid)
   assertEquals(callLease.token.eid, call)
   assertEquals(rows.find((row) => row.eid == call)?.comps.lease, undefined)
-  assertEquals(rows.find((row) => row.eid == call)?.comps.error, undefined)
+  assertEquals(rows.find((row) => row.eid == call)?.comps.failed, undefined)
   assertEquals(rows.at(-1)?.comps.content?.body, 'after recovered call')
   assertEquals(calls, 1)
   db.close()
@@ -2238,12 +2238,12 @@ slow(
     // The in-flight generation reached a settled boundary.
     assert(generation.comps.delivered)
     assertEquals(generation.comps.lease, undefined)
-    assertEquals(generation.comps.error, undefined)
+    assertEquals(generation.comps.failed, undefined)
     // Its follow-on tool call was never started: it sits ready for the successor.
     let call = rows.find((row) => row.comps.call)!
     assertEquals(call.comps.lease, undefined)
     assertEquals(call.comps.result, undefined)
-    assertEquals(call.comps.error, undefined)
+    assertEquals(call.comps.failed, undefined)
     assertEquals(readyEntries(db, sid).map((e) => e.eid), [call.eid])
     assertEquals(calls, 1)
     db.close()
@@ -2346,7 +2346,7 @@ slow(
     assertEquals(sucCalls, 0)
     let held = readEntries(db2, sid).find((row) => row.eid == generation)!
     assert(held.comps.lease)
-    assertEquals(held.comps.error, undefined)
+    assertEquals(held.comps.failed, undefined)
 
     // The predecessor drains: the in-flight generation completes and settles.
     let drained = pre.settle(5000)
@@ -2355,13 +2355,13 @@ slow(
     await running
     let after = readEntries(db1, sid).find((row) => row.eid == generation)!
     assert(after.comps.delivered)
-    assertEquals(after.comps.error, undefined)
+    assertEquals(after.comps.failed, undefined)
 
     // The successor resumes from the settled boundary and finishes the session.
     await suc.sweep()
     let rows = readEntries(db2, sid)
     assertEquals(rows.at(-1)?.comps.content?.body, 'resumed and finished')
-    assertEquals(rows.some((row) => row.comps.error), false)
+    assertEquals(rows.some((row) => row.comps.failed), false)
     assertEquals(rows.some((row) => row.comps.result), true)
     assert(sucCalls >= 1)
     db1.close()
@@ -2629,7 +2629,7 @@ Deno.test('a credential minted after the failure retries it, once', () => {
   assertEquals(heard.some((c) => c.eid == eid && c.comp == null), true)
   assertEquals(
     !!db.prepare(
-      'select 1 from error where entity = (select id from entity where eid = ?)',
+      'select 1 from failed where entity = (select id from entity where eid = ?)',
     ).get(other),
     true,
   )
@@ -2747,7 +2747,7 @@ Deno.test('restart of an old error-bearing call never exposes a terminal recover
   // Historical runners left this error on a call that is still owed a result.
   apply(db, [{
     eid: call,
-    name: 'error',
+    name: 'failed',
     comp: { message: 'ambiguous restart' },
   }])
   let observed: string[] = []
@@ -2878,7 +2878,7 @@ for (
         }
         assert(changes.some((c) => c.name == 'cancel'))
         assertEquals(
-          rows.some((r) => r.comps.error || r.comps.exception),
+          rows.some((r) => r.comps.failed || r.comps.exception),
           false,
         )
       }
