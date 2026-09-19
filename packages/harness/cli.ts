@@ -10,7 +10,7 @@ import { commands } from './commands.ts'
 // UI mounts, so a listing and a transcript cannot drift from what any other
 // door shows.
 
-import type { Comp, Eid } from '@yaks/graph'
+import { type Comp, type Eid, land } from '@yaks/graph'
 import { type Ctx, type Word } from '@yaks/cli'
 import { codexPaths, fromCodex, fromEnv } from '@yaks/openai'
 import { type Agent, agent, titleOf } from './run.ts'
@@ -252,15 +252,18 @@ let overGraph = (tool: typeof commands[number]): Word => ({
   run: async (args, c) => {
     let h = open()
     try {
-      let result = await tool.run(args, {
+      // The command line is a HOST: the tool says what it wants done, the
+      // landing happens here, and what it answers is printed.
+      let call = {
         graph: h.g,
         actor: null,
-        read: (query, opts) => h.g.read(query, opts),
-        apply: () => {
-          throw new Error('Read-only command context')
-        },
-      })
-      c.out(JSON.stringify(result, null, 2))
+        read: (query: Parameters<typeof h.g.read>[0], opts?: unknown) =>
+          h.g.read(query, opts as undefined),
+      }
+      let intent = await tool.run(args, call)
+      if (intent.msg) c.out(intent.msg)
+      let value = await land(intent, call)
+      if (value !== undefined) c.out(JSON.stringify(value, null, 2))
       return 0
     } finally {
       h.close()

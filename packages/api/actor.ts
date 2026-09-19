@@ -10,7 +10,7 @@
 // unattributed rather than attributed to a guess. A door that would rather
 // refuse throws `Unauthorized` from its `authenticate`.
 
-import type { Bundle, Change, Entity } from '@yaks/graph'
+import type { Entity } from '@yaks/graph'
 
 /**
  * How the host names the writer of a request: the entity making it, or `null`
@@ -31,14 +31,8 @@ export type Authenticate = (
   request: Request,
 ) => Entity | null | Promise<Entity | null>
 
-/**
- * A batch signed by the door: every bundle's `$actor` replaced by this writer,
- * or removed when there is none. What a client sent is never kept.
- */
-export let signed = (change: Change, who: Entity | null): Change =>
-  change.map((b) => {
-    let out: Bundle = { ...b }
-    delete out.$actor
-    if (who) out.$actor = { by: who.eid }
-    return out
-  })
+// A batch signed by the door: every bundle's `$actor` replaced by this
+// writer, or removed when there is none. What a client sent is never kept.
+// It lives in @yaks/graph beside `land` — signing a batch is a fact about a
+// graph, not about HTTP — and is re-exported here, where doors reach for it.
+export { signed } from '@yaks/graph'

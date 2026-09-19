@@ -53,7 +53,6 @@ Deno.test('graph MCP definitions persist; rename keeps identity, edits and remov
     const value = await original.run({ html: '<h1>kept</h1>' }, {
       graph: h.g,
       actor: null,
-      apply: h.g.apply.bind(h.g),
       read: h.g.read.bind(h.g),
     })
     assert(JSON.stringify(value).includes('mockup/1'))
@@ -216,7 +215,6 @@ Deno.test('reconfiguration changes tool identity without retargeting previously 
     const ctx = {
       graph: h.g,
       actor: null,
-      apply: h.g.apply.bind(h.g),
       read: h.g.read.bind(h.g),
     }
     await old.run({ html: 'old' }, ctx)

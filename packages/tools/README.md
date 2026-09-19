@@ -34,7 +34,6 @@ const g = graph({ vocab, storage: ram(vocab) })
 const context: ToolCtx = {
   graph: g,
   actor: null,
-  apply: (change) => g.apply(change),
   read: (query) => g.read(query),
 }
 await g.apply([

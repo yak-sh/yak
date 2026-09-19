@@ -134,7 +134,9 @@ let listing = (ctx: Ctx, vocab: Vocab): Tool => ({
       [{ space, app, who }],
       `${LETTER}${which}&.limit=${num(args.limit) ?? 20}`,
     )
-    return (Array.isArray(rows) ? rows as Bundle[] : []).sort(newest)
+    return {
+      result: (Array.isArray(rows) ? rows as Bundle[] : []).sort(newest),
+    }
   },
 })
 
@@ -206,7 +208,10 @@ let sending = (ctx: Ctx, vocab: Vocab): Tool => ({
     let eid = out.aliases['$letter']
     let letter = out.bundles.find((b) => b.entity?.eid == eid)
     if (!letter) throw new Error('the letter was not written')
-    return letter
+    // The letter went through the APP's own door, vouched as the caller, so
+    // what comes back is the answer — there is nothing left for the host to
+    // land on the platform's own graph.
+    return { result: letter }
   },
 })
 

@@ -21,7 +21,6 @@ Deno.test('recorded graph tools need no session and validate the same JSON Schem
   const ctx: ToolCtx = {
     graph: g,
     actor: null,
-    apply: (b) => g.apply(b),
     read: (q) => g.read(q),
   }
   const tool: Tool = {
@@ -36,7 +35,7 @@ Deno.test('recorded graph tools need no session and validate the same JSON Schem
         count: { type: 'integer', default: 2 },
       },
     },
-    run: (args) => ({ value: args.value, count: args.count }),
+    run: (args) => ({ result: { value: args.value, count: args.count } }),
   }
   const outcomes = await executeCall(g, 'call', {
     resolve: () => graphInvocation(tool, ctx),
@@ -160,7 +159,6 @@ Deno.test('schema refusal happens before the handler, with a recorded result', a
   const ctx: ToolCtx = {
     graph: g,
     actor: null,
-    apply: (b) => g.apply(b),
     read: (q) => g.read(q),
   }
   let ran = false
@@ -174,6 +172,7 @@ Deno.test('schema refusal happens before the handler, with a recorded result', a
     },
     run: () => {
       ran = true
+      return {}
     },
   }
   await executeCall(g, 'call', { resolve: () => graphInvocation(tool, ctx) })

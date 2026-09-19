@@ -284,7 +284,7 @@ Deno.test('opaque separators cannot silently collide across distinct server name
   const { checkToolNames } = await import('./mod.ts')
   const a = await nameOf('a', 'b__c'), b = await nameOf('a__b', 'c')
   assertEquals(a, b)
-  const tool = { description: '', run: () => 'ok' }
+  const tool = { description: '' }
   assertThrows(
     () => checkToolNames([{ ...tool, name: a }, { ...tool, name: b }]),
     Error,

@@ -11,7 +11,7 @@ import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/harness.ts'
 import { comp, connect, result, shopGraph } from './harness.ts'
-import { roster, Say } from './server.ts'
+import { roster } from './server.ts'
 import { rosterLine, rosterVersion } from './roster.ts'
 
 let ada = { eid: 'm1' }
@@ -320,8 +320,9 @@ Deno.test('a plugin contributes tools the way it contributes components', async 
       name: 'shelve',
       description: 'put a book on the shelf',
       input: {},
-      run: (_args, ctx) =>
-        ctx.apply([{ entity: { eid: 'b1' }, book: { status: 'shelved' } }]),
+      run: () => ({
+        change: [{ entity: { eid: 'b1' }, book: { status: 'shelved' } }],
+      }),
     }],
   })
   let client = await connect({ graph, actor: ada })
@@ -345,7 +346,7 @@ Deno.test('a tool that says its own words says them, and its data beside', async
       name: 'stocktake',
       description: 'count the shelf',
       meta: { ui: { resourceUri: 'ui://shop/shelf' } },
-      run: () => new Say('two books here', { books: 2 }),
+      run: () => ({ msg: 'two books here', result: { books: 2 } }),
     }],
   })
   let client = await connect({ graph })
@@ -464,13 +465,13 @@ Deno.test('every tool says how a client signs in for it', async () => {
       description: 'what this shop is',
       input: {},
       meta: { securitySchemes: [{ type: 'noauth' }] },
-      run: () => new Say('a bookshop'),
+      run: () => ({ msg: 'a bookshop' }),
     }, {
       name: 'shelve',
       description: 'put a book on the shelf',
       input: {},
       meta: { ui: { resourceUri: 'ui://shelf' } },
-      run: () => new Say('shelved'),
+      run: () => ({ msg: 'shelved' }),
     }],
   })
   let client = await connect({

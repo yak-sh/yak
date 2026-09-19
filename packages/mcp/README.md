@@ -219,11 +219,12 @@ let shelf = {
     name: 'shelve',
     description: 'put a book on the shelf',
     input: { book: z.string().describe('the book to shelve') },
-    run: (args, ctx) =>
-      ctx.apply([{
+    run: (args) => ({
+      change: [{
         entity: { eid: String(args.book) },
         book: { status: 'shelved' },
-      }]),
+      }],
+    }),
   }],
 }
 
@@ -232,27 +233,28 @@ graph.use(shelf)
 
 They are listed beside the generic tier, with the same signing and the same
 reply shape. A tool is handed the arguments the client sent (already checked
-against its `input`) and a `ToolCtx`: the graph, who is asking, a signed
-`apply`, and a `read`. Schemas are [Zod](https://zod.dev), because the MCP SDK
-takes Zod.
+against its `input`) and a `ToolCtx`: the graph to READ, and who is asking.
+Schemas are [Zod](https://zod.dev), because the MCP SDK takes Zod.
 
-A tool whose words and value differ answers with a `Say`, and one that carries
-`meta` has it handed to the client verbatim as `_meta`:
+A tool never writes. It answers an `Intent` — `change` for what it wants landed,
+`result` for an answer of its own, `msg` for words a person reads, and `card`
+for a host with a screen — and this server lands it (@yaks/graph `land`) signed
+as the actor. What a `change` answers is the batch as applied.
+
+A tool that carries `meta` has it handed to the client verbatim as `_meta`:
 
 ```ts
-import { Say } from '@yaks/mcp'
-
 {
   name: 'shelf',
   description: 'what is on the shelf',
   meta: { ui: { resourceUri: 'ui://shop/shelf' } },
-  run: () => new Say('two books here', { books: 2 }),
+  run: () => ({ msg: 'two books here', result: { books: 2 } }),
 }
 ```
 
-The text is what a client without schemas reads; the data goes to one that
-renders the answer, unwrapped — a plain value is returned under `result`
-instead.
+`msg` is what a client without schemas reads; the `result` beside it goes to one
+that renders the answer, unwrapped — a tool that says no `msg` gets its value
+under `result` instead.
 
 ## When a host serves more than tools
 
@@ -337,7 +339,7 @@ compiler. Output schemas retain the existing Zod path.
 
 Custom tools may declare `outputSchema` as a JSON Schema object, alongside
 `inputSchema`. The schema describes the complete `structuredContent` object.
-Return `new Say(text, data)` to keep a human-readable message and expose `data`
+Answer `{ msg, result }` to keep a human-readable message and expose the value
 unwrapped. For ordinary return values, the server wraps the value as
 `{ result: value }`; declare that wrapper in the output schema. Failed calls use
 `isError` and do not need to conform to the success schema. JSON Schema outputs

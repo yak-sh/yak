@@ -238,7 +238,7 @@ let called = async (
   if (!run) return { text: `no tool ${c.name}`, ok: false }
   try {
     let said = await run(c.args.trim() ? JSON.parse(c.args) : {})
-    return { text: said.text, ok: true }
+    return { text: said.msg ?? '', ok: true }
   } catch (e) {
     return { text: e instanceof Error ? e.message : String(e), ok: false }
   }

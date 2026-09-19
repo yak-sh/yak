@@ -56,7 +56,7 @@
  * {@link Options.extend} is handed the SDK's own server once the tools are on
  * it, so resources, prompts and a capability of the host's own go on the SAME
  * server rather than beside it. A tool whose words and value differ returns a
- * {@link Say}, and a tool may carry `meta` the client is handed verbatim.
+ * an intent's `msg`, and a tool may carry `meta` the client is handed verbatim.
  *
  * @module
  */
@@ -67,7 +67,6 @@ export {
   listing,
   type Options,
   roster,
-  Say,
   type Security,
   server,
   shapeOf,

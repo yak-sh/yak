@@ -42,7 +42,7 @@ Deno.test('narrative structured result preserves the exact text and existing vie
     text: 'created app',
     data: { url: 'https://example.test/' },
   })
-  assertEquals(value.data, {
+  assertEquals(value.result, {
     text: 'created app',
     url: 'https://example.test/',
   })

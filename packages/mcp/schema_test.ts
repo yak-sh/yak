@@ -187,7 +187,6 @@ Deno.test('the write door names its own words, and stays open to newer ones', as
 })
 
 Deno.test('JSON Schema output declarations reach listing unchanged and validate structured replies', async () => {
-  const { Say } = await import('@yaks/mcp')
   const outputSchema = {
     type: 'object',
     required: ['count'],
@@ -200,13 +199,13 @@ Deno.test('JSON Schema output declarations reach listing unchanged and validate 
         name: 'count_good',
         description: 'Count records',
         outputSchema,
-        run: () => new Say('two records', { count: 2 }),
+        run: () => ({ msg: 'two records', result: { count: 2 } }),
       },
       {
         name: 'count_bad',
         description: 'Invalid implementation',
         outputSchema,
-        run: () => new Say('wrong', { count: 'two' }),
+        run: () => ({ msg: 'wrong', result: { count: 'two' } }),
       },
       {
         name: 'list_values',
@@ -218,7 +217,7 @@ Deno.test('JSON Schema output declarations reach listing unchanged and validate 
             result: { type: 'array', items: { type: 'string' } },
           },
         },
-        run: () => ['one', 'two'],
+        run: () => ({ result: ['one', 'two'] }),
       },
     ],
   })
@@ -242,7 +241,6 @@ Deno.test('JSON Schema output declarations reach listing unchanged and validate 
 })
 
 Deno.test('output validation does not invent defaulted result fields', async () => {
-  const { Say } = await import('@yaks/mcp')
   const client = await connect({
     tools: [{
       name: 'missing_count',
@@ -254,7 +252,7 @@ Deno.test('output validation does not invent defaulted result fields', async () 
           count: { type: 'integer', default: 0 },
         },
       },
-      run: () => new Say('no count', {}),
+      run: () => ({ msg: 'no count', result: {} }),
     }],
   })
   try {

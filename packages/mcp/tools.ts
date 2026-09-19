@@ -107,7 +107,7 @@ let batch = (v: unknown): Bundle[] => {
 // The refusal is matched by its WORDS rather than its class: a graph may be a
 // composition over stores of its own, where admission ran on the far side of a
 // hop and what arrives here is the sentence it wrote, not the error it threw.
-let pointed = (err: unknown): never => {
+export let pointed = (err: unknown): never => {
   let said = err instanceof Error ? err.message : ''
   if (!said.includes('unknown column')) throw err
   throw new Refused(
@@ -202,13 +202,9 @@ export let core = (opts: CoreOpts): Tool[] => {
         change: writes.describe('the bundles to apply, atomically'),
       },
       output: applied,
-      run: async (args, ctx) => {
-        try {
-          return await ctx.apply(batch(args.change))
-        } catch (err) {
-          return pointed(err)
-        }
-      },
+      // The tool does not write: it says what to land and the server lands it
+      // signed as the actor, answering the batch as applied.
+      run: (args) => ({ change: batch(args.change) }),
     },
     {
       name: 'graph_query',
@@ -230,13 +226,13 @@ export let core = (opts: CoreOpts): Tool[] => {
         limit: z.number().optional().describe('at most this many entities'),
       },
       output: bundles,
-      run: (args, ctx) => {
+      run: async (args, ctx) => {
         let line = [str(args.q), ...strings(args.filters)]
           .map((s) => s.trim()).filter(Boolean)
         let n = num(args.limit)
         if (n) line.push(`.limit=${n}`)
         if (!line.length) throw new Refused('graph_query needs a query line')
-        return ctx.read(line.join('&'))
+        return { result: await ctx.read(line.join('&')) }
       },
     },
     {
@@ -262,7 +258,7 @@ export let core = (opts: CoreOpts): Tool[] => {
         let ids = strings(args.ids)
         if (!ids.length) throw new Refused('graph_show needs at least one id')
         let found = await gather(ctx, ids, args.backrefs !== false)
-        return { bundles: found }
+        return { result: { bundles: found } }
       },
     },
     {
@@ -306,11 +302,13 @@ export let core = (opts: CoreOpts): Tool[] => {
               `${v.kinds.join(', ')}; ask for it as component instead`,
           )
         }
-        return kind
-          ? ofKind(v, kind, opts.guide)
-          : named.length
-          ? { comps: named.map((name) => detail(v, name, opts.guide)) }
-          : index(v)
+        return {
+          result: kind
+            ? ofKind(v, kind, opts.guide)
+            : named.length
+            ? { comps: named.map((name) => detail(v, name, opts.guide)) }
+            : index(v),
+        }
       },
     },
   ]
@@ -331,10 +329,10 @@ export let core = (opts: CoreOpts): Tool[] => {
         limit: z.number().optional().describe('at most this many entities'),
       },
       output: bundles,
-      run: (args) => {
+      run: async (args) => {
         let words = str(args.words).trim()
         if (!words) throw new Refused('search needs words')
-        return find(words, { limit: num(args.limit) })
+        return { result: await find(words, { limit: num(args.limit) }) }
       },
     })
   }

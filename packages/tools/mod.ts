@@ -5,6 +5,7 @@ import {
   type Comp,
   type Eid,
   type Graph,
+  land,
   token,
   type Tool,
   type ToolCtx,
@@ -44,7 +45,9 @@ export type CallOptions = {
 
 /** Adapt the existing graph Tool contract, including legacy schema validators. */
 export const graphInvocation = (tool: Tool, ctx: ToolCtx): Invocation => ({
-  run: (args) => tool.run(args, ctx),
+  // A recorded call is a HOST: the tool says what it wants done, the landing
+  // happens here signed as the actor, and what is recorded is the answer.
+  run: async (args) => land(await tool.run(args, ctx), ctx),
   inputSchema: tool.inputSchema,
   validate: (args) => {
     try {

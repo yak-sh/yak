@@ -98,14 +98,16 @@ Deno.test('staging tool URLs and app mail use the same configured host', async (
     to: 'ana@books.example',
     title: 'Dinner',
     body: 'Bring pudding.',
-  }, {} as never) as { mail: { from: string } }
-  assertEquals(out.mail.from, 'ada.recipes@yaks.fyi')
+  }, {} as never)
+  let letter = out.result as { mail: { from: string } }
+  assertEquals(letter.mail.from, 'ada.recipes@yaks.fyi')
   let sent = await listing.run({
     space: 'ada',
     app: 'recipes',
     direction: 'sent',
-  }, {} as never) as { mail: { from: string } }[]
-  assertEquals(sent.map((l) => l.mail.from), ['ada.recipes@yaks.fyi'])
+  }, {} as never)
+  let rows = sent.result as { mail: { from: string } }[]
+  assertEquals(rows.map((l) => l.mail.from), ['ada.recipes@yaks.fyi'])
   let { store } = await inApp(ctx, { space: 'ada', app: 'recipes' })
   let read = await store('/query?q=.mail!', {}, {
     'x-yak-person': ctx.person,

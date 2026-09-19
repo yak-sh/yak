@@ -25,7 +25,6 @@ Deno.test('manifest contributions share one command between CLI and MCP over a g
     graph: h.g,
     actor: null,
     read: (q, opts) => h.g.read(q, opts),
-    apply: (b) => h.g.apply(b),
   }
   const results: unknown[] = []
   // The same declaration reaches a command line and a transport: @yaks/cli
@@ -96,7 +95,7 @@ Deno.test('JSON Schema tool uses identical metadata and constraints through MCP 
       },
       options: { positional: ['scope'], short: { n: 'limit' } },
     }),
-    run: (args: Record<string, unknown>) => args,
+    run: (args: Record<string, unknown>) => ({ result: args }),
   }
   const h = open(':memory:')
   const c = await connect({ graph: h.g, tools: [tool] })

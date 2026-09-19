@@ -7,7 +7,7 @@ import {
   type Tool as RemoteTool,
   ToolListChangedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js'
-import type { Tool } from '@yaks/graph'
+import type { Tool, ToolId } from '@yaks/graph'
 import { toolOutputValidator } from '@yaks/vocab/tools'
 import type { jsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/types.js'
 
@@ -106,7 +106,7 @@ export const checkNamespaces = (servers: readonly Server[]): void => {
 }
 
 /** Separators in opaque remote names can also create a cross-server collision. */
-export const checkToolNames = (tools: readonly Tool[]): void => {
+export const checkToolNames = (tools: readonly ToolId[]): void => {
   const names = new Set<string>()
   for (const tool of tools) {
     if (names.has(tool.name!)) {

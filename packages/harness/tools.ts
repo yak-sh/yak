@@ -1,5 +1,5 @@
 import { validateToolInput } from '@yaks/vocab/tools'
-import { toolName } from '@yaks/graph'
+import { land, toolName } from '@yaks/graph'
 import { artifactTools } from './artifact_tools.ts'
 import type { ImageOptions } from './images.ts'
 import { valueTools } from '@yaks/blob'
@@ -63,26 +63,19 @@ export let graphTools = (
   let ctx: ToolCtx = {
     graph: g,
     actor: opts.actor ?? null,
-    apply: (change) => g.apply(change),
     read: (query, o) => g.read(query, o),
   }
   return core({ vocab: g.vocab, depth: opts.depth ?? 'names' }).map((t) => ({
     name: toolName(t),
     description: t.description,
     parameters: parametersOf(t),
+    // This is a HOST: the tool says what it wants done and the landing is
+    // here, signed as whoever the call is for.
     run: async (args: Record<string, unknown>, call) => {
       let actor = call?.session ? { eid: call.session } : ctx.actor
-      return said(
-        await t.run(validateToolInput(t, args), {
-          ...ctx,
-          actor,
-          apply: (change) =>
-            g.apply(change.map((b) => ({
-              ...b,
-              $actor: actor ? { by: actor.eid } : {},
-            }))),
-        }),
-      )
+      let mine = { ...ctx, actor }
+      let intent = await t.run(validateToolInput(t, args), mine)
+      return said(intent.msg ?? await land(intent, mine))
     },
   }))
 }

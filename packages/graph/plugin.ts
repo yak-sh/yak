@@ -12,7 +12,7 @@
 // entity, and a component that never reaches a table is a perfectly good way
 // for one phase to tell a later one what it decided.
 
-import type { Bundle, Change, Eid, Entity } from './bundle.ts'
+import type { Bundle, Eid, Entity } from './bundle.ts'
 import type { Query, ReadOpts, Tx } from './storage.ts'
 import type { Ask } from './gather.ts'
 import type { Resource, Rule } from './rules.ts'
@@ -109,20 +109,44 @@ export type WriteHook = Hook & { independent?: boolean }
 export type Schema = object
 
 /**
- * What a {@link Tool} is handed when it runs: the graph, who is asking, and the
- * two doors it should use. `apply` signs the batch as `actor`, so a tool cannot
- * write in the client's name by accident; reaching past it to `graph.apply` is
- * the deliberate, unsigned way.
+ * What a {@link Tool} is handed when it runs: the graph to READ, and who is
+ * asking. There is no door to write through — a tool ANSWERS with what it
+ * wants done ({@link Intent}) and the host lands it, signed as `actor`, so a
+ * tool cannot write in the client's name by accident and a host can refuse,
+ * batch, or replay what it was asked for.
  */
 export type ToolCtx = {
   /** the graph the tool works on (its vocabulary and storage included) */
   graph: Graph
   /** the entity the transport authenticated, or `null` for nobody */
   actor: Entity | null
-  /** apply a batch, signed as `actor` */
-  apply: (change: Change) => Bundle[] | Promise<Bundle[]>
   /** a query → the matching entities as whole bundles */
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
+}
+
+/**
+ * What a tool ASKS its host to do — the whole of what one answers with.
+ *
+ * A tool never writes; it says what should be written and the host lands it
+ * signed as the actor, answering the batch as applied. `result` is the other
+ * half: what a READ found, or an answer that is not what landed. `card` and
+ * `msg` are for a host with a screen and a person in front of it — every other
+ * host ignores them.
+ *
+ * ```ts
+ * run: () => ({ msg: 'two books here', result: { books: 2 } })
+ * run: (args) => ({ change: [{ entity: { eid: '$b' }, book: args }] })
+ * ```
+ */
+export type Intent = {
+  /** bundles to land, atomically, signed as the actor */
+  change?: Bundle[]
+  /** the structured answer, where what landed is not it */
+  result?: unknown
+  /** an entity a host with a screen should open */
+  card?: Eid
+  /** a line for a person */
+  msg?: string
 }
 
 /**
@@ -134,7 +158,7 @@ export type ToolCtx = {
  * against `input` — and whatever `run` returns is the tool's structured result,
  * which for most tools is bundles.
  */
-export type Tool<C = ToolCtx, R = unknown> = {
+export type Tool<C = ToolCtx, R = Intent> = {
   /** Legacy transport name. Structured tools derive it from noun and verb. */
   name?: string
   /** Resource word, independent of CLI word order or graph components. */
@@ -179,7 +203,7 @@ export type Tool<C = ToolCtx, R = unknown> = {
    * to the client verbatim — an MCP `_meta`, say, naming the page a host
    * renders the answer in. Opaque here, like {@link Schema}. */
   meta?: Record<string, unknown>
-  /** do it: the arguments in, the structured result out */
+  /** say what to do: the arguments in, the {@link Intent} out */
   run: (args: Record<string, unknown>, ctx: C) => R | Promise<R>
 }
 

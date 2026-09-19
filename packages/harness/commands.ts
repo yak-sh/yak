@@ -6,5 +6,5 @@ import definition from './session-list.json' with { type: 'json' }
 
 export const commands: Tool[] = [{
   ...toolDefinition(definition),
-  run: (_args, ctx) => ctx.read(parse('.session')),
+  run: async (_args, ctx) => ({ result: await ctx.read(parse('.session')) }),
 }]

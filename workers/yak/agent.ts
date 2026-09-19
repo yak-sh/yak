@@ -25,11 +25,20 @@
 // actually write.
 import { z } from 'zod'
 import { platformOutput, structuredOutput } from './tool_outputs.ts'
-import type { Bundle, Graph, Plugin, Row, Storage, Tool, Tx } from '@yaks/graph'
+import type {
+  Bundle,
+  Graph,
+  Intent,
+  Plugin,
+  Row,
+  Storage,
+  Tool,
+  Tx,
+} from '@yaks/graph'
 import { composed as perEntity, detached } from '@yaks/graph'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
-import { Say, type Search } from '@yaks/mcp'
+import type { Search } from '@yaks/mcp'
 import type { Column, PropSchema, Vocab } from '@yaks/vocab'
 import { META } from './directory.ts'
 import { vocabIn } from './declared.ts'
@@ -114,11 +123,11 @@ export let outputOf = (
  * DOOR before (mcp.ts `call`) and rides on the tool now, because the door no
  * longer knows what a space is.
  */
-export let answered = async (ctx: Ctx, out: Out): Promise<Say> => {
+export let answered = async (ctx: Ctx, out: Out): Promise<Intent> => {
   // Nobody signed in has no space to be told what is unseen in (anon.ts): the
   // breaks in an app are its members', and a stranger is not one.
   if (!out.space || !ctx.person) {
-    return new Say(out.text, structuredOutput(out.text, out.data))
+    return { msg: out.text, result: structuredOutput(out.text, out.data) }
   }
   let who = {
     person: ctx.person,
@@ -126,7 +135,7 @@ export let answered = async (ctx: Ctx, out: Out): Promise<Say> => {
   }
   const text = out.text + unseenBlock(await serve(ctx.env, out.space, who)) +
     await ceiling(ctx.env, out.space)
-  return new Say(text, structuredOutput(text, out.data))
+  return { msg: text, result: structuredOutput(text, out.data) }
 }
 
 /**
@@ -168,7 +177,7 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   ...(t.destructive == null ? {} : { destructive: t.destructive }),
   ...(t.idempotent ? { idempotent: true } : {}),
   ...(t.openWorld ? { openWorld: true } : {}),
-  // What it answers, where it says: the `Say`'s data rides as the reply's
+  // What it answers, where it says: an intent's `result` rides as the reply's
   // structuredContent unwrapped (@yaks/mcp `server`), so the schema describes
   // that object itself rather than a value under a key.
   output: t.output

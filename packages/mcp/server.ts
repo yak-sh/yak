@@ -6,10 +6,11 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 // calls them. Everything transport-shaped lives in ./mount.ts and ./stdio.ts;
 // this file only knows how a `Tool` becomes an MCP tool.
 //
-// A tool is handed a `ToolCtx` whose `apply` is SIGNED — every bundle's
-// `$actor` is replaced by the identity the door authenticated, exactly as
-// @yaks/api's `/apply` does it, so a tool cannot write in the client's name
-// even if the client asked it to.
+// A tool never writes: it answers an `Intent` saying what it wants done and
+// this server LANDS it (@yaks/graph `land`), signed — every bundle's `$actor`
+// is replaced by the identity the door authenticated, exactly as @yaks/api's
+// `/apply` does it, so a tool cannot write in the client's name even if the
+// client asked it to.
 //
 // A refusal comes back as the tool's own error text with `isError`, never as a
 // protocol error: a bad argument or a rejected write is something the agent
@@ -21,14 +22,15 @@ import { z } from 'zod'
 import {
   type Entity,
   type Graph,
+  type Intent,
+  land,
   type Schema,
   type Tool,
   type ToolCtx,
   toolsOf,
 } from '@yaks/graph'
-import { signed } from '@yaks/api'
 import type { BundleOpts, Depth } from './schema.ts'
-import { core, type CoreOpts, type Search } from './tools.ts'
+import { core, type CoreOpts, pointed, type Search } from './tools.ts'
 import type { Guide } from './words.ts'
 
 /**
@@ -117,41 +119,29 @@ export type Options = {
   extend?: (server: McpServer) => void | Promise<void>
 }
 
-/**
- * A tool's own reply, when the words and the value differ: `text` is what a
- * client without schemas reads, and `data` is handed to one that renders the
- * answer (MCP Apps) exactly as given — not wrapped under `result`, which is
- * what a tool answering a plain value gets.
- *
- * ```ts
- * run: () => new Say('two apps here', { apps: [] })
- * ```
- */
-export class Say {
-  constructor(readonly text: string, readonly data?: unknown) {}
-}
-
 // The reply, said both ways from one value: the JSON as text for a client that
 // reads text, and the same value as `structuredContent` for one that reads the
 // schema. MCP requires structured content to be an object, so it rides under
 // `result` (schema.ts `outputSchema`).
 let said = (value: unknown): CallToolResult => ({
-  content: [{ type: 'text', text: JSON.stringify(value, null, 2) }],
+  content: [{ type: 'text', text: JSON.stringify(value ?? null, null, 2) }],
   structuredContent: { result: value },
 })
 
+// A tool that asked for nothing and answered nothing still says something: a
+// reply with no content at all is not a reply a client can read.
 let bare = (value: unknown): CallToolResult => ({
-  content: [{ type: 'text', text: JSON.stringify(value, null, 2) }],
+  content: [{ type: 'text', text: JSON.stringify(value ?? null, null, 2) }],
 })
 
-// A tool that says its own words (`Say`). The data rides UNWRAPPED, because a
-// host that renders it was told which page to render it in and the page reads
-// the answer's own shape.
-let spoke = (s: Say): CallToolResult => ({
-  content: [{ type: 'text', text: s.text }],
-  ...(s.data == undefined
+// A tool that says its own words (an intent's `msg`). The value rides
+// UNWRAPPED, because a host that renders it was told which page to render it
+// in and the page reads the answer's own shape.
+let spoke = (msg: string, value: unknown): CallToolResult => ({
+  content: [{ type: 'text', text: msg }],
+  ...(value == undefined
     ? {}
-    : { structuredContent: s.data as Record<string, unknown> }),
+    : { structuredContent: value as Record<string, unknown> }),
 })
 
 // A refusal IS an error: `isError` rides the reply so a harness counts it as
@@ -295,8 +285,20 @@ export let server = (opts: Options): McpServer => {
   let ctx: ToolCtx = {
     graph,
     actor,
-    apply: (change) => graph.apply(signed(change, actor)),
     read: (query, readOpts) => graph.read(query, readOpts),
+  }
+
+  // This server is a HOST: a tool answers with what it wants done and the
+  // landing happens here (@yaks/graph `land`), signed as the actor, so a tool
+  // can never write in the client's name by accident. A word this graph does
+  // not know is worth a sentence with the door in it — and `apply` may refuse
+  // before it ever returns a promise, so the catch is around the whole call.
+  let landing = async (intent: Intent): Promise<unknown> => {
+    try {
+      return await land(intent, ctx)
+    } catch (err) {
+      return pointed(err)
+    }
   }
 
   let tools = listing(opts).map(namedTool)
@@ -321,9 +323,10 @@ export let server = (opts: Options): McpServer => {
     let run = async (args: Record<string, unknown>) => {
       let out: CallToolResult
       try {
-        let value = await t.run(validateToolInput(t, args), ctx)
-        out = value instanceof Say
-          ? spoke(value)
+        let intent = await t.run(validateToolInput(t, args), ctx)
+        let value = await landing(intent)
+        out = intent.msg != null
+          ? spoke(intent.msg, value)
           : output || t.outputSchema
           ? said(value)
           : bare(value)
