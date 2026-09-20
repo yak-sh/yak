@@ -23,14 +23,14 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "who archived it \u2014 kept as history when that entity is deleted"
+          "description": "who archived it — kept as history when that entity is deleted"
         },
         "via": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "the instrument it was written through \u2014 the session or client the write came in on"
+          "description": "the instrument it was written through — the session or client the write came in on"
         }
       }
     },
@@ -83,7 +83,7 @@
           "store": "blob"
         }
       },
-      "description": "the session\u2019s own account of itself, written at the end and quoted in the next one"
+      "description": "the session’s own account of itself, written at the end and quoted in the next one"
     },
     "cancel": {
       "component": true,
@@ -115,19 +115,19 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "a session\u2019s lock on the entity carrying it",
+      "description": "a session’s lock on the entity carrying it",
       "properties": {
         "session": {
           "type": "string",
           "ref": "session",
           "death": "release",
-          "description": "the session holding it \u2014 when that session\u2019s entity dies the lock goes and the entity lives"
+          "description": "the session holding it — when that session’s entity dies the lock goes and the entity lives"
         },
         "at": {
           "type": "string",
           "format": "date-time",
           "stamped": true,
-          "description": "when it was taken \u2014 stamped when the lock is new"
+          "description": "when it was taken — stamped when the lock is new"
         }
       }
     },
@@ -235,7 +235,7 @@
           "stamped": true
         }
       },
-      "description": "a line that came from somewhere else \u2014 which transcript, and which line of it"
+      "description": "a line that came from somewhere else — which transcript, and which line of it"
     },
     "notice": {
       "component": true,
@@ -291,13 +291,13 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "the runner\u2019s own name for it"
+          "description": "the runner’s own name for it"
         },
         "actor": {
           "type": "string",
           "ref": "entity",
           "death": "detach",
-          "description": "who it speaks as \u2014 the identity that survives a /clear, where `created.by` is the run"
+          "description": "who it speaks as — the identity that survives a /clear, where `created.by` is the run"
         },
         "operator": {
           "type": "boolean",
@@ -356,13 +356,13 @@
           "type": "string",
           "ref": "provider",
           "death": "keep",
-          "description": "the provider asked \u2014 kept as history when that entity is deleted, so a past ask still says what answered it"
+          "description": "the provider asked — kept as history when that entity is deleted, so a past ask still says what answered it"
         },
         "model": {
           "type": "string",
           "ref": "model",
           "death": "keep",
-          "description": "the model asked \u2014 kept as history when that entity is deleted, so a past ask still says what answered it"
+          "description": "the model asked — kept as history when that entity is deleted, so a past ask still says what answered it"
         },
         "effort": {
           "type": "string"
@@ -378,12 +378,12 @@
       "noun": "claim",
       "verb": "take",
       "title": "Claim it",
-      "description": "Take the lock on an entity for a session, so nobody else picks it up. A lease, not a patch: writing one over another session\u2019s lock fails the whole batch \u2014 release first. The same session re-claiming is a no-op refresh.",
+      "description": "Take the lock on an entity for a session, so nobody else picks it up. A lease, not a patch: writing one over another session’s lock fails the whole batch — release first. The same session re-claiming is a no-op refresh.",
       "input": {
         "target": {
           "type": "string",
           "ref": "entity",
-          "description": "the entity to lock \u2014 any entity at all"
+          "description": "the entity to lock — any entity at all"
         },
         "session": {
           "type": "string",
@@ -406,12 +406,12 @@
       "noun": "claim",
       "verb": "release",
       "title": "Let it go",
-      "description": "Drop the lock on an entity. Unguarded on purpose: letting go is how a lock is handed over, and a dead session\u2019s locks are freed by whoever notices.",
+      "description": "Drop the lock on an entity. Unguarded on purpose: letting go is how a lock is handed over, and a dead session’s locks are freed by whoever notices.",
       "input": {
         "target": {
           "type": "string",
           "ref": "entity",
-          "description": "the entity to lock \u2014 any entity at all"
+          "description": "the entity to lock — any entity at all"
         }
       },
       "required": [
@@ -429,7 +429,7 @@
       "noun": "session",
       "verb": "context",
       "title": "What this session was in the middle of",
-      "description": "Start of a transcript: find or mint the session entity for a harness\u2019s session id, and answer what it was in the middle of \u2014 what it holds a claim on, and the last thing the actor behind it said about itself. The harness injects the prose; nothing here fails loudly.",
+      "description": "Start of a transcript: find or mint the session entity for a harness’s session id, and answer what it was in the middle of — what it holds a claim on, and the last thing the actor behind it said about itself. The harness injects the prose; nothing here fails loudly.",
       "input": {
         "session": {
           "type": "string",
@@ -437,12 +437,12 @@
         },
         "hook": {
           "type": "string",
-          "description": "a harness lifecycle payload as JSON \u2014 `-` reads it from stdin, which is how a hook hands its event over"
+          "description": "a harness lifecycle payload as JSON — `-` reads it from stdin, which is how a hook hands its event over"
         },
         "actor": {
           "type": "string",
           "ref": "entity",
-          "description": "who it speaks as \u2014 the identity that survives a /clear"
+          "description": "who it speaks as — the identity that survives a /clear"
         }
       },
       "options": {
@@ -457,7 +457,7 @@
       "noun": "session",
       "verb": "wrap",
       "title": "End of a transcript",
-      "description": "End of a transcript: record the session\u2019s own account of itself, and release every lock it still holds. A session that was never reified wraps to nothing.",
+      "description": "End of a transcript: record the session’s own account of itself, and release every lock it still holds. A session that was never reified wraps to nothing.",
       "input": {
         "session": {
           "type": "string",
@@ -465,7 +465,7 @@
         },
         "hook": {
           "type": "string",
-          "description": "a harness lifecycle payload as JSON \u2014 `-` reads it from stdin, which is how a hook hands its event over"
+          "description": "a harness lifecycle payload as JSON — `-` reads it from stdin, which is how a hook hands its event over"
         },
         "brief": {
           "type": "string",
@@ -487,7 +487,7 @@
       "noun": "session",
       "verb": "brief",
       "title": "Say what happened",
-      "description": "Write the session\u2019s own account of itself \u2014 the brief the next session by the same actor is handed. Replaces whatever it said before.",
+      "description": "Write the session’s own account of itself — the brief the next session by the same actor is handed. Replaces whatever it said before.",
       "input": {
         "session": {
           "type": "string",
@@ -495,7 +495,7 @@
         },
         "hook": {
           "type": "string",
-          "description": "a harness lifecycle payload as JSON \u2014 `-` reads it from stdin, which is how a hook hands its event over"
+          "description": "a harness lifecycle payload as JSON — `-` reads it from stdin, which is how a hook hands its event over"
         },
         "text": {
           "type": "string",
@@ -517,7 +517,7 @@
       "noun": "hooks",
       "verb": "install",
       "title": "Wire the injection loop",
-      "description": "Write this package\u2019s lifecycle entries into a harness settings file, so every session starts by reading its context back and ends by wrapping. Replaces an earlier install and leaves every other entry alone. Runs on the box the tool runs on.",
+      "description": "Write this package’s lifecycle entries into a harness settings file, so every session starts by reading its context back and ends by wrapping. Replaces an earlier install and leaves every other entry alone. Runs on the box the tool runs on.",
       "input": {
         "path": {
           "type": "string",

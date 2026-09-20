@@ -24,7 +24,7 @@
           "death": "cascade"
         }
       },
-      "description": "words aimed at any entity \u2014 the doc beside it says them"
+      "description": "words aimed at any entity — the doc beside it says them"
     },
     "created": {
       "component": true,
@@ -102,7 +102,7 @@
           "ref": "archetype",
           "death": "keep",
           "stamped": true,
-          "description": "which set of components it wears \u2014 the archetype row, not a kind"
+          "description": "which set of components it wears — the archetype row, not a kind"
         }
       },
       "description": "every entity has one: the number this graph minted for it, and the archetype its set of components makes"
@@ -237,7 +237,7 @@
           "description": "the digest of what was there, so a claim about it can still be checked"
         }
       },
-      "description": "one column of one entity, replaced \u2014 the hash proves what was there without keeping it"
+      "description": "one column of one entity, replaced — the hash proves what was there without keeping it"
     },
     "references": {
       "component": true,
@@ -303,7 +303,7 @@
       "noun": "comment",
       "verb": "new",
       "title": "Comment on anything",
-      "description": "Say something about an entity: a new entity wearing doc{body} and comment{target}, signed as whoever asked. The target is any entity \u2014 a task, a design, a session, another comment.",
+      "description": "Say something about an entity: a new entity wearing doc{body} and comment{target}, signed as whoever asked. The target is any entity — a task, a design, a session, another comment.",
       "input": {
         "target": {
           "type": "string",
