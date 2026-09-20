@@ -4,6 +4,11 @@
 import { assertEquals, assertThrows } from '@std/assert'
 import { Refused } from '@yaks/graph'
 import { unroutable } from './guard.ts'
+import { loadVocab } from '@yaks/vocab'
+import { docDoc } from '@yaks/doc'
+import { edgeDoc, edgeKeywords } from '@yaks/edge'
+import { taskDoc } from '@yaks/task'
+import { projectDoc } from './comp.ts'
 import { team, teamGraph } from './harness.ts'
 
 let board = (query: string) => [{
@@ -114,4 +119,22 @@ Deno.test('filing stores separately and a bare priority query orders filed tasks
   assertEquals(rows.map((b) => b.entity.eid), ['first', 'later'])
   assertEquals(rows[1].task, {})
   assertEquals(rows[1].filed, { priority: 2, domain: 'Eng' })
+})
+
+Deno.test('the vocabulary widens the ladder where a package owns the rung', () => {
+  // Naming no marks reads the closed set the DOCUMENTS declare, so a host
+  // composing @yaks/session's `statuses` gets `wip` without @yaks/project
+  // being told about leases.
+  let leased = loadVocab(
+    [docDoc, edgeDoc, taskDoc, projectDoc, {
+      $defs: { statuses: { enum: ['wip'] } },
+    }],
+    [edgeKeywords],
+  )
+  assertEquals(unroutable('.status=wip', leased), null)
+  assertEquals(unroutable('.status=open', leased), null)
+  assertEquals(
+    unroutable('.status=complete', leased),
+    'no such status: complete — this board knows cancelled, done, open, wip',
+  )
 })

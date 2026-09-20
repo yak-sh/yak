@@ -93,10 +93,6 @@ export type Host = {
   storage: Store
   sql: Driver
   graph: Graph
-  /** the columns the store computes rather than keeps, as the vocab facets
-   * said them — what a package holding an index of its own reads a
-   * content-addressed column through. */
-  derived: Derived
   /** who is calling — the same answer the graph's own doors get, so a route
    * signs what it writes (`signed` in @yaks/api) rather than writing as
    * nobody. One plugin may say it; where none does, it is the config's
@@ -405,7 +401,6 @@ export let compose = async (
       config,
       vocab,
       sql,
-      derived,
       who: authenticate,
       get storage(): Store {
         if (!store) throw new Error('the store is not open yet')
@@ -431,10 +426,6 @@ export let compose = async (
       adopt: config.adopt ?? false,
     })
     store.install()
-    // After the tables, because an index is cut from them: `adopt` makes the
-    // indexes stand equal to what the vocabulary says and rebuilds one that
-    // drifted, and writes nothing on a boot where nothing moved.
-    if (text.length) adopt(sql, text)
 
     // An effect writes through the graph's own door, trusted: what it writes
     // is the host's word, never a client's.
@@ -454,6 +445,13 @@ export let compose = async (
         fx.on(comp, watch)
       }
     }
+    // After every table, the plugins' own included: an index is CUT from the
+    // tables it reads, and a column the graph keeps under a content address is
+    // read through the plugin's — so the index is raised once the rules have
+    // installed theirs. `adopt` makes the indexes stand equal to what the
+    // vocabulary says and rebuilds one that drifted, and writes nothing on a
+    // boot where nothing moved.
+    if (text.length) adopt(sql, text, derived)
     let tools = loadTools(
       docs,
       Object.assign(

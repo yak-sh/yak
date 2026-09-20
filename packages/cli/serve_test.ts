@@ -3,6 +3,8 @@ import type { Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
+import { blobKeywords, blobRead } from '@yaks/blob'
+import { rules as blobRules } from '@yaks/blob/rules'
 import { compose, FACETS, type Facets, read, unfinished } from './serve.ts'
 
 let doc: VocabDoc = {
@@ -629,5 +631,52 @@ Deno.test('an option written {env} is read from the environment', () => {
   } finally {
     Deno.env.delete('YAK_TEST_TOKEN')
     Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+Deno.test('a body kept in the store is still found by its own words', async () => {
+  // The index is cut from the WORDS, and a column that says `store: blob`
+  // holds an address where its text was. An index raised over the raw column
+  // would hold hashes, so the host hands its computed reads to the index the
+  // same way it hands them to the store — a search over a long body is what
+  // says whether it did.
+  let post: VocabDoc = {
+    title: 'blog',
+    $defs: {
+      entity: doc.$defs!.entity,
+      created: doc.$defs!.created,
+      updated: doc.$defs!.updated,
+      post: {
+        component: true,
+        type: 'object',
+        kind: true,
+        prefix: 'P',
+        properties: {
+          title: { type: 'string', search: true },
+          body: { type: 'string', store: 'blob', search: true },
+        },
+      },
+    },
+  }
+  let host = await compose(
+    { db: ':memory:', plugins: ['blog'] },
+    only({
+      blog: {
+        vocab: { docs: [post], keywords: [blobKeywords], derived: blobRead },
+        rules: { rules: blobRules },
+      },
+    }),
+  )
+  try {
+    await host.graph.apply([{
+      entity: { eid: 'p1' },
+      post: { title: 'On lemons', body: 'three lemons and a drizzle of syrup' },
+    }])
+    let found = await host.handler(new Request('http://h/query?q=drizzle'))
+    let rows = await found.json()
+    assertEquals(rows.length, 1)
+    assertEquals(rows[0].post.title, 'On lemons')
+  } finally {
+    host.close()
   }
 })

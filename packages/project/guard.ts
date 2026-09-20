@@ -32,7 +32,7 @@ import type { Bundle, Comp, Hook } from '@yaks/graph'
 import { comps, Refused } from '@yaks/graph'
 import { parse, type Value } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import { type Mark, MARKS, statuses, TASK } from '@yaks/task'
+import { declared, type Mark, statuses, TASK } from '@yaks/task'
 import { BOARD } from './comp.ts'
 
 // Every raw token a value names: a scalar is one, a list is its items, a range
@@ -63,9 +63,12 @@ let tokens = (v: Value | null): string[] =>
 export let unroutable = (
   query: string,
   vocab: Vocab,
-  marks: Mark[] = MARKS,
+  marks?: Mark[],
 ): string | null => {
-  let known = statuses(marks)
+  // Name the marks and the ladder is theirs; name none and it is the one the
+  // VOCABULARY declares, which is how a board in a host that leases its tasks
+  // knows `wip` without @yaks/project being told about @yaks/session.
+  let known = marks ? statuses(marks) : declared(vocab)
   try {
     for (let c of parse(query).clauses) {
       if (c.kind != 'pred') continue
@@ -91,13 +94,12 @@ export let unroutable = (
  * {@link https://jsr.io/@yaks/task/doc/~/tasks | tasks}; exported on its own for
  * a graph that wants the check without the vocabulary.
  */
-export let guarding =
-  (vocab: Vocab, marks: Mark[] = MARKS): Hook => (bundles) => {
-    for (let b of bundles) {
-      for (let [name, comp] of comps(b)) checked(b, name, comp, vocab, marks)
-    }
-    return bundles
+export let guarding = (vocab: Vocab, marks?: Mark[]): Hook => (bundles) => {
+  for (let b of bundles) {
+    for (let [name, comp] of comps(b)) checked(b, name, comp, vocab, marks)
   }
+  return bundles
+}
 
 // One component patch of one bundle. A `null` comp is a drop, which states no
 // query at all.
@@ -106,7 +108,7 @@ let checked = (
   name: string,
   comp: Comp | null,
   vocab: Vocab,
-  marks: Mark[],
+  marks?: Mark[],
 ): void => {
   if (!comp || name != BOARD || comp.query == null) return
   let why = unroutable(String(comp.query), vocab, marks)

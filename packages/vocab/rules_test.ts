@@ -61,3 +61,23 @@ Deno.test('a rule declaration validates as one', () => {
     false,
   )
 })
+
+Deno.test('one rule cited twice is one rule; two different ones refuse', () => {
+  // A package shipping a convenience document bundling a neighbour's words
+  // says that neighbour's rule in two of the documents a host loads.
+  let settle = { rule: true, match: '.call', phase: 'effect' }
+  assertEquals(
+    rulesIn([{ $defs: { settle } }, { $defs: { settle: { ...settle } } }])
+      .map((r) => r.name),
+    ['settle'],
+  )
+  assertThrows(
+    () =>
+      rulesIn([
+        { $defs: { settle } },
+        { $defs: { settle: { rule: true, match: '.result' } } },
+      ]),
+    Error,
+    "rule 'settle' is declared twice",
+  )
+})

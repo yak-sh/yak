@@ -22,7 +22,7 @@ import { guarding } from './guard.ts'
  * does not — the guard checks the statuses a board's query names against the
  * same ladder the reader will use.
  */
-export let projects = (vocab: Vocab, marks: Mark[] = MARKS): Plugin => ({
+export let projects = (vocab: Vocab, marks?: Mark[]): Plugin => ({
   name: '@yaks/project',
   vocab: [projectDoc],
   hooks: { precondition: guarding(vocab, marks) },
