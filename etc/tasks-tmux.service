@@ -7,9 +7,10 @@
 # five operators lost mid-turn (T-11139). The parent had been chosen by a
 # race between two 2s reconcile sweeps, not by anyone.
 #
-# tasksd restarts on every source edit; panes must live for hours. So the
-# server is owned here, under user-<uid>.slice, which a system-service
-# restart cannot touch, and tasksd only ever connects as a client.
+# The graph server (`yak serve`, the tasksd unit) restarts whenever a landed
+# edit is deployed; panes must live for hours. So the tmux server is owned
+# here, under user-<uid>.slice, which a system-service restart cannot touch,
+# and `yak serve` only ever connects as a client.
 #
 # Install:
 #   ln -sf "$PWD/etc/tasks-tmux.service" ~/.config/systemd/user/
@@ -19,15 +20,16 @@
 
 [Unit]
 Description=tmux server for the tasks fleet
-# Deliberately independent of tasksd: no After=, no Requires=. The whole
+# Deliberately independent of the graph server: no After=, no Requires=. The whole
 # point is that the two lifetimes are unrelated.
 
 [Service]
 # The tmux server is the ancestor of every operator pane, so its environment is
 # where a variable reaches every interactive agent shell at once. DENO_DIR is
-# pinned here for the same reason src/agent_env.ts pins it for spawned agents:
-# a probe that moves HOME would otherwise download an ~800 MB module cache into
-# its throwaway home, and 142 of those filled the disk twice (T-37394). A
+# pinned here for the same reason the service unit pins a PATH for spawned
+# agents: a probe that moves HOME would otherwise download an ~800 MB module
+# cache into its throwaway home, and 142 of those filled the disk twice
+# (T-37394). A
 # `HOME=` prefix on a command cannot unset what the pane already exports.
 # Panes inherit this at server start — tmux's update-environment does not
 # touch DENO_DIR — so a running server wants `tmux setenv -g DENO_DIR …` too.

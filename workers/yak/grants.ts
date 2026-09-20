@@ -4,7 +4,7 @@
 // and no connector — the person says "give me a token", pastes one line into a
 // terminal, and the CLI speaks to the same door with the same tools.
 //
-// It is a SEALED value (src/token.ts `seal`), like the platform session cookie
+// It is a SEALED value (lib/token.ts `seal`), like the platform session cookie
 // and the custom-domain handoff beside it, and deliberately NOT an OAuth
 // access token: the provider mints those only at the end of a browser redirect
 // flow it owns, and their life is one number for the whole provider

@@ -1,6 +1,6 @@
 // An R2 bucket, as the slice we ask of it and nothing else — mirroring
-// @cloudflare/workers-types, so neither src/ nor a Worker carries a Cloudflare
-// dependency to name a bucket.
+// @cloudflare/workers-types, so naming a bucket costs no Cloudflare
+// dependency.
 //
 // It is its OWN module, with no imports at all, because two very different
 // programs name it: blobs_r2.ts, which adapts a bucket to the blob seam, and

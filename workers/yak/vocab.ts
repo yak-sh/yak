@@ -275,7 +275,7 @@ export let EXAMPLE =
 /** Where the whole of it is written, and what an app's store says when it is
  * asked for a word nobody declared — the same sentence at the write door and
  * the read door, because it is the same missing act. The fleet's own store
- * says it too (src/store/vocab.ts `TEACH`); it is spelled again here because
+ * says it too (lib/store/vocab.ts `TEACH`); it is spelled again here because
  * the Store carries the packages' vocabulary and never the fleet's. */
 export let GUIDE = url({}, '/guide.md')
 export let teach = (env: Host = {}) =>
@@ -294,7 +294,7 @@ export let TEACH = teach()
  * each app's own — a `task` in one app is the same word as a `task` in the
  * next, so one filter reads both.
  *
- * Their columns are the fleet contract's own (src/types.ts), so a row written
+ * Their columns are the fleet contract's own (lib/types.ts), so a row written
  * through the old store means what a row written through this one means.
  */
 export let appsDoc: VocabDoc = {
@@ -537,7 +537,7 @@ export let coreDocs: VocabDoc[] = [
 
 /**
  * The platform's own components — what the directory IS, as one JSON Schema
- * document. Every word here is the fleet contract's own (src/types.ts) read
+ * document. Every word here is the fleet contract's own (lib/types.ts) read
  * back in the format @yaks/vocab loads: the same columns, the same closed sets,
  * the same death behaviour, so a row written through the old store means
  * exactly what a row written through this one means.
@@ -852,7 +852,7 @@ export let platformDoc: VocabDoc = {
     },
     // What the hourly sweep read off Cloudflare (usage.ts). Written by the
     // sweep, through the kernel's door — and NOT stamped, because the fleet
-    // contract does not stamp it (src/types.ts `comps`) and the meta space's
+    // contract does not stamp it (lib/types.ts `comps`) and the meta space's
     // own graph tier is how a reading is planted or corrected by hand. Nobody
     // but an owner of `yak` reaches that door at all (directory.ts), which is
     // what keeps a customer from writing their own bill.

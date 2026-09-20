@@ -1,5 +1,5 @@
 // Who is asking (D-32318 §Auth): the platform session cookie, verified with
-// the shared secret (src/token.ts), joined to the person's membership in the
+// the shared secret (lib/token.ts), joined to the person's membership in the
 // space the request is for. The kernel is the one reader of the cookie —
 // what serves an app gets the VOUCH instead, and never the cookie — and the
 // only writer of it, so a client cannot send one: every request to a store is

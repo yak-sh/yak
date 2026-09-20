@@ -8,7 +8,7 @@
 // so the ceiling says nothing about the address (T-33020) — and hands it to
 // the mail seam (mail.ts);
 // `POST /login/code` spends it, finds or mints the person, and sets the
-// platform session cookie (src/token.ts). No password exists to lose. Those
+// platform session cookie (lib/token.ts). No password exists to lose. Those
 // two steps are the WHOLE of signing up (T-34236): give the address, prove it,
 // and land on your own space. The card asks nothing else — what a person is
 // called (T-32654) and the address their apps live at (T-32967) are set on the

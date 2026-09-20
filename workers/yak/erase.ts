@@ -24,7 +24,7 @@
 // the apps, the domains, the people — because whoever reads it may not be
 // whoever asked.
 //
-// The ticket the letter carries is a `seal` (src/token.ts): the space, the
+// The ticket the letter carries is a `seal` (lib/token.ts): the space, the
 // person, and the hour it dies, signed under the session secret, kept nowhere.
 // Single-use is what it AUTHORIZES rather than a row somewhere: the one act
 // it opens can happen once, and a second visit finds a space that is gone. It

@@ -1,12 +1,15 @@
-// GENERATED — do not edit. The vocabulary source of truth is the
-// data manifests in src/vocab/manifests/*.json; `deno task codegen`
-// emits this file from them. Hand edits here are refused by the
-// gate's stale check
-// (`deno task codegen --check`). The code half is src/vocab/code.ts.part.
+// The component vocabulary this worker's platform store is checked against:
+// component columns and their types, the server-stamped half, the edge
+// relations, and the id helpers over them. No imports; the module IS the
+// schema.
 //
-// Shared FE/BE vocabulary: entity components, edges, and the sync
-// unit. No imports; the module IS the schema, on both sides of the
-// wire.
+// It WAS generated, from the fleet server's data manifests, and is not any
+// more (T-37584): the fleet server and its codegen are gone, and the worker
+// was the table's only other reader. So this is authored now — edit it here,
+// and it means what an app's store may hold and what `RESERVED` (vocab.ts)
+// will not let an app redeclare. The words a fleet graph speaks live in the
+// @yaks/* plugin vocabularies instead, and when this worker moves onto those,
+// this file goes.
 
 export let statuses = ['open', 'wip', 'done', 'cancelled'] as const
 export let turnStates = ['idle', 'busy'] as const

@@ -1,21 +1,18 @@
-// The store seam's contract, held against db.ts through a second handle: one
-// that wraps the file adapter and answers `can` differently. A store without
-// FTS5 still migrates, and its search door says so; an empty handle planted
-// from schemaDdl() serves the wire like a migrated one.
-Deno.env.set('DB_PATH', ':memory:')
-import { assertEquals, assertStrictEquals, assertThrows } from '@std/assert'
-import { slow } from '../testing.ts'
-import { type Can, present, type Sql, textPresent, WHITESPACE } from './sql.ts'
-let { DatabaseSync } = await import('./sqlite.ts')
-let { apply, migrate, plant, regraft, schemaDdl, search, snapshot } =
-  await import(
-    '../db.ts'
-  )
+// The store seam's two value predicates, held against SQLite itself: the same
+// question asked in SQL and in JS has to give the same answer, or a filter
+// means one thing to a store and another to the code reading its rows.
+//
+// The rest of this file drove the fleet's own file adapter through a second
+// handle — a store without FTS5, a store planted from schemaDdl() — and went
+// with that server (T-37584). What the platform store does on its own storage
+// is workers/yak's do_test.ts and migrate.ts's tests.
+import { assertEquals } from '@std/assert'
+import { Database } from '@db/sqlite'
+import { slow } from '../../../../bin/testing.ts'
+import { present, textPresent, WHITESPACE } from './sql.ts'
 
 // The WHITESPACE list is String.prototype.trim's, proven over the whole BMP
-// (every Unicode space lives there); present() is that test as SQL, and the
-// file adapter agrees with textPresent() on the values that used to need the
-// text_present function.
+// (every Unicode space lives there).
 slow('WHITESPACE is String.prototype.trim over the BMP', () => {
   let ws = new Set(WHITESPACE)
   let off: string[] = []
@@ -29,204 +26,10 @@ slow('WHITESPACE is String.prototype.trim over the BMP', () => {
 })
 
 Deno.test('present() in SQL is textPresent() in JS', () => {
-  let db = new DatabaseSync(':memory:')
+  let db = new Database(':memory:')
   let ask = db.prepare(`select ${present('?')} as p`)
-  for (let v of ['', ' \t\n', '\u00a0\ufeff\u3000', ' x ', '\u2028y', null]) {
-    assertEquals(!!ask.get(v)?.p, textPresent(v), JSON.stringify(v))
+  for (let v of ['', ' \t\n', ' ﻿　', ' x ', ' y', null]) {
+    assertEquals(!!ask.get<{ p: unknown }>(v)?.p, textPresent(v), JSON.stringify(v))
   }
-  db.close()
-})
-
-// The transaction door's contract: a nested run is a savepoint whose failure
-// leaves the outer's writes; an outer failure leaves nothing and no open
-// transaction; the version round-trips.
-Deno.test('transaction(): nested failure rolls back alone, outer keeps', () => {
-  let db = new DatabaseSync(':memory:')
-  db.exec('create table t (n integer)')
-  let rows = () => db.prepare('select n from t').all()
-  db.transaction(() => {
-    db.exec('insert into t values (1)')
-    assertThrows(() =>
-      db.transaction(() => {
-        db.exec('insert into t values (2)')
-        throw new Error('inner')
-      })
-    )
-    assertEquals(db.inTransaction, true)
-  }, true)
-  assertEquals(rows(), [{ n: 1 }])
-  assertThrows(() =>
-    db.transaction(() => {
-      db.exec('insert into t values (3)')
-      throw new Error('outer')
-    })
-  )
-  assertEquals(db.inTransaction, false)
-  assertEquals(rows(), [{ n: 1 }])
-  db.version = 7
-  assertEquals(db.version, 7)
-  db.close()
-})
-
-for (let nested of [false, true]) {
-  Deno.test(`transaction(): abandoned ${nested ? 'nested' : 'outer'} keeps the body error`, () => {
-    let db = new DatabaseSync(':memory:')
-    let original = new Error('body failed')
-    let body = () => {
-      db.exec('rollback') // Simulate SQLite abandoning the entire transaction.
-      throw original
-    }
-    try {
-      let error = assertThrows(() =>
-        db.transaction(() => nested ? db.transaction(body) : body())
-      )
-      assertStrictEquals(error, original)
-      if (nested) {
-        assertEquals(original.cause instanceof Error, true)
-        assertEquals(
-          (original.cause as Error).message.startsWith(
-            'no such savepoint: tx_',
-          ),
-          true,
-        )
-      } else assertEquals(original.cause, undefined)
-      assertEquals(db.inTransaction, false)
-      assertEquals(db.transaction(() => 42), 42)
-    } finally {
-      db.close()
-    }
-  })
-}
-
-for (let cleanup of ['rollback', 'release']) {
-  Deno.test(`transaction(): failed ${cleanup} is the original error's cause`, () => {
-    let db = new DatabaseSync(':memory:')
-    let exec = db.exec.bind(db)
-    let original = new Error('body failed')
-    let failure = new Error('cleanup failed')
-    db.exec = (sql) => {
-      if (sql.split(' ')[0] == cleanup) throw failure
-      exec(sql)
-    }
-    try {
-      if (cleanup == 'release') exec('begin')
-      let error = assertThrows(() =>
-        db.transaction(() => {
-          throw original
-        })
-      )
-      assertStrictEquals(error, original)
-      assertStrictEquals(original.cause, failure)
-    } finally {
-      if (db.inTransaction) exec('rollback')
-      db.close()
-    }
-  })
-}
-
-for (let original of ['body failed', Object.freeze(new Error('body failed'))]) {
-  Deno.test(`transaction(): cleanup preserves ${typeof original == 'string' ? 'primitive' : 'frozen'} exceptions`, () => {
-    let db = new DatabaseSync(':memory:')
-    try {
-      let error = assertThrows(() =>
-        db.transaction(() =>
-          db.transaction(() => {
-            db.exec('rollback')
-            throw original
-          })
-        )
-      )
-      assertStrictEquals(error, original)
-      assertEquals(db.inTransaction, false)
-    } finally {
-      db.close()
-    }
-  })
-}
-
-// A backend is whatever answers Sql: delegate to the adapter, own the `can`.
-let backend = (can: Can): Sql => {
-  let db = new DatabaseSync(':memory:')
-  return {
-    prepare: (sql) => db.prepare(sql),
-    exec: (sql) => db.exec(sql),
-    get inTransaction() {
-      return db.inTransaction
-    },
-    get lastInsertRowId() {
-      return db.lastInsertRowId
-    },
-    get isOpen() {
-      return db.isOpen
-    },
-    get version() {
-      return db.version
-    },
-    set version(v: number) {
-      db.version = v
-    },
-    transaction: (fn, immediate) => db.transaction(fn, immediate),
-    can,
-    afterCommit: (fn) => db.afterCommit(fn),
-    close: () => db.close(),
-  }
-}
-
-let tables = (db: Sql) =>
-  (db.prepare(
-    `select name from sqlite_master where type = 'table' order by name`,
-  ).all() as { name: string }[]).map((r) => r.name)
-
-slow('a store without FTS5 migrates whole and its search says so', () => {
-  let db = migrate(backend({ fts: false, temp: true }))
-  assertEquals(tables(db).some((t) => t.startsWith('doc_fts')), false)
-  assertEquals(tables(db).includes('task'), true)
-  assertThrows(() => search(db, 'anything'), Error, 'FTS5')
-  db.close()
-})
-
-// A store raised from an OLDER schema: `create … if not exists` leaves the
-// definition it found, so a store planted before a column joined the index
-// keeps the narrower index under the current triggers, which write the column
-// — and SQLite compiles a table's triggers with the statement that fires them,
-// so EVERY write through that table stops preparing (T-32826). regraft() drops
-// each definition and raises the current one, then refills the mirrors it
-// emptied.
-slow('regraft() raises the definitions a graft cannot alter', () => {
-  let ops = schemaDdl(new DatabaseSync(':memory:'))
-  let db = plant(backend({ fts: true, temp: true }), ops)
-  let [live, dead] = [crypto.randomUUID(), crypto.randomUUID()]
-  apply(db, [
-    { eid: live, name: 'doc', comp: { title: 'planted' } },
-    { eid: dead, name: 'doc', comp: { title: 'passing' } },
-  ])
-  // A one-column index where the current triggers write two.
-  db.exec(`
-    drop trigger doc_fts_insert;
-    drop trigger doc_fts_update;
-    drop table doc_fts;
-    create virtual table doc_fts using fts5(
-      title, content='doc_text', content_rowid='entity'
-    );
-  `)
-  assertThrows(() => apply(db, [{ eid: dead, name: 'entity', comp: null }]))
-  regraft(db, ops)
-  apply(db, [{ eid: dead, name: 'entity', comp: null }])
-  // And the mirror the drop emptied answers for a doc written before it.
-  assertEquals(search(db, 'planted').map((h) => h.eid), [live])
-  db.close()
-})
-
-slow('plant() from schemaDdl() serves the wire without a migration', () => {
-  let ops = schemaDdl(new DatabaseSync(':memory:'))
-  let db = plant(backend({ fts: true, temp: true }), ops)
-  let eid = crypto.randomUUID()
-  apply(db, [
-    { eid, name: 'doc', comp: { title: 'planted' } },
-    { eid, name: 'task', comp: {} },
-    { eid, name: 'filed', comp: { priority: 1 } },
-  ])
-  let doc = snapshot(db).changes.find((c) => c.eid == eid && c.name == 'doc')
-  assertEquals((doc?.comp as { title?: string })?.title, 'planted')
   db.close()
 })

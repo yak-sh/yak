@@ -117,7 +117,7 @@ export let modern = <T>(v: T): T =>
     : v
 
 // The wire's own keys beside the components: what an entity bundle may say
-// that is not a component name (src/mutation.ts EntityLiteral).
+// that is not a component name (lib/mutation.ts EntityLiteral).
 let WIRE = ['entity', 'edges', 'tombstone', 'was']
 
 // Every variable in a template, wherever the strings are.

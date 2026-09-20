@@ -16,7 +16,6 @@ const FILES = [
   'packages/sqlite/archetype_bench.ts',
   'packages/sql/throughput_bench.ts',
   'packages/query/throughput_bench.ts',
-  'src/throughput_bench.ts',
 ]
 export type Measurement = {
   version: number

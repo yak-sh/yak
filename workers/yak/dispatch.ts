@@ -8,7 +8,7 @@
 // The hard part is identity. The app's script is code its owner's agent
 // wrote, so nothing it SAYS can be believed — and it still has to reach its
 // own store and its own files as the person looking at the page. So the
-// kernel seals a GRANT (src/token.ts `seal`) naming the store, the visitor
+// kernel seals a GRANT (lib/token.ts `seal`) naming the store, the visitor
 // and their role, good for a minute, and sends it in with the request; the
 // script's uploaded entry module (`SHIM`) takes that header off before the
 // app's own code ever sees it and holds it in a closure, handing the app

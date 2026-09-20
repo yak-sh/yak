@@ -1,4 +1,4 @@
-// The one-pass move from the fleet-shaped store (src/store/schema.json, whose
+// The one-pass move from the fleet-shaped store (lib/store/schema.json, whose
 // Durable Object class went with T-33807) to the packages-shaped one (graph.ts,
 // @yaks/sqlite from a loaded vocabulary). Nothing here imports that class: the
 // pass reads the old tables BY NAME, which is why it outlives the code that

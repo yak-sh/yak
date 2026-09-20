@@ -2,7 +2,7 @@
 // store/blobs.ts's Blobs, key for key, so the kernel worker serves an app's
 // files through the seam's verbs. The bucket is
 // typed structurally — the slice this adapter touches, mirroring
-// @cloudflare/workers-types — so src/ carries no Cloudflare dependency. Under
+// @cloudflare/workers-types — so the seam carries no Cloudflare types. Under
 // `wrangler dev` the same binding is a local simulation, which is the dev
 // store; nothing chooses between them here.
 //

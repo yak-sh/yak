@@ -4,7 +4,7 @@
 // discovers there is somewhere to put a recipe the way it discovers anything
 // else here: by asking `commands` what the apps in reach can do.
 //
-// Nothing new answers them. They are ordinary declared tools (src/store/tools.ts
+// Nothing new answers them. They are ordinary declared tools (lib/store/tools.ts
 // ToolDef), planted in the app's store beside whatever its tools.json said and
 // listed, called, titled and described through the one seam (declared.ts) — so
 // `readOnly` on the find and the app's title and address on the description

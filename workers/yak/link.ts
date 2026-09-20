@@ -7,7 +7,7 @@
 // to retype anything.
 //
 // One mechanism carries both: a value sealed under the session secret
-// (src/token.ts) riding on `/login/link?t=`. Nothing here imports a Cloudflare
+// (lib/token.ts) riding on `/login/link?t=`. Nothing here imports a Cloudflare
 // name, so the contract holds in plain Deno (link_test.ts); identity.ts is
 // where a pass becomes a session, at the same `landed` a spent code reaches.
 // The two passes die differently, and that difference is the design:
