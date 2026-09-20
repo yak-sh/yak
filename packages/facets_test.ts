@@ -78,9 +78,12 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
   }
   let seen = new Set<string>()
   for (let p of packages) {
-    // A facet name is reserved on a PLUGIN-shaped package — one with words of
-    // its own. The core's `@yaks/graph/tools` and `@yaks/vocab/tools` are the
-    // tool mechanism under that name and predate the facets; nobody composes
+    // Words are not what makes a plugin: `@yaks/embedding` composes as one —
+    // the vector table and the `.near` compiler — and declares no vocabulary,
+    // because a vector is not a word anybody writes. So every package's facets
+    // are walked. The one exemption is `./tools` on a package with no words:
+    // the core's `@yaks/graph/tools` and `@yaks/vocab/tools` are the tool
+    // MECHANISM under that name and predate the facets, and nobody composes
     // either as a plugin. See packages/README.md, the misfit list.
     let words = true
     try {
@@ -88,9 +91,8 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
     } catch {
       words = false
     }
-    if (!words) continue
     for (let [facet, name] of Object.entries(shapes)) {
-      if (!has(p, facet)) continue
+      if (!has(p, facet) || (facet == 'tools' && !words)) continue
       let mod = await import(file(p, facet).href) as Record<string, unknown>
       assert(name in mod, `${p.name}/${facet} exports no \`${name}\``)
       seen.add(facet)
