@@ -3,6 +3,15 @@
 // the account they were issued to. Nothing here reads a file or the
 // environment on its own — both are handed in — so the same code decides for a
 // CLI, a server, and a test, and a token is never printed by anything here.
+//
+// WHICH IS WHY THE EXPIRY CHECK IS NOT HERE. The fleet's doctor watched its
+// Codex credential run out (a sign-in nothing but a person can renew, and
+// every spawn failing `credential unavailable` until they do) by reading one
+// file on one box against that box's clock. That is a deployment's health, not
+// this package's invariant: which file, whose box, and what to do about it are
+// all the host's, and a package that reads neither file nor environment cannot
+// ask. A deployment that wants the warning asks its own `check` (a tool whose
+// verb is `check`, @yaks/tools), where the answer is about the box it runs on.
 
 /** A bearer and the endpoint it is good for. */
 export type Credential = {

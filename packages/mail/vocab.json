@@ -136,6 +136,15 @@
           "description": "what carried it"
         }
       }
+    },
+    "mail_check": {
+      "tool": true,
+      "noun": "mail",
+      "verb": "check",
+      "title": "Check the mail",
+      "description": "Every letter that arrived carries a sender. A letter with the Message-ID the world knows it by and no `from` is one nobody can ever answer — the reply has no address to go to.",
+      "input": {},
+      "readOnly": true
     }
   }
 }

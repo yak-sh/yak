@@ -5,6 +5,7 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./rules": "./rules.ts",
+    "./tools": "./tools.ts",
     "./effects": "./effects.ts",
     "./routes": "./routes.ts"
   },

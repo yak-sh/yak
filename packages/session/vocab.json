@@ -538,6 +538,24 @@
         ]
       },
       "idempotent": true
+    },
+    "claim_check": {
+      "tool": true,
+      "noun": "claim",
+      "verb": "check",
+      "title": "Check the locks",
+      "description": "No entity is locked by a session that is over: a holder this graph has no session for, or one whose transcript stopped or failed. The board otherwise says somebody is working on what nobody is working on.",
+      "input": {},
+      "readOnly": true
+    },
+    "session_check": {
+      "tool": true,
+      "noun": "session",
+      "verb": "check",
+      "title": "Check the transcripts",
+      "description": "No transcript has stalled — owed a turn or owed an answer for hours with nothing appended. A daemon that died mid-turn leaves a session that simply stops, and nothing anywhere says so.",
+      "input": {},
+      "readOnly": true
     }
   }
 }

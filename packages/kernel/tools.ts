@@ -10,8 +10,10 @@
 import { addressed, type Bundle, type ToolCtx } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 
-/** The runs behind the tools ./vocab.json declares. */
-export let runs: Runs = {
+/** The runs behind the tools ./vocab.json declares. A factory, as every facet
+ * is, though this one needs nothing from the host: what a run reads arrives on
+ * the call's own context. */
+export let runs = (): Runs => ({
   comment_new: async (_bundles, ctx: ToolCtx): Promise<Bundle[]> => {
     let [target] = await addressed(ctx.graph, [String(ctx.args.target)])
     return [{
@@ -20,4 +22,4 @@ export let runs: Runs = {
       comment: { target },
     }]
   },
-}
+})

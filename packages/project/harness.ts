@@ -9,6 +9,7 @@ import { type Graph, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
+import { kernelKeywords } from '@yaks/kernel'
 import { type Mark, taskDoc, tasks } from '@yaks/task'
 import { projectDoc } from './comp.ts'
 import { projects } from './plugin.ts'
@@ -33,10 +34,12 @@ let doc = {
   },
 }
 
-/** The team's vocabulary: the portfolio, the tasks in it, `doc` and edges. */
+/** The team's vocabulary: the portfolio, the tasks in it, `doc` and edges.
+ * The kernel keywords ride along because a task declares `governed` — which is
+ * what says a project answers for it. */
 export let team: Vocab = loadVocab(
   [docDoc, edgeDoc, taskDoc, projectDoc, doc],
-  [edgeKeywords],
+  [edgeKeywords, kernelKeywords],
 )
 
 /** A fresh in-memory storage over that vocabulary. */

@@ -5,6 +5,7 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./rules": "./rules.ts",
+    "./tools": "./tools.ts",
     "./boot": "./boot.ts",
     "./tools": "./tools.ts",
     "./views": "./views.ts"

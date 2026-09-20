@@ -14,12 +14,56 @@
 // keeps the harness's dialect out of everything else: one field is read from
 // it, the session's own id, and a payload that is not JSON at all is no
 // reason to fail — a hook that fails is a session that will not start.
+//
+// The third thing here is the two CHECKS — tools whose verb is `check`, which
+// is the whole of what a "doctor" is (@yaks/tools ./check.ts).
+//
+// A LOCK OUTLIVES ITS HOLDER. ./boot.ts frees the locks whose holder is not a
+// session in this graph, at the one moment there is an honest answer — so one
+// found here appeared since, and the board is lying about who is working. The
+// other half is the lock held by a transcript that ENDED: `stopped` or
+// `failed` is a run nothing will resume, and its lock is a document nobody is
+// editing that nobody else may edit. Neither is corruption, so both are
+// `warn`; and a `settled` transcript is NOT one of them — a run between turns
+// still holds what it holds (./reap.ts).
+//
+// A TRANSCRIPT STALLS. `pending` is the model owed a turn and `running` is a
+// model or a tool owed an answer; both are moments, not states to live in. One
+// that has been owed for hours means the daemon died mid-turn, or the answer
+// came back to a process that was gone — the transcript just stops, and
+// nothing anywhere says so. Both read the same rule everything else reads,
+// ./status.ts `statusOf` over the entries, rather than a second copy of it.
 
-import { addressed, type Bundle, type Comp, type ToolCtx } from '@yaks/graph'
+import {
+  addressed,
+  type Bundle,
+  type Comp,
+  detached,
+  TOMBSTONE,
+  type ToolCtx,
+} from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import { idOf } from '@yaks/id'
+import { human, idOf } from '@yaks/id'
+import { and, eq, present } from '@yaks/query'
+import { checked, type Finding } from '@yaks/tools'
+import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'
+import { ENTRY } from './native.ts'
+import { ordered, statusOf } from './status.ts'
 import { install, settingsPath } from './hooks.ts'
+
+/** What a config says to `@yaks/session`'s checks. */
+export type Options = {
+  /** how long a transcript may be owed a turn or an answer before that is a
+   * stall rather than work in progress (default 2 hours) */
+  hours?: number
+}
+
+let HOURS = 2
+
+// A run nothing will resume. `settled` is left out on purpose: it means
+// nothing is owed, not that the session is over.
+let ENDED = ['stopped', 'failed']
 
 let str = (v: unknown): string => v == null ? '' : String(v)
 
@@ -100,8 +144,26 @@ let briefed = (eid: string, text: unknown): Bundle => ({
   brief: { text: str(text) },
 })
 
-/** The runs behind the tools ./vocab.json declares. */
-export let runs: Runs = {
+/** The session a lock names. */
+let holderOf = (b: Bundle): string => str(comp(b, CLAIM).session)
+
+// One transcript's entries. Few sessions hold a lock, so this is asked per
+// holder rather than by reading every entry in the graph.
+let transcript = (ctx: Pick<ToolCtx, 'read'>, session: string) =>
+  ctx.read(and(eq(`${ENTRY}.session`, session)))
+
+// When an entry was written, as the kernel stamps it. A graph that stamps
+// nothing has no clock to judge a stall by, which the check says out loud
+// rather than passing.
+let writtenAt = (b: Bundle): number => Date.parse(str(comp(b, 'created').at))
+
+/** The runs behind the tools ./vocab.json declares. The host's vocabulary is
+ * what the checks name an entity with, and its options are what they judge a
+ * stall by. */
+export let runs = (
+  host: { vocab: Vocab },
+  options: Options = {},
+): Runs => ({
   claim_take: async (_bundles, ctx): Promise<Bundle[]> => {
     let [on] = await addressed(ctx.graph, [str(ctx.args.target)])
     let session = str(ctx.args.session) || str(ctx.actor?.eid)
@@ -180,4 +242,91 @@ export let runs: Runs = {
       }`,
     },
   }],
-}
+
+  claim_check: async (_bundles, ctx) => {
+    let id = human(host.vocab)
+    let locks = await ctx.read(and(present(`${CLAIM}.session`)))
+    let holders = [...new Set(locks.map(holderOf))]
+    let rows = holders.length
+      ? await detached(ctx.graph.storage).get(holders)
+      : []
+    // A tombstoned holder is a holder that is gone: `claim.session` dies by
+    // release, so a lock still naming one is the same leak.
+    let held = new Map(
+      rows.filter((b) => b[TOMBSTONE] == null && b[SESSION] != null)
+        .map((b) => [b.entity.eid, b]),
+    )
+    let over = new Map<string, string>()
+    for (let eid of held.keys()) {
+      let state = statusOf(await transcript(ctx, eid))
+      if (ENDED.includes(state)) over.set(eid, state)
+    }
+    let found = locks.flatMap((b): Finding[] => {
+      let eid = holderOf(b)
+      let holder = held.get(eid)
+      if (!holder) {
+        return [{
+          level: 'warn',
+          text: `${id(b)} is locked by ${eid}, which this graph has no ` +
+            `session for — start-up frees these, so this one went since`,
+        }]
+      }
+      let state = over.get(eid)
+      return state
+        ? [{
+          level: 'warn',
+          text: `${id(b)} is locked by ${id(holder)}, whose transcript ` +
+            `${state} — nothing will resume it, and nobody else may write`,
+        }]
+        : []
+    })
+    return checked(
+      ctx.call,
+      'no entity is locked by a session that is over',
+      found,
+    )
+  },
+
+  session_check: async (_bundles, ctx) => {
+    let id = human(host.vocab)
+    let hours = options.hours ?? HOURS
+    let cutoff = Date.now() - hours * 3_600_000
+    let sessions = await ctx.read(and(present(SESSION)))
+    if (!sessions.length) {
+      return checked(ctx.call, 'no transcript has stalled', [])
+    }
+    // One read of the entries, grouped here: a transcript is only readable as
+    // a whole, and asking per session would be one query per session.
+    let lines = new Map<string, Bundle[]>()
+    let stamped = false
+    for (let b of await ctx.read(and(present(ENTRY)))) {
+      let of = str(comp(b, ENTRY).session)
+      lines.set(of, [...lines.get(of) ?? [], b])
+      if (!isNaN(writtenAt(b))) stamped = true
+    }
+    if (!stamped) {
+      return checked(ctx.call, 'no transcript has stalled', [{
+        level: 'warn',
+        text: 'this graph stamps no time on an entry, so a transcript that ' +
+          'stalled cannot be told from one that is merely quiet — UNVERIFIED',
+      }])
+    }
+    let found = sessions.flatMap((s): Finding[] => {
+      let entries = lines.get(s.entity.eid) ?? []
+      let state = statusOf(entries)
+      if (state != 'pending' && state != 'running') return []
+      let newest = ordered(entries).at(-1)
+      let at = newest ? writtenAt(newest) : NaN
+      if (isNaN(at) || at > cutoff) return []
+      return [{
+        level: 'warn',
+        text: `${id(s)} has been ${state} since ${
+          new Date(at).toISOString()
+        } — over ${hours}h owed ${
+          state == 'pending' ? 'a turn' : 'an answer'
+        }, with nothing appended since`,
+      }]
+    })
+    return checked(ctx.call, 'no transcript has stalled', found)
+  },
+})

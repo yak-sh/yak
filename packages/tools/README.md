@@ -96,6 +96,34 @@ Whoever wrote the call, read off the call's `created.by` provenance stamp — no
 the process running it. So a tool's writes are decided about the person asking,
 and a ledger's vocabulary has to declare `created` for the actor to reach one.
 
+## A check is a verb
+
+A tool whose verb is `check` is a CHECK, and that is the whole of what a
+"doctor" is here: not a registry anybody adds a row to, but every tool the
+loaded vocabulary declares with that verb.
+
+```ts
+import { ailing, checked, checks } from '@yaks/tools'
+
+checks(host.tools) // the doctor: every `*_check` this host composed
+```
+
+A check belongs to the package whose invariant it checks, which is why there is
+no package for them: compose `@yaks/mail` and a letter that arrived with no
+sender gets noticed, compose `@yaks/sqlite` and the file's own keys do. Drop the
+plugin and the check goes with it, and no list falls out of date.
+
+`checked(call, about, found)` is what one answers: the prose on `content{body}`,
+`output{source}` naming the call, and `error{code}` carrying the worst level —
+`fail` for a measured violation, `warn` for a leak or a verdict the check could
+not verify. A listing of faults is not a fault, so a check that finds a sick
+graph still SUCCEEDED; `ailing(answer)` is how a caller reads the verdict, the
+way `faulted(landed)` reads whether the call itself failed.
+
+Two rules the fleet doctor this replaces paid for: a check that finds nothing
+still answers (silence is indistinguishable from a check that never ran), and
+one that cannot run says so as a `warn` rather than passing quietly.
+
 ## At most once, and what a crash leaves
 
 `execution{state}` is the claim: `running` under a `$was` that the column was

@@ -34,7 +34,7 @@
 
 import type { Bundle, Comp } from '@yaks/graph'
 import { BODY, DOC, TITLE } from '@yaks/doc'
-import { idOf } from '@yaks/id'
+import { human } from '@yaks/id'
 import { safe } from '@yaks/text'
 import type { Vocab } from '@yaks/vocab'
 
@@ -91,13 +91,8 @@ let column = (b: Bundle, name: string): string => {
  * writes one.
  */
 export let voice = (vocab: Vocab): (worn: Worn) => string => {
-  let id = idOf(vocab)
-  let head = (b: Bundle): string =>
-    safe(
-      `${id({ eid: b.entity.eid, kind: vocab.kindOf(b), num: b.entity.num })} ${
-        column(b, TITLE)
-      }`,
-    ).trim()
+  let id = human(vocab)
+  let head = (b: Bundle): string => safe(`${id(b)} ${column(b, TITLE)}`).trim()
   let part = (b: Bundle): string =>
     [`# ${head(b)}`, column(b, BODY).trim()].filter(Boolean).join('\n\n')
   return ({ persona, carries, names }) =>

@@ -75,8 +75,10 @@ export let listing = (query?: unknown, limit?: unknown): string => {
   ].join('&')
 }
 
-/** The runs behind the tools ./vocab.json declares. */
-export let runs: Runs = {
+/** The runs behind the tools ./vocab.json declares. A factory, as every facet
+ * is, though this one needs nothing from the host: what a run reads arrives on
+ * the call's own context. */
+export let runs = (): Runs => ({
   task_new: async (_bundles, ctx): Promise<Bundle[]> => {
     let filed = await filedIn(ctx)
     let doc = docIn(ctx)
@@ -102,4 +104,4 @@ export let runs: Runs = {
       ...(filed ? { filed } : {}),
     }]
   },
-}
+})

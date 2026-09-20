@@ -22,8 +22,10 @@ let at = async (ctx: ToolCtx, said: string): Promise<string> => {
   return found.get(said) ?? said
 }
 
-/** The runs behind the tools ./vocab.json declares. */
-export let runs: Runs = {
+/** The runs behind the tools ./vocab.json declares. A factory, as every facet
+ * is, though this one needs nothing from the host: a persona is read through
+ * the graph the call arrives on. */
+export let runs = (): Runs => ({
   persona_read: async (_bundles, ctx): Promise<Bundle[]> => {
     let said = String(ctx.args.persona ?? '').trim()
     if (!said) throw new Refused('persona_read needs a persona')
@@ -39,4 +41,4 @@ export let runs: Runs = {
       output: { source: ctx.call },
     }]
   },
-}
+})

@@ -77,7 +77,14 @@ Deno.test('packages: every vocab.json is plain JSON that loads', () => {
   for (let [pkg, doc] of files) {
     assertEquals(storable(doc), [], `${pkg}/vocab.json is not storable`)
     let mine = new Set(compsOf(doc))
-    assert(mine.size > 0, `${pkg}/vocab.json declares no components`)
+    // A document says WORDS, and a tool is one: `@yaks/sqlite` and
+    // `@yaks/embedding` declare only their checks, because a store and a
+    // vector index are not component domains and nothing about them rides the
+    // wire. What is refused is a file that declares nothing at all.
+    assert(
+      Object.keys(doc.$defs ?? {}).length > 0,
+      `${pkg}/vocab.json declares nothing`,
+    )
     let beside = [...new Set(beforeOf(doc))]
       .filter((k) => !mine.has(k))
       .map((k) => {

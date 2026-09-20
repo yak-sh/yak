@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./tools": "./tools.ts",
     "./rules": "./rules.ts",
     "./effects": "./effects.ts"
   },

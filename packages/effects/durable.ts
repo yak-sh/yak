@@ -47,6 +47,9 @@ import type { Kind } from './trace.ts'
  */
 export let effectDoc: VocabDoc = doc
 
+/** The ledger's component, by the name ./vocab.json declares it. */
+export let EFFECT = 'effect'
+
 /** How a ledger is built. */
 export type LedgerOpts = {
   /** who this process is, written into a row it claims */
@@ -97,7 +100,7 @@ export let ledger = (opts: LedgerOpts): Ledger => {
   let stamp = (ms: number) => new Date(ms).toISOString()
 
   let write = (tx: Tx, eid: Eid, effect: Comp) =>
-    tx.patch([{ entity: { eid }, effect }])
+    tx.patch([{ entity: { eid }, [EFFECT]: effect }])
 
   // The end of a run, either way: the verdict, and the claim let go.
   let settle = (tx: Tx, eid: Eid, state: 'done' | 'failed') =>

@@ -9,10 +9,11 @@
 // can ask for a neighbourhood, and one that did not gets the compiler's own
 // refusal. Nobody wires it up.
 //
-// This package declares no words. A vector is not a word anybody writes: it is
-// derived from text somebody else's vocabulary declares, it never rides the
-// wire, and no patch mints one — which is why there is no `./vocab` here and
-// why the table is raised in SQL rather than by the store.
+// This package declares no COMPONENT. A vector is not a word anybody writes:
+// it is derived from text somebody else's vocabulary declares, it never rides
+// the wire, and no patch mints one — which is why the table is raised in SQL
+// here rather than by the store. The one word `./vocab` does declare is the
+// index's CHECK (./tools.ts), which is a tool and not a component.
 
 import type { Plugin } from '@yaks/graph'
 import type { Extension } from '@yaks/sql'

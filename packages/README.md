@@ -286,17 +286,46 @@ all of these load together with no name declared twice
 A host does not import a plugin. It imports the FACETS of one, a subpath apiece,
 and takes the ones it runs (`@yaks/cli` `compose`, `packages/cli`):
 
-| subpath     | what it exports                                               | may import          |
-| ----------- | ------------------------------------------------------------- | ------------------- |
-| `./vocab`   | `docs`, `keywords?`, `derived?`                               | nothing server-side |
-| `./rules`   | `rules: (host, options) => Plugin[]`, `extend?` (@yaks/sql)   | anything            |
-| `./tools`   | `runs: Runs`, behind its `tool: true` declarations            | ajv, SQL, anything  |
-| `./effects` | `effects: (host, options) => Watch[]`                         | anything            |
-| `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`         | anything            |
-| `./boot`    | `boot: (host, options) => void \| Promise<void>`              | anything            |
-| `./service` | `service: (host, options, signal) => void \| Promise<void>`   | anything            |
-| `./views`   | `views` — `@yaks/render` renderers                            | nothing server-side |
-| `.`         | types, and the pure functions the package offers as a library |                     |
+| subpath     | what it exports                                                | may import          |
+| ----------- | -------------------------------------------------------------- | ------------------- |
+| `./vocab`   | `docs`, `keywords?`, `derived?`                                | nothing server-side |
+| `./rules`   | `rules: (host, options) => Plugin[]`, `extend?` (@yaks/sql)    | anything            |
+| `./tools`   | `runs: (host, options) => Runs`, behind its `tool: true` words | ajv, SQL, anything  |
+| `./effects` | `effects: (host, options) => Watch[]`                          | anything            |
+| `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`          | anything            |
+| `./boot`    | `boot: (host, options) => void \| Promise<void>`               | anything            |
+| `./service` | `service: (host, options, signal) => void \| Promise<void>`    | anything            |
+| `./views`   | `views` — `@yaks/render` renderers                             | nothing server-side |
+| `.`         | types, and the pure functions the package offers as a library  |                     |
+
+Every facet is a FACTORY of `(host, options)`, `./tools` included: a check over
+a package's own SQL table reaches it through `host.sql`, and a threshold or a
+relation name is the config's to say rather than the code's. What a run is
+handed per CALL — the graph, the caller, the arguments — still rides the tool
+context.
+
+### The doctor is a verb
+
+A CHECK is a tool whose verb is `check`, and that is the whole of it. There is
+no doctor package and no registry: "the doctor" is every tool the composed
+vocabulary declares with that verb (`checks(host.tools)`, @yaks/tools), so a
+host that composes a plugin gets its invariants watched and one that drops it
+drops them, and no list can fall out of date.
+
+A check belongs to the package whose invariant it is — `@yaks/mail` answers for
+a letter that arrived with no sender, `@yaks/session` for a lock whose holder is
+over, `@yaks/sqlite` for the file's own keys — and it answers BUNDLES like any
+other tool: prose on `content{body}`, `output{source}` naming the call, and
+`error{code}` carrying `fail` (a measured violation) or `warn` (a leak, or a
+verdict it could not verify). A check that finds nothing still answers, and one
+that cannot run says so rather than passing quietly.
+`packages/cli/checks_test.ts` is the whole idea end to end.
+
+What does NOT live in a package: a deployment's own health. The fleet doctor
+read Cloudflare Email Routing's live rule set and a provider credential file on
+one box; both are questions about a deployment, answered by a credential the
+host holds, and their answer is the same whatever graph is running. A package's
+check reads the graph its own words describe.
 
 `./boot` is the one pass a plugin makes at start-up, before anything is served:
 the leases a dead holder left (`@yaks/session/boot`), the agents still running

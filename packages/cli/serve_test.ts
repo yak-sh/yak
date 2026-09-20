@@ -74,7 +74,9 @@ type Plugged = Partial<Facets>
 let shop: Plugged = {
   vocab: { docs: [doc] },
   tools: {
-    runs: {
+    // A factory, like every facet: what a run needs from the host, it takes
+    // here.
+    runs: () => ({
       // A tool answers BUNDLES: the entities it found, and nothing else.
       book_list: (_, ctx) => ctx.read('.book'),
       // And a writing one answers the entity it wants made. It never writes
@@ -85,7 +87,7 @@ let shop: Plugged = {
         content: { body: `shelved ${ctx.args.title}` },
         output: { source: ctx.call },
       }],
-    },
+    }),
   },
   routes: {
     routes: () => [{
@@ -248,7 +250,7 @@ Deno.test('a rule sees the graph it is part of, and an effect fires on a commit'
   let seen: string[] = []
   let mod: Plugged = {
     vocab: { docs: [doc] },
-    tools: { runs: { book_list: () => [], book_add: () => [] } },
+    tools: { runs: () => ({ book_list: () => [], book_add: () => [] }) },
     rules: {
       rules: (host) => [{
         name: 'watcher',
@@ -284,7 +286,7 @@ Deno.test('a boot pass runs when a host is SERVED, never when one is composed', 
   let booted: string[] = []
   let mod: Plugged = {
     vocab: { docs: [doc] },
-    tools: { runs: { book_list: () => [], book_add: () => [] } },
+    tools: { runs: () => ({ book_list: () => [], book_add: () => [] }) },
     boot: { boot: (host) => void booted.push(typeof host.graph.apply) },
   }
   let host = await compose({ db: ':memory:', plugins: ['m'] }, only({ m: mod }))

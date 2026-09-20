@@ -1,14 +1,19 @@
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Comp, ToolCtx } from '@yaks/graph'
+import type { Bundle, Comp, Graph, ToolCtx } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { idKeywords } from '@yaks/id'
 import { loadVocab } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { sessionDoc } from './comp.ts'
-import { hookSession, runs } from './tools.ts'
+import { ids, locked, pages, seed, store } from './harness.ts'
+import { hookSession, type Options, runs } from './tools.ts'
 
 let vocab = loadVocab([docDoc, taskDoc, sessionDoc], [idKeywords])
+
+// The runs, built the way a host builds them: a facet is a factory now, and
+// these tools take nothing from the host but its words.
+let tools = runs({ vocab })
 
 // The store, as far as these tools read it: a list of bundles and the queries
 // they answer. Each tool asks one thing, so the stub answers by prefix.
@@ -33,18 +38,20 @@ let row = (b: Bundle, on: string): Bundle => ({ ...b, $match: { [on]: true } })
 let comp = (b: Bundle, name: string) => b[name] as Comp
 
 Deno.test('every session tool is declared and implemented', () => {
-  assertEquals(loadTools(sessionDoc, runs).map((t) => t.name).sort(), [
+  assertEquals(loadTools(sessionDoc, tools).map((t) => t.name).sort(), [
+    'claim_check',
     'claim_release',
     'claim_take',
     'hooks_install',
     'session_brief',
+    'session_check',
     'session_context',
     'session_wrap',
   ])
 })
 
 Deno.test('a claim is taken for whoever is asking', async () => {
-  let [said] = await runs.claim_take!(
+  let [said] = await tools.claim_take!(
     [],
     ctx({ target: 't' }, [], 's'),
   ) as Bundle[]
@@ -55,7 +62,7 @@ Deno.test('a claim is taken for whoever is asking', async () => {
 Deno.test('nobody asking and nobody named is a refusal, not a lock', async () => {
   let threw = false
   try {
-    await runs.claim_take!([], ctx({ target: 't' }))
+    await tools.claim_take!([], ctx({ target: 't' }))
   } catch {
     threw = true
   }
@@ -63,7 +70,7 @@ Deno.test('nobody asking and nobody named is a refusal, not a lock', async () =>
 })
 
 Deno.test('a release drops the component', async () => {
-  let [said] = await runs.claim_release!([], ctx({ target: 't' })) as Bundle[]
+  let [said] = await tools.claim_release!([], ctx({ target: 't' })) as Bundle[]
   assertEquals(said.claim, null)
 })
 
@@ -74,7 +81,7 @@ Deno.test('a hook payload names the session; anything else says nothing', () => 
 })
 
 Deno.test('a session nobody has seen is minted, with its own heading', async () => {
-  let said = await runs.session_context!(
+  let said = await tools.session_context!(
     [],
     ctx({ hook: '{"session_id":"abc"}', actor: 'p1' }),
   ) as Bundle[]
@@ -105,7 +112,7 @@ Deno.test('a session that exists is handed back what it was in the middle of', a
       'brief!',
     ),
   ]
-  let said = await runs.session_context!(
+  let said = await tools.session_context!(
     [],
     ctx({ session: 'abc' }, rows),
   ) as Bundle[]
@@ -130,7 +137,7 @@ Deno.test('a wrap records the account and lets go of everything', async () => {
     row({ entity: { eid: 't1' } }, 'claim.session'),
     row({ entity: { eid: 't2' } }, 'claim.session'),
   ]
-  let said = await runs.session_wrap!(
+  let said = await tools.session_wrap!(
     [],
     ctx({ hook: '{"session_id":"abc"}', brief: 'did the thing' }, rows),
   ) as Bundle[]
@@ -142,5 +149,103 @@ Deno.test('a wrap records the account and lets go of everything', async () => {
 })
 
 Deno.test('a session nobody reified wraps to nothing', async () => {
-  assertEquals(await runs.session_wrap!([], ctx({ session: 'gone' })), [])
+  assertEquals(await tools.session_wrap!([], ctx({ session: 'gone' })), [])
+})
+
+// ---- the checks ------------------------------------------------------------
+//
+// These read a whole graph rather than the stub above — a lock's holder, and
+// the entries that say what a transcript is doing — so they run over the same
+// in-memory store the rest of this package's tests use.
+
+// One check run, as a host would call it.
+let checkup = async (
+  name: 'claim_check' | 'session_check',
+  g: Graph,
+  options: Options = {},
+) => {
+  let [said] = await runs({ vocab: pages }, options)[name]([], {
+    graph: g,
+    actor: null,
+    read: (q) => g.read(q),
+    args: {},
+    call: 'c1',
+  } as ToolCtx) as Bundle[]
+  return {
+    body: String((said.content as Comp).body),
+    level: (said.error as Comp | undefined)?.code,
+  }
+}
+
+let ago = (hours: number) =>
+  new Date(Date.now() - hours * 3_600_000).toISOString()
+
+// A page locked by `run1`, plus whatever entries the case gives that run.
+let rigged = (...entries: Bundle[]) => {
+  let s = store()
+  seed(
+    s,
+    { entity: { eid: ids.p1 }, claim: { session: ids.run1 } },
+    ...entries,
+  )
+  return locked(s)
+}
+
+let line = (seq: number, at: string, comps: Bundle) => ({
+  ...comps,
+  entry: { session: ids.run1, seq },
+  created: { at },
+})
+
+Deno.test('a lock held by a live transcript is nothing to report', async () => {
+  let g = rigged(
+    line(1, ago(0.1), { entity: { eid: 'l1' }, content: { body: 'go' } }),
+  )
+  assertEquals((await checkup('claim_check', g)).level, undefined)
+})
+
+Deno.test('a lock held by a stopped transcript is a warn', async () => {
+  let g = rigged(
+    line(1, ago(1), { entity: { eid: 'l1' }, content: { body: 'go' } }),
+    line(2, ago(1), { entity: { eid: 'l2' }, stop: {} }),
+  )
+  let said = await checkup('claim_check', g)
+  assertEquals(said.level, 'warn')
+  assert(said.body.includes('whose transcript stopped'), said.body)
+})
+
+Deno.test('a lock naming no session at all is a warn', async () => {
+  let s = store()
+  seed(s, { entity: { eid: ids.p1 }, claim: { session: ids.gone } })
+  let said = await checkup('claim_check', locked(s))
+  assertEquals(said.level, 'warn')
+  assert(said.body.includes('has no session for'), said.body)
+})
+
+Deno.test('a transcript owed an answer for hours is a warn', async () => {
+  let g = rigged(
+    line(1, ago(9), { entity: { eid: 'l1' }, content: { body: 'go' } }),
+  )
+  let said = await checkup('session_check', g)
+  assertEquals(said.level, 'warn')
+  assert(said.body.includes('has been pending since'), said.body)
+})
+
+Deno.test('a transcript owed an answer since a moment ago is working', async () => {
+  let g = rigged(
+    line(1, ago(0.1), { entity: { eid: 'l1' }, content: { body: 'go' } }),
+  )
+  assertEquals((await checkup('session_check', g)).level, undefined)
+})
+
+Deno.test('a settled transcript is never stalled, however old', async () => {
+  let g = rigged(
+    line(1, ago(99), { entity: { eid: 'l1' }, content: { body: 'go' } }),
+    line(2, ago(99), {
+      entity: { eid: 'l2' },
+      content: { body: 'done' },
+      output: { source: 'l1' },
+    }),
+  )
+  assertEquals((await checkup('session_check', g)).level, undefined)
 })

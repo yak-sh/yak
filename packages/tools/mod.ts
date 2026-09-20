@@ -15,6 +15,14 @@
 
 export { callDoc, toolDoc, toolsDoc } from './vocab.ts'
 export {
+  ailing,
+  CHECK,
+  checked,
+  checks,
+  type Finding,
+  type Level,
+} from './check.ts'
+export {
   answerOf,
   CallError,
   faulted,

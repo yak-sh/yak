@@ -8,6 +8,10 @@
 import type { NamedTool } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { runs } from './runs.ts'
+import { vocab } from './vocab.ts'
 import doc from './vocab.json' with { type: 'json' }
 
-export let tools: NamedTool[] = loadTools(doc, runs)
+// The harness's OWN document, so its command line lists the harness's own
+// words; the runs are built against everything it speaks, which is more than
+// this document and harmless here — `loadTools` asks for the ones it needs.
+export let tools: NamedTool[] = loadTools(doc, runs({ vocab }))

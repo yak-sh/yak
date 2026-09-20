@@ -75,3 +75,21 @@ export let idOf = (v: Vocab): (e: Named) => string => {
   return (e) =>
     e.num ? format(letter(e.kind), e.num) : short(e.eid, letter(e.kind))
 }
+
+/** A bundle, as this file reads one: a spine, and the components beside it —
+ * which is all {@link human} needs, and why it costs no dependency. */
+export type Wearing = {
+  entity: { eid: string; num?: number | null }
+  [comp: string]: unknown
+}
+
+/**
+ * An entity as a BUNDLE carries it: the comps say which kind it is, the spine
+ * says the eid and the number. What a door speaks when it names a row it just
+ * read — `let id = human(vocab)`, then `id(row)` — so nobody assembles a
+ * {@link Named} by hand at every call site.
+ */
+export let human = (v: Vocab): (b: Wearing) => string => {
+  let id = idOf(v)
+  return (b) => id({ eid: b.entity.eid, kind: v.kindOf(b), num: b.entity.num })
+}

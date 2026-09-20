@@ -139,8 +139,15 @@ export type RulesFacet = {
 }
 
 /** `<plugin>/tools` — the runs behind its `tool: true` declarations, keyed by
- * tool name. */
-export type ToolsFacet = { runs?: Runs }
+ * tool name.
+ *
+ * A FACTORY, like every other facet, because a run needs the same things they
+ * do: a check over a package's own SQL table reaches it through `host.sql`
+ * (@yaks/sqlite's storage scan, @yaks/embedding's vector index), and a
+ * threshold or a relation name is the config's to say, not the code's. What a
+ * run is handed per CALL — the graph, the caller, the arguments — still rides
+ * the tool context. */
+export type ToolsFacet = { runs?: (host: Host, options: Options) => Runs }
 
 /** `<plugin>/effects` — what happens after a commit. A sender, a spawner, a
  * sweep: what an effect ACTS on is named in this plugin's options. */
@@ -443,7 +450,10 @@ export let compose = async (
     }
     let tools = loadTools(
       docs,
-      Object.assign({}, ...tooled.map(([t]) => t.runs ?? {})) as Runs,
+      Object.assign(
+        {},
+        ...tooled.map(([t, options]) => t.runs?.(host, options) ?? {}),
+      ) as Runs,
     )
     // The one RUNNER over this graph. A door calls a tool and records the ask
     // and the answer as it goes; what this adds is the calls NOBODY here is

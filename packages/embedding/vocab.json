@@ -1,0 +1,17 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true
+  },
+  "title": "embedding",
+  "$defs": {
+    "vector_check": {
+      "tool": true,
+      "noun": "vector",
+      "verb": "check",
+      "title": "Check the vector index",
+      "description": "The vector index is being rebuilt by the sweep that owns it. A mark that outlives the sweep's own interval means nobody is quantizing, and every neighbourhood is answering from the last good build — silently, since the writes still land and the searches still answer.",
+      "input": {},
+      "readOnly": true
+    }
+  }
+}

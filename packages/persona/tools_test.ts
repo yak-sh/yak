@@ -6,7 +6,7 @@ import { link, memory, voiced, world } from './harness.ts'
 import { runs } from './tools.ts'
 
 let asked = (g: Graph, args: Record<string, unknown>) =>
-  runs.persona_read([], {
+  runs().persona_read([], {
     graph: g,
     actor: null,
     read: (q) => g.read(q),

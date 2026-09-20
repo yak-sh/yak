@@ -126,17 +126,17 @@ says so.
 }
 ```
 
-| subpath     | what it exports                                               | may import          |
-| ----------- | ------------------------------------------------------------- | ------------------- |
-| `./vocab`   | `docs`, `keywords?`, `derived?`                               | nothing server-side |
-| `./rules`   | `rules: (host, options) => Plugin[]`, `extend?` (@yaks/sql)   | anything            |
-| `./tools`   | `runs: Runs` — the runs behind its `tool: true` declarations  | ajv, SQL, anything  |
-| `./effects` | `effects: (host, options) => Watch[]`                         | anything            |
-| `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`         | anything            |
-| `./boot`    | `boot: (host, options)` — the one pass made at start-up       | anything            |
-| `./service` | `service: (host, options, signal)` — what keeps running       | anything            |
-| `./views`   | `views` — @yaks/render renderers for the web door and a TUI   | nothing server-side |
-| `.`         | types, and the pure functions the package offers as a library |                     |
+| subpath     | what it exports                                                 | may import          |
+| ----------- | --------------------------------------------------------------- | ------------------- |
+| `./vocab`   | `docs`, `keywords?`, `derived?`                                 | nothing server-side |
+| `./rules`   | `rules: (host, options) => Plugin[]`, `extend?` (@yaks/sql)     | anything            |
+| `./tools`   | `runs: (host, options) => Runs` — behind its `tool: true` words | ajv, SQL, anything  |
+| `./effects` | `effects: (host, options) => Watch[]`                           | anything            |
+| `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`           | anything            |
+| `./boot`    | `boot: (host, options)` — the one pass made at start-up         | anything            |
+| `./service` | `service: (host, options, signal)` — what keeps running         | anything            |
+| `./views`   | `views` — @yaks/render renderers for the web door and a TUI     | nothing server-side |
+| `.`         | types, and the pure functions the package offers as a library   |                     |
 
 ```ts
 // @yaks/mail/vocab
@@ -149,6 +149,9 @@ export let rules = (host, options) => [mailbox({ domain: options.domain })]
 
 // @yaks/embedding/rules — the same subpath's other half: what a QUERY may say
 export let extend = (host, options) => [semantic(host.sql, embedderOf(options))]
+
+// @yaks/sqlite/tools — a run reads the host's own connection, and its options
+export let runs = (host, options) => ({ storage_check: (_, ctx) => … })
 
 // @yaks/mail/routes
 export let routes = (

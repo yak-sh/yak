@@ -73,6 +73,15 @@
           "description": "when the claim lapses and another process may take it"
         }
       }
+    },
+    "effect_check": {
+      "tool": true,
+      "noun": "effect",
+      "verb": "check",
+      "title": "Check the effect ledger",
+      "description": "Every effect run reached an end somebody would hear about: a run that spent its one retry is marked failed and left for a person, and a run still pending long after it was written means nothing is dispatching at all.",
+      "input": {},
+      "readOnly": true
     }
   }
 }

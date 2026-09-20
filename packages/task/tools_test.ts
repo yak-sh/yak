@@ -6,6 +6,9 @@ import { statusOf } from './status.ts'
 import { teamGraph } from './harness.ts'
 import { listing, runs } from './tools.ts'
 
+// The runs, built the way a host builds them: a facet is a factory.
+let tools = runs()
+
 let ctx = (args: Record<string, unknown>, at: Record<string, string> = {}) =>
   ({
     args,
@@ -19,8 +22,7 @@ let ctx = (args: Record<string, unknown>, at: Record<string, string> = {}) =>
 let comp = (b: Bundle, name: string) => b[name] as Comp
 
 Deno.test('every task tool is declared and implemented', () => {
-  let tools = loadTools(taskDoc, runs)
-  assertEquals(tools.map((t) => t.name).sort(), [
+  assertEquals(loadTools(taskDoc, tools).map((t) => t.name).sort(), [
     'task_list',
     'task_new',
     'task_update',
@@ -28,7 +30,7 @@ Deno.test('every task tool is declared and implemented', () => {
 })
 
 Deno.test('a new task is task{} plus the words, filed where the line said', async () => {
-  let [said] = await runs.task_new!(
+  let [said] = await tools.task_new!(
     [],
     ctx({ title: 'ship it', project: 'P-19', priority: 2 }, { 'P-19': 'p19' }),
   ) as Bundle[]
@@ -38,7 +40,7 @@ Deno.test('a new task is task{} plus the words, filed where the line said', asyn
 })
 
 Deno.test('a task nobody filed wears no filing', async () => {
-  let [said] = await runs.task_new!(
+  let [said] = await tools.task_new!(
     [],
     ctx({ title: 'a microtask' }),
   ) as Bundle[]
@@ -55,7 +57,7 @@ Deno.test('a status is the marks that mean it', async () => {
   let { g } = teamGraph()
   await g.apply([{ entity: { eid: 't' }, task: {}, doc: { title: 'a task' } }])
   let move = async (status: string) => {
-    let said = await runs.task_update!(
+    let said = await tools.task_update!(
       [],
       ctx({ task: 't', status }),
     ) as Bundle[]
@@ -75,7 +77,7 @@ Deno.test('what the line left out is left alone', async () => {
     doc: { title: 'a task', body: 'why' },
   }])
   await g.apply(
-    await runs.task_update!(
+    await tools.task_update!(
       [],
       ctx({ task: 't', title: 'a better title' }),
     ) as Bundle[],

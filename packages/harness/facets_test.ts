@@ -8,7 +8,7 @@ import { connect } from '../mcp/harness.ts'
 import { open } from './store.ts'
 import { tools as declared } from './declared.ts'
 import { tools as cliTools } from './cli.ts'
-import { docs } from './vocab.ts'
+import { docs, vocab } from './vocab.ts'
 import { rules } from './rules.ts'
 import { runs } from './runs.ts'
 
@@ -19,7 +19,9 @@ Deno.test('the facet subpaths say the harness once, and one declaration reaches 
   // — no manifest, no registration, no activation step — so a subsystem
   // imports only the one it needs.
   assertEquals(docs.some((d) => d.title == 'harness'), true)
-  const declarations = loadTools(docs, runs)
+  // Every declaration the harness SPEAKS, wearing its run — the checks the
+  // packages it composes bring included, since a word it lists has to work.
+  const declarations = loadTools(docs, runs({ vocab }))
   const h = open(':memory:')
   // The rules over that graph are `@yaks/harness/rules`, the very ones `open`
   // built it with: blobs, transcripts, edges, tasks, the portfolio they are

@@ -130,6 +130,24 @@
         }
       },
       "description": "work on it is suspended — a mark, so the phase underneath is untouched and resuming removes the mark"
+    },
+    "board_check": {
+      "tool": true,
+      "noun": "board",
+      "verb": "check",
+      "title": "Check the boards",
+      "description": "Every saved board query still routes. A board IS its query, so one written against words the vocabulary no longer has matches nothing and never says why.",
+      "input": {},
+      "readOnly": true
+    },
+    "project_check": {
+      "tool": true,
+      "noun": "project",
+      "verb": "check",
+      "title": "Check the portfolio",
+      "description": "Every governed entity is reachable from a project — filed under one, or hanging off one's containment. Work nobody's portfolio holds is work nothing will ever say was dropped.",
+      "input": {},
+      "readOnly": true
     }
   }
 }
