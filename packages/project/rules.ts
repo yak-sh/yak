@@ -2,10 +2,10 @@
 // (`@yaks/project/rules`) — including the guard over a board's saved query,
 // which is why this facet needs the vocabulary the query is written against.
 //
-// The status ladder a board filters on is the DEFAULT one. A host whose tasks
-// are leased reads a held claim as `wip`, and that rung is @yaks/session's;
-// composing this facet gives a board the three words @yaks/task ships. A host
-// that wants the wider ladder in its board guard composes `projects()` itself.
+// The status ladder a board filters on is the one the loaded VOCABULARY
+// declares — each package's `statuses` enum, read as a union — so a host that
+// composes @yaks/session's claim gets `wip` in its board guard by composing
+// it, and a host without leases still knows only the three @yaks/task ships.
 
 import type { Plugin } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'

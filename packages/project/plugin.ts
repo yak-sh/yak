@@ -9,7 +9,7 @@
 
 import type { Plugin } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { type Mark, MARKS } from '@yaks/task'
+import type { Mark } from '@yaks/task'
 import { projectDoc } from './comp.ts'
 import { guarding } from './guard.ts'
 
@@ -18,9 +18,10 @@ import { guarding } from './guard.ts'
  * components, and a `precondition` hook that refuses a board whose query would
  * quietly match nothing.
  *
- * Pass `marks` when the graph's status ladder has a rung @yaks/task's default
- * does not — the guard checks the statuses a board's query names against the
- * same ladder the reader will use.
+ * Naming no `marks` checks a board's statuses against the ladder the loaded
+ * VOCABULARY declares — every package's `statuses` enum, so a host composing
+ * leases knows `wip` without this package being told about them. Pass `marks`
+ * to check against exactly that ladder instead.
  */
 export let projects = (vocab: Vocab, marks?: Mark[]): Plugin => ({
   name: '@yaks/project',
