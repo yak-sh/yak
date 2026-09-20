@@ -41,13 +41,13 @@ export let LIMIT = 25 * 1024 * 1024
 export type Options = {
   /** where the objects this door serves and takes LIVE; name none and they
    * live in the host's own table, beside the text `./rules` keeps there */
-  store?: Kept
+  store?: Backend
   /** the largest upload, in bytes (default {@link LIMIT}) */
   limit?: number
 }
 
-/** A store, as a config names one. */
-export type Kept =
+/** A backend, as a config names one — the same three ./store.ts describes. */
+export type Backend =
   | {
     /** the host's own SQLite table — the default, and TEXT: it is the table
      * SQL reads a body column through (./sqlite.ts), so a host taking binary
@@ -73,7 +73,7 @@ export type Kept =
 /** A named store, built. An unknown `via` is a refusal: a host that thinks it
  * is keeping uploads somewhere and is not is worse than one that will not
  * boot. */
-export let kept = (said: Kept, host: { sql: Driver }): Blobs => {
+export let backend = (said: Backend, host: { sql: Driver }): Blobs => {
   if (said.via == 'sqlite') return sqliteBlobs(host.sql)
   if (said.via == 'file') {
     if (!said.dir) throw new Error('@yaks/blob: a file store needs `dir`')
@@ -86,7 +86,7 @@ export let kept = (said: Kept, host: { sql: Driver }): Blobs => {
     return objectBlobs(said.bucket, said.prefix)
   }
   throw new Error(
-    `@yaks/blob: no store called ${JSON.stringify((said as Kept).via)}`,
+    `@yaks/blob: no store called ${JSON.stringify((said as Backend).via)}`,
   )
 }
 
@@ -119,7 +119,7 @@ export let routes = (
   host: { sql: Driver; graph: Graph },
   options: Options = {},
 ): Route[] => {
-  let store = kept(options.store ?? { via: 'sqlite' }, host)
+  let store = backend(options.store ?? { via: 'sqlite' }, host)
   let limit = options.limit ?? LIMIT
 
   // What the row says this object is. The bytes are the truth about

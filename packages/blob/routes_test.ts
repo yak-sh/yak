@@ -7,7 +7,7 @@ import { addressOf, type Artifact, artifactDoc } from './artifact.ts'
 import type { Driver } from './driver.ts'
 import { mem } from './harness.ts'
 import type { Bucket } from './object.ts'
-import { type Kept, type Options, PREFIX, routes } from './routes.ts'
+import { type Backend, type Options, PREFIX, routes } from './routes.ts'
 import { blobSchema } from './sqlite.ts'
 
 // The spine, which no package's own document declares: a host composes it
@@ -169,12 +169,12 @@ Deno.test('the store a host names is where the bytes land', async () => {
 Deno.test('a store nobody can build refuses at compose, not at a request', () => {
   let h = host()
   assertThrows(
-    () => routes(h, { store: { via: 'file' } as Kept }),
+    () => routes(h, { store: { via: 'file' } as Backend }),
     Error,
     'needs `dir`',
   )
   assertThrows(
-    () => routes(h, { store: { via: 'bucket' } as unknown as Kept }),
+    () => routes(h, { store: { via: 'bucket' } as unknown as Backend }),
     Error,
     'no store called "bucket"',
   )
