@@ -11,7 +11,7 @@ let club = 'sp-club'
 let ana = 'p-ana'
 
 let rig = async (refuse?: string) => {
-  let house = clubhouse(refuse)
+  let house = clubhouse({ refuse })
   house.fx.created(
     'member',
     invited({

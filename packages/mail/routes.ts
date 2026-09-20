@@ -1,0 +1,109 @@
+// The arrival door: the `routes` facet (`@yaks/mail/routes`) — the one path a
+// mail edge hands this graph a letter on.
+//
+// Mail lands at the edge of the world, in front of a domain, and the graph is
+// usually somewhere that edge cannot reach back into. So the letter is POSTED
+// here, as the message itself: the envelope, the headers exactly as they
+// arrived, and the body as text once something upstream has parsed the MIME.
+// The subject, the Message-ID, the date and the DKIM verdict are READ OUT of
+// those headers (./inbound.ts) rather than said a second time in the body —
+// two spellings of one fact is how they come to disagree.
+//
+// Who may post is this plugin's OPTION, not the host's: which senders a
+// mailbox trusts is a fact about the mailbox. Name no secret and the door is
+// as open as the `/apply` beside it, which is right for a box behind a
+// perimeter and wrong for anything else.
+//
+// Nothing here decides what a letter MEANS. It records one, answers with its
+// id, and the effects registered on `mail` do the rest — which is why posting
+// the same letter twice is not a problem worth a lock: the Message-ID already
+// says which letter this is (./arrive.ts).
+
+import { type Graph, Refused } from '@yaks/graph'
+import { json, refuse, type Route, Unauthorized } from '@yaks/api'
+import { arrived } from './arrive.ts'
+import type { Head } from './inbound.ts'
+import type { Options } from './options.ts'
+
+/** Where a letter arrives, unless the config says otherwise. */
+export let PATH = '/mail/inbound'
+
+/** A letter as it is posted: the message, and what only the poster knows. */
+export type Posted = {
+  /** the envelope sender — SMTP plumbing; the author is the `From:` header */
+  from: string
+  /** the address it was delivered to */
+  to: string
+  /** its headers, as they arrived */
+  headers?: Record<string, string>
+  /** the body as text, once something has parsed the MIME */
+  text?: string
+  /** whether the sending domain signed for it, where the receiving MTA told
+   * the poster and left no `Authentication-Results` header to read */
+  verified?: boolean
+}
+
+// Headers as a plain object, read the way a `Headers` is read. A poster writes
+// them however its runtime spelled them, so the lookup is case-insensitive.
+let head = (said: Record<string, string> = {}): Head => {
+  let by = new Map(
+    Object.entries(said).map(([k, v]) => [k.toLowerCase(), String(v)]),
+  )
+  return { get: (name) => by.get(name.toLowerCase()) ?? null }
+}
+
+// A constant-time comparison: a secret checked with `==` tells whoever is
+// willing to time the door how long a prefix they got right. The length still
+// leaks, which is why a secret is a token rather than a password.
+let same = (a: string, b: string): boolean => {
+  if (a.length != b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff == 0
+}
+
+let bearer = (request: Request): string =>
+  (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '')
+
+let said = (body: unknown): Posted => {
+  let m = body as Posted | null
+  if (!m || typeof m != 'object' || !m.from || !m.to) {
+    throw new Refused('a letter arrives as {from, to, headers?, text?}')
+  }
+  return m
+}
+
+/** `POST /mail/inbound` — one letter, as it arrived. */
+export let routes = (
+  host: { graph: Graph },
+  options: Options = {},
+): Route[] => {
+  let { path = PATH, secret, triage } = options.door ?? {}
+  return [{
+    method: 'POST',
+    path,
+    handle: async (request) => {
+      try {
+        if (secret && !same(secret, bearer(request))) {
+          throw new Unauthorized('the arrival door takes a bearer token')
+        }
+        let { from, to, headers, text, verified } = said(await request.json())
+        let receive = arrived({
+          graph: host.graph,
+          domain: options.domain,
+          triage,
+        })
+        let batch = await receive({ from, to, headers: head(headers) }, {
+          text,
+          ...(verified == null ? {} : { verified }),
+        })
+        // No bundles: this Message-ID is already here. A poster that cannot
+        // tell "recorded" from "recorded earlier" would post it again.
+        let landed = batch.length ? await host.graph.apply(batch) : []
+        return json({ eid: landed[0]?.entity.eid ?? null })
+      } catch (err) {
+        return refuse(err, request)
+      }
+    },
+  }]
+}

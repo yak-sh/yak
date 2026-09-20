@@ -25,6 +25,7 @@ import type { Bundle, Comp, Entity, Tx } from '@yaks/graph'
 import { then } from '@yaks/graph'
 import type { Handler } from '@yaks/effects'
 import { BODY, DOC, TITLE } from '@yaks/doc'
+import { at } from './addr.ts'
 import { html, text } from './md.ts'
 import { BOUNCED, DELIVER, DELIVERED, EMAIL, MAIL } from './comp.ts'
 
@@ -66,6 +67,9 @@ export type Post = {
   sender: Sender
   /** the clock, injected so a test can hold it still (default: now) */
   now?: () => string
+  /** a domain whose addresses are this GRAPH's own rather than a mail
+   * server's. A letter to one is delivered by writing it — see below. */
+  local?: string
 }
 
 let clock = () => new Date().toISOString()
@@ -146,9 +150,17 @@ export let message = (
  * ask. The registry needs that door: `effects(vocab, { write })`, applied
  * trusted, since `delivered` and `bounced` are the sender's word and therefore
  * server-owned.
+ *
+ * `local` names a domain whose addresses are this GRAPH's — an agent, a
+ * project, anything reachable here and nowhere else. A letter to one is
+ * already where it is going, so it is stamped `delivered{via: 'local'}` and
+ * never handed to the transport; posting it out would bring it home as a
+ * second letter about the same words. Leave it out where somebody reads that
+ * domain's mail in a mail client: then the mailbox is the destination, and the
+ * graph is only the record.
  */
 export let sending =
-  ({ sender, now = clock }: Post): Handler => (event, tx, write) =>
+  ({ sender, now = clock, local }: Post): Handler => (event, tx, write) =>
     then(whole(tx, event.entity), (letter) => {
       let mail = comp(letter, MAIL)
       let deliver = comp(letter, DELIVER)
@@ -163,6 +175,17 @@ export let sending =
       return then(addressOf(tx, recipient), (to) => {
         if (!to) return fail(`no address on file for ${recipient}`)
         if (!str(mail, 'from')) return fail('the letter has no from address')
+        // Local delivery: the address is in a namespace this graph owns, so
+        // the letter has arrived by being written. The envelope is stamped the
+        // same way a sent one is — what an address book edit later says must
+        // never rewrite where this letter went.
+        if (local && at(local)(to)) {
+          return write([{
+            entity: event.entity,
+            [MAIL]: { to },
+            [DELIVERED]: { at: now(), via: 'local' },
+          }])
+        }
         let answered = mail.reply_to == null ? '' : String(mail.reply_to)
         return then(
           answered ? threadOf(tx, answered) : '',

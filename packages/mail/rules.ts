@@ -10,7 +10,7 @@
 
 import type { Plugin } from '@yaks/graph'
 import { mailbox } from './plugin.ts'
-import type { Options } from './effects.ts'
+import type { Options } from './options.ts'
 
 /** The letter words, and the address canonicalizer the domain implies. */
 export let rules = (_host: unknown, options: Options = {}): Plugin[] => [

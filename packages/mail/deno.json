@@ -5,7 +5,8 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./rules": "./rules.ts",
-    "./effects": "./effects.ts"
+    "./effects": "./effects.ts",
+    "./routes": "./routes.ts"
   },
   "license": "Apache-2.0",
   "description": "Represents letters and their delivery outcomes as graph components, sends them through an injected sender, and converts arrivals to bundles.",

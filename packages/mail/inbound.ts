@@ -47,6 +47,9 @@ export type Arrival = {
   eid?: Eid
   /** the entity the letter is about — the recipient, a thread, a task */
   target?: Eid
+  /** the letter this one answers, once something has looked up which letter
+   * the `in-reply-to` header names (./arrive.ts `known`) */
+  reply?: Eid
   /** when it arrived (default: the Date header, else now) */
   at?: string
   /**
@@ -107,10 +110,11 @@ export let messageId = (m: Received): string =>
  * // await graph.apply(inbound(message, { text, target: club }))
  * ```
  *
- * Threading is a lookup, so it is left to you: read the `in-reply-to` header,
- * find the letter whose `message_id` matches, and patch this one's `reply_to`
- * at it. Same for `target` when the recipient address names an entity — query
- * `email.address`, and pass what you find.
+ * Threading is a lookup, so it arrives as an answer rather than a question:
+ * read the `in-reply-to` header, find the letter whose `message_id` matches,
+ * and pass it as `reply`. Same for `target` when the recipient address names an
+ * entity — query `email.address`, and pass what you find. Both lookups are
+ * ./arrive.ts, which has a graph to ask.
  */
 export let inbound = (m: Received, arrival: Arrival = {}): Bundle[] => {
   let at = arrival.at ?? m.headers.get('date') ?? new Date().toISOString()
@@ -126,6 +130,7 @@ export let inbound = (m: Received, arrival: Arrival = {}): Bundle[] => {
       at,
       message_id: messageId(m),
       ...(arrival.target ? { target: arrival.target } : {}),
+      ...(arrival.reply ? { reply_to: arrival.reply } : {}),
       ...(arrival.verified == null ? {} : { verified: arrival.verified }),
     },
   }]

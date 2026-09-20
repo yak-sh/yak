@@ -88,8 +88,16 @@ export type Club = {
   post: Stash
 }
 
-/** A club with a post room. `refuse` makes every send fail, for the bounce. */
-export let clubhouse = (refuse?: string): Club => {
+/** How the club is rigged for one test. */
+export type Rig = {
+  /** make every send fail with this reason, for the bounce */
+  refuse?: string
+  /** the domain whose addresses are the graph's own, for local delivery */
+  local?: string
+}
+
+/** A club with a post room. */
+export let clubhouse = ({ refuse, local }: Rig = {}): Club => {
   // The write door the sending effect settles a letter through: the club's own
   // graph, trusted, since `delivered` and `bounced` are server-owned. `g` is
   // built below and this only ever runs post-commit.
@@ -106,6 +114,7 @@ export let clubhouse = (refuse?: string): Club => {
         sender: post,
         effects: fx,
         now: noon,
+        ...(local ? { local } : {}),
       }),
     ],
   })

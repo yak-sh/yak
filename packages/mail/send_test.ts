@@ -1,6 +1,6 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
-import { clubhouse } from './harness.ts'
+import { clubhouse, noon } from './harness.ts'
 import { message } from './send.ts'
 
 let ana = 'p-ana'
@@ -8,7 +8,7 @@ let letter = 'e-potluck'
 
 // A club with one member who has an address on file.
 let seeded = async (refuse?: string) => {
-  let club = clubhouse(refuse)
+  let club = clubhouse({ refuse })
   await club.g.apply([{
     entity: { eid: ana },
     person: { name: 'Ana' },
@@ -156,4 +156,50 @@ Deno.test('message: the composition, without a transport anywhere', () => {
       html: '<p><strong>b</strong></p>',
     },
   )
+})
+
+// Local delivery: the domain is the graph's own namespace, so a letter to it
+// has arrived by being written.
+let inhouse = async () => {
+  let club = clubhouse({ local: 'books.example' })
+  await club.g.apply([
+    {
+      entity: { eid: ana },
+      person: { name: 'Ana' },
+      email: { address: 'ana@books.example' },
+    },
+    {
+      entity: { eid: 'p-bo' },
+      person: { name: 'Bo' },
+      email: { address: 'bo@elsewhere.com' },
+    },
+  ])
+  return club
+}
+
+Deno.test('a letter to an address the graph owns never reaches the transport', async () => {
+  let { g, post } = await inhouse()
+  await g.apply([{
+    entity: { eid: letter },
+    doc: { title: 'Soup', body: 'there is soup' },
+    mail: { from: 'club@books.example' },
+    deliver: { to: ana },
+  }])
+  assertEquals(post.sent.length, 0)
+  let sent = await read(g, letter)
+  assertEquals(comp(sent, 'delivered'), { at: noon(), via: 'local' })
+  // The envelope is still denormalized: where it went is data, not a lookup.
+  assertEquals(comp(sent, 'mail')?.to, 'ana@books.example')
+})
+
+Deno.test('a letter out of the house still rides the transport', async () => {
+  let { g, post } = await inhouse()
+  await g.apply([{
+    entity: { eid: letter },
+    doc: { title: 'Soup', body: 'there is soup' },
+    mail: { from: 'club@books.example' },
+    deliver: { to: 'p-bo' },
+  }])
+  assertEquals(post.last()?.to, 'bo@elsewhere.com')
+  assertEquals(comp(await read(g, letter), 'delivered')?.via, 'stash-1')
 })
