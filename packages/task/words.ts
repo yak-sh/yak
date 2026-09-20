@@ -66,21 +66,21 @@ export let statuses = (marks: Mark[] = MARKS): Status[] => [
 
 /**
  * The closed set a VOCABULARY declares: the `statuses` enum this package
- * ships, which names the rungs a host adds as well as the three the default
- * ladder spells. A host that composes a lease reads `wip` there without having
- * to hand its marks to every door that checks a status — and a vocabulary that
- * declares no such enum reads as the default ladder.
+ * ships, which names every rung a task's status can read — the three the
+ * default ladder spells, and the one a host that leases its tasks adds, since
+ * the word list is the same wherever the marks come from. A door that checks a
+ * status without being handed marks reads this, so a board filtering on `wip`
+ * is routed rather than refused; a vocabulary without the enum reads as the
+ * default ladder.
  */
 export let declared = (
   vocab: { docs: { $defs?: Record<string, unknown> }[] },
 ): Status[] => {
-  let known: Status[] = []
   for (let doc of vocab.docs) {
     let said = doc.$defs?.statuses as { enum?: unknown } | undefined
-    if (!Array.isArray(said?.enum)) continue
-    for (let s of said.enum as Status[]) if (!known.includes(s)) known.push(s)
+    if (Array.isArray(said?.enum)) return said.enum as Status[]
   }
-  return known.length ? known : statuses()
+  return statuses()
 }
 
 /** Does this status mean the work is over? An open task is never settled, and a

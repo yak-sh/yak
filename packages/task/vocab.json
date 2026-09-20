@@ -139,11 +139,12 @@
       }
     },
     "statuses": {
-      "description": "every word THIS package's ladder spells, most decisive first. A host that adds a rung declares it in the plugin that owns the rung — @yaks/session says `wip`, because it owns the claim — and a door that checks a status reads the union.",
+      "description": "every word a task's derived status can be, the host's extra marks included: `wip` is what a task under a live claim reads as, contributed by whoever ships the claim (see MARKS).",
       "enum": [
-        "cancelled",
+        "open",
+        "wip",
         "done",
-        "open"
+        "cancelled"
       ]
     },
     "task_new": {

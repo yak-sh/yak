@@ -4,11 +4,7 @@
 import { assertEquals, assertThrows } from '@std/assert'
 import { Refused } from '@yaks/graph'
 import { unroutable } from './guard.ts'
-import { loadVocab } from '@yaks/vocab'
-import { docDoc } from '@yaks/doc'
-import { edgeDoc, edgeKeywords } from '@yaks/edge'
-import { taskDoc } from '@yaks/task'
-import { projectDoc } from './comp.ts'
+import { MARKS } from '@yaks/task'
 import { team, teamGraph } from './harness.ts'
 
 let board = (query: string) => [{
@@ -44,21 +40,28 @@ Deno.test('a status outside the closed set is refused, by name', () => {
   let why = unroutable('.status=complete', team)
   assertEquals(
     why,
-    'no such status: complete — this board knows cancelled, done, open',
+    'no such status: complete — this board knows open, wip, done, cancelled',
   )
   // and in a list, where one bad member is just as invisible
   assertEquals(typeof unroutable('.status=open,finished', team), 'string')
 })
 
-Deno.test('an added rung widens what a board may say', () => {
-  let marks = [
-    { status: 'cancelled', comp: 'cancelled' },
-    { status: 'done', comp: 'completed' },
-    { status: 'wip', comp: 'claim', settled: false },
-  ]
-  assertEquals(unroutable('.status=wip', team, marks), null)
-  // and without it, the same query is refused
-  assertEquals(typeof unroutable('.status=wip', team), 'string')
+Deno.test("the ladder is the vocabulary's, unless marks name one", () => {
+  // Naming nothing reads @yaks/task's `statuses` — every word a status can be,
+  // the rung a host that leases its tasks adds included — so a board filtering
+  // on `wip` routes without @yaks/project being told about leases.
+  assertEquals(unroutable('.status=wip', team), null)
+  // Naming marks NARROWS it to exactly that ladder, which is what a graph with
+  // no lease at all wants.
+  assertEquals(typeof unroutable('.status=wip', team, MARKS), 'string')
+  assertEquals(
+    unroutable('.status=wip', team, [...MARKS, {
+      status: 'wip',
+      comp: 'claim',
+      settled: false,
+    }]),
+    null,
+  )
 })
 
 Deno.test('the graph refuses the bad board and keeps the good one', () => {
@@ -119,22 +122,4 @@ Deno.test('filing stores separately and a bare priority query orders filed tasks
   assertEquals(rows.map((b) => b.entity.eid), ['first', 'later'])
   assertEquals(rows[1].task, {})
   assertEquals(rows[1].filed, { priority: 2, domain: 'Eng' })
-})
-
-Deno.test('the vocabulary widens the ladder where a package owns the rung', () => {
-  // Naming no marks reads the closed set the DOCUMENTS declare, so a host
-  // composing @yaks/session's `statuses` gets `wip` without @yaks/project
-  // being told about leases.
-  let leased = loadVocab(
-    [docDoc, edgeDoc, taskDoc, projectDoc, {
-      $defs: { statuses: { enum: ['wip'] } },
-    }],
-    [edgeKeywords],
-  )
-  assertEquals(unroutable('.status=wip', leased), null)
-  assertEquals(unroutable('.status=open', leased), null)
-  assertEquals(
-    unroutable('.status=complete', leased),
-    'no such status: complete — this board knows cancelled, done, open, wip',
-  )
 })
