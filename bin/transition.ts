@@ -917,6 +917,12 @@ let link = (from: Eid, relation: string, to: Eid): Bundle => ({
 // reference mints the spine it points at.
 let FIRST = ['model', 'provider', 'person', 'persona', 'project', 'session']
 
+// And what has to be written after everything else. `updated` is stamped by
+// the graph on every patch to an entity that already existed — which the whole
+// export is — so the fleet's own reading of when a thing last changed has to
+// land last, or half a million entities read as changed today.
+let LAST = ['updated']
+
 // The relation tags an edge entity wears. An edge is ONE sentence, so its two
 // ends and its tag are written in one bundle — said apart, the half with no
 // tag is not an edge yet and @yaks/edge refuses it.
@@ -1219,7 +1225,10 @@ let main = async () => {
 
   let order = [
     ...FIRST,
-    ...Object.keys(MOVES).filter((c) => !FIRST.includes(c)),
+    ...Object.keys(MOVES).filter((c) =>
+      !FIRST.includes(c) && !LAST.includes(c)
+    ),
+    ...LAST,
   ]
   for (let comp of order) {
     let move = MOVES[comp]

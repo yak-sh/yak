@@ -21,14 +21,18 @@ import {
 import { docDoc, docs as docRules } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { effectDoc } from '@yaks/effects'
-import { fields as ftsFields, schema as ftsSchema } from '@yaks/fts'
+import {
+  fields as ftsFields,
+  schema as ftsSchema,
+  search as ftsSearch,
+} from '@yaks/fts'
 import type { Plugin } from '@yaks/graph'
 import { idKeywords } from '@yaks/id'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { ddl as journalDdl, journal, log } from '@yaks/journal'
 import { nameKeywords } from '@yaks/names'
-import type { Derived } from '@yaks/sql'
+import type { Derived, Extension } from '@yaks/sql'
 import type { Keywords, Vocab, VocabDoc } from '@yaks/vocab'
 import type { Host } from '@yaks/cli/serve'
 
@@ -54,6 +58,11 @@ export let keywords: Keywords[] = [
 
 /** A body column reads as the text it addresses, resolved in the statement. */
 export let derived = (v: Vocab): Derived => blobRead(v)
+
+/** A bare word in a query is a full-text match over the columns that declared
+ * themselves searchable — which is what makes a search string a valid board
+ * query, and a board query a search. */
+export let extend = (v: Vocab): Extension[] => [ftsSearch(ftsFields(v))]
 
 export let rules = (host: Host): Plugin[] => {
   for (let statement of blobSchema()) host.sql.exec(statement)
