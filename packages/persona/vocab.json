@@ -86,6 +86,24 @@
         }
       },
       "description": "a persona hired into standing work: what it is responsible for, and whether it is running. When it wakes is a @yaks/wake `wake` pointed at it, where it works is a @yaks/git `worktree`, and what it last decided is kernel `decided`"
+    },
+    "persona_read": {
+      "tool": true,
+      "noun": "persona",
+      "verb": "read",
+      "title": "Read a persona",
+      "description": "A persona as one markdown document: its own voice, then every doc it carries in full, then a line naming each doc it only reads. This is the text an agent is handed to wear — where it lands (a file, a repo, a spawn's system prompt) is the caller's business.",
+      "input": {
+        "persona": {
+          "type": "string",
+          "description": "the persona's eid, its id, or the name it answers to"
+        }
+      },
+      "required": ["persona"],
+      "options": {
+        "positional": ["persona"]
+      },
+      "readOnly": true
     }
   }
 }

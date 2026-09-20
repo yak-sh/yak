@@ -8,6 +8,15 @@
     "strict": true
   },
   "imports": {
+    "@yaks/archetype": "../archetype/mod.ts",
+    "@yaks/doc": "../doc/mod.ts",
+    "@yaks/edge": "../edge/mod.ts",
+    "@yaks/graph": "../graph/mod.ts",
+    "@yaks/id": "../id/mod.ts",
+    "@yaks/query": "../query/mod.ts",
+    "@yaks/render": "../render/mod.ts",
+    "@yaks/sql": "../sql/mod.ts",
+    "@yaks/text": "../text/mod.ts",
     "@yaks/vocab": "../vocab/mod.ts"
   }
 }

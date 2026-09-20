@@ -174,9 +174,10 @@ In dependency order:
   `memory` on a `doc` whose body is the sentence itself with a few lines of
   context, the filter line that recalls them, and the passage handed to an agent
   at the start of its next conversation.
-- **[@yaks/persona](./persona)** — who is speaking and what they are for: the
-  people a graph knows, the personas an agent wears, and the roles those
-  personas are hired into, with the checks a role runs and what they found.
+- **[@yaks/persona](./persona)** — who is speaking, what they are for, and what
+  they say: the people a graph knows, the personas an agent wears, the roles
+  those personas are hired into, and a persona materialized — its own voice plus
+  the docs it carries and names — as the one markdown document an agent reads.
 - **[@yaks/project](./project)** — a portfolio: the `project` work is filed
   under, the `filed` that files it, the `board` that is a saved filter over it,
   and the `venture` being built.

@@ -3,10 +3,9 @@
 // browser tab loading this vocabulary loads nothing else.
 
 import type { VocabDoc } from '@yaks/vocab'
-import doc from './vocab.json' with { type: 'json' }
+import { personaDoc } from './comp.ts'
 
-/** The persona vocabulary, as the document `loadVocab` takes. */
-export let personaDoc: VocabDoc = doc as VocabDoc
+export { personaDoc }
 
 /** Every document this plugin declares. */
 export let docs: VocabDoc[] = [personaDoc]
