@@ -106,6 +106,26 @@ arguments, so the same code runs in a Worker, on a server, and against a stub.
 `stash()` keeps the messages in a list, which is what a test and a development
 environment want.
 
+### Local delivery
+
+`local` names a domain whose addresses are your GRAPH's own — an agent, a
+project, anything reachable here and nowhere else:
+
+```ts
+mailbox({
+  domain: 'books.example',
+  local: 'books.example',
+  sender,
+  effects: fx,
+})
+```
+
+A letter to one of those addresses is already where it is going, so it is
+stamped `delivered { via: 'local' }` and never handed to the transport — posting
+it out would bring it home as a second letter about the same words. Leave it out
+where somebody reads that domain's mail in a mail client: then the mailbox is
+the destination and the graph is only the record.
+
 ## Receiving is a pure function
 
 ```ts
@@ -115,13 +135,77 @@ await g.apply(inbound(message, { text, target: club }))
 ```
 
 `inbound` takes a message in the shape Cloudflare's Email Workers hand you and
-answers with bundles. It asks the graph nothing, so it tests without one — and
-the two questions that DO need the graph are left to you: which entity the
-letter is about (`target`), and which earlier letter it answers (find the one
-whose `message_id` matches the `in-reply-to` header, patch `reply_to`).
+answers with bundles. It asks the graph nothing, so it tests without one.
 
 It does not parse MIME. Turning RFC 5322 into text is a parser's job, and this
 package would rather not carry one.
+
+### The two questions that need a graph
+
+Whom the letter is about (`target`) and which earlier letter it answers
+(`reply_to`) are lookups, so they live one file over, where there is a graph to
+ask. `arrived` composes them with `inbound`:
+
+```ts
+let receive = arrived({ graph, domain: 'books.example', triage: pile })
+await graph.apply(await receive(message, { text }))
+```
+
+- **The address book is read backwards**: `wearer` is whoever wears an address,
+  and a sender nobody knows resolves to nobody — never to whatever a fallback
+  would have picked, or a stranger's letter joins the journal signed by whoever
+  runs the box. The batch carries `$actor` only where the book knew the author.
+- **The id grammar is the address grammar**: at your own domain, an address
+  whose local part is an id this graph knows names that entity —
+  `S-31@books.example` is S-31, resolved through `graph.address`, the same door
+  that resolves an id a person typed. Derived, never stored, so writing to
+  something short-lived does not mean minting an address-book row for it.
+- **A letter addressed to nobody here** lands on `triage`, if you name a pile.
+- **The Message-ID makes an arrival idempotent.** The same message recorded
+  twice answers with no bundles at all, which is what a door posted a retry and
+  a sweep pulling the same page both need.
+
+## The arrival door
+
+Mail lands at the edge of the world, in front of a domain, and the graph is
+usually somewhere that edge cannot reach back into. `@yaks/mail/routes` is the
+path it posts a letter on — the message as it arrived, and nothing else:
+
+```sh
+curl -X POST http://box/mail/inbound -H 'authorization: Bearer …' -d '{
+  "from": "bounces@relay.example",
+  "to": "ana@books.example",
+  "headers": { "From": "Ana <ana@books.example>", "Subject": "Is there soup?" },
+  "text": "asking"
+}'
+# {"eid":"b7ee3386-…"}   — or {"eid":null}, meaning it was already here
+```
+
+The subject, the Message-ID, the date and the DKIM verdict are read out of those
+headers rather than said a second time in the body; two spellings of one fact is
+how they come to disagree. Who may post is this plugin's option: name no
+`door.secret` and the door is as open as the `/apply` beside it, which is right
+for a box behind a perimeter and wrong for anything else.
+
+```json
+{
+  "use": "@yaks/mail",
+  "with": {
+    "domain": "books.example",
+    "local": true,
+    "sender": {
+      "via": "cloudflare",
+      "account": "a1b2",
+      "token": { "env": "CF_EMAIL_TOKEN" }
+    },
+    "door": {
+      "path": "/mail/inbound",
+      "secret": { "env": "MAIL_DOOR_SECRET" },
+      "triage": "…"
+    }
+  }
+}
+```
 
 ## Invitations: @yaks/member's empty slot, filled
 
@@ -188,12 +272,16 @@ prefer.
 | `mailDoc`                                          | the six components, beside `@yaks/doc`'s `doc` |
 | `MAIL`, `EMAIL`, `DELIVER`, …                      | their names                                    |
 | `mailbox(opts)`                                    | the @yaks/graph plugin — vocab, canon, sending |
-| `sending({ sender, now })`                         | the `created(mail)` handler                    |
+| `sending({ sender, now, local })`                  | the `created(mail)` handler                    |
 | `message(letter, to, replyTo?)`                    | a letter composed, purely                      |
 | `Sender`, `Message`, `Receipt`                     | the transport interface                        |
 | `cloudflare({ account, token })`, `payload`        | Cloudflare Email Sending, and its payload      |
 | `stash()`                                          | the sender that keeps them in a list           |
 | `inbound(message, arrival)`, `author`, `messageId` | an arrival → bundles                           |
+| `arrived({ graph, domain, triage })`               | the same, with the two lookups answered        |
+| `wearer`, `named`, `routed`, `known`               | the address book, read backwards               |
+| `routes(host, options)`, `PATH`                    | the arrival door                               |
+| `Options`, `Transport`, `Door`                     | what a config says to this plugin              |
 | `invited({ welcome, apply })`                      | the `created(member)` handler                  |
 | `canon`, `local`, `at`, `parts`, `address`         | addresses                                      |
 | `html`, `text`, `tokens`, `linkable`, `escape`     | the two body renderings                        |
@@ -205,6 +293,11 @@ retry, and it leaves a record. A queue that hides failures is the thing this
 replaces.
 
 **MIME parsing**, and **any credential of any kind**.
+
+**A clock.** Nothing here polls. Where mail has to be PULLED — an edge that
+cannot reach in, so the graph fetches what arrived — `arrived` is the half that
+turns each message into bundles, idempotent on the Message-ID, and whatever runs
+on a timer is the host's.
 
 **A `to` on `deliver`.** Where a letter goes is one question with one answer:
 the recipient entity's address, read when it leaves.

@@ -484,7 +484,10 @@ on its own:
   refuse a write; the outcome is written back as components, so what became of a
   letter is a query. It also fills the `created(member)` slot `@yaks/member`
   documents and leaves for it — an invitation is a letter, written through the
-  same `apply()` as everything else.
+  same `apply()` as everything else. Receiving is the mirror: a pure
+  message-to-bundles, the two lookups that need a graph beside it, and a
+  `routes` facet a mail edge posts on — idempotent on the Message-ID, so a retry
+  and a sweep record one letter.
 - `@yaks/api` puts the whole stack behind three routes. It composes
   `@yaks/graph` (for writes) with a storage adapter (for reads) and
   `@yaks/match` (to decide cheaply which subscription a committed batch

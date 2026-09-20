@@ -47,6 +47,9 @@
  * ## Receiving is a pure function
  * {@link inbound} turns a message as an Email Worker receives it into the
  * bundles that record it. It asks the graph nothing, so it tests without one.
+ * The two columns that ARE lookups — whom the letter is about, which letter it
+ * answers — are {@link arrived} one file over, where there is a graph to ask,
+ * and `@yaks/mail/routes` is the path a mail edge posts a letter on.
  *
  * ## The worked example
  * {@link invited} fills the `created(member)` slot
