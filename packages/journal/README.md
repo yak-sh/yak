@@ -43,6 +43,17 @@ Nothing is read in order to write, so there is no precondition phase and nothing
 rides forward on the batch. The host is one function wide — `rows(sql, params)`
 — and the journal owns no transaction of its own: the caller owns it.
 
+## In a host
+
+`@yaks/journal/rules` is the facet a config-composed host takes: it raises the
+three tables through the host's own connection and returns the plugin that
+writes them. There is no `./vocab` — the journal declares no component and
+appears in no snapshot; it is the record OF the wire, not part of it.
+
+```json
+{ "plugins": ["@yaks/kernel", "@yaks/journal"] }
+```
+
 ## What it answers
 
 ```ts

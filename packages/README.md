@@ -441,12 +441,6 @@ shape proposed for it.
   in `./vocab` and the renderer reads it off the bundle; a `./views` that
   imports a driver is a view that has gone to the wrong side of the door, and
   the browser gate will say so.
-- **Two packages still answer a clause nobody composed.** `@yaks/fts` (a text
-  term) and `@yaks/edge` (`.cites[<=3]->p1`) register through the same @yaks/sql
-  seam `@yaks/embedding` does, but only when an APPLICATION hands `compile()` an
-  extension itself — neither exports `./rules`, so a host composed from a config
-  cannot search or walk. Each wants the three lines `@yaks/embedding/rules` has:
-  its indexes raised through `host.sql`, its compiler returned from `extend`.
 - **`@yaks/render`'s `vocab.json` describes a column schema**, not a component
   domain, so it is the one vocabulary document with no `./vocab` subpath, and
   the facet test names it as an exception.

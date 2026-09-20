@@ -69,15 +69,16 @@ One JSON file. `--config` names it, else `$YAK_CONFIG`.
 }
 ```
 
-| field      | what it says                                                                             |
-| ---------- | ---------------------------------------------------------------------------------------- |
-| `db`       | the SQLite file, or `:memory:`. Relative to the config file itself.                      |
-| `plugins`  | the packages, by import specifier; a relative one resolves against the config            |
-| `port`     | what `serve` listens on, and so where a client aimed at this config talks (default 8787) |
-| `hostname` | which interface `serve` binds; a client reads it as the host to talk to                  |
-| `actor`    | the eid every request is signed with, where no plugin authenticates                      |
-| `numbers`  | whether the store mints human numbers beside eids (default true)                         |
-| `name`     | what the MCP door calls itself                                                           |
+| field      | what it says                                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `db`       | the SQLite file, or `:memory:`. Relative to the config file itself.                                                      |
+| `plugins`  | the packages, by import specifier; a relative one resolves against the config                                            |
+| `port`     | what `serve` listens on, and so where a client aimed at this config talks (default 8787)                                 |
+| `hostname` | which interface `serve` binds; a client reads it as the host to talk to                                                  |
+| `actor`    | the eid every request is signed with, where no plugin authenticates                                                      |
+| `numbers`  | whether the store mints human numbers beside eids (default true)                                                         |
+| `adopt`    | take the `num` a batch's identity carries instead of minting one — what a store seeded from another store's export needs |
+| `name`     | what the MCP door calls itself                                                                                           |
 
 ### What a config says to one plugin
 
