@@ -55,6 +55,8 @@ import {
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
+import { idKeywords } from '@yaks/id'
+import { nameKeywords } from '@yaks/names'
 import type { Derived, Extension } from '@yaks/sql'
 import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
 import { Database, driver } from '@yaks/sqlite/db'
@@ -348,6 +350,23 @@ let said = (docs: VocabDoc[]): VocabDoc[] => {
     : docs
 }
 
+// The keywords that are the HOST's rather than any plugin's: what letter an
+// id wears (`prefix`, @yaks/id) and which column is a name somebody may type
+// (`by_name`, @yaks/names). Every package spells them in its `$vocabulary`,
+// none registers them — and an unregistered keyword is silently dropped, so a
+// host that skipped these would mint `entity.num` and then render `P-1` for a
+// persona that declared `N`, having fallen back to the component's initial.
+// Minting the number and answering in human ids are both this host's doing,
+// so reading the words that shape them is too. A plugin that supplies its own
+// copy wins; this is the difference, never a second registration.
+let understood = (brought: Keywords[]): Keywords[] => {
+  let taken = new Set(brought.map((k) => k.uri))
+  return [
+    ...brought,
+    ...[idKeywords, nameKeywords].filter((k) => !taken.has(k.uri)),
+  ]
+}
+
 // Exactly one plugin may say who is calling; two would mean the door's answer
 // depends on import order, which is not an answer.
 let doorman = (mods: RoutesFacet[], config: Config): Authenticate => {
@@ -413,7 +432,10 @@ export let compose = async (
   // whose transcripts ARE calls — keeps its own spelling, so only the words
   // nobody supplied are added.
   let docs = said(vocabs.flatMap(([v]) => v.docs ?? []))
-  let vocab = loadVocab(docs, vocabs.flatMap(([v]) => v.keywords ?? []))
+  let vocab = loadVocab(
+    docs,
+    understood(vocabs.flatMap(([v]) => v.keywords ?? [])),
+  )
 
   if (path != ':memory:') {
     let dir = path.slice(0, path.lastIndexOf('/'))

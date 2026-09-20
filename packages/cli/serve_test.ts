@@ -2,6 +2,7 @@ import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
+import { prefixes } from '@yaks/id'
 import { compose, FACETS, type Facets, read, words } from './serve.ts'
 
 let doc: VocabDoc = {
@@ -36,6 +37,9 @@ let doc: VocabDoc = {
     book: {
       component: true,
       kind: true,
+      // The letter its human ids wear — @yaks/id's keyword, which no plugin
+      // registers and every host needs.
+      prefix: 'K',
       type: 'object',
       properties: { title: { type: 'string' }, price: { type: 'number' } },
     },
@@ -397,6 +401,20 @@ Deno.test('a plugin named with options gets them, beside the host', async () => 
     assertEquals(said, [{}, { open: 'tuesdays' }])
     let res = await host.handler(new Request('http://x/open'))
     assertEquals(await res.text(), 'tuesdays')
+  } finally {
+    host.close()
+  }
+})
+
+Deno.test('a host reads the letter an id wears, which no plugin registers', async () => {
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'] },
+    only({ shop }),
+  )
+  try {
+    // Without @yaks/id's keyword the declaration is dropped on load and a
+    // component falls back to its own initial — `B-1` for a book that said K.
+    assertEquals(prefixes(host.vocab).book, 'K')
   } finally {
     host.close()
   }
