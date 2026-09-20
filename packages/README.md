@@ -46,12 +46,6 @@ In dependency order:
 - **[@yaks/embedding](./embedding)** — the other kind of search: a vector per
   entity, kept current by a sweep, and the `@yaks/sql` extension that compiles
   `.near=<entity>` and `.order=similar` into a nearest-neighbour ranking.
-- **[@yaks/telemetry](./telemetry)** — RETIRED: the graph holds what the
-  tool-call log held. A call is a `call` settled as a `result` with its `ms` and
-  its `created.by`, and a failure is the `error` or `exception` beside it
-  ([@yaks/tools](./tools/README.md#what-the-tool-call-log-was)), so `/telemetry`
-  is a query. Nothing composes this package; it dies with the fleet server that
-  imports it.
 - **[@yaks/match](./match)** — the other evaluator of the same grammar: a
   `@yaks/query` AST run as a predicate over bundles held in memory, with no
   database. Tested query by query for parity with `@yaks/sql`.
