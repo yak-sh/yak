@@ -144,8 +144,8 @@ let MOVES: Record<string, Move | null> = {
   alias: {
     says: 'alias',
     // The name IS the row: @yaks/alias writes one through the `alias{name}`
-    // sugar, and every other name the fleet listed is another key on the
-    // same entity.
+    // sugar on the named entity's own bundle, and every OTHER name the fleet
+    // listed beside it is another key on that same entity.
     make: (row, ctx) => {
       for (let extra of String(row.slugs ?? '').split(/\s+/).filter(Boolean)) {
         ctx.also({
@@ -154,9 +154,8 @@ let MOVES: Record<string, Move | null> = {
           alias: {},
         })
       }
-      return null
+      return row.slug == null ? null : { name: String(row.slug) }
     },
-    onto: () => undefined,
   },
   anchor: same('anchor', 'paths', 'sha', 'symbol', 'hunk', 'start', 'end'),
   archetype: {
@@ -916,7 +915,7 @@ let link = (from: Eid, relation: string, to: Eid): Bundle => ({
 // — an entry's session, a claim's session — cannot be written before the thing
 // it names exists, so those few go first; the rest are order-free, because a
 // reference mints the spine it points at.
-let FIRST = ['session', 'project', 'model', 'provider', 'person', 'persona']
+let FIRST = ['model', 'provider', 'person', 'persona', 'project', 'session']
 
 // The relation tags an edge entity wears. An edge is ONE sentence, so its two
 // ends and its tag are written in one bundle — said apart, the half with no

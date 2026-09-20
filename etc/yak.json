@@ -27,7 +27,8 @@
   ],
   "numbers": {
     "except": [
-      "archetype"
+      "archetype",
+      "key"
     ]
   },
   "port": 5273,
