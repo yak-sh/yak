@@ -56,6 +56,51 @@ Deno.test('a burst of writes is one sweep, and it never holds the write open', a
   await until(() => count(db) == 4)
 })
 
+// A slow, counting embedder, named the way a config names one — which is also
+// how a test reaches inside a facet that otherwise only takes JSON.
+let counted = (during: (call: number) => void = () => {}) => {
+  let calls = 0
+  let embedder = {
+    via: 'ollama',
+    model: 'counted',
+    base: 'http://box',
+    fetch: async () => {
+      during(++calls)
+      await new Promise((go) => setTimeout(go, 1))
+      return {
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve('{"embeddings":[[1,0,0]]}'),
+      }
+    },
+  } as const
+  return { embedder, calls: () => calls }
+}
+
+// A write that lands WHILE a pass is asking the model belongs to no pass: the
+// one running chose its work before that write existed. So the nudge it fires
+// has to survive until the pass is over — and the pass that follows must not
+// re-embed what the first one already did.
+Deno.test('a nudge mid-pass runs after it, and nothing is embedded twice', async () => {
+  let db = shelf()
+  let model = counted((call) => {
+    if (call != 2) return
+    db.exec(`insert into entity (id, eid, num) values (9, 'book-9', 9)`)
+    db.query(
+      `insert into book (entity, title, blurb, price) values (?, ?, ?, ?)`,
+      [9, 'Late', 'A book that arrived mid-sweep.', 5],
+    )
+    fire(watches[0])
+  })
+  let watches = effects({ vocab: shop, sql: db }, {
+    after: 0,
+    embedder: model.embedder,
+  })
+  fire(watches[0])
+  await until(() => count(db) == 5)
+  assertEquals(model.calls(), 5, 'one call per entity, not one per nudge')
+})
+
 Deno.test('an embedder that cannot be reached leaves the vectors stale, not the write broken', async () => {
   let db = shelf()
   let warned: unknown[] = []

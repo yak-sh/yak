@@ -28,19 +28,41 @@ import { sweep } from './sweep.ts'
 export let AFTER = 3_000
 
 // The handler a watch fires: it starts nothing and returns nothing, so the
-// commit that woke it is never held open. A failure is reported where it
-// happens — a write that already landed cannot be failed by an embedder that
-// is unreachable, and a graph whose box cannot reach its model is a graph with
-// stale vectors, not a broken one.
+// commit that woke it is never held open. A burst of writes is ONE sweep — the
+// timer is re-armed, never stacked — and one pass runs at a time, because a
+// pass may be a long line of model calls and a second one into the same
+// backlog would pay for every vector twice. A nudge that arrives mid-pass is
+// remembered and runs when that pass is over, rather than dropped: the writes
+// it was about would otherwise stay stale until something else moved.
+//
+// A failure is reported where it happens. A write that already landed cannot
+// be failed by an embedder nobody can reach, and a graph whose box cannot
+// reach its model has stale vectors, not a broken write.
 let nudge = (
   run: () => Promise<unknown>,
   ms: number,
   report: (error: unknown) => void,
 ): () => void => {
   let timer: ReturnType<typeof setTimeout> | undefined
+  let busy = false
+  let again = false
+  let go = async (): Promise<void> => {
+    if (busy) return void (again = true)
+    busy = true
+    try {
+      await run()
+    } catch (error) {
+      report(error)
+    }
+    busy = false
+    if (again) {
+      again = false
+      await go()
+    }
+  }
   return () => {
     clearTimeout(timer)
-    timer = setTimeout(() => void run().catch(report), ms)
+    timer = setTimeout(go, ms)
   }
 }
 
