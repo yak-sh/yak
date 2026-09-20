@@ -159,6 +159,7 @@ text column holding a hash, and the store is a table of hashes and text.
 | `objectBlobs(bucket, prefix?)`        | the bucket backend                          |
 | `sizeOf(bytes)`                       | an image's `{w, h}`, off its own header     |
 | `served(bytes, {mime, name})`         | a stored object as a fenced HTTP response   |
+| `addressOf(bytes)`, `keep(store, …)`  | an object's address, and storing it once    |
 
 ## Composition
 
@@ -209,6 +210,43 @@ non-text values fail; the tools do not serialize arbitrary objects.
 Offsets count code points rather than grapheme clusters or terminal columns.
 These APIs currently load the whole text through the reader before slicing or
 searching it; bounded output is not a streaming storage API.
+
+## The door
+
+`@yaks/blob/routes` is the `routes` facet a host composes (`yak serve`, see
+[@yaks/cli](../cli/README.md)): one path, `/blob/<sha256>`, both ways.
+
+```json
+{
+  "use": "@yaks/blob",
+  "with": {
+    "store": { "via": "file", "dir": "/var/lib/blobs" },
+    "limit": 26214400
+  }
+}
+```
+
+- **`GET /blob/<sha>`** — the bytes, fenced and immutable (`served`), typed by
+  the `artifact` row that names them and `application/octet-stream` where none
+  does.
+- **`PUT /blob/<sha>`** — the bytes in, with `content-type` saying what they
+  are. The address is the name, so the server only has to agree: bytes that hash
+  to something else are refused, and the same file sent twice is one stored
+  object and one row. It answers the `artifact` as JSON.
+
+An upload lands that row through the graph — rehearsed first, so whatever policy
+refuses the write refuses the upload, and the bytes are in place before anything
+names them. There is no upload permission of this package's own.
+
+`limit` is the largest upload, in bytes (default 25 MB). `store` is where the
+objects live, and the GET reads the same one:
+
+- `{"via": "sqlite"}` — the host's own table, beside the text `./rules` keeps
+  there. The default, and TEXT: bytes that are not UTF-8 are refused, so a host
+  taking binary uploads names one of the others.
+- `{"via": "file", "dir": "…"}` — a directory, one file per address.
+- `{"via": "object", "bucket": …, "prefix": "…"}` — an S3-shaped bucket. The
+  binding itself, so this one is named by a host composing in code.
 
 ## Binary artifacts
 

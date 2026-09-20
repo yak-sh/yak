@@ -80,8 +80,10 @@ export * from './serve.ts'
 
 export { VALUE_LIMIT, type ValueTool, valueTools } from './value.ts'
 export {
+  addressOf,
   type Artifact,
   artifactDoc,
   type ArtifactStore,
   artifactStore,
+  keep,
 } from './artifact.ts'

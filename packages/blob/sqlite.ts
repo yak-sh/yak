@@ -23,7 +23,7 @@ import type { Vocab } from '@yaks/vocab'
 import type { Derived } from '@yaks/sql'
 import type { Driver } from './driver.ts'
 import { bodies } from './columns.ts'
-import { type Blobs, decode, encode } from './store.ts'
+import { type Blobs, encode } from './store.ts'
 
 /**
  * Where the blob table is and what its two columns are called. The defaults
@@ -48,6 +48,22 @@ let named = (l: Layout = {}): Named => ({
 })
 
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
+
+// This table's column is TEXT, so bytes that are not UTF-8 have no spelling in
+// it. Refusing them here is the difference between a store that cannot hold an
+// object and a store that holds a mangled one: the address would answer bytes
+// that do not hash to it, which is the one thing content addressing promises.
+let strict = new TextDecoder('utf-8', { fatal: true })
+let asText = (bytes: Uint8Array): string => {
+  try {
+    return strict.decode(bytes)
+  } catch {
+    throw new Error(
+      '@yaks/blob: this store holds text and these bytes are not UTF-8 — ' +
+        'binary belongs in a directory or a bucket',
+    )
+  }
+}
 
 /**
  * The statement creating the blob table: an address, and the text stored under
@@ -85,7 +101,7 @@ export let sqliteBlobs = (driver: Driver, layout: Layout = {}): Blobs => {
       driver.query(
         `insert or ignore into ${q(l.table)} (${q(l.key)}, ${q(l.value)})
            values (?, ?)`,
-        [sha, decode(bytes)],
+        [sha, asText(bytes)],
       )
     },
   }
