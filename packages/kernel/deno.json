@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
-    "./vocab": "./vocab.ts"
+    "./vocab": "./vocab.ts",
+    "./rules": "./rules.ts",
+    "./tools": "./tools.ts"
   },
   "license": "Apache-2.0",
   "description": "The base components a graph of work wears \u2014 the entity spine, its provenance marks, and the relation tags its edges say.",

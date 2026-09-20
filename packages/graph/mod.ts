@@ -90,7 +90,13 @@ export { numbers } from './number.ts'
 
 export * from './transient.ts'
 
-export { type NamedTool, namedTool, type ToolId, toolName } from './tool.ts'
+export {
+  addressed,
+  type NamedTool,
+  namedTool,
+  type ToolId,
+  toolName,
+} from './tool.ts'
 
 export * from './join.ts'
 export * from './declared.ts'
