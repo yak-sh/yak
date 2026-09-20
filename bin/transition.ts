@@ -271,7 +271,17 @@ let MOVES: Record<string, Move | null> = {
   signal: null, // the fleet's timer bus; a reminder is @yaks/wake `wake`
   supersedes: tag('supersedes'),
   supervises: tag('supervises'),
-  updated: marked('updated'),
+  updated: {
+    says: 'updated',
+    // The graph OWNS this stamp: it writes `updated.at` on every patch to an
+    // entity that already existed, over whatever the caller said, because that
+    // is what the word means. An archive's reading of when a thing last
+    // changed therefore cannot come through the door — it is restored under
+    // it, the way a grave is, once every patch is in.
+    elsewhere:
+      'restored under the graph after the last patch — the graph owns this stamp',
+    make: () => null,
+  },
   wants: tag('wants'),
   worked: tag('worked'),
 
@@ -921,7 +931,6 @@ let FIRST = ['model', 'provider', 'person', 'persona', 'project', 'session']
 // the graph on every patch to an entity that already existed — which the whole
 // export is — so the fleet's own reading of when a thing last changed has to
 // land last, or half a million entities read as changed today.
-let LAST = ['updated']
 
 // The relation tags an edge entity wears. An edge is ONE sentence, so its two
 // ends and its tag are written in one bundle — said apart, the half with no
@@ -1225,10 +1234,7 @@ let main = async () => {
 
   let order = [
     ...FIRST,
-    ...Object.keys(MOVES).filter((c) =>
-      !FIRST.includes(c) && !LAST.includes(c)
-    ),
-    ...LAST,
+    ...Object.keys(MOVES).filter((c) => !FIRST.includes(c)),
   ]
   for (let comp of order) {
     let move = MOVES[comp]
@@ -1278,18 +1284,48 @@ let main = async () => {
     emitted[comp] = made
     dropped[comp] = count - made
     await flush()
-    // The graph stamps `updated` on every patch to an entity that already
-    // existed, and every entity in this export already existed — its spine was
-    // minted before the first reference could. So half a million entities wear
-    // an `updated` from the import's own clock, and they are cleared out right
-    // before the fleet's own readings land on top (`LAST`).
-    if (comp == order[order.length - LAST.length - 1]) {
-      sql.exec('delete from "updated"')
-    }
   }
   say('components')
 
-  // ── pass 2: the graves ──
+  // What integer id this store keeps for a fleet reference — the same lookup
+  // the log copy needs, so it is built once here.
+  let here = new Map<string, number>()
+  for (let r of sql.query('select id, eid from entity', [])) {
+    here.set(String(r.eid), Number(r.id))
+  }
+  let idAt = (id: unknown): number | null => {
+    let e = eidOf(id)
+    return e == null ? null : here.get(e) ?? null
+  }
+
+  // ── pass 2: when a thing last changed ──
+  // Every patch above left an `updated` carrying the import's own clock, which
+  // is true of the import and false of the graph. The fleet's own readings go
+  // back under it: the stamp is the graph's to write, so nothing written
+  // THROUGH the graph could have said this.
+  sql.exec('delete from "updated"')
+  let touched = 0
+  sql.exec('begin')
+  for (let r of all('select * from updated')) {
+    let e = eidOf(r.entity)
+    if (!e) continue
+    sql.query(
+      `insert or replace into "updated" (entity, at, "by", via)
+         select id, ?, ?, ? from entity where eid = ?`,
+      [
+        String(r.at),
+        idAt(r['by']),
+        idAt(r.via),
+        e,
+      ],
+    )
+    touched++
+  }
+  sql.exec('commit')
+  elsewhere.updated = touched
+  say('updated')
+
+  // ── pass 3: the graves ──
   // A tombstone is spine storage, not a component: nothing can be written
   // THROUGH the graph that says "this eid died and was never anything".
   let graves = all('select entity, deleted_at from tombstone')
@@ -1307,19 +1343,11 @@ let main = async () => {
   bury.exec('commit')
   say('graves')
 
-  // ── pass 3: the log ──
+  // ── pass 4: the log ──
   // The fleet's three-table journal is already the package's layout (9952cc18),
   // so it copies across as-is — only the integer ids are this store's, so they
   // are read back through the eid each one named.
-  let here = new Map<string, number>()
-  for (let r of bury.query('select id, eid from entity', [])) {
-    here.set(String(r.eid), Number(r.id))
-  }
-  let idOf = (id: unknown): number | null => {
-    let s = spine.get(Number(id))
-    if (!s) return null
-    return here.get(renamed.get(s.eid) ?? s.eid) ?? null
-  }
+  let idOf = idAt
   let logged = { tx: 0, change: 0, field: 0 }
   // Three million rows go in as multi-row inserts rather than one statement
   // each: the same rows, two orders of magnitude fewer round trips.
