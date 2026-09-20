@@ -93,6 +93,10 @@ export type Host = {
   storage: Store
   sql: Driver
   graph: Graph
+  /** the columns the store computes rather than keeps, as the vocab facets
+   * said them — what a package holding an index of its own reads a
+   * content-addressed column through. */
+  derived: Derived
   /** who is calling — the same answer the graph's own doors get, so a route
    * signs what it writes (`signed` in @yaks/api) rather than writing as
    * nobody. One plugin may say it; where none does, it is the config's
@@ -401,6 +405,7 @@ export let compose = async (
       config,
       vocab,
       sql,
+      derived,
       who: authenticate,
       get storage(): Store {
         if (!store) throw new Error('the store is not open yet')

@@ -19,7 +19,13 @@
 
 import { Database } from '@yaks/sqlite/db'
 import { mintSql } from '@yaks/sqlite'
-import { compose, type Module, read } from '@yaks/cli/serve'
+import {
+  compose,
+  facet,
+  type Load,
+  read,
+  type RulesFacet,
+} from '@yaks/cli/serve'
 import type { Bundle, Eid } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import { aliasEid } from '@yaks/alias'
@@ -1102,13 +1108,16 @@ let main = async () => {
   } catch { /* a fresh file is the normal case */ }
   // The import writes the graph but NOT its log: the fleet's own three-table
   // journal is the history, and it is copied across whole at the end.
-  let load = async (spec: string): Promise<Module> => {
-    let m = await import(spec) as Module
-    if (!spec.endsWith('/core.ts')) return m
+  let load: Load = async (plugin, name) => {
+    let mod = await facet(plugin, name)
+    if (plugin != '@yaks/journal' || name != 'rules') return mod
+    // Its tables are still raised — the fleet's own log is poured into them —
+    // but the plugin that would write a row per bundle is left out.
     return {
-      ...m,
-      rules: (host) =>
-        (m.rules?.(host) ?? []).filter((p) => p.name != '@yaks/journal'),
+      rules: (host, options) => {
+        ;(mod as RulesFacet).rules?.(host, options)
+        return []
+      },
     }
   }
   // The store ADOPTS what each bundle states its number to be — the fleet's

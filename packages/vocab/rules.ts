@@ -53,12 +53,21 @@ export type RuleDecl = {
 export let rulesIn = (input: VocabDoc | VocabDoc[]): RuleDecl[] => {
   let docs = Array.isArray(input) ? input : [input]
   let out: RuleDecl[] = []
-  let seen = new Set<string>()
+  let seen = new Map<string, unknown>()
   for (let doc of docs) {
     for (let [name, entry] of Object.entries(doc.$defs ?? {})) {
       if (entry?.rule !== true) continue
-      if (seen.has(name)) throw new Error(`rule '${name}' is declared twice`)
-      seen.add(name)
+      // The same reading a component gets: a package shipping a convenience
+      // document bundling a neighbour's words says that neighbour's rule in
+      // two of the documents a host loads, and both say the same thing. One
+      // rule cited twice is one rule; two different ones are the bug.
+      if (seen.has(name)) {
+        if (JSON.stringify(seen.get(name)) != JSON.stringify(entry)) {
+          throw new Error(`rule '${name}' is declared twice`)
+        }
+        continue
+      }
+      seen.set(name, entry)
       let match = entry.match
       if (typeof match != 'string' || !match.trim()) {
         throw new Error(`rule '${name}' declares no match`)

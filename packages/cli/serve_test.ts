@@ -203,12 +203,15 @@ Deno.test('a config may keep a component off the human number line', async () =>
     only({
       shop: {
         vocab: {
-          $defs: {
-            ...doc.$defs,
-            note: { component: true, type: 'object', kind: true },
-          },
+          docs: [{
+            ...doc,
+            $defs: {
+              ...doc.$defs,
+              note: { component: true, type: 'object', kind: true },
+            },
+          }],
         },
-        runs: shop.runs,
+        tools: shop.tools,
       },
     }),
   )
