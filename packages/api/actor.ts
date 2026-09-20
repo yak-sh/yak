@@ -10,12 +10,16 @@
 // unattributed rather than attributed to a guess. A door that would rather
 // refuse throws `Unauthorized` from its `authenticate`.
 
-import type { Entity } from '@yaks/graph'
+import type { Actor } from '@yaks/graph'
 
 /**
- * How the host names the writer of a request: the entity making it, or `null`
+ * How the host names the writer of a request: the actor making it, or `null`
  * for nobody. Throwing {@link https://jsr.io/@yaks/api/doc/~/Unauthorized |
  * Unauthorized} refuses the request with a 401.
+ *
+ * An actor is the PAIR a write is stamped with — `by` the identity it acts
+ * for, `via` the instrument it came through, a session or a connector or the
+ * host itself. A door that knows only the identity answers only `by`.
  *
  * It runs on EVERY request the handler answers — a read, a write and a socket
  * upgrade alike — so a door that gates reads gates them here.
@@ -23,13 +27,13 @@ import type { Entity } from '@yaks/graph'
  * ```ts
  * let authenticate = (request: Request) => {
  *   let key = request.headers.get('authorization')
- *   return key ? { eid: memberOf(key) } : null
+ *   return key ? { by: memberOf(key) } : null
  * }
  * ```
  */
 export type Authenticate = (
   request: Request,
-) => Entity | null | Promise<Entity | null>
+) => Actor | null | Promise<Actor | null>
 
 // A batch signed by the door: every bundle's `$actor` replaced by this
 // writer, or removed when there is none. What a client sent is never kept.

@@ -20,19 +20,15 @@
 
 import type { Bundle, Eid, Hook, Tx } from '@yaks/graph'
 import { comps, substitute, then } from '@yaks/graph'
+import { minted } from '@yaks/id'
 import { ofOf } from '@yaks/key'
 import type { Vocab } from '@yaks/vocab'
 import { aliasEid } from './comp.ts'
 
-// What an id this family mints looks like: a uuid, or the hex of a content
-// hash. A name of that shape would be a strange name, and one written anyway is
-// simply not looked up — the eid rung answers it.
-let MINTED = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$|^[0-9a-f]{40,64}$/i
-
 /** Whether an id is worth asking about as a name — a `$alias` and an id this
- * family mints are not. */
+ * family mints (@yaks/id `minted`: a uuid, a content hash) are not. */
 export let wordish = (id: string): boolean =>
-  !!id && !id.startsWith('$') && !MINTED.test(id)
+  !!id && !id.startsWith('$') && !minted(id)
 
 /**
  * These ids as the eids they name. The answer holds ONLY the ids that moved, so

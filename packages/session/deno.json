@@ -7,7 +7,7 @@
     "./rules": "./rules.ts",
     "./tools": "./tools.ts",
     "./boot": "./boot.ts",
-    "./tools": "./tools.ts",
+    "./routes": "./routes.ts",
     "./views": "./views.ts"
   },
   "license": "Apache-2.0",

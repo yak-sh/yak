@@ -31,8 +31,12 @@ export type Config = {
   /** which interface (default Deno's own; a client reads it as the host to
    * talk to, and 127.0.0.1 where it is unsaid or means "everything") */
   hostname?: string
-  /** the eid every request is signed with, where nothing authenticates —
-   * a box that trusts whoever reaches it. */
+  /** who this host writes as, where no door named a caller — its rules, its
+   * effects, the pass each plugin makes at boot. A NAME is the host's own
+   * identity: it mints that entity at start-up and derives its id from the
+   * name (@yaks/kernel `hosted`), so nothing is looked up. An id this family
+   * minted (a uuid, a content hash) names something somebody else made, and
+   * is signed with as it stands — a box that writes as a person. */
   actor?: string
   /** whether the store mints human numbers beside eids (default true), and
    * for which entities. `{ except: [comp, …] }` keeps a component's entities

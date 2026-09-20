@@ -21,8 +21,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import {
+  type Actor,
   type Bundle,
-  type Entity,
   type Graph,
   type Schema,
   type Tool,
@@ -65,9 +65,10 @@ export type Options = {
    * stores, a connector that will not record a stranger's question — keeps a
    * ledger of its own here; the tools still work on `graph`. */
   calls?: Graph
-  /** who is calling — every write this server makes is signed as this entity
+  /** who is calling — every write this server makes is signed with this actor,
+   * `by` the identity it acts for and `via` the run it came through
    * (default: nobody, and batches land unattributed) */
-  actor?: Entity | null
+  actor?: Actor | null
   /** the server's name, as a client displays it (default: `yaks`) */
   name?: string
   /** the server's version (default: `0.0.0`) */
@@ -289,7 +290,7 @@ export let annotated = (
  * every tool the graph's plugins contribute and any you pass yourself.
  *
  * ```ts
- * let s = server({ graph, actor: { eid: 'm1' } })
+ * let s = server({ graph, actor: { by: 'm1' } })
  * await s.connect(transport)
  * ```
  */
@@ -342,7 +343,7 @@ export let server = (opts: Options): McpServer => {
         let landed = await run.call([{
           entity: { eid: '$call' },
           call: { to: toolEid(t.name), args: JSON.stringify(args ?? {}) },
-          ...(actor ? { $actor: { by: actor.eid } } : {}),
+          ...(actor ? { $actor: { ...actor } } : {}),
         }])
         out = said(answerOf(landed), faulted(landed))
       } catch (err) {

@@ -67,7 +67,7 @@ let authenticate = door({
   cookie: 'shop_session',
   verify: async (token) => {
     let person = await verifyJwt(token, env.SHOP_SECRET)
-    return person ? { eid: person } : null
+    return person ? { by: person } : null
   },
   required: true, // a request naming nobody is answered 401
 })

@@ -9,7 +9,7 @@
 
 import type { Authenticate } from '@yaks/api'
 import { Unauthorized } from '@yaks/api'
-import type { Entity } from '@yaks/graph'
+import type { Actor } from '@yaks/graph'
 
 // A cookie value is usually percent-encoded, but nothing makes it so: a value
 // that is not valid encoding is the value itself, not a thrown request.
@@ -45,12 +45,13 @@ export let bearer = (request: Request): string | null => {
 
 /** How a Worker's door is built. */
 export type Door = {
-  /** turn a credential into the entity writing — `null` for a token this app
-   * does not honour */
+  /** turn a credential into the actor writing — `by` whoever holds it, and
+   * `via` whatever it came through; `null` for a token this app does not
+   * honour */
   verify: (
     token: string,
     request: Request,
-  ) => Entity | null | Promise<Entity | null>
+  ) => Actor | null | Promise<Actor | null>
   /** the cookie a session token lives in (default: read only the bearer) */
   cookie?: string
   /** refuse a request that names nobody with a 401 (default: it lands

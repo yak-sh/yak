@@ -207,6 +207,22 @@ export let hostFor = (
 ): string =>
   said.host ?? Deno.env.get('YAKS_HOST') ?? hostOf(said.config) ?? dflt
 
+/**
+ * The run this command line is part of, as the environment names it: a
+ * harness sets it, every shell and hook under that harness inherits it, and a
+ * write made from any of them carries the transcript that made it without
+ * anybody passing a flag. It rides to the door on `x-via`, which resolves it
+ * to the session and signs what the line writes (@yaks/session/routes).
+ *
+ * The spellings are the harnesses' own, read most specific first: a subagent's
+ * own id before the tree it was spawned from.
+ */
+export let via = (
+  env: (name: string) => string | undefined = (n) => Deno.env.get(n),
+): string | undefined =>
+  env('CLAUDE_CODE_SESSION_ID') ?? env('TASKS_SESSION') ??
+    env('CODEX_THREAD_ID')
+
 let disk: Reads = {
   file: (path) => Deno.readTextFile(path),
   stdin: () => new Response(Deno.stdin.readable).text(),
@@ -247,6 +263,7 @@ export let cli = async (
     ask: opts.ask ?? rpc({
       url: doorUrl(host),
       token: tokenFor(host),
+      via: via(),
       fetch: timing ? timed(note) : undefined,
     }),
     reads: opts.reads ?? disk,

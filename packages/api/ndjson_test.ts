@@ -9,7 +9,7 @@ import { CHUNK } from './doors.ts'
 import { api } from './route.ts'
 import { comp, req, shopGraph } from './harness.ts'
 
-let ada = { eid: 'm1' }
+let ada = { by: 'm1' }
 
 /** A handler over a fresh shop, the width of every batch that reached the
  * graph, and a hook to hold the nth one open. */

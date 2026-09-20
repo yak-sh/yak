@@ -12,7 +12,7 @@ import { doorUrl, initialize, rpc, timed, Unauthorized } from './rpc.ts'
 import { saidBy } from './roster.ts'
 import { toolHelp } from './show.ts'
 import type { Listed as Tool } from './tool.ts'
-import { globals } from './run.ts'
+import { globals, via } from './run.ts'
 
 let reads: Reads = { file: () => '', stdin: () => '' }
 
@@ -40,6 +40,31 @@ let listed = async (): Promise<Tool[]> => {
 Deno.test('a host becomes the /mcp door it names', () => {
   assertEquals(doorUrl('yaks.app'), 'https://yaks.app/mcp')
   assertEquals(doorUrl('http://localhost:8787/'), 'http://localhost:8787/mcp')
+})
+
+Deno.test('a line says which run it speaks for, and nothing when it is nobody', async () => {
+  let seen: (string | null)[] = []
+  let door = (r: Request) => {
+    seen.push(r.headers.get('x-via'))
+    return new Response(
+      JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} }),
+      { headers: { 'content-type': 'application/json' } },
+    )
+  }
+  await rpc({ url: doorUrl('shop.test'), via: 's1', fetch: door })('ping')
+  await rpc({ url: doorUrl('shop.test'), fetch: door })('ping')
+  assertEquals(seen, ['s1', null])
+})
+
+Deno.test('the run a command line is part of is the one the environment named', () => {
+  let env = (of: Record<string, string>) => (name: string) => of[name]
+  assertEquals(
+    via(env({ CLAUDE_CODE_SESSION_ID: 'a', TASKS_SESSION: 'b' })),
+    'a',
+  )
+  assertEquals(via(env({ TASKS_SESSION: 'b' })), 'b')
+  assertEquals(via(env({ CODEX_THREAD_ID: 'c' })), 'c')
+  assertEquals(via(env({})), undefined)
 })
 
 Deno.test('the tool list is the subcommand list', async () => {

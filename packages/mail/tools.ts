@@ -108,7 +108,7 @@ let letterIn = async (ctx: ToolCtx, said: unknown): Promise<Bundle> => {
 /** Whose inbox this is: the entity the line named, else whoever is asking. */
 export let reader = async (ctx: ToolCtx): Promise<Eid> => {
   if (ctx.args.who != null) return await at(ctx, ctx.args.who)
-  let me = ctx.actor?.eid
+  let me = ctx.actor?.by
   if (!me) throw new Error('nobody is asking — say --who')
   return me
 }
@@ -322,7 +322,7 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
     if (!far.to) throw new Error('a letter needs somebody to go to — say --to')
     let from = ctx.args.from != null
       ? str(ctx.args.from)
-      : col(comp(await one(ctx, str(ctx.actor?.eid)), EMAIL), 'address')
+      : col(comp(await one(ctx, str(ctx.actor?.by)), EMAIL), 'address')
     if (!from) {
       throw new Error(
         'a letter needs a from address — say --from, or give whoever is ' +

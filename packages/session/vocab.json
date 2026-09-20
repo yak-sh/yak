@@ -270,7 +270,7 @@
           "type": "string",
           "ref": "entity",
           "death": "detach",
-          "description": "who it speaks as — the identity that survives a /clear, where `created.by` is the run"
+          "description": "who it speaks as — the identity that survives a /clear, where `created.via` is the run"
         },
         "operator": {
           "type": "boolean",

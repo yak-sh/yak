@@ -1,11 +1,23 @@
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
-import type { Comp } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
 import { blobKeywords, blobRead } from '@yaks/blob'
 import { rules as blobRules } from '@yaks/blob/rules'
-import { compose, FACETS, type Facets, read, unfinished } from './serve.ts'
+import {
+  compose,
+  FACETS,
+  type Facets,
+  own,
+  read,
+  unfinished,
+  writer,
+} from './serve.ts'
+
+// The host of these tests, as its own writes are signed: a config's `actor`
+// is a NAME, and the entity it mints for itself is derived from it.
+let me = writer({ actor: 'me' })!.by
 
 let doc: VocabDoc = {
   title: 'shop',
@@ -181,7 +193,7 @@ Deno.test('compose takes each facet from its own subpath, and mounts the doors',
     assertEquals(applied.status, 200)
     // The door signs what it applied with the identity it authenticated,
     // whatever the client said about itself.
-    assertEquals((await applied.json())[0].created.by, 'me')
+    assertEquals((await applied.json())[0].created.by, me)
 
     let found = await host.handler(new Request('http://h/query?q=.book'))
     assertEquals((await found.json())[0].book.title, 'Spring')
@@ -238,8 +250,69 @@ Deno.test('a declared tool nobody runs refuses to compose', async () => {
   )
 })
 
+Deno.test('a host that names itself writes as itself, and a plugin may say who else', async () => {
+  // The plugin names a caller for the requests that carry a token, and says
+  // nothing about the rest — which is the host's own writing.
+  let ana = { by: 'ana', via: 'her-run' }
+  let told: Plugged = {
+    routes: {
+      authenticate: () => (r) => r.headers.get('authorization') ? ana : null,
+    },
+  }
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop', 'told'], actor: 'me' },
+    only({ shop, told }),
+  )
+  try {
+    let wrote = async (headers: Record<string, string> = {}) => {
+      let said = await host.handler(
+        new Request('http://h/apply', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify([{ entity: { eid: '$b' }, book: {} }]),
+        }),
+      )
+      return await said.json() as Bundle[]
+    }
+
+    let stamp = (b: Bundle) => b.created as Comp
+    assertEquals(stamp((await wrote())[0]).by, me)
+    assertEquals(
+      stamp((await wrote({ authorization: 'Bearer t' }))[0]).by,
+      'ana',
+    )
+    // And what the host writes with nobody at any door at all — an effect, a
+    // boot pass — is signed the same way.
+    let [own] = await host.graph.apply([{ entity: { eid: 'b9' }, book: {} }])
+    assertEquals((own.created as Comp).by, me)
+  } finally {
+    host.close()
+  }
+})
+
+Deno.test('the host mints the identity it signs with, once', async () => {
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'], actor: 'me' },
+    only({ shop }),
+  )
+  try {
+    await own(host)
+    await own(host)
+    // `host` is not a word this vocabulary speaks, so there is nothing to
+    // mint — the entity its writes point at is still its own derived id.
+    assertEquals(host.vocab.comp('host'), undefined)
+    assertEquals(writer({ actor: 'me' })?.via, me)
+    // An id somebody else minted is signed with as it stands.
+    let uuid = '6a1f7e0c-2b3d-4f5a-8c9e-0d1a2b3c4d5e'
+    assertEquals(writer({ actor: uuid })?.by, uuid)
+    assertEquals(writer({}), null)
+  } finally {
+    host.close()
+  }
+})
+
 Deno.test('two plugins may not both say who is calling', async () => {
-  let who: Plugged = { routes: { authenticate: () => ({ eid: 'a' }) } }
+  let who: Plugged = { routes: { authenticate: () => () => ({ by: 'a' }) } }
   await assertRejects(
     () =>
       compose(
@@ -370,12 +443,12 @@ Deno.test('the door calls the tool, and the call is the transcript', async () =>
     // the tool answered is signed as the person who asked, not the server.
     let [call] = await host.graph.read('.call')
     assertEquals((call.call as Comp).to, toolEid('book_add'))
-    assertEquals((call.created as Comp).by, 'me')
+    assertEquals((call.created as Comp).by, me)
     assertEquals((call.execution as Comp).state, 'done')
     let [result] = await host.graph.read('.result')
     assertEquals((result.result as Comp).call, call.entity.eid)
     let [book] = await host.graph.read('.book')
-    assertEquals((book.created as Comp).by, 'me')
+    assertEquals((book.created as Comp).by, me)
   } finally {
     host.close()
   }

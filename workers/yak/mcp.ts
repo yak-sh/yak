@@ -358,7 +358,7 @@ let door = async (ctx: Ctx, session: string) => {
     // And the way back out of a delete here, which the generic tier could not
     // know: a store is not a place a mistake is final (recover.ts, T-34509).
     undo: UNDO,
-    authenticate: () => ({ eid: ctx.person }),
+    authenticate: () => ({ by: ctx.person }),
     // The name, the line and the picture, from the one place they are written
     // (seo.ts CONNECTOR, T-34415): a client that reads `serverInfo` shows this
     // door with a face, and nobody has to type any of it into a form.

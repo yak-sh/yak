@@ -48,6 +48,7 @@ import { and, eq, present } from '@yaks/query'
 import { checked, type Finding } from '@yaks/tools'
 import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'
+import { sessionFor } from './who.ts'
 import { ENTRY } from './native.ts'
 import { ordered, statusOf } from './status.ts'
 import { install, settingsPath } from './hooks.ts'
@@ -78,9 +79,10 @@ export let hookSession = (hook: unknown): string => {
   }
 }
 
-// The session this call is about: what the line said, else what the hook
-// payload said. It is the harness's OWN name for the transcript, not an eid —
-// the entity wearing it is found (or minted) by `contextOf`.
+// The session this call is about, as the caller SAID it: the line's word,
+// else the one in the hook payload. What it means is ./who.ts's to answer —
+// an eid, a human id, or the harness's own name for the run, which is the
+// only one of the three that may not exist yet.
 let idIn = (ctx: ToolCtx): string =>
   str(ctx.args.session) || hookSession(ctx.args.hook)
 
@@ -98,13 +100,9 @@ export let line = (ctx: ToolCtx, b: Bundle): string => {
   return title ? `${id} — ${title}` : id
 }
 
-// The transcript entity for a harness's session id: the one already wearing
-// it, or a fresh alias for the batch to mint.
-let sessionOf = async (
-  ctx: ToolCtx,
-  id: string,
-): Promise<Bundle | undefined> =>
-  (await ctx.read(`.${SESSION}.id=${JSON.stringify(id)}`))[0]
+// The transcript a word names, however the caller says it (./who.ts).
+let sessionOf = (ctx: ToolCtx, id: string): Promise<Bundle | undefined> =>
+  sessionFor(ctx, id)
 
 /**
  * What this session is in the middle of, and what the actor behind it last
@@ -166,10 +164,20 @@ export let runs = (
 ): Runs => ({
   claim_take: async (_bundles, ctx): Promise<Bundle[]> => {
     let [on] = await addressed(ctx.graph, [str(ctx.args.target)])
-    let session = str(ctx.args.session) || str(ctx.actor?.eid)
-    if (!session) throw new Error('nobody is asking — say --session')
-    let [held] = await addressed(ctx.graph, [session])
-    return [{ entity: { eid: on }, [CLAIM]: { session: held } }]
+    let said = str(ctx.args.session)
+    // Whoever is asking, where the line named nobody: the actor a door signed
+    // this call with says which run it came through.
+    let holder = said
+      ? (await sessionOf(ctx, said))?.entity.eid
+      : str(ctx.actor?.via || ctx.actor?.by)
+    if (!holder) {
+      throw new Error(
+        said
+          ? `no session answers to ${said}`
+          : 'nobody is asking — say --session',
+      )
+    }
+    return [{ entity: { eid: on }, [CLAIM]: { session: holder } }]
   },
 
   claim_release: async (_bundles, ctx): Promise<Bundle[]> => {
@@ -184,7 +192,8 @@ export let runs = (
     // A transcript nobody has reified yet is reified HERE, wearing its own
     // name, the way `session_context` reifies one. Never on the word the
     // caller typed: `--session S-37703` is a human id, not an eid, and taking
-    // it for one mints an entity whose eid IS `S-37703`.
+    // it for one mints an entity whose eid IS `S-37703` (./who.ts is what
+    // tells the two apart).
     return [
       s ? briefed(s.entity.eid, ctx.args.text) : {
         ...briefed('$session', ctx.args.text),

@@ -19,8 +19,21 @@
     "@yaks/model",
     "@yaks/openai",
     "@yaks/process",
+    "@yaks/spawn",
     "@yaks/persona",
     "@yaks/memory",
+    {
+      "use": "@yaks/embedding",
+      "with": {
+        "embedder": {
+          "via": "ollama",
+          "model": "qwen3-embedding:0.6b",
+          "base": "https://ollama.yak.sh",
+          "key": { "env": "OLLAMA_API_KEY" },
+          "dim": 384
+        }
+      }
+    },
     "@yaks/dreaming",
     "@yaks/context",
     "@yaks/mail",
@@ -35,6 +48,7 @@
     "@yaks/member"
   ],
   "numbers": { "except": ["archetype", "key"] },
+  "actor": "yak",
   "port": 5273,
   "name": "yak"
 }

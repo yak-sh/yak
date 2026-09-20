@@ -100,13 +100,14 @@ a second load once the eids are known.
 ## Authentication and write attribution
 
 A bundle can say anything, including whose name is on it. So the handler throws
-away the `$actor` a client sent and replaces it with the identity your
-`authenticate` returns for that request:
+away the `$actor` a client sent and replaces it with the actor your
+`authenticate` returns for that request — `by` the identity it acts for, and
+`via` the instrument it came through, where you know one:
 
 ```ts
 let authenticate = (request: Request) => {
   let token = request.headers.get('authorization')
-  return token ? { eid: memberFor(token) } : null
+  return token ? { by: memberFor(token) } : null
 }
 ```
 

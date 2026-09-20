@@ -2,7 +2,7 @@
 // mark reading leaves, the far side a reply is aimed at, and the check.
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Bundle, Comp, Entity, Graph, ToolCtx } from '@yaks/graph'
+import type { Actor, Bundle, Comp, Graph, ToolCtx } from '@yaks/graph'
 import { clubhouse } from './harness.ts'
 import { reSubject, runs } from './tools.ts'
 
@@ -10,7 +10,7 @@ let ask = (
   g: Graph,
   tool: string,
   args: Record<string, unknown> = {},
-  actor: Entity | null = null,
+  actor: Actor | null = null,
 ): Promise<Bundle[]> =>
   Promise.resolve(
     runs(undefined, { domain: 'books.example' })[tool]([], {
@@ -28,7 +28,7 @@ let did = async (
   g: Graph,
   tool: string,
   args: Record<string, unknown> = {},
-  actor: Entity | null = null,
+  actor: Actor | null = null,
 ): Promise<Bundle[]> => await g.apply(await ask(g, tool, args, actor))
 
 let comp = (b: Bundle | undefined, name: string): Comp =>
@@ -88,7 +88,7 @@ Deno.test('the inbox is what is addressed to you and not archived', async () => 
   assertEquals(ids(await ask(g, 'inbox_list', { who: 'ana' })), ['a2'])
   // Whoever is asking, where the line names nobody.
   assertEquals(
-    ids(await ask(g, 'inbox_list', {}, { eid: 'desk' })),
+    ids(await ask(g, 'inbox_list', {}, { by: 'desk' })),
     ['a1'],
   )
   await assertRejects(() => ask(g, 'inbox_list'), Error, 'nobody is asking')
@@ -215,7 +215,7 @@ Deno.test('sending mints the address it is for, and goes', async () => {
     body: 'We meet at seven.',
     from: 'hello@books.example',
     about: 'ana',
-  }, { eid: 'desk' })
+  }, { by: 'desk' })
   let [letter] = await g.read('.mail.target=ana')
   assertEquals(comp(letter, 'doc').title, 'Thursday')
   // Somebody else's namespace passes through untouched: only this graph's own
@@ -230,7 +230,7 @@ Deno.test('who is asking supplies the from address, and its absence is loud', as
     to: 'nina@elsewhere.example',
     subject: 'Hello',
     body: 'Hi.',
-  }, { eid: 'desk' })
+  }, { by: 'desk' })
   assertEquals(post.last()?.from, 'hello@books.example')
   await assertRejects(
     () =>
@@ -238,7 +238,7 @@ Deno.test('who is asking supplies the from address, and its absence is loud', as
         to: 'nina@elsewhere.example',
         subject: 'Hello',
         body: 'Hi.',
-      }, { eid: 'ana' }),
+      }, { by: 'ana' }),
     Error,
     'a letter needs a from address',
   )

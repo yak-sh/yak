@@ -23,7 +23,7 @@ let shop = (opts: { required?: boolean } = {}) => {
         graph,
         authenticate: door({
           cookie: 'shop_session',
-          verify: (token) => (token == 'ada' ? { eid: 'm1' } : null),
+          verify: (token) => (token == 'ada' ? { by: 'm1' } : null),
           required: opts.required,
         }),
       }

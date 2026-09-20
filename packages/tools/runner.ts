@@ -34,6 +34,7 @@
 // execution — is the server's and carries no actor at all.
 
 import {
+  type Actor,
   asked,
   type Bundle,
   type Change,
@@ -41,7 +42,6 @@ import {
   type Declared,
   type Eid,
   emitted,
-  type Entity,
   type Graph,
   type NamedTool,
   namedTool,
@@ -147,10 +147,20 @@ export let worded = (answer: Bundle[]): string => {
 // Who wrote the call, as the graph recorded it. A batch's `$actor` is the
 // pipeline's and never a column, so what survives the commit is the stamp the
 // provenance rule wrote — which is the point: the caller is a fact about the
-// call, not a claim the runner has to be told again.
-let who = (call: Bundle): Entity | null => {
-  let by = (call.created as Comp | undefined)?.by ?? call.$actor?.by
-  return by ? { eid: String(by) } : null
+// call, not a claim the runner has to be told again. Both halves come back:
+// what a tool writes is the caller's, through the same run the call came
+// through.
+let who = (call: Bundle): Actor | null => {
+  let said = (col: 'by' | 'via') =>
+    (call.created as Comp | undefined)?.[col] ?? call.$actor?.[col]
+  let by = said('by')
+  let via = said('via')
+  return by || via
+    ? {
+      ...(by ? { by: String(by) } : {}),
+      ...(via ? { via: String(via) } : {}),
+    }
+    : null
 }
 
 /**

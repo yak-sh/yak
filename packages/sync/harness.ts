@@ -187,7 +187,7 @@ export let server = (): Server => {
   let waiting: Fake[] = []
   let handler = api({
     graph: g,
-    authenticate: () => ({ eid: COOK }),
+    authenticate: () => ({ by: COOK }),
     upgrade: () => {
       let s = waiting.shift()!
       sockets.push(s)

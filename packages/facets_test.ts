@@ -110,14 +110,17 @@ Deno.test("every package's words load beside every other package's", async () =>
 })
 
 Deno.test('every other facet a package exports is shaped the way a host reads it', async () => {
-  let shapes: Record<string, string> = {
-    rules: 'rules',
-    tools: 'runs',
-    effects: 'effects',
-    routes: 'routes',
-    boot: 'boot',
-    service: 'service',
-    views: 'views',
+  // What each facet's module has to say. `routes` has two, because it says
+  // two things: the HTTP a plugin adds beside the doors, and — for at most one
+  // plugin in a host — who is calling. A module with either is that facet.
+  let shapes: Record<string, string[]> = {
+    rules: ['rules'],
+    tools: ['runs'],
+    effects: ['effects'],
+    routes: ['routes', 'authenticate'],
+    boot: ['boot'],
+    service: ['service'],
+    views: ['views'],
   }
   let seen = new Set<string>()
   for (let p of packages) {
@@ -135,10 +138,13 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
     } catch {
       words = false
     }
-    for (let [facet, name] of Object.entries(shapes)) {
+    for (let [facet, names] of Object.entries(shapes)) {
       if (!has(p, facet) || (facet == 'tools' && !words)) continue
       let mod = await import(file(p, facet).href) as Record<string, unknown>
-      assert(name in mod, `${p.name}/${facet} exports no \`${name}\``)
+      assert(
+        names.some((name) => name in mod),
+        `${p.name}/${facet} exports no \`${names.join('` or `')}\``,
+      )
       seen.add(facet)
     }
     if (!words) continue

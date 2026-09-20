@@ -221,7 +221,7 @@ Deno.test('an upload is by whoever the door says is calling', async () => {
   let h = host()
   // The host's own answer to "who is this", as `@yaks/cli` composes it from
   // the plugins: a route reads it rather than writing as nobody.
-  let ask = door({ ...h, who: () => ({ eid: 'ana' }) })
+  let ask = door({ ...h, who: () => ({ by: 'ana' }) })
   let sha = await addressOf(text)
   assertEquals((await ask(put(sha, text))).status, 200)
   let [row] = await h.graph.read(`.eid=${sha}`)

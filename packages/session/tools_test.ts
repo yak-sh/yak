@@ -16,7 +16,12 @@ let vocab = loadVocab([docDoc, taskDoc, sessionDoc], [idKeywords])
 let tools = runs({ vocab })
 
 // The store, as far as these tools read it: a list of bundles and the queries
-// they answer. Each tool asks one thing, so the stub answers by prefix.
+// they answer. Each tool asks one thing, so the stub answers by prefix — and
+// a get by eid, which is the first rung of reaching a session by the word a
+// caller said (./who.ts).
+//
+// `actor` is the RUN a door signed the call with: `via` the transcript, `by`
+// whoever it speaks for.
 let ctx = (
   args: Record<string, unknown>,
   rows: Bundle[] = [],
@@ -24,8 +29,18 @@ let ctx = (
 ) =>
   ({
     args,
-    actor: actor ? { eid: actor } : null,
-    graph: { vocab, address: () => new Map() },
+    actor: actor ? { by: 'p1', via: actor } : null,
+    graph: {
+      vocab,
+      address: () => new Map(),
+      storage: {
+        tx: (run: (tx: { get: (eids: string[]) => Bundle[] }) => unknown) =>
+          run({
+            get: (eids: string[]) =>
+              rows.filter((b) => eids.includes(b.entity.eid)),
+          }),
+      },
+    },
     read: (q: string) =>
       rows.filter((b) =>
         Object.entries(b.$match ?? {}).every(([k]) => String(q).includes(k))
@@ -57,6 +72,38 @@ Deno.test('a claim is taken for whoever is asking', async () => {
   ) as Bundle[]
   assertEquals(said.entity.eid, 't')
   assertEquals(comp(said, 'claim'), { session: 's' })
+})
+
+Deno.test('one word means one run: the lock and the wrap take the same --session', async () => {
+  // The transcript, reachable by the eid it has and by the name its runner
+  // gave it — and the claim row the lock leaves behind.
+  let rows = [
+    row({ entity: { eid: 's1' }, session: { id: 'abc' } }, 'session.id'),
+    row({ entity: { eid: 's1' }, session: { id: 'abc' } }, 'eid'),
+    row({ entity: { eid: 't1' } }, 'claim.session'),
+  ]
+  let [took] = await tools.claim_take!(
+    [],
+    ctx({ target: 't1', session: 'abc' }, rows),
+  ) as Bundle[]
+  // The lock names the SESSION, never the word the caller typed.
+  assertEquals(comp(took, 'claim'), { session: 's1' })
+
+  let [, freed] = await tools.session_wrap!(
+    [],
+    ctx({ session: 'abc', brief: 'done' }, rows),
+  ) as Bundle[]
+  assertEquals([freed.entity.eid, freed.claim], ['t1', null])
+})
+
+Deno.test('a lock for a run nothing answers to is a refusal, not a lock', async () => {
+  let threw = ''
+  try {
+    await tools.claim_take!([], ctx({ target: 't', session: 'S-404' }))
+  } catch (e) {
+    threw = (e as Error).message
+  }
+  assertEquals(threw, 'no session answers to S-404')
 })
 
 Deno.test('nobody asking and nobody named is a refusal, not a lock', async () => {

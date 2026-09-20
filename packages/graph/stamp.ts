@@ -21,7 +21,7 @@
 // all is stamped not at all. Nothing here assumes a shape.
 
 import type { Vocab } from '@yaks/vocab'
-import type { Actor, Bundle, Comp, Entity } from './bundle.ts'
+import type { Actor, Bundle, Comp } from './bundle.ts'
 import type { State } from './state.ts'
 import type { Bound, Patch, Rule } from './rules.ts'
 
@@ -33,16 +33,20 @@ import type { Bound, Patch, Rule } from './rules.ts'
  * (@yaks/api's `/apply`, @yaks/tools' runner landing what a tool answered)
  * that says it.
  *
+ * An actor is a PAIR, because a write has two answers to "whose is this": the
+ * identity it acts for (`by`) and the instrument it came through (`via`) — a
+ * session, a run, a connector. A door that knows only one says only one.
+ *
  * ```ts
- * signed([{ entity: { eid: 'b1' } }], { eid: 'm1' })
+ * signed([{ entity: { eid: 'b1' } }], { by: 'm1' })
  * // [{ entity: { eid: 'b1' }, $actor: { by: 'm1' } }]
  * ```
  */
-export let signed = (change: Bundle[], who: Entity | null): Bundle[] =>
+export let signed = (change: Bundle[], who: Actor | null): Bundle[] =>
   change.map((b) => {
     let out: Bundle = { ...b }
     delete out.$actor
-    if (who) out.$actor = { by: who.eid }
+    if (who && (who.by || who.via)) out.$actor = { ...who }
     return out
   })
 

@@ -169,7 +169,7 @@ tool applies is signed with that — never with what the client sent:
 ```ts
 let authenticate = (request: Request) => {
   let token = request.headers.get('authorization')
-  return token ? { eid: memberFor(token) } : null
+  return token ? { by: memberFor(token) } : null
 }
 ```
 
@@ -287,7 +287,7 @@ For an agent that launches the server itself:
 // deno run -A serve.ts
 import { stdio } from '@yaks/mcp/stdio'
 
-await stdio({ graph, actor: { eid: 'm1' } })
+await stdio({ graph, actor: { by: 'm1' } })
 ```
 
 It lives in its own module because it is the one part that is not portable — it

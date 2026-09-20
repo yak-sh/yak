@@ -218,7 +218,22 @@ A route that WRITES signs what it writes: `host.who(request)` is the same answer
 `/apply` beside it gets, and `signed(batch, actor)` (@yaks/api) is how it rides
 along — without it an upload or a capture is by nobody while the write next to
 it is attributed. One plugin may say who is calling (`authenticate` on its
-`./routes`); where none does, it is the config's `actor`.
+`./routes`, a factory like every facet, so it can read the graph to say it);
+where it says nobody, the answer is the host itself.
+
+## Who the host writes as
+
+`actor` in the config is one sentence about a whole server: who its own writing
+is by. A NAME is the host's own identity — it mints that entity at start-up and
+derives its id from the name (@yaks/kernel `hosted`), so `"actor": "yak"` is a
+server that is `yak` in every graph it writes to and nothing has to be looked
+up. An id this family minted (a uuid, a content hash) names something somebody
+else made, and is signed with as it stands.
+
+It is not only the doors. A batch that reaches `apply()` with no `$actor` at all
+— a rule's effect, a plugin's boot pass, a load poured in through `yak apply` —
+is the host's own writing and lands signed with it, so there is no such thing
+here as a row nobody wrote. A door that authenticated somebody signs over it.
 
 ## What `compose` does
 

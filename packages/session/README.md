@@ -137,6 +137,20 @@ its lock mid-edit.
 while the documents live. That is declared in `sessionDoc` and executed by
 @yaks/graph's cascade — no code for it here.
 
+## One word means one run
+
+A caller names a transcript in three ways — the eid, the human id a person says
+(`S-37703`), and the harness's own name for the run — and `sessionFor` answers
+all three with the same entity, so `claim take --session S-20` and
+`session wrap --session S-20` are about the same thing. Only the last of the
+three may not exist yet, which is what `session context --hook -` mints.
+
+The door reads the same word off `x-via`: a request says which run it speaks
+for, and what it writes is signed `by` whoever that run speaks as
+(`session.actor`, else the run itself) and `via` the run. That is the `routes`
+facet a host takes (`@yaks/session/routes`) — it names a writer, never an
+authorization; a host that gates access authenticates with a key beside it.
+
 ## Exports
 
 | export                                           | is                                                       |
@@ -149,6 +163,7 @@ while the documents live. That is declared in `sessionDoc` and executed by
 | `views`                                          | `Line` and `Status`, portable @yaks/render renderers     |
 | `leasing(opts)`, `naming`, `auditing(opts)`      | the hooks on their own                                   |
 | `reapLeases(storage)`, `staleLeases(tx)`         | start-up reconciliation, doing and reading               |
+| `sessionFor`, `speaking`, `where`                | the run a word names, and the actor it writes as         |
 | `Bounced`, `Unnamed`                             | the refusals, with their facts as fields                 |
 
 ## What is deliberately not here

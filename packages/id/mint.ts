@@ -25,3 +25,19 @@ export let short = (eid: string, prefix = ''): string =>
 
 /** Short input handles carry 6–64 hex characters; bare hex is never an id fragment. */
 export let SHORT: RegExp = /^(?:[a-z]+)?#[0-9a-f]{6,64}$/i
+
+// What an id this family MINTS looks like: a uuid, or the hex of a content
+// address (@yaks/graph `derivedEid`, a key, a blob). A word of that shape is
+// an id however it was meant, so every ladder that reads "an eid, else a name
+// somebody chose" tells the two apart here rather than each in its own copy.
+let MINTED = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$|^[0-9a-f]{40,64}$/i
+
+/**
+ * Whether an id is one this family minted, rather than a word a person chose.
+ *
+ * ```ts
+ * minted(mint()) // true
+ * minted('lemon-cake') // false
+ * ```
+ */
+export let minted = (id: string): boolean => MINTED.test(id)

@@ -9,7 +9,7 @@
 // that neither the request nor the answer is ever whole in memory.
 
 import { type Bundle, type Change, type Graph, Refused } from '@yaks/graph'
-import type { Entity, Row } from '@yaks/graph'
+import type { Actor, Row } from '@yaks/graph'
 import { parse, type Query } from '@yaks/query'
 import { signed } from './actor.ts'
 import { json, refusal } from './refuse.ts'
@@ -112,7 +112,7 @@ let asked = (held: Bundle[], applied: Bundle[]): Bundle[] => {
 export let pour = (
   graph: Graph,
   request: Request,
-  who: Entity | null,
+  who: Actor | null,
 ): Response => {
   let body = request.body
   if (!body) throw new Refused('/apply takes one bundle per line')
@@ -180,7 +180,7 @@ export let pour = (
 export let write = async (
   graph: Graph,
   request: Request,
-  who: Entity | null,
+  who: Actor | null,
 ): Promise<Response> => {
   if (poured(request)) return pour(graph, request, who)
   let body = await request.json()

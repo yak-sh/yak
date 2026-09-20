@@ -88,7 +88,9 @@ Deno.test('a composed host finds exactly the two states we broke', async () => {
     assert(claim.includes('whose transcript stopped'), claim)
 
     let board = await ask(h, 'board_check')
-    assert(board.includes('B-6 no longer routes'), board)
+    // B-7, not B-6: the host's own identity is an entity too, minted the
+    // first time a batch is signed with it.
+    assert(board.includes('B-7 no longer routes'), board)
     assert(board.includes('.staus=open'), board)
 
     // And the checks nothing broke still answer, rather than staying silent.

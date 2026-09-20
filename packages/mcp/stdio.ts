@@ -14,7 +14,7 @@ import { type Options, server } from './server.ts'
  *
  * ```ts
  * // deno run -A serve.ts
- * await stdio({ graph, actor: { eid: 'm1' } })
+ * await stdio({ graph, actor: { by: 'm1' } })
  * ```
  */
 export let stdio = async (opts: Options): Promise<void> => {

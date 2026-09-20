@@ -12,7 +12,7 @@
 // entity, and a component that never reaches a table is a perfectly good way
 // for one phase to tell a later one what it decided.
 
-import type { Bundle, Eid, Entity } from './bundle.ts'
+import type { Actor, Bundle, Eid } from './bundle.ts'
 import type { Query, ReadOpts, Tx } from './storage.ts'
 import type { Ask } from './gather.ts'
 import type { Resource, Rule } from './rules.ts'
@@ -124,7 +124,9 @@ export type Schema = object
  *
  * `actor` is the CALLER's, never the runner's: a tool that writes writes in
  * the name of whoever wrote the call, so authorization is decided about the
- * person asking (see {@link https://jsr.io/@yaks/tools | @yaks/tools}).
+ * person asking (see {@link https://jsr.io/@yaks/tools | @yaks/tools}). It is
+ * the PAIR the wire carries — `by` the identity, `via` the run it came
+ * through — so a tool that needs the session behind a call reads `via`.
  *
  * There is no door to write through — a tool ANSWERS with bundles and the
  * runner lands them, signed, so a tool cannot write in somebody else's name by
@@ -133,8 +135,9 @@ export type Schema = object
 export type ToolCtx = {
   /** the graph the tool works on (its vocabulary and storage included) */
   graph: Graph
-  /** the entity that wrote the call, or `null` for nobody */
-  actor: Entity | null
+  /** who wrote the call — the identity it acts for and the instrument it came
+   * through, as the graph stamped them — or `null` for nobody */
+  actor: Actor | null
   /** a query → the matching entities as whole bundles */
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
   /** the call's arguments, parsed out of `call.args` and checked against the

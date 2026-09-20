@@ -25,11 +25,17 @@ export class Refused extends Error {}
 /** Nobody is signed in — the message is the sentence to print. */
 export class Unauthorized extends Error {}
 
-/** Where and as whom: the `/mcp` URL, the bearer, and the `fetch` to use
- * (a test hands over a handler, so nothing here needs a socket). */
+/** Where and as whom: the `/mcp` URL, the bearer, the run this line speaks
+ * for, and the `fetch` to use (a test hands over a handler, so nothing here
+ * needs a socket). */
 export type Door = {
   url: string
   token?: string | null
+  /** the session this command line is part of, named on `x-via` — the
+   * INSTRUMENT behind what it writes, never a credential. A host that has
+   * transcripts resolves it to the run and signs the writes with it
+   * (@yaks/session/routes); one that does not ignores the header. */
+  via?: string | null
   fetch?: (request: Request) => Response | Promise<Response>
 }
 
@@ -70,6 +76,7 @@ export let rpc = (door: Door): Rpc => {
         accept: 'application/json, text/event-stream',
         'mcp-protocol-version': PROTOCOL,
         ...(door.token ? { authorization: `Bearer ${door.token}` } : {}),
+        ...(door.via ? { 'x-via': door.via } : {}),
         ...(session ? { 'mcp-session-id': session } : {}),
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: ++n, method, params }),

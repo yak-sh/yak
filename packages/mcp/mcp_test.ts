@@ -15,7 +15,7 @@ import { comp, connect, result, shopGraph, text } from './harness.ts'
 import { roster } from './server.ts'
 import { rosterLine, rosterVersion } from './roster.ts'
 
-let ada = { eid: 'm1' }
+let ada = { by: 'm1' }
 let spring: Bundle = {
   entity: { eid: 'b1' },
   doc: { title: 'The Left Hand of Spring' },
@@ -183,7 +183,7 @@ Deno.test('a tool runs as whoever called it', async () => {
       description: 'put a book on the shelf',
       input: {},
       run: (_, ctx) => {
-        seen = ctx.actor?.eid ?? null
+        seen = ctx.actor?.by ?? null
         return [{ entity: { eid: 'b1' }, book: { status: 'shelved' } }]
       },
     }],

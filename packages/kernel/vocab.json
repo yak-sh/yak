@@ -146,6 +146,19 @@
       },
       "description": "somebody keeps it close"
     },
+    "host": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "prefix": "H",
+      "description": "a server that composes this graph \u2014 the identity its own writing is signed with, where no door named a caller",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "what it is running as \u2014 its id is derived from this, so the same name is the same host in every graph it writes to"
+        }
+      }
+    },
     "image": {
       "component": true,
       "type": "object",

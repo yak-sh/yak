@@ -182,6 +182,24 @@ Deno.test('births are stamped created, later touches updated', () => {
   assertEquals(again.find((b) => b.created), undefined)
 })
 
+Deno.test("a batch nobody signed is the graph's own, and a signed one is not", () => {
+  let one = graph({
+    storage: memory(),
+    vocab: books,
+    actor: { by: 'shop', via: 'shop' },
+  })
+  // Nobody at a door: an effect, a boot pass, a load poured in.
+  let own = sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]))
+  assertEquals(at(own, 'b1', 'created').by, 'shop')
+  // And a door that named somebody has the last word.
+  let hers = sync(one.apply([{
+    entity: { eid: 'b2' },
+    doc: { title: 'Dune II' },
+    $actor: { by: 'ada' },
+  }]))
+  assertEquals(at(hers, 'b2', 'created').by, 'ada')
+})
+
 Deno.test('a mark is signed where it lands, and the first telling stands', () => {
   let one = g()
   let out = sync(one.apply([{

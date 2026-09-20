@@ -339,7 +339,7 @@ export let authenticating = (
 async (req) => {
   let v = vouchOf(req)
   heard(v)
-  let who = v.person ? { eid: v.person } : null
+  let who = v.person ? { by: v.person } : null
   let held = app()
   if (!held) return who
   let m = await may.modeOf(held)
@@ -349,7 +349,7 @@ async (req) => {
   // is the app owner's to grant. Neither answer says more about the app than
   // the address already did.
   if (!who) throw new Unauthorized('sign in to read this app')
-  throw new Denied(who.eid, held, 'viewer', 'read')
+  throw new Denied(String(who.by), held, 'viewer', 'read')
 }
 
 // The spine's own name.
@@ -1038,7 +1038,7 @@ export class Store {
   // things at once and they are the same thing: @yaks/graph admits the
   // server-owned columns, and the guard above stands down.
   #trust(bundles: Bundle[], who: string | null, opts: ApplyOpts = {}) {
-    return this.#asIs(signed(bundles, who ? { eid: who } : null), opts)
+    return this.#asIs(signed(bundles, who ? { by: who } : null), opts)
   }
 
   // The same door, keeping whatever signature the batch already carries: what

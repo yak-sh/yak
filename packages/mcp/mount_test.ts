@@ -9,7 +9,7 @@ import { Unauthorized } from '@yaks/api'
 import { mcp } from './mount.ts'
 import { comp, shopGraph } from './harness.ts'
 
-let ada = { eid: 'm1' }
+let ada = { by: 'm1' }
 
 let post = (body: unknown) =>
   new Request('http://shop.test/mcp', {

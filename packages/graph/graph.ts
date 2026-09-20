@@ -44,7 +44,13 @@
 import { rulesIn, type Vocab } from '@yaks/vocab'
 // getRandomValues, never crypto.randomUUID: a page on plain http mints too.
 import { mint as fresh } from '@yaks/id'
-import { type Bundle, type Change, comps, type Eid } from './bundle.ts'
+import {
+  type Actor,
+  type Bundle,
+  type Change,
+  comps,
+  type Eid,
+} from './bundle.ts'
 import type { Row, Storage, Tx } from './storage.ts'
 import { detached, type Query, type ReadOpts } from './storage.ts'
 import type { Hook, Phase, Plugin, Tracker, WriteHook } from './plugin.ts'
@@ -62,6 +68,7 @@ import {
   births,
   marks,
   provenance,
+  signed,
   type StampPolicy,
 } from './stamp.ts'
 import { fire, registry, type Resource, type Rule, stands } from './rules.ts'
@@ -116,6 +123,12 @@ export type Options = {
   vocab: Vocab
   /** the plugins whose hooks run in `apply()` */
   plugins?: Plugin[]
+  /** whose graph this is: the actor a batch that names none is signed with.
+   * A host's own writing — its rules, its effects, the pass it makes at boot,
+   * a load somebody pours in — arrives with no door to sign it, and lands
+   * attributed to the host rather than to nobody. A door that authenticated
+   * somebody signs over this before the batch ever gets here (`signed`). */
+  actor?: Actor
   /** Per-entity provenance policy; core retains the stamp mechanism. */
   provenance?: StampPolicy
   /** A host's provenance clock, sampled once when a rule first asks #Now.
@@ -259,6 +272,16 @@ export let graph = (opts: Options): Graph => {
         },
       },
     ])
+
+  // A batch that names no writer is this graph's OWN — nobody authenticated
+  // it because nobody was at a door: a rule's effect, a boot pass, a load
+  // poured in by the process that holds the file. It lands as the host rather
+  // than as nobody, so every write is attributed and the journal has a name to
+  // record. A door signs over this (`signed`) before the batch arrives.
+  let owned = (change: Change): Change =>
+    opts.actor && !change.some((b) => b.$actor)
+      ? signed(change, opts.actor)
+      : change
 
   let apply = (change: Change, o: ApplyOpts = {}):
     | Bundle[]
@@ -535,7 +558,7 @@ export let graph = (opts: Options): Graph => {
         inside,
         composed,
       ],
-      change,
+      owned(change),
       (b, step) => step(b),
     )
   }

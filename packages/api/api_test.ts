@@ -12,10 +12,12 @@ import { Unauthorized } from './refuse.ts'
 import { comp, post, req, shopGraph } from './harness.ts'
 
 let ada = { eid: 'm1' }
+// The same person as the door names her: an actor is `by` whoever is writing.
+let hers = { by: ada.eid }
 
 // A handler over a fresh shop, with `ada` at the keyboard unless told
 // otherwise, and the member she is already in the graph.
-let shop = (authenticate: Authenticate = () => ada) => {
+let shop = (authenticate: Authenticate = () => hers) => {
   let graph = shopGraph()
   graph.apply([{ entity: ada, doc: { title: 'Ada Card' } }])
   return api({ graph, authenticate })

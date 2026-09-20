@@ -32,9 +32,9 @@
  */
 
 import {
+  type Actor,
   type Bundle,
   detached,
-  type Entity,
   type Graph,
   graph,
   type NamedTool,
@@ -49,8 +49,9 @@ import {
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
-import { idKeywords } from '@yaks/id'
+import { idKeywords, minted } from '@yaks/id'
 import { nameKeywords } from '@yaks/names'
+import { HOST, hosted, hostEid } from '@yaks/kernel'
 import type { Derived, Extension } from '@yaks/sql'
 import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
 import { Database, driver } from '@yaks/sqlite/db'
@@ -95,8 +96,8 @@ export type Host = {
   graph: Graph
   /** who is calling — the same answer the graph's own doors get, so a route
    * signs what it writes (`signed` in @yaks/api) rather than writing as
-   * nobody. One plugin may say it; where none does, it is the config's
-   * `actor`. */
+   * nobody. One plugin may say it; where it says nobody, the answer is this
+   * host itself ({@link writer}). */
   who: Authenticate
 }
 
@@ -158,10 +159,15 @@ export type EffectsFacet = {
 }
 
 /** `<plugin>/routes` — the HTTP it adds beside the doors, and, for at most one
- * plugin in a host, who is calling. */
+ * plugin in a host, who is calling.
+ *
+ * `authenticate` is a FACTORY like every other facet, because naming a caller
+ * is a read: @yaks/session answers a request with the transcript it says it
+ * speaks for, which it can only do through the host's own graph. It is handed
+ * the host with nothing open on it yet — keep it, do not call it. */
 export type RoutesFacet = {
   routes?: (host: Host, options: Options) => Route[]
-  authenticate?: Authenticate
+  authenticate?: (host: Host, options: Options) => Authenticate
 }
 
 /** `<plugin>/boot` — the one pass this plugin makes at start-up, before
@@ -295,16 +301,41 @@ let understood = (brought: Keywords[]): Keywords[] => {
   ]
 }
 
+/**
+ * Who a host writes as where no door named a caller: the entity its config's
+ * `actor` names, acting for itself through itself.
+ *
+ * A NAME is the host's own identity — it mints that row at start-up
+ * (@yaks/kernel `hosted`) and its id is derived from the name, so nothing is
+ * looked up and no uuid is pasted into a config. An id this family minted
+ * names something somebody else made, and is signed with as it stands.
+ *
+ * ```ts
+ * writer({ actor: 'yak' })?.by == writer({ actor: 'yak' })?.by // true
+ * ```
+ */
+export let writer = (config: Config): Actor | null => {
+  if (!config.actor) return null
+  let eid = minted(config.actor) ? config.actor : hostEid(config.actor)
+  return { by: eid, via: eid }
+}
+
 // Exactly one plugin may say who is calling; two would mean the door's answer
-// depends on import order, which is not an answer.
-let doorman = (mods: RoutesFacet[], config: Config): Authenticate => {
-  let said = mods.map((m) => m.authenticate).filter((a) => !!a)
+// depends on import order, which is not an answer. Whoever it is, the HOST is
+// the floor: a request no plugin claimed is the box's own writing, not
+// nobody's.
+let doorman = (
+  served: [RoutesFacet, Options][],
+  host: Host,
+  self: Actor | null,
+): Authenticate => {
+  let said = served.filter(([r]) => r.authenticate)
   if (said.length > 1) {
     throw new Error(`${said.length} plugins authenticate — a door has one`)
   }
-  if (said[0]) return said[0]
-  let actor: Entity | null = config.actor ? { eid: config.actor } : null
-  return () => actor
+  let [mod, options] = said[0] ?? []
+  let ask = mod?.authenticate?.(host, options ?? {})
+  return ask ? async (request) => (await ask(request)) ?? self : () => self
 }
 
 /**
@@ -394,16 +425,18 @@ export let compose = async (
 
     let g: Graph | undefined
     let stopping = new AbortController()
-    // Who is calling is settled before anything is built, because it is read
-    // off the route modules themselves rather than from a factory: a route
-    // needs the same answer the graph's own doors get, or what it writes is
-    // attributed to nobody while `/apply` beside it is attributed correctly.
-    let authenticate = doorman(served.map(([r]) => r), config)
+    // Who is calling is settled before anything is built: a route needs the
+    // same answer the graph's own doors get, or what it writes is attributed
+    // to nobody while `/apply` beside it is attributed correctly. The host
+    // itself is that answer until the plugins are asked, which is a moment
+    // later — `who` reads the binding rather than a copy of it.
+    let self = writer(config)
+    let authenticate: Authenticate = () => self
     let host: Host = {
       config,
       vocab,
       sql,
-      who: authenticate,
+      who: (request) => authenticate(request),
       get storage(): Store {
         if (!store) throw new Error('the store is not open yet')
         return store
@@ -413,6 +446,7 @@ export let compose = async (
         return g
       },
     }
+    authenticate = doorman(served, host, self)
     // The clause compilers ride the STORE, so they are gathered before it is
     // built: what a query may SAY is settled once, at compose, and every door
     // that reads — `/query`, `/ws`, a tool, the command line — asks through
@@ -437,6 +471,9 @@ export let compose = async (
     g = graph({
       storage: host.storage,
       vocab,
+      // A batch no door signed is the host's own: its rules, its effects, its
+      // boot passes and the loads it is handed all land attributed.
+      ...(self ? { actor: self } : {}),
       plugins: [
         ...ruled.flatMap(([r, options]) => r.rules?.(host, options) ?? []),
         fx,
@@ -477,7 +514,7 @@ export let compose = async (
       fx.on(rule.plan, (e) => run.run(e.entity.eid), { doc: rule.rule.name })
     }
     let routes = served.flatMap(([r, o]) => r.routes?.(host, o) ?? [])
-    let door = api({ graph: g, authenticate })
+    let door = api({ graph: g, authenticate: host.who })
     // Ranked words, for the door that asks for them. Membership is already
     // answered by the extension above; this is the order they come back in.
     let ranked: Search | undefined = text.length
@@ -490,7 +527,7 @@ export let compose = async (
       : undefined
     let agents = mcp({
       graph: g,
-      authenticate,
+      authenticate: host.who,
       tools,
       search: ranked,
       name: config.name ?? 'yak',
@@ -557,6 +594,21 @@ export let unfinished = (g: Graph): SweepRows => (comp, pending) =>
       })),
   )
 
+/**
+ * The host's own row, written before anything it signs points at it:
+ * `created.by` is a REFERENCE, so a server signing with an entity nothing
+ * minted would write a dangling id on its first breath. Idempotent — the id is
+ * derived from the name, so every start says the same thing.
+ *
+ * A config that signs with an id this family minted names something somebody
+ * else made, and nothing is written for it: that entity is not this host's.
+ */
+export let own = async (host: Served): Promise<void> => {
+  let said = host.config.actor
+  if (!said || minted(said) || !host.vocab.comp(HOST)) return
+  await host.graph.apply([hosted(said)])
+}
+
 /** Serve a config: compose it, and listen. `onListen` is told the address and
  * the host it belongs to — the composition is done before anything binds. */
 export let serve = async (
@@ -564,6 +616,8 @@ export let serve = async (
   onListen?: (addr: Deno.NetAddr, host: Served) => void,
 ): Promise<{ host: Served; server: Deno.HttpServer }> => {
   let host = await compose(config)
+  // Whose server this is, first of all: everything below is signed with it.
+  await own(host)
   // Boot: the `tool` rows a call points at, and then what a crash left
   // claimed and unanswered, finished. Here rather than in `compose`, because
   // BOOT is the server starting — a one-shot command composes the same host

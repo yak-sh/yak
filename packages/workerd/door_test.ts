@@ -32,7 +32,7 @@ Deno.test('the cookie is read first, the bearer second', async () => {
     cookie: 'shop_session',
     verify: (token) => {
       seen.push(token)
-      return { eid: 'm1' }
+      return { by: 'm1' }
     },
   })
 
@@ -40,10 +40,10 @@ Deno.test('the cookie is read first, the bearer second', async () => {
     await ada(
       carrying({ cookie: 'shop_session=c', authorization: 'Bearer b' }),
     ),
-    { eid: 'm1' },
+    { by: 'm1' },
   )
   assertEquals(await ada(carrying({ authorization: 'Bearer b' })), {
-    eid: 'm1',
+    by: 'm1',
   })
   assertEquals(seen, ['c', 'b'])
 })
