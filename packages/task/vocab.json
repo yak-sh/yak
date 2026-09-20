@@ -19,7 +19,7 @@
           "description": "the conditions, in prose"
         }
       },
-      "description": "what finishing this means — written when the work is asked for, not after"
+      "description": "what finishing this means \u2014 written when the work is asked for, not after"
     },
     "blocked": {
       "component": true,
@@ -52,7 +52,7 @@
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "description": "who called it off — kept as history when that entity is deleted",
+          "description": "who called it off \u2014 kept as history when that entity is deleted",
           "stamped": true
         },
         "reason": {
@@ -64,7 +64,7 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "the instrument it was written through — the session or client the write came in on"
+          "description": "the instrument it was written through \u2014 the session or client the write came in on"
         }
       }
     },
@@ -88,7 +88,7 @@
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "description": "who finished it — kept as history when that entity is deleted",
+          "description": "who finished it \u2014 kept as history when that entity is deleted",
           "stamped": true
         },
         "via": {
@@ -96,7 +96,7 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "the instrument it was written through — the session or client the write came in on"
+          "description": "the instrument it was written through \u2014 the session or client the write came in on"
         }
       }
     },
@@ -130,7 +130,7 @@
             "open"
           ],
           "computed": true,
-          "description": "where the task stands — read off the completed and cancelled marks, never written"
+          "description": "where the task stands \u2014 read off the completed and cancelled marks, never written"
         }
       }
     },
@@ -142,6 +142,143 @@
         "done",
         "cancelled"
       ]
+    },
+    "task_new": {
+      "tool": true,
+      "noun": "task",
+      "verb": "new",
+      "title": "File a task",
+      "description": "Write down something to do: an entity wearing task{} and doc{title, body}, open by the only definition there is \u2014 it wears neither the completed nor the cancelled mark. Say where it is filed and it wears filed{} too.",
+      "input": {
+        "title": {
+          "type": "string",
+          "description": "what to do, in a line"
+        },
+        "body": {
+          "type": "string",
+          "description": "the irreducible ask and its pointers, as Markdown"
+        },
+        "project": {
+          "type": "string",
+          "ref": "project",
+          "description": "the project it is filed under"
+        },
+        "priority": {
+          "type": "number",
+          "description": "queue order \u2014 lower is more urgent"
+        },
+        "assignee": {
+          "type": "string",
+          "ref": "entity",
+          "description": "whose queue it is filed in"
+        },
+        "domain": {
+          "type": "string",
+          "description": "the work area"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "options": {
+        "positional": [
+          "title",
+          "body"
+        ],
+        "short": {
+          "p": "project",
+          "b": "body"
+        }
+      }
+    },
+    "task_list": {
+      "tool": true,
+      "noun": "task",
+      "verb": "list",
+      "title": "The list",
+      "description": "The tasks a query line selects, as whole bundles. `.task` is always on the line; what you say is joined onto it, and saying nothing means `.status=open`. The grammar is the query grammar: `.status=done`, `.filed.project=P-19`, `.priority<3`, a bare word for its text.",
+      "input": {
+        "query": {
+          "type": "string",
+          "description": "dot-params joined onto `.task`"
+        },
+        "limit": {
+          "type": "number",
+          "description": "at most this many"
+        }
+      },
+      "options": {
+        "positional": [
+          "query"
+        ],
+        "short": {
+          "n": "limit"
+        }
+      },
+      "readOnly": true
+    },
+    "task_update": {
+      "tool": true,
+      "noun": "task",
+      "verb": "update",
+      "title": "Move a task",
+      "description": "Change where a task stands or where it is filed. `status` is not a column: done adds the completed mark and drops the cancelled one, cancelled the other way about, and open drops both. Anything you leave out is left alone.",
+      "input": {
+        "task": {
+          "type": "string",
+          "ref": "task",
+          "description": "the task to move"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "done",
+            "cancelled"
+          ],
+          "description": "where it stands now"
+        },
+        "title": {
+          "type": "string",
+          "description": "a new title"
+        },
+        "body": {
+          "type": "string",
+          "description": "a new body"
+        },
+        "project": {
+          "type": "string",
+          "ref": "project",
+          "description": "the project it is filed under"
+        },
+        "priority": {
+          "type": "number",
+          "description": "queue order \u2014 lower is more urgent"
+        },
+        "assignee": {
+          "type": "string",
+          "ref": "entity",
+          "description": "whose queue it is filed in"
+        },
+        "domain": {
+          "type": "string",
+          "description": "the work area"
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "options": {
+        "positional": [
+          "task",
+          "status"
+        ],
+        "short": {
+          "p": "project",
+          "s": "status"
+        }
+      },
+      "idempotent": true
     }
   }
 }

@@ -77,3 +77,5 @@ export { appendEntry, repairSequences } from './append.ts'
 export * from './timing.ts'
 
 export * from './window.ts'
+
+export * from './hooks.ts'

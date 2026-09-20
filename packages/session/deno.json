@@ -6,6 +6,7 @@
     "./vocab": "./vocab.ts",
     "./rules": "./rules.ts",
     "./boot": "./boot.ts",
+    "./tools": "./tools.ts",
     "./views": "./views.ts"
   },
   "license": "Apache-2.0",
