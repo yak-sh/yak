@@ -1099,7 +1099,10 @@ let api = async (
   }
   if (path.startsWith('/files/')) {
     if (req.method != 'PUT') return json(405, 'method_not_allowed')
-    if (!writes(who.role)) return refused()
+    // The file door is never widened (public/guide/sharing.md): a guest of
+    // this app writes its data and never its bytes, whatever level the grant
+    // gave them. An app takes a guest's rows and never a guest's deploy.
+    if (!writes(who.role) || who.guest) return refused()
     let key = keyOf(space, app, path.slice('/files'.length))
     let bytes = new Uint8Array(await req.arrayBuffer())
     let stopped = await fullFiles(env, space, [{
@@ -1655,6 +1658,18 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       })
       return reporting(early.page, req, '/')
     }
+  }
+  // A GUEST of this one app (T-37615). The roster is read space-wide, so
+  // somebody invited to a single app holds no seat and the answer above is
+  // null; what they hold is a grant on THIS app, and from here on they are
+  // that level — the app's page, its data, its `me()`, and the vouch its store
+  // mirrors. Here rather than beside the seat, because rung 1.5 above hands
+  // `who` to the HOME app's router: a guest of one app must not arrive at
+  // another app's worker wearing a level. Asked only of a signed-in caller
+  // with no seat, so a member pays nothing for it and a stranger nothing.
+  if (who.person && !who.role) {
+    let held = await c.time('guest', () => dir.grant(app!, who.person!))
+    if (held) who = { ...who, role: held.access, guest: true }
   }
   // The `/api/` doors stay the kernel's, always, and keep their own refusals,
   // which speak.

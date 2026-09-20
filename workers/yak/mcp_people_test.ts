@@ -8,6 +8,7 @@ import {
 import { slow } from '../../src/testing.ts'
 
 import {
+  client,
   connector,
   kernel,
   letter,
@@ -268,6 +269,100 @@ slow('an invited person gets a space of their own', async () => {
     await k.stop()
   }
 })
+
+// A guest of ONE app (T-37615). The roster is read space-wide, so a seat is
+// everything the space holds; naming the app on the invitation is the other
+// rung — a grant on that app alone. What it proves is the "alone": the app she
+// was invited to answers her as a member, the app beside it does not exist as
+// far as she is concerned, and the file door is shut to her in both.
+slow(
+  'a guest of one app holds that app and nothing else in the space',
+  async () => {
+    let k = await kernel()
+    try {
+      let jeff = await signIn(k)
+      let his = connector(k, jeff.cookie)
+      let mine = jeff.email.split('@')[0]
+      let host = `${mine}.yaks.app`
+      for (let slug of ['arena', 'ledger']) {
+        await his.tool('app_new', { slug, title: slug, access: 'private' })
+        await his.tool('app_files', {
+          app: slug,
+          op: 'write',
+          path: 'index.html',
+          content: `<h1>${slug}</h1>`,
+        })
+        await his.tool('app_deploy', { app: slug })
+      }
+
+      let ana = `ana-${crypto.randomUUID().slice(0, 8)}@yaks.app`
+      let said = await his.tool('member_add', {
+        email: ana,
+        app: 'arena',
+        role: 'editor',
+      })
+      assertStringIncludes(said, `${mine}/arena`)
+      assertStringIncludes(said, `nothing else in ${mine}`)
+      let hers = await signIn(k, ana)
+
+      // The app she was invited to: its page, and its store, as a member has
+      // them — a private app answers nobody else at all.
+      assertEquals(
+        (await k.at(host, '/arena/', { headers: { cookie: hers.cookie } }))
+          .status,
+        200,
+      )
+      let arena = client(k, host, 'arena', hers.cookie)
+      await arena.applied({ entities: [{ doc: { title: 'her hero' } }] })
+      assertEquals((await arena.get('.doc!')).length, 1)
+
+      // The app beside it is not hers, page or data: to her it is an address
+      // with nothing at it, which is what private means to everybody else.
+      let page = await k.at(host, '/ledger/', {
+        headers: { cookie: hers.cookie },
+      })
+      assert(
+        page.status == 404 || page.status == 303,
+        `ledger page: ${page.status}`,
+      )
+      await page.body?.cancel()
+      let read = await k.at(host, '/ledger/api/query?.doc!', {
+        headers: { cookie: hers.cookie },
+      })
+      assertEquals(read.status, 403)
+      assertStringIncludes(await read.text(), 'not_a_reader')
+
+      // And the file door is never widened: a guest writes the app's rows and
+      // never its bytes, whatever level the invitation gave them.
+      let wrote = await arena.put('/index.html', '<h1>mine now</h1>')
+      assertEquals(wrote.status, 403)
+      await wrote.body?.cancel()
+
+      // She is on no roster, so her agent has no space of his to list — only
+      // the one signing in gave her.
+      let listed = await connector(k, hers.cookie).tool('app_list')
+      assertEquals(listed.includes(`${mine}.yaks.app`), false)
+
+      // Taken back, one app at a time.
+      await his.tool('member_remove', { email: ana, app: 'arena' })
+      let after = await k.at(host, '/arena/api/query?.doc!', {
+        headers: { cookie: hers.cookie },
+      })
+      assertEquals(after.status, 403)
+      await after.body?.cancel()
+
+      // And a member is never quietly demoted to a guest.
+      await his.tool('member_add', { email: ana, role: 'editor' })
+      await assertRejects(
+        () => his.tool('member_add', { email: ana, app: 'arena' }),
+        Error,
+        'reaches every app in it',
+      )
+    } finally {
+      await k.stop()
+    }
+  },
+)
 
 // The five things four separate builders each had to guess at (T-33145), each
 // held here as well as written in the guide, so a guide sentence that stops

@@ -1,6 +1,6 @@
 ---
 name: sharing
-description: 'Publishing and installing an app (yaks.app). Who may read and write an app, and how one travels: app_publish, app_install and app_update, what an installed copy shares (the code, and nothing else), what pinning means, and what an update does to what people saved.'
+description: 'Publishing and installing an app (yaks.app). Who may read and write an app, how somebody is invited to ONE app rather than the whole space, and how an app travels: app_publish, app_install and app_update, what an installed copy shares (the code, and nothing else), what pinning means, and what an update does to what people saved.'
 ---
 
 # Publishing and installing an app
@@ -54,7 +54,7 @@ into its store. An `open` app takes a guest's rows and never a guest's deploy.
 ## The guest list
 
     member_add(email, app?, name?, note?, role?, space?)
-    member_remove(email, space?)
+    member_remove(email, app?, space?)
 
 Only the space owner may invite; an editor writes the app's data and its files
 but does not hand out keys.
@@ -63,17 +63,42 @@ but does not hand out keys.
 `owner` (may also invite). Inviting an address that is already a member changes
 their role, and the answer says what it was.
 
-Those three words are the SPACE's roster — what `me()` answers as `role`, and
-the only place `viewer` is a seat. Inside an app's own store `member` is a
-different word: two seats, `owner` and `member`, saying whether someone belongs.
-Belonging is not access there, so read-only is the app's `access` (`public`,
-`private`) or a `grant` at `viewer`, never a seat. Write the roster with
-`member_add`, not by hand.
+## One app, or the space
 
-`app` decides where the letter points. Name it and the invitation carries that
-app's own link; leave it out and it carries the space's own address, which is
-its front page when it has one and a list of the apps they may open when it does
-not. Name the app.
+`app` is the whole of the difference, and it is a difference in what they GET:
+
+**Name it** and they are a guest of that one app. They open its page and read
+and write its data exactly as a member does, and the rest of the space is not
+theirs — its private apps are a wrong address to them, its public ones are what
+a stranger with the link sees. This is how a player joins one game, a household
+opens one list, a client sees one project. They are not on the roster at all, so
+they have no space to list and nothing of yours to browse.
+
+    member_add(email: 'player@example.com', app: 'idler-rpg', role: 'editor')
+    member_remove(email: 'player@example.com', app: 'idler-rpg')
+
+**Leave it out** and they take a seat on the SPACE, which reaches every app in
+it, now and every one you make later. That is a collaborator, not a guest.
+
+Two things a guest never gets, whatever level the invitation gave them. The
+app's FILES — writing an app's bytes stays a member's act, so an app takes a
+guest's rows and never a guest's deploy. And a reach for their agent: a guest is
+somebody who opens a page, not somebody whose connector lists your apps.
+
+Inviting a member to one app is refused rather than quietly demoting them: take
+the seat back with `member_remove` first, and then the invitation is that app
+alone.
+
+Those three words are the roster's, and a guest's grant is written in the same
+three. What `me()` answers as `role` is what the caller holds on THE APP they
+are looking at — their seat where they have one, their grant where they do not.
+Inside an app's own store `member` is a different word again: two seats, `owner`
+and `member`, saying whether someone belongs. Write both with `member_add`,
+never by hand.
+
+The letter follows `app` too: name it and the invitation carries that app's own
+link, leave it out and it carries the space's own address, which is its front
+page when it has one and a list of the apps they may open when it does not.
 
 `name` is what to call them — their apps show it beside what they write, so
 nobody sees an address. Left out, their first sign-in asks them. It never
@@ -95,7 +120,9 @@ hand and says why. Never re-invite to "retry"; give them the link.
 
 `member_remove` refuses to remove the last owner: a space with nobody to say who
 belongs is one nobody can open again. Removing someone leaves their sign-in
-intact — they lose this space, not the platform.
+intact — they lose this space, not the platform — and
+`member_remove(email,
+app)` takes one app back and leaves the rest.
 
 ## Publishing
 

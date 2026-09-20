@@ -90,10 +90,12 @@ broken in it.
 An app is readable by anyone with the link and writable by its members. When
 it is for other people too, say so: app_new (or app_set) takes access 'open',
 where anyone with the link can vote, add a line or sign up without signing in,
-and 'private', where only members see it at all; member_add invites someone
-into the space by email address — name the app and the invitation is mailed to
-them with its link, and they sign in there with that address and land back on
-the page they were on.
+and 'private', where only members see it at all; member_add invites someone by
+email address — name the app and that one app is all they get, its page and its
+data and nothing else in the space, which is how a player joins one game.
+Leave the app out and they are seated on the space, which reaches every app in
+it. Either way the invitation is mailed to them with the link, and they sign in
+there with that address and land back on the page they were on.
 
 Its data belongs in the app's own store, not localStorage — so it is the same
 on their phone and their laptop, and so you can read and repair it yourself.

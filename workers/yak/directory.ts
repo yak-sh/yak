@@ -306,6 +306,7 @@ type Row = {
   fee?: { bps?: number | null }
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role }
+  grant?: { app: Id; person: Id; access: Role }
   email?: { address: string }
   former?: { slug: string; slugs?: string | null }
   home?: { first?: string | null }
@@ -1033,6 +1034,18 @@ export let directory = (via: Fetcher, now = false) => {
     },
     role: async (space: Space, person: string) =>
       (await self.member(space, person))?.role ?? null,
+    // What one person holds on ONE app, by a grant rather than a seat
+    // (T-37615): a guest invited to this app and nothing else in the space.
+    // The same guard as `member` — an empty person is a caller who has not
+    // signed in, and `.grant.person=` would read as that column being absent
+    // and hand a stranger somebody's grant.
+    grant: async (app: App, person: string) => {
+      if (!person) return null
+      let row = await one(`.grant.app=${app.eid}&.grant.person=${person}`)
+      return row?.grant
+        ? { eid: row.entity.eid, access: row.grant.access }
+        : null
+    },
     // Everyone in a space, by person eid — who to tell when an app's tools
     // move (declared.ts `toolsChanged`), since reaching the app is exactly
     // being in the space.

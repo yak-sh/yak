@@ -402,9 +402,11 @@ Deno.test('the directory plants the platform, and not one app word', async () =>
     .toArray()
     .map((r) => String((r as { name: unknown }).name))
     .filter((n) => !n.startsWith('doc_fts') && !n.startsWith('sqlite_'))
-  // @yaks/member's roster is NOT here: the platform declares its own `member`,
-  // with three seats instead of two, and the kernel is the directory's guard.
-  assertEquals(tables.includes('grant'), false)
+  // @yaks/member's DOCUMENT is not loaded here: the platform declares the two
+  // rungs of its own ladder — `member`, with three seats instead of two, and
+  // `grant`, one app rather than a space (T-37615) — and the kernel is the
+  // directory's guard. An app's own mode is a word on its `app` row, so
+  // `access` is a table the directory has no use for.
   assertEquals(tables.includes('access'), false)
   for (
     let name of [
@@ -412,6 +414,7 @@ Deno.test('the directory plants the platform, and not one app word', async () =>
       'app',
       'former',
       'member',
+      'grant',
       'email',
       'hostname',
       'deploy',

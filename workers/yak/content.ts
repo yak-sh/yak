@@ -108,7 +108,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'sharing',
     'title': 'Publishing and installing an app',
     'description':
-      'Who may read and write an app, and how one travels: app_publish, app_install and app_update, what an installed copy shares (the code, and nothing else), what pinning means, and what an update does to what people saved.',
+      'Who may read and write an app, how somebody is invited to ONE app rather than the whole space, and how an app travels: app_publish, app_install and app_update, what an installed copy shares (the code, and nothing else), what pinning means, and what an update does to what people saved.',
     'brief': 'publishing and installing an app',
   },
   'stats': {
@@ -401,12 +401,12 @@ export let WORDS: Record<string, Words> = {
   'member_add': {
     'title': 'Invite someone',
     'description':
-      "Invite someone into the space by email address, so they can change what its apps hold: an editor writes, a viewer only reads, an owner may also invite. The invitation is MAILED to them — who invited them, the link, and that signing in at it with that address is all it takes — so name the app they are being invited to and the letter points at it instead of the space. Pass a note and the person's own message goes at the top of that letter, as written and quoted as theirs: a line or two saying what this is (\"the potluck list for Saturday\"), which is the difference between an invitation someone opens and one they wonder about. Pass their name if you know it and their apps will show it beside what they write, so nobody sees an address; they can say for themselves at their first sign-in. There is nothing for them to install and no account to make first. Only the space owner may invite. For an app that everyone with the link should be able to act on without signing in at all, give it access 'open' instead (app_set).",
+      "Invite someone by email address, so they can change what an app holds: an editor writes, a viewer only reads, an owner may also invite. NAME THE APP and that one app is all they get — its page and its data, and nothing else in the space, which is how a player joins one game or a household opens one list without being handed everything else you keep here. Leave the app out and they are seated on the SPACE, which reaches every app in it. Either way the invitation is MAILED to them — who invited them, the link, and that signing in at it with that address is all it takes. Pass a note and the person's own message goes at the top of that letter, as written and quoted as theirs: a line or two saying what this is (\"the potluck list for Saturday\"), which is the difference between an invitation someone opens and one they wonder about. Pass their name if you know it and their apps will show it beside what they write, so nobody sees an address; they can say for themselves at their first sign-in. There is nothing for them to install and no account to make first. Only the space owner may invite. For an app that everyone with the link should be able to act on without signing in at all, give it access 'open' instead (app_set).",
   },
   'member_remove': {
     'title': 'Remove someone',
     'description':
-      'Take someone back out of the space: they keep their sign-in and lose this space. Only the space owner may, and the last owner cannot be removed — a space with nobody to say who belongs is one nobody can ever open again. The way back: member_add with the same address, which puts them back where they were.',
+      'Take someone back out: name the app and they lose that one app and keep the rest, name none and they lose the space. Either way they keep their sign-in. Only the space owner may, and the last owner cannot be removed — a space with nobody to say who belongs is one nobody can ever open again. The way back: member_add with the same address, which puts them back where they were.',
   },
   'grant': {
     'title': 'A token for the CLI',

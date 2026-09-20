@@ -3925,8 +3925,9 @@ let OURS: Row[] = [
         space: SPACE,
         email: str('their email address'),
         app: str(
-          'the app they are being invited to — the letter and the answer ' +
-            'point at it; leave it out for the space itself',
+          'the app they are being invited to, and the ONLY one they get: ' +
+            'they hold this app and nothing else in the space. Leave it out ' +
+            'to seat them on the space, which reaches every app in it',
         ),
         name: str(
           'what to call them — the name their apps show beside what they ' +
@@ -3982,20 +3983,46 @@ let OURS: Row[] = [
       if (person == ctx.person && had) {
         throw new Error(`${email} is you, and you own ${space.slug}`)
       }
+      // ONE app, or the space (T-37615). A seat is read space-wide — that is
+      // what the roster IS — so the way to invite somebody to a single app is
+      // the other rung: a grant on that app, which gives them its page and its
+      // data and nothing else in the space. Naming the app is asking for that,
+      // because an invitation that named one app and handed over the space was
+      // the tool saying one thing and doing another.
+      let held = app && await ctx.dir.grant(app, person)
+      if (app && had) {
+        throw new Error(
+          `${email} is already ${
+            had.role == 'owner' ? 'an' : 'a'
+          } ${had.role}` +
+            ` of ${space.slug}, which reaches every app in it — ` +
+            `member_remove takes the seat back, and then this invitation is ` +
+            `${app.slug} alone`,
+        )
+      }
       await ctx.dir.apply({
         entities: [
-          had ? { entity: { eid: had.eid }, member: { role: want } } : {
-            entity: { eid: '$seat' },
-            member: { space: space.eid, person, role: want },
-          },
+          app
+            ? held ? { entity: { eid: held.eid }, grant: { access: want } } : {
+              entity: { eid: '$grant' },
+              grant: { app: app.eid, person, access: want },
+            }
+            : had
+            ? { entity: { eid: had.eid }, member: { role: want } }
+            : {
+              entity: { eid: '$seat' },
+              member: { space: space.eid, person, role: want },
+            },
         ],
       }, vouched(who))
       // Being added is a deploy from where the added person stands: every
       // view the space's apps declare just appeared for them, and the
       // deploy-time walk tells members — which they were not until now
       // (declared.ts, T-33004). A re-role moves nothing they can reach, and
-      // neither does a space with no apps.
-      if (!had && (await ctx.dir.apps(space)).length) {
+      // neither does a space with no apps. A guest of one app is not on that
+      // walk at all: they have no reach to change, and their app is a page
+      // they open rather than a store their agent lists.
+      if (!app && !had && (await ctx.dir.apps(space)).length) {
         await reachChanged(ctx.env, person)
       }
       // The letter, from the platform's own sender — the one the sign-in
@@ -4023,7 +4050,12 @@ let OURS: Row[] = [
         text:
           `${email} is ${want == 'editor' || want == 'owner' ? 'an' : 'a'}` +
           ` ${want} of ` +
-          `${space.slug}${had ? ` (was ${had.role})` : ''} — ` +
+          (app
+            ? `${space.slug}/${app.slug}${
+              held ? ` (was ${held.access})` : ''
+            } and nothing else in ${space.slug}`
+            : `${space.slug}${had ? ` (was ${had.role})` : ''}`) +
+          ` — ` +
           (sent
             ? `the invitation${
               note ? ' and your note are' : ' is'
@@ -4042,13 +4074,43 @@ let OURS: Row[] = [
     idempotent: true,
     input: {
       type: 'object',
-      properties: { space: SPACE, email: str('their email address') },
+      properties: {
+        space: SPACE,
+        email: str('their email address'),
+        app: str(
+          'the app they were a guest of — takes that one app back and leaves ' +
+            'the rest. Leave it out to take a seat on the space back',
+        ),
+      },
       required: ['email'],
     },
     run: async (ctx, args) => {
       let { space, who } = await owns(ctx, args)
       let email = address(args.email)
       let person = await ctx.dir.personAt(email)
+      // The other rung, taken back (T-37615): a guest of one app holds a
+      // grant and no seat, so asking the roster about them answers nobody.
+      let app = args.app == null
+        ? null
+        : await ctx.dir.app(space, text(args.app, 'app'))
+      if (args.app != null && !app) {
+        throw new Error(`no app ${args.app} in ${space.slug}`)
+      }
+      let held = app && person && await ctx.dir.grant(app, person)
+      if (app) {
+        if (!held) {
+          throw new Error(
+            `${email} is not a guest of ${space.slug}/${app.slug}`,
+          )
+        }
+        await ctx.dir.apply({
+          entities: [{ entity: { eid: held.eid }, tombstone: {} }],
+        }, vouched(who))
+        return {
+          text: `${email} no longer holds ${space.slug}/${app.slug}`,
+          space,
+        }
+      }
       let had = person && await ctx.dir.member(space, person)
       if (!had) throw new Error(`${email} is not a member of ${space.slug}`)
       if (had.role == 'owner' && (await ctx.dir.owners(space)) < 2) {

@@ -613,9 +613,13 @@ slow('an app says who may read it and who may write it', async () => {
     let maya = row.entity.eid
     let mayaIn = await signedIn(k, maya)
     let editor = (app: string) => client(k, 'club.yaks.app', app, mayaIn)
-    await editor('list').applied(line('her line'))
-    assertEquals((await anyone('list').get('.doc!')).length, 2)
-    // The private app is hers to read and to write — its page included.
+    // She was invited to ONE app (T-37615), so the app beside it is somebody
+    // else's: a signed-in stranger at a public list, who reads it and does
+    // not write it.
+    assertEquals((await editor('list').post(line('her line'))).status, 403)
+    assertEquals((await anyone('list').get('.doc!')).length, 1)
+    // The private app she WAS invited to is hers to read and to write — its
+    // page included.
     await editor('diary').applied(line('her secret'))
     assertEquals((await editor('diary').get('.doc!')).length, 2)
     assertEquals(
@@ -623,7 +627,8 @@ slow('an app says who may read it and who may write it', async () => {
         .status,
       200,
     )
-    // An editor writes the data; who belongs is the owner's alone.
+    // She writes that app's data and is on no roster at all, so who belongs
+    // to the club is not hers to say — and the refusal says which it is.
     await assertRejects(
       () =>
         connector(k, mayaIn).tool('member_add', {
@@ -631,7 +636,7 @@ slow('an app says who may read it and who may write it', async () => {
           email: 'someone@example.com',
         }),
       Error,
-      'not the owner of club',
+      'not a member of club',
     )
 
     // Taken back out, she is a signed-in stranger: 403, not 401.
@@ -639,8 +644,9 @@ slow('an app says who may read it and who may write it', async () => {
       await agent.tool('member_remove', {
         space: 'club',
         email: 'maya@example.com',
+        app: 'diary',
       }),
-      'maya@example.com is no longer a member of club',
+      'maya@example.com no longer holds club/diary',
     )
     assertEquals((await editor('list').post(line('again'))).status, 403)
     let out = await k.at('club.yaks.app', '/diary/api/query?.doc!', {
@@ -684,7 +690,7 @@ slow('an app says who may read it and who may write it', async () => {
       'anyone with the link can use it',
     )
     await anyone('list').applied(line('everyone can now'))
-    assertEquals((await anyone('list').get('.doc!')).length, 3)
+    assertEquals((await anyone('list').get('.doc!')).length, 2)
     await agent.tool('app_set', {
       space: 'club',
       app: 'list',

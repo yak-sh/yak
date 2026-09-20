@@ -444,7 +444,7 @@ slow('the directory keeps its three seats', async () => {
   let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
 
   // Three seats, unsplit: the platform's own `member` declares them, so an
-  // editor is still an editor and no grant is minted.
+  // editor is still an editor.
   let seats = await now.query('.member!')
   let report = reportIn(files.held)
   assert(report.ok, report.message)
@@ -453,7 +453,12 @@ slow('the directory keeps its three seats', async () => {
     seats.map((s) => (s.member as { role: string }).role).sort(),
     ['editor', 'owner'],
   )
-  assertEquals(report.moved.find((m) => m.table == 'grant'), undefined)
+  // Nor does one become a GRANT. The directory has that word too now — it is
+  // the other rung of its ladder, one app rather than a space (T-37615) — but
+  // it is written by an invitation that names an app and never minted out of a
+  // roster, so the table crosses empty.
+  assertEquals(report.moved.find((m) => m.table == 'grant')?.to ?? 0, 0)
+  assertEquals((await now.query('.grant!')).length, 0)
   assertEquals((await now.query('.space.slug=ada')).length, 1)
   assertEquals((await now.query('.app.slug=cookbook')).length, 1)
 })

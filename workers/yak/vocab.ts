@@ -632,6 +632,25 @@ export let platformDoc: VocabDoc = {
         role: { enum: ['owner', 'editor', 'viewer'] },
       },
     },
+    // A seat reaches every app in its space; this reaches ONE (T-37615). It is
+    // the word @yaks/member already spells for that — the same three levels,
+    // the same meaning — said here because the ladder a page is read by is the
+    // platform's roster and this is its other rung: somebody invited to one
+    // app holds that app's data and its page as a member does, and holds no
+    // other app in the space at all. Never its FILES: writing an app's bytes
+    // stays a member's act (apps.ts, public/guide/sharing.md).
+    grant: {
+      component: true,
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      unique: [['app', 'person']],
+      properties: {
+        app: ref('cascade'),
+        person: ref('cascade', false),
+        access: { enum: ['owner', 'editor', 'viewer'] },
+      },
+    },
     email: {
       component: true,
       type: 'object',

@@ -25,7 +25,16 @@ import type { Env } from './env.ts'
 import { apex, type Host } from './host.ts'
 import { hostOf } from './route.ts'
 
-export type Who = { person: string | null; role: Role | null }
+export type Who = {
+  person: string | null
+  role: Role | null
+  /** The role above is held by a GRANT on the one app this request is for,
+   * not by a seat on the space's roster (T-37615). A guest of one app reads
+   * and writes that app's data and sees its page exactly as a member does, and
+   * reaches nothing else in the space — its FILES included, since writing an
+   * app's bytes stays a member's act (apps.ts, public/guide/sharing.md). */
+  guest?: boolean
+}
 
 /**
  * Who is asking at a door that takes a CREDENTIAL rather than a cookie alone
