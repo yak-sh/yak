@@ -57,6 +57,33 @@ Deno.test('a deleted entity is not a hit', () => {
   )
 })
 
+Deno.test('words are terms, so they need not be adjacent or in order', () => {
+  let db = shelf()
+  assertEquals(
+    find(db, text, 'burglar dragon').map((h) => h.entity),
+    ['book-1'],
+  )
+  // The same words as a PHRASE say the stronger thing, and find nothing.
+  assertEquals(find(db, text, '"burglar dragon"'), [])
+  assertEquals(
+    find(db, text, '"leaves home"').map((h) => h.entity),
+    ['book-1'],
+  )
+})
+
+Deno.test('a word reaches the longer word it starts', () => {
+  assertEquals(
+    find(shelf(), text, 'burgl').map((h) => h.entity),
+    ['book-1'],
+  )
+})
+
+Deno.test('every word of a search is marked in the snippet', () => {
+  let [book] = find(shelf(), text, 'burglar dragon')
+  assert(book.snippet.includes(`${OPEN}burglar${CLOSE}`), book.snippet)
+  assert(book.snippet.includes(`${OPEN}dragon${CLOSE}`), book.snippet)
+})
+
 Deno.test('a search that cannot be asked finds nothing', () => {
   assertEquals(hits(text, '  '), null)
   assertEquals(hits([], 'dragon'), null)

@@ -13,7 +13,7 @@
 
 import type { Eid } from '@yaks/graph'
 import { type Field, indexes, indexName } from './fields.ts'
-import { CLOSE, OPEN, term } from './term.ts'
+import { CLOSE, match, OPEN } from './term.ts'
 import type { Driver } from './driver.ts'
 
 // One search hit: the entity, its rank, and a snippet marking the matches.
@@ -43,7 +43,9 @@ export type SearchOpts = {
 
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
-// The ranked statement for a search, or null when the text holds no word.
+// The ranked statement for a search, or null when the text holds no word. The
+// words are ANDed terms (./term.ts) and bm25 puts them in order, so a search
+// reads as a bag of words rather than as one phrase.
 //
 // One arm per index, unioned; the outer statement joins the spine for the eid,
 // drops the graves, and keeps one row per entity. `min(rank)` picks an entity's
@@ -55,7 +57,7 @@ export let hits = (
   text: string,
   opts: SearchOpts = {},
 ): Stmt | null => {
-  let t = term(text)
+  let t = match(text)
   let arms = indexes(fields)
   if (!t || !arms.length) return null
   let context = opts.context ?? 10

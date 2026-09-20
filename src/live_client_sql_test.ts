@@ -33,7 +33,7 @@ Deno.test('SQLite FTS, projections, windows, walks, tallies and riders cross the
     write([
       { eid: a, name: 'doc', comp: { title: 'ộ', body: 'complete a' } },
       { eid: a, name: 'task', comp: {} },
-      { eid: b, name: 'doc', comp: { title: 'other', body: 'complete b' } },
+      { eid: b, name: 'doc', comp: { title: 'plain', body: 'complete b' } },
       { eid: b, name: 'task', comp: {} },
       { eid: c, name: 'comment', comp: { target: a } },
       ...link(a, 'requires', b),
@@ -66,7 +66,7 @@ Deno.test('SQLite FTS, projections, windows, walks, tallies and riders cross the
       type: 'requires',
       child: b,
     }])
-    assertEquals(client.box.ent(b)?.doc, { title: 'other' })
+    assertEquals(client.box.ent(b)?.doc, { title: 'plain' })
     write([
       { eid: a, name: 'filed', comp: { priority: 1 } },
       { eid: b, name: 'filed', comp: { priority: 2 } },

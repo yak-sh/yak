@@ -55,6 +55,20 @@ Deno.test('a grave stops being a neighbour before the sweep prunes it', async ()
   )
 })
 
+Deno.test('a screen decides what "nearest" is nearest among', async () => {
+  let db = await stocked()
+  let q = vectorOf(db, 'book-1', model)!
+  let within = {
+    sql: `select eid from entity where eid in (?, ?)`,
+    params: ['book-3', 'review-4'],
+  }
+  assertEquals(
+    nearest(db, q, { model, limit: 1, without: 'book-1', within })
+      .map((h) => h.entity),
+    ['review-4'],
+  )
+})
+
 Deno.test('another model is another space, and it is empty', async () => {
   let db = await stocked()
   assertEquals(vectorOf(db, 'book-1', 'other'), null)

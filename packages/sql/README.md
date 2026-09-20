@@ -129,10 +129,18 @@ The contract, whole:
   API.
 - One `bind` is one QUESTION, and an extension that remembers anything between
   its two hooks — the neighbourhood a `.near` resolved, so the ordering can rank
-  by it — says so with a **`begin()`** hook. The binder calls it before any
-  clause of a new question compiles, which is what lets a long-lived extension
-  (one a host registered at compose time and serves every query through) answer
-  each query from that query alone.
+  by it — says so with a **`begin(screen)`** hook. The binder calls it before
+  any clause of a new question compiles, which is what lets a long-lived
+  extension (one a host registered at compose time and serves every query
+  through) answer each query from that query alone.
+- `screen()` is what the REST of the line selects: a statement over the eids
+  every other clause admits, with this extension's own clauses and the
+  answer-shaping directives left out (`null` when nothing else is on the line).
+  An extension that RANKS needs it, because a ranking cut to a limit before the
+  other clauses filter is a ranking of the wrong set — the eight nearest
+  entities of any kind, intersected with "and a memory", is usually nothing.
+  Filter, then rank, then cut. It is a function: compiling it costs something an
+  extension that does not rank should not pay.
 
 ## Ordering and paging
 

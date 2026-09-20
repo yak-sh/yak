@@ -80,9 +80,11 @@ statement over the arms `hits()` builds.
   `heal` runs last. A second call changes nothing.
 - **`search(fields)`** is the [@yaks/sql](https://jsr.io/@yaks/sql) extension:
   it claims the `text` clause and compiles it to a `match` over every index.
-  What a person typed is always spelled as a quoted phrase, so match syntax in a
-  search box is text, not grammar; a trailing `*` is the one piece of grammar
-  they can reach.
+  Every word is spelled as a quoted term, so match syntax in a search box is
+  text, not grammar. A bare word prefix-matches (`research` finds `researching`
+  — the tokenizer does not stem), several words AND together and are ranked,
+  `"a quoted run"` stays one phrase matched as it stands, and a trailing `*` is
+  the one piece of grammar a person can reach.
 - **`find(db, fields, text, opts)`** ranks the matches by relevance (FTS5's bm25
   — lower is closer) and marks each hit with `\x01`…`\x02` rather than markup,
   so a renderer chooses its own emphasis without trusting the content. Pass

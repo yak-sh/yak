@@ -5,10 +5,14 @@
 // that clause; this module is the @yaks/sql EXTENSION that compiles the clause,
 // registered through `compile(ast, vocab, { extend: [search(fields)] })`.
 //
+// A clause is ONE word, or one run somebody quoted (@yaks/query splits a line
+// on whitespace), so `term` spells it — a word prefix-matches, a run stays a
+// phrase — and several words AND together the way every other clause does.
+//
 // The condition is one `in` per indexed component, OR'd: because an index's
 // rowid IS the entity's spine id, a match reads as a set of ids the surrounding
-// statement already speaks, and needs no join. Several words AND together the
-// way every other clause does — @yaks/sql composes them, not this file.
+// statement already speaks, and needs no join. The AND between words is
+// @yaks/sql's composition of the clauses, not this file's.
 
 import { type Extension, FALSE, or, raw } from '@yaks/sql'
 import { type Field, indexes, indexName } from './fields.ts'

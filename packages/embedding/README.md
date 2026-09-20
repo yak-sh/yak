@@ -165,7 +165,8 @@ and answers it in three moves:
 
 1. the anchor's stored vector is read (never the network — compiling a query is
    synchronous);
-2. the ranking answers the nearest entities;
+2. the ranking answers the nearest entities **among what the rest of the line
+   selects**;
 3. that list becomes `entity.id in (?, ?, ?)` for the `WHERE` and a
    `case … when … then` for the `ORDER BY`.
 
@@ -173,6 +174,14 @@ So the KNN runs where the vectors are, and what reaches SQL is a handful of
 integer ids. That is why the ordering carries no bound parameter (the IR's
 `ORDER BY` holds none) and why the rest of the query line still filters, counts
 and pages normally.
+
+**Nearest among what.** The ranking is cut to `neighbours`, so cutting it before
+the other clauses filter answers `.near=X&.memory` as "the memories among the
+eight nearest entities of any kind" — almost always none. @yaks/sql hands every
+extension the question's `Screen` when it begins — a statement over the eids the
+rest of the line admits — and the scan reads only those vectors. Filter, then
+rank, then cut. A replacement `rank` (an ANN) is handed the same screen and has
+to honour it, or every filtered line gets the wrong neighbourhood.
 
 **Paging a neighbourhood.** `.near=X&.order=similar&.limit=5` answers the five
 nearest, and `&.after=<num>` continues from that entity's own place in the

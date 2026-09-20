@@ -66,6 +66,19 @@ Deno.test('the rest of the query line still filters', async () => {
   assertEquals(ask(db, '.near=book-1&.kind=review', near), ['review-4'])
 })
 
+// The defect this replaced: the neighbourhood was cut to `limit` BEFORE the
+// rest of the line filtered, so `.near=X&.kind=review` answered the reviews
+// among the nearest two of any kind — almost always none of them.
+Deno.test('the neighbourhood is taken among what the rest of the line selects', async () => {
+  let db = await stocked()
+  let near = semantic(db, embedder, { limit: 1 })
+  assertEquals(ask(db, '.near=book-1', near), ['book-2'])
+  assertEquals(ask(db, '.near=book-1&.kind=review', near), ['review-4'])
+  assertEquals(ask(db, '.near=book-1&.price<15', near), ['book-3'])
+  // and the screen is this question's: the next one is not screened by it
+  assertEquals(ask(db, '.near=book-1', near), ['book-2'])
+})
+
 Deno.test('the ranking is compiled, not bound — no params in the order', async () => {
   let db = await stocked()
   let { sql, params } = compile(

@@ -7,6 +7,13 @@
 // one function to replace: {@link Rank} is its shape, and the query extension
 // takes one, so an ANN swaps in without touching anything else here.
 //
+// A {@link Screen} is the other half of "nearest": nearest AMONG WHAT. The
+// eight nearest entities of any kind are the wrong eight for `.near=X&.memory`
+// — intersecting them with "and a memory" usually answers nothing — so the
+// rest of the query line comes in as a statement over the eids it admits, the
+// scan reads only those vectors, and the cut to `limit` happens after. Filter,
+// then rank, then cut.
+//
 // A neighbour carries its integer owner id beside its eid. That is not leakage
 // for its own sake: the ranking has to become SQL, and an integer id is the one
 // thing an ORDER BY can carry safely without a bound param.
@@ -24,22 +31,35 @@ import { cosine, unpack } from './vector.ts'
 export type Near = { entity: Eid; owner: number; similarity: number }
 
 /**
- * A ranking: the nearest `limit` entities to a query vector, most similar
- * first. {@link nearest} is the exact one; an approximate index has the same
- * shape.
+ * A statement selecting the eids a neighbour must be among — @yaks/sql's
+ * compiled shape, so what it compiled for the rest of a query line is handed
+ * straight in (the same seam @yaks/fts's `find` takes as its `screen`).
  */
-export type Rank = (query: Float32Array, limit: number) => Near[]
+export type Screen = { sql: string; params: (string | number)[] }
+
+/**
+ * A ranking: the nearest `limit` entities to a query vector, most similar
+ * first, among the eids `within` allows. {@link nearest} is the exact one; an
+ * approximate index has the same shape, and one that cannot honour `within`
+ * answers the wrong neighbourhood for every line that filters.
+ */
+export type Rank = (
+  query: Float32Array,
+  limit: number,
+  within?: Screen,
+) => Near[]
 
 // Every living vector in one model's space. The graves are screened here as
 // well as pruned by the sweep: a delete between two sweeps must not leave a
 // neighbour that no longer exists.
-let vectors = (db: Driver, model: string) =>
+let vectors = (db: Driver, model: string, within?: Screen) =>
   db.query(
     `select e.entity as owner, o.eid as eid, e.vec as vec from ${q(TABLE)} e` +
       ` join entity o on o.id = e.entity` +
       ` where e.model = ?` +
-      ` and not exists (select 1 from tombstone t where t.entity = e.entity)`,
-    [model],
+      ` and not exists (select 1 from tombstone t where t.entity = e.entity)` +
+      (within ? ` and o.eid in (${within.sql})` : ''),
+    [model, ...(within?.params ?? [])],
   ) as unknown as { owner: number; eid: Eid; vec: Uint8Array }[]
 
 /**
@@ -70,6 +90,8 @@ export type NearOpts = {
   floor?: number
   /** an entity to leave out — nothing is its own neighbour */
   without?: Eid
+  /** the eids a neighbour must be among — the rest of the query line */
+  within?: Screen
 }
 
 /**
@@ -83,7 +105,7 @@ export let nearest = (
   opts: NearOpts,
 ): Near[] => {
   let floor = opts.floor ?? 0
-  return vectors(db, opts.model)
+  return vectors(db, opts.model, opts.within)
     .filter((r) => r.eid != opts.without)
     .map((r) => ({
       entity: r.eid,

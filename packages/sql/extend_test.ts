@@ -141,6 +141,36 @@ Deno.test('a cursor pages within an extension ranking', () => {
   )
 })
 
+// A ranking extension is told what the REST of the line selects, so it ranks
+// among those rows instead of cutting its answer before they are filtered.
+Deno.test('an extension is handed the screen for the rest of the line', () => {
+  let seen: (string | null)[] = []
+  let ranker: Extension = {
+    name: 'ranker',
+    begin: (screen) => {
+      let rest = screen()
+      seen.push(rest && `${rest.sql} << ${rest.params.join(',')}`)
+    },
+    compile: {
+      near: (c, site) =>
+        c.kind == 'near'
+          ? raw({
+            sql: `${site.owner} in (select entity from "vec")`,
+            params: [],
+          })
+          : null,
+    },
+  }
+  compile(parse('.near=b1&.title=Dune&.limit=2'), v, { extend: [ranker] })
+  // its own clause and the window are gone; the filter that narrows is not
+  assert(seen[0]?.includes('"doc"."title"'), `${seen[0]}`)
+  assert(seen[0]?.endsWith('<< Dune'), `${seen[0]}`)
+  assert(!seen[0]?.includes('limit'), `${seen[0]}`)
+  // a line with nothing else on it has nothing to screen by
+  compile(parse('.near=b1'), v, { extend: [ranker] })
+  assertEquals(seen[1], null)
+})
+
 Deno.test('extensions run in registration order, first answer wins', () => {
   let second: Extension = {
     name: 'second',

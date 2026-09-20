@@ -40,7 +40,7 @@
 
 import type { Clause } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import type { Cond } from './ir.ts'
+import type { Cond, Frag } from './ir.ts'
 import type { Dialect } from './sqlite.ts'
 
 // What a contributed compiler is handed besides the clause: everything the
@@ -93,4 +93,19 @@ export type Extension = {
 // line between two questions, the second would rank by the first's memory. So
 // the binder tells each extension a new question has begun, before any clause
 // of it compiles; an extension that remembers nothing does not say it.
-export type Begin = () => void
+//
+// It is told with the question's {@link Screen}, because an extension that
+// RANKS needs one. A ranking cut before the rest of the line filters is a
+// ranking of the wrong set: the eight nearest entities of any kind, intersected
+// with "and a memory", is usually nothing. The screen is what the REST of the
+// line selects, so the extension ranks among those and cuts afterwards.
+export type Begin = (screen: Screen) => void
+
+// What the rest of the query line selects: a statement over the same database
+// answering the `eid`s every OTHER clause admits — the extension's own clauses
+// left out, since they are what is being resolved, and the directives that
+// shape an answer (order, limit, projection) left out, since they never narrow
+// it. It is a FUNCTION because compiling it costs something an extension that
+// does not rank should not pay, and it answers null when nothing else is on the
+// line — there is nothing to screen by, so the whole store is the field.
+export type Screen = () => Frag | null

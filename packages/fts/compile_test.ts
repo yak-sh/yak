@@ -20,7 +20,7 @@ Deno.test('a word matches every index, and its term rides as a param', () => {
   let { sql: s, params } = sql('dragon')
   assert(s.includes('"book_fts" match ?'), s)
   assert(s.includes('"review_fts" match ?'), s)
-  assertEquals(params, ['"dragon"', '"dragon"'])
+  assertEquals(params, ['"dragon"*', '"dragon"*'])
 })
 
 Deno.test('a word finds prose in any component', () => {
@@ -38,6 +38,15 @@ Deno.test('two words both have to match', () => {
 
 Deno.test('a trailing star prefix-matches the last word', () => {
   assertEquals(found('drag*'), ['book-1', 'book-2', 'review-4'])
+})
+
+Deno.test('a bare word reaches the longer word it starts', () => {
+  assertEquals(found('drag'), ['book-1', 'book-2', 'review-4'])
+})
+
+Deno.test('a quoted run is one phrase, matched as it stands', () => {
+  assertEquals(found('"leaves home"'), ['book-1'])
+  assertEquals(found('"home leaves"'), [])
 })
 
 Deno.test('a search with no word in it finds nothing', () => {

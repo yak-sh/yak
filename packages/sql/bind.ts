@@ -816,6 +816,34 @@ let DIRECTIVES = new Set([
 let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
   cs.find((c) => c.kind == kind) as T | undefined
 
+// The REST of the line, as a statement selecting the eids it admits — the
+// screen an extension that ranks is handed (./extend.ts `Screen`). Its own
+// clauses go, because they are the question being asked; the directives go,
+// because a window or an ordering shapes an answer rather than narrowing it.
+// What is left is every filter and every other package's clause, compiled
+// through the same extensions.
+//
+// Those extensions are handed over WITHOUT their `begin`: a screen is a
+// question inside a question, and telling an extension a new one had begun
+// would wipe the memory of the outer one — and have it ask for a screen of a
+// screen.
+let screen = (
+  ast: And,
+  vocab: Vocab,
+  opts: BindOpts,
+  e: Extension,
+): Frag | null => {
+  let mine = new Set(Object.keys(e.compile))
+  let rest = ast.clauses.filter((c) =>
+    !mine.has(c.kind) && !DIRECTIVES.has(c.kind)
+  )
+  if (!rest.length) return null
+  let quiet = (opts.extend ?? []).map(({ begin: _begin, ...rest }) => rest)
+  return render(
+    bind({ ...ast, clauses: rest }, vocab, { ...opts, extend: quiet }),
+  )
+}
+
 // A path resolved for a directive value (order, fields): its column expression.
 let resolveField = (
   ctx: Ctx,
@@ -843,10 +871,12 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
     tables: new Set(),
     archetypes: opts.archetypes,
   }
-  // A new question. An extension that remembers what it resolved for one query
-  // is told here, before any clause compiles, so the memory a long-lived
-  // extension keeps is always this query's (./extend.ts `Begin`).
-  for (let e of ctx.ext) e.begin?.()
+  // A new question, and what the rest of it selects. An extension that
+  // remembers what it resolved for one query is told here, before any clause
+  // compiles, so the memory a long-lived extension keeps is always this
+  // query's; one that RANKS asks for the screen and ranks among the rows the
+  // other clauses admit (./extend.ts `Begin`, `Screen`).
+  for (let e of ctx.ext) e.begin?.(() => screen(ast, vocab, opts, e))
   let cs = ast.clauses
   for (let c of cs) {
     if (UNREACHED.has(c.kind) && !claims(ctx, c.kind)) {

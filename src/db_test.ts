@@ -2435,8 +2435,8 @@ Deno.test('fts: search finds, follows edits, forgets the dead', () => {
     '\x01Xylophone\x02 repair',
   )
   assertEquals(search(db, 'xylo*')[0]?.kind, 'task') // prefix + derived kind
-  // Prefix is explicit; an unstarred term is a whole token.
-  assertEquals(search(db, 'xylo').length, 0)
+  // A word prefix-matches on its own (@yaks/fts term); the star says it louder.
+  assertEquals(search(db, 'xylo')[0]?.eid, t)
   assertEquals(search(db, 'xylophone repai*')[0]?.eid, t)
   assertEquals(search(db, 'xylophone repairs').length, 0) // prefix ≠ fuzzy
   apply(db, [{ eid: t, name: 'doc', comp: { title: 'Glockenspiel repair' } }])

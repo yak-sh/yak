@@ -1026,8 +1026,8 @@ Deno.test('.near supplies similarity rank without becoming membership', () => {
 })
 
 Deno.test('bare text uses FTS token and explicit prefix membership', () => {
-  assertEquals(ftsTerm('widget'), '"widget"')
-  assertEquals(ftsTerm('idget'), '"idget"')
+  assertEquals(ftsTerm('widget'), '"widget"*')
+  assertEquals(ftsTerm('idget'), '"idget"*')
   assertEquals(ftsTerm('wid*'), '"wid"*')
   assertEquals(ftsTerm('widget alpha'), '"widget alpha"')
 })

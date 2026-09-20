@@ -12,8 +12,15 @@
 // the WHERE and a `case … when … then` for the ORDER BY. So the KNN itself runs
 // where the vectors are — in this package — and what reaches SQL is a handful
 // of integer ids, which is why the ordering needs no bound param (the IR's
-// ORDER BY carries none) and why the rest of the query line still filters and
-// pages normally.
+// ORDER BY carries none) and why the rest of the query line still pages
+// normally.
+//
+// NEAREST AMONG WHAT the rest of the line selects. The ranking is cut to
+// `limit`, so cutting it before the other clauses filter answers the memories
+// among the eight nearest entities of ANY kind — almost always none. @yaks/sql
+// hands each extension the question's `Screen` (a statement over the eids the
+// rest of the line admits) when it begins, and the scan reads only those
+// vectors: filter, then rank, then cut.
 //
 // It remembers the neighbourhood the `.near` clause resolved so the ordering
 // can rank by it and the caller can read the scores back afterwards — and
@@ -24,7 +31,14 @@
 // query.
 
 import type { Bundle } from '@yaks/graph'
-import { type Cond, type Extension, FALSE, raw, Unsupported } from '@yaks/sql'
+import {
+  type Cond,
+  type Extension,
+  FALSE,
+  raw,
+  type Screen,
+  Unsupported,
+} from '@yaks/sql'
 import type { Driver } from './driver.ts'
 import type { Embedder } from './embedder.ts'
 import { type Near, nearest, type Rank, vectorOf } from './near.ts'
@@ -70,18 +84,22 @@ export let semantic = (
   opts: SemanticOpts = {},
 ): Semantic => {
   let held: Near[] | null = null
+  // The rest of this question, unasked until a `.near` needs it.
+  let asked: Screen | null = null
   let rank: Rank = opts.rank ??
-    ((query, limit) => nearest(db, query, { model: embedder.model, limit }))
+    ((query, limit, within) =>
+      nearest(db, query, { model: embedder.model, limit, within }))
 
   let near = (anchor: string, owner: string): Cond => {
     let vec = vectorOf(db, anchor, embedder.model)
     let limit = opts.limit ?? 8
+    let within = asked?.() ?? undefined
     // An anchor with no vector has no neighbourhood, and saying so as a
     // constant false answers "nothing" rather than widening to everything.
     // The ranking is asked for one extra: the anchor scores 1 against itself
     // and would otherwise eat a place, and nothing is its own neighbour.
     held = vec
-      ? rank(vec, limit + 1)
+      ? rank(vec, limit + 1, within)
         .filter((n) => n.entity != anchor && n.similarity >= (opts.floor ?? 0))
         .slice(0, limit)
       : []
@@ -94,7 +112,10 @@ export let semantic = (
 
   return {
     name: 'embedding',
-    begin: () => held = null,
+    begin: (screen) => {
+      held = null
+      asked = screen
+    },
     compile: {
       near: (clause, site) =>
         clause.kind == 'near' ? near(clause.value, site.owner) : null,
