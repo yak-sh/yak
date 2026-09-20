@@ -7,7 +7,7 @@
 // with that server (T-37584). What the platform store does on its own storage
 // is workers/yak's do_test.ts and migrate.ts's tests.
 import { assertEquals } from '@std/assert'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/db'
 import { slow } from '../../../../bin/testing.ts'
 import { present, textPresent, WHITESPACE } from './sql.ts'
 
@@ -29,7 +29,11 @@ Deno.test('present() in SQL is textPresent() in JS', () => {
   let db = new Database(':memory:')
   let ask = db.prepare(`select ${present('?')} as p`)
   for (let v of ['', ' \t\n', ' ﻿　', ' x ', ' y', null]) {
-    assertEquals(!!ask.get<{ p: unknown }>(v)?.p, textPresent(v), JSON.stringify(v))
+    assertEquals(
+      !!ask.get<{ p: unknown }>(v)?.p,
+      textPresent(v),
+      JSON.stringify(v),
+    )
   }
   db.close()
 })

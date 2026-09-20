@@ -2,7 +2,7 @@
 // replace a database another reader or restore verifier still has open.
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals } from '@std/assert'
-import { Database } from '@db/sqlite'
+import { Database } from '@yaks/sqlite/db'
 import { slow } from './testing.ts'
 
 let script = fileURLToPath(new URL('./backup', import.meta.url))
