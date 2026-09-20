@@ -353,10 +353,10 @@ let CHORE_WORDS = JSON.stringify({
   $defs: { chore: { properties: { name: { type: 'string' } } } },
 })
 
-let app = (ctx = state()) => {
+let app = (name = 'ada/chores', ctx = state()) => {
   let store = new Store(ctx)
   let head = {
-    'x-store': 'ada/chores',
+    'x-store': name,
     'x-yak-app': 'a0000000-0000-4000-8000-000000000001',
     'x-yak-person': 'b0000000-0000-4000-8000-000000000002',
     'x-yak-role': 'owner',
@@ -444,4 +444,65 @@ Deno.test('a recurring call is one invocation per firing, never a re-run', async
   assertEquals((await a.rows('.call.source=daily')).length, 2)
   assertEquals((await a.rows('.chore')).length, 2)
   assertEquals((await a.rows('.result')).length, 2)
+})
+
+// The offline simulation, as the guide writes it (guide/wakes.md, T-37613).
+// An idle game wants a cadence of a few minutes that keeps advancing while
+// nobody has the page open. The whole of it is one row: the world wears the
+// ask (`call`) and the cadence (`wake{every}`), so every firing runs the
+// app's own command once — and a stretch nobody was there for collapses into
+// ONE firing, which is what catching up means here.
+let IDLER = JSON.stringify({
+  $defs: {
+    world: { properties: { name: { type: 'string' } } },
+    tick: { properties: {} },
+  },
+})
+let ADVANCE = JSON.stringify({
+  advance: {
+    description: 'Advance the world to now',
+    input: {},
+    apply: { entity: { eid: '$tick' }, tick: {} },
+  },
+})
+
+Deno.test('an idle world advances offline, a missed stretch in one firing', async () => {
+  let a = app('ada/idler')
+  assertEquals((await a.ask('/vocab', IDLER)).status, 200)
+  assertEquals((await a.ask('/tools', ADVANCE)).status, 200)
+  // The command's own row, found by name — what a page writes into `call.to`.
+  let [advance] = await a.rows('.tool.name=advance')
+  assertEquals(advance.entity.eid, toolEid('advance'))
+  assertEquals(
+    (await a.ask('/apply', [{
+      entity: { eid: 'world' },
+      world: { name: 'Eldermoor' },
+      call: { to: advance.entity.eid, args: '{}' },
+      wake: { at: iso('09:05'), every: '5m' },
+    }])).status,
+    200,
+  )
+  let world = async () =>
+    (await a.rows('.eid=world&.wake?&.fired?'))[0] as unknown as {
+      wake: { at: string; every: string }
+      fired: { at: string }
+    }
+  await a.store.tick(at('09:05'))
+  assertEquals((await a.rows('.tick!')).length, 1)
+  assertEquals((await a.rows('.call.source=world')).length, 1)
+  assertEquals((await world()).fired.at, iso('09:05'))
+  assertEquals((await world()).wake.at, iso('09:10'))
+  // Half an hour with nothing awake to notice: the seven occurrences owed in
+  // between are one firing, so the command runs ONCE more and not seven
+  // times, and the cadence carries on from where the catch-up left it.
+  await a.store.tick(at('09:40'))
+  assertEquals((await a.rows('.tick!')).length, 2)
+  let calls = await a.rows('.call.source=world&.created?')
+  assertEquals(calls.length, 2)
+  // Each invocation says when it was asked for, so the stretch a firing
+  // covered is the gap between the last two — what an idle world advances BY.
+  assert(calls.every((c) => (c.created as { at: string })?.at))
+  assertEquals((await world()).fired.at, iso('09:40'))
+  assertEquals((await world()).wake.at, iso('09:45'))
+  assertEquals((await world()).wake.every, '5m')
 })

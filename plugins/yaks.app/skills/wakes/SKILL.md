@@ -1,6 +1,6 @@
 ---
 name: wakes
-description: "Coming back later (yaks.app). Schedules as data: a `wake` on any entity says when to return to it, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares says what the firing MEANS. Recurrence in durations, cron lines and zones; pausing and resuming; why there is no cron trigger and no queue to ask for."
+description: "Coming back later (yaks.app). Schedules as data: a `wake` on any entity says when to return to it, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares says what the firing MEANS. Recurrence in durations, cron lines and zones; pausing and resuming; a command asked for later; an idle world advancing offline on a five-minute cadence and catching a missed stretch up in one firing; where a firing runs and what it may spend; why there is no cron trigger, no `scheduled()` and no queue to ask for."
 ---
 
 # Coming back later
@@ -128,11 +128,19 @@ An app's own commands (the `tools.json` at its root) are things the store can
 run itself, and asking is a row like everything else. A `call` names the command
 and its arguments; a `wake` on that same row says when:
 
+    let [digest] = await query('.tool.name=send_digest')
+
     await apply({
       entity: { eid: '$monday' },
-      call: { to: 'tool:send_digest', args: '{"list":"weekly"}' },
+      call: { to: digest.entity.eid, args: '{"list":"weekly"}' },
       wake: { at: '2026-09-21T09:00:00Z', every: '@weekly' },
     })
+
+`call.to` is a command's own ROW. A deploy plants one per declared command,
+wearing `tool { name, description }`, so the name is what you look it up by —
+and a `to` naming no command this store knows is left where it is rather than
+refused, since another runner may own it. A mistyped name is a call that never
+runs.
 
 A call with no wake runs the moment it is written. One wearing a wake waits, and
 the firing is what runs it — so the answer lands beside the ask: a `result`
@@ -146,11 +154,79 @@ the schedule — so a weekly digest is fifty-two calls and fifty-two answers,
 never one result re-run. The same instant twice is the same call, so a
 re-delivered alarm changes nothing.
 
+## A world that keeps going
+
+An idle game is the hardest version of the ask: a few minutes between ticks, and
+the world has to go on while nobody has the page open. It is one row — the world
+wears the ask and the cadence together:
+
+    let [advance] = await query('.tool.name=advance')
+
+    await apply({
+      entity: { eid: '$world' },
+      world: { name: 'Eldermoor' },
+      call: { to: advance.entity.eid, args: '{}' },
+      wake: { at: new Date().toISOString(), every: '5m' },
+    })
+
+`advance` is the app's own command, declared in `tools.json` like any other:
+
+    { "advance": {
+        "description": "Advance the world to now",
+        "input": {},
+        "apply": { "entity": { "eid": "$tick" }, "tick": {} } } }
+
+Every five minutes the store wakes itself, writes the call for that instant and
+runs it — with nothing open and nothing connected.
+
+**A stretch nobody was there for is one firing, not one per minute.** Half an
+hour when nothing was awake to notice leaves ONE `advance`, and the cadence
+carries on from where the catch-up left it: 09:05, then 09:40, then 09:45. That
+is the whole of catching up, and it is why a five-minute world costs the same
+whether it was watched all day or not at all.
+
+How long it has been is on the rows. The schedule row carries `fired { at }` —
+the instant it last went off — and each firing's own call is stamped with when
+it was written, so the stretch that just passed is the gap between the last two.
+What the world EARNED over that stretch is the span times whatever a minute is
+worth, and that arithmetic is not the tick's: a rule and a command both write
+rows, and neither multiplies. Fold the span where code runs — the page as it
+draws, or the app's own `worker.js`. Which is the other reason the catch-up is
+cheap: one firing, one span, one fold, instead of a thousand replayed minutes.
+
+The repeating ask is the `call` and not a rule. A declared rule that writes onto
+the row it matched has to gate itself (`+!comp` above), and a gate is what makes
+a rule fire ONCE per thing — so "every five minutes" belongs to the schedule,
+and a rule is for what one firing MEANS about that row.
+
+## Where a firing runs
+
+- **Inside the app's own store**, the same object a page writes through — not a
+  request to your `worker.js`, which runs only when something asks it for a
+  page. Nothing of the app's own JavaScript runs on a firing: what a tick can do
+  is what a rule and a declared command can do, which is write rows. There is no
+  background `env` to reach from it, and so no secret it could carry.
+- **On the app's own words.** The rules in its `vocab.json` and the commands in
+  its `tools.json`, as the last deploy left them.
+- **Under the Durable Object alarm's budget**, which is what a store object's
+  own clock is. Cloudflare gives an alarm handler a maximum wall time of 15
+  minutes, and the object 30 seconds of active CPU per invocation, raisable to
+  five minutes (300,000 ms) on the Workers Paid plan
+  (<https://developers.cloudflare.com/workers/platform/limits/>, read
+  2026-09-19). The 50 ms an app's own worker gets per REQUEST (see
+  <https://yaks.app/guide/code.md>) is a different budget, and not the one a
+  firing spends.
+- **At least once.** An alarm can be delivered twice; the firing is guarded on
+  the wake's own `at`, so the second delivery finds the occurrence taken. A
+  scheduled call is derived from the schedule and the instant, so the same
+  instant twice is the same call.
+
 ## Why there is no cron trigger
 
 An app's worker cannot ask for a Cron Trigger and cannot ask for a queue, and
-`app_deploy` refuses a `wrangler.toml` naming either. Both would be a second
-place where "later" lives, and you would then have to keep it in step with your
-data by hand. A wake row is in the same store as the thing it is about, readable
-by the same query, editable by the same page, restored by the same
-`store_restore`. Ask for later where the thing lives.
+`app_deploy` refuses a `wrangler.toml` naming either. There is no `scheduled()`
+to export: nothing forwards one, and a worker that has one is never called on
+it. Both would be a second place where "later" lives, and you would then have to
+keep it in step with your data by hand. A wake row is in the same store as the
+thing it is about, readable by the same query, editable by the same page,
+restored by the same `store_restore`. Ask for later where the thing lives.
