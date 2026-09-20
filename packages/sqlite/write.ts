@@ -305,6 +305,7 @@ export let patch = (
   vocab: Vocab,
   bundles: Bundle[],
   number: boolean | { except: readonly string[] } = true,
+  adopt = false,
 ): Entity[] => {
   let known = spines(driver, [...new Set(touched(vocab, bundles))])
   let alive = bundles.filter((b) => !known.get(b.entity.eid)?.dead)
@@ -338,12 +339,28 @@ export let patch = (
       )
     }
   }
+  // What each bundle STATES its entity's number to be, where the store is
+  // adopting rather than minting: a number to take, or `null` for none. Only a
+  // birth honours it — a number in use is not something a later batch may
+  // reassign.
+  let stated = new Map<string, number | null>()
+  if (adopt) {
+    for (let b of alive) {
+      if (b.entity.num !== undefined) stated.set(b.entity.eid, b.entity.num)
+    }
+  }
   let born: Entity[] = []
   let seen = new Set(known.keys())
   for (let eid of touched(vocab, alive)) {
     if (seen.has(eid)) continue
     seen.add(eid)
-    let s = mintSql(eid, number !== false && !excluded.has(eid))
+    let mine = number !== false && !excluded.has(eid)
+    let take = !mine
+      ? false
+      : !stated.has(eid)
+      ? true
+      : stated.get(eid) ?? false
+    let s = mintSql(eid, take)
     let e = minted(driver.query(s.sql, s.params))
     if (e) born.push(e)
   }

@@ -96,3 +96,30 @@ Deno.test('a mint may state the number it is adopting', () => {
     assertEquals(tx.get(['fresh'])[0].entity.num, 37575)
   })
 })
+
+Deno.test('an adopting store takes the number a patch states', () => {
+  // A store seeded from another store's export is TOLD the identity: a stated
+  // number is the one the entity takes, a stated null leaves it unnumbered,
+  // and the sequence carries on past whatever was stated.
+  let s = storage(mem(), vocab, { adopt: true })
+  s.install()
+  s.tx((tx) => {
+    tx.patch([
+      { entity: { eid: 'old', num: 37574 }, task: {} },
+      { entity: { eid: 'made', num: null }, task: {} },
+      { entity: { eid: 'mine' }, task: {} },
+    ])
+    assertEquals(tx.get(['old'])[0].entity.num, 37574)
+    assertEquals(tx.get(['made'])[0].entity, { eid: 'made' })
+    assertEquals(tx.get(['mine'])[0].entity.num, 37575)
+  })
+})
+
+Deno.test('a store that is not adopting mints its own numbers regardless', () => {
+  let s = storage(mem(), vocab)
+  s.install()
+  s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'old', num: 37574 }, task: {} }])
+    assertEquals(tx.get(['old'])[0].entity.num, 1)
+  })
+})

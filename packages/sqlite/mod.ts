@@ -176,6 +176,13 @@ export type Opts = BindOpts & {
   /** Mint unnumbered spines when false; the host may number them after their
    * components land. Identity and birth reporting still belong to storage. */
   number?: boolean | { except: readonly string[] }
+  /** Adopt the `num` a patch's identity carries instead of minting one — a
+   * stated number for the entity to take, an explicit `null` for one that is
+   * to have none. What a store MIRRORING another graph needs, and the same
+   * word @yaks/ram says it with: a batch from another store is TELLING the
+   * identity, not asking for one. Off by default, because a store nobody
+   * mirrors owns its own numbering. */
+  adopt?: boolean
 }
 
 /**
@@ -196,7 +203,7 @@ export let storage = (
     doom: (eids) => doom(driver, vocab, eids),
     bindings: (matches, batch, covers) =>
       bindings(driver, vocab, matches, batch, covers, base),
-    patch: (bundles) => patch(driver, vocab, bundles, base.number),
+    patch: (bundles) => patch(driver, vocab, bundles, base.number, base.adopt),
     remove: (entities) => remove(driver, vocab, entities),
   }
   return {

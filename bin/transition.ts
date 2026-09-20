@@ -1092,7 +1092,9 @@ let main = async () => {
         (m.rules?.(host) ?? []).filter((p) => p.name != '@yaks/journal'),
     }
   }
-  let host = await compose({ ...cfg, db: to, port: 0 }, load)
+  // The store ADOPTS what each bundle states its number to be — the fleet's
+  // own, or `null` for the entities this export creates, which wear none.
+  let host = await compose({ ...cfg, db: to, port: 0, adopt: true }, load)
 
   let emitted: Record<string, number> = {}
   let dropped: Record<string, number> = {}

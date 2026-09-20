@@ -423,6 +423,7 @@ export let compose = async (
       derived,
       extend: text.length ? [...extend, search(text)] : extend,
       number: config.numbers ?? true,
+      adopt: config.adopt ?? false,
     })
     store.install()
     // After the tables, because an index is cut from them: `adopt` makes the

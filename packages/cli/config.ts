@@ -39,6 +39,10 @@ export type Config = {
    * off the human number line — what a host composing @yaks/archetype wants,
    * since a descriptor is bookkeeping and nobody ever types its number. */
   numbers?: boolean | { except: string[] }
+  /** adopt the `num` a batch's identity carries instead of minting one — what
+   * a store seeded from another store's export needs, and never what a host
+   * serving clients wants (default false) */
+  adopt?: boolean
   /** what the MCP door calls itself (default `yak`) */
   name?: string
 }
