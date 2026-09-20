@@ -1278,6 +1278,14 @@ let main = async () => {
     emitted[comp] = made
     dropped[comp] = count - made
     await flush()
+    // The graph stamps `updated` on every patch to an entity that already
+    // existed, and every entity in this export already existed — its spine was
+    // minted before the first reference could. So half a million entities wear
+    // an `updated` from the import's own clock, and they are cleared out right
+    // before the fleet's own readings land on top (`LAST`).
+    if (comp == order[order.length - LAST.length - 1]) {
+      sql.exec('delete from "updated"')
+    }
   }
   say('components')
 
