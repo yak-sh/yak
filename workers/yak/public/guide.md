@@ -356,6 +356,42 @@ taken:
 Anything the columns don't cover still lives in `doc.body`: it is text, so
 markdown or JSON both keep there.
 
+## Coming back later
+
+An app has no cron and nothing sitting awake. Anything in its store can wear a
+`wake` instead, and the store comes back for it:
+
+    await apply({
+      entity: { eid: '$fern' },
+      plant: { window: 'north' },
+      wake: { at: '2026-09-20T09:00:00Z', every: '1d', note: 'water me' },
+    })
+
+At that moment the row is stamped `fired: { at }` and `wake.at` moves on to the
+next occurrence — or is cleared, when there is no next one. Nothing polls, and
+an app with no schedules is woken for nothing.
+
+What a firing MEANS is a rule, which is a `vocab.json` entry like a component
+and needs no code:
+
+    "waters": {
+      "rule": true,
+      "match": ".plant, .wake, .fired, +!watered, +watered.by=wake" }
+
+`+comp` writes that component, `+!comp` is a gate — it only fires while that
+component is absent, which is how a rule fires once per thing rather than on
+every later write. The rule runs inside the transaction the firing is part of,
+so the row comes back already wearing what it wrote.
+
+`every` takes a duration (`30m`, `1d`), five cron fields (`0 9 * * 1-5`) or
+`@hourly`/`@daily`/`@weekly`/`@monthly`, and a cron line may end with a zone.
+`wake: { at: null }` pauses without forgetting the schedule; `wake: null` ends
+it.
+
+Deeper: <https://yaks.app/guide/wakes.md> — every column, recurrence and zones,
+pausing and resuming, what a rule may match, and why there is no cron trigger to
+ask for.
+
 ## The tool list, and when it moves
 
 Your host listed these tools once, when it connected, and is holding that list.

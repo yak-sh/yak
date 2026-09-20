@@ -90,6 +90,9 @@ Deno.test('every example vocab.json in the repo loads', () => {
   for (let [where, m] of found) {
     let v = appVocab(m)
     for (let [name, schema] of Object.entries(m.$defs ?? {})) {
+      // A rule is a declaration and not a component: it has a match where a
+      // component has columns, and no table is raised for it.
+      if (schema.rule) continue
       assertEquals(
         v.comp(name)?.writable.sort(),
         Object.keys(schema.properties ?? {}).sort(),

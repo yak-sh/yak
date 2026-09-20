@@ -65,9 +65,9 @@ let REFUSED: Record<string, string> = {
   kv_namespaces:
     "KV has a 1000-namespace account cap and app sharing is undecided; use Durable Object storage or the app's store",
   queues:
-    "queue provisioning is not available for apps; use wake rows and the app's store",
+    "queue provisioning is not available for apps; write what is owed into the app's store, with a wake{at} on it (https://yaks.app/guide/wakes.md)",
   crons:
-    'user workers in a dispatch namespace receive no cron triggers; use wake rows',
+    "user workers in a dispatch namespace receive no cron triggers; a wake{at, every} on a row in the app's store is the schedule, and a rule on `fired` is what it does (https://yaks.app/guide/wakes.md)",
 }
 
 let object = (v: unknown): v is Record<string, unknown> =>

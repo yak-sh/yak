@@ -132,6 +132,13 @@ export let PAGES: Record<string, Page> = {
       "tools.json, so the person's agent can act on an app with no page open: an entry's description, its input types and $var bindings, the apply and query acts, what a deploy refuses, the view an answer draws itself in, and how commands and command carry them.",
     'brief': 'commands of the app, for an agent',
   },
+  'wakes': {
+    'slug': 'wakes',
+    'title': 'Coming back later',
+    'description':
+      "Schedules as data: a `wake` on any entity says when to return to it, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares says what the firing MEANS. Recurrence in durations, cron lines and zones; pausing and resuming; why there is no cron trigger and no queue to ask for.",
+    'brief': 'a row that says when to come back, and what happens when it does',
+  },
 }
 
 /** Every prompt this door offers, by name. */

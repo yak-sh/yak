@@ -225,6 +225,21 @@ take same-origin requests only, so a script on somebody else's page cannot
 write here. Call guide with page clipping for the whole thing
 (${url(env, '/guide/clipping.md')}).
 
+Anything that should happen LATER is a row, not a cron: put wake {at, every,
+note} on the entity it is about — the reminder, the lease that lapses, the
+digest nobody has sent — and that app's store comes back at that moment,
+stamping fired {at} on the row and moving wake.at to the next occurrence or
+clearing it. What the firing MEANS is a rule the app declares in its
+vocab.json, with no code to deploy: {"rule": true, "match": ".plant, .wake,
+.fired, +!watered, +watered.by=wake"} — a +comp clause writes that component,
++!comp gates on its absence so the rule fires once, and the whole of it runs
+inside the transaction the firing is part of. every takes a duration (30m, 1d), five cron
+fields (0 9 * * 1-5) or @hourly/@daily/@weekly/@monthly, with an optional IANA
+zone at the end of a cron line; wake {at: null} pauses without forgetting the
+schedule. Call guide with page wakes for the whole thing (${
+    url(env, '/guide/wakes.md')
+  }).
+
 One app in a space can be its FRONT PAGE — app_set(app, home: true) — and it is
 the space's router as well as its homepage: served AT <space>.${apex(env)}/, and
 asked for every path no other app's slug claims, its worker first and its files
@@ -343,6 +358,7 @@ let OURS: Page[] = [
   'querying',
   'components',
   'entities',
+  'wakes',
   'files',
   'tools',
   'notes',
@@ -372,6 +388,7 @@ let COVERS: Record<string, string[]> = {
   errors: ['exception', 'failed', 'archived'],
   files: ['artifact', 'image', 'attachment'],
   components: ['doc', 'task', 'filed', 'project', 'comment', 'favorite', 'web'],
+  wakes: ['wake', 'fired'],
 }
 
 let PAGE_OF: Record<string, string> = Object.fromEntries(
