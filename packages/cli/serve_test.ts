@@ -41,7 +41,12 @@ let doc: VocabDoc = {
       // registers and every host needs.
       prefix: 'K',
       type: 'object',
-      properties: { title: { type: 'string' }, price: { type: 'number' } },
+      properties: {
+        // A column that says its words are worth looking for: the host cuts
+        // the index from this alone (@yaks/fts).
+        title: { type: 'string', search: true },
+        price: { type: 'number' },
+      },
     },
     book_list: {
       tool: true,
@@ -523,6 +528,51 @@ Deno.test('a service that throws is reported, and the host still serves', async 
     assertEquals(
       await (await host.handler(new Request('http://x/shop/a'))).text(),
       '/shop/a',
+    )
+  } finally {
+    host.close()
+  }
+})
+
+Deno.test('a column that declares its words searched is indexed, and ranked', async () => {
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'], actor: 'me' },
+    only({ shop }),
+  )
+  try {
+    await host.graph.apply([
+      { entity: { eid: 'b1' }, book: { title: 'the hobbit' } },
+      { entity: { eid: 'b2' }, book: { title: 'a history of bread' } },
+    ])
+    // A bare word on any query line is a match — the store was given the
+    // extension, so nothing had to ask for search by name.
+    assertEquals(
+      (await host.graph.read('hobbit')).map((b) => b.entity.eid),
+      ['b1'],
+    )
+    // And the door lists the ranked tool, which the generic tier only has
+    // when the host composed one.
+    let said = await host.handler(
+      new Request('http://h/mcp', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'search', arguments: { words: 'bread' } },
+        }),
+      }),
+    )
+    let reply = await said.json() as {
+      result: { structuredContent: { result: { entity: { eid: string } }[] } }
+    }
+    assertEquals(
+      reply.result.structuredContent.result.map((b) => b.entity.eid),
+      ['b2'],
     )
   } finally {
     host.close()

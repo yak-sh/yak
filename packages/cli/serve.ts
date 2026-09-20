@@ -33,6 +33,7 @@
 
 import {
   type Bundle,
+  detached,
   type Entity,
   type Graph,
   graph,
@@ -60,7 +61,8 @@ import {
   type Route,
   routed,
 } from '@yaks/api'
-import { mcp } from '@yaks/mcp'
+import { mcp, type Search } from '@yaks/mcp'
+import { adopt, fields as searched, find, search } from '@yaks/fts'
 import {
   type Effects,
   effects,
@@ -373,6 +375,14 @@ export let compose = async (
       ...vocabs.map(([v]) => v.derived?.(vocab) ?? {}),
     )
     let store: Store | undefined
+    // SEARCH is a property of the WORDS: a column that declared itself
+    // `search: true` is indexed, whoever declared it, so composing @yaks/fts
+    // here rather than in a plugin is the vocabulary being taken at its word.
+    // Two things fall out of the one list — a bare word on any query line
+    // compiles to a match (one more clause compiler beside the plugins'), and
+    // `/mcp` lists a ranked `search`.
+    let text = searched(vocab)
+
     let g: Graph | undefined
     let stopping = new AbortController()
     // Who is calling is settled before anything is built, because it is read
@@ -404,10 +414,14 @@ export let compose = async (
     )
     store = storage(sql, vocab, {
       derived,
-      extend,
+      extend: text.length ? [...extend, search(text)] : extend,
       number: config.numbers ?? true,
     })
     store.install()
+    // After the tables, because an index is cut from them: `adopt` makes the
+    // indexes stand equal to what the vocabulary says and rebuilds one that
+    // drifted, and writes nothing on a boot where nothing moved.
+    if (text.length) adopt(sql, text)
 
     // An effect writes through the graph's own door, trusted: what it writes
     // is the host's word, never a client's.
@@ -448,10 +462,21 @@ export let compose = async (
     }
     let routes = served.flatMap(([r, o]) => r.routes?.(host, o) ?? [])
     let door = api({ graph: g, authenticate })
+    // Ranked words, for the door that asks for them. Membership is already
+    // answered by the extension above; this is the order they come back in.
+    let ranked: Search | undefined = text.length
+      ? async (words, opts) => {
+        let hits = find(sql, text, words, { limit: opts?.limit })
+        let found = await detached(host.storage).get(hits.map((h) => h.entity))
+        let at = new Map(found.map((b) => [b.entity.eid, b]))
+        return hits.map((h) => at.get(h.entity)).filter((b) => !!b)
+      }
+      : undefined
     let agents = mcp({
       graph: g,
       authenticate,
       tools,
+      search: ranked,
       name: config.name ?? 'yak',
     })
     let handler: Handler = (request) => {

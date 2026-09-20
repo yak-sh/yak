@@ -197,8 +197,10 @@ it is attributed. One plugin may say who is calling (`authenticate` on its
 2. loads every `./vocab`'s `docs` and `keywords` into one vocabulary
    (@yaks/vocab `loadVocab` — a word declared twice is a conflict);
 3. opens the SQLite file (@yaks/sqlite), runs the migration control, and binds
-   the store with every `./vocab`'s `derived` columns and every `./rules`'s
-   `extend` clause compilers;
+   the store with every `./vocab`'s `derived` columns, every `./rules`'s
+   `extend` clause compilers, and a full-text index over every column any
+   vocabulary declared `search: true` (@yaks/fts) — so a bare word on any query
+   line is a match and `/mcp` lists a ranked `search`;
 4. builds the graph over it with every `./rules` plus the effects registry
    (@yaks/effects), whose writes go through the graph's own `apply()`, trusted;
 5. registers every `./effects`;
