@@ -81,6 +81,7 @@ export * from './rules.ts'
 export * from './stamp.ts'
 export * from './compose.ts'
 export * from './graph.ts'
+export * from './said.ts'
 
 export * from './edit.ts'
 

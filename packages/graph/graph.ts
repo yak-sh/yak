@@ -68,6 +68,7 @@ import { fire, registry, type Resource, type Rule, stands } from './rules.ts'
 import { ready, settle } from './declared.ts'
 import { state } from './state.ts'
 import { each, isPromise, then } from './pipe.ts'
+import { addressing } from './said.ts'
 
 /** What one `apply()` call may say about itself. */
 export type ApplyOpts = {
@@ -538,6 +539,11 @@ export let graph = (opts: Options): Graph => {
     )
   }
 
+  // The same courtesy a tool's argument gets (tool.ts `addressed`), owed to a
+  // query line: an id the caller can SAY, wherever the line names an entity,
+  // read as the eid the store keys by (said.ts).
+  let aim = addressing(vocab)
+
   // What a door asks before it reads by id: every plugin that knows how a name
   // becomes an eid, asked in turn, each about the ids nobody has answered for
   // yet. Outside any transaction — a door is asking before it does anything.
@@ -563,8 +569,10 @@ export let graph = (opts: Options): Graph => {
     },
     ddl: () => storage.ddl(),
     install: () => storage.install(),
-    read: (query, readOpts) => storage.read(query, readOpts),
-    rows: (query, readOpts) => storage.rows(query, readOpts),
+    read: (query, readOpts) =>
+      then(aim(query, address), (q) => storage.read(q, readOpts)),
+    rows: (query, readOpts) =>
+      then(aim(query, address), (q) => storage.rows(q, readOpts)),
     apply,
   }
   return g
