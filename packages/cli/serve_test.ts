@@ -402,6 +402,64 @@ Deno.test('a plugin named with options gets them, beside the host', async () => 
   }
 })
 
+Deno.test('a service runs while the host is up and stops when it closes', async () => {
+  let beats = 0
+  let stopped = false
+  let host = await compose(
+    { db: ':memory:', plugins: [{ use: 'clock', with: { every: 1 } }] },
+    only({
+      clock: {
+        service: {
+          service: (_h, options, signal) =>
+            new Promise<void>((done) => {
+              let timer = setInterval(() => beats++, Number(options.every))
+              signal.addEventListener('abort', () => {
+                clearInterval(timer)
+                stopped = true
+                done()
+              })
+            }),
+        },
+      },
+    }),
+  )
+  // Composing is not starting: a one-shot command must not start a clock.
+  assertEquals(beats, 0)
+  host.start()
+  let deadline = Date.now() + 5000
+  while (!beats && Date.now() < deadline) {
+    await new Promise((go) => setTimeout(go, 5))
+  }
+  assert(beats > 0, 'the service never ran')
+  host.close()
+  assert(stopped, 'closing the host did not stop its service')
+})
+
+Deno.test('a service that throws is reported, and the host still serves', async () => {
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop', 'broken'] },
+    only({
+      shop,
+      broken: {
+        service: {
+          service: () => {
+            throw new Error('no clock here')
+          },
+        },
+      },
+    }),
+  )
+  try {
+    host.start()
+    assertEquals(
+      await (await host.handler(new Request('http://x/shop/a'))).text(),
+      '/shop/a',
+    )
+  } finally {
+    host.close()
+  }
+})
+
 Deno.test('an option written {env} is read from the environment', () => {
   let dir = Deno.makeTempDirSync()
   Deno.env.set('YAK_TEST_TOKEN', 'hunter2')

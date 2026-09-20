@@ -6,7 +6,8 @@
  * apiece: the words it speaks (`@yaks/mail/vocab`), what a batch means
  * (`/rules`), what an agent may call (`/tools`), what happens after a commit
  * (`/effects`), the HTTP it adds (`/routes`), and the one pass it makes at
- * start-up (`/boot`). A subpath a package does not
+ * start-up (`/boot`) and what it keeps doing while the host is up
+ * (`/service`). A subpath a package does not
  * export is a facet it does not have, and is skipped; a subpath that exists
  * and fails to import is an error, never a skip. Over that it opens one SQLite
  * file and mounts the doors —
@@ -125,6 +126,7 @@ export let FACETS = [
   'effects',
   'routes',
   'boot',
+  'service',
 ] as const
 
 /** One of those names. */
@@ -180,6 +182,22 @@ export type BootFacet = {
   boot?: (host: Host, options: Options) => void | Promise<void>
 }
 
+/** `<plugin>/service` — the work this plugin KEEPS DOING while the host is up:
+ * a clock, a poll, a sweep. Neither a request nor a post-commit observation,
+ * which is why neither `routes` nor `effects` could hold it — a wake that
+ * comes due and a mailbox that has to be asked are things nobody is calling
+ * about. It is handed an `AbortSignal` and returns when that signal aborts;
+ * `compose` imports it and {@link serve} is what starts it, for the reason
+ * `boot` has: a one-shot command opens the same host to ask one question and
+ * must not start another process's clock. */
+export type ServiceFacet = {
+  service?: (
+    host: Host,
+    options: Options,
+    signal: AbortSignal,
+  ) => void | Promise<void>
+}
+
 /** What each subpath is expected to export. Every field is optional: a plugin
  * exports what it has, and the host takes what it runs. */
 export type Facets = {
@@ -189,6 +207,7 @@ export type Facets = {
   effects: EffectsFacet
   routes: RoutesFacet
   boot: BootFacet
+  service: ServiceFacet
 }
 
 /** How a plugin's facet becomes a module. `null` means the package does not
@@ -234,6 +253,8 @@ export type Served = Host & {
   /** each plugin's start-up pass, in config order — run by {@link serve}
    * before it listens, and by nobody else */
   boot: () => Promise<void>
+  /** start every plugin's long-running work; it stops with {@link Served.close} */
+  start: () => void
   close: () => void
 }
 
@@ -384,6 +405,7 @@ export let compose = async (
   let watched = taken('effects')
   let served = taken('routes')
   let booted = taken('boot')
+  let running = taken('service')
 
   // The words an invocation is written in come with the HOST, not with
   // whichever plugin happened to mention them: what was asked of this server
@@ -413,6 +435,7 @@ export let compose = async (
     )
     let store: Store | undefined
     let g: Graph | undefined
+    let stopping = new AbortController()
     // Who is calling is settled before anything is built, because it is read
     // off the route modules themselves rather than from a factory: a route
     // needs the same answer the graph's own doors get, or what it writes is
@@ -512,7 +535,25 @@ export let compose = async (
       boot: async () => {
         for (let [mod, options] of booted) await mod.boot?.(host, options)
       },
-      close: () => db.close(),
+      // Started together and stopped together, by one signal: a host going
+      // down is one fact, and a service that outlived the database it reads
+      // would be a crash nobody asked for. A service that throws is reported
+      // and its plugin stops — the others keep running, the way a failing
+      // effect is telemetry rather than a broken host.
+      start: () => {
+        for (let [mod, options] of running) {
+          try {
+            let done = mod.service?.(host, options, stopping.signal)
+            if (done) done.catch((e) => console.error('service failed —', e))
+          } catch (e) {
+            console.error('service failed —', e)
+          }
+        }
+      },
+      close: () => {
+        stopping.abort()
+        db.close()
+      },
     }
   } catch (error) {
     db.close()
@@ -564,6 +605,10 @@ export let serve = async (
   // And each plugin's own: the locks a dead holder left, the agents still
   // running that this process has no memory of.
   await host.boot()
+  // And then the clocks: what a plugin keeps doing while this is up. After
+  // boot, so a sweep never races the reconciliation that corrects what it is
+  // about to read.
+  host.start()
   let server = Deno.serve({
     port: config.port ?? 8787,
     hostname: config.hostname,

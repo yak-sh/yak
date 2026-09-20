@@ -294,6 +294,7 @@ and takes the ones it runs (`@yaks/cli` `compose`, `packages/cli`):
 | `./effects` | `effects: (host, options) => Watch[]`                         | anything            |
 | `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`         | anything            |
 | `./boot`    | `boot: (host, options) => void \| Promise<void>`              | anything            |
+| `./service` | `service: (host, options, signal) => void \| Promise<void>`   | anything            |
 | `./views`   | `views` — `@yaks/render` renderers                            | nothing server-side |
 | `.`         | types, and the pure functions the package offers as a library |                     |
 
@@ -304,6 +305,14 @@ rather than an observation, which is why it is not an effect — and `compose`
 only imports it while `serve` is what runs it, because a one-shot command opens
 the same host to ask one question and must not reconcile another process's
 world.
+
+`./service` is the other half of that: what a plugin KEEPS DOING while the host
+is up — a clock, a poll, a sweep (`@yaks/wake/service` fires what has come due).
+Neither a request nor a post-commit observation, which is why neither `routes`
+nor `effects` could hold it: a wake reaching its instant and a mailbox that has
+to be asked are things nobody is calling about. It is handed an `AbortSignal`,
+returns when that aborts, and is started by `serve` after `boot` and stopped by
+the host's `close`.
 
 A subpath a package does not export is a facet it does not have, and the host
 skips it; a subpath that exists and fails to import is an error, never a skip. A

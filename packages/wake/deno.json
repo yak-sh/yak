@@ -6,7 +6,8 @@
     "./cloudflare": "./cloudflare.ts",
     "./deno": "./deno.ts",
     "./vocab": "./vocab.ts",
-    "./rules": "./rules.ts"
+    "./rules": "./rules.ts",
+    "./service": "./service.ts"
   },
   "license": "Apache-2.0",
   "description": "Stores one-shot and recurring schedules as graph components, marking due wakes as fired and advancing their next scheduled times.",

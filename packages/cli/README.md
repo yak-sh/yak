@@ -109,6 +109,8 @@ says so.
 | `./tools`   | `runs: Runs` — the runs behind its `tool: true` declarations  | ajv, SQL, anything  |
 | `./effects` | `effects: (host, options) => Watch[]`                         | anything            |
 | `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`         | anything            |
+| `./boot`    | `boot: (host, options)` — the one pass made at start-up       | anything            |
+| `./service` | `service: (host, options, signal)` — what keeps running       | anything            |
 | `./views`   | `views` — @yaks/render renderers for the web door and a TUI   | nothing server-side |
 | `.`         | types, and the pure functions the package offers as a library |                     |
 

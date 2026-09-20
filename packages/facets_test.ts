@@ -75,6 +75,7 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
     effects: 'effects',
     routes: 'routes',
     boot: 'boot',
+    service: 'service',
     views: 'views',
   }
   let seen = new Set<string>()
@@ -114,6 +115,7 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
     'effects',
     'routes',
     'rules',
+    'service',
     'tools',
     'views',
   ])
