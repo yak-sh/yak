@@ -1,6 +1,13 @@
 /**
- * @yaks/telemetry — what the tools are doing: every call through a door, who
- * made it, how long it took, whether it worked.
+ * @yaks/telemetry — RETIRED. The graph holds what this log held: a tool call is
+ * a `call` entity claimed by an `execution` and settled as a `result` with its
+ * `ms` and its `created.by`, and a failure is the `error` or `exception` beside
+ * it ({@link https://jsr.io/@yaks/tools | @yaks/tools}). `/telemetry` is a
+ * query. Nothing in `packages/` composes this; it stands until the fleet server
+ * that imports it is deleted, and it gets no plugin facets.
+ *
+ * What the tools are doing: every call through a door, who made it, how long it
+ * took, whether it worked.
  *
  * The errors callers hit are the docs not yet written, and the errors nobody
  * hits are the ones that decay into a hand repair months on. This is the log

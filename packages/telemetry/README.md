@@ -1,5 +1,19 @@
 # @yaks/telemetry
 
+**Retired.** The graph holds what this log held. A tool call is a `call` entity
+claimed by an `execution` and settled as a `result` with its `ms`, its
+`created.by`, and — when it failed — an `error` or `exception` beside it whose
+prose is the `content` and whose `output.source` names the call
+([@yaks/tools](../tools)). A second table of the same fact, off the spine and
+unqueryable beside anything else, is one shape too many. `/telemetry` is a query
+now: see [@yaks/tools](../tools/README.md#what-the-tool-call-log-was).
+
+Nothing in `packages/` composes this. It is still in the workspace because the
+fleet server (`src/telemetry.ts`, `src/db.ts`) imports it, and it is deleted
+with `src/` at cutover (T-37584). It gets no facets and no plugin.
+
+---
+
 A tool-call log beside a yaks graph: every call through a door, who made it, how
 long it took, whether it worked. Recorded without ever throwing; read back
 newest-first with repeated errors folded into counted cohorts.

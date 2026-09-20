@@ -132,3 +132,33 @@ two firings are two results, and the same instant twice is the same call.
 
 Keep a single scheduling owner per graph. `@yaks/session`'s daemon drives its
 own transcript's calls in order, through `run()`, and registers nothing.
+
+## What the tool-call log was
+
+A host used to keep a second table beside the graph — one row per call, with the
+tool's name, who made it, how many milliseconds it took and whether it worked —
+and serve it at `/telemetry`. Every column of it is a row here now, so the log
+is a query and the table is gone (`@yaks/telemetry`, retired):
+
+| the log asked   | the graph answers                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
+| which tool      | `call.to` → the `tool{name}` it points at                                                                 |
+| who called it   | `created.by` on the call                                                                                  |
+| how long        | `result.ms`                                                                                               |
+| did it work     | `execution.state` — `done` or `failed`                                                                    |
+| what went wrong | the `error{code}` or `exception` whose `output.source` is the call, with the prose on its `content{body}` |
+| when            | `created.at`                                                                                              |
+
+```
+.result                       # every call that came to rest, newest first
+.exception                    # only the ones that blew up
+.call .execution.state=failed # the calls behind them
+```
+
+So a failure is queryable beside the work it was about, journaled, and pushed to
+whoever is watching — none of which a table off the spine could do. Two things
+the log had do NOT come back, deliberately: it recorded the door a call arrived
+through (`mcp`, `web`, `cli`), which is a column on `call` if anybody wants it
+rather than a second log; and it was written outside the transaction so it
+survived a graph that could not write, which is a property only something
+outside the graph can have.
