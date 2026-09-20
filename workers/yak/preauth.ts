@@ -107,8 +107,14 @@ ${url(env, '/guide.md')} is the map, and a page per subject sits beside it.
 app_published is what other people have published, browsable by word.
 graph_query, graph_show, graph_schema and search read ONE app you name — its
 space and its slug — as long as its pages are readable by anyone with the
-link, which is exactly what a browser at that address would see. And feedback
-reaches the people who run this place whether or not anybody has signed in.
+link, which is exactly what a browser at that address would see. Those two
+arguments belong to THIS door and no other: they are the call's whole scope
+while there is nobody to have a reach. Signed in there is one, so the same
+four take no app and no space at all — they answer every app you can reach at
+once, and '.in=<space>/<app>' on the query line narrows that to one. A write
+names none either: each component goes to the app that declares it. And
+feedback reaches the people who run this place whether or not anybody has
+signed in.
 
 Making anything needs signing in: a space, an app, its files, a deploy, and
 writing any app's data. Sign in at ${url(env, '/login')} — one email address

@@ -49,14 +49,16 @@ app that owns that word.
 The platform's shared words — `doc`, `comment`, `task`, `image`, `archived` —
 belong to no app, so they go, in this order:
 
-1. the app you named, if you named one;
+1. the app the bundle names, where it says `"$app": "<slug>"`;
 2. the app where that entity already wears the word;
 3. the app whose OWN word is in the same bundle — a title beside a recipe is the
    recipe's title, which is what makes writing a new entity one call.
 
-When none of those decides it, the write is refused rather than guessed:
+`$app` rides on the BUNDLE rather than on the call, because one batch may land
+in several apps at once — it is the bundle that goes somewhere, not the write.
+When none of the three decides it, the write is refused rather than guessed:
 
-    which app should doc go in? name one with app — reading-list, lending
+    which app should doc go in? say $app on the bundle — reading-list, lending
 
 Every part is admitted in its own store BEFORE any of them commits, so a refusal
 in one leaves the others unwritten. A `$alias` is minted once, at the door, so a

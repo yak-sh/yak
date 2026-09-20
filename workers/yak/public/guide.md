@@ -433,8 +433,8 @@ they are one entity wearing two components, one per store.
 
 A component lives with the app that DECLARES it, so nothing has to be agreed:
 `book` is the reading list's word wherever it is written, `loan` is the lending
-app's. Anything shared — `doc`, `comment`, `image` — goes to the app you name,
-else the app where that entity already lives.
+app's. Anything shared — `doc`, `comment`, `image` — goes to the app the bundle
+names with `"$app": "<slug>"`, else the app where that entity already lives.
 
 One word, one home — the first app in the space to declare it. Name it in a
 second app's vocab.json and nothing is planted twice: the deploy answers

@@ -3,8 +3,14 @@
 // which app a signed-out read is scoped to. The list is PINNED on purpose — a
 // tool that grows `noauth` lands here in a diff, which is the whole point of
 // declaring it.
-import { assertEquals, assertRejects } from '@std/assert'
-import { anonymous, opened, openly, READS } from './anon.ts'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
+import { anonymous, opened, openly, READS, SCOPE } from './anon.ts'
+import { about } from './preauth.ts'
 import type { Ctx } from './tools.ts'
 import { TOOLS } from './tools.ts'
 
@@ -95,4 +101,24 @@ Deno.test('a read that names no app says it is needed signed out', async () => {
       'signed out, a read answers for ONE app',
     )
   }
+})
+
+// The one place this door promises an ARGUMENT in prose (T-37617). `about` is
+// what an agent reads before anything else, and it says the generic reads take
+// a space and a slug — true HERE, where the pair is the call's whole scope, and
+// not signed in, where there is a reach to read and `.in=` narrows it. An
+// assistant read it signed in, went looking for an app argument the schema does
+// not have, and asked how to target one app (E#868fa3f25c answer 5). So the
+// sentence and the schema are held together: the paragraph is the signed-out
+// one, it names every read that takes the pair and every argument in it, and it
+// says what the other door does instead.
+Deno.test('about promises the app pair exactly where a schema declares it', () => {
+  let said = about().text.split('\n\n').find((p) => p.includes('graph_query'))
+  assert(said, 'about says nothing about the generic reads')
+  assert(said.startsWith('Signed out'), said.slice(0, 60))
+  for (let arg of Object.keys(SCOPE)) assertStringIncludes(said, arg)
+  for (let name of READS) assertStringIncludes(said, name)
+  // And the signed-in answer, in the same paragraph, because that is where the
+  // question gets asked: no argument, and the rider that narrows a line.
+  assertStringIncludes(said, '.in=<space>/<app>')
 })
