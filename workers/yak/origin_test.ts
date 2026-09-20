@@ -12,7 +12,7 @@
 // The second test is the one door that is deliberately open to every page
 // (T-33408): an app's READ door, answered with the credentials taken off.
 import { assert, assertEquals } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { client, connector, kernel, meta, relay, seed } from './probe.ts'
 
 // How a socket ended: open, or refused at the handshake. Whichever comes

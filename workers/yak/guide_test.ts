@@ -10,7 +10,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { front } from '@yaks/yaml'
 import { RESERVED } from './vocab.ts'
-import { comps, typeName } from '../../src/types.ts'
+import { comps, typeName } from './lib/types.ts'
 import { SHIM, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { INSTRUCTIONS, PAGES, uriOf } from './guide.ts'

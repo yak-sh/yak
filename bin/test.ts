@@ -1,60 +1,21 @@
 // Run the broad suite in independent Deno processes while preserving
 // fresh-process isolation for fixtures whose contract is process-global state.
-// A parallel worker reuses one module graph and environment for several files:
-// sessions_contention owns a file DB_PATH, and sessions owns
-// the managed-process directories. Co-locating any of them can make a cached
-// import observe whichever file happened to load first.
+// A parallel worker reuses one module graph and environment for several files,
+// so a fixture that owns a file DB_PATH, a HOME, or a directory of processes
+// can otherwise make a cached import observe whichever file loaded first.
 //
 // The isolated pass follows the parallel pass. Running it concurrently would
 // preserve module isolation but not scheduler isolation: debounce and process
 // fixtures would again be tested under artificial saturation.
 
-import { denoDir } from '../src/testing.ts'
+import { denoDir } from './testing.ts'
 
-let isolated = new Set([
-  'src/sessions_contention_test.ts',
-  'src/sessions_test.ts',
-  // Native transcript confinement reads HOME while each drain runs. A
-  // co-located fixture changing HOME can make a valid transcript disappear
-  // between its creation and ingestion.
-  'src/ingest_drain_test.ts',
-  'src/ingest_native_test.ts',
-  // Owns a blank live_db singleton, its P-19 identity and vector quantization.
-  'src/hygiene_test.ts',
-  // Owns the local-read arm and file DBs, and spawns a real server (the import
-  // scan below only recognizes servers imported in-process).
-  'src/localwrite_test.ts',
-  // This one deliberately tests a real debounce interval.
-  'src/components/Search_test.tsx',
-  // These launch nested Deno/provider processes and own their cache/HOME.
-  'src/cli_test.ts',
-  'src/harness_integration_test.ts',
-])
-
-// These modules guard every server/HOME/port side effect behind TASKS_SLOW.
-// Their fast tests (and the existing ignored cases) still run in the broad
-// pass; an inactive server fixture must not cost a fresh Deno process. New
-// server-importing files remain isolated by default until audited here.
-let slowIsolated = new Set([
-  'src/agg_sub_test.ts',
-  'src/bus_realdb_test.ts',
-  'src/claim_test.ts',
-  'src/cli_usage_server_test.ts',
-  'src/edges_sub_test.ts',
-  'src/effects_registry_test.ts',
-  'src/empty_sub_test.ts',
-  'src/hops_test.ts',
-  'src/inbox_server_test.ts',
-  'src/migrate_consumer_test.ts',
-  'src/outbox_test.ts',
-  'src/page_test.ts',
-  'src/precondition_test.ts',
-  'src/redaction_server_test.ts',
-  'src/subs_live_test.ts',
-  'src/verify_server_test.ts',
-  'src/worker_server_test.ts',
-  'src/wsworker_test.ts',
-])
+// Files whose contract is process-global state and that must not share a
+// worker. The fleet server's whole suite left this list with src/ (T-37584),
+// and with it the scan that isolated anything importing `./server.ts`: there
+// is no such module here now. What is left runs parallel; a new entry earns
+// its own line and the reason it cannot share one.
+let isolated = new Set<string>([])
 
 export async function inventory() {
   let tests: string[] = []
@@ -74,22 +35,8 @@ export async function inventory() {
       }
     }
   }
-  for (let dir of ['src', 'bin', 'channels', 'workers']) await collect(dir)
+  for (let dir of ['bin', 'workers']) await collect(dir)
   tests.sort()
-
-  // A server import is itself process-global state: server.ts binds once, owns
-  // one db singleton, and installs signal handlers. Addressing `http.addr` makes
-  // accidental co-location correct for the in-memory HTTP tests, but file-db and
-  // shutdown tests still require a fresh process, so keep the whole boundary in
-  // the ordinary runner.
-  for (let file of tests) {
-    let source = await Deno.readTextFile(file)
-    if (/(?:from\s*|import\s*\()\s*['"]\.\/server\.ts['"]/.test(source)) {
-      if (Deno.env.get('TASKS_SLOW') || !slowIsolated.has(file)) {
-        isolated.add(file)
-      }
-    }
-  }
 
   return tests
 }

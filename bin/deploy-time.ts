@@ -14,7 +14,13 @@ import {
   split,
 } from './deploy-gate.ts'
 import { WRANGLER } from '../workers/yak/wrangler.ts'
-import type { Version } from '../src/yak_deploys.ts'
+
+/** One upload of the worker, as Cloudflare's versions API lists it. */
+export type Version = {
+  id: string
+  metadata: { created_on: string }
+  annotations?: Record<string, string>
+}
 
 type Event = {
   type: string

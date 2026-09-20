@@ -42,7 +42,7 @@ import { directory, type Plan, type Space, stamp } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { apex, type Host, spaceHost } from './host.ts'
 
-import { cookieValue, verify } from '../../src/token.ts'
+import { cookieValue, verify } from './lib/token.ts'
 import { metaBreaks, noted } from './unseen.ts'
 
 let API = 'https://api.stripe.com'

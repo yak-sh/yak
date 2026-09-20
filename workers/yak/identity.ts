@@ -81,7 +81,7 @@ import {
   OAuthProvider,
   type OAuthProviderOptions,
 } from '@cloudflare/workers-oauth-provider'
-import { cookieValue, verify } from '../../src/token.ts'
+import { cookieValue, verify } from './lib/token.ts'
 import { connectionsOf } from './connections.ts'
 import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'

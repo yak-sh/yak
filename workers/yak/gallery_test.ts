@@ -8,7 +8,7 @@
 // in workerd in mcp_test.ts, where there is a directory to write and a letter
 // to read off the log.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import type { App, Directory, Space } from './directory.ts'
 import {
   card,

@@ -18,8 +18,8 @@
 // A redeploy regenerates them from the manifest as it then reads, so a column
 // added to a kind is an argument added to its two tools.
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
-import type { PropType } from '../../src/types.ts'
-import type { ToolDef, Tools } from '../../src/store/tools.ts'
+import type { PropType } from './lib/types.ts'
+import type { ToolDef, Tools } from './lib/store/tools.ts'
 import { wordOf } from './vocab.ts'
 
 // The columns a caller may WRITE: a server-owned column is nobody's to send,

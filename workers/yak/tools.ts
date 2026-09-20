@@ -35,14 +35,14 @@
 // kept, files and all, so app_rollback can put it back.
 import { deployWorker } from './deploy_worker.ts'
 import { bindingLines, bindings } from './bindings.ts'
-import type { Blobs } from '../../src/store/blobs.ts'
-import { r2Blobs } from '../../src/blobs_r2.ts'
+import type { Blobs } from './lib/store/blobs.ts'
+import { r2Blobs } from './lib/blobs_r2.ts'
 import { fullFiles } from './usage.ts'
-import { parseTools, TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
-import { borrowed, type Vocab } from '../../src/store/vocab.ts'
-import type { EntityLiteral } from '../../src/mutation.ts'
-import { appAccess } from '../../src/types.ts'
-import { VERSION } from '../../src/version.ts'
+import { parseTools, TOOLS_EXAMPLE, viewsOf } from './lib/store/tools.ts'
+import { borrowed, type Vocab } from './lib/store/vocab.ts'
+import type { EntityLiteral } from './lib/mutation.ts'
+import { appAccess } from './lib/types.ts'
+import { VERSION } from './lib/version.ts'
 import {
   appDoc,
   coreDocs,

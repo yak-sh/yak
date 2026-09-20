@@ -9,7 +9,7 @@
 // nothing here calls Stripe: the kernel boots with a webhook secret and no
 // STRIPE_KEY, which is also the shape a deploy has before the owner sets one.
 import { assert, assertEquals } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { connector, kernel, meta, seed, signed } from './probe.ts'
 
 let SECRET = 'whsec_a_probe_secret'

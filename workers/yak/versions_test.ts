@@ -7,9 +7,9 @@
 // last hop is proved here against the same stubbed account API dispatch_test.ts
 // uses.
 import { assert, assertEquals } from '@std/assert'
-import type { Blobs } from '../../src/store/blobs.ts'
-import { counted } from '../../src/store/blobs.ts'
-import type { Tally } from '../../src/hops.ts'
+import type { Blobs } from './lib/store/blobs.ts'
+import { counted } from './lib/store/blobs.ts'
+import type { Tally } from './lib/hops.ts'
 import type { App, Directory } from './directory.ts'
 import { carried, upload } from './dispatch.ts'
 import type { Env } from './env.ts'

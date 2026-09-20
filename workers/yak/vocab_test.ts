@@ -9,7 +9,7 @@ import {
 } from '@std/assert'
 import { schema } from '@yaks/sqlite'
 import { fields } from '@yaks/fts'
-import ops from '../../src/store/schema.json' with { type: 'json' }
+import ops from './lib/store/schema.json' with { type: 'json' }
 import { PAGES } from './guide.ts'
 import {
   appDoc,

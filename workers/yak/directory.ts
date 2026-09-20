@@ -25,8 +25,8 @@
 // its own store.
 import { type Host as HostEnv, spaceHost } from './host.ts'
 import type { Bundle } from '@yaks/graph'
-import type { EntityLiteral, Mutation } from '../../src/mutation.ts'
-import { slugsOf } from '../../src/types.ts'
+import type { EntityLiteral, Mutation } from './lib/mutation.ts'
+import { slugsOf } from './lib/types.ts'
 import {
   type Door,
   type Fetcher,

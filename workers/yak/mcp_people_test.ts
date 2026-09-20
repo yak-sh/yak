@@ -5,7 +5,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 
 import {
   client,
@@ -20,7 +20,7 @@ import {
   vocabFile,
   when,
 } from './probe.ts'
-import { VERSION } from '../../src/version.ts'
+import { VERSION } from './lib/version.ts'
 import { HELLO, minted } from './mcp-probe.ts'
 
 // The other direction (T-32950): an app's breaks reach the person's agent,

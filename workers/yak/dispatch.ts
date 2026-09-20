@@ -42,7 +42,7 @@
 // that throws `needs to be run remotely`, which `nowhere` reads as the same
 // fact. `remote = true` in wrangler.toml would point local dev at the deployed
 // namespace; we do not set it, because a test must not need the account.
-import { COOKIE, opened, seal } from '../../src/token.ts'
+import { COOKIE, opened, seal } from './lib/token.ts'
 import type { App, Role, Space } from './directory.ts'
 import { storeName } from './directory.ts'
 import type { Env } from './env.ts'

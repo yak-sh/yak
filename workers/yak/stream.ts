@@ -40,7 +40,7 @@
 // never told an id, and every one of those hears — they cannot be told apart,
 // and silence is the worse failure.
 import { rosterLine } from '@yaks/mcp'
-import { VERSION } from '../../src/version.ts'
+import { VERSION } from './lib/version.ts'
 import type { Env } from './env.ts'
 import { fetchOf, type Namespace } from './door.ts'
 

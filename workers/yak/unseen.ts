@@ -10,7 +10,7 @@
 // never SQL; the apps of a space come from the directory part. The same
 // rows are the `app_errors` answer, one line each.
 import type { Bundle } from '@yaks/graph'
-import { idOf } from '../../src/types.ts'
+import { idOf } from './lib/types.ts'
 import * as dirPart from './directory.ts'
 import {
   type App,

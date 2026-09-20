@@ -40,8 +40,8 @@ import {
   type Writes,
 } from '@yaks/git'
 import type { Bundle, Eid } from '@yaks/graph'
-import { r2Blobs } from '../../src/blobs_r2.ts'
-import type { Blobs } from '../../src/store/blobs.ts'
+import { r2Blobs } from './lib/blobs_r2.ts'
+import type { Blobs } from './lib/store/blobs.ts'
 import { GIT_STORE, type Namespace, storeOf } from './door.ts'
 import { spaceHost } from './host.ts'
 import { KERNEL, type Meta, metaOf } from './meta.ts'

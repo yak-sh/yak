@@ -6,7 +6,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { connector, kernel, meta, seed, signIn } from './probe.ts'
 
 // The whole of T-32907 (C-32905 items 1 and 3): an app's own files never name

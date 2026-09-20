@@ -38,11 +38,11 @@ import {
   schemaOf,
   type ToolDef,
   type Tools,
-} from '../../src/store/tools.ts'
+} from './lib/store/tools.ts'
 import { type Ctx, type Out, uiMeta, VIEW_MIME } from './tools.ts'
 import { once } from './tool.ts'
 import type { Who } from './session.ts'
-import { r2Blobs } from '../../src/blobs_r2.ts'
+import { r2Blobs } from './lib/blobs_r2.ts'
 import { storeOf } from './door.ts'
 import { told } from './stream.ts'
 

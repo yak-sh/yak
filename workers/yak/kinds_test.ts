@@ -4,7 +4,7 @@
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { withKinds } from './kinds.ts'
 import { appDoc } from './vocab.ts'
-import { filled, schemaOf } from '../../src/store/tools.ts'
+import { filled, schemaOf } from './lib/store/tools.ts'
 
 let box = {
   $defs: {

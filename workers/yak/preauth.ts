@@ -37,7 +37,7 @@
 // that declaration; here, before anyone has even signed in, is the last place
 // it would belong.
 import type { Security } from '@yaks/mcp'
-import { VERSION } from '../../src/version.ts'
+import { VERSION } from './lib/version.ts'
 import type { Env } from './env.ts'
 import { PAGES, uriOf, whole } from './guide.ts'
 import { apex, type Host, hosted, spaceHost, url } from './host.ts'

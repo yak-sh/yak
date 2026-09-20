@@ -5,7 +5,7 @@
 // `/robots.txt` and `/llms.txt` from (T-34288).
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { REPLY_TO } from './mail.ts'
 import { CURRENCY, FILES, FREE, LETTERS, PLUS, PRICE, size } from './meter.ts'
 import { quoted, rate } from './sell.ts'

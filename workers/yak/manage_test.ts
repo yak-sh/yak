@@ -2,7 +2,7 @@
 // requests use the browser's cookie and form paths, including the boundaries
 // that keep another space's page from changing this account.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../../src/testing.ts'
+import { slow } from '../../bin/testing.ts'
 import { client, connector, kernel, meta, signIn, stripe } from './probe.ts'
 import { MANAGE, managePath } from './route.ts'
 

@@ -47,7 +47,7 @@
 // With one key space the sweep is one pass for the whole bucket rather than one
 // per app: an object another app still names is not the first app's to free.
 import type { Blobs as Pins } from '@yaks/blob'
-import type { Blobs } from '../../src/store/blobs.ts'
+import type { Blobs } from './lib/store/blobs.ts'
 import type { App, Directory } from './directory.ts'
 import { pinsOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'

@@ -17,7 +17,7 @@
 
 import type { Bundle } from '@yaks/graph'
 import { assert, assertEquals } from '@std/assert'
-import { slow, until } from '../../src/testing.ts'
+import { slow, until } from '../../bin/testing.ts'
 import { client, connector, kernel, seed, txt, when } from './probe.ts'
 
 // An app vocabulary with a rule in it. `vocabFile` in probe.ts only spells

@@ -39,7 +39,7 @@
 // on every code standing for that address, since it goes through the same
 // `spend`. A counter per request would cost every honest sign-in a write to
 // defend a 256-bit mac.
-import { opened, seal } from '../../src/token.ts'
+import { opened, seal } from './lib/token.ts'
 import { type Row, shelf } from './grants.ts'
 import { PLATFORM } from './route.ts'
 

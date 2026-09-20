@@ -56,8 +56,8 @@
 // leaves a space still named but emptied, which asking again finishes; the
 // other order would leave a billable custom hostname and a bucket full of
 // bytes with nothing left pointing at them.
-import { r2Blobs } from '../../src/blobs_r2.ts'
-import { opened, seal } from '../../src/token.ts'
+import { r2Blobs } from './lib/blobs_r2.ts'
+import { opened, seal } from './lib/token.ts'
 import { wiped } from './build.ts'
 import { reachChanged, toolsOf, viewsMoved } from './declared.ts'
 import {

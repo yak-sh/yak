@@ -19,8 +19,8 @@
 // a port selected and released before their child can bind it.
 import { fileURLToPath } from 'node:url'
 import { apex } from './host.ts'
-import { until } from '../../src/testing.ts'
-import { COOKIE, sign, verify } from '../../src/token.ts'
+import { until } from '../../bin/testing.ts'
+import { COOKIE, sign, verify } from './lib/token.ts'
 import { ready, WRANGLER } from './wrangler.ts'
 import type { Custom } from './domains.ts'
 

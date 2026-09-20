@@ -26,7 +26,7 @@
 // sweep it. KV is eventually consistent, so a revocation lands everywhere
 // within about a minute rather than instantly — which is why the life is short
 // and the ceiling is a day.
-import { opened, seal } from '../../src/token.ts'
+import { opened, seal } from './lib/token.ts'
 import type { Directory } from './directory.ts'
 
 // What a grant token opens with, so identity.ts knows to open it here.

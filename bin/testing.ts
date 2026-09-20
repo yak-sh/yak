@@ -5,22 +5,30 @@
 // fixed span: it yields with `tick` and waits on a fact with `until`, both
 // deterministic, so nothing pads for a settle that a loaded box would stretch
 // past the pad. A fixed sleep lives only behind `slow()`, where the real
-// process it waits on is the point. The migrated-db clone (freshDb) lives in
-// testdb.ts, not here, so importing these primitives never pulls in db.ts —
-// this module stays free of the DB_PATH import-order discipline db.ts carries.
+// process it waits on is the point. It imports nothing but the runtime, so a
+// test may reach for these primitives without pulling a database, a server or
+// a package's module graph in behind them.
 //
 // The speed bar (bin/test-budget.ts) is ADVISORY, not a wall (T-17785): it lists
 // tests over 1ms slowest-first but exits 0 on the budget alone, turning fatal
 // only under TASKS_FAST_STRICT=1. deno rounds durations, so a `(1ms)` line hides
-// up to ~1.4ms — one freshDb + one apply clears it. The 2–9ms multi-apply band
-// that does show up is production freshDb + apply() cost, not trimmable test
-// setup: don't chase it by rewriting the test. Chase it by picking the cheaper
-// db primitive (both in testdb.ts): reach for bareDb() — an UNSEEDED clone that
-// snapshots in ~0.09ms — and read back the rows the test writes itself;
-// freshDb()'s ~1.5ms is the 180-row demo seed, so spend it only when the test
-// actually asserts on that seed (its tasks, boards, or people).
+// up to ~1.4ms. A test in the 2–9ms band is usually paying production apply()
+// cost rather than trimmable setup: don't chase it by rewriting the test,
+// chase it by opening the cheaper graph (@yaks/sqlite `open` over `:memory:`
+// with only the words the test asserts on).
 
-import { denoCache } from './agent_env.ts'
+// The one module cache this box has. A probe may move HOME freely and still
+// write here, because DENO_DIR is pinned in every session shell's environment
+// (etc/tasks-tmux.service); the platform defaults below are the fallback for a
+// box that never pinned it.
+let denoCache = (() => {
+  let configured = Deno.env.get('DENO_DIR')
+  if (configured) return configured
+  let home = Deno.env.get('HOME')
+  if (Deno.build.os == 'darwin') return `${home}/Library/Caches/deno`
+  if (Deno.build.os == 'windows') return `${Deno.env.get('LOCALAPPDATA')}\\deno`
+  return `${Deno.env.get('XDG_CACHE_HOME') ?? `${home}/.cache`}/deno`
+})()
 
 // A heavy test: skipped unless TASKS_SLOW opts in. Takes the same two shapes
 // Deno.test does — (name, fn) and (name, opts, fn) — and folds in the ignore.
@@ -66,7 +74,7 @@ export let until = async <T>(
   )
 }
 
-// The pinned module cache (agent_env.ts `denoCache`), with the runner's own
+// The pinned module cache (`denoCache` above), with the runner's own
 // TEST_DENO_DIR ahead of it so a suite can be pointed at a scratch cache. A
 // test that redirects HOME wants the harness paths moved, never the cache —
 // hand the child this one. Both are captured at import, so the value survives

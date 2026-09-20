@@ -17,7 +17,7 @@
 // but time, and a count is worth more than the field's tidiness: a duration
 // cannot tell one slow wait from forty fast ones, and forty fast ones is the
 // bug we keep writing. `hops;dur=7` is an N+1 read straight off a curl.
-import { counts, type Tally, tallying } from '../../src/hops.ts'
+import { counts, type Tally, tallying } from './lib/hops.ts'
 
 export type Clock = ReturnType<typeof clock>
 

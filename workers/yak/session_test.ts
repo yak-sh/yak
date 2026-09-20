@@ -13,7 +13,7 @@ import {
   assertMatch,
   assertStringIncludes,
 } from '@std/assert'
-import { COOKIE, sign, verify } from '../../src/token.ts'
+import { COOKIE, sign, verify } from './lib/token.ts'
 import { SESSION, slid } from './session.ts'
 
 let SECRET = 'a-probe-secret'

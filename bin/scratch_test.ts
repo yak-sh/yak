@@ -1,5 +1,5 @@
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { slow } from '../src/testing.ts'
+import { slow } from './testing.ts'
 import {
   ours,
   running,

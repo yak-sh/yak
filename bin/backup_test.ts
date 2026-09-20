@@ -2,8 +2,8 @@
 // replace a database another reader or restore verifier still has open.
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals } from '@std/assert'
-import { DatabaseSync } from '../src/store/sqlite.ts'
-import { slow } from '../src/testing.ts'
+import { Database } from '@db/sqlite'
+import { slow } from './testing.ts'
 
 let script = fileURLToPath(new URL('./backup', import.meta.url))
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
@@ -18,9 +18,9 @@ let fixture = async () => {
   await run('git', ['init', '-q'], dir)
   await Deno.writeTextFile(`${dir}/.gitignore`, '*.db\n*.db-*\n')
   await Deno.mkdir(`${dir}/snap`)
-  let opened: DatabaseSync[] = []
+  let opened: Database[] = []
   let database = (path: string) => {
-    let db = new DatabaseSync(`${dir}/${path}`)
+    let db = new Database(`${dir}/${path}`)
     opened.push(db)
     db.exec(
       'pragma journal_mode=wal; create table entity (id integer primary key)',
@@ -28,7 +28,7 @@ let fixture = async () => {
     db.exec('insert into entity values (1)')
     return db
   }
-  let db = database('tasks.db')
+  let db = database('yak.db')
   // A searched component, indexed the way @yaks/fts indexes one: an
   // external-content FTS5 mirror plus the trigger that keeps it. Named after
   // no index the script ever hard-coded, because that is the failure — a new
@@ -43,7 +43,7 @@ let fixture = async () => {
     insert into note values (1, 'the words the index holds')`)
   // Previous versions used these public names. Another process may still
   // hold either open; a new backup has no ownership of those files.
-  database('snap/tasks.db')
+  database('snap/yak.db')
   database('snap/.verify.db')
   return {
     dir,
@@ -68,7 +68,7 @@ slow(
   async () => {
     let f = await fixture()
     try {
-      let paths = ['tasks.db', 'snap/tasks.db', 'snap/.verify.db']
+      let paths = ['yak.db', 'snap/yak.db', 'snap/.verify.db']
       let inodes = paths.map((p) => Deno.statSync(`${f.dir}/${p}`).ino)
       let out = await f.backup()
       assert(out.success, decode(out.stderr))

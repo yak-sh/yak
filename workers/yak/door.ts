@@ -10,7 +10,7 @@
 // (meter.ts `metering`). This is why the door was lifted out of the store that
 // graph.ts replaced: living beside that class dragged src/db.ts into the
 // object's graph and failed that check. That class is gone (T-33807).
-import { hop } from '../../src/hops.ts'
+import { hop } from './lib/hops.ts'
 
 /** Anything a request can be handed to: a service binding, or a part of this
  * Worker called in-process (env.ts `bound`). */

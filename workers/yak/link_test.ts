@@ -5,7 +5,7 @@
 // the door it hangs on is held in workerd (identity_test.ts).
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { seal } from '../../src/token.ts'
+import { seal } from './lib/token.ts'
 import {
   DAYS,
   links,

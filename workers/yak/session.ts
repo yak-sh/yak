@@ -19,7 +19,7 @@
 // is minted as, and the renewal that makes a session slide. The doors that
 // mint one (identity.ts) and the router the renewal hangs off (index.ts) are
 // elsewhere; what a session IS belongs beside who is asking.
-import { COOKIE, cookie, cookieValue, sign, verify } from '../../src/token.ts'
+import { COOKIE, cookie, cookieValue, sign, verify } from './lib/token.ts'
 import type { Role } from './directory.ts'
 import type { Env } from './env.ts'
 import { apex, type Host } from './host.ts'

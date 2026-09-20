@@ -37,8 +37,8 @@
 // every reader here screens a trashed app and a trashed space out. So a
 // trashed app leaves the gallery the moment it is thrown away, and a restored
 // one is back where it was without asking anybody twice.
-import { r2Blobs } from '../../src/blobs_r2.ts'
-import { opened, seal } from '../../src/token.ts'
+import { r2Blobs } from './lib/blobs_r2.ts'
+import { opened, seal } from './lib/token.ts'
 import {
   type App,
   type Directory,
