@@ -109,6 +109,11 @@ export type Host = {
   storage: Store
   sql: Driver
   graph: Graph
+  /** who is calling — the same answer the graph's own doors get, so a route
+   * signs what it writes (`signed` in @yaks/api) rather than writing as
+   * nobody. One plugin may say it; where none does, it is the config's
+   * `actor`. */
+  who: Authenticate
 }
 
 /** The facets a host takes from a plugin, one subpath each. `views` is not
@@ -408,10 +413,16 @@ export let compose = async (
     )
     let store: Store | undefined
     let g: Graph | undefined
+    // Who is calling is settled before anything is built, because it is read
+    // off the route modules themselves rather than from a factory: a route
+    // needs the same answer the graph's own doors get, or what it writes is
+    // attributed to nobody while `/apply` beside it is attributed correctly.
+    let authenticate = doorman(served.map(([r]) => r), config)
     let host: Host = {
       config,
       vocab,
       sql,
+      who: authenticate,
       get storage(): Store {
         if (!store) throw new Error('the store is not open yet')
         return store
@@ -474,7 +485,6 @@ export let compose = async (
       fx.on(rule.plan, (e) => run.run(e.entity.eid), { doc: rule.rule.name })
     }
     let routes = served.flatMap(([r, o]) => r.routes?.(host, o) ?? [])
-    let authenticate = doorman(served.map(([r]) => r), config)
     let door = api({ graph: g, authenticate })
     let agents = mcp({
       graph: g,

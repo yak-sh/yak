@@ -140,21 +140,27 @@ describes a running program where `@yaks/process` starts one.
 
 `yak serve` takes the first five. `./views` is nobody's server business.
 
-`host` is `{ config, vocab, storage, sql, graph }`. `storage` and `graph` are
-live from the moment each is open — a factory may keep them, and may not call
-them before it returns. A `rules` factory runs at compose time and may install
-tables of its own through `host.sql`; an `extend` factory, beside it, answers
-with the @yaks/sql extensions the STORE is built with, which is how a package
-holding an index of its own teaches the query compiler a clause it declines
-alone (`.near` over vectors, a text term over an index) — every door that reads
-then has it, and nobody wires one up. A facet factory need not take the whole
-host: it names the parts it uses (`(host: { vocab: Vocab }) => …`), which is how
-a package says what it needs without importing this one.
+`host` is `{ config, vocab, storage, sql, graph, who }`. `storage` and `graph`
+are live from the moment each is open — a factory may keep them, and may not
+call them before it returns. A `rules` factory runs at compose time and may
+install tables of its own through `host.sql`; an `extend` factory, beside it,
+answers with the @yaks/sql extensions the STORE is built with, which is how a
+package holding an index of its own teaches the query compiler a clause it
+declines alone (`.near` over vectors, a text term over an index) — every door
+that reads then has it, and nobody wires one up. A facet factory need not take
+the whole host: it names the parts it uses (`(host: { vocab: Vocab }) => …`),
+which is how a package says what it needs without importing this one.
 
 A **route** is `{ method, path, handle }` (@yaks/api `Route`): `handle` is a
 plain `(Request) => Response`, `path` is exact or ends in `*` for a prefix, and
 `method` is the verb or `*` for any. Anything no route claims falls through to
 the graph's own doors, which refuse it in the wire's shape.
+
+A route that WRITES signs what it writes: `host.who(request)` is the same answer
+`/apply` beside it gets, and `signed(batch, actor)` (@yaks/api) is how it rides
+along — without it an upload or a capture is by nobody while the write next to
+it is attributed. One plugin may say who is calling (`authenticate` on its
+`./routes`); where none does, it is the config's `actor`.
 
 ## What `compose` does
 

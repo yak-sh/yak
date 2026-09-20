@@ -21,7 +21,7 @@
 // PUT minted supplies the one thing the bytes cannot say about themselves —
 // what they are — and the answer is fenced either way (./serve.ts).
 
-import { json, refuse, type Route } from '@yaks/api'
+import { type Authenticate, json, refuse, type Route, signed } from '@yaks/api'
 import type { Graph } from '@yaks/graph'
 import type { Driver } from '@yaks/sqlite'
 import { addressOf, type Artifact, keep } from './artifact.ts'
@@ -142,7 +142,7 @@ let mediaOf = (request: Request): string => {
 
 /** `GET /blob/<sha256>` — the bytes; `PUT /blob/<sha256>` — the bytes in. */
 export let routes = (
-  host: { sql: Driver; graph: Graph },
+  host: { sql: Driver; graph: Graph; who?: Authenticate },
   options: Options = {},
 ): Route[] => {
   let store = backend(options.store ?? { via: 'sqlite' }, host)
@@ -187,18 +187,21 @@ export let routes = (
           media_type: mediaOf(request),
           size: bytes.length,
         }
-        // Ask, store, write. The ask is a rehearsal (`check`), so the policy
-        // that governs a write decides the upload BEFORE anything is kept,
-        // and the bytes are still in place before the row that names them —
-        // nothing ever points at an object the store does not hold. A PUT
-        // that died in the middle left an unnamed object, which is what a
-        // content-addressed store has instead of a mess, and repeating the
-        // PUT is the repair.
-        await host.graph.apply([{ entity: { eid: sha }, artifact }], {
-          check: true,
-        })
+        // Ask, store, write — signed as whoever the door says is calling, so
+        // an upload is attributed the way a write through `/apply` beside it
+        // is. The ask is a rehearsal (`check`), so the policy that governs a
+        // write decides the upload BEFORE anything is kept, and the bytes are
+        // in place before the row that names them — nothing ever points at an
+        // object the store does not hold. A PUT that died in the middle left
+        // an unnamed object, which is what a content-addressed store has
+        // instead of a mess, and repeating the PUT is the repair.
+        let actor = await host.who?.(request) ?? null
+        // A fresh batch each time: `apply` reads and writes the bundles it is
+        // given, so the rehearsal's is not the write's.
+        let batch = () => signed([{ entity: { eid: sha }, artifact }], actor)
+        await host.graph.apply(batch(), { check: true })
         await keep(store, sha, bytes)
-        await host.graph.apply([{ entity: { eid: sha }, artifact }])
+        await host.graph.apply(batch())
         return json(artifact)
       } catch (err) {
         return refuse(err, request)

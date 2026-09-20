@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { type Graph, graph } from '@yaks/graph'
-import { type Route, routed } from '@yaks/api'
+import { type Authenticate, type Route, routed } from '@yaks/api'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { addressOf, type Artifact, artifactDoc } from './artifact.ts'
@@ -20,6 +20,26 @@ let spine: VocabDoc = {
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
+    // A host's provenance marks, so a test can ask who an upload was by.
+    // Both of them: the stamp rules ensure `updated` on any entity that
+    // already wears `created`, so declaring one without the other is a
+    // vocabulary no host has.
+    created: {
+      component: true,
+      type: 'object',
+      properties: {
+        at: { type: 'string', stamped: true },
+        by: { type: 'string', stamped: true },
+      },
+    },
+    updated: {
+      component: true,
+      type: 'object',
+      properties: {
+        at: { type: 'string', stamped: true },
+        by: { type: 'string', stamped: true },
+      },
+    },
   },
 }
 
@@ -33,7 +53,10 @@ let host = (): { sql: Driver; graph: Graph } => {
   return { sql, graph: graph({ storage: db, vocab, plugins: [] }) }
 }
 
-let door = (h: { sql: Driver; graph: Graph }, options?: Options) => {
+let door = (
+  h: { sql: Driver; graph: Graph; who?: Authenticate },
+  options?: Options,
+) => {
   let table: Route[] = routes(h, options)
   return (request: Request) => {
     let path = new URL(request.url).pathname
@@ -192,4 +215,24 @@ Deno.test('a store nobody can build refuses at compose, not at a request', () =>
     Error,
     'no store called "bucket"',
   )
+})
+
+Deno.test('an upload is by whoever the door says is calling', async () => {
+  let h = host()
+  // The host's own answer to "who is this", as `@yaks/cli` composes it from
+  // the plugins: a route reads it rather than writing as nobody.
+  let ask = door({ ...h, who: () => ({ eid: 'ana' }) })
+  let sha = await addressOf(text)
+  assertEquals((await ask(put(sha, text))).status, 200)
+  let [row] = await h.graph.read(`.eid=${sha}`)
+  assertEquals((row.created as { by: string }).by, 'ana')
+})
+
+Deno.test('a door that knows nobody uploads as nobody, not as the caller', async () => {
+  let h = host()
+  let ask = door({ ...h, who: () => null })
+  let sha = await addressOf(text)
+  assertEquals((await ask(put(sha, text))).status, 200)
+  let [row] = await h.graph.read(`.eid=${sha}`)
+  assertEquals((row.created as { by: string | null }).by, null)
 })
