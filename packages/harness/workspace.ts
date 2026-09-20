@@ -2,6 +2,7 @@
 import { checkoutAt, createWorktree, discover } from '@yaks/git/host'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { ChildLimits } from '@yaks/session'
+import { worktrees } from './paths.ts'
 
 export { workspaceDoc } from './vocab.ts'
 
@@ -44,11 +45,9 @@ export let workspace = (g: Graph, cwd = Deno.cwd()): ChildLimits => ({
     let observed = await discover(g, String(path))
     let head = (observed.worktree as Comp).head
     if (!head) throw new Error('Task worktree requires a committed HEAD')
-    let directory = Deno.env.get('HARNESS_WORKTREE_DIR') ??
-      `${Deno.env.get('HOME')}/.harness/worktrees`
     return {
       worktree: {
-        path: `${directory}/${child.replaceAll(':', '-')}`,
+        path: `${worktrees()}/${child.replaceAll(':', '-')}`,
         base: String(head),
         branch: 'task-' + child.replaceAll(':', '-'),
       },

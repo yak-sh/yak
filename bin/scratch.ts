@@ -5,6 +5,13 @@
 // mint one; almost none remove it, and no amount of per-test `finally` survives
 // a phase the runner kills, a fixture that throws, or a child that exits.
 //
+// HARNESS_HOME rides along for the same reason: a harness test that forks a
+// task child checks the repository out at `$HARNESS_HOME/worktrees/<child>`,
+// ~160 MB a time, and nothing removes it. Left at the owner's `~/.harness`
+// that reached 500 checkouts and 81 GB, and a full disk is what made
+// packages/harness/task_entry_test.ts fail (T-37621). Inside the run directory
+// those checkouts die with the run.
+//
 // Three doors close the directory: normal exit, an accepted signal, and the
 // next run's stale sweep (a SIGKILLed run cannot clean up after itself, so its
 // successor does it by pid). Afterwards the run fails if any NEW `tasks-*`
@@ -80,7 +87,7 @@ if (import.meta.main) {
 
   let child = new Deno.Command(Deno.args[0], {
     args: Deno.args.slice(1),
-    env: { TMPDIR: dir },
+    env: { TMPDIR: dir, HARNESS_HOME: `${dir}/harness` },
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit',

@@ -7,3 +7,9 @@ export let home = (
 export let errorPath = (
   env: (name: string) => string | undefined = Deno.env.get,
 ): string => env('HARNESS_ERROR_LOG') || `${home(env)}/exceptions.jsonl`
+
+/** Where a task child's checkout lands: `$HARNESS_WORKTREE_DIR`, else beside
+ * the rest of the harness's state. */
+export let worktrees = (
+  env: (name: string) => string | undefined = Deno.env.get,
+): string => env('HARNESS_WORKTREE_DIR') || `${home(env)}/worktrees`
