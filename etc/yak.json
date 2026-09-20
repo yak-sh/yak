@@ -1,0 +1,35 @@
+{
+  "db": "../../.tasks/yak.db",
+  "plugins": [
+    "./plugins/core.ts",
+    "./plugins/task.ts",
+    "./plugins/project.ts",
+    "./plugins/goal.ts",
+    "./plugins/design.ts",
+    "./plugins/session.ts",
+    "./plugins/tools.ts",
+    "./plugins/model.ts",
+    "./plugins/openai.ts",
+    "./plugins/process.ts",
+    "./plugins/persona.ts",
+    "./plugins/memory.ts",
+    "./plugins/dreaming.ts",
+    "./plugins/context.ts",
+    "./plugins/mail.ts",
+    "./plugins/notify.ts",
+    "./plugins/wake.ts",
+    "./plugins/hook.ts",
+    "./plugins/page.ts",
+    "./plugins/git.ts",
+    "./plugins/canvas.ts",
+    "./plugins/platform.ts",
+    "./plugins/member.ts"
+  ],
+  "numbers": {
+    "except": [
+      "archetype"
+    ]
+  },
+  "port": 5273,
+  "name": "yak"
+}
