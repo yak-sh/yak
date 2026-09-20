@@ -277,10 +277,10 @@ and takes the ones it runs (`@yaks/cli` `compose`, `packages/cli`):
 | subpath     | what it exports                                               | may import          |
 | ----------- | ------------------------------------------------------------- | ------------------- |
 | `./vocab`   | `docs`, `keywords?`, `derived?`                               | nothing server-side |
-| `./rules`   | `rules: (host) => Plugin[]`                                   | anything            |
+| `./rules`   | `rules: (host, options) => Plugin[]`                          | anything            |
 | `./tools`   | `runs: Runs`, behind its `tool: true` declarations            | ajv, SQL, anything  |
-| `./effects` | `effects: (host) => Watch[]`                                  | anything            |
-| `./routes`  | `routes: (host) => Route[]`, `authenticate?`                  | anything            |
+| `./effects` | `effects: (host, options) => Watch[]`                         | anything            |
+| `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`         | anything            |
 | `./views`   | `views` — `@yaks/render` renderers                            | nothing server-side |
 | `.`         | types, and the pure functions the package offers as a library |                     |
 
@@ -331,20 +331,22 @@ shape proposed for it.
   `projects(vocab, marks)` itself. The proposal: the ladder becomes a value the
   host passes, not a package's default — which is a change to `@yaks/task`'s
   signature and wants its own decision.
-- **An effect needs a configured thing to act on.** `@yaks/mail`'s outbound half
-  is an effect that hands a letter to a SENDER — an SMTP host, a Cloudflare
-  binding — and a graph config carries no such object. So `@yaks/mail/rules` is
-  what a graph that RECEIVES mail needs, and there is no `@yaks/mail/effects`: a
-  host that sends composes `mailbox({ effects, sender })` with its own. The
-  proposal: a config's `plugins` entry grows an optional options object, passed
-  to each facet factory beside the host — the smallest thing that lets a plugin
-  be configured without a registry.
+- ~~**An effect needs a configured thing to act on.**~~ Answered: a `plugins`
+  entry is a specifier or `{"use", "with"}`, and the options in `with` are
+  handed to each of that plugin's facet factories beside the host. So
+  `@yaks/mail/effects` builds its own transport from what the config named
+  (`{"via": "cloudflare", "account", "token": {"env": "…"}}`), and a value
+  written `{"env": "NAME"}` is read from the environment when the config is
+  read, so a config names a secret without holding one. See
+  [@yaks/cli](./cli/README.md#what-a-config-says-to-one-plugin).
 - **`authenticate` is storage policy, not a route.** It lives on `./routes`
   because a door is where trust is, but it is not an HTTP path and at most one
   plugin in a host may say it. `@yaks/member` is where the answer belongs, and
   its `members(where)` needs an app-specific `Guard` that nothing in a config
-  names — which is why `@yaks/member` exports `./vocab` and no `./rules`. Same
-  proposal as above: per-plugin options.
+  names — which is why `@yaks/member` exports `./vocab` and no `./rules`. The
+  options above are half the answer: a config can now name the guard's policy.
+  What it still cannot name is a FUNCTION, so this one waits on `@yaks/member`'s
+  own decision about what a config-shaped guard looks like.
 - **`numbers` is the host's, and a word's.** Whether the store mints a human
   number beside an eid is a config field today, though which components HAVE a
   prefix is a vocabulary fact. The two should be one statement. The proposal:

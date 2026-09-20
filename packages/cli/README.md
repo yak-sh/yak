@@ -26,7 +26,20 @@ One JSON file. `--config` names it, else `$YAK_CONFIG`.
 ```json
 {
   "db": "graph.db",
-  "plugins": ["@yaks/harness", "./plugins/mail"],
+  "plugins": [
+    "@yaks/harness",
+    {
+      "use": "@yaks/mail",
+      "with": {
+        "domain": "books.example",
+        "sender": {
+          "via": "cloudflare",
+          "account": "a1b2",
+          "token": { "env": "CF_EMAIL_TOKEN" }
+        }
+      }
+    }
+  ],
   "port": 8787,
   "actor": "me"
 }
@@ -41,6 +54,27 @@ One JSON file. `--config` names it, else `$YAK_CONFIG`.
 | `actor`    | the eid every request is signed with, where no plugin authenticates           |
 | `numbers`  | whether the store mints human numbers beside eids (default true)              |
 | `name`     | what the MCP door calls itself                                                |
+
+### What a config says to one plugin
+
+A `plugins` entry is a bare specifier, or `{"use": "<specifier>", "with": {…}}`
+— that plugin's own options, handed to each of its facet factories beside the
+host (`rules(host, options)`, `effects(host, options)`,
+`routes(host, options)`). A plugin nobody configured is handed `{}`, so a
+factory reads its options without guarding first. The keys are the PLUGIN's;
+nothing here interprets them, which is what keeps a config from growing a field
+per package.
+
+That is the answer to the one thing a plugin could not say alone: what an effect
+ACTS on. `@yaks/mail`'s outbound half hands a letter to a transport — an
+account, a token, an endpoint — and none of that is a fact about the graph, so
+the config names it and `@yaks/mail/effects` builds it. Name no sender and there
+is no outbound watch, which is what a graph that only receives mail wants.
+
+**A secret is named, not held.** An option written `{"env": "NAME"}` — at any
+depth — is the environment's value at the moment the config is read, so a config
+file is committable and the token is not in it. A name nothing exports reads as
+undefined and the plugin refuses in its own words.
 
 **There is no default database.** `db`, or `DB_PATH` in the environment, or the
 host refuses to start: the path anybody would pick as a default is somebody's
@@ -71,10 +105,10 @@ says so.
 | subpath     | what it exports                                               | may import          |
 | ----------- | ------------------------------------------------------------- | ------------------- |
 | `./vocab`   | `docs`, `keywords?`, `derived?`                               | nothing server-side |
-| `./rules`   | `rules: (host) => Plugin[]`                                   | anything            |
+| `./rules`   | `rules: (host, options) => Plugin[]`                          | anything            |
 | `./tools`   | `runs: Runs` — the runs behind its `tool: true` declarations  | ajv, SQL, anything  |
-| `./effects` | `effects: (host) => Watch[]`                                  | anything            |
-| `./routes`  | `routes: (host) => Route[]`, `authenticate?`                  | anything            |
+| `./effects` | `effects: (host, options) => Watch[]`                         | anything            |
+| `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`         | anything            |
 | `./views`   | `views` — @yaks/render renderers for the web door and a TUI   | nothing server-side |
 | `.`         | types, and the pure functions the package offers as a library |                     |
 
@@ -85,10 +119,13 @@ export let keywords = [mailKeywords]
 export let derived = (vocab) => mailRead(vocab)
 
 // @yaks/mail/rules
-export let rules = (host) => [mailbox({ domain: host.config.domain })]
+export let rules = (host, options) => [mailbox({ domain: options.domain })]
 
 // @yaks/mail/routes
-export let routes = (host) => [{ method: 'POST', path: '/inbound', handle }]
+export let routes = (
+  host,
+  options,
+) => [{ method: 'POST', path: '/inbound', handle }]
 export let authenticate = (request) => who(request) // at most one plugin may say
 ```
 

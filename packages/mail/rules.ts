@@ -1,17 +1,18 @@
 // What a batch MEANS about a letter: the `rules` facet a host takes
-// (`@yaks/mail/rules`) — the vocabulary and, where the host names a domain,
+// (`@yaks/mail/rules`) — the vocabulary and, where the config names a domain,
 // the canonicalizer that fixes an address on the way in.
 //
-// The OUTBOUND half is not here. Handing a letter to a sender is an effect,
-// and an effect needs a configured sender (an SMTP host, a Cloudflare binding)
-// that a graph config does not carry; a host that sends composes
-// {@link mailbox} itself with its own. This facet is what a graph that
-// RECEIVES mail needs, which is the whole of what a plugin can say alone.
+// The domain is this plugin's OPTION rather than the host's config: whose
+// namespace an address belongs to is a fact about this plugin, and a host that
+// composes two mailboxes would otherwise have one domain between them.
+//
+// The outbound half is `./effects`, which needs a sender the config names.
 
 import type { Plugin } from '@yaks/graph'
 import { mailbox } from './plugin.ts'
+import type { Options } from './effects.ts'
 
-/** The letter words, and the address canonicalizer the host's domain implies. */
-export let rules = (host: { config: { domain?: string } }): Plugin[] => [
-  mailbox({ domain: host.config.domain }),
+/** The letter words, and the address canonicalizer the domain implies. */
+export let rules = (_host: unknown, options: Options = {}): Plugin[] => [
+  mailbox({ domain: options.domain }),
 ]

@@ -105,7 +105,13 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
       }
     }
   }
-  assertEquals([...seen].sort(), ['routes', 'rules', 'tools', 'views'])
+  assertEquals([...seen].sort(), [
+    'effects',
+    'routes',
+    'rules',
+    'tools',
+    'views',
+  ])
 })
 
 Deno.test('compose takes every facet of the plugins a config names', async () => {

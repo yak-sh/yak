@@ -339,3 +339,67 @@ Deno.test('a call written through the door is run by the effect', async () => {
     host.close()
   }
 })
+
+Deno.test('a plugin named with options gets them, beside the host', async () => {
+  let said: unknown[] = []
+  let host = await compose(
+    {
+      db: ':memory:',
+      plugins: [{ use: 'shop', with: { open: 'tuesdays' } }, 'quiet'],
+      actor: 'me',
+    },
+    only({
+      shop: {
+        ...shop,
+        routes: {
+          routes: (_host, options) => {
+            said.push(options)
+            return [{
+              method: 'GET',
+              path: '/open',
+              handle: () => new Response(String(options.open)),
+            }]
+          },
+        },
+      },
+      // A plugin nobody configured is handed an empty object, never
+      // undefined: a factory reads its options without guarding first.
+      quiet: {
+        effects: {
+          effects: (_h, options) => {
+            said.push(options)
+            return []
+          },
+        },
+      },
+    }),
+  )
+  try {
+    assertEquals(said, [{}, { open: 'tuesdays' }])
+    let res = await host.handler(new Request('http://x/open'))
+    assertEquals(await res.text(), 'tuesdays')
+  } finally {
+    host.close()
+  }
+})
+
+Deno.test('an option written {env} is read from the environment', () => {
+  let dir = Deno.makeTempDirSync()
+  Deno.env.set('YAK_TEST_TOKEN', 'hunter2')
+  try {
+    write(`${dir}/yak.json`, {
+      db: ':memory:',
+      plugins: [{
+        use: './plugins/mail',
+        with: { sender: { token: { env: 'YAK_TEST_TOKEN' } }, keep: [1, 2] },
+      }],
+    })
+    assertEquals(read(`${dir}/yak.json`).plugins, [{
+      use: `file://${dir}/plugins/mail`,
+      with: { sender: { token: 'hunter2' }, keep: [1, 2] },
+    }])
+  } finally {
+    Deno.env.delete('YAK_TEST_TOKEN')
+    Deno.removeSync(dir, { recursive: true })
+  }
+})

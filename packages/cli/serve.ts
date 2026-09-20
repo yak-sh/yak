@@ -67,14 +67,23 @@ import { mcp } from '@yaks/mcp'
 import { type Effects, effects, type Watch } from '@yaks/effects'
 import type { Ctx, Word } from './run.ts'
 
+/** What a config says TO one plugin: its own options, handed to each facet
+ * factory beside the host. A value written `{"env": "NAME"}` is read out of
+ * the environment when the file is read, so a config names a secret without
+ * holding one. */
+export type Options = Record<string, unknown>
+
+/** A plugin a config names: a bare specifier, or one with options. */
+export type Plug = string | { use: string; with?: Options }
+
 /** What a config file says: where the graph lives, and what speaks over it. */
 export type Config = {
   /** the SQLite file, `:memory:` for a graph that lasts as long as the
    * process. Required — a host never guesses a database. */
   db?: string
   /** the plugin modules, by import specifier. A relative one is resolved
-   * against the config file itself. */
-  plugins?: string[]
+   * against the config file itself; `{use, with}` names one with options. */
+  plugins?: Plug[]
   /** what to listen on (default 8787) */
   port?: number
   /** which interface (default Deno's own) */
@@ -120,19 +129,22 @@ export type VocabFacet = {
 
 /** `<plugin>/rules` — what a batch MEANS. It runs at compose time and may
  * install tables of its own through `host.sql`. */
-export type RulesFacet = { rules?: (host: Host) => Plugin[] }
+export type RulesFacet = { rules?: (host: Host, options: Options) => Plugin[] }
 
 /** `<plugin>/tools` — the runs behind its `tool: true` declarations, keyed by
  * tool name. */
 export type ToolsFacet = { runs?: Runs }
 
-/** `<plugin>/effects` — what happens after a commit. */
-export type EffectsFacet = { effects?: (host: Host) => Watch[] }
+/** `<plugin>/effects` — what happens after a commit. A sender, a spawner, a
+ * sweep: what an effect ACTS on is named in this plugin's options. */
+export type EffectsFacet = {
+  effects?: (host: Host, options: Options) => Watch[]
+}
 
 /** `<plugin>/routes` — the HTTP it adds beside the doors, and, for at most one
  * plugin in a host, who is calling. */
 export type RoutesFacet = {
-  routes?: (host: Host) => Route[]
+  routes?: (host: Host, options: Options) => Route[]
   authenticate?: Authenticate
 }
 
@@ -196,6 +208,36 @@ export type Served = Host & {
 let near = (spec: string, base: URL): string =>
   spec.startsWith('.') || spec.startsWith('/') ? new URL(spec, base).href : spec
 
+/** What a plugin entry names, either way it is written. */
+export let used = (plug: Plug): string =>
+  typeof plug == 'string' ? plug : plug.use
+
+/** What it was given, either way it is written. */
+export let given = (plug: Plug): Options =>
+  typeof plug == 'string' ? {} : plug.with ?? {}
+
+// `{"env": "NAME"}` anywhere in an options object is the environment's value
+// at the moment the config is read — the one thing a config file cannot hold
+// in the open. A name nothing exports reads as undefined rather than as a
+// guess, so the plugin refuses in its own words about what it wanted.
+let sourced = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(sourced)
+  if (!value || typeof value != 'object') return value
+  let said = value as Record<string, unknown>
+  if (typeof said.env == 'string' && Object.keys(said).length == 1) {
+    return Deno.env.get(said.env)
+  }
+  return Object.fromEntries(
+    Object.entries(said).map(([k, v]) => [k, sourced(v)]),
+  )
+}
+
+let resolved = (plug: Plug, base: URL): Plug =>
+  typeof plug == 'string' ? near(plug, base) : {
+    use: near(plug.use, base),
+    ...plug.with ? { with: sourced(plug.with) as Options } : {},
+  }
+
 /**
  * Read a config file. Paths inside it — the database, a relative plugin — are
  * resolved against the file itself.
@@ -217,7 +259,7 @@ export let read = (path: string): Config => {
     db: config.db && config.db != ':memory:'
       ? new URL(config.db, base).pathname
       : config.db,
-    plugins: (config.plugins ?? []).map((spec) => near(spec, base)),
+    plugins: (config.plugins ?? []).map((plug) => resolved(plug, base)),
   }
 }
 
@@ -275,16 +317,17 @@ export let compose = async (
   let path = dbOf(config)
   let plugins = config.plugins ?? []
   let got = await Promise.all(
-    plugins.map(async (plugin) =>
+    plugins.map(async (plug) =>
       [
-        plugin,
-        await Promise.all(FACETS.map((name) => load(plugin, name))),
+        used(plug),
+        given(plug),
+        await Promise.all(FACETS.map((name) => load(used(plug), name))),
       ] as const
     ),
   )
   // A plugin that exports none of the five is a typo in the config, not a
   // plugin: say so here rather than serve a host quietly missing its words.
-  for (let [plugin, facets] of got) {
+  for (let [plugin, , facets] of got) {
     if (facets.every((f) => !f)) {
       throw new Error(
         `${plugin} exports no facet — a plugin has at least one of ` +
@@ -292,9 +335,12 @@ export let compose = async (
       )
     }
   }
-  let taken = <F extends FacetName>(name: F): Facets[F][] =>
-    got.map(([, facets]) => facets[FACETS.indexOf(name)] as Facets[F] | null)
-      .filter((f) => !!f)
+  // A facet and the options it was named with travel together: what a host
+  // runs is one plugin's module handed one plugin's config.
+  let taken = <F extends FacetName>(name: F): [Facets[F], Options][] =>
+    got.map(([, options, facets]) =>
+      [facets[FACETS.indexOf(name)] as Facets[F] | null, options] as const
+    ).filter((pair): pair is [Facets[F], Options] => !!pair[0])
 
   let vocabs = taken('vocab')
   let ruled = taken('rules')
@@ -307,8 +353,8 @@ export let compose = async (
   // is its own transcript. A plugin that speaks them already — a harness,
   // whose transcripts ARE calls — keeps its own spelling, so only the words
   // nobody supplied are added.
-  let docs = said(vocabs.flatMap((v) => v.docs ?? []))
-  let vocab = loadVocab(docs, vocabs.flatMap((v) => v.keywords ?? []))
+  let docs = said(vocabs.flatMap(([v]) => v.docs ?? []))
+  let vocab = loadVocab(docs, vocabs.flatMap(([v]) => v.keywords ?? []))
 
   if (path != ':memory:') {
     let dir = path.slice(0, path.lastIndexOf('/'))
@@ -326,7 +372,7 @@ export let compose = async (
     migrations(sql).ready()
     let derived: Derived = Object.assign(
       {},
-      ...vocabs.map((v) => v.derived?.(vocab) ?? {}),
+      ...vocabs.map(([v]) => v.derived?.(vocab) ?? {}),
     )
     let store = storage(sql, vocab, {
       derived,
@@ -353,16 +399,19 @@ export let compose = async (
     g = graph({
       storage: store,
       vocab,
-      plugins: [...ruled.flatMap((r) => r.rules?.(host) ?? []), fx],
+      plugins: [
+        ...ruled.flatMap(([r, options]) => r.rules?.(host, options) ?? []),
+        fx,
+      ],
     })
-    for (let mod of watched) {
-      for (let { comp, ...watch } of mod.effects?.(host) ?? []) {
+    for (let [mod, options] of watched) {
+      for (let { comp, ...watch } of mod.effects?.(host, options) ?? []) {
         fx.on(comp, watch)
       }
     }
     let tools = loadTools(
       docs,
-      Object.assign({}, ...tooled.map((t) => t.runs ?? {})) as Runs,
+      Object.assign({}, ...tooled.map(([t]) => t.runs ?? {})) as Runs,
     )
     // The one RUNNER over this graph. A door calls a tool and records the ask
     // and the answer as it goes; what this adds is the calls NOBODY here is
@@ -379,8 +428,8 @@ export let compose = async (
     for (let rule of run.rules) {
       fx.on(rule.plan, (e) => run.run(e.entity.eid), { doc: rule.rule.name })
     }
-    let routes = served.flatMap((r) => r.routes?.(host) ?? [])
-    let authenticate = doorman(served, config)
+    let routes = served.flatMap(([r, o]) => r.routes?.(host, o) ?? [])
+    let authenticate = doorman(served.map(([r]) => r), config)
     let door = api({ graph: g, authenticate })
     let agents = mcp({
       graph: g,
