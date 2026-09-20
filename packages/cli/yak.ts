@@ -9,6 +9,15 @@
 //   yak recipes add_recipe title='Lemon cake' serves=4
 //   cat bundles.ndjson | yak apply
 //
+//   yak serve --config yak.json       # the server that config describes
+//   yak --config yak.json task list   # and a line aimed at it
+//
+// ONE CONFIG SAYS ONE ADDRESS. `serve` binds `hostname`/`port`; every other
+// line naming the same config talks to what is listening there (run.ts
+// `hostFor`). A config is not a second copy of the graph — opening the file a
+// server is holding would be a second writer, a second runner and a second
+// tool list, so there is no local path here and never will be.
+//
 // The platform table is why there is no list of tools in this package: it
 // reads `tools/list` at run time, so the CLI cannot drift from the connector
 // an agent is talking to, and a tool a release adds is a subcommand the day it
@@ -20,14 +29,8 @@
 import { Usage } from './args.ts'
 import { bundlesIn, chunks } from './apply.ts'
 import { appStray, appTools } from './commands.ts'
-import {
-  cli,
-  configPath,
-  type Ctx,
-  helpTool,
-  type Opts,
-  type Word,
-} from './run.ts'
+import { cli, type Ctx, helpTool, type Opts, type Word } from './run.ts'
+import { configPath } from './config.ts'
 import { listed, printed, rosterOf } from './platform.ts'
 import type { Result } from './roster.ts'
 import { forgetToken, saveToken } from './store.ts'
@@ -37,9 +40,10 @@ export let HOST = 'yaks.app'
 
 let HEAD = 'yak — the tools this server lists, and the words this box adds'
 
-let TAIL = `  --host <host>   which server (default $YAKS_HOST, else ${HOST})
-  --config <path> serve, and run tools against, the graph this config
-                  composes (default $YAK_CONFIG)
+let TAIL = `  --host <host>   which server (default $YAKS_HOST, the address
+                  --config describes, else ${HOST})
+  --config <path> the config a \`yak serve\` is running — its hostname and
+                  port are where this line is aimed (default $YAK_CONFIG)
   --json          print the structured result instead of the words
   --timing        a line on stderr per answer, with its Server-Timing
                   (or YAKS_TIMING=1)
@@ -80,22 +84,6 @@ let applied = async (
   return code
 }
 
-// A local host, composed from a config: its tools are words like any other,
-// run against the graph this box just opened rather than a server's. The
-// module is imported only on a line that asks for one — it opens a database,
-// and `yak login` must work on a box with no graph at all.
-let local = async (c: Ctx): Promise<Word[]> => {
-  let { compose, read, words } = await import('./serve.ts')
-  let path = configPath(c.config)
-  if (!path) return []
-  return words(await compose(read(path)))
-}
-
-// What a line means when it names a config: the local host's tools. Without
-// one it is the server's table, as always.
-let table = (c: Ctx): Word[] | Promise<Word[]> =>
-  configPath(c.config) ? local(c) : listed(c)
-
 // `serve` is the whole server: one config, the plugins it names, and the doors
 // @yaks/api and @yaks/mcp mount over the graph they compose.
 let served = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
@@ -125,7 +113,7 @@ export let YAK: Opts = {
   about: HEAD,
   notes: TAIL,
   host: HOST,
-  more: table,
+  more: listed,
   stray: appStray,
 }
 

@@ -3,14 +3,7 @@ import type { Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
-import {
-  compose,
-  FACETS,
-  type Facets,
-  read,
-  unfinished,
-  words,
-} from './serve.ts'
+import { compose, FACETS, type Facets, read, unfinished } from './serve.ts'
 
 let doc: VocabDoc = {
   title: 'shop',
@@ -305,20 +298,34 @@ Deno.test('a boot pass runs when a host is SERVED, never when one is composed', 
 // the answer are written down as they go, and a call somebody else wrote is
 // run by the effect the server registers.
 
-Deno.test('a word calls the tool, and the call is the transcript', async () => {
-  let said: string[] = []
+Deno.test('the door calls the tool, and the call is the transcript', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop'], actor: 'me' },
     only({ shop }),
   )
   try {
-    let add = words(host).find((w) => w.name == 'book_add')!
-    let code = await add.run({ title: 'Spring' }, {
-      out: (line: string) => said.push(line),
-      err: () => {},
-    } as never)
-    assertEquals(code, 0)
-    assertEquals(said, ['shelved Spring'])
+    // What `yak book add --title Spring` is once it reaches the server: one
+    // POST to /mcp, which is the only way a line runs a tool here.
+    let said = await host.handler(
+      new Request('http://h/mcp', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'book_add', arguments: { title: 'Spring' } },
+        }),
+      }),
+    )
+    assertEquals(said.status, 200)
+    let reply = await said.json() as {
+      result: { content: { text: string }[] }
+    }
+    assertEquals(reply.result.content[0].text, 'shelved Spring')
 
     // What was asked, and what came back, both written down — and the book
     // the tool answered is signed as the person who asked, not the server.

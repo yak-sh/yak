@@ -16,8 +16,32 @@ deno install -gAf jsr:@yaks/cli/yak
 
 yak app_list                       # a tool the server lists
 yak serve --config yak.json        # the doors onto the graph that config names
-yak --config yak.json session list # that graph's own tools, locally
+yak --config yak.json task list    # a line aimed at that server
 ```
+
+## Where a line is aimed
+
+**A config names a SERVER, not a second copy of the graph.**
+`yak serve
+--config yak.json` binds the `hostname` and `port` that config says,
+and every other line naming the same config talks to whatever is listening
+there, over `/mcp`. One graph, one writer, one tool list — the same words
+whether the caller is a person, a lifecycle hook or an agent. There is no local
+path that opens the database a server is holding, and there will not be one:
+that is a second writer, a second runner and a second boot.
+
+In order, a line goes to:
+
+| said                       | where it goes                                                       |
+| -------------------------- | ------------------------------------------------------------------- |
+| `--host <host>`            | there — a bare name is `https://`, an origin is as given            |
+| `$YAKS_HOST`               | there                                                               |
+| `--config` / `$YAK_CONFIG` | `http://<hostname>:<port>` of that config (`127.0.0.1:8787` unsaid) |
+| nothing                    | `yaks.app`                                                          |
+
+So a box whose shell exports `YAK_CONFIG=/etc/yak.json` types `yak task list`
+and reaches its own server; `yak --host yaks.app app_list` still reaches the
+platform from the same shell.
 
 ## The config
 
@@ -45,15 +69,15 @@ One JSON file. `--config` names it, else `$YAK_CONFIG`.
 }
 ```
 
-| field      | what it says                                                                  |
-| ---------- | ----------------------------------------------------------------------------- |
-| `db`       | the SQLite file, or `:memory:`. Relative to the config file itself.           |
-| `plugins`  | the packages, by import specifier; a relative one resolves against the config |
-| `port`     | what to listen on (default 8787)                                              |
-| `hostname` | which interface                                                               |
-| `actor`    | the eid every request is signed with, where no plugin authenticates           |
-| `numbers`  | whether the store mints human numbers beside eids (default true)              |
-| `name`     | what the MCP door calls itself                                                |
+| field      | what it says                                                                             |
+| ---------- | ---------------------------------------------------------------------------------------- |
+| `db`       | the SQLite file, or `:memory:`. Relative to the config file itself.                      |
+| `plugins`  | the packages, by import specifier; a relative one resolves against the config            |
+| `port`     | what `serve` listens on, and so where a client aimed at this config talks (default 8787) |
+| `hostname` | which interface `serve` binds; a client reads it as the host to talk to                  |
+| `actor`    | the eid every request is signed with, where no plugin authenticates                      |
+| `numbers`  | whether the store mints human numbers beside eids (default true)                         |
+| `name`     | what the MCP door calls itself                                                           |
 
 ### What a config says to one plugin
 
@@ -185,8 +209,9 @@ it is attributed. One plugin may say who is calling (`authenticate` on its
    `/mcp`, then the `./routes`.
 
 It answers a `Served`: the host, its `tools`, its `fx`, one `handler`, and
-`close`. `serve(config)` is that plus `Deno.serve`. `words(host)` is the same
-tools as command-line words, which is what `yak --config …` runs.
+`close`. `serve(config)` is that plus `Deno.serve`. Reading the config file is
+`./config.ts`, which imports nothing — a line that only needs the ADDRESS must
+never drag a database in.
 
 ## The client half
 

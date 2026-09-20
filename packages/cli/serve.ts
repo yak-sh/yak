@@ -40,16 +40,7 @@ import {
   type Plugin,
   then,
 } from '@yaks/graph'
-import {
-  answerOf,
-  faulted,
-  reconcile,
-  type Runner,
-  runner,
-  toolEid,
-  toolsDoc,
-  worded,
-} from '@yaks/tools'
+import { reconcile, type Runner, runner, toolsDoc } from '@yaks/tools'
 import { loadTools, type Runs } from '@yaks/graph/tools'
 import {
   type Keywords,
@@ -76,37 +67,18 @@ import {
   type SweepRows,
   type Watch,
 } from '@yaks/effects'
-import type { Ctx, Word } from './run.ts'
+import { type Config, given, type Options, PORT, used } from './config.ts'
 
-/** What a config says TO one plugin: its own options, handed to each facet
- * factory beside the host. A value written `{"env": "NAME"}` is read out of
- * the environment when the file is read, so a config names a secret without
- * holding one. */
-export type Options = Record<string, unknown>
-
-/** A plugin a config names: a bare specifier, or one with options. */
-export type Plug = string | { use: string; with?: Options }
-
-/** What a config file says: where the graph lives, and what speaks over it. */
-export type Config = {
-  /** the SQLite file, `:memory:` for a graph that lasts as long as the
-   * process. Required — a host never guesses a database. */
-  db?: string
-  /** the plugin modules, by import specifier. A relative one is resolved
-   * against the config file itself; `{use, with}` names one with options. */
-  plugins?: Plug[]
-  /** what to listen on (default 8787) */
-  port?: number
-  /** which interface (default Deno's own) */
-  hostname?: string
-  /** the eid every request is signed with, where nothing authenticates —
-   * a box that trusts whoever reaches it. */
-  actor?: string
-  /** whether the store mints human numbers beside eids (default true) */
-  numbers?: boolean
-  /** what the MCP door calls itself (default `yak`) */
-  name?: string
-}
+export {
+  type Config,
+  configPath,
+  doorOf,
+  given,
+  type Options,
+  type Plug,
+  read,
+  used,
+} from './config.ts'
 
 /** What every facet factory is handed: the graph being built, the words it
  * speaks, the store under it, the connection beneath that, and the config that
@@ -265,68 +237,6 @@ export type Served = Host & {
   /** start every plugin's long-running work; it stops with {@link Served.close} */
   start: () => void
   close: () => void
-}
-
-// A specifier the config file owns — `./plugins/mail`, `/srv/mail` — is
-// resolved against the config, so a config is movable and a bare `@yaks/…` is
-// left to the import map. It names a PACKAGE, never a file: the facets are its
-// subpaths, and only a package has those.
-let near = (spec: string, base: URL): string =>
-  spec.startsWith('.') || spec.startsWith('/') ? new URL(spec, base).href : spec
-
-/** What a plugin entry names, either way it is written. */
-export let used = (plug: Plug): string =>
-  typeof plug == 'string' ? plug : plug.use
-
-/** What it was given, either way it is written. */
-export let given = (plug: Plug): Options =>
-  typeof plug == 'string' ? {} : plug.with ?? {}
-
-// `{"env": "NAME"}` anywhere in an options object is the environment's value
-// at the moment the config is read — the one thing a config file cannot hold
-// in the open. A name nothing exports reads as undefined rather than as a
-// guess, so the plugin refuses in its own words about what it wanted.
-let sourced = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(sourced)
-  if (!value || typeof value != 'object') return value
-  let said = value as Record<string, unknown>
-  if (typeof said.env == 'string' && Object.keys(said).length == 1) {
-    return Deno.env.get(said.env)
-  }
-  return Object.fromEntries(
-    Object.entries(said).map(([k, v]) => [k, sourced(v)]),
-  )
-}
-
-let resolved = (plug: Plug, base: URL): Plug =>
-  typeof plug == 'string' ? near(plug, base) : {
-    use: near(plug.use, base),
-    ...plug.with ? { with: sourced(plug.with) as Options } : {},
-  }
-
-/**
- * Read a config file. Paths inside it — the database, a relative plugin — are
- * resolved against the file itself.
- */
-export let read = (path: string): Config => {
-  let base = new URL(path, `file://${Deno.cwd()}/`)
-  let said: unknown
-  try {
-    said = JSON.parse(Deno.readTextFileSync(base))
-  } catch (e) {
-    throw new Error(`${path}: ${(e as Error).message}`)
-  }
-  if (!said || typeof said != 'object' || Array.isArray(said)) {
-    throw new Error(`${path}: a config is a JSON object`)
-  }
-  let config = said as Config
-  return {
-    ...config,
-    db: config.db && config.db != ':memory:'
-      ? new URL(config.db, base).pathname
-      : config.db,
-    plugins: (config.plugins ?? []).map((plug) => resolved(plug, base)),
-  }
 }
 
 // The database a config names. `DB_PATH` is the other spelling, for a service
@@ -590,34 +500,6 @@ export let compose = async (
   }
 }
 
-/** The composed tools as words a person types — the same tools `/mcp` lists,
- * run against the same graph, their answer printed. */
-export let words = (host: Served): Word[] =>
-  host.tools.map((tool) => ({
-    ...tool,
-    run: async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
-      // The command line WRITES A CALL, signed as whoever this host says it
-      // is, and prints what answered it — the prose the answer carries, or
-      // the bundles themselves as JSON. Calling the tool is the runner's.
-      //
-      // The `tool` rows a call's `to` points at come first, once per process.
-      await host.runner.ensure()
-      let landed = await host.runner.call([{
-        entity: { eid: '$call' },
-        call: {
-          to: toolEid(tool.name),
-          args: JSON.stringify(args ?? {}),
-        },
-        ...(host.config.actor ? { $actor: { by: host.config.actor } } : {}),
-      }])
-      c.out(worded(answerOf(landed)))
-      // A refusal is data now, not a throw: the words are printed either way
-      // and the exit code is what says which it was — the runner's own word,
-      // since a tool that ANSWERS fault rows did not fail.
-      return faulted(landed) ? 1 : 0
-    },
-  }))
-
 /**
  * What an effect's `sweep` means here: its `pending` is a query in the graph's
  * own grammar, so the rows it names are read the way everything else is, and
@@ -662,7 +544,7 @@ export let serve = async (
   // about to read.
   host.start()
   let server = Deno.serve({
-    port: config.port ?? 8787,
+    port: config.port ?? PORT,
     hostname: config.hostname,
     onListen: (addr) => onListen?.(addr, host),
   }, host.handler)

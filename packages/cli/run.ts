@@ -21,6 +21,7 @@ import { argsFor, type Grammar, type Reads, Usage } from './args.ts'
 import { lineOf, safe, toolHelp } from './show.ts'
 import { titleOf, wordOf } from './tool.ts'
 import { doorUrl, type Rpc, rpc, timed } from './rpc.ts'
+import { hostOf } from './config.ts'
 import { tokenFor } from './store.ts'
 
 /** What a tool is handed: the door, where to print, and the line's globals. */
@@ -157,18 +158,19 @@ export let usage = (
 }
 
 /** The flags a program keeps for itself, lifted off the line before a tool
- * ever sees it. */
+ * ever sees it. `host` is what the LINE said and nothing else — where a line
+ * is aimed when it says nothing is {@link hostFor}'s answer. */
 export let globals = (
   argv: readonly string[],
-  host = 'yaks.app',
 ): {
-  host: string
+  host?: string
   config?: string
   json: boolean
   help: boolean
   timing: boolean
   rest: string[]
 } => {
+  let host: string | undefined
   let json = false
   let help = false
   let config: string | undefined
@@ -190,9 +192,20 @@ export let globals = (
   return { host, config, json, help, timing, rest }
 }
 
-/** Where a LOCAL host's config is: what the line said, else `$YAK_CONFIG`. */
-export let configPath = (said?: string): string | undefined =>
-  said ?? Deno.env.get('YAK_CONFIG') ?? undefined
+/**
+ * Where a line is aimed. In order: what the line said, `$YAKS_HOST`, the
+ * address the config file describes, and the platform this program came with.
+ *
+ * A CONFIG NAMES A SERVER, not a second copy of the graph. `yak serve
+ * --config yak.json` binds that address and every other line aimed at the same
+ * config talks to what is listening there — one graph, one writer, one tool
+ * list, whether the caller is a person, a hook or an agent.
+ */
+export let hostFor = (
+  said: { host?: string; config?: string },
+  dflt = 'yaks.app',
+): string =>
+  said.host ?? Deno.env.get('YAKS_HOST') ?? hostOf(said.config) ?? dflt
 
 let disk: Reads = {
   file: (path) => Deno.readTextFile(path),
@@ -209,10 +222,9 @@ export let cli = async (
 ): Promise<number> => {
   let out = opts.out ?? ((line: string) => console.log(safe(line)))
   let note = opts.note ?? ((line: string) => console.error(safe(line)))
-  let { host, config, json, help, timing, rest } = globals(
-    opts.argv ?? Deno.args,
-    Deno.env.get('YAKS_HOST') ?? opts.host ?? 'yaks.app',
-  )
+  let said = globals(opts.argv ?? Deno.args)
+  let { config, json, help, timing, rest } = said
+  let host = hostFor(said, opts.host ?? 'yaks.app')
   // A table that cannot be had is a reason on the page, not a page nobody
   // gets: `yak` with no argument is what a person types when nothing works.
   let extra: Word[] | undefined
