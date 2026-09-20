@@ -93,16 +93,16 @@
     "check:codegen": "deno task codegen --check",
     "check:content": "deno task content --check",
     "check:packages": {
-      "command": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno test --parallel --no-check -A packages/",
+      "command": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno run -A bin/scratch.ts deno test --parallel --no-check -A packages/",
       "dependencies": [
         "check:types"
       ]
     },
     "codegen": "deno run --allow-read --allow-write --allow-run=deno src/vocab/gen.ts",
     "content": "deno run --allow-read --allow-write --allow-run=deno workers/yak/gen.ts",
-    "test:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno test --parallel -A packages/",
+    "test:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno run -A bin/scratch.ts deno test --parallel -A packages/",
     "test:workerd": "deno run -A bin/suite-time.ts test:workerd deno task test:workerd:run",
-    "test:workers": "deno test -A workers/yak/ workers/yak-tail/",
+    "test:workers": "deno run -A bin/scratch.ts deno test -A workers/yak/ workers/yak-tail/",
     "gate": "deno task check && deno task test && deno task bench:gate && deno task bench:gate:web && deno run -A src/cli.ts sync --check",
     "dev": "deno run -A --unstable-net --unstable-worker-options src/dev.ts",
     "dev:yak": "deno run --allow-read --allow-write --allow-run=npm,npx,pgrep,kill workers/yak/wrangler.ts dev",
@@ -125,7 +125,7 @@
     "seed": "deno run -A src/store/sqlite.ts",
     "icons": "deno run -A bin/gen-icons.ts",
     "test": "deno run -A bin/suite-time.ts test deno task test:run",
-    "test:all": "TASKS_SLOW=1 DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/test.ts",
+    "test:all": "TASKS_SLOW=1 DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/scratch.ts deno run -A bin/test.ts",
     "test:budget": "deno run -A bin/test-budget.ts",
     "bench": "bash bin/bench.sh",
     "bench:gate": "deno run -A bin/bench-gate.ts",
@@ -149,7 +149,7 @@
         "check:packages"
       ]
     },
-    "test:run": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/test.ts",
+    "test:run": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/scratch.ts deno run -A bin/test.ts",
     "test:workerd:run": "deno run -A bin/test-workerd.ts"
   },
   "workspace": [

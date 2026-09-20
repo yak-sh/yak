@@ -1,0 +1,136 @@
+// One temp directory per run, owned by the runner. Deno.makeTempDir reads
+// TMPDIR, so pointing it at `<base>/tasks-run-<pid>` puts EVERY scratch dir a
+// test mints inside one directory the run can remove — whether or not the test
+// that made it reached its own cleanup. Roughly two hundred test call sites
+// mint one; almost none remove it, and no amount of per-test `finally` survives
+// a phase the runner kills, a fixture that throws, or a child that exits.
+//
+// Three doors close the directory: normal exit, an accepted signal, and the
+// next run's stale sweep (a SIGKILLed run cannot clean up after itself, so its
+// successor does it by pid). Afterwards the run fails if any NEW `tasks-*`
+// entry appeared in the base directory: that is a spawn site writing to a
+// hard-coded `/tmp` instead of TMPDIR, and it is how /tmp filled to 0 bytes
+// free on this box three times (T-20558).
+//
+// That last check reads the base directory, so it is exact only while the base
+// is this run's to watch. Where several suites share one `/tmp` — this box runs
+// CI and other worktrees against the same one — give the run a base of its own
+// (`TMPDIR=<scratch> deno task test`) and it reports only its own leaks.
+
+/** Where temp dirs land for a process that has not been given a run dir. */
+export let tmpBase = (env: { TMPDIR?: string } = Deno.env.toObject()) =>
+  env.TMPDIR || '/tmp'
+
+/** The `tasks-*` entries of a directory — the family this repo mints. */
+export let tasksEntries = (base: string) => {
+  let names = new Set<string>()
+  for (let e of Deno.readDirSync(base)) {
+    if (e.name.startsWith('tasks-')) names.add(e.name)
+  }
+  return names
+}
+
+// Linux procfs, the same door bin/test.ts uses to watch a process group.
+export let running = (pid: number) => {
+  try {
+    return Deno.statSync(`/proc/${pid}`).isDirectory
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Remove the run directories of runs that are gone. A run killed outright
+ * never reaches its own cleanup; its pid is the receipt that says so.
+ */
+export let sweep = (base: string, alive = running) => {
+  let gone: string[] = []
+  for (let e of Deno.readDirSync(base)) {
+    let owner = /^tasks-run-(\d+)$/.exec(e.name)
+    if (!owner || alive(Number(owner[1]))) continue
+    try {
+      Deno.removeSync(`${base}/${e.name}`, { recursive: true })
+      gone.push(e.name)
+    } catch {
+      // Another runner's sweep won the race, or the dir is not ours to remove.
+    }
+  }
+  return gone
+}
+
+/**
+ * `tasks-*` entries that appeared while the run ran. A run directory is
+ * excluded: it belongs to whichever run minted it and cleans itself up.
+ */
+export let strays = (base: string, before: Set<string>) =>
+  [...tasksEntries(base)]
+    .filter((name) => !before.has(name) && !name.startsWith('tasks-run-'))
+    .sort()
+
+if (import.meta.main) {
+  if (!Deno.args.length) {
+    console.error('usage: scratch.ts <command> [args...]')
+    Deno.exit(2)
+  }
+  let base = tmpBase()
+  sweep(base)
+  let dir = `${base}/tasks-run-${Deno.pid}`
+  Deno.mkdirSync(dir, { recursive: true })
+  let before = tasksEntries(base)
+
+  let child = new Deno.Command(Deno.args[0], {
+    args: Deno.args.slice(1),
+    env: { TMPDIR: dir },
+    stdin: 'inherit',
+    stdout: 'inherit',
+    stderr: 'inherit',
+  }).spawn()
+
+  // Hand the signal to the run and wait for it: the directory is only safe to
+  // remove once the processes writing into it are done. A shell reads 130/143
+  // the same way it reads the death itself, and reporting the leak first is
+  // worth more here than dying by signal.
+  let raise: Deno.Signal | undefined
+  let listeners = (['SIGINT', 'SIGTERM'] as const).map((signal) => {
+    let handler = () => {
+      raise ??= signal
+      try {
+        child.kill(signal)
+      } catch {
+        // Already gone; the status below is the outcome.
+      }
+    }
+    Deno.addSignalListener(signal, handler)
+    return [signal, handler] as const
+  })
+
+  let status = await child.status
+  for (let [signal, handler] of listeners) {
+    Deno.removeSignalListener(signal, handler)
+  }
+
+  let held: unknown
+  try {
+    Deno.removeSync(dir, { recursive: true })
+  } catch (error) {
+    held = error
+  }
+
+  let leaked = strays(base, before)
+  if (held) console.error(`could not remove ${dir}: ${held}`)
+  if (leaked.length) {
+    console.error(
+      `\n─── ${leaked.length} temp entr${
+        leaked.length == 1 ? 'y' : 'ies'
+      } leaked outside the run directory ───`,
+    )
+    for (let name of leaked) console.error(`  ${base}/${name}`)
+    console.error(
+      'Mint scratch under TMPDIR (Deno.makeTempDir does), never a literal /tmp.',
+    )
+  }
+
+  let signal = raise ?? status.signal
+  if (signal) Deno.exit(signal == 'SIGINT' ? 130 : 143)
+  Deno.exit(status.code || (held || leaked.length ? 1 : 0))
+}
