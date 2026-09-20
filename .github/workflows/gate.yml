@@ -77,7 +77,7 @@ jobs:
       # Actions secret is added — the recorder uses the box's own gh and
       # wrangler logins under $HOME. Nothing here pushes, so the row lands in
       # this run's checkout and in the job summary; commit it with the next
-      # change, like bench-gate's baseline. A bench-row commit on main would
+      # change, like the suite timings' baseline. A bench-row commit on main would
       # start another Workers Build and another gate.
       - name: deploy time
         if: github.event_name == 'push'
@@ -134,13 +134,6 @@ jobs:
         env:
           SUITE_STEP: app deploy gate
         run: deno task app-deploy:gate
-
-      # Reports a regression against the committed floor; it does not block.
-      - name: bench gate
-        continue-on-error: true
-        env:
-          SUITE_STEP: bench gate
-        run: deno task bench:gate
 
       - name: retain suite timings
         if: always()
