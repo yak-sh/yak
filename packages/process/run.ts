@@ -132,6 +132,27 @@ let files = (dir: string, eid: string) => ({
   ended: `${dir}/${eid}.ended`,
 })
 
+/**
+ * The files one run keeps, by the entity it lands on: its two streams, the
+ * pidfile the wrapper reported for duty with, and the code file it reports the
+ * ending in.
+ *
+ * ```ts
+ * import { paths } from '@yaks/process'
+ *
+ * // paths('7f3…').out  // the stdout a tailer reads
+ * ```
+ *
+ * A caller that reads a stream itself — @yaks/spawn imports a provider's JSONL
+ * as transcript entries — needs the name of the file this package writes, and
+ * the layout is this package's to say rather than anybody's to assume.
+ */
+export let paths = (
+  eid: string,
+  o: Opts = {},
+): Record<'out' | 'err' | 'pid' | 'code' | 'started' | 'ended', string> =>
+  files(dirOf(o), eid)
+
 // The firebreak script, run inside the scope by `setsid sh <this file>`. It
 // rides a FILE, not `sh -c '<script>'`, because systemd-run applies systemd's
 // own $-expansion to the command it launches and `$$` is its escape for a
@@ -259,6 +280,29 @@ let kill = async (target: number, sig: string) =>
   }).output()).success
 
 let alive = (pid: number) => kill(pid, '0')
+
+/**
+ * Signal a tracked run: its process GROUP where we launched it — the wrapper
+ * leads that group, so the child and anything the child started go with it —
+ * and the bare pid where we only adopted one.
+ *
+ * ```ts
+ * import { signal } from '@yaks/process'
+ *
+ * // await signal(run.eid, run.pid, 'TERM')
+ * ```
+ *
+ * Nothing waits: the ending is the watcher's to stamp, here as everywhere.
+ */
+export let signal = (
+  eid: string,
+  pid: number,
+  sig: string,
+  o: Opts = {},
+): Promise<boolean> => {
+  let group = groupOf(paths(eid, o).pid)
+  return kill(group ? -group : pid, sig)
+}
 
 let sizeOf = (path: string) => {
   try {
@@ -579,15 +623,10 @@ let mine = () => {
 export let supervise = (store: Store, o: Care = {}): () => Promise<Run[]> => {
   let waits = new Map<string, Wait>()
   let own = mine()
-  let dir = dirOf(o)
   let wait = (eid: string) => {
     let w = waits.get(eid)
     if (!w) waits.set(eid, w = {})
     return w
-  }
-  let signal = (eid: string, pid: number, sig: string) => {
-    let group = groupOf(files(dir, eid).pid)
-    return kill(group ? -group : pid, sig)
   }
   // Down, politely and then not: TERM on the pass that first sees it, KILL on
   // the first pass after the grace. Nothing here waits — the tick comes back.
@@ -595,10 +634,10 @@ export let supervise = (store: Store, o: Care = {}): () => Promise<Run[]> => {
     if (!pid || !(await alive(pid))) return
     if (!w.termed) {
       w.termed = Date.now()
-      return signal(eid, pid, 'TERM')
+      return signal(eid, pid, 'TERM', o)
     }
     if (Date.now() - w.termed >= (o.grace ?? 10_000)) {
-      return signal(eid, pid, 'KILL')
+      return signal(eid, pid, 'KILL', o)
     }
   }
   return async (): Promise<Run[]> => {

@@ -271,6 +271,25 @@ Deno.test('a rule sees the graph it is part of, and an effect fires on a commit'
   }
 })
 
+Deno.test('a boot pass runs when a host is SERVED, never when one is composed', async () => {
+  let booted: string[] = []
+  let mod: Plugged = {
+    vocab: { docs: [doc] },
+    tools: { runs: { book_list: () => [], book_add: () => [] } },
+    boot: { boot: (host) => void booted.push(typeof host.graph.apply) },
+  }
+  let host = await compose({ db: ':memory:', plugins: ['m'] }, only({ m: mod }))
+  try {
+    // A one-shot command opens the same host to ask one question, and must
+    // not reconcile another process's world on the way in.
+    assertEquals(booted, [])
+    await host.boot()
+    assertEquals(booted, ['function'])
+  } finally {
+    host.close()
+  }
+})
+
 // The whole host path, in one place: a word calls the tool HERE, the ask and
 // the answer are written down as they go, and a call somebody else wrote is
 // run by the effect the server registers.

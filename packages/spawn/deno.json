@@ -1,0 +1,21 @@
+{
+  "name": "@yaks/spawn",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./mod.ts",
+    "./effects": "./effects.ts",
+    "./boot": "./boot.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Runs a session's provider as a detached command and reads its JSONL stdout back as that transcript's entries.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./harness.ts",
+      "./fake.ts"
+    ]
+  }
+}

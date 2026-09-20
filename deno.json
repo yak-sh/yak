@@ -188,6 +188,7 @@
     "./packages/task",
     "./packages/session",
     "./packages/process",
+    "./packages/spawn",
     "./packages/model",
     "./packages/openai",
     "./packages/openrouter",

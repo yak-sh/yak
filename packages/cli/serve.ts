@@ -5,7 +5,8 @@
  * plugin packages and imports, from each, the FACETS it runs — one subpath
  * apiece: the words it speaks (`@yaks/mail/vocab`), what a batch means
  * (`/rules`), what an agent may call (`/tools`), what happens after a commit
- * (`/effects`), and the HTTP it adds (`/routes`). A subpath a package does not
+ * (`/effects`), the HTTP it adds (`/routes`), and the one pass it makes at
+ * start-up (`/boot`). A subpath a package does not
  * export is a facet it does not have, and is skipped; a subpath that exists
  * and fails to import is an error, never a skip. Over that it opens one SQLite
  * file and mounts the doors —
@@ -112,7 +113,14 @@ export type Host = {
 
 /** The facets a host takes from a plugin, one subpath each. `views` is not
  * among them: a renderer is the WEB door's to import, never a server's. */
-export let FACETS = ['vocab', 'rules', 'tools', 'effects', 'routes'] as const
+export let FACETS = [
+  'vocab',
+  'rules',
+  'tools',
+  'effects',
+  'routes',
+  'boot',
+] as const
 
 /** One of those names. */
 export type FacetName = typeof FACETS[number]
@@ -157,6 +165,16 @@ export type RoutesFacet = {
   authenticate?: Authenticate
 }
 
+/** `<plugin>/boot` — the one pass this plugin makes at start-up, before
+ * anything is served: the leases a dead holder left, the processes a restart
+ * has to adopt back. A MOMENT rather than an observation, which is why it is
+ * not an effect — and why `compose` only imports it while {@link serve} is
+ * what runs it: a one-shot command opens the same host to ask one question and
+ * must not reconcile another process's world. */
+export type BootFacet = {
+  boot?: (host: Host, options: Options) => void | Promise<void>
+}
+
 /** What each subpath is expected to export. Every field is optional: a plugin
  * exports what it has, and the host takes what it runs. */
 export type Facets = {
@@ -165,6 +183,7 @@ export type Facets = {
   tools: ToolsFacet
   effects: EffectsFacet
   routes: RoutesFacet
+  boot: BootFacet
 }
 
 /** How a plugin's facet becomes a module. `null` means the package does not
@@ -207,6 +226,9 @@ export type Served = Host & {
   fx: Effects
   /** the doors, as one request handler */
   handler: Handler
+  /** each plugin's start-up pass, in config order — run by {@link serve}
+   * before it listens, and by nobody else */
+  boot: () => Promise<void>
   close: () => void
 }
 
@@ -356,6 +378,7 @@ export let compose = async (
   let tooled = taken('tools')
   let watched = taken('effects')
   let served = taken('routes')
+  let booted = taken('boot')
 
   // The words an invocation is written in come with the HOST, not with
   // whichever plugin happened to mention them: what was asked of this server
@@ -474,6 +497,11 @@ export let compose = async (
       runner: run,
       fx,
       handler,
+      // In config order, one after another: a plugin's pass may well be about
+      // rows another plugin's pass just corrected.
+      boot: async () => {
+        for (let [mod, options] of booted) await mod.boot?.(host, options)
+      },
       close: () => db.close(),
     }
   } catch (error) {
@@ -523,6 +551,9 @@ export let serve = async (
   // and must not reach into calls another process is running.
   await host.runner.ensure()
   await reconcile(host.runner)
+  // And each plugin's own: the locks a dead holder left, the agents still
+  // running that this process has no memory of.
+  await host.boot()
   let server = Deno.serve({
     port: config.port ?? 8787,
     hostname: config.hostname,

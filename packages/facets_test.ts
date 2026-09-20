@@ -74,6 +74,7 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
     tools: 'runs',
     effects: 'effects',
     routes: 'routes',
+    boot: 'boot',
     views: 'views',
   }
   let seen = new Set<string>()
@@ -97,6 +98,7 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
       assert(name in mod, `${p.name}/${facet} exports no \`${name}\``)
       seen.add(facet)
     }
+    if (!words) continue
     // A subpath outside the facet list is a package's own business, but a
     // facet NAME must mean the facet: nothing may export `./rules` meaning
     // something else.
@@ -108,6 +110,7 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
     }
   }
   assertEquals([...seen].sort(), [
+    'boot',
     'effects',
     'routes',
     'rules',

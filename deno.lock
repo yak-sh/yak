@@ -2065,6 +2065,11 @@
           "jsr:@std/assert@1"
         ]
       },
+      "packages/spawn": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/sql": {
         "dependencies": [
           "jsr:@std/assert@1"

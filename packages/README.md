@@ -142,6 +142,12 @@ In dependency order:
   supervise the wanted ones from a host's tick — plus the same rows as a
   session's `shell`, `wait` and `stop` tools, so a long tool call answers with
   the process instead of blocking on it.
+- **[@yaks/spawn](./spawn)** — the three of those meeting: a session whose
+  provider is a COMMAND. The `using` on a transcript's first entry is the
+  request, a provider that is a command line (`claude`, `codex`) is started
+  detached through @yaks/process on the session's own entity, and its JSONL
+  stdout is read back as that transcript's entries — exactly once, by the
+  `imported{source, line}` each one wears. It ships no components of its own.
 - **[@yaks/context](./context)** — the instructions a transcript was given, as
   entries: a `prompt` entry with its source and a hash of the snapshot it was
   made from, so what the model read is a row and not a guess. It persists
@@ -287,8 +293,17 @@ and takes the ones it runs (`@yaks/cli` `compose`, `packages/cli`):
 | `./tools`   | `runs: Runs`, behind its `tool: true` declarations            | ajv, SQL, anything  |
 | `./effects` | `effects: (host, options) => Watch[]`                         | anything            |
 | `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`         | anything            |
+| `./boot`    | `boot: (host, options) => void \| Promise<void>`              | anything            |
 | `./views`   | `views` — `@yaks/render` renderers                            | nothing server-side |
 | `.`         | types, and the pure functions the package offers as a library |                     |
+
+`./boot` is the one pass a plugin makes at start-up, before anything is served:
+the leases a dead holder left (`@yaks/session/boot`), the agents still running
+that a restarted server has no memory of (`@yaks/spawn/boot`). It is a MOMENT
+rather than an observation, which is why it is not an effect — and `compose`
+only imports it while `serve` is what runs it, because a one-shot command opens
+the same host to ask one question and must not reconcile another process's
+world.
 
 A subpath a package does not export is a facet it does not have, and the host
 skips it; a subpath that exists and fails to import is an error, never a skip. A
@@ -372,6 +387,15 @@ shape proposed for it.
   in `packages/facets_test.ts` reserves facet names on plugin-shaped packages
   only. The proposal, if it ever bites: those two become `./tool`, singular —
   one declaration, not a table of runs.
+- **A tool call somebody else already ran.** A provider CLI's transcript is full
+  of them, and `call{to, args}` + `result{call}` are exactly the words for what
+  it did — except that a `call` in this graph is an ORDER: @yaks/tools registers
+  "a call with no result" as an effect and runs any call naming a tool this host
+  has, which is most of what a fleet agent calls. So `@yaks/spawn`'s adapters
+  leave a foreign tool use in the log file rather than writing a row that would
+  be executed a second time. The proposal: a mark on the call saying it is a
+  RECORD rather than a request — one word, read by the runner's pattern — so an
+  imported transcript can say everything it saw.
 - **A view that needs SQL.** No package has one yet. When one does — a renderer
   that wants a computed column the store answers — the column is the `derived`
   in `./vocab` and the renderer reads it off the bundle; a `./views` that
