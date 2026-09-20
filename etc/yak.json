@@ -10,7 +10,6 @@
     "@yaks/archetype",
     "@yaks/effects",
     "@yaks/journal",
-    "@yaks/fts",
     "@yaks/task",
     "@yaks/project",
     "@yaks/goal",
@@ -31,6 +30,7 @@
     "@yaks/page",
     "@yaks/git",
     "@yaks/canvas",
+    "@yaks/tmux",
     "@yaks/platform",
     "@yaks/member"
   ],

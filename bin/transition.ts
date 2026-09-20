@@ -29,7 +29,7 @@ import {
 import type { Bundle, Eid } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import { aliasEid } from '@yaks/alias'
-import { derivedEid } from '@yaks/graph'
+import { derivedEid, identityEid } from '@yaks/graph'
 
 // ─── the fleet side ──────────────────────────────────────────────────────────
 
@@ -59,6 +59,8 @@ type Ctx = {
   /** the git ref a branch NAME is — @yaks/git's `worktree.branch` points at
    * the ref, it does not spell it */
   branch: (name: string) => string
+  /** the tmux pane somebody watches a run in (@yaks/tmux) */
+  pane: (target: string, of: string) => void
   /** the first entry of a session, when it has one */
   firstEntry: (session: string) => string | undefined
   /** the prose an artifact entity holds */
@@ -695,7 +697,7 @@ let MOVES: Record<string, Move | null> = {
   runtime: {
     says: 'process',
     make: (row, ctx) => {
-      if (row.pane != null) ctx.lost('runtime.pane') // TODO @yaks/tmux
+      if (row.pane != null) ctx.pane(String(row.pane), ctx.ref(row.entity)!)
       if (row.transcript != null) ctx.lost('runtime.transcript')
       if (row.provider_session_id != null) {
         ctx.also({
@@ -796,13 +798,13 @@ let MOVES: Record<string, Move | null> = {
           openai: { response_id: String(row.provider_session_id) },
         })
       }
+      if (row.pane != null) ctx.pane(String(row.pane), me)
       for (
         let col of [
           'turn',
           'latest_seq',
           'status',
           'source',
-          'pane',
           'transcript',
           'agent_type',
           'signal_at',
@@ -1066,6 +1068,14 @@ let main = async () => {
     let s = spine.get(Number(r.entity))
     if (s) renamed.set(s.eid, String(r.sha))
   }
+  // A page's address IS the page: @yaks/page declares `web.url` an identity,
+  // so the id is derived from it and the fleet's minted one cannot stand. Two
+  // rows witnessing one address become one entity, which is the point of
+  // saying it that way.
+  for (let r of all('select entity, url from web where url is not null')) {
+    let s = spine.get(Number(r.entity))
+    if (s) renamed.set(s.eid, identityEid('web', [String(r.url)]))
+  }
   let eidOf = (id: unknown): string | undefined => {
     let s = spine.get(Number(id))
     if (!s) return undefined
@@ -1178,6 +1188,12 @@ let main = async () => {
         batch.push({ entity: { eid, num: null }, ref: { name } })
       }
       return eid
+    },
+    pane: (target, of) => {
+      let eid = derivedEid(`tmux|${target}`)
+      if (minted.has(`tmux|${target}`)) return
+      minted.set(`tmux|${target}`, eid)
+      batch.push({ entity: { eid, num: null }, tmux: { of, pane: target } })
     },
     repository: (name) => {
       let eid = derivedEid(`repository|${name}`)
