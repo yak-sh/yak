@@ -4,10 +4,11 @@ import { loadTools } from '@yaks/graph/tools'
 import { idKeywords } from '@yaks/id'
 import { loadVocab } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
+import { taskDoc } from '@yaks/task'
 import { sessionDoc } from './comp.ts'
 import { hookSession, runs } from './tools.ts'
 
-let vocab = loadVocab([docDoc, sessionDoc], [idKeywords])
+let vocab = loadVocab([docDoc, taskDoc, sessionDoc], [idKeywords])
 
 // The store, as far as these tools read it: a list of bundles and the queries
 // they answer. Each tool asks one thing, so the stub answers by prefix.
@@ -86,8 +87,15 @@ Deno.test('a session that exists is handed back what it was in the middle of', a
       { entity: { eid: 's1', num: 3 }, session: { id: 'abc', actor: 'p1' } },
       'session.id',
     ),
+    // Under lease, and still a task: `claim` is a kind too, and a task says
+    // it sorts before one (@yaks/task's vocabulary), so the line reads T-7.
     row(
-      { entity: { eid: 't1', num: 7 }, doc: { title: 'ship it' } },
+      {
+        entity: { eid: 't1', num: 7 },
+        task: {},
+        doc: { title: 'ship it' },
+        claim: { session: 's1' },
+      },
       'claim.session',
     ),
     row(
@@ -106,7 +114,7 @@ Deno.test('a session that exists is handed back what it was in the middle of', a
       '# S-3',
       '',
       '## claimed',
-      '- D-7 — ship it',
+      '- T-7 — ship it',
       '',
       '## previously',
       'landed the thing',

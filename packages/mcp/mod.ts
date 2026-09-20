@@ -82,6 +82,7 @@ export {
   type Security,
   server,
   shapeOf,
+  WORD,
 } from './server.ts'
 export { rosterLine, rosterVersion } from './roster.ts'
 export { core, type CoreOpts, type Search } from './tools.ts'

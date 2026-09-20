@@ -13,7 +13,7 @@ import type { Ctx, Word } from './run.ts'
 import { initialize, type Rpc } from './rpc.ts'
 import { type Result, rosterAfter, saidBy } from './roster.ts'
 import { cached, forget, remember, type Roster } from './store.ts'
-import type { Listed } from './tool.ts'
+import { type Listed, spelling } from './tool.ts'
 
 /** The tool list for a host: the cached one, or a handshake and a listing.
  * The protocol version is negotiated on this same path and kept beside it. */
@@ -64,9 +64,13 @@ export let printed = (
 }
 
 // One tool the server listed, as a tool this command runs: its published
-// schema IS the grammar of the line, and running it is the call.
+// schema IS the grammar of the line, and running it is the call. Two words and
+// a spelling ride beside it where the tool declared them (tool.ts `spelling`),
+// so `yak task new 'ship it'` is typed the way the vocabulary said and a
+// server that says neither still lists as one flat name.
 let toolOf = (roster: Roster, t: Listed): Word => ({
   name: t.name,
+  ...spelling(t),
   ...(t.title ?? t.annotations?.title
     ? { title: t.title ?? t.annotations?.title }
     : {}),

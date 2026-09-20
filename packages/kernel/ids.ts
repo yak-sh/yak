@@ -31,10 +31,16 @@ export let ids = (vocab: Vocab): Plugin => {
         let b of await tx.read(`.entity.num=${[...want.keys()].join(',')}`)
       ) {
         let num = Number(b.entity.num)
-        let series = letter(vocab.kindOf(b))
+        // Every letter this entity could be printed with, not only the one it
+        // displays as. An entity wears several kinds at once — a task is a
+        // `doc` too — and a person typing `T-17` for the thing to do is right
+        // whichever kind happens to win the display.
+        let series = new Set(
+          vocab.kinds.filter((k) => b[k]).map((k) => letter(k)),
+        )
         for (let id of want.get(num) ?? []) {
           let p = parse(id)
-          if (p && (!p.prefix || p.prefix == series)) at.set(id, b.entity.eid)
+          if (p && (!p.prefix || series.has(p.prefix))) at.set(id, b.entity.eid)
         }
       }
       return at

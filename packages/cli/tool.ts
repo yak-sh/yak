@@ -32,6 +32,14 @@ export type Schema = {
   required?: string[]
 }
 
+/** How a command line spells a tool's arguments: which bare words fill which
+ * properties, and the single letters it answers to. */
+export type Spelling = {
+  positional?: readonly string[]
+  short?: Readonly<Record<string, string>>
+  rest?: string
+}
+
 /** A tool as the server lists it. */
 export type Listed = {
   name: string
@@ -39,6 +47,28 @@ export type Listed = {
   description?: string
   inputSchema?: Schema
   annotations?: { title?: string }
+  /** what the transport says beside the schemas — where the two words and the
+   * spelling ride (see {@link spelling}) */
+  _meta?: Record<string, unknown>
+}
+
+/** The `_meta` key the command-line grammar rides under (@yaks/mcp `WORD`).
+ * Spelled here rather than imported: a client that reads a listing should not
+ * have to depend on the server that wrote it. */
+export let WORD = 'yaks.sh/word'
+
+/**
+ * The two words a tool is typed as, and how it spells its arguments — what the
+ * DECLARATION said, carried through `tools/list` as `_meta`. A listing without
+ * it is a tool with one flat name, which is what every other MCP server sends.
+ */
+export let spelling = (
+  t: Listed,
+): { noun?: string; verb?: string; options?: Spelling } => {
+  let said = t._meta?.[WORD]
+  return said && typeof said == 'object'
+    ? said as { noun?: string; verb?: string; options?: Spelling }
+    : {}
 }
 
 /** The one word a listing shows beside a name: its title, or the first

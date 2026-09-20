@@ -12,6 +12,7 @@ let doc: VocabDoc = {
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
+    doc: { component: true, type: 'object', kind: true },
     task: { component: true, type: 'object', kind: true, prefix: 'T' },
     memory: { component: true, type: 'object', kind: true, prefix: 'M' },
   },
@@ -20,7 +21,9 @@ let vocab = loadVocab([doc], [idKeywords])
 
 // The store, as far as addressing is concerned: the entities numbered so far.
 let rows: Bundle[] = [
-  { entity: { eid: 'a', num: 7 }, task: {} },
+  // A task is a doc too, so it answers to both letters — which is the point:
+  // whichever kind wins the DISPLAY, the id a person typed still lands.
+  { entity: { eid: 'a', num: 7 }, task: {}, doc: {} },
   { entity: { eid: 'b', num: 9 }, memory: {} },
 ]
 let asked: string[] = []
@@ -43,7 +46,11 @@ Deno.test('a human id is the entity wearing that number', async () => {
 Deno.test('the number is the identity; the letter only has to agree', async () => {
   assertEquals(await at('7'), { '7': 'a' })
   assertEquals(await at('t-7'), { 't-7': 'a' })
-  // T-9 is nobody: entity 9 is a memory.
+  // Every kind it wears answers for it: entity 7 is a task and a doc.
+  assertEquals(await at('D-7'), { 'D-7': 'a' })
+  // M-7 is nobody: entity 7 is neither a memory nor anything else with an M.
+  assertEquals(await at('M-7'), {})
+  // T-9 is nobody either: entity 9 is a memory.
   assertEquals(await at('T-9'), {})
 })
 

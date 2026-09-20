@@ -199,9 +199,28 @@ let metaOf = (
   security: Options['security'],
 ): Record<string, unknown> | undefined => {
   let says = typeof security == 'function' ? security(tool) : security
-  return says && !tool.meta?.securitySchemes
-    ? { ...tool.meta, securitySchemes: says }
-    : tool.meta
+  let meta = {
+    ...tool.meta,
+    ...spelling(tool),
+    ...(says && !tool.meta?.securitySchemes ? { securitySchemes: says } : {}),
+  }
+  return Object.keys(meta).length ? meta : undefined
+}
+
+/** Where the command-line grammar rides on the wire. */
+export let WORD = 'yaks.sh/word'
+
+// A tool's two words, and how a line spells its arguments. The protocol has
+// one flat `name` and no place for either, so they ride in `_meta` — which is
+// what `_meta` is for — and a command line reassembles `yak task new 'ship
+// it'` from the same declaration the vocabulary made (@yaks/cli platform.ts).
+// A tool with neither says nothing, and lists as its name, as it always did.
+let spelling = (tool: NamedTool): Record<string, unknown> | undefined => {
+  let said = {
+    ...(tool.noun && tool.verb ? { noun: tool.noun, verb: tool.verb } : {}),
+    ...(tool.options ? { options: tool.options } : {}),
+  }
+  return Object.keys(said).length ? { [WORD]: said } : undefined
 }
 
 /**

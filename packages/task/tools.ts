@@ -58,12 +58,19 @@ export let marked: Record<string, Record<string, Comp | null>> = {
   cancelled: { cancelled: {}, completed: null },
 }
 
-/** The line a listing reads, with `.task` always on it. */
+/**
+ * The line a listing reads, with `.task` always on it.
+ *
+ * The default says `.task.status`, not `.status`: a graph that also keeps
+ * transcripts has a `session.status` too, and a bare `.status` there is
+ * ambiguous — which is the query grammar telling the truth, not a bug to work
+ * around. A caller's own line is passed through as typed.
+ */
 export let listing = (query?: unknown, limit?: unknown): string => {
   let said = String(query ?? '').trim()
   return [
     '.task',
-    said || '.status=open',
+    said || '.task.status=open',
     ...(limit == null ? [] : [`.limit=${Number(limit)}`]),
   ].join('&')
 }

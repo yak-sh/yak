@@ -118,6 +118,10 @@
       "component": true,
       "type": "object",
       "kind": true,
+      "before": [
+        "claim",
+        "doc"
+      ],
       "prefix": "T",
       "governed": true,
       "description": "a thing to do",
