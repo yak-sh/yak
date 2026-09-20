@@ -1038,10 +1038,19 @@ export let appKeywords: Keywords[] = [
  * guide publishes under "Components of your own", and a word it spells is a
  * word this platform means something by, whether or not an app's store raises
  * a table for it.
+ *
+ * A `tool: true` entry is NOT one of them. A document carries its components
+ * and its tools in one `$defs` map, and only the components are words an app
+ * may not reuse — a tool is a verb somebody calls, and `mail_send` never
+ * collides with a column called `mail_send`. Reserving them made every tool a
+ * package declares cost an app a word it was never going to want.
  */
 export let RESERVED: string[] = [
   ...new Set([
-    ...coreDocs.flatMap((d) => Object.keys(d.$defs ?? {})),
+    ...coreDocs.flatMap((d) =>
+      Object.entries(d.$defs ?? {}).filter(([, e]) => e?.tool !== true)
+        .map(([name]) => name)
+    ),
     ...FLEET,
   ]),
 ].sort()

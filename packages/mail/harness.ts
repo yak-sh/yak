@@ -53,6 +53,37 @@ let doc: VocabDoc = {
         role: { enum: ['owner', 'member'], default: 'member' },
       },
     },
+    // The two words the `tools` facet WRITES and does not own — @yaks/kernel's
+    // `opened` and @yaks/session's `archived` — said here for the same reason
+    // `member` is: a test needs the word, not the package.
+    opened: {
+      component: true,
+      type: 'object',
+      properties: {
+        at: { type: 'string', format: 'date-time', stamped: true },
+      },
+    },
+    archived: {
+      component: true,
+      type: 'object',
+      properties: {
+        at: { type: 'string', format: 'date-time', stamped: true },
+      },
+    },
+    // What a tool's answer says in words, and which call it came from
+    // (@yaks/tools) — declared here so a run's prose can be applied.
+    content: {
+      component: true,
+      type: 'object',
+      properties: { body: { type: 'string' } },
+    },
+    output: {
+      component: true,
+      type: 'object',
+      properties: {
+        source: { type: 'string', ref: 'entity', death: 'keep' },
+      },
+    },
     created: {
       component: true,
       type: 'object',

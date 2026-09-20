@@ -207,6 +207,52 @@ for a box behind a perimeter and wrong for anything else.
 }
 ```
 
+## The words a person types
+
+`@yaks/mail/tools` is the `tools` facet: the runs behind the `tool: true`
+declarations in `vocab.json`, so a host that composes this plugin lists them on
+`/mcp` and answers them on its `yak` command line.
+
+| word                 | does                                                         |
+| -------------------- | ------------------------------------------------------------ |
+| `inbox list`         | what is addressed to a reader and not archived, newest first |
+| `inbox archive <id>` | hide one item until it needs them again                      |
+| `mail show <id>`     | one letter whole, its thread beneath — and marks it read     |
+| `mail reply <id>`    | answer it, threaded, from the desk it came to                |
+| `mail send`          | write a letter and ask for it to go                          |
+| `mail check`         | every letter that arrived carries a sender                   |
+
+```sh
+yak inbox list                       # ● unread · read × archived
+yak mail show E-12                   # reading IS the mark
+yak mail reply E-12 --body @answer.md
+yak inbox archive E-11
+yak mail send ana@books.example 'Thursday' --body 'We meet at seven.'
+```
+
+**The inbox is a query, never a pile.** A letter is addressed to somebody three
+ways — routed to them (`mail.target`), written to them (`deliver.to`), or
+delivered to an address they wear (`mail.to`) — so the inbox is those three
+asked as one `or`, minus what has been archived. Nothing is moved or copied on
+the way in, which is why the same letter reads the same through every door.
+
+**Archiving is the one act that hides.** Reading a letter marks it read and
+leaves it in the list; only `inbox archive` takes it out, and `--all` is the way
+back. No sweep or second reader can drain somebody's inbox behind them. The one
+thing that archives on its own is answering an arrival: a thread you have
+replied to is not one waiting on you.
+
+**Replying and sending never talk to a mail server.** They MINT a letter that
+asks to go (`deliver`), and the `effects` facet — built from the `sender` the
+config names — is what hands it over. A development box says
+`"sender": {"via": "stash"}` and the whole flow runs with the letters piling up
+in memory.
+
+`archived` and `opened` are neighbours' words (@yaks/session's and
+@yaks/kernel's). A tool answers bundles, which are data, so naming one costs no
+import; a host that composes neither has those columns dropped at the door, and
+its inbox is then a list that never shrinks.
+
 ## Invitations: @yaks/member's empty slot, filled
 
 [@yaks/member](https://jsr.io/@yaks/member) ships a roster and documents a
@@ -281,6 +327,7 @@ prefer.
 | `arrived({ graph, domain, triage })`               | the same, with the two lookups answered        |
 | `wearer`, `named`, `routed`, `known`               | the address book, read backwards               |
 | `routes(host, options)`, `PATH`                    | the arrival door                               |
+| `runs(host, options)`                              | the runs behind the tools it declares          |
 | `Options`, `Transport`, `Door`                     | what a config says to this plugin              |
 | `invited({ welcome, apply })`                      | the `created(member)` handler                  |
 | `canon`, `local`, `at`, `parts`, `address`         | addresses                                      |
