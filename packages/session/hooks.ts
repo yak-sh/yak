@@ -14,6 +14,11 @@
 // will not start, so every entry ends `|| true`: a graph that is not there
 // means no context today, never a wedged harness.
 //
+// It is NOT re-exported from the package's front door, and never will be: a
+// browser tab loading @yaks/session must reach no runtime, and this module
+// writes a file. `@yaks/session/tools` is where it is reached from — a host
+// facet, which is the side of the door a settings file belongs on.
+//
 // The merge is the careful part. A settings file is the person's, with their
 // own entries in it, so an install REPLACES what an earlier install wrote and
 // leaves everything else exactly where it was — told apart by the commands,

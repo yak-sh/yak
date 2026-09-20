@@ -53,10 +53,12 @@ Deno.test('a claim is taken for whoever is asking', async () => {
 })
 
 Deno.test('nobody asking and nobody named is a refusal, not a lock', async () => {
-  let threw = await runs.claim_take!([], ctx({ target: 't' })).then(
-    () => false,
-    () => true,
-  )
+  let threw = false
+  try {
+    await runs.claim_take!([], ctx({ target: 't' }))
+  } catch {
+    threw = true
+  }
   assert(threw)
 })
 
