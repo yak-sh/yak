@@ -449,10 +449,10 @@ These are the names, all of them:
 
     about accept access alias anchor app apply archetype architecture archived
     artifact attachment attention bash blob blocked board bounced brief bug
-    call camera cancel cancelled canvas card chat checkpoint claim client
+    call call_ready call_woken camera cancel cancelled canvas card chat checkpoint claim client
     comment commit completed conflict contains content created cursor decided
     delegates deliver delivered deploy design doc dream edge effect email
-    entity entry error exception exit failed favorite feedback fetch filed
+    entity entry error exception execution exit failed favorite feedback fetch filed
     finding fired fixer fold fork generation goal grant graph_query headers hook
     hostname image imported installed key knock layout lease mail member memory
     message meta meter model nofix notified noverify opaque opened order output
@@ -461,7 +461,7 @@ These are the names, all of them:
     referenced references repo report requires response result resume retired
     review role run runner runtime satisfies service session setting settled
     shelf signal signin space spawn stderr stop stop_request subscription
-    supersedes supervises task task_context timeout tool_use updated usage
+    supersedes supervises task task_context timeout tool tool_use updated usage
     venture verifier wake wants web worked worktree yield
 
 When your first choice is taken, ask what the word is FOR and name that: the

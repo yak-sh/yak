@@ -37,6 +37,7 @@
 // ordinary doors with the caller's identity and the app's access rule
 // (workers/yak/declared.ts). So a tool can do exactly what the person
 // calling it could do on the page, and never more.
+import type { Bundle, Tool, ToolCtx } from '@yaks/graph'
 import { comps, type PropType } from '../types.ts'
 import { TYPES, type Vocab } from './vocab.ts'
 
@@ -457,3 +458,32 @@ export let filled = (
     ),
   }
 }
+
+/**
+ * An app's declared commands as TOOLS a graph can run itself (T-37605): the
+ * declaration from the manifest, and a `run` that fills the template and hands
+ * back what it made. @yaks/tools does the rest — it writes the call, lands the
+ * answer beside it, and a call wearing a wake waits for its firing first.
+ *
+ * A tool ANSWERS bundles and never applies them: an `apply` template is the
+ * bundles it means, landed by the runner as the caller, and a `query`
+ * template is a read, so those bundles are rows that already exist and the
+ * runner keeps its hands off them.
+ *
+ * This is the same template language the kernel's `command` tool fills
+ * (workers/yak/declared.ts `ran`); what differs is where the filled act goes —
+ * there, through the app's own HTTP doors; here, straight into the store that
+ * declared it.
+ */
+export let commands = (said: Tools): Tool[] =>
+  Object.entries(said).map(([name, def]) => ({
+    name,
+    description: def.description,
+    inputSchema: schemaOf(def),
+    readOnly: def.query != null,
+    run: (_bundles: Bundle[], ctx: ToolCtx) => {
+      let act = filled(def, ctx.args ?? {})
+      if (act.query != null) return ctx.read(act.query)
+      return (Array.isArray(act.apply) ? act.apply : [act.apply]) as Bundle[]
+    },
+  }))

@@ -122,6 +122,30 @@ A paused wake is a row that is still there and simply owes nothing — which is
 why pausing is a column and not a delete. `fired` stays where it was: it is
 history, not state.
 
+## A command, later
+
+An app's own commands (the `tools.json` at its root) are things the store can
+run itself, and asking is a row like everything else. A `call` names the command
+and its arguments; a `wake` on that same row says when:
+
+    await apply({
+      entity: { eid: '$monday' },
+      call: { to: 'tool:send_digest', args: '{"list":"weekly"}' },
+      wake: { at: '2026-09-21T09:00:00Z', every: '@weekly' },
+    })
+
+A call with no wake runs the moment it is written. One wearing a wake waits, and
+the firing is what runs it — so the answer lands beside the ask: a `result`
+pointing back at the call, an `execution` saying `done` or `failed`, and
+whatever the command itself wrote. Nothing is lost if the app was quiet: the
+call is a row, and so is the moment it is owed.
+
+A call wearing `every` is a STANDING ask and is never answered itself. Each
+firing writes its own call — `call { to, args, source }`, the `source` naming
+the schedule — so a weekly digest is fifty-two calls and fifty-two answers,
+never one result re-run. The same instant twice is the same call, so a
+re-delivered alarm changes nothing.
+
 ## Why there is no cron trigger
 
 An app's worker cannot ask for a Cron Trigger and cannot ask for a queue, and

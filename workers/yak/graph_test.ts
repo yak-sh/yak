@@ -486,6 +486,14 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
       // alarm fires (D-37562)
       'wake',
       'fired',
+      // @yaks/tools — an invocation, which is how work is asked for here and
+      // (wearing a wake) how it is asked for later
+      'call',
+      'result',
+      'execution',
+      'tool',
+      'content',
+      'output',
       // the app's own
       'recipe',
     ].sort(),

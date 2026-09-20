@@ -95,13 +95,23 @@ let both: Record<string, PropSchema> = {
 
 // The ledger's own vocabulary: the door's words, with the invocation's added
 // and the two they share declared once, widely enough for both.
+// The invocation as the LEDGER declares it: @yaks/tools' own words and rules,
+// with the two both vocabularies spell widened to mean both things.
+let invocationDoc: VocabDoc = {
+  title: 'invocation',
+  $defs: { ...without(toolsDoc, SHARED).$defs, ...both },
+}
+
 let speaking = (speaks: Vocab): Vocab =>
   loadVocab([
-    ...speaks.docs.map((d) => without(d, SHARED)),
-    {
-      title: 'invocation',
-      $defs: { ...without(toolsDoc, SHARED).$defs, ...both },
-    },
+    // Every word of the invocation comes from that one document, including
+    // the ones the door's own vocabulary now carries: an app's store speaks
+    // `call`, `result` and the two rules itself (vocab.ts `invocationDoc`),
+    // and a word may only be declared once.
+    ...speaks.docs.map((d) =>
+      without(d, Object.keys(invocationDoc.$defs ?? {}))
+    ),
+    invocationDoc,
   ], appKeywords)
 
 // Is this bundle the invocation's own? A bundle that says nothing at all — a

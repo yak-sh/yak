@@ -338,10 +338,10 @@ taken:
 
     about accept access alias anchor app apply archetype architecture archived
     artifact attachment attention bash blob blocked board bounced brief bug
-    call camera cancel cancelled canvas card chat checkpoint claim client
+    call call_ready call_woken camera cancel cancelled canvas card chat checkpoint claim client
     comment commit completed conflict contains content created cursor decided
     delegates deliver delivered deploy design doc dream edge effect email
-    entity entry error exception exit failed favorite feedback fetch filed
+    entity entry error exception execution exit failed favorite feedback fetch filed
     finding fired fixer fold fork generation goal grant graph_query headers hook
     hostname image imported installed key knock layout lease mail member memory
     message meta meter model nofix notified noverify opaque opened order output
@@ -350,7 +350,7 @@ taken:
     referenced references repo report requires response result resume retired
     review role run runner runtime satisfies service session setting settled
     shelf signal signin space spawn stderr stop stop_request subscription
-    supersedes supervises task task_context timeout tool_use updated usage
+    supersedes supervises task task_context timeout tool tool_use updated usage
     venture verifier wake wants web worked worktree yield
 
 Anything the columns don't cover still lives in `doc.body`: it is text, so
@@ -388,9 +388,14 @@ so the row comes back already wearing what it wrote.
 `wake: { at: null }` pauses without forgetting the schedule; `wake: null` ends
 it.
 
+An app's own commands can be asked for later the same way: a `call` naming the
+command, with a `wake` on the same row saying when. It waits for the firing, the
+answer lands beside the ask, and a recurring one is a standing ask — each firing
+writes its own call, so nothing is ever a result re-run.
+
 Deeper: <https://yaks.app/guide/wakes.md> — every column, recurrence and zones,
-pausing and resuming, what a rule may match, and why there is no cron trigger to
-ask for.
+pausing and resuming, what a rule may match, calling a command later, and why
+there is no cron trigger to ask for.
 
 ## The tool list, and when it moves
 

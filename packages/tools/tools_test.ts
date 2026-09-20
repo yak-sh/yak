@@ -238,17 +238,21 @@ Deno.test('a call for a tool this runner has no word for is left alone', async (
   assertEquals((await g.read('.execution')).length, 0)
 })
 
+let clock = {
+  wake: {
+    component: true,
+    properties: {
+      at: { type: 'string', format: 'date-time' },
+      every: { type: 'string' },
+    },
+  },
+  fired: {
+    component: true,
+    properties: { at: { type: 'string', format: 'date-time' } },
+  },
+}
+
 Deno.test('a call waiting on a wake that has not fired is not this tick', async () => {
-  let clock = {
-    wake: {
-      component: true,
-      properties: { at: { type: 'string', format: 'date-time' } },
-    },
-    fired: {
-      component: true,
-      properties: { at: { type: 'string', format: 'date-time' } },
-    },
-  }
   let { g, r } = watched([echo], clock)
   await r.ensure()
   // Written, and sleeping: the ready rule says `!wake` and this one wears it.
@@ -265,4 +269,33 @@ Deno.test('a call waiting on a wake that has not fired is not this tick', async 
     fired: { at: '2030-01-01T00:00:00.000Z' },
   }])
   assertEquals(body((await g.read('.result'))[0]), 'soon 2')
+})
+
+Deno.test('a recurring call is a standing ask: one invocation per firing', async () => {
+  let { g, r } = watched([echo], clock)
+  await r.ensure()
+  // The SCHEDULE: a call that wears a recurrence. It is never answered
+  // itself — each firing writes its own call, so the row keeps asking.
+  await g.apply([{
+    entity: { eid: 'daily' },
+    call: { to: toolEid('example_echo'), args: '{"value":"tick"}' },
+    wake: { at: '2030-01-01T00:00:00.000Z', every: '1d' },
+  }])
+  assertEquals((await g.read('.result')).length, 0)
+  for (let at of ['2030-01-01T00:00:00.000Z', '2030-01-02T00:00:00.000Z']) {
+    await g.apply([{ entity: { eid: 'daily' }, fired: { at } }])
+  }
+  // Two firings, two calls of their own, two results — and the schedule has
+  // neither a result nor a claim on it.
+  let made = await g.read('.call.source=daily')
+  assertEquals(made.length, 2)
+  assertEquals((await g.read('.result')).length, 2)
+  assertEquals((await g.read('.result.call=daily')).length, 0)
+  assertEquals((await g.read('.execution.state=done')).length, 2)
+  // The same firing twice is the same call: an instant names one invocation.
+  await g.apply([{
+    entity: { eid: 'daily' },
+    fired: { at: '2030-01-02T00:00:00.000Z' },
+  }])
+  assertEquals((await g.read('.call.source=daily')).length, 2)
 })

@@ -256,6 +256,14 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       // alarm (D-37562)
       'wake',
       'fired',
+      // @yaks/tools — an invocation, which is how work is asked for here and
+      // (wearing a wake) how it is asked for later
+      'call',
+      'result',
+      'execution',
+      'tool',
+      'content',
+      'output',
       // the app's own
       'recipe',
       'cooked',
@@ -316,7 +324,11 @@ Deno.test('none of the fleet vocabulary comes with it', () => {
   )
   let mine = new Set(tablesOf(schema(appVocab())))
   assert(fleet.length > 50, `the fleet plants ${fleet.length} tables`)
-  assert(mine.size < 55, `an app plants ${mine.size}`)
+  // Fewer than the fleet's, by a wide margin, and the margin is the point:
+  // every word here is one an app can USE. The last eight are the schedule
+  // and the invocation (D-37562, T-37605) — asking for something, and asking
+  // for it later.
+  assert(mine.size < 65, `an app plants ${mine.size}`)
   // The words an app SHARES with the fleet are the ones the guide gives it to
   // reach for — `task` and its marks among them. What must not come with it is
   // the fleet's own working life: its sessions, its canvas, its memories.

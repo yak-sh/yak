@@ -123,5 +123,12 @@ wearing a wake that has now fired — registers the two rules as effects
 asynchronous case. `reconcile(runner)` at boot finishes what a crash left
 claimed, by asking the same queries once.
 
+A call wearing `wake{at}` alone is one invocation, waiting: it runs where it
+stands once its `fired` stamp is there. A call wearing `wake{every}` is a
+STANDING ask, and it is never answered itself — each firing writes its own call,
+derived from the schedule and the instant it went off (`call{to, args, source}`,
+the source naming the schedule), and that one runs. So a result is never re-run,
+two firings are two results, and the same instant twice is the same call.
+
 Keep a single scheduling owner per graph. `@yaks/session`'s daemon drives its
 own transcript's calls in order, through `run()`, and registers nothing.

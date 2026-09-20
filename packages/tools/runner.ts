@@ -283,6 +283,23 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   ): Promise<Bundle[]> => {
     let [call] = await g.storage.tx((tx) => tx.get([id]))
     if (!call?.call) throw new CallError('call', 'Not a call: ' + id)
+    // A RECURRING call is not one invocation: it is the row that keeps asking
+    // for one. Each firing writes its OWN call, derived from the schedule and
+    // the instant it went off, and that one runs — so a result is never
+    // re-run, the transcript says how many times it went, and the schedule
+    // itself stays what it is, a standing ask. A one-shot has nothing to
+    // advance and runs where it stands.
+    let every = (call.wake as Comp | undefined)?.every
+    let went = (call.fired as Comp | undefined)?.at
+    if (every && went) {
+      let asked = call.call as Comp
+      let each = derivedEid(`call ${id} ${went}`)
+      await g.apply(signed([{
+        entity: { eid: each },
+        call: { to: asked.to, args: asked.args, source: id },
+      }], who(call)))
+      return run(each)
+    }
     let held = await recalled(id)
     if (held.length) return held
     if (call.execution && !o.redrive) throw new UnfinishedCall(id)

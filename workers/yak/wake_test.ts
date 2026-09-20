@@ -4,7 +4,8 @@
 // a test names the instant it wants the tick read at — which is what the
 // runtime's `alarm()` does with the present one.
 import { assert, assertEquals } from '@std/assert'
-import type { Bound } from '@yaks/graph'
+import type { Bound, Bundle } from '@yaks/graph'
+import { toolEid } from '@yaks/tools'
 import { Store } from './graph.ts'
 import { platform, state } from './harness.ts'
 import { meta } from './meta.ts'
@@ -335,4 +336,112 @@ Deno.test("an app's rule on `fired` advances the row its wake was about", async 
       }[]
   assertEquals(row.watered.by, 'wake')
   assertEquals(row.wake.at, null)
+})
+
+// An app's own command, called later (T-37605). A `call` is a row in the
+// app's store — what was asked, the claim while it runs, the answer beside it
+// — so a call wearing a `wake` is work asked for later, and nothing outside
+// this object has to be awake for it.
+let CHORES = JSON.stringify({
+  add_chore: {
+    description: 'Write down a chore',
+    input: { name: 'text' },
+    apply: { entity: { eid: '$chore' }, chore: { name: '$name' } },
+  },
+})
+let CHORE_WORDS = JSON.stringify({
+  $defs: { chore: { properties: { name: { type: 'string' } } } },
+})
+
+let app = (ctx = state()) => {
+  let store = new Store(ctx)
+  let head = {
+    'x-store': 'ada/chores',
+    'x-yak-app': 'a0000000-0000-4000-8000-000000000001',
+    'x-yak-person': 'b0000000-0000-4000-8000-000000000002',
+    'x-yak-role': 'owner',
+  }
+  let ask = (path: string, body?: unknown) =>
+    store.fetch(
+      new Request(`http://store${path}`, {
+        method: body == null ? 'GET' : 'POST',
+        headers: head,
+        body: body == null
+          ? undefined
+          : typeof body == 'string'
+          ? body
+          : JSON.stringify(body),
+      }),
+    )
+  let rows = async (line: string) =>
+    await (await ask(`/query?q=${encodeURIComponent(line)}`)).json() as Bundle[]
+  return { ctx, store, ask, rows }
+}
+
+let chores = async () => {
+  let a = app()
+  assertEquals((await a.ask('/vocab', CHORE_WORDS)).status, 200)
+  assertEquals((await a.ask('/tools', CHORES)).status, 200)
+  return a
+}
+
+Deno.test('a call wearing a wake waits for it, and answers when it fires', async () => {
+  let a = await chores()
+  // A call nobody scheduled is due when it is written: the other rule.
+  await a.ask('/apply', [{
+    entity: { eid: 'now' },
+    call: { to: toolEid('add_chore'), args: '{"name":"take the bins out"}' },
+  }])
+  assertEquals((await a.rows('.result.call=now')).length, 1)
+  let now = Date.now() - 1
+  assertEquals(
+    (await a.ask('/apply', [{
+      entity: { eid: 'later' },
+      call: { to: toolEid('add_chore'), args: '{"name":"water the plants"}' },
+      wake: { at: new Date(now).toISOString() },
+    }])).status,
+    200,
+  )
+  // Written and sleeping: the ready rule says `!wake` and this one wears one.
+  assertEquals((await a.rows('.result.call=later')).length, 0)
+  assertEquals((await a.rows('.chore')).length, 1)
+  assertEquals(await a.ctx.storage.getAlarm(), now)
+  await a.ctx.storage.deleteAlarm()
+  await a.store.alarm()
+  // The firing is what ran it: the chore the template names is written, and
+  // the answer is beside the ask.
+  assertEquals(
+    (await a.rows('.chore')).map((b) => (b.chore as { name: string }).name)
+      .sort(),
+    ['take the bins out', 'water the plants'],
+  )
+  assertEquals((await a.rows('.result.call=later')).length, 1)
+  assertEquals(
+    (await a.rows('.execution'))[0].execution,
+    { state: 'done' },
+  )
+})
+
+Deno.test('a recurring call is one invocation per firing, never a re-run', async () => {
+  let a = await chores()
+  let first = Date.now() - 1
+  await a.ask('/apply', [{
+    entity: { eid: 'daily' },
+    call: { to: toolEid('add_chore'), args: '{"name":"sweep"}' },
+    wake: { at: new Date(first).toISOString(), every: '1d' },
+  }])
+  await a.ctx.storage.deleteAlarm()
+  await a.store.alarm()
+  // The schedule keeps asking: it is never answered itself, and the firing
+  // wrote a call of its own.
+  assertEquals((await a.rows('.result.call=daily')).length, 0)
+  assertEquals((await a.rows('.call.source=daily')).length, 1)
+  assertEquals((await a.rows('.chore')).length, 1)
+  // The next occurrence, a day on, is its own invocation and its own answer.
+  let [row] = await a.rows('.eid=daily&.wake?')
+  await a.ctx.storage.setAlarm(Date.parse((row.wake as { at: string }).at))
+  await a.store.tick(Date.parse((row.wake as { at: string }).at))
+  assertEquals((await a.rows('.call.source=daily')).length, 2)
+  assertEquals((await a.rows('.chore')).length, 2)
+  assertEquals((await a.rows('.result')).length, 2)
 })

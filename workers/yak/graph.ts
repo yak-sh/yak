@@ -106,6 +106,7 @@ import {
 import {
   type ApplyOpts,
   type Bundle,
+  type Change,
   type Comp,
   comps,
   detached,
@@ -133,6 +134,8 @@ import {
 } from '@yaks/member'
 import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
+import { reconcile, type Runner, runner } from '@yaks/tools'
+import { commands, modern, type Tools } from '../../src/store/tools.ts'
 import { soonest, tick, type Ticked, wakes } from '@yaks/wake'
 import { type Alarm, arm } from '@yaks/wake/cloudflare'
 import { named, type Row } from './listing.ts'
@@ -286,6 +289,7 @@ type Word =
   | 'schema'
   | 'migrated'
   | 'wakes'
+  | 'planted'
 let KV = `create table if not exists yak_kv (
     k text primary key,
     v text not null
@@ -443,6 +447,10 @@ export class Store {
   #alarm: Alarm | null = null
   // The schedules this object was born with, planted once (`#sowing`).
   #sowing: Promise<void> | null = null
+  // The app's own commands, as a runner over this store (T-37605), beside the
+  // manifest they were built from. A deploy is the only thing that moves that
+  // manifest, and a new one is a new runner.
+  #runs: { said: string; run: Runner } | null = null
 
   constructor(ctx: State, bind: Bindings = {}) {
     this.#ctx = ctx
@@ -671,6 +679,18 @@ export class Store {
       created: (e) => this.#arming(e.comp?.at as string),
       changed: { at: (e) => this.#arming(e.comp?.at as string) },
     })
+    // The app's own commands, run HERE (T-37605, D-37562). @yaks/tools says
+    // which calls still want running as two rules — one for a call nobody
+    // scheduled, one for a call whose wake has fired — and a host registers
+    // each as an effect. That is the whole of the scheduled case: a page
+    // writes a `call` wearing a `wake{at}`, the object comes back at that
+    // instant, the firing makes the second rule hold, and the answer lands
+    // beside the ask.
+    for (let rule of this.#runner(g).rules) {
+      fx.on(rule.plan, (e) => this.#runner().run(e.entity.eid), {
+        doc: rule.rule.name,
+      })
+    }
     effected(PLUGINS, fx, {
       env: this.#bind,
       meta,
@@ -1018,12 +1038,19 @@ export class Store {
   // things at once and they are the same thing: @yaks/graph admits the
   // server-owned columns, and the guard above stands down.
   #trust(bundles: Bundle[], who: string | null, opts: ApplyOpts = {}) {
+    return this.#asIs(signed(bundles, who ? { eid: who } : null), opts)
+  }
+
+  // The same door, keeping whatever signature the batch already carries: what
+  // the RUNNER writes through (`#runner`). A call reached this store by the
+  // ordinary door and @yaks/member's guard has already had its say about who
+  // wrote it; the claim and the result beside it are the server's own
+  // bookkeeping, and a tool's answer is the caller's own write, already signed
+  // as them.
+  #asIs(change: Change, opts: ApplyOpts = {}) {
     this.#kernelling = true
     try {
-      return this.#graph.apply(
-        signed(bundles, who ? { eid: who } : null),
-        { ...opts, trusted: true },
-      )
+      return this.#graph.apply(change, { ...opts, trusted: true })
     } finally {
       this.#kernelling = false
     }
@@ -1031,6 +1058,46 @@ export class Store {
 
   #patch(bundles: Bundle[]) {
     this.#graph.storage.tx((tx) => tx.patch(bundles))
+  }
+
+  // ---- the calls (T-37605) -------------------------------------------------
+
+  /**
+   * The runner over this store: the app's declared commands as tools, rebuilt
+   * when the manifest they come from moves. A call is a row here — what was
+   * asked, the claim while it runs, and the answer beside it — so a call
+   * wearing a wake is work asked for later, and nothing outside this object
+   * has to be awake for it.
+   */
+  #runner = (g: Graph = this.#graph): Runner => {
+    let said = this.#get('tools') ?? '{}'
+    if (this.#runs?.said != said || g != this.#graph) {
+      let declared: Tools = modern(
+        JSON.parse(said || '{}') as Tools,
+      )
+      this.#runs = {
+        said,
+        run: runner(
+          { ...g, apply: (change, opts) => this.#asIs(change, opts) },
+          {
+            host: g,
+            tools: commands(declared),
+            report: (error) => void this.#broke('tool', error),
+          },
+        ),
+      }
+    }
+    return this.#runs.run
+  }
+
+  // The `tool` rows a call names, written when the manifest they come from
+  // moves. A call points AT a tool entity, so that row has to be standing
+  // before anybody can write one — and a deploy is the moment to stand it up.
+  #planting = async (): Promise<void> => {
+    let said = this.#get('tools') ?? '{}'
+    if (this.#get('planted') == said) return
+    await this.#runner().ensure()
+    this.#put('planted', said)
   }
 
   // ---- the clock (D-37562) -------------------------------------------------
@@ -1110,6 +1177,14 @@ export class Store {
       }
       if (this.#alarm && !(await this.#alarm.getAlarm())) {
         await this.#owed(Date.now())
+      }
+      // The app's own commands, standing: the `tool` rows a call names, and
+      // one pass over the calls nobody is waiting on — one another process
+      // wrote, one a crash left claimed, one whose wake fired while this
+      // object was away. Only a store that HAS commands asks.
+      if ((this.#get('tools') ?? '{}') != '{}') {
+        await this.#planting()
+        await reconcile(this.#runner())
       }
     } catch (e) {
       await this.#broke('wake seed', e)
@@ -1438,6 +1513,9 @@ export class Store {
       // of, and the kernel tells everyone who can reach the app when it moved
       // (declared.ts `viewsMoved`). The commands themselves move no list —
       // they are not tools, and the tool roster is fixed (T-34541).
+      // The rows those commands are CALLED at (`#planting`): a deploy is what
+      // moves the manifest, so a deploy is what stands them up.
+      if (now != was) await this.#planting()
       let said = await answer.json() as Record<string, unknown>
       return Response.json({ ...said, views: viewed(now) != viewed(was) })
     }

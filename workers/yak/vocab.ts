@@ -58,6 +58,7 @@ import { idKeywords } from '@yaks/id'
 import { keyDoc, keyKeywords } from '@yaks/key'
 import { mailDoc } from '@yaks/mail'
 import { memberDoc } from '@yaks/member'
+import { toolsDoc } from '@yaks/tools'
 import { wakeDoc } from '@yaks/wake'
 import { read } from '@yaks/yaml'
 import { RESERVED as FLEET } from '../../src/store/vocab.ts'
@@ -203,7 +204,10 @@ export let kernelDoc: VocabDoc = {
       type: 'object',
       kind: true,
       before: ['doc'],
-      properties: { at: owned(time), message: owned(text) },
+      // `code` is @yaks/tools' half of this word: what a refused CALL says
+      // about itself, written by the runner rather than stamped by the
+      // platform. One word, both meanings, so a store never has to choose.
+      properties: { at: owned(time), message: owned(text), code: text },
     },
     archived: {
       component: true,
@@ -472,6 +476,26 @@ export const classificationDoc: VocabDoc = {
   ),
 }
 
+/**
+ * The words an INVOCATION is made of (@yaks/tools): what was asked, what came
+ * back, the claim in between, and the tool a call names. Every store speaks
+ * them, because asking is a ROW here — and a row is the only thing that can
+ * wait: a `call` wearing a `wake` is work asked for later (D-37562), and the
+ * store that will run it is the store that has to hold it.
+ *
+ * `error` and `exception` are left out: both vocabularies spell them, the
+ * platform's are the ones a break page reads, and the one column @yaks/tools
+ * adds (`error.code`) is declared on the platform's above.
+ */
+let invocationDoc: VocabDoc = {
+  title: 'invocation',
+  $defs: Object.fromEntries(
+    Object.entries(toolsDoc.$defs ?? {}).filter(
+      ([name]) => name != 'error' && name != 'exception',
+    ),
+  ),
+}
+
 export let coreDocs: VocabDoc[] = [
   coreDoc,
   classificationDoc,
@@ -484,6 +508,7 @@ export let coreDocs: VocabDoc[] = [
   mailDoc,
   keyDoc,
   aliasDoc,
+  invocationDoc,
   // A schedule is every store's word now (D-37562): an app writes `wake{at}`
   // on anything it means to come back to, its Durable Object arms its own
   // alarm for the earliest one (graph.ts), and what the firing MEANS is left
