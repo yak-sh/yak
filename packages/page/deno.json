@@ -3,16 +3,21 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
-    "./vocab": "./vocab.ts"
+    "./vocab": "./vocab.ts",
+    "./rules": "./rules.ts",
+    "./effects": "./effects.ts",
+    "./routes": "./routes.ts"
   },
   "license": "Apache-2.0",
-  "description": "A page on the web as witnessed: its address, and when its bytes were frozen.",
+  "description": "A page on the web as witnessed: its canonical address as its identity, and its bytes frozen to one self-contained document.",
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "linkedom": "npm:linkedom@^0.18.12"
   },
   "publish": {
     "exclude": [
-      "**/*_test.ts"
+      "**/*_test.ts",
+      "./browser.json"
     ]
   }
 }

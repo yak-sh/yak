@@ -2012,7 +2012,8 @@
       },
       "packages/page": {
         "dependencies": [
-          "jsr:@std/assert@1"
+          "jsr:@std/assert@1",
+          "npm:linkedom@~0.18.12"
         ]
       },
       "packages/persona": {

@@ -15,16 +15,23 @@
         "url": {
           "type": "string",
           "format": "uri",
-          "description": "the canonical address"
+          "identity": true,
+          "description": "the canonical address — what the page IS, so the entity's id is derived from it and witnessing one page twice is one entity"
         },
         "frozen_at": {
           "type": "string",
           "format": "date-time",
           "stamped": true,
           "description": "when its bytes were captured, if they were"
+        },
+        "bytes": {
+          "type": "string",
+          "bare": false,
+          "stamped": true,
+          "description": "where the captured document is: its SHA-256 address in the host's blob store"
         }
       },
-      "description": "a page as witnessed: the address it was at, and when its bytes were frozen"
+      "description": "a page as witnessed: the address it was at, and when and where its bytes were frozen"
     }
   }
 }
