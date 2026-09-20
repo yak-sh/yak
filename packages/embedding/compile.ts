@@ -15,9 +15,13 @@
 // ORDER BY carries none) and why the rest of the query line still filters and
 // pages normally.
 //
-// One value serves ONE query. It remembers the neighbourhood the `.near` clause
-// resolved so the ordering can rank by it and the caller can read the scores
-// back afterwards; build a fresh one per query rather than sharing it.
+// It remembers the neighbourhood the `.near` clause resolved so the ordering
+// can rank by it and the caller can read the scores back afterwards — and
+// forgets it when the compiler says a new question has begun (@yaks/sql
+// `Begin`). That is what lets a HOST register one of these at compose time and
+// serve every query through it: each compilation answers from its own `.near`,
+// and an `.order=similar` with none declines as loudly as it did on the first
+// query.
 
 import type { Bundle } from '@yaks/graph'
 import { type Cond, type Extension, FALSE, raw, Unsupported } from '@yaks/sql'
@@ -90,6 +94,7 @@ export let semantic = (
 
   return {
     name: 'embedding',
+    begin: () => held = null,
     compile: {
       near: (clause, site) =>
         clause.kind == 'near' ? near(clause.value, site.owner) : null,

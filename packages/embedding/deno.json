@@ -1,7 +1,11 @@
 {
   "name": "@yaks/embedding",
   "version": "0.1.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./rules": "./rules.ts",
+    "./effects": "./effects.ts"
+  },
   "license": "Apache-2.0",
   "description": "Maintains text embeddings for graph entities and adds nearest-neighbor ranking to queries through an injected embedder.",
   "imports": {

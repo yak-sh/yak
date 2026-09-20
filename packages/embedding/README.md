@@ -36,6 +36,71 @@ let { sql, params } = compile(
 let hits = near.rank(readBundles(sql, params)) // each with `rank.score`
 ```
 
+## As a plugin
+
+A host composes this package rather than wiring it: `./rules` raises the vector
+table through the host's own connection and registers the `.near` compiler with
+the store, and `./effects` watches the embedded columns and nudges the sweep
+when they move. Both are built from the options the config names beside the
+plugin — which is where the model, the endpoint and the key live, because none
+of them is a fact about the graph:
+
+```json
+{
+  "plugins": [
+    "@yaks/doc",
+    {
+      "use": "@yaks/embedding",
+      "with": {
+        "embedder": {
+          "via": "ollama",
+          "model": "qwen3-embedding",
+          "base": "https://ollama.example",
+          "key": { "env": "OLLAMA_API_KEY" },
+          "dim": 384
+        },
+        "text": ["doc.title", "doc.body"],
+        "neighbours": 8,
+        "floor": 0.78,
+        "after": 3000
+      }
+    }
+  ]
+}
+```
+
+`embedder` is `{"via": "hash"}` (offline, deterministic — a development box and
+every test), `{"via": "ollama"}` or `{"via": "openai"}`; a config that composes
+this plugin and names none refuses at boot rather than answering every search
+with nothing forever. `text` narrows which columns feed a vector (the default is
+every stored text column the vocabulary declares); `neighbours` and `floor`
+bound what `.near` selects; `after` is how long a burst of writes settles before
+one sweep answers all of it. `{"env": "NAME"}` anywhere in there is read from
+the environment when the config is read, so a config names a secret without
+holding one.
+
+**There is no `vocab.json` here, and there should not be.** A vector is not a
+word anybody writes: it is derived from text another package's vocabulary
+declares, it never rides the wire, and no patch mints one. The table is raised
+in SQL by `./rules`, not by the store, for the same reason.
+
+**A clock is not a facet.** An effects facet is a list of watches and owns no
+lifecycle, so this one has no timer: what keeps the vectors true is the write
+that moved the text. The sweep reconciles the whole corpus rather than the
+entity that woke it, so a model change heals itself on the next write — and a
+host that would rather reconcile on a schedule calls `sweep()` from a wake
+([@yaks/wake](https://jsr.io/@yaks/wake)) or a cron.
+
+**The near-duplicate hint** — "you may already have written this", answered the
+moment something is created — is not a facet here. As a QUERY it already works
+once the vector exists (`.near=<entity>&.order=similar&.limit=3` under a
+`floor`); what the hint wants beyond that is the text embedded _before_ there is
+anything to anchor on, which is an asynchronous call and so a TOOL, not a clause
+— compiling a query never reaches the network. It belongs to whichever package
+mints the entity and knows what a duplicate means there, built from `nearest()`
+and the embedder this plugin already names; nothing here can know that a comment
+is not a twin of the task it is on.
+
 ## Which text is embedded
 
 Not one "document" component: a vocabulary declares components, some of their
@@ -63,12 +128,21 @@ every stored row, screens every search, and folds into the content hash — so
 changing models invalidates the corpus, the sweep rebuilds it, and no query ever
 compares two spaces.
 
-`hashEmbedder(dim)` is the one embedder shipped here: every word is hashed into
-a bucket and the counts are normalized. It is deterministic, instant, and
-offline, which is what tests and early development want. It captures vocabulary
-overlap and nothing else — it has no sense of meaning, so swap in a model before
+`hashEmbedder(dim)` is the offline one shipped here: every word is hashed into a
+bucket and the counts are normalized. It is deterministic, instant, and offline,
+which is what tests and early development want. It captures vocabulary overlap
+and nothing else — it has no sense of meaning, so swap in a model before
 promising anyone semantic search. Nothing else in this package changes when you
 do.
+
+`remote({via, model, base, key?, dim?})` is the other: one POST per vector, to
+Ollama's `/api/embed` or an OpenAI-compatible `/v1/embeddings`. It holds no
+credential and reads no environment — the endpoint, the model and the token are
+arguments, which is what lets the same code run on a server, in a Worker and
+against a stubbed `fetch`. `dim` truncates a Matryoshka-trained model to a fixed
+width and renormalizes, so a corpus keeps one shape without a second model. A
+fault throws: the sweep decides what a dark embedder means (it stops, and the
+rest stay stale), and a vector quietly invented here would be worse than none.
 
 ## The sweep
 
@@ -114,10 +188,13 @@ returns them nearest-first, each with `rank: { score }`. Nothing stores it — a
 component is a shape for carrying data about an entity, and it does not have to
 be a table.
 
-One `semantic()` value serves one query: it remembers the neighbourhood the
-`.near` clause resolved so the ordering can rank by it and you can read the
-scores back. Build a fresh one per query rather than sharing it.
-`.order=similar` with no `.near` to rank declines, loudly, as `Unsupported`.
+One `semantic()` value answers one question at a time: it remembers the
+neighbourhood the `.near` clause resolved so the ordering can rank by it and you
+can read the scores back, and it forgets when the compiler says a new question
+has begun (@yaks/sql's `Begin` hook). That is what lets a host register one at
+compose time and serve every query through it. `.order=similar` with no `.near`
+to rank declines, loudly, as `Unsupported` — on the hundredth query as on the
+first.
 
 ## The ranking
 

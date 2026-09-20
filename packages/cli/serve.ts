@@ -53,7 +53,7 @@ import {
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
-import type { Derived } from '@yaks/sql'
+import type { Derived, Extension } from '@yaks/sql'
 import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
 import { Database, driver } from '@yaks/sqlite/db'
 import {
@@ -99,8 +99,9 @@ export type Config = {
 
 /** What every facet factory is handed: the graph being built, the words it
  * speaks, the store under it, the connection beneath that, and the config that
- * named them. `graph` is live from the moment the graph is open — a factory
- * may keep it, and may not call it before it returns. */
+ * named them. `storage` and `graph` are live from the moment each is open — a
+ * factory may keep them, and may not call them before it returns, since an
+ * `extend` factory runs before there is a store to read. */
 export type Host = {
   config: Config
   vocab: Vocab
@@ -127,9 +128,17 @@ export type VocabFacet = {
   derived?: (vocab: Vocab) => Derived
 }
 
-/** `<plugin>/rules` — what a batch MEANS. It runs at compose time and may
- * install tables of its own through `host.sql`. */
-export type RulesFacet = { rules?: (host: Host, options: Options) => Plugin[] }
+/** `<plugin>/rules` — what a batch MEANS, and what a QUERY may say. `rules`
+ * runs at compose time and may install tables of its own through `host.sql`;
+ * `extend` contributes the clause compilers the READ door consults (@yaks/sql
+ * `Extension`), which is how a package holding an index of its own — a search,
+ * a vector, a link table — answers a clause the compiler declines alone. They
+ * share a subpath because they share a reason: both are SQL over the host's
+ * own connection. */
+export type RulesFacet = {
+  rules?: (host: Host, options: Options) => Plugin[]
+  extend?: (host: Host, options: Options) => Extension[]
+}
 
 /** `<plugin>/tools` — the runs behind its `tool: true` declarations, keyed by
  * tool name. */
@@ -374,30 +383,43 @@ export let compose = async (
       {},
       ...vocabs.map(([v]) => v.derived?.(vocab) ?? {}),
     )
-    let store = storage(sql, vocab, {
-      derived,
-      number: config.numbers ?? true,
-    })
-    store.install()
-
+    let store: Store | undefined
     let g: Graph | undefined
     let host: Host = {
       config,
       vocab,
-      storage: store,
       sql,
+      get storage(): Store {
+        if (!store) throw new Error('the store is not open yet')
+        return store
+      },
       get graph(): Graph {
         if (!g) throw new Error('the graph is not open yet')
         return g
       },
     }
+    // The clause compilers ride the STORE, so they are gathered before it is
+    // built: what a query may SAY is settled once, at compose, and every door
+    // that reads — `/query`, `/ws`, a tool, the command line — asks through
+    // them. A factory is handed the host with nothing open on it yet, which is
+    // the same promise `graph` makes: keep it, do not call it.
+    let extend = ruled.flatMap(([r, options]) =>
+      r.extend?.(host, options) ?? []
+    )
+    store = storage(sql, vocab, {
+      derived,
+      extend,
+      number: config.numbers ?? true,
+    })
+    store.install()
+
     // An effect writes through the graph's own door, trusted: what it writes
     // is the host's word, never a client's.
     let fx = effects(vocab, {
       write: (b) => host.graph.apply(b, { trusted: true }),
     })
     g = graph({
-      storage: store,
+      storage: host.storage,
       vocab,
       plugins: [
         ...ruled.flatMap(([r, options]) => r.rules?.(host, options) ?? []),

@@ -83,4 +83,14 @@ export type Extension = {
   name: string
   compile: Partial<Record<Clause['kind'], Compile>>
   order?: OrderBy
+  begin?: Begin
 }
+
+// One `bind` is ONE question, and this says so out loud. An extension that
+// answers a clause and an ORDER BY over the same thing has to remember what it
+// resolved between the two calls — a neighbourhood, a cut term — and a host
+// registers its extensions ONCE and serves every query through them. Without a
+// line between two questions, the second would rank by the first's memory. So
+// the binder tells each extension a new question has begun, before any clause
+// of it compiles; an extension that remembers nothing does not say it.
+export type Begin = () => void

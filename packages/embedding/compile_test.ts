@@ -112,6 +112,22 @@ Deno.test('the similarity rides back as a query-only comp', async () => {
   assertEquals(mixed[mixed.length - 1], { entity: { eid: 'book-9' } })
 })
 
+// A host registers its extensions once and serves every query through them, so
+// what one question resolved must not answer the next: the compiler says when a
+// new one begins (@yaks/sql `Begin`) and the neighbourhood goes with the old.
+Deno.test('one extension, many questions — each answered from its own .near', async () => {
+  let db = await stocked()
+  let near = semantic(db, embedder)
+  assertEquals(ask(db, '.near=book-1&.order=similar', near)[0], 'book-2')
+  assertEquals(ask(db, '.near=book-3&.order=similar', near)[0], 'book-1')
+  // and a ranking with no anchor declines as loudly as it did on a fresh one
+  assertThrows(
+    () => compile(parse('.order=similar'), shop, { extend: [near] }),
+    Unsupported,
+    'nothing to rank by',
+  )
+})
+
 Deno.test('without this extension the compiler still declines .near', async () => {
   let db = await stocked()
   assertThrows(() => compile(parse('.near=book-1'), shop), Unsupported, '.near')

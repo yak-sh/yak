@@ -105,7 +105,7 @@ says so.
 | subpath     | what it exports                                               | may import          |
 | ----------- | ------------------------------------------------------------- | ------------------- |
 | `./vocab`   | `docs`, `keywords?`, `derived?`                               | nothing server-side |
-| `./rules`   | `rules: (host, options) => Plugin[]`                          | anything            |
+| `./rules`   | `rules: (host, options) => Plugin[]`, `extend?` (@yaks/sql)   | anything            |
 | `./tools`   | `runs: Runs` — the runs behind its `tool: true` declarations  | ajv, SQL, anything  |
 | `./effects` | `effects: (host, options) => Watch[]`                         | anything            |
 | `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`         | anything            |
@@ -120,6 +120,9 @@ export let derived = (vocab) => mailRead(vocab)
 
 // @yaks/mail/rules
 export let rules = (host, options) => [mailbox({ domain: options.domain })]
+
+// @yaks/embedding/rules — the same subpath's other half: what a QUERY may say
+export let extend = (host, options) => [semantic(host.sql, embedderOf(options))]
 
 // @yaks/mail/routes
 export let routes = (
@@ -137,12 +140,16 @@ describes a running program where `@yaks/process` starts one.
 
 `yak serve` takes the first five. `./views` is nobody's server business.
 
-`host` is `{ config, vocab, storage, sql, graph }`. `graph` is live from the
-moment the graph is open — a factory may keep it, and may not call it before it
-returns. A `rules` factory runs at compose time and may install tables of its
-own through `host.sql`. A facet factory need not take the whole host: it names
-the parts it uses (`(host: { vocab: Vocab }) => …`), which is how a package says
-what it needs without importing this one.
+`host` is `{ config, vocab, storage, sql, graph }`. `storage` and `graph` are
+live from the moment each is open — a factory may keep them, and may not call
+them before it returns. A `rules` factory runs at compose time and may install
+tables of its own through `host.sql`; an `extend` factory, beside it, answers
+with the @yaks/sql extensions the STORE is built with, which is how a package
+holding an index of its own teaches the query compiler a clause it declines
+alone (`.near` over vectors, a text term over an index) — every door that reads
+then has it, and nobody wires one up. A facet factory need not take the whole
+host: it names the parts it uses (`(host: { vocab: Vocab }) => …`), which is how
+a package says what it needs without importing this one.
 
 A **route** is `{ method, path, handle }` (@yaks/api `Route`): `handle` is a
 plain `(Request) => Response`, `path` is exact or ends in `*` for a prefix, and
@@ -158,7 +165,8 @@ the graph's own doors, which refuse it in the wire's shape.
 2. loads every `./vocab`'s `docs` and `keywords` into one vocabulary
    (@yaks/vocab `loadVocab` — a word declared twice is a conflict);
 3. opens the SQLite file (@yaks/sqlite), runs the migration control, and binds
-   the store with every `./vocab`'s `derived` columns;
+   the store with every `./vocab`'s `derived` columns and every `./rules`'s
+   `extend` clause compilers;
 4. builds the graph over it with every `./rules` plus the effects registry
    (@yaks/effects), whose writes go through the graph's own `apply()`, trusted;
 5. registers every `./effects`;

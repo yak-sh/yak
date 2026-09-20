@@ -47,9 +47,15 @@
  * ```
  *
  * The embedder is injected — {@link hashEmbedder} is the deterministic,
- * offline one shipped here, so tests and early development never reach a
- * network. Everything a query touches is synchronous; only the sweep, which may
- * be calling a hosted model, is not.
+ * offline one shipped here and {@link remote} is one over HTTP, so tests and
+ * early development never reach a network. Everything a query touches is
+ * synchronous; only the sweep, which may be calling a hosted model, is not.
+ *
+ * As a PLUGIN it is those two halves and nothing else: `./rules` raises the
+ * vector table and registers the `.near` compiler, `./effects` nudges the
+ * sweep when embedded text moves, and the model, endpoint and key are the
+ * options a config names beside the plugin. It declares no vocabulary — a
+ * vector is not a word anybody writes.
  *
  * It assumes the storage layout @yaks/sql's SQLite dialect reads and
  * {@link https://jsr.io/@yaks/sqlite | @yaks/sqlite} builds: an `entity` spine
@@ -62,6 +68,7 @@
 export * from './driver.ts'
 export * from './vector.ts'
 export * from './embedder.ts'
+export * from './remote.ts'
 export * from './fields.ts'
 export * from './ddl.ts'
 export * from './sweep.ts'

@@ -280,7 +280,7 @@ and takes the ones it runs (`@yaks/cli` `compose`, `packages/cli`):
 | subpath     | what it exports                                               | may import          |
 | ----------- | ------------------------------------------------------------- | ------------------- |
 | `./vocab`   | `docs`, `keywords?`, `derived?`                               | nothing server-side |
-| `./rules`   | `rules: (host, options) => Plugin[]`                          | anything            |
+| `./rules`   | `rules: (host, options) => Plugin[]`, `extend?` (@yaks/sql)   | anything            |
 | `./tools`   | `runs: Runs`, behind its `tool: true` declarations            | ajv, SQL, anything  |
 | `./effects` | `effects: (host, options) => Watch[]`                         | anything            |
 | `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`         | anything            |
@@ -291,6 +291,13 @@ A subpath a package does not export is a facet it does not have, and the host
 skips it; a subpath that exists and fails to import is an error, never a skip. A
 facet factory names the parts of the host it uses — `(host: { vocab: Vocab })` —
 so no package imports `@yaks/cli` to say what it needs.
+
+`./rules` says two things because they have one reason — SQL over the host's own
+connection. `rules` is what a batch MEANS, as @yaks/graph plugins; `extend` is
+what a QUERY may say, as @yaks/sql extensions handed to the store when it is
+built, so a package holding an index of its own answers a clause the compiler
+declines alone and every door that reads gets it without wiring
+(`@yaks/embedding/rules` is the worked example: the vector table, and `.near`).
 
 The facet file is named after the facet. Where a package already owns that
 filename for something else, the subpath maps to another file and the SUBPATH is
@@ -367,6 +374,12 @@ shape proposed for it.
   in `./vocab` and the renderer reads it off the bundle; a `./views` that
   imports a driver is a view that has gone to the wrong side of the door, and
   the browser gate will say so.
+- **Two packages still answer a clause nobody composed.** `@yaks/fts` (a text
+  term) and `@yaks/edge` (`.cites[<=3]->p1`) register through the same @yaks/sql
+  seam `@yaks/embedding` does, but only when an APPLICATION hands `compile()` an
+  extension itself — neither exports `./rules`, so a host composed from a config
+  cannot search or walk. Each wants the three lines `@yaks/embedding/rules` has:
+  its indexes raised through `host.sql`, its compiler returned from `extend`.
 - **`@yaks/render`'s `vocab.json` describes a column schema**, not a component
   domain, so it is the one vocabulary document with no `./vocab` subpath and the
   one the facet test names as an exception.
@@ -394,7 +407,11 @@ on its own:
   traversal packages use.
 - `@yaks/embedding` adds the other half of search through that same seam —
   keyword recall from `@yaks/fts`, meaning-nearest from here — with the embedder
-  injected, so nothing commits you to a model.
+  injected, so nothing commits you to a model. It is also the package that shows
+  what that seam looks like from a HOST: its `./rules` raises the vector table
+  and hands the store its `.near` compiler (`extend`), its `./effects` nudges
+  the sweep when embedded text moves, and the model, endpoint and key are the
+  options the config names beside the plugin.
 - `@yaks/match` is the path with no storage at all: hand it the same AST and
   vocabulary and it filters the bundles you already hold, so a saved filter
   means one thing in the database and in the page.

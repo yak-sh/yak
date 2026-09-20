@@ -843,6 +843,10 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
     tables: new Set(),
     archetypes: opts.archetypes,
   }
+  // A new question. An extension that remembers what it resolved for one query
+  // is told here, before any clause compiles, so the memory a long-lived
+  // extension keeps is always this query's (./extend.ts `Begin`).
+  for (let e of ctx.ext) e.begin?.()
   let cs = ast.clauses
   for (let c of cs) {
     if (UNREACHED.has(c.kind) && !claims(ctx, c.kind)) {

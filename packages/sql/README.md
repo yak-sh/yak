@@ -127,6 +127,12 @@ The contract, whole:
   expression speaks about: a `.after` cursor asks the same hook a second time
   with the ANCHOR's owner id, so a ranking is pageable without another extension
   API.
+- One `bind` is one QUESTION, and an extension that remembers anything between
+  its two hooks — the neighbourhood a `.near` resolved, so the ordering can rank
+  by it — says so with a **`begin()`** hook. The binder calls it before any
+  clause of a new question compiles, which is what lets a long-lived extension
+  (one a host registered at compose time and serves every query through) answer
+  each query from that query alone.
 
 ## Ordering and paging
 
