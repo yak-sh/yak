@@ -186,7 +186,9 @@ In dependency order:
 - **[@yaks/design](./design)** — what was proposed, the review it got, and the
   architecture that stands.
 - **[@yaks/dreaming](./dreaming)** — what an agent returns to when nothing is
-  asking: a `dream` with a floor under it, and the `recall` it consolidates.
+  asking: a `dream` with a floor under it, the `recall` it consolidates, and the
+  desk that opens on a dream whose floor has passed (`./effects`; what opens is
+  the config's to name).
 - **[@yaks/notify](./notify)** — how somebody is told: a knock, what they watch
   or mute, and an open chat.
 - **[@yaks/hook](./hook)** — an event another system delivered, kept as it
