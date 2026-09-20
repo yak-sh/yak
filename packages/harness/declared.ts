@@ -7,7 +7,7 @@
 
 import type { NamedTool } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
-import { runs } from './plugin.ts'
+import { runs } from './runs.ts'
 import doc from './vocab.json' with { type: 'json' }
 
 export let tools: NamedTool[] = loadTools(doc, runs)

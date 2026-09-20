@@ -1,7 +1,11 @@
 {
   "name": "@yaks/alias",
   "version": "0.1.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./rules": "./rules.ts"
+  },
   "license": "Apache-2.0",
   "description": "Assigns persistent, unique names to graph entities and resolves those names wherever an entity id is accepted.",
   "imports": {

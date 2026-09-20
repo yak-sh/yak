@@ -2,10 +2,13 @@
  * `yak serve` — the whole server, composed from one config file.
  *
  * A host is not written; it is COMPOSED. This module reads a config naming
- * plugin modules, imports each, and takes from every one the facets it runs:
- * the words it speaks (`vocab`), what a batch means (`rules`), what an agent
- * may call (`runs`), what happens after a commit (`effects`), and the HTTP it
- * adds (`routes`). Over that it opens one SQLite file and mounts the doors —
+ * plugin packages and imports, from each, the FACETS it runs — one subpath
+ * apiece: the words it speaks (`@yaks/mail/vocab`), what a batch means
+ * (`/rules`), what an agent may call (`/tools`), what happens after a commit
+ * (`/effects`), and the HTTP it adds (`/routes`). A subpath a package does not
+ * export is a facet it does not have, and is skipped; a subpath that exists
+ * and fails to import is an error, never a skip. Over that it opens one SQLite
+ * file and mounts the doors —
  * {@link https://jsr.io/@yaks/api | @yaks/api} at `/apply`, `/query` and
  * `/ws`, {@link https://jsr.io/@yaks/mcp | @yaks/mcp} at `/mcp`. There is no
  * other wiring: a server is a config file and a list of modules.
@@ -17,9 +20,11 @@
  * // Deno.serve(host.handler)
  * ```
  *
- * A PLUGIN is a plain module — no registry, no manifest, no activation. It
- * exports what it has and the host takes what it runs; see {@link Module} and
- * the package README.
+ * A PLUGIN is a PACKAGE — no registry, no manifest, no activation, and no
+ * facet protocol on its front door. Its `exports` map names the subpaths it
+ * has, and a subsystem imports only the one it needs, so a browser loading
+ * `@yaks/task/vocab` never reaches the SQL that `@yaks/task/rules` would. See
+ * {@link FACETS} and the package README.
  *
  * @module
  */
@@ -51,9 +56,15 @@ import {
 import type { Derived } from '@yaks/sql'
 import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
 import { Database, driver } from '@yaks/sqlite/db'
-import { api, type Authenticate, type Handler } from '@yaks/api'
+import {
+  api,
+  type Authenticate,
+  type Handler,
+  type Route,
+  routed,
+} from '@yaks/api'
 import { mcp } from '@yaks/mcp'
-import { type Effects, effects, type Registration } from '@yaks/effects'
+import { type Effects, effects, type Watch } from '@yaks/effects'
 import type { Ctx, Word } from './run.ts'
 
 /** What a config file says: where the graph lives, and what speaks over it. */
@@ -89,47 +100,79 @@ export type Host = {
   graph: Graph
 }
 
-/** A post-commit observer, said where it belongs: beside the component it
- * watches (@yaks/effects `Registration`). */
-export type Watch = Registration & { comp: string }
+/** The facets a host takes from a plugin, one subpath each. `views` is not
+ * among them: a renderer is the WEB door's to import, never a server's. */
+export let FACETS = ['vocab', 'rules', 'tools', 'effects', 'routes'] as const
 
-/** One HTTP route a plugin adds. `path` is exact, or ends in `*` for a
- * prefix; `method` is the verb, or `*` for any. */
-export type Route = {
-  method: string
-  path: string
-  handle: (request: Request) => Response | Promise<Response>
-}
+/** One of those names. */
+export type FacetName = typeof FACETS[number]
 
-/**
- * A plugin module: a plain module exporting named parts, all optional.
- *
- * ```ts
- * // export let vocab = [mailDoc]
- * // export let rules = (host) => [mail(host.vocab)]
- * // export let runs = { mail_send: (bundles, ctx) => [] }
- * // export let effects = () => [{ comp: 'mail', created: (e) => deliver(e) }]
- * // export let routes = [{ method: 'POST', path: '/inbound', handle }]
- * ```
- */
-export type Module = {
+/** `<plugin>/vocab` — the words, and nothing that could not run in a browser
+ * tab: a page importing this must never reach SQL, a driver or a runtime. */
+export type VocabFacet = {
   /** the components and tools this plugin declares */
-  vocab?: VocabDoc | VocabDoc[]
-  /** JSON Schema keywords its documents use (@yaks/vocab `loadVocab`) */
+  docs?: VocabDoc[]
+  /** JSON Schema keywords those documents use (@yaks/vocab `loadVocab`) */
   keywords?: Keywords[]
   /** columns the store computes rather than keeps, said in SQL */
   derived?: (vocab: Vocab) => Derived
-  /** what a batch means: @yaks/graph plugins. It runs at compose time and may
-   * install tables of its own through `host.sql`. */
-  rules?: (host: Host) => Plugin[]
-  /** the runs behind its `tool: true` declarations, keyed by tool name */
-  runs?: Runs
-  /** what happens after a commit */
-  effects?: (host: Host) => Watch[]
-  /** the HTTP it adds beside the doors */
-  routes?: Route[]
-  /** who is calling. At most one plugin may say. */
+}
+
+/** `<plugin>/rules` — what a batch MEANS. It runs at compose time and may
+ * install tables of its own through `host.sql`. */
+export type RulesFacet = { rules?: (host: Host) => Plugin[] }
+
+/** `<plugin>/tools` — the runs behind its `tool: true` declarations, keyed by
+ * tool name. */
+export type ToolsFacet = { runs?: Runs }
+
+/** `<plugin>/effects` — what happens after a commit. */
+export type EffectsFacet = { effects?: (host: Host) => Watch[] }
+
+/** `<plugin>/routes` — the HTTP it adds beside the doors, and, for at most one
+ * plugin in a host, who is calling. */
+export type RoutesFacet = {
+  routes?: (host: Host) => Route[]
   authenticate?: Authenticate
+}
+
+/** What each subpath is expected to export. Every field is optional: a plugin
+ * exports what it has, and the host takes what it runs. */
+export type Facets = {
+  vocab: VocabFacet
+  rules: RulesFacet
+  tools: ToolsFacet
+  effects: EffectsFacet
+  routes: RoutesFacet
+}
+
+/** How a plugin's facet becomes a module. `null` means the package does not
+ * export that subpath — injected so a test composes facets it wrote in place
+ * rather than files on disk. */
+export type Load = <F extends FacetName>(
+  plugin: string,
+  facet: F,
+) => Promise<Facets[F] | null>
+
+// A subpath a package does not export is a facet it does not have. Anything
+// else that goes wrong importing one — a syntax error, a dependency that is
+// not there, a throw at module scope — is that facet FAILING, and is rethrown:
+// a server that quietly runs without its rules is worse than one that refuses
+// to start.
+let unexported = (error: unknown, spec: string, facet: string): boolean =>
+  error instanceof TypeError &&
+  (error.message.startsWith(`Unknown export './${facet}' for `) ||
+    error.message == `Module not found "${spec}".`)
+
+/** The default {@link Load}: `import('<plugin>/<facet>')`. */
+export let facet: Load = async (plugin, name) => {
+  let spec = `${plugin}/${name}`
+  try {
+    return await import(spec)
+  } catch (error) {
+    if (unexported(error, spec, name)) return null
+    throw error
+  }
 }
 
 /** A composed host: everything a facet was given, plus what came out. */
@@ -146,9 +189,10 @@ export type Served = Host & {
   close: () => void
 }
 
-// A specifier the config file owns — `./mail.ts`, `/srv/x.ts` — is resolved
-// against the config, so a config is movable and a bare `@yaks/…` is left to
-// the import map.
+// A specifier the config file owns — `./plugins/mail`, `/srv/mail` — is
+// resolved against the config, so a config is movable and a bare `@yaks/…` is
+// left to the import map. It names a PACKAGE, never a file: the facets are its
+// subpaths, and only a package has those.
 let near = (spec: string, base: URL): string =>
   spec.startsWith('.') || spec.startsWith('/') ? new URL(spec, base).href : spec
 
@@ -191,9 +235,6 @@ let dbOf = (config: Config): string => {
   return db
 }
 
-let docsOf = (mod: Module): VocabDoc[] =>
-  !mod.vocab ? [] : Array.isArray(mod.vocab) ? mod.vocab : [mod.vocab]
-
 // The plugins' words, with the invocation's own added where they are missing.
 // A word declared twice is a refusal (@yaks/vocab), and rightly — two
 // spellings of one component is not something to guess about — so what is
@@ -210,7 +251,7 @@ let said = (docs: VocabDoc[]): VocabDoc[] => {
 
 // Exactly one plugin may say who is calling; two would mean the door's answer
 // depends on import order, which is not an answer.
-let doorman = (mods: Module[], config: Config): Authenticate => {
+let doorman = (mods: RoutesFacet[], config: Config): Authenticate => {
   let said = mods.map((m) => m.authenticate).filter((a) => !!a)
   if (said.length > 1) {
     throw new Error(`${said.length} plugins authenticate — a door has one`)
@@ -220,35 +261,54 @@ let doorman = (mods: Module[], config: Config): Authenticate => {
   return () => actor
 }
 
-// Whether a route answers this request. A path ending in `*` is a prefix —
-// what a route serving addressed bytes (`/blob/<sha>`) needs.
-let hit = (route: Route, method: string, path: string): boolean =>
-  (route.method == '*' || route.method == method) &&
-  (route.path.endsWith('*')
-    ? path.startsWith(route.path.slice(0, -1))
-    : route.path == path)
-
 /**
  * Compose a host from a config: import the plugins, open the database, build
  * the graph, and answer with the handler the doors are mounted on.
  *
- * `load` is how a specifier becomes a module, injected so a test composes
- * modules it wrote in place rather than files on disk.
+ * `load` is how one plugin's facet becomes a module ({@link facet}), injected
+ * so a test composes facets it wrote in place rather than files on disk.
  */
 export let compose = async (
   config: Config,
-  load: (spec: string) => Promise<Module> = (spec) =>
-    import(spec) as Promise<Module>,
+  load: Load = facet,
 ): Promise<Served> => {
   let path = dbOf(config)
-  let mods = await Promise.all((config.plugins ?? []).map(load))
+  let plugins = config.plugins ?? []
+  let got = await Promise.all(
+    plugins.map(async (plugin) =>
+      [
+        plugin,
+        await Promise.all(FACETS.map((name) => load(plugin, name))),
+      ] as const
+    ),
+  )
+  // A plugin that exports none of the five is a typo in the config, not a
+  // plugin: say so here rather than serve a host quietly missing its words.
+  for (let [plugin, facets] of got) {
+    if (facets.every((f) => !f)) {
+      throw new Error(
+        `${plugin} exports no facet — a plugin has at least one of ` +
+          FACETS.map((f) => `./${f}`).join(', '),
+      )
+    }
+  }
+  let taken = <F extends FacetName>(name: F): Facets[F][] =>
+    got.map(([, facets]) => facets[FACETS.indexOf(name)] as Facets[F] | null)
+      .filter((f) => !!f)
+
+  let vocabs = taken('vocab')
+  let ruled = taken('rules')
+  let tooled = taken('tools')
+  let watched = taken('effects')
+  let served = taken('routes')
+
   // The words an invocation is written in come with the HOST, not with
   // whichever plugin happened to mention them: what was asked of this server
   // is its own transcript. A plugin that speaks them already — a harness,
   // whose transcripts ARE calls — keeps its own spelling, so only the words
   // nobody supplied are added.
-  let docs = said(mods.flatMap(docsOf))
-  let vocab = loadVocab(docs, mods.flatMap((m) => m.keywords ?? []))
+  let docs = said(vocabs.flatMap((v) => v.docs ?? []))
+  let vocab = loadVocab(docs, vocabs.flatMap((v) => v.keywords ?? []))
 
   if (path != ':memory:') {
     let dir = path.slice(0, path.lastIndexOf('/'))
@@ -266,7 +326,7 @@ export let compose = async (
     migrations(sql).ready()
     let derived: Derived = Object.assign(
       {},
-      ...mods.map((m) => m.derived?.(vocab) ?? {}),
+      ...vocabs.map((v) => v.derived?.(vocab) ?? {}),
     )
     let store = storage(sql, vocab, {
       derived,
@@ -293,16 +353,16 @@ export let compose = async (
     g = graph({
       storage: store,
       vocab,
-      plugins: [...mods.flatMap((m) => m.rules?.(host) ?? []), fx],
+      plugins: [...ruled.flatMap((r) => r.rules?.(host) ?? []), fx],
     })
-    for (let mod of mods) {
+    for (let mod of watched) {
       for (let { comp, ...watch } of mod.effects?.(host) ?? []) {
         fx.on(comp, watch)
       }
     }
     let tools = loadTools(
       docs,
-      Object.assign({}, ...mods.map((m) => m.runs ?? {})) as Runs,
+      Object.assign({}, ...tooled.map((t) => t.runs ?? {})) as Runs,
     )
     // The one RUNNER over this graph. A door calls a tool and records the ask
     // and the answer as it goes; what this adds is the calls NOBODY here is
@@ -319,8 +379,8 @@ export let compose = async (
     for (let rule of run.rules) {
       fx.on(rule.plan, (e) => run.run(e.entity.eid), { doc: rule.rule.name })
     }
-    let routes = mods.flatMap((m) => m.routes ?? [])
-    let authenticate = doorman(mods, config)
+    let routes = served.flatMap((r) => r.routes?.(host) ?? [])
+    let authenticate = doorman(served, config)
     let door = api({ graph: g, authenticate })
     let agents = mcp({
       graph: g,
@@ -331,7 +391,7 @@ export let compose = async (
     let handler: Handler = (request) => {
       let path = new URL(request.url).pathname
       if (path == '/mcp') return agents(request)
-      let route = routes.find((r) => hit(r, request.method, path))
+      let route = routes.find((r) => routed(r, request.method, path))
       // Anything nobody claimed goes to the graph's own doors, which answer
       // `/apply`, `/query` and `/ws` and refuse the rest in the wire's shape.
       return route ? route.handle(request) : door(request)

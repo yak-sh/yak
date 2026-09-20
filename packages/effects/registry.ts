@@ -65,6 +65,7 @@ export type {
   Policy,
   Registration,
   SweepRows,
+  Watch,
 } from './registration.ts'
 
 /** A post-commit observer: what happened, a detached transaction to read

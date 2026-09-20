@@ -7,8 +7,5 @@
  *
  * Components only — the Worker that serves them is `workers/yak`.
  */
-import type { VocabDoc } from '@yaks/vocab'
-import doc from './vocab.json' with { type: 'json' }
 
-/** The platform vocabulary, as the document `loadVocab` takes. */
-export let platformDoc: VocabDoc = doc as VocabDoc
+export { platformDoc } from './vocab.ts'

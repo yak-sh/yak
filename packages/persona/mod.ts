@@ -9,8 +9,5 @@
  *
  * Components only: a vocabulary document, no machinery.
  */
-import type { VocabDoc } from '@yaks/vocab'
-import doc from './vocab.json' with { type: 'json' }
 
-/** The persona vocabulary, as the document `loadVocab` takes. */
-export let personaDoc: VocabDoc = doc as VocabDoc
+export { personaDoc } from './vocab.ts'

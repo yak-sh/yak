@@ -17,7 +17,7 @@ import { then } from '@yaks/graph'
 import { sessionDoc } from './comp.ts'
 import { auditing, type AuditOpts } from './audit.ts'
 import { leasing } from './lease.ts'
-import { naming } from './rules.ts'
+import { naming } from './naming.ts'
 
 /** How the plugin's two seams are wired: a clock for both stamps, and the name
  * a conflict record is minted under. */

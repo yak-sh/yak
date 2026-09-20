@@ -2,9 +2,20 @@
 // standalone config as the source of truth; resolve its relative import map
 // before merging. The browser program may use any declared web-platform lib,
 // but never gains Deno, Node or Workers globals from the root configuration.
+//
+// WHAT THE BROWSER PROGRAM CHECKS is a package's browser-facing EXPORTS, not
+// its directory. `entries` in a browser.json names them (default: `.`), and a
+// package's `./vocab` and `./views` subpaths are always added when it has
+// them: the web door imports those two of every package, so "this package fits
+// the facet split" and "these two subpaths type-check with only the web
+// platform in scope" are the same statement. A package whose front door starts
+// child processes says `"entries": ["./vocab"]` and is still held to it.
 export type Config = {
   compilerOptions: { lib: string[]; [key: string]: unknown }
   imports?: Record<string, string>
+  /** which of the package's exports this program checks (default `["."]`);
+   * `./vocab` and `./views` are added whenever the package exports them */
+  entries?: string[]
   [key: string]: unknown
 }
 
@@ -14,7 +25,7 @@ export function mergeConfigs(configs: { url: URL; config: Config }[]): Config {
   let options: Record<string, unknown> | undefined
   for (let { url, config } of configs) {
     for (let key of Object.keys(config)) {
-      if (!['_', 'compilerOptions', 'imports'].includes(key)) {
+      if (!['_', 'compilerOptions', 'imports', 'entries'].includes(key)) {
         throw new Error(`${url}: unsupported platform config field ${key}`)
       }
     }
@@ -47,6 +58,25 @@ export function mergeConfigs(configs: { url: URL; config: Config }[]): Config {
   }
 }
 
+/** The two subpaths the web door imports of every package that has them. */
+let WEB = ['./vocab', './views']
+
+// Which files of one package the browser program checks: what its browser.json
+// names (default its front door), plus `./vocab` and `./views` whenever the
+// package exports them — the web door's half of the facet split.
+function browserEntries(config: Config, deno: URL): string[] {
+  let exports = JSON.parse(Deno.readTextFileSync(deno)).exports as
+    | string
+    | Record<string, string>
+  let map = typeof exports === 'string' ? { '.': exports } : exports
+  let want = new Set([...(config.entries ?? ['.']), ...WEB])
+  let files = [...want].filter((k) => k in map).map((k) => map[k])
+  if (!files.length) {
+    throw new Error(`${deno}: no browser entry among ${[...want].join(' ')}`)
+  }
+  return files
+}
+
 export async function platformConfig(root: URL, platform: string) {
   if (!['browser', 'workers'].includes(platform)) {
     throw new Error('Expected browser or workers')
@@ -64,10 +94,15 @@ export async function platformConfig(root: URL, platform: string) {
         if (error instanceof Deno.errors.NotFound) continue
         throw error
       }
-      configs.push({ url, config: JSON.parse(text) })
-      entries.push(
-        new URL(platform === 'browser' ? 'mod.ts' : 'conform.ts', url).href,
-      )
+      let config = JSON.parse(text) as Config
+      configs.push({ url, config })
+      if (platform !== 'browser') {
+        entries.push(new URL('conform.ts', url).href)
+        continue
+      }
+      for (let file of browserEntries(config, new URL('deno.json', url))) {
+        entries.push(new URL(file, url).href)
+      }
     }
   }
   // The tail Worker shares the Store's runtime config, not the Deno root's.

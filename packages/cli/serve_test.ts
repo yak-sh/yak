@@ -2,7 +2,7 @@ import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
-import { compose, type Module, read, words } from './serve.ts'
+import { compose, FACETS, type Facets, read, words } from './serve.ts'
 
 let doc: VocabDoc = {
   title: 'shop',
@@ -57,31 +57,42 @@ let doc: VocabDoc = {
   },
 }
 
-// One plugin module, written here rather than on disk: `compose` takes how a
-// specifier becomes a module, so a test never writes a file to be imported.
-let shop: Module = {
-  vocab: doc,
-  runs: {
-    // A tool answers BUNDLES: the entities it found, and nothing else.
-    book_list: (_, ctx) => ctx.read('.book'),
-    // And a writing one answers the entity it wants made. It never writes
-    // itself: what it answers is landed for it, as whoever asked.
-    book_add: (_, ctx) => [{
-      entity: { eid: '$made' },
-      book: { title: String(ctx.args.title) },
-      content: { body: `shelved ${ctx.args.title}` },
-      output: { source: ctx.call },
+// A plugin's facets, written here rather than on disk: `compose` takes how a
+// plugin's subpath becomes a module, so a test never writes a package to be
+// imported. What a plugin does NOT export is what it does not have.
+type Plugged = Partial<Facets>
+
+let shop: Plugged = {
+  vocab: { docs: [doc] },
+  tools: {
+    runs: {
+      // A tool answers BUNDLES: the entities it found, and nothing else.
+      book_list: (_, ctx) => ctx.read('.book'),
+      // And a writing one answers the entity it wants made. It never writes
+      // itself: what it answers is landed for it, as whoever asked.
+      book_add: (_, ctx) => [{
+        entity: { eid: '$made' },
+        book: { title: String(ctx.args.title) },
+        content: { body: `shelved ${ctx.args.title}` },
+        output: { source: ctx.call },
+      }],
+    },
+  },
+  routes: {
+    routes: () => [{
+      method: 'GET',
+      path: '/shop/*',
+      handle: (request) => new Response(new URL(request.url).pathname),
     }],
   },
-  routes: [{
-    method: 'GET',
-    path: '/shop/*',
-    handle: (request) => new Response(new URL(request.url).pathname),
-  }],
 }
 
-let only = (mods: Record<string, Module>) => (spec: string) =>
-  Promise.resolve(mods[spec] ?? {})
+// Every facet of every plugin, by name. A facet nobody wrote is `null` — the
+// answer the default loader gives for a subpath a package does not export.
+let only =
+  (mods: Record<string, Plugged>) =>
+  <F extends keyof Facets>(spec: string, facet: F): Promise<Facets[F] | null> =>
+    Promise.resolve((mods[spec]?.[facet] ?? null) as Facets[F] | null)
 
 let write = (path: string, body: unknown) =>
   Deno.writeTextFileSync(path, JSON.stringify(body))
@@ -91,12 +102,15 @@ Deno.test('a config resolves its database and its relative plugins against itsel
   try {
     write(`${dir}/yak.json`, {
       db: 'graph.db',
-      plugins: ['./mail.ts', '@yaks/session'],
+      plugins: ['./plugins/mail', '@yaks/session'],
       port: 9000,
     })
     let config = read(`${dir}/yak.json`)
     assertEquals(config.db, `${dir}/graph.db`)
-    assertEquals(config.plugins, [`file://${dir}/mail.ts`, '@yaks/session'])
+    assertEquals(config.plugins, [
+      `file://${dir}/plugins/mail`,
+      '@yaks/session',
+    ])
     assertEquals(config.port, 9000)
   } finally {
     Deno.removeSync(dir, { recursive: true })
@@ -133,7 +147,7 @@ Deno.test('a host without a database refuses rather than guessing one', async ()
   }
 })
 
-Deno.test('compose takes each facet: vocab, tools, routes, and the doors', async () => {
+Deno.test('compose takes each facet from its own subpath, and mounts the doors', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop'], actor: 'me' },
     only({ shop }),
@@ -174,7 +188,7 @@ Deno.test('a declared tool nobody runs refuses to compose', async () => {
     () =>
       compose(
         { db: ':memory:', plugins: ['shop'] },
-        only({ shop: { vocab: doc } }),
+        only({ shop: { vocab: { docs: [doc] } } }),
       ),
     Error,
     'declared and not implemented',
@@ -182,34 +196,68 @@ Deno.test('a declared tool nobody runs refuses to compose', async () => {
 })
 
 Deno.test('two plugins may not both say who is calling', async () => {
-  let who: Module = { authenticate: () => ({ eid: 'a' }) }
+  let who: Plugged = { routes: { authenticate: () => ({ eid: 'a' }) } }
   await assertRejects(
     () =>
       compose(
         { db: ':memory:', plugins: ['a', 'b'] },
-        only({ a: who, b: { ...who } }),
+        only({ a: who, b: { routes: { ...who.routes } } }),
       ),
     Error,
     'a door has one',
   )
 })
 
+Deno.test('a plugin that exports no facet is a typo, not a plugin', async () => {
+  await assertRejects(
+    () => compose({ db: ':memory:', plugins: ['nope'] }, only({})),
+    Error,
+    'exports no facet',
+  )
+})
+
+Deno.test('a facet that fails to import is loud; one that is absent is skipped', async () => {
+  // The default loader tells the two apart by the error: an unknown subpath is
+  // a facet the package does not have, and anything else is that facet failing.
+  let load = <F extends keyof Facets>(
+    _spec: string,
+    facet: F,
+  ): Promise<Facets[F] | null> => {
+    if (facet == 'vocab') return Promise.resolve({ docs: [doc] } as Facets[F])
+    if (facet == 'rules') return Promise.reject(new SyntaxError('broken'))
+    return Promise.resolve(null)
+  }
+  await assertRejects(
+    () => compose({ db: ':memory:', plugins: ['half'] }, load),
+    SyntaxError,
+    'broken',
+  )
+  assertEquals(FACETS.includes('rules'), true)
+})
+
 Deno.test('a rule sees the graph it is part of, and an effect fires on a commit', async () => {
   let seen: string[] = []
-  let mod: Module = {
-    vocab: doc,
-    runs: { book_list: () => [], book_add: () => [] },
-    rules: (host) => [{
-      name: 'watcher',
-      // The graph is live by the time a hook runs, not while it is built.
-      hooks: {
-        commit: (bundles) => {
-          seen.push(typeof host.graph.apply)
-          return bundles
+  let mod: Plugged = {
+    vocab: { docs: [doc] },
+    tools: { runs: { book_list: () => [], book_add: () => [] } },
+    rules: {
+      rules: (host) => [{
+        name: 'watcher',
+        // The graph is live by the time a hook runs, not while it is built.
+        hooks: {
+          commit: (bundles) => {
+            seen.push(typeof host.graph.apply)
+            return bundles
+          },
         },
-      },
-    }],
-    effects: () => [{ comp: 'book', created: (e) => seen.push(e.entity.eid) }],
+      }],
+    },
+    effects: {
+      effects: () => [{
+        comp: 'book',
+        created: (e) => seen.push(e.entity.eid),
+      }],
+    },
   }
   let host = await compose(
     { db: ':memory:', plugins: ['m'] },

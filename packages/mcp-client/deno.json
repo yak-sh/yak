@@ -5,7 +5,8 @@
     ".": "./mod.ts",
     "./oauth": "./oauth.ts",
     "./host": "./host.ts",
-    "./graph": "./graph.ts"
+    "./graph": "./graph.ts",
+    "./vocab": "./vocab.ts"
   },
   "license": "Apache-2.0",
   "imports": {

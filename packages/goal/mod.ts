@@ -6,8 +6,5 @@
  *
  * Components only: a vocabulary document, no machinery.
  */
-import type { VocabDoc } from '@yaks/vocab'
-import doc from './vocab.json' with { type: 'json' }
 
-/** The goal vocabulary, as the document `loadVocab` takes. */
-export let goalDoc: VocabDoc = doc as VocabDoc
+export { goalDoc } from './vocab.ts'

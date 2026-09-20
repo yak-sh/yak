@@ -1,7 +1,12 @@
 {
   "name": "@yaks/blob",
   "version": "0.1.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./rules": "./rules.ts",
+    "./routes": "./routes.ts"
+  },
   "license": "Apache-2.0",
   "description": "Stores text column values by content hash in a database, directory, or object store while preserving text on reads and writes.",
   "imports": {

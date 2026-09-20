@@ -189,6 +189,9 @@ In dependency order:
   arrived.
 - **[@yaks/page](./page)** — a page as witnessed: its address, and when its
   bytes were frozen.
+- **[@yaks/tmux](./tmux)** — a terminal somebody can watch: `tmux{of, pane}`,
+  what is running in it and the target tmux answers to. Words only — a session
+  is a transcript and a process is a pid, and the terminal is the third fact.
 - **[@yaks/platform](./platform)** — what a hosting platform keeps about the
   apps it serves: `space`, `app`, `deploy`, `published`, `hostname`,
   `installed`, `plan`, `meter`, `signin` and `report`. Belonging to a space is
@@ -253,11 +256,11 @@ In dependency order:
 `@yaks/task`, `@yaks/wake`, `@yaks/mail`, `@yaks/memory`, `@yaks/tools`,
 `@yaks/context`, `@yaks/canvas`, `@yaks/platform`, `@yaks/persona`,
 `@yaks/project`, `@yaks/goal`, `@yaks/design`, `@yaks/dreaming`, `@yaks/notify`,
-`@yaks/hook` and `@yaks/page` ship components rather than machinery. Each is a
-`vocab.json` (JSON Schema 2020-12, loaded by `@yaks/vocab`) plus, where it needs
-one, a graph plugin or an effect — the same shape a customer app declares its
-own components in, so an app's entities and these compose by eid with nothing in
-between.
+`@yaks/hook`, `@yaks/page` and `@yaks/tmux` ship components rather than
+machinery. Each is a `vocab.json` (JSON Schema 2020-12, loaded by `@yaks/vocab`)
+plus, where it needs one, a graph plugin or an effect — the same shape a
+customer app declares its own components in, so an app's entities and these
+compose by eid with nothing in between.
 
 These are designed for the use-case, not ported from the fleet server: that
 server is being dismantled, and `docs/transition.md` says, one row per fleet
@@ -265,6 +268,103 @@ component, which package component its rows become when its data is exported
 into a plugin-powered graph — or why nothing takes them. A word has ONE home, so
 all of these load together with no name declared twice
 (`bin/transition_test.ts`).
+
+## Facets: a plugin is a package, a facet is a subpath
+
+A host does not import a plugin. It imports the FACETS of one, a subpath apiece,
+and takes the ones it runs (`@yaks/cli` `compose`, `packages/cli`):
+
+| subpath     | what it exports                                               | may import          |
+| ----------- | ------------------------------------------------------------- | ------------------- |
+| `./vocab`   | `docs`, `keywords?`, `derived?`                               | nothing server-side |
+| `./rules`   | `rules: (host) => Plugin[]`                                   | anything            |
+| `./tools`   | `runs: Runs`, behind its `tool: true` declarations            | ajv, SQL, anything  |
+| `./effects` | `effects: (host) => Watch[]`                                  | anything            |
+| `./routes`  | `routes: (host) => Route[]`, `authenticate?`                  | anything            |
+| `./views`   | `views` — `@yaks/render` renderers                            | nothing server-side |
+| `.`         | types, and the pure functions the package offers as a library |                     |
+
+A subpath a package does not export is a facet it does not have, and the host
+skips it; a subpath that exists and fails to import is an error, never a skip. A
+facet factory names the parts of the host it uses — `(host: { vocab: Vocab })` —
+so no package imports `@yaks/cli` to say what it needs.
+
+The facet file is named after the facet. Where a package already owns that
+filename for something else, the subpath maps to another file and the SUBPATH is
+still the facet's name (`@yaks/harness` has a `tools.ts` of its own, so its
+`./tools` is `./runs.ts`).
+
+**`./vocab` and `./views` are the web door's half.** The browser imports those
+two of every package, so neither may reach storage, SQL or a runtime, and
+`deno task check:browser` type-checks both with only the web platform in scope.
+That is what "this package fits the split" MEANS, and it is why
+`@yaks/process/vocab` describes a running program in a page that could never
+start one. `packages/facets_test.ts` walks the set: every package with words
+exports them, every facet is shaped the way a host reads it, and `compose` over
+the fleet's own config takes all of them.
+
+### Facets that do not split cleanly
+
+Named here rather than forced. Each is a real seam, and the paragraph is the
+shape proposed for it.
+
+- **`pane` is a word two ideas want.** `@yaks/canvas` declares
+  `pane{layout, parent, dir, content, view}` — a region of a layout — and a
+  terminal is the other thing anybody calls a pane. Component names are one flat
+  namespace and `loadVocab` refuses a word declared twice
+  (`bin/transition_test.ts` holds every package vocabulary to loading beside
+  every other), so the two cannot both have it and a host may well want a canvas
+  and a terminal at once. Resolved by moving the word down a level: `@yaks/tmux`
+  says `tmux{of, pane}`, the package's own word carrying the component and
+  `pane` naming the thing tmux addresses — which is also what the fleet's own
+  note in `src/sessions.ts` had proposed. The alternative, renaming the canvas's
+  `pane` to `region`, is a better word for a layout split and a change that
+  belongs with the canvas's own move, not with the facet split.
+- **The status ladder is a composition, not a package's.** `task.status` is
+  computed from the marks a task wears, and a graph that LEASES its tasks reads
+  a held claim as `wip` — a rung `@yaks/task` cannot know about, since `claim`
+  is `@yaks/session`'s. Resolved by ordering: `@yaks/session/vocab` restates
+  `task.status` with the wider ladder, and a config listing it after
+  `@yaks/task` gets that reading. What still does not fit is
+  `@yaks/project/rules`, whose board guard validates a saved query against the
+  ladder and sees only the narrow one; a host wanting the wider guard composes
+  `projects(vocab, marks)` itself. The proposal: the ladder becomes a value the
+  host passes, not a package's default — which is a change to `@yaks/task`'s
+  signature and wants its own decision.
+- **An effect needs a configured thing to act on.** `@yaks/mail`'s outbound half
+  is an effect that hands a letter to a SENDER — an SMTP host, a Cloudflare
+  binding — and a graph config carries no such object. So `@yaks/mail/rules` is
+  what a graph that RECEIVES mail needs, and there is no `@yaks/mail/effects`: a
+  host that sends composes `mailbox({ effects, sender })` with its own. The
+  proposal: a config's `plugins` entry grows an optional options object, passed
+  to each facet factory beside the host — the smallest thing that lets a plugin
+  be configured without a registry.
+- **`authenticate` is storage policy, not a route.** It lives on `./routes`
+  because a door is where trust is, but it is not an HTTP path and at most one
+  plugin in a host may say it. `@yaks/member` is where the answer belongs, and
+  its `members(where)` needs an app-specific `Guard` that nothing in a config
+  names — which is why `@yaks/member` exports `./vocab` and no `./rules`. Same
+  proposal as above: per-plugin options.
+- **`numbers` is the host's, and a word's.** Whether the store mints a human
+  number beside an eid is a config field today, though which components HAVE a
+  prefix is a vocabulary fact. The two should be one statement. The proposal:
+  the store mints a number for a component whose schema declares a `prefix`, and
+  the config field goes.
+- **`./tools` is a reserved name that two core packages already use.**
+  `@yaks/graph/tools` and `@yaks/vocab/tools` are the tool MECHANISM — loading a
+  declaration, checking its input — not a plugin's runs, and they predate the
+  facets. Nobody composes either as a plugin, so nothing breaks; the facet check
+  in `packages/facets_test.ts` reserves facet names on plugin-shaped packages
+  only. The proposal, if it ever bites: those two become `./tool`, singular —
+  one declaration, not a table of runs.
+- **A view that needs SQL.** No package has one yet. When one does — a renderer
+  that wants a computed column the store answers — the column is the `derived`
+  in `./vocab` and the renderer reads it off the bundle; a `./views` that
+  imports a driver is a view that has gone to the wrong side of the door, and
+  the browser gate will say so.
+- **`@yaks/render`'s `vocab.json` describes a column schema**, not a component
+  domain, so it is the one vocabulary document with no `./vocab` subpath and the
+  one the facet test names as an exception.
 
 ## How they compose
 

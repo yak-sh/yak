@@ -1,5 +1,3 @@
-import { toolDoc } from '@yaks/tools/vocab'
-import { type Artifact, artifactDoc } from '@yaks/blob'
 /**
  * @yaks/model is the seam between a conversation and whoever serves it: the
  * shape of a request, the shape of a reply, and the three entities a graph
@@ -39,13 +37,10 @@ import { type Artifact, artifactDoc } from '@yaks/blob'
 
 import type { Plugin } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
-import doc from './vocab.json' with { type: 'json' }
+import type { Artifact } from '@yaks/blob'
+import { modelDoc } from './vocab.ts'
 
-/** The `provider`, `model` and `tool` components, to load beside your own. */
-export let modelDoc: VocabDoc = {
-  ...doc,
-  $defs: { ...doc.$defs, ...artifactDoc.$defs, ...toolDoc.$defs },
-}
+export { modelDoc }
 
 export let PROVIDER = 'provider'
 export let MODEL = 'model'

@@ -1,0 +1,27 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/id": true
+  },
+  "title": "tmux",
+  "$defs": {
+    "tmux": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "properties": {
+        "of": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "what the pane is showing — a session, a process, anything that runs"
+        },
+        "pane": {
+          "type": "string",
+          "description": "the target tmux answers to: a pane id (`%42`), or `session:window.pane`"
+        }
+      },
+      "description": "a terminal somebody can watch: one tmux pane, and what is running in it"
+    }
+  }
+}

@@ -1,7 +1,11 @@
 {
   "name": "@yaks/model",
   "version": "0.1.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./rules": "./rules.ts"
+  },
   "license": "Apache-2.0",
   "description": "Defines provider-neutral model requests and replies, plus graph components for providers, models, and tools, without implementing a transport.",
   "imports": {

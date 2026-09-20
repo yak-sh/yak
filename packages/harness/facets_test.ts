@@ -8,27 +8,24 @@ import { connect } from '../mcp/harness.ts'
 import { open } from './store.ts'
 import { tools as declared } from './declared.ts'
 import { tools as cliTools } from './cli.ts'
-import { rules, runs, vocab as docs } from './plugin.ts'
+import { docs } from './vocab.ts'
+import { rules } from './rules.ts'
+import { runs } from './runs.ts'
 
 let reads = { file: () => '', stdin: () => '' }
 
-Deno.test('the plugin module says the harness once, and one declaration reaches both doors', async () => {
-  // Every facet a host takes (@yaks/cli `compose`) is an export of the module
-  // — no manifest, no registration, no activation step.
+Deno.test('the facet subpaths say the harness once, and one declaration reaches both doors', async () => {
+  // Every facet a host takes (@yaks/cli `compose`) is a SUBPATH of the package
+  // — no manifest, no registration, no activation step — so a subsystem
+  // imports only the one it needs.
   assertEquals(docs.some((d) => d.title == 'harness'), true)
   const declarations = loadTools(docs, runs)
   const h = open(':memory:')
-  // The rules over that graph are the plugin module's, the very ones `open`
+  // The rules over that graph are `@yaks/harness/rules`, the very ones `open`
   // built it with: blobs, transcripts, edges, tasks, the portfolio they are
   // filed in, and the programs a session runs.
   assertEquals(
-    rules({
-      config: {},
-      vocab: h.vocab,
-      storage: h.store,
-      sql: driver(h.db),
-      graph: h.g,
-    }).map((p) => p.name),
+    rules({ vocab: h.vocab, sql: driver(h.db) }).map((p) => p.name),
     [
       '@yaks/blob',
       '@yaks/session',

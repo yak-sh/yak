@@ -1,7 +1,10 @@
 {
   "name": "@yaks/hook",
   "version": "0.1.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts"
+  },
   "license": "Apache-2.0",
   "description": "An event another system delivered, kept as it arrived: the payload, the route it came in on, and whether it was signed.",
   "imports": {

@@ -8,22 +8,5 @@
  * It ships no machinery: a vocabulary document and the four keywords that
  * describe what the core meta-model does not (see {@link kernelKeywords}).
  */
-import type { VocabDoc } from '@yaks/vocab'
-import doc from './vocab.json' with { type: 'json' }
-
 export { KERNEL_URI, kernelKeywords } from './keywords.ts'
-
-/** The kernel vocabulary, as the document `loadVocab` takes. */
-export let kernelDoc: VocabDoc = doc as VocabDoc
-
-/** Just the spine and the two stamps every graph wants, for a host that takes
- * the base words without the rest of the kernel's: `entity{num, archetype}`,
- * `created{at, by, via}` and `updated{at, by, via}`. */
-export let spineDoc: VocabDoc = {
-  title: 'spine',
-  $defs: Object.fromEntries(
-    ['entity', 'created', 'updated'].map((
-      n,
-    ) => [n, (doc.$defs as Record<string, unknown>)[n]]),
-  ),
-} as VocabDoc
+export { kernelDoc, spineDoc } from './vocab.ts'

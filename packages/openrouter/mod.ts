@@ -4,10 +4,9 @@ import {
   type Options as ResponsesOptions,
   responses as openResponses,
 } from '@yaks/openai'
-import type { VocabDoc } from '@yaks/vocab'
-import doc from './vocab.json' with { type: 'json' }
+import { openrouterDoc } from './vocab.ts'
 
-export const openrouterDoc: VocabDoc = doc
+export { openrouterDoc }
 export type Options = Pick<ResponsesOptions, 'fetch' | 'signal'> & {
   /** Obtain an OpenRouter API key. Never supply another provider's credentials. */
   key: () => string | Promise<string>

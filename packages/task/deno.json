@@ -1,7 +1,11 @@
 {
   "name": "@yaks/task",
   "version": "0.1.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./rules": "./rules.ts"
+  },
   "license": "Apache-2.0",
   "description": "Task vocabulary with a status nobody writes, dependency checks, and completion stamping for graph entities.",
   "imports": {

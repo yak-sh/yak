@@ -1,7 +1,10 @@
 {
   "name": "@yaks/notify",
   "version": "0.1.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts"
+  },
   "license": "Apache-2.0",
   "description": "How somebody is told: a knock at a thing, what they watch or mute, and an open conversation.",
   "imports": {

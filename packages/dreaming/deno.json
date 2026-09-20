@@ -1,7 +1,10 @@
 {
   "name": "@yaks/dreaming",
   "version": "0.1.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts"
+  },
   "license": "Apache-2.0",
   "description": "Dreaming: the standing intentions an agent returns to, and how often a memory has surfaced.",
   "imports": {

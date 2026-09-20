@@ -215,7 +215,8 @@
     "./packages/notify",
     "./packages/persona",
     "./packages/dreaming",
-    "./packages/project"
+    "./packages/project",
+    "./packages/tmux"
   ],
   "exclude": [
     "src/vendor",

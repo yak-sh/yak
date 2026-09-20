@@ -1,4 +1,5 @@
-// The whole thing, once: a config file naming the harness's plugin module, a
+// The whole thing, once: a config file naming the harness as a plugin, its
+// facets imported one subpath at a time, a
 // scratch database, and the four doors answering over it. It costs a port and
 // a file, so it runs under TASKS_SLOW rather than in the fast tier.
 
@@ -25,7 +26,7 @@ slow(
       `${dir}/yak.json`,
       JSON.stringify({
         db: 'graph.db',
-        plugins: ['@yaks/harness/plugin'],
+        plugins: ['@yaks/harness'],
         numbers: false,
         actor: 'boot',
         port,

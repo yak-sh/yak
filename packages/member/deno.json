@@ -1,7 +1,10 @@
 {
   "name": "@yaks/member",
   "version": "0.1.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts"
+  },
   "license": "Apache-2.0",
   "description": "Defines space membership, per-entity grants, and access modes, with checks for authorized graph reads and writes.",
   "imports": {

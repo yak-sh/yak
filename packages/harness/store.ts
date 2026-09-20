@@ -7,7 +7,8 @@ import { home } from './paths.ts'
 // `HARNESS_DB` points, `:memory:` for a test), so an agent runs with the
 // tasks daemon down and the same bundles move into the fleet's graph later.
 //
-// What the harness is MADE of is said once, in ./plugin.ts: the documents it
+// What the harness is MADE of is said once, in its facets (./vocab.ts,
+// ./rules.ts, ./runs.ts): the documents it
 // speaks, the columns it computes rather than keeps, and the rules that decide
 // what a batch means. This file takes those same facets for the harness's own
 // file, and a host composing the harness (@yaks/cli `compose`) takes them for
@@ -34,7 +35,8 @@ import { reapLeases } from '@yaks/session'
 import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
 import { type Vocab } from '@yaks/vocab'
 
-import { derived, rules } from './plugin.ts'
+import { derived } from './vocab.ts'
+import { rules } from './rules.ts'
 import { vocab } from './vocab.ts'
 export { harnessDoc, vocab } from './vocab.ts'
 
@@ -256,15 +258,7 @@ export let open = (path: string = dbPath()): Harness => {
     storage: store,
     vocab,
     plugins: [
-      ...rules({
-        config: { db: path },
-        vocab,
-        storage: store,
-        sql,
-        get graph(): Graph {
-          return g
-        },
-      }),
+      ...rules({ vocab, sql }),
       fx,
     ],
   })

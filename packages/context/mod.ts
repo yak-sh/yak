@@ -1,8 +1,8 @@
 /** Explicit instruction snapshots; storage and session execution are separate. */
-import type { VocabDoc } from '@yaks/vocab'
-import doc from './vocab.json' with { type: 'json' }
-export const contextDoc: VocabDoc = doc
 import type { Bundle } from '@yaks/graph'
+import { contextDoc } from './vocab.ts'
+
+export { contextDoc }
 
 export let promptEntry = (
   session: string,

@@ -84,11 +84,24 @@ Deno.test('platform entrypoints cover every standalone config and the tail Worke
         if (!dir.isDirectory) continue
         let base = new URL(`${parent}/${dir.name}/`, root)
         let files = [...Deno.readDirSync(base)].map((file) => file.name)
-        if (files.includes(`${platform}.json`)) {
-          expected.push(
-            new URL(platform === 'browser' ? 'mod.ts' : 'conform.ts', base)
-              .href,
-          )
+        if (!files.includes(`${platform}.json`)) continue
+        if (platform !== 'browser') {
+          expected.push(new URL('conform.ts', base).href)
+          continue
+        }
+        // The browser program checks a package's browser-facing EXPORTS: what
+        // its browser.json names (default `.`), plus `./vocab` and `./views`
+        // whenever the package exports them — the web door imports those two
+        // of every package and must reach nothing server-side through either.
+        let said = JSON.parse(
+          Deno.readTextFileSync(new URL('browser.json', base)),
+        ).entries as string[] | undefined
+        let exports = JSON.parse(
+          Deno.readTextFileSync(new URL('deno.json', base)),
+        ).exports as string | Record<string, string>
+        let map = typeof exports === 'string' ? { '.': exports } : exports
+        for (let key of new Set([...(said ?? ['.']), './vocab', './views'])) {
+          if (key in map) expected.push(new URL(map[key], base).href)
         }
       }
     }

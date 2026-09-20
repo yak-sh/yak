@@ -1,7 +1,11 @@
 {
   "name": "@yaks/edge",
   "version": "0.1.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./rules": "./rules.ts"
+  },
   "license": "Apache-2.0",
   "description": "Represents typed links as graph entities with content-derived ids and supports traversal through storage reads and SQL queries.",
   "imports": {

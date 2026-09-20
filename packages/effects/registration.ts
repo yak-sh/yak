@@ -25,6 +25,11 @@ export type Registration = Policy & {
   removed?: Handler
 }
 
+/** A registration said where it belongs — beside the component it watches.
+ * A plugin hands a host a flat list of these, and the host registers each one
+ * on its own registry; nobody passes a component name twice. */
+export type Watch = Registration & { comp: string }
+
 /** Selection and telemetry for one consumer of an external journal. */
 export type Dispatch = {
   /** Only run slots belonging to a process class this consumer owns. */

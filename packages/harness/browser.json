@@ -1,0 +1,30 @@
+{
+  "_": "The browser gate: @yaks/harness's browser-facing exports must type-check with only the web platform in scope \u2014 no Deno namespace, no Node types. `deno task check:browser` is the check.",
+  "entries": [
+    "./vocab"
+  ],
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/vocab": "../vocab/mod.ts",
+    "@yaks/sql": "../sql/mod.ts",
+    "@yaks/blob/vocab": "../blob/vocab.ts",
+    "@yaks/doc/vocab": "../doc/vocab.ts",
+    "@yaks/edge/vocab": "../edge/vocab.ts",
+    "@yaks/git/vocab": "../git/vocab.ts",
+    "@yaks/kernel/vocab": "../kernel/vocab.ts",
+    "@yaks/mcp-client/vocab": "../mcp-client/vocab.ts",
+    "@yaks/model/vocab": "../model/vocab.ts",
+    "@yaks/openai/vocab": "../openai/vocab.ts",
+    "@yaks/openrouter/vocab": "../openrouter/vocab.ts",
+    "@yaks/process/vocab": "../process/vocab.ts",
+    "@yaks/project/vocab": "../project/vocab.ts",
+    "@yaks/session/vocab": "../session/vocab.ts",
+    "@yaks/task/vocab": "../task/vocab.ts"
+  }
+}

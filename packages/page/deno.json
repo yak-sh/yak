@@ -1,7 +1,10 @@
 {
   "name": "@yaks/page",
   "version": "0.1.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts"
+  },
   "license": "Apache-2.0",
   "description": "A page on the web as witnessed: its address, and when its bytes were frozen.",
   "imports": {

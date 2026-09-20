@@ -17,6 +17,24 @@ import { type Subs, subscriptions } from './subs.ts'
 /** A web-standard request handler: a `Request` in, a `Response` out. */
 export type Handler = (request: Request) => Response | Promise<Response>
 
+/** One path answered BESIDE the graph's own doors — a plugin's route. `path`
+ * is exact, or ends in `*` for a prefix, which is what addressed bytes
+ * (`/blob/<sha>`) need; `method` is the verb, or `*` for any. Whoever mounts
+ * the routes decides what wins: this package answers `/apply`, `/query` and
+ * `/ws` and claims nothing else. */
+export type Route = {
+  method: string
+  path: string
+  handle: Handler
+}
+
+/** Whether a route answers this request. */
+export let routed = (route: Route, method: string, path: string): boolean =>
+  (route.method == '*' || route.method == method) &&
+  (route.path.endsWith('*')
+    ? path.startsWith(route.path.slice(0, -1))
+    : route.path == path)
+
 /** How a handler is built: the graph it fronts, and the seams a host fills. */
 export type Options = {
   /** the graph this API reads and writes */

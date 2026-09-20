@@ -1,7 +1,12 @@
 {
   "name": "@yaks/session",
   "version": "0.1.0",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./rules": "./rules.ts",
+    "./views": "./views.ts"
+  },
   "license": "Apache-2.0",
   "description": "Represents sessions as graph transcripts, derives status from their entries, manages claims, and runs a daemon that responds to new entries.",
   "imports": {

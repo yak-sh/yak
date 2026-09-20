@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
-    "./host": "./host.ts"
+    "./host": "./host.ts",
+    "./vocab": "./vocab.ts"
   },
   "license": "Apache-2.0",
   "description": "Constructs instruction snapshots and prompt entries for graph transcripts, leaving admission, storage, and execution to the caller.",
