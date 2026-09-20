@@ -259,6 +259,11 @@ let indexesOf = (
 // `.entity.eid=`) rather than making each vocabulary re-declare it. It stays
 // out of `columns()` on purpose: identity is not prose and has no row of its
 // own, so it never reaches a text index, an embedding, or a component's DDL.
+// Whether two declarations of one word say the same thing. Structural, on
+// plain JSON: a schema is data, so equality is what its text says.
+let same = (a: unknown, b: unknown): boolean =>
+  a === b || JSON.stringify(a) === JSON.stringify(b)
+
 let SPINE = 'entity'
 let EID = 'eid'
 
@@ -322,7 +327,18 @@ export let loadVocab = (
         }
         continue
       }
-      if (name in defs) throw new Error(`component '${name}' is declared twice`)
+      // A word has one home — but a package that ships a convenience document
+      // bundling a neighbour's words beside its own says that neighbour's word
+      // in two of the documents a host loads, and both say the SAME thing. So
+      // the conflict is a DISAGREEMENT, not a repetition: the same definition
+      // twice is one home cited twice, and two different ones are the bug this
+      // refuses.
+      if (name in defs) {
+        if (!same(defs[name], schema)) {
+          throw new Error(`component '${name}' is declared twice`)
+        }
+        continue
+      }
       defs[name] = schema
     }
   }

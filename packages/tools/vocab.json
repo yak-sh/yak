@@ -66,6 +66,14 @@
           "ref": "entity",
           "death": "keep",
           "description": "the entry or run that produced it"
+        },
+        "id": {
+          "type": "string",
+          "description": "the provider's id for this piece of output, the way `call.id` is its id for the call — what a later revision of the same item is matched on"
+        },
+        "phase": {
+          "type": "string",
+          "description": "which part of the answer it is — a model that narrates before it answers marks the narration apart from the answer"
         }
       }
     },

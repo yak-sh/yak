@@ -34,8 +34,11 @@ export type Config = {
   /** the eid every request is signed with, where nothing authenticates —
    * a box that trusts whoever reaches it. */
   actor?: string
-  /** whether the store mints human numbers beside eids (default true) */
-  numbers?: boolean
+  /** whether the store mints human numbers beside eids (default true), and
+   * for which entities. `{ except: [comp, …] }` keeps a component's entities
+   * off the human number line — what a host composing @yaks/archetype wants,
+   * since a descriptor is bookkeeping and nobody ever types its number. */
+  numbers?: boolean | { except: string[] }
   /** what the MCP door calls itself (default `yak`) */
   name?: string
 }

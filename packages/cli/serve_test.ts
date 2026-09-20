@@ -194,6 +194,33 @@ Deno.test('compose takes each facet from its own subpath, and mounts the doors',
   }
 })
 
+Deno.test('a config may keep a component off the human number line', async () => {
+  // What `numbers` says is what the store's own `number` says, so a host
+  // composing a component whose entities nobody ever types the number of —
+  // a classifier's descriptors, a log's rows — can say so in its config.
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'], numbers: { except: ['note'] } },
+    only({
+      shop: {
+        vocab: {
+          $defs: {
+            ...doc.$defs,
+            note: { component: true, type: 'object', kind: true },
+          },
+        },
+        runs: shop.runs,
+      },
+    }),
+  )
+  let [book] = await host.graph.apply([
+    { entity: { eid: 'b1' }, book: { title: 'Dune' } },
+  ])
+  let [note] = await host.graph.apply([{ entity: { eid: 'n1' }, note: {} }])
+  assertEquals(book.entity.num, 1)
+  assertEquals(note.entity.num, null)
+  host.close()
+})
+
 Deno.test('a declared tool nobody runs refuses to compose', async () => {
   await assertRejects(
     () =>

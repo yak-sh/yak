@@ -45,6 +45,15 @@
         "verified": {
           "type": "boolean",
           "description": "whether the sending domain signed for this letter (DKIM) — false is recorded, never dropped: a letter nobody signed for is still a letter, and the reader is the one who decides what to trust"
+        },
+        "in_reply_to": {
+          "type": "string",
+          "description": "the Message-ID this letter answers, as the header spelled it — what arrives before `reply_to` can name an entity, and all a reply to a letter nobody kept ever has"
+        },
+        "sent_id": {
+          "type": "string",
+          "stamped": true,
+          "description": "the id the sending service gave this letter when it took it — written by whoever sent it, and what a delivery report is looked up by"
         }
       }
     },

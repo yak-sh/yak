@@ -2,7 +2,7 @@ import { assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { mem } from './harness.ts'
-import { storage } from './mod.ts'
+import { mintSql, storage } from './mod.ts'
 
 let vocab = loadVocab([{
   $defs: {
@@ -72,5 +72,27 @@ Deno.test('SQLite migration retains historic high-water across clearing and reop
     assertEquals(tx.get(['next'])[0].entity.num, 90001)
     assertEquals(tx.get(['task'])[0].entity.num, 1)
     assertEquals(tx.get(['entry'])[0].entity, { eid: 'entry' })
+  })
+})
+
+Deno.test('a mint may state the number it is adopting', () => {
+  // What a store seeded from another store's export needs: an entity read as
+  // 37574 there is 37574 here, and the sequence carries on past it rather than
+  // handing the next arrival a number already in use.
+  let d = mem()
+  let s = storage(d, vocab)
+  s.install()
+  for (let [eid, n] of [['old', 37574], ['older', 12]] as const) {
+    let m = mintSql(eid, n)
+    d.query(m.sql, m.params)
+  }
+  let none = mintSql('nameless', false)
+  d.query(none.sql, none.params)
+  s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'fresh' }, task: {} }])
+    assertEquals(tx.get(['old'])[0].entity.num, 37574)
+    assertEquals(tx.get(['older'])[0].entity.num, 12)
+    assertEquals(tx.get(['nameless'])[0].entity, { eid: 'nameless' })
+    assertEquals(tx.get(['fresh'])[0].entity.num, 37575)
   })
 })

@@ -108,16 +108,24 @@ export let buried = (driver: Driver, eids: string[]): Set<string> =>
  * so minting twice is not an error; RETURNING then emits NO row, which is also
  * the answer to "was this one new". `number = false` leaves a NULL number for
  * a host that allocates human numbers later, or not at all.
+ *
+ * `number` may also be a NUMBER, and then it is the one the entity takes: a
+ * store seeded from another store's export adopts the numbers that export
+ * already carries, because an entity read as `T-37574` somewhere is `T-37574`
+ * everywhere. The sequence follows — `entity_number_insert` raises its high
+ * water mark — so the next minted number is still past every stated one.
  */
-export let mintSql = (eid: string, number = true): Sql => ({
+export let mintSql = (eid: string, number: boolean | number = true): Sql => ({
   sql: `insert into entity (eid, num)
           values (?, ${
-    number
+    typeof number == 'number'
+      ? '?'
+      : number
       ? '(select high + 1 from entity_sequence where singleton = 1)'
       : 'null'
   })
           on conflict(eid) do nothing returning eid, num`,
-  params: [eid],
+  params: typeof number == 'number' ? [eid, number] : [eid],
 })
 
 /** The identity a {@link mintSql} statement reported — the rows it returned —
