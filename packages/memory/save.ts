@@ -35,19 +35,31 @@ export let clamped = (context: string): string =>
   context.split('\n').map((l) => l.trim()).filter(Boolean)
     .slice(0, LINES).join('\n')
 
-/** What a caller hands over to keep one. */
+/** What a caller hands over to keep one. Everything but the words is
+ * optional, because everything but the words is about WHERE they belong: a
+ * graph with no spaces in it keeps memories all the same. */
 export type Saving = {
   /** the id to write it at */
   eid: Eid
   /** the person's own words, verbatim */
   said: string
+  /** the index line a recall shows first, where somebody gave one */
+  title?: string
   /** the space they belong to */
-  space: Eid
+  space?: Eid
+  /** the project they belong to — absent for a principle everybody carries */
+  scope?: Eid
+  /** who GAVE the correction, when the words are one; `true` where they are
+   * feedback and nobody knows whose */
+  feedback?: Eid | true
   /** the line or two needed to read them */
   context?: string
   /** the app they were about, by slug */
   about?: string
 }
+
+/** The component that says a memory records a correction somebody gave. */
+export let FEEDBACK = 'feedback'
 
 /**
  * One memory as the batch that writes it: the words in `doc.body` exactly as
@@ -59,13 +71,18 @@ export let saved = (m: Saving): Bundle[] => {
   if (!said) throw new Error(EMPTY)
   let context = clamped(m.context ?? '')
   let about = (m.about ?? '').trim()
+  let title = (m.title ?? '').trim()
   return [{
     entity: { eid: m.eid },
-    doc: { body: said },
+    doc: { ...(title ? { title } : {}), body: said },
     [MEMORY]: {
-      space: m.space,
+      ...(m.space ? { space: m.space } : {}),
+      ...(m.scope ? { scope: m.scope } : {}),
       ...(context ? { context } : {}),
       ...(about ? { about } : {}),
     },
+    ...(m.feedback
+      ? { [FEEDBACK]: m.feedback === true ? {} : { by: m.feedback } }
+      : {}),
   }]
 }

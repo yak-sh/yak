@@ -2,13 +2,15 @@
 // context, never a snippet — because half of what somebody said is worse than
 // none of it. What is ranked is which ones, not how much of them.
 //
-// TWO RANKINGS, ONE ANSWER. Where the host has a vector service, a {@link
-// Ranker} says which memories are nearest in MEANING to the words asked about
-// ("how do they like the pages to look"), and this package never learns how
-// that is done. Where it has none, the words rank themselves: {@link line} is
-// a filter line with the words on it, which every yaks store answers as a
-// full-text search over `doc` — which is where a memory's sentence lives.
-// Neither is configured; a caller that has a ranker passes one.
+// RANKINGS, ONE ANSWER. Where the host has a vector service, a {@link Ranker}
+// says which memories are nearest in MEANING to the words asked about ("how do
+// they like the pages to look"), and this package never learns how that is
+// done. A host whose STORE does the same thing answers `.near=<entity>` on the
+// line itself (@yaks/embedding), and {@link Asked.near} is where that goes.
+// Where there is neither, the words rank themselves: {@link line} is a filter
+// line with the words on it, which every yaks store answers as a full-text
+// search over `doc` — which is where a memory's sentence lives. None of it is
+// configured; a caller that has a ranker passes one.
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import { MEMORY } from './comp.ts'
@@ -71,28 +73,51 @@ export let heard = (b: Bundle): Memory => {
 let words = (said: string) =>
   said.replace(/[^\p{L}\p{N}\s'-]+/gu, ' ').trim().replace(/\s+/g, ' ')
 
+/** What a recall is looking for: which memories, and what ranks them. */
+export type Asked = {
+  /** at most this many */
+  limit: number
+  /** the space they were said in */
+  space?: Eid
+  /** the project they are scoped to */
+  scope?: Eid
+  /** only the ones recording a correction somebody gave */
+  feedback?: boolean
+  /** the words to rank by — the store's own index over `doc` */
+  said?: string
+  /** an entity to rank by MEANING instead, where the host embeds */
+  near?: Eid
+  /** particular ones, by id */
+  eids?: Eid[]
+}
+
 /**
- * The filter line that finds a space's memories: with words, the store ranks
- * them by its own full-text index; with none, newest first. The components are
- * named so a row carries them — a row carries only what its filter names.
+ * The filter line that finds memories: with words, the store ranks them by its
+ * own full-text index; with a `near`, by meaning; with neither, newest first.
+ * The components are named so a row carries them — a row carries only what its
+ * filter names.
  *
  * ```ts
  * line({ space: 's1', limit: 8 })
  * // '.memory.space=s1&.doc?&.created?&.order=-entity.num&.limit=8'
  * ```
  */
-export let line = (
-  scope: { space: Eid; limit: number; said?: string; eids?: Eid[] },
-): string => {
-  let said = words(scope.said ?? '')
+export let line = (asked: Asked): string => {
+  let said = words(asked.said ?? '')
+  let ranked = !!(said || asked.eids?.length || asked.near)
   return [
     ...(said ? [said] : []),
-    ...(scope.eids?.length ? [`.eid=${scope.eids.join(',')}`] : []),
-    `.${MEMORY}.space=${scope.space}`,
+    ...(asked.eids?.length ? [`.eid=${asked.eids.join(',')}`] : []),
+    ...(asked.near ? [`.near=${asked.near}`] : []),
+    // A memory is what is being asked for, so the word is always on the line;
+    // where a space bounds them, saying it bounds them and says it at once.
+    asked.space ? `.${MEMORY}.space=${asked.space}` : `.${MEMORY}`,
+    ...(asked.scope ? [`.${MEMORY}.scope=${asked.scope}`] : []),
+    ...(asked.feedback ? ['.feedback'] : []),
     '.doc?',
     '.created?',
-    ...(said || scope.eids?.length ? [] : ['.order=-entity.num']),
-    `.limit=${scope.limit}`,
+    ...(asked.near ? ['.order=similar'] : ranked ? [] : ['.order=-entity.num']),
+    `.limit=${asked.limit}`,
   ].join('&')
 }
 

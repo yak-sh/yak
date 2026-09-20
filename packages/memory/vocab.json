@@ -54,6 +54,106 @@
           "description": "the line or two needed to understand the words — what was being talked about, never a restatement of what was said"
         }
       }
+    },
+    "memory_save": {
+      "tool": true,
+      "noun": "memory",
+      "verb": "save",
+      "title": "Keep what was said",
+      "description": "Keep somebody's words as they said them. The sentence itself is the memory — never your summary of it, which can only ever hold less — plus the line or two of context somebody needs to read it six weeks from now. scope names the project it belongs to; leave it out for a principle everybody carries. feedback names who GAVE the correction, when the words are one. Pass id instead to patch one that already exists: anything you leave out is left alone, and replacing the words needs was — the token memory recall hands back beside them — so a memory another writer moved since you read it is refused whole rather than clobbered.",
+      "input": {
+        "said": {
+          "type": "string",
+          "description": "the words the person used, as they used them"
+        },
+        "title": {
+          "type": "string",
+          "description": "the index line a recall shows first"
+        },
+        "context": {
+          "type": "string",
+          "description": "what was being talked about — two lines, never a restatement of what was said"
+        },
+        "scope": {
+          "type": "string",
+          "ref": "project",
+          "description": "the project the words belong to; unsaid, they are everybody's"
+        },
+        "feedback": {
+          "type": "string",
+          "description": "who GAVE the correction these words are — a person, or empty where nobody knows whose they were. Either way the memory is marked as feedback"
+        },
+        "about": {
+          "type": "string",
+          "description": "the app they were said about, by slug"
+        },
+        "id": {
+          "type": "string",
+          "ref": "memory",
+          "description": "a memory to patch instead of minting one"
+        },
+        "was": {
+          "type": "string",
+          "description": "the token memory recall printed for the words you are replacing"
+        }
+      },
+      "options": {
+        "positional": [
+          "said"
+        ],
+        "short": {
+          "s": "scope",
+          "c": "context"
+        }
+      }
+    },
+    "memory_recall": {
+      "tool": true,
+      "noun": "memory",
+      "verb": "recall",
+      "title": "What was said about this",
+      "description": "The memories nearest what you are doing. said is matched against their text as a PHRASE, so say the words you expect them to use rather than a sentence of your own; near names an entity and ranks by MEANING instead, where this host keeps vectors, which is the one that answers a sentence; with neither, the newest come back. Each comes back WHOLE — half of what somebody said is worse than none of it — carrying the $was token memory save asks for before it replaces any of them.",
+      "input": {
+        "said": {
+          "type": "string",
+          "description": "the words you expect them to have used — matched as a phrase"
+        },
+        "near": {
+          "type": "string",
+          "ref": "entity",
+          "description": "an entity to rank by meaning, where this host keeps vectors"
+        },
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "particular memories, by id"
+        },
+        "scope": {
+          "type": "string",
+          "ref": "project",
+          "description": "only the ones filed under this project"
+        },
+        "feedback": {
+          "type": "boolean",
+          "description": "only the ones recording a correction somebody gave"
+        },
+        "limit": {
+          "type": "number",
+          "description": "at most this many (default 8)"
+        }
+      },
+      "options": {
+        "positional": [
+          "said"
+        ],
+        "short": {
+          "n": "limit",
+          "s": "scope"
+        }
+      },
+      "readOnly": true
     }
   }
 }

@@ -96,6 +96,30 @@ under it. Bounded — `LAST` (8) of them and `BYTES` (2048) bytes, whichever run
 out first, then one line saying the rest are a `memory_recall` away. The host
 must provide any recall tool referenced in the formatted output.
 
+## The tools
+
+`vocab.json` declares two, and `@yaks/memory/tools` is the facet a host takes
+for their runs (`yak memory save`, `yak memory recall`, and the same two over
+`/mcp`):
+
+```sh
+yak memory save 'always commit your changes' --scope P-19 --feedback jeff
+yak memory recall 'commit'
+yak memory recall --near T-37666
+```
+
+`memory save` mints one from the words; passing `id` patches the one that
+exists, leaving alone whatever the line did not say. Replacing the words needs
+`was` — the token `memory recall` hands back beside them, as the `$was` the
+graph's own precondition reads — so a memory another writer moved since you read
+it is refused whole rather than clobbered.
+
+`memory recall` answers memories WHOLE, ranked by whatever the host has: its
+full-text index over `doc`, which matches `said` as a PHRASE, so say the words
+you expect them to have used; its vectors where `near` names an anchor and
+[@yaks/embedding](https://jsr.io/@yaks/embedding) is composed, which is the one
+that answers a sentence; the newest where it has neither.
+
 ## Compatibility
 
 Pure TypeScript. It imports no platform API — no `Deno`, no Node built-in, no
