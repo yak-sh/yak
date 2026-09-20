@@ -3,7 +3,14 @@ import type { Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
-import { compose, FACETS, type Facets, read, words } from './serve.ts'
+import {
+  compose,
+  FACETS,
+  type Facets,
+  read,
+  unfinished,
+  words,
+} from './serve.ts'
 
 let doc: VocabDoc = {
   title: 'shop',
@@ -401,6 +408,43 @@ Deno.test('a plugin named with options gets them, beside the host', async () => 
     assertEquals(said, [{}, { open: 'tuesdays' }])
     let res = await host.handler(new Request('http://x/open'))
     assertEquals(await res.text(), 'tuesdays')
+  } finally {
+    host.close()
+  }
+})
+
+Deno.test('an effect that said what pending looks like is re-driven at boot', async () => {
+  let ran: string[] = []
+  let mod: Plugged = {
+    vocab: { docs: [doc] },
+    tools: shop.tools,
+    effects: {
+      effects: () => [{
+        comp: 'book',
+        // Declaring a sweep promises an idempotent handler: what it re-drives
+        // may well have run already.
+        sweep: { pending: '.book.price=' },
+        created: (event) => {
+          ran.push(String(event.entity.eid))
+        },
+      }],
+    },
+  }
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'] },
+    only({ shop: mod }),
+  )
+  try {
+    // Two books, one of them unpriced — the shape the sweep's query names.
+    await host.graph.apply([
+      { entity: { eid: 'b1' }, book: { title: 'Spring', price: 12 } },
+      { entity: { eid: 'b2' }, book: { title: 'Winter' } },
+    ])
+    assertEquals(ran, ['b1', 'b2'])
+    ran.length = 0
+    // What `serve` does after boot: only the row still pending comes back.
+    await host.fx.relay(unfinished(host.graph))
+    assertEquals(ran, ['b2'])
   } finally {
     host.close()
   }

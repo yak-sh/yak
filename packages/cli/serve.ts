@@ -32,11 +32,13 @@
  */
 
 import {
+  type Bundle,
   type Entity,
   type Graph,
   graph,
   type NamedTool,
   type Plugin,
+  then,
 } from '@yaks/graph'
 import {
   answerOf,
@@ -68,7 +70,12 @@ import {
   routed,
 } from '@yaks/api'
 import { mcp } from '@yaks/mcp'
-import { type Effects, effects, type Watch } from '@yaks/effects'
+import {
+  type Effects,
+  effects,
+  type SweepRows,
+  type Watch,
+} from '@yaks/effects'
 import type { Ctx, Word } from './run.ts'
 
 /** What a config says TO one plugin: its own options, handed to each facet
@@ -611,6 +618,22 @@ export let words = (host: Served): Word[] =>
     },
   }))
 
+/**
+ * What an effect's `sweep` means here: its `pending` is a query in the graph's
+ * own grammar, so the rows it names are read the way everything else is, and
+ * flattened to the `{eid, …columns}` shape a registration's handler is given
+ * (@yaks/effects `relay`).
+ */
+export let unfinished = (g: Graph): SweepRows => (comp, pending) =>
+  then(
+    g.read(pending),
+    (found: Bundle[]) =>
+      found.map((b) => ({
+        eid: b.entity?.eid,
+        ...b[comp] as Record<string, unknown>,
+      })),
+  )
+
 /** Serve a config: compose it, and listen. `onListen` is told the address and
  * the host it belongs to — the composition is done before anything binds. */
 export let serve = async (
@@ -627,6 +650,13 @@ export let serve = async (
   // And each plugin's own: the locks a dead holder left, the agents still
   // running that this process has no memory of.
   await host.boot()
+  // Then the effects that said what "still pending" LOOKS like: an effect is
+  // at-most-once, and a crash between the commit and the handler is exactly
+  // what the `sweep` on a registration is for. Its query is the graph's own,
+  // so the rows are read the way everything else here reads — and a handler
+  // that declared a sweep promised to be idempotent, since this re-drives what
+  // may well have run.
+  await host.fx.relay(unfinished(host.graph))
   // And then the clocks: what a plugin keeps doing while this is up. After
   // boot, so a sweep never races the reconciliation that corrects what it is
   // about to read.
