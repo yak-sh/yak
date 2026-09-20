@@ -1,6 +1,6 @@
 // What anybody may ask of a to-do list: the `tools` facet a host takes
 // (`@yaks/task/tools`) — the runs behind the `tool: true` declarations in
-// ./vocab.json. These are the three words a person types all day.
+// ./vocab.json. These are the four words a person types all day.
 //
 // They write words that are not this package's, and that is the point: a task
 // with a title wears @yaks/doc's `doc`, and one filed in a portfolio wears
@@ -15,6 +15,10 @@
 
 import { addressed, type Bundle, type Comp, type ToolCtx } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
+import { relations } from '@yaks/edge'
+import { human } from '@yaks/id'
+import { CallError } from '@yaks/tools'
+import { named, type Node, planned } from './tree.ts'
 
 // Where the work is filed, as arguments. The two that name an entity are
 // addressed; a person types `P-19`, never an eid.
@@ -92,6 +96,29 @@ export let runs = (): Runs => ({
 
   task_list: (_bundles, ctx) =>
     ctx.read(listing(ctx.args.query, ctx.args.limit)),
+
+  // A plan is one batch or none of it: the tasks and the sentences that relate
+  // them land together, so a tree is never half-written. `dry_run` answers the
+  // tree alone — no task and no link — which is what proving a layout costs.
+  task_tree: async (_bundles, ctx): Promise<Bundle[]> => {
+    let asked = String(ctx.args.project)
+    let [eid] = await addressed(ctx.graph, [asked])
+    let [root] = await ctx.read(`.entity.eid="${eid}"`)
+    if (!root) throw new CallError('project', `no such entity: ${asked}`)
+    let vocab = ctx.graph.vocab
+    let plan = planned(
+      { eid, name: named(human(vocab)(root), root) },
+      (ctx.args.nodes ?? []) as Node[],
+      relations(vocab),
+    )
+    let dry = ctx.args.dry_run === true
+    let said: Bundle = {
+      entity: { eid: '$tree' },
+      content: { body: dry ? `dry run\n${plan.text}` : plan.text },
+      output: { source: ctx.call },
+    }
+    return dry ? [said] : [...plan.bundles, said]
+  },
 
   task_update: async (_bundles, ctx): Promise<Bundle[]> => {
     let [eid] = await addressed(ctx.graph, [String(ctx.args.task)])

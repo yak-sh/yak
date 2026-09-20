@@ -22,6 +22,74 @@
       "properties": {},
       "description": "a change being proposed: what it is, said in the doc beside it. `proposed` and `decided` carry the lifecycle"
     },
+    "design_new": {
+      "tool": true,
+      "noun": "design",
+      "verb": "new",
+      "title": "Propose a design",
+      "description": "Write a change down so it can be argued with: an entity wearing design{} and doc{title, body}, put forward by the proposed mark. Who proposed it and when are stamped from the caller, never said on the line.",
+      "input": {
+        "title": {
+          "type": "string",
+          "description": "what it proposes, in a line"
+        },
+        "body": {
+          "type": "string",
+          "description": "the proposal itself, as Markdown"
+        },
+        "project": {
+          "type": "string",
+          "ref": "project",
+          "description": "the project it is filed under"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "options": {
+        "positional": [
+          "title",
+          "body"
+        ],
+        "short": {
+          "p": "project",
+          "b": "body"
+        }
+      }
+    },
+    "design_decide": {
+      "tool": true,
+      "noun": "design",
+      "verb": "decide",
+      "title": "Settle a design",
+      "description": "Record the decision on a proposal: approved, or declined. The decider is whoever is calling — stamped from the caller, so an agent's own decision is recorded as the agent's and an owner's only when the owner is the one asking.",
+      "input": {
+        "design": {
+          "type": "string",
+          "ref": "design",
+          "description": "the design being settled"
+        },
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "declined"
+          ],
+          "default": "approved",
+          "description": "what was decided"
+        }
+      },
+      "required": [
+        "design"
+      ],
+      "options": {
+        "positional": [
+          "design",
+          "verdict"
+        ]
+      },
+      "idempotent": true
+    },
     "review": {
       "component": true,
       "type": "object",

@@ -221,6 +221,83 @@
       },
       "readOnly": true
     },
+    "task_tree": {
+      "tool": true,
+      "noun": "task",
+      "verb": "tree",
+      "title": "Plan a tree of work",
+      "description": "Write a plan the way the graph holds one: the tasks, and the relations between them, in a single atomic batch. Every node carries a key of its own and says the relation its parent states about it, so nothing is inferred from the order of the list or from prose. dry_run renders the tree and writes neither a task nor a link. Work of three steps or more belongs here rather than in a checklist in one task's body.",
+      "input": {
+        "project": {
+          "type": "string",
+          "ref": "project",
+          "description": "the entity the tree hangs from"
+        },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "description": "the plan, one node apiece",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "title",
+              "relation"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+                "description": "this node's name within the plan — what another node names as its parent"
+              },
+              "title": {
+                "type": "string",
+                "description": "what to do, in a line"
+              },
+              "body": {
+                "type": "string",
+                "description": "the irreducible ask and its pointers, as Markdown"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "done",
+                  "cancelled"
+                ],
+                "description": "where it stands at birth — open unless said"
+              },
+              "parent": {
+                "type": "string",
+                "description": "the key of the node it hangs under; left out, it hangs from the project"
+              },
+              "relation": {
+                "type": "string",
+                "description": "what the parent states about this node — `requires`, `contains`, or any other relation this graph declares"
+              }
+            }
+          }
+        },
+        "dry_run": {
+          "type": "boolean",
+          "description": "render the tree and write nothing"
+        }
+      },
+      "required": [
+        "project",
+        "nodes"
+      ],
+      "options": {
+        "positional": [
+          "project"
+        ],
+        "short": {
+          "p": "project",
+          "n": "nodes"
+        }
+      }
+    },
     "task_update": {
       "tool": true,
       "noun": "task",
