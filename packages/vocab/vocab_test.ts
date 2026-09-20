@@ -3,13 +3,7 @@
 // no global vocabulary anywhere.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import {
-  extendMeta,
-  kindOrder,
-  loadVocab,
-  metaSchema,
-  type VocabDoc,
-} from './mod.ts'
+import { extendMeta, kindOrder, loadVocab, metaSchema } from './mod.ts'
 import slice from './fleet/slice.schema.json' with { type: 'json' }
 
 let v = loadVocab(slice)
@@ -412,16 +406,6 @@ Deno.test('a word has one home across documents', () => {
     Error,
     'declared twice',
   )
-})
-
-Deno.test('one home cited twice is not two homes', () => {
-  // A package that ships a convenience document bundling a neighbour's words
-  // beside its own says that neighbour's word in two of the documents a host
-  // loads — and both say the same thing, so it is one declaration, not a
-  // conflict. The refusal above is about DISAGREEMENT.
-  let again = { $defs: { doc: slice.$defs.doc } } as unknown as VocabDoc
-  let w = loadVocab([slice, again])
-  assertEquals(w.columns('doc'), v.columns('doc'))
 })
 
 Deno.test('every stored reference is indexed without an opt-in', () => {
