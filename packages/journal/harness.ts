@@ -11,7 +11,7 @@
 import { type Graph, graph, isPromise, type Options } from '@yaks/graph'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { mem } from '../sqlite/harness.ts'
-import { storage } from '../sqlite/mod.ts'
+import { type Driver, storage } from '../sqlite/mod.ts'
 import { ddl, journal, type Log, log } from './log.ts'
 
 let doc: VocabDoc = {
@@ -74,8 +74,13 @@ export let NOW = '2026-01-01T00:00:00.000Z'
 let ACTORS = ['ada', 'bob', 'cli']
 
 /** An embedded database with the wiki's tables and the journal's, and a log
- * bound to it — what a graph and a test both read through. */
-export let wikiLog = (): { g: (p?: Options['plugins']) => Graph; j: Log } => {
+ * bound to it — what a graph and a test both read through. The driver comes
+ * back beside them, since a facet is built from a host's own connection. */
+export let wikiLog = (): {
+  g: (p?: Options['plugins']) => Graph
+  j: Log
+  sql: Driver
+} => {
   let db = mem()
   let store = storage(db, wiki)
   store.install()
@@ -97,6 +102,7 @@ export let wikiLog = (): { g: (p?: Options['plugins']) => Graph; j: Log } => {
         plugins: [journal(j, { now: () => NOW }), ...plugins],
       }),
     j,
+    sql: db,
   }
 }
 
@@ -104,9 +110,9 @@ export let wikiLog = (): { g: (p?: Options['plugins']) => Graph; j: Log } => {
  * brings — with the log it writes to beside it. */
 export let wikiGraph = (
   plugins: Options['plugins'] = [],
-): { g: Graph; j: Log } => {
+): { g: Graph; j: Log; sql: Driver } => {
   let held = wikiLog()
-  return { g: held.g(plugins), j: held.j }
+  return { g: held.g(plugins), j: held.j, sql: held.sql }
 }
 
 /** Every adapter under the tests here is synchronous; a promise means the

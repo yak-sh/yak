@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
-    "./rules": "./rules.ts"
+    "./vocab": "./vocab.ts",
+    "./rules": "./rules.ts",
+    "./tools": "./tools.ts"
   },
   "license": "Apache-2.0",
   "description": "Records graph changes and their authors within each transaction, providing entity history, batch undo, and a cursor-based delta feed.",

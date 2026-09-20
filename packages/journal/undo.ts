@@ -80,8 +80,22 @@ let side = (batch: Batch, want: 'before' | 'after', guard = false): Change => {
       continue
     }
     let b: Bundle = { entity: { eid } }
-    for (let [comp, value] of held.get(eid)!) b[comp] = value
-    if (Object.keys(b).length == 1) continue
+    let moved = false
+    for (let [comp, value] of held.get(eid)!) {
+      moved = true
+      // The spine is the bundle's own IDENTITY, not a component beside it: a
+      // recorded patch to `entity` merges into the key that says who this
+      // bundle is about, and never lands on top of the eid. A graph this
+      // package journals never records one (the hook skips the spine), but a
+      // log imported from elsewhere holds them, and a bundle with no eid is
+      // not a bundle.
+      if (comp == 'entity') {
+        if (value) b.entity = { ...b.entity, ...value }
+        continue
+      }
+      b[comp] = value
+    }
+    if (!moved) continue
     let w = was.get(eid)
     // A guard names only columns this bundle restores: a component the undo
     // removes whole has no column to hold a token.

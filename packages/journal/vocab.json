@@ -1,0 +1,38 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true
+  },
+  "title": "journal",
+  "$defs": {
+    "entity_history": {
+      "tool": true,
+      "noun": "entity",
+      "verb": "history",
+      "title": "What happened to it",
+      "description": "Every committed batch that touched one entity, newest first. Each answers as the patch that batch applied — the components it wrote, or `$delete` for the death it was — stamped with who wrote it, when, and through what instrument. The log is written inside the transaction that wrote, so this is blame and diff without a version table; it starts where this graph started journaling.",
+      "input": {
+        "entity": {
+          "type": "string",
+          "ref": "entity",
+          "description": "whose past to read — an id, a name, or an eid"
+        },
+        "limit": {
+          "type": "number",
+          "description": "at most this many batches, counting back from the newest"
+        }
+      },
+      "required": [
+        "entity"
+      ],
+      "options": {
+        "positional": [
+          "entity"
+        ],
+        "short": {
+          "n": "limit"
+        }
+      },
+      "readOnly": true
+    }
+  }
+}
