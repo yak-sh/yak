@@ -1,5 +1,5 @@
 {
-  "db": "../../.tasks/yak.db",
+  "db": "../../../.tasks/yak.db",
   "plugins": [
     "@yaks/kernel",
     "@yaks/key",
