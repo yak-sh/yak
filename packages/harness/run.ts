@@ -28,6 +28,8 @@ import { diagnostics } from './diagnostics.ts'
 import { promptEntry } from '@yaks/context'
 import { instructionFiles } from '@yaks/context/host'
 import { homeAt, workspace } from './workspace.ts'
+import { worktrees } from './paths.ts'
+import { cutFor, homes, reclaim, sweep } from './worktrees.ts'
 import { render as tree } from '@yaks/preact'
 import type { VNode } from 'preact'
 import { transcriptViews } from './transcript.ts'
@@ -67,7 +69,7 @@ import {
   views,
 } from '@yaks/session'
 import { render } from '@yaks/text'
-import { type Harness, open } from './store.ts'
+import { dbPath, type Harness, open } from './store.ts'
 import { harnessTools } from './tools.ts'
 
 /** The model the harness asks when nobody says otherwise. */
@@ -253,6 +255,21 @@ export let agent = (opts: Opts = {}): Agent => {
   const mcp = mcpTools(h.g)
   h.fx.created('mcp_server', mcp.refresh).changed('mcp_server', mcp.refresh)
     .removed('mcp_server', mcp.refresh)
+  // A child's own checkout is garbage the moment its dispatch settles: no
+  // further step runs in it. The path is the one workspace.ts cut — named
+  // after the child — so a child that merely INHERITED its parent's home is
+  // not mistaken for the owner of it. reclaim() keeps anything dirty or
+  // unlanded, and a child without a checkout of its own finds nothing there.
+  h.fx.changed('dispatch', 'state', (e) => {
+    if (e.comp?.state != 'settled') return
+    reclaim(cutFor(e.entity.eid)).catch(
+      (error) =>
+        diagnostics().report(error, {
+          phase: 'worktree',
+          session: e.entity.eid,
+        }),
+    )
+  })
   h.g.apply(seed({ provider, model: name, tools }), { trusted: true })
   let d = daemon(
     h.g,
@@ -460,6 +477,16 @@ export let agent = (opts: Opts = {}): Agent => {
               session: parent,
             })
           },
+        )
+      }
+      // What abnormal endings left in the worktree root, taken back by the
+      // same test one child's end applies — plus the checkouts Git itself has
+      // forgotten. Only the harness running out of its OWN home sweeps: a
+      // store somebody named explicitly (a test, a probe) is not this one, and
+      // its run must never reach the live root.
+      if (h.path == dbPath()) {
+        sweep(worktrees(), await homes(h.g, live)).catch((error) =>
+          diagnostics().report(error, { phase: 'worktree-sweep' })
         )
       }
       let woken = live.map((b) => b.entity.eid)

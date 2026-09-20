@@ -2,7 +2,7 @@
 import { checkoutAt, createWorktree, discover } from '@yaks/git/host'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { ChildLimits } from '@yaks/session'
-import { worktrees } from './paths.ts'
+import { cutFor } from './worktrees.ts'
 
 export { workspaceDoc } from './vocab.ts'
 
@@ -47,7 +47,10 @@ export let workspace = (g: Graph, cwd = Deno.cwd()): ChildLimits => ({
     if (!head) throw new Error('Task worktree requires a committed HEAD')
     return {
       worktree: {
-        path: `${worktrees()}/${child.replaceAll(':', '-')}`,
+        // Named after the child, so worktrees.ts knows whose checkout it is
+        // without asking the graph — and never mistakes an inherited home for
+        // one of its own.
+        path: cutFor(child),
         base: String(head),
         branch: 'task-' + child.replaceAll(':', '-'),
       },
@@ -57,7 +60,7 @@ export let workspace = (g: Graph, cwd = Deno.cwd()): ChildLimits => ({
     worktree: {
       type: 'object',
       description:
-        'Explicitly create a Git checkout (committed base only). Omit to share parent home. No sandbox or automatic cleanup.',
+        'Explicitly create a Git checkout (committed base only). Omit to share parent home. No sandbox; a path of your own choosing is never reclaimed when the session ends.',
       properties: {
         path: { type: 'string' },
         base: {
