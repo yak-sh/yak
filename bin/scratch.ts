@@ -14,19 +14,27 @@
 //
 // Three doors close the directory: normal exit, an accepted signal, and the
 // next run's stale sweep (a SIGKILLed run cannot clean up after itself, so its
-// successor does it by pid). Afterwards the run fails if any NEW `tasks-*`
-// entry appeared in the base directory: that is a spawn site writing to a
+// successor does it by pid). Afterwards the run reports any NEW `tasks-*`
+// entry that appeared in the base directory: that is a spawn site writing to a
 // hard-coded `/tmp` instead of TMPDIR, and it is how /tmp filled to 0 bytes
 // free on this box three times (T-20558).
 //
-// That last check reads the base directory, so it is exact only while the base
-// is this run's to watch. Where several suites share one `/tmp` — this box runs
-// CI and other worktrees against the same one — give the run a base of its own
-// (`TMPDIR=<scratch> deno task test`) and it reports only its own leaks.
+// That check reads the base directory, so a stray is only ATTRIBUTABLE while
+// the base is this run's to watch — and the caller already says which case it
+// is by naming TMPDIR or not. A named base (a scratchpad, a CI run) is nobody
+// else's, so a stray there is this run's leak and fails it. An unnamed one is
+// the shared `/tmp`, where this box runs CI and several worktrees at once: a
+// `tasks-*` entry there may be another run's, so it prints as a warning
+// naming the rule and the run passes (T-37656).
 
 /** Where temp dirs land for a process that has not been given a run dir. */
 export let tmpBase = (env: { TMPDIR?: string } = Deno.env.toObject()) =>
   env.TMPDIR || '/tmp'
+
+/** Whether the base is this run's alone — the caller named it, so nobody
+ * else mints there and a stray can be blamed on this run. */
+export let ours = (env: { TMPDIR?: string } = Deno.env.toObject()) =>
+  !!env.TMPDIR
 
 /** The `tasks-*` entries of a directory — the family this repo mints. */
 export let tasksEntries = (base: string) => {
@@ -79,7 +87,9 @@ if (import.meta.main) {
     console.error('usage: scratch.ts <command> [args...]')
     Deno.exit(2)
   }
-  let base = tmpBase()
+  let env = Deno.env.toObject()
+  let base = tmpBase(env)
+  let mine = ours(env)
   sweep(base)
   let dir = `${base}/tasks-run-${Deno.pid}`
   Deno.mkdirSync(dir, { recursive: true })
@@ -126,18 +136,22 @@ if (import.meta.main) {
   let leaked = strays(base, before)
   if (held) console.error(`could not remove ${dir}: ${held}`)
   if (leaked.length) {
+    let many = `${leaked.length} temp entr${leaked.length == 1 ? 'y' : 'ies'}`
     console.error(
-      `\n─── ${leaked.length} temp entr${
-        leaked.length == 1 ? 'y' : 'ies'
-      } leaked outside the run directory ───`,
+      `\n─── ${many} ${
+        mine ? 'leaked outside' : 'appeared beside'
+      } the run directory ───`,
     )
     for (let name of leaked) console.error(`  ${base}/${name}`)
     console.error(
-      'Mint scratch under TMPDIR (Deno.makeTempDir does), never a literal /tmp.',
+      mine
+        ? 'Mint scratch under TMPDIR (Deno.makeTempDir does), never a literal /tmp.'
+        : `Not failing: ${base} is shared, so these may be another run's.\n` +
+          'Name a base of your own (TMPDIR=<dir>) and the check is exact.',
     )
   }
 
   let signal = raise ?? status.signal
   if (signal) Deno.exit(signal == 'SIGINT' ? 130 : 143)
-  Deno.exit(status.code || (held || leaked.length ? 1 : 0))
+  Deno.exit(status.code || (held || (mine && leaked.length) ? 1 : 0))
 }

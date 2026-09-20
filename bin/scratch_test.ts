@@ -1,5 +1,13 @@
-import { assertEquals } from '@std/assert'
-import { running, strays, sweep, tasksEntries, tmpBase } from './scratch.ts'
+import { assertEquals, assertStringIncludes } from '@std/assert'
+import { slow } from '../src/testing.ts'
+import {
+  ours,
+  running,
+  strays,
+  sweep,
+  tasksEntries,
+  tmpBase,
+} from './scratch.ts'
 
 // Every case builds its own base and removes it — the hygiene this module is
 // about, practiced. The base lands under TMPDIR, so a case that dies mid-way
@@ -17,6 +25,13 @@ let base = (names: string[], body: (dir: string) => void) => {
 Deno.test('the base is TMPDIR, and /tmp only when nothing named one', () => {
   assertEquals(tmpBase({ TMPDIR: '/tmp/tasks-run-7' }), '/tmp/tasks-run-7')
   assertEquals(tmpBase({}), '/tmp')
+})
+
+// Naming a base is the whole claim to it: the shared /tmp carries other runs'
+// `tasks-*` entries, so a stray there is a warning and not this run's failure.
+Deno.test('a stray is blamed only on a base the caller named', () => {
+  assertEquals(ours({ TMPDIR: '/tmp/scratchpad' }), true)
+  assertEquals(ours({}), false)
 })
 
 Deno.test('only the tasks-* family counts as ours', () =>
@@ -45,3 +60,52 @@ Deno.test('this very process is running; pid 0 names no process', () => {
   assertEquals(running(Deno.pid), true)
   assertEquals(running(0), false)
 })
+
+// The predicate above decides an exit code, and it was the exit code that
+// failed runs which had leaked nothing — so the wiring gets its own proof.
+// The run leaks by hand: a command that mkdirs a `tasks-*` entry in the BASE
+// is exactly the spawn site writing past TMPDIR that the guard is for.
+let leaks = async (base: string, env: Record<string, string>) => {
+  let stray = `${base}/tasks-e2e-${crypto.randomUUID().slice(0, 8)}`
+  try {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: ['run', '-A', import.meta.dirname + '/scratch.ts', 'mkdir', stray],
+      env,
+      clearEnv: true,
+      stderr: 'piped',
+      stdout: 'null',
+    }).output()
+    return [out.code, new TextDecoder().decode(out.stderr)] as const
+  } finally {
+    try {
+      Deno.removeSync(stray, { recursive: true })
+    } catch { /* the run never got that far */ }
+  }
+}
+
+slow(
+  'a stray fails a named base and only warns on the shared one',
+  async () => {
+    // clearEnv is the only way to UNSET TMPDIR for a child, so the few names
+    // the child still needs are carried across by hand — DENO_DIR among them,
+    // or the run would build a second module cache under HOME.
+    let home = Object.fromEntries(
+      ['HOME', 'PATH', 'DENO_DIR'].map((k) => [k, Deno.env.get(k) ?? '']),
+    )
+    let dir = Deno.makeTempDirSync({ prefix: 'scratch-e2e-' })
+    try {
+      let [code, err] = await leaks(dir, { ...home, TMPDIR: dir })
+      assertEquals(code, 1)
+      assertStringIncludes(err, 'leaked outside the run directory')
+
+      // No TMPDIR: the base is /tmp, which this box shares with CI and every
+      // other worktree, so the entry is reported and the run still passes.
+      let [shared, warning] = await leaks('/tmp', home)
+      assertEquals(shared, 0)
+      assertStringIncludes(warning, 'appeared beside the run directory')
+      assertStringIncludes(warning, 'Not failing')
+    } finally {
+      Deno.removeSync(dir, { recursive: true })
+    }
+  },
+)

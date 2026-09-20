@@ -23,7 +23,9 @@ let log = (...a: unknown[]) => {
 // --- launch chrome ---------------------------------------------------------
 let port = 9200 + Math.floor(Date.now() % 700)
 // Chrome's singleton socket path lives under user-data-dir and must fit the
-// ~108-char unix socket limit — keep the dir short (a deep TMPDIR crashes it).
+// ~108-char unix socket limit — keep the dir short (a deep TMPDIR is a FATAL
+// "Socket path too long"). So a profile is the one scratch that may NOT
+// follow TMPDIR; src/probes.ts `throwaway()` only reaps one under `/tmp`.
 let dir = await Deno.makeTempDir({ dir: '/tmp', prefix: 'wp' })
 let chrome = new Deno.Command('google-chrome', {
   args: [
