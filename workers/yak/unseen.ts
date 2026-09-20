@@ -8,7 +8,7 @@
 // agent saying so ({@link archive}) archives it.
 // Reads and marks go through the store's own doors with the caller vouched,
 // never SQL; the apps of a space come from the directory part. The same
-// rows fold into `cards`, the structured half of the `app_errors` answer.
+// rows are the `app_errors` answer, one line each.
 import type { Bundle } from '@yaks/graph'
 import { idOf } from '../../src/types.ts'
 import * as dirPart from './directory.ts'
@@ -189,8 +189,7 @@ type Hit = {
   error?: Broke
 }
 // One open item and the app it broke in — what serve() hands back, so a
-// caller can write the line, fold the cards, or archive by id from the one
-// read.
+// caller can write the line or archive by id from the one read.
 export type Seen = { app: App; hit: Hit }
 
 let broke = (h: Hit) => h.exception ?? h.error ?? {}
@@ -200,9 +199,8 @@ let broke = (h: Hit) => h.exception ?? h.error ?? {}
 // title said the same thing.
 //
 // The place is the file and line where there is one ({@link spot}), the route
-// where there is not — the same precedence a card reads it with, and the line
-// is the only place anyone sees it now that an answer is bundles and nothing
-// carries a second structured copy.
+// where there is not — and the line is the only place anyone sees it now that
+// an answer is bundles and nothing carries a second structured copy.
 export let line = ({ app, hit }: Seen) => {
   let e = broke(hit)
   let id = idOf({ eid: hit.entity.eid, kind: hit.kind, num: hit.entity.num })
@@ -239,55 +237,6 @@ export let spot = (stack = '') => {
     return `${at.pathname}:${m[2]}`
   }
   return ''
-}
-
-// One card: a break as a person reads it, however many times it happened.
-// The same message from the same place is ONE break — a render loop that
-// throws every frame writes twenty rows and is one thing to fix — so the
-// entities fold together and the card keeps all their eids, which is what
-// `fixed` takes back.
-export type Card = {
-  eids: string[]
-  app: string
-  message: string
-  where: string
-  version: number | null
-  count: number
-  at: string
-}
-
-export let cards = (seen: Seen[]) => {
-  let by = new Map<string, Card>()
-  for (let { app, hit } of seen) {
-    let e = broke(hit)
-    let message = e.message ?? hit.doc?.title ?? ''
-    let where = spot(e.stack) || e.request || hit.doc?.title || ''
-    let key = `${app.slug}\n${message}\n${where}`
-    let card = by.get(key)
-    if (!card) {
-      by.set(
-        key,
-        card = {
-          eids: [],
-          app: app.slug,
-          message,
-          where,
-          version: e.version ?? null,
-          count: 0,
-          at: e.at ?? '',
-        },
-      )
-    }
-    card.eids.push(hit.entity.eid)
-    card.count++
-    // The card wears the LAST time it happened, and the deploy it happened
-    // on then: a break that survived a release is news about that release.
-    if ((e.at ?? '') >= card.at) {
-      card.at = e.at ?? ''
-      card.version = e.version ?? null
-    }
-  }
-  return [...by.values()].sort((a, b) => a.at < b.at ? 1 : -1)
 }
 
 // The space's apps, asked of the directory the way apps.ts asks it.
