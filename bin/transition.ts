@@ -50,6 +50,9 @@ type Ctx = {
   provider: (name: string) => string | undefined
   /** the entity a repository at this path or url is */
   repository: (name: string) => string
+  /** the git ref a branch NAME is — @yaks/git's `worktree.branch` points at
+   * the ref, it does not spell it */
+  branch: (name: string) => string
   /** the first entry of a session, when it has one */
   firstEntry: (session: string) => string | undefined
   /** the prose an artifact entity holds */
@@ -736,7 +739,9 @@ let MOVES: Record<string, Move | null> = {
           entity: { eid: me },
           worktree: {
             path: String(row.cwd),
-            ...(row.branch == null ? {} : { branch: String(row.branch) }),
+            ...(row.branch == null
+              ? {}
+              : { branch: ctx.branch(String(row.branch)) }),
             ...(row.base_revision == null
               ? {}
               : { head: String(row.base_revision) }),
@@ -857,7 +862,7 @@ let MOVES: Record<string, Move | null> = {
     says: 'worktree',
     make: (row, ctx) => ({
       path: text(row.cwd),
-      branch: text(row.branch),
+      branch: row.branch == null ? undefined : ctx.branch(String(row.branch)),
       head: text(row.base_revision),
       repository: row.cwd ? ctx.repository(String(row.cwd)) : undefined,
     }),
@@ -1143,6 +1148,14 @@ let main = async () => {
     },
     model: (name) => models.get(name),
     provider: (name) => providers.get(name),
+    branch: (name) => {
+      let eid = derivedEid(`ref|${name}`)
+      if (!minted.has(`ref|${name}`)) {
+        minted.set(`ref|${name}`, eid)
+        batch.push({ entity: { eid, num: null }, ref: { name } })
+      }
+      return eid
+    },
     repository: (name) => {
       let eid = derivedEid(`repository|${name}`)
       if (!minted.has(`repo|${name}`)) {
