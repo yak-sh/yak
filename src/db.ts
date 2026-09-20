@@ -1765,6 +1765,27 @@ let writableVersion = (db: Sql) => {
   return stored
 }
 
+// An ARRIVAL is not a deliverable: a letter that came IN was never sent, so it
+// can wear no delivery outcome. 133 of them wore a failure (T-37612) —
+// created(mail) fires on the wire batch that mints the mail comp, a beat
+// BEFORE inbound.ts stamps the arrival onto it, so the delivery effect read a
+// letter with no message_id and no sender and took it for an outbound ask.
+// mailed() asks for the RECIPIENT now, which that same batch carries or the
+// letter never will; this clears what the window left behind, and finds
+// nothing thereafter. The read guard keeps a re-open pure reads, the same
+// shape addCol takes with hasCol.
+export let healArrivals = (db: Sql) => {
+  let arrivals = `select m.entity from mail m
+     where m.message_id is not null
+       and not exists (select 1 from deliver d where d.entity = m.entity)`
+  for (let outcome of ['failed', 'delivered']) {
+    let stale = `${outcome} where entity in (${arrivals})`
+    if (prep(db, `select 1 from ${stale}`).get()) {
+      db.exec(`delete from ${stale}`)
+    }
+  }
+}
+
 // Migrate a connected handle in place: the hand + derived schema, the additive
 // column/index fills, and the vector index.
 // The schema work runs under one BEGIN IMMEDIATE and is idempotent: concurrent
@@ -2025,6 +2046,7 @@ export let migrate = <D extends Sql>(db: D): D => {
       // The spawn catalog is graph data, so every graph carries it: a fresh
       // one, the live one, and a test's :memory: alike (T-35023).
       seedCatalog(db)
+      healArrivals(db)
       // healStored re-parses every stored cell of every component table (6.6s
       // of a 15s boot on the live graph) for what an older vocabulary let in.
       // The vocabulary decides validity, so one pass per vocabulary is the

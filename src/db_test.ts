@@ -18,6 +18,7 @@ let {
   epochOf,
   findEid,
   hasCol,
+  healArrivals,
   historicalWorked,
   human,
   journalBy,
@@ -995,6 +996,34 @@ Deno.test('alias: every slug resolves, one primary, each globally unique', () =>
   apply(db, [{ eid: b, name: 'alias', comp: { slugs: 'second' } }])
   assertEquals(comp(b, 'alias')?.slug, 'beta')
   assertEquals(resolveId(db, 'second'), b)
+})
+
+// A letter that came IN was never sent, so it can wear no delivery outcome.
+// The pre-stamp window let the delivery effect take arrivals for outbound asks
+// and stamp each a failure (T-37612); boot clears what it left, and an
+// outbound letter — one WITH a recipient — keeps the outcome it earned.
+Deno.test('boot clears a delivery outcome an arrival could never have earned', () => {
+  let arrival = uid(), sent = uid(), box = uid()
+  apply(db, [
+    { eid: box, name: 'doc', comp: { title: 'A box' } },
+    { eid: arrival, name: 'doc', comp: { title: 'feedback', body: 'five' } },
+    { eid: arrival, name: 'mail', comp: {} },
+    { eid: sent, name: 'doc', comp: { title: 'a letter', body: '' } },
+    { eid: sent, name: 'mail', comp: {} },
+    { eid: sent, name: 'deliver', comp: { to: box } },
+  ])
+  let failing = (eid: string, message: string) =>
+    db.prepare(
+      `insert into failed (entity, at, message)
+       values ((select id from entity where eid = ?), ?, ?)`,
+    ).run(eid, '2026-09-19T18:23:45Z', message)
+  db.prepare(`update mail set message_id = ? where ${OWNED}`)
+    .run('msg:1:arrived@bot.test', arrival)
+  failing(arrival, ' is an ambiguous alias — matches #90bfa453d9')
+  failing(sent, 'no mailer configured')
+  healArrivals(db)
+  assertEquals(comp(arrival, 'failed'), undefined)
+  assertEquals(comp(sent, 'failed')?.message, 'no mailer configured')
 })
 
 // The empty reference: a missing id is ABSENCE, not a name. It used to reach
