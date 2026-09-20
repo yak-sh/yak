@@ -1,0 +1,94 @@
+{
+  "title": "spawn",
+  "$defs": {
+    "session_spawn": {
+      "tool": true,
+      "noun": "session",
+      "verb": "spawn",
+      "title": "Hand work to an agent",
+      "description": "Start an agent on a task: a session, the entry that asks for a provider, a model and an effort, and the session's claim on the task. The agent is launched by the commit, so a task somebody else holds refuses the whole thing. Say wait and the answer is what the run came to — its brief and its exit code — instead of its id.",
+      "input": {
+        "task": {
+          "type": "string",
+          "ref": "task",
+          "description": "the work it is being handed, which it claims"
+        },
+        "provider": {
+          "type": "string",
+          "ref": "provider",
+          "description": "who runs it — a provider whose transport is a command here"
+        },
+        "model": {
+          "type": "string",
+          "ref": "model",
+          "description": "which model it serves the run with"
+        },
+        "effort": {
+          "type": "string",
+          "description": "how hard to think, where the model takes such a word"
+        },
+        "instruction": {
+          "type": "string",
+          "description": "what to tell it (default the task's id and title — it holds the claim and reads the rest itself)"
+        },
+        "wait": {
+          "type": "boolean",
+          "description": "block until the run is over and answer with its ending"
+        },
+        "timeout": {
+          "type": "string",
+          "description": "how long to wait — 45m, 2h, or bare seconds (default 30m)"
+        }
+      },
+      "required": ["task", "provider"],
+      "options": {
+        "positional": ["task"],
+        "short": { "p": "provider", "m": "model" }
+      }
+    },
+    "session_wait": {
+      "tool": true,
+      "noun": "session",
+      "verb": "wait",
+      "title": "Block until it is over",
+      "description": "Wait for a session to end, and answer with what it came to: its brief and the exit code its run ended on. A session still going when the timeout passes is answered as still going, never killed.",
+      "input": {
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "description": "the session to wait on"
+        },
+        "timeout": {
+          "type": "string",
+          "description": "how long to wait — 45m, 2h, or bare seconds (default 30m)"
+        }
+      },
+      "required": ["session"],
+      "options": { "positional": ["session"] },
+      "readOnly": true,
+      "idempotent": true
+    },
+    "session_peek": {
+      "tool": true,
+      "noun": "session",
+      "verb": "peek",
+      "title": "A glance at the transcript",
+      "description": "The tail of a session's transcript as the graph holds it, one line per entry, plus what it is doing. A bounded glance at the entries, never the provider's own log file.",
+      "input": {
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "description": "the session to read"
+        },
+        "lines": {
+          "type": "number",
+          "description": "how many entries, newest last (default 40)"
+        }
+      },
+      "required": ["session"],
+      "options": { "positional": ["session"], "short": { "n": "lines" } },
+      "readOnly": true,
+      "idempotent": true
+    }
+  }
+}

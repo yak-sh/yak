@@ -34,6 +34,37 @@ it. A provider whose transport is `http` is not in the table, so it stays the
 in-process daemon's ([@yaks/session](../session)'s `react`). The effort is
 checked against the `efforts` its model serves before anything is launched.
 
+## The three words
+
+`@yaks/spawn/tools` is the facet a host takes to say that batch out loud — the
+runs behind the `tool: true` declarations in `vocab.json`, which is every word
+this package declares (it ships no component):
+
+```sh
+yak session spawn T-37667 --provider claude --model opus --effort high --wait
+yak session wait S-4211 --timeout 45m
+yak session peek S-4211 -n 20
+```
+
+`spawn` writes the session, the entry that asks, and the session's claim on the
+task; `wait` blocks until the run is over and answers with its brief and its
+exit code; `peek` is the transcript as the graph holds it, never the log file.
+The same three are `session_spawn`, `session_wait` and `session_peek` over
+`/mcp`.
+
+A spawn LANDS ITS OWN BATCH rather than answering with it, which is the one
+place here that differs from every other tool. The agent does not exist until
+the request has committed — `./effects.ts` answers the commit, not the intention
+— so a tool that only described the request could never watch what it started,
+and `--wait` would have nothing to wait on. It is the shape
+[@yaks/process](../process)'s `shell` already has, and for the same reason.
+
+Waiting is reading, on the same beat the logs are read on. A session with a
+PROCESS is over when the process is: a provider prints its terminal event and
+can still linger, so its own `stop` entry is not the run ending. One with no
+process is over when its transcript is. A wait that runs out of patience says so
+and leaves the agent alone — ending it is `stop`'s sentence, not this one's.
+
 ## The run
 
 `start` launches through @yaks/process: a launcher that exits at birth, a
@@ -95,9 +126,10 @@ this" is not in the vocabulary yet, so a tool use stays in the file.
 }
 ```
 
-The options say where an agent runs and how often its log is read. The providers
-are not among them — an adapter is a function, not a value a config can hold —
-so a host with one of its own writes a module:
+The options say where an agent runs, how often its log is read, how long a wait
+waits (`timeout`, a duration a person says: `45m`) and how many entries a peek
+shows (`lines`). The providers are not among them — an adapter is a function,
+not a value a config can hold — so a host with one of its own writes a module:
 
 ```ts
 import { spawning } from '@yaks/spawn/effects'
