@@ -69,6 +69,7 @@ import { ready, settle } from './declared.ts'
 import { state } from './state.ts'
 import { each, isPromise, then } from './pipe.ts'
 import { addressing } from './said.ts'
+import { meaning } from './meant.ts'
 
 /** What one `apply()` call may say about itself. */
 export type ApplyOpts = {
@@ -544,6 +545,12 @@ export let graph = (opts: Options): Graph => {
   // read as the eid the store keys by (said.ts).
   let aim = addressing(vocab)
 
+  // And the other half of hearing a line as it was meant: a bare column the
+  // vocabulary cannot place alone, read as the comp the line already selects
+  // (meant.ts). Both run before the store sees the query, so every door that
+  // reads through this graph hears the same sentence.
+  let mean = meaning(vocab)
+
   // What a door asks before it reads by id: every plugin that knows how a name
   // becomes an eid, asked in turn, each about the ids nobody has answered for
   // yet. Outside any transaction — a door is asking before it does anything.
@@ -570,9 +577,9 @@ export let graph = (opts: Options): Graph => {
     ddl: () => storage.ddl(),
     install: () => storage.install(),
     read: (query, readOpts) =>
-      then(aim(query, address), (q) => storage.read(q, readOpts)),
+      then(aim(mean(query), address), (q) => storage.read(q, readOpts)),
     rows: (query, readOpts) =>
-      then(aim(query, address), (q) => storage.rows(q, readOpts)),
+      then(aim(mean(query), address), (q) => storage.rows(q, readOpts)),
     apply,
   }
   return g

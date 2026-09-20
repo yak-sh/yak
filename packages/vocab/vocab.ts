@@ -40,6 +40,24 @@ export class Unknown extends Error {
   }
 }
 
+/** A bare word several components claim. The vocabulary alone cannot say which
+ * is meant — so it says WHICH ONES, and whoever holds more of the sentence than
+ * one word decides between them (@yaks/graph's `meaning`, which reads the comp
+ * off the rest of the line). Unresolved, it reaches the caller as this: the
+ * word, the choices, and a qualified spelling to type instead. */
+export class Ambiguous extends Error {
+  prop: string
+  comps: string[]
+  constructor(prop: string, comps: string[]) {
+    super(
+      `.${prop} is ambiguous (${comps.join(', ')}) — use .${comps[0]}.${prop}`,
+    )
+    this.prop = prop
+    this.comps = comps
+    this.name = 'Ambiguous'
+  }
+}
+
 // The extension keywords a registration admits, picked off a schema verbatim.
 // A keyword the caller did not register is invisible: the loader carries what
 // somebody asked for and nothing else.
@@ -429,8 +447,9 @@ export let loadVocab = (
     // sessions carry a stamped status), so non-stamped owners are preferred
     // first. A unique owner wins; several owners that are all references are one
     // read concept (comp '' — the filter scans every owner); any other collision
-    // is ambiguous and names the candidates. A bare word that is itself a
-    // component name routes as that facet (presence).
+    // throws {@link Ambiguous}, which NAMES the candidates so a caller holding
+    // the rest of the sentence can pick among them. A bare word that is itself
+    // a component name routes as that facet (presence).
     route: (prop) => {
       let own = owners.get(prop) ?? []
       if (own.length > 1) {
@@ -442,9 +461,7 @@ export let loadVocab = (
         if (own.every((c) => colFor(c, prop)?.category == 'ref')) {
           return { comp: '', prop }
         }
-        throw new Error(
-          `.${prop} is ambiguous (${own.join(', ')}) — use .${own[0]}.${prop}`,
-        )
+        throw new Ambiguous(prop, own)
       }
       if (routes.has(prop)) return { comp: prop, prop: '' }
       if (prop == EID && routes.has(SPINE)) return { comp: SPINE, prop: EID }

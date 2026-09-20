@@ -3,7 +3,13 @@
 // no global vocabulary anywhere.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { extendMeta, kindOrder, loadVocab, metaSchema } from './mod.ts'
+import {
+  Ambiguous,
+  extendMeta,
+  kindOrder,
+  loadVocab,
+  metaSchema,
+} from './mod.ts'
 import slice from './fleet/slice.schema.json' with { type: 'json' }
 
 let v = loadVocab(slice)
@@ -307,6 +313,19 @@ Deno.test('a computed column reads but never writes', () => {
   assertEquals(w.route('status'), { comp: 'task', prop: 'status' })
   assertEquals(w.column('task', 'status')?.computed, true)
   assert(w.check('task', { status: 'open' }).length == 1)
+})
+
+Deno.test('an ambiguous word names its choices for whoever can decide', () => {
+  let w = loadVocab({
+    $defs: {
+      task: { component: true, properties: { status: { type: 'string' } } },
+      session: { component: true, properties: { status: { type: 'string' } } },
+    },
+  })
+  let e = assertThrows(() => w.route('status'), Ambiguous)
+  assertEquals((e as Ambiguous).prop, 'status')
+  assertEquals((e as Ambiguous).comps, ['session', 'task'])
+  assertEquals((e as Ambiguous).name, 'Ambiguous')
 })
 
 Deno.test('the order refuses cycles', () => {

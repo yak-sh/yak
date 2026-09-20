@@ -11,7 +11,10 @@ behavior is host-specific; other routes use standard Request/Response APIs.
   effect observes it, while a refusal is still a refusal. A check does not
   reserve state or provide a transaction across multiple graphs; a subsequent
   write can still fail.
-- **`GET /query?q=…`** (or `POST /query`) — a query line in, bundles out.
+- **`GET /query?q=…`** (or `POST /query`) — a query line in, bundles out. A line
+  that REDUCES the selection instead of naming its members answers the value:
+  `.count!` as `{"count":n}`, `.distinct=col` as `{"distinct":[…]}`,
+  `.tally=col` as `{"tally":{…}}`.
 - **`/ws`** — subscriptions: a saved query whose answer is pushed again whenever
   a committed batch changes it.
 

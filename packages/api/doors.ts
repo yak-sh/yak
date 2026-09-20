@@ -9,7 +9,8 @@
 // that neither the request nor the answer is ever whole in memory.
 
 import { type Bundle, type Change, type Graph, Refused } from '@yaks/graph'
-import type { Entity } from '@yaks/graph'
+import type { Entity, Row } from '@yaks/graph'
+import { parse, type Query } from '@yaks/query'
 import { signed } from './actor.ts'
 import { json, refusal } from './refuse.ts'
 
@@ -200,14 +201,45 @@ let lineOf = (body: unknown): string | null => {
   return null
 }
 
+/** The three words that reduce a selection to a VALUE instead of naming its
+ * members. A line carrying one is asking a different question, so the door
+ * reads it off the AST before anything gathers a bundle nobody asked for. */
+type Agg = 'count' | 'distinct' | 'tally'
+let AGGS = new Set(['count', 'distinct', 'tally'])
+let aggregate = (ast: Query): Agg | undefined =>
+  ast.clauses.find((c) => AGGS.has(c.kind))?.kind as Agg | undefined
+
+/** An aggregate's rows as the wire says them. The compiled statement answers
+ * one `{value, n}` row per value (`.count!` under the empty key, since no
+ * tally keeps an empty one), and each word has its own shape: a count is the
+ * number, a distinct the values, a tally the map. Sorted by value, so two
+ * stores answering the same question answer in the same order. */
+let reduced = (op: Agg, rows: Row[]): unknown => {
+  if (op == 'count') return { count: Number(rows[0]?.n ?? 0) }
+  let values = rows.map((r) => String(r.value)).sort()
+  if (op == 'distinct') return { distinct: values }
+  let at = new Map(rows.map((r) => [String(r.value), Number(r.n ?? 0)]))
+  return { tally: Object.fromEntries(values.map((v) => [v, at.get(v)])) }
+}
+
 /**
  * `GET /query?q=…` or `POST /query` — a query line in, the bundles it selects
  * out.
+ *
+ * Unless the line asks for a REDUCTION. `.count!`, `.distinct=col` and
+ * `.tally=col` are questions about the selection rather than about its members,
+ * and the store answers each with one statement (`rows()` rather than
+ * `read()`); the body is then `{"count":n}`, `{"distinct":[…]}` or
+ * `{"tally":{…}}`.
  */
 export let ask = async (graph: Graph, request: Request): Promise<Response> => {
   let q = request.method == 'GET'
     ? new URL(request.url).searchParams.get('q')
     : lineOf(await request.json())
   if (q == null) throw new Refused('/query needs a query: ?q=… or a body {q}')
-  return json(await graph.read(q))
+  // Parsed once, here: the AST is what both seams take, so the line is read
+  // to decide which of them answers and not again to answer.
+  let ast = parse(q)
+  let op = aggregate(ast)
+  return json(op ? reduced(op, await graph.rows(ast)) : await graph.read(ast))
 }

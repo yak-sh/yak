@@ -14,7 +14,7 @@
  * precondition's `eid`, `comp`, `column` and `current`, say). */
 export type Refusal = {
   /** the error's name — `Refused`, `Stale`, `Unsupported`, `Unknown`,
-   * `Unauthorized`, `Denied` */
+   * `Ambiguous`, `Unauthorized`, `Denied` */
   error: string
   /** what was wrong, in the error's own words */
   message: string
@@ -40,8 +40,11 @@ export let STATUS: Record<string, number> = {
   Unsupported: 400,
   SyntaxError: 400,
   // @yaks/vocab's `Unknown`: a word the vocabulary does not know. The query
-  // named it, so the fault is the request's.
+  // named it, so the fault is the request's — and so is its `Ambiguous`, a
+  // word several components claim on a line that picked none of them. Both
+  // carry the word, and the ambiguous one carries the choices.
   Unknown: 400,
+  Ambiguous: 400,
   Unauthorized: 401,
   // The door knows who is asking; the answer is still no. @yaks/member's
   // `Denied` is this, and so is any other policy refusal that names itself so.
