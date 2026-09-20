@@ -169,11 +169,11 @@ Deno.test('a session that exists is handed back what it was in the middle of', a
     [
       '# S-3',
       '',
-      '## claimed',
-      '- T-7 — ship it',
-      '',
       '## previously',
       'landed the thing',
+      '',
+      '## claimed',
+      '- T-7 — ship it',
     ].join('\n'),
   )
 })

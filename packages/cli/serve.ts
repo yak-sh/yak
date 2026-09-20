@@ -5,9 +5,9 @@
  * plugin packages and imports, from each, the FACETS it runs — one subpath
  * apiece: the words it speaks (`@yaks/mail/vocab`), what a batch means
  * (`/rules`), what an agent may call (`/tools`), what happens after a commit
- * (`/effects`), the HTTP it adds (`/routes`), and the one pass it makes at
- * start-up (`/boot`) and what it keeps doing while the host is up
- * (`/service`). A subpath a package does not
+ * (`/effects`), the HTTP it adds (`/routes`), what it says at the start of a
+ * transcript (`/digest`), and the one pass it makes at start-up (`/boot`) and
+ * what it keeps doing while the host is up (`/service`). A subpath a package does not
  * export is a facet it does not have, and is skipped; a subpath that exists
  * and fails to import is an error, never a skip. Over that it opens one SQLite
  * file and mounts the doors —
@@ -63,6 +63,7 @@ import {
   routed,
 } from '@yaks/api'
 import { mcp, type Search } from '@yaks/mcp'
+import { composed, type Digest, type Sections } from '@yaks/context'
 import { adopt, fields as searched, find, search } from '@yaks/fts'
 import {
   type Effects,
@@ -99,6 +100,10 @@ export type Host = {
    * nobody. One plugin may say it; where it says nobody, the answer is this
    * host itself ({@link writer}). */
   who: Authenticate
+  /** what a session is told at its start: every plugin's sections, in weight
+   * order (@yaks/context `composed`). Live from the moment the plugins are
+   * imported — a factory may keep it, and may not call it before it returns. */
+  digest: Digest
 }
 
 /** The facets a host takes from a plugin, one subpath each. `views` is not
@@ -111,6 +116,7 @@ export let FACETS = [
   'tools',
   'effects',
   'routes',
+  'digest',
   'boot',
   'service',
 ] as const
@@ -170,6 +176,18 @@ export type RoutesFacet = {
   authenticate?: (host: Host, options: Options) => Authenticate
 }
 
+/** `<plugin>/digest` — what this plugin says at the START of a transcript: a
+ * factory answering the sections it contributes to the prose a session reads
+ * before its first turn (@yaks/context `Section`). `weight` is where they sit
+ * — lower leads, and the config's order breaks a tie — so the owner's words
+ * come before what the work is FOR whatever order the plugins were named in.
+ * A section is written from the transcript and the graph alone, never from
+ * another section, so no contributor has to know what any other one says. */
+export type DigestFacet = {
+  digest?: (host: Host, options: Options) => Sections
+  weight?: number
+}
+
 /** `<plugin>/boot` — the one pass this plugin makes at start-up, before
  * anything is served: the leases a dead holder left, the processes a restart
  * has to adopt back. A MOMENT rather than an observation, which is why it is
@@ -204,6 +222,7 @@ export type Facets = {
   tools: ToolsFacet
   effects: EffectsFacet
   routes: RoutesFacet
+  digest: DigestFacet
   boot: BootFacet
   service: ServiceFacet
 }
@@ -382,6 +401,7 @@ export let compose = async (
   let tooled = taken('tools')
   let watched = taken('effects')
   let served = taken('routes')
+  let telling = taken('digest')
   let booted = taken('boot')
   let running = taken('service')
 
@@ -432,11 +452,16 @@ export let compose = async (
     // later — `who` reads the binding rather than a copy of it.
     let self = writer(config)
     let authenticate: Authenticate = () => self
+    let told: Digest | undefined
     let host: Host = {
       config,
       vocab,
       sql,
       who: (request) => authenticate(request),
+      get digest(): Digest {
+        if (!told) throw new Error('the digest is not composed yet')
+        return told
+      },
       get storage(): Store {
         if (!store) throw new Error('the store is not open yet')
         return store
@@ -447,6 +472,18 @@ export let compose = async (
       },
     }
     authenticate = doorman(served, host, self)
+    // What a session is told, settled here for the reason authentication is:
+    // the tool that answers it (@yaks/session's `session_context`) reads it off
+    // the host, and a factory built later would have nothing to read. Each
+    // plugin's sections keep the weight its own module declared; the config's
+    // order breaks a tie.
+    told = composed(
+      telling.flatMap(([d, options]) =>
+        d.digest
+          ? [{ sections: d.digest(host, options), weight: d.weight }]
+          : []
+      ),
+    )
     // The clause compilers ride the STORE, so they are gathered before it is
     // built: what a query may SAY is settled once, at compose, and every door
     // that reads — `/query`, `/ws`, a tool, the command line — asks through

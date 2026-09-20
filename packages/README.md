@@ -295,6 +295,7 @@ and takes the ones it runs (`@yaks/cli` `compose`, `packages/cli`):
 | `./tools`   | `runs: (host, options) => Runs`, behind its `tool: true` words | ajv, SQL, anything  |
 | `./effects` | `effects: (host, options) => Watch[]`                          | anything            |
 | `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`          | anything            |
+| `./digest`  | `digest: (host, options) => Sections`, `weight?`               | anything            |
 | `./boot`    | `boot: (host, options) => void \| Promise<void>`               | anything            |
 | `./service` | `service: (host, options, signal) => void \| Promise<void>`    | anything            |
 | `./views`   | `views` — `@yaks/render` renderers                             | nothing server-side |
@@ -328,6 +329,20 @@ read Cloudflare Email Routing's live rule set and a provider credential file on
 one box; both are questions about a deployment, answered by a credential the
 host holds, and their answer is the same whatever graph is running. A package's
 check reads the graph its own words describe.
+
+`./digest` is what a plugin says at the START of a transcript: the sections of
+the prose a session reads before its first turn (@yaks/context `Section`,
+`composed`). Not a tool and not a route — nobody calls a plugin to ask what a
+session should be told; `session_context` asks the HOST, and the host answers
+with every plugin's sections at once. They are written in WEIGHT order, lower
+first and the config's order breaking a tie, so the owner's words lead and what
+the work is FOR comes last whatever order the plugins were named in
+(@yaks/session −10, @yaks/memory 10, @yaks/goal 20). Each section is written
+from the transcript and the graph alone, never from another section, so nothing
+here reaches sideways: @yaks/memory contributes recall knowing nothing of
+claims, and @yaks/session contributes what a transcript holds knowing nothing of
+memories. A section with no lines is not written, so dropping a plugin drops its
+heading rather than leaving an empty one.
 
 `./boot` is the one pass a plugin makes at start-up, before anything is served:
 the leases a dead holder left (`@yaks/session/boot`), the agents still running
