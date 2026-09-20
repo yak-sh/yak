@@ -11,5 +11,5 @@
  * addressed back to the entity that wears that number (see {@link ids}).
  */
 export { KERNEL_URI, kernelKeywords } from './keywords.ts'
-export { kernelDoc, spineDoc } from './vocab.ts'
+export { kernelDoc, marksDoc, spineDoc } from './vocab.ts'
 export { ids } from './ids.ts'

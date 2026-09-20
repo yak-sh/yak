@@ -13,6 +13,33 @@
       "properties": {},
       "description": "the relation an edge wears: this is about that"
     },
+    "archived": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was archived"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who archived it — kept as history when that entity is deleted"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the instrument it was written through — the session or client the write came in on"
+        }
+      },
+      "description": "Hidden from ordinary listings, without stopping execution or deleting history."
+    },
     "comment": {
       "component": true,
       "type": "object",

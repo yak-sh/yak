@@ -248,10 +248,10 @@ config names — is what hands it over. A development box says
 `"sender": {"via": "stash"}` and the whole flow runs with the letters piling up
 in memory.
 
-`archived` and `opened` are neighbours' words (@yaks/session's and
-@yaks/kernel's). A tool answers bundles, which are data, so naming one costs no
-import; a host that composes neither has those columns dropped at the door, and
-its inbox is then a list that never shrinks.
+`archived` and `opened` are a neighbour's words (@yaks/kernel's). A tool answers
+bundles, which are data, so naming one costs no import; a host that composes the
+kernel's vocabulary has them, and one that does not has those columns dropped at
+the door, its inbox then a list that never shrinks.
 
 ## Invitations: @yaks/member's empty slot, filled
 

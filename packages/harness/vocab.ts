@@ -16,7 +16,7 @@ import { artifactDoc, blobKeywords, blobRead } from '@yaks/blob/vocab'
 import { contextDoc } from '@yaks/context/vocab'
 import { docDoc } from '@yaks/doc/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
-import { spineDoc } from '@yaks/kernel/vocab'
+import { marksDoc, spineDoc } from '@yaks/kernel/vocab'
 import { edgeDoc, edgeKeywords } from '@yaks/edge/vocab'
 import { modelDoc } from '@yaks/model/vocab'
 import { openaiDoc } from '@yaks/openai/vocab'
@@ -43,13 +43,16 @@ export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
  * @yaks/context), what serves it (@yaks/model, @yaks/openai), what a reply
  * carries (@yaks/blob), the programs it starts (@yaks/process), and the work it
  * is doing (@yaks/doc, @yaks/edge, @yaks/task) — over @yaks/kernel's spine,
- * which is where `entity` and the two stamps live.
+ * which is where `entity` and the two stamps live, and its marks, which is
+ * where `archived` lives: a harness archives a session, it does not own the
+ * word for putting a thing away.
  *
  * This is a LIST, package by package, because that is the only way a word has
  * one home: no document here says another's words, so every one of them also
  * loads beside this one (`packages/facets_test.ts`). */
 export let docs: VocabDoc[] = [
   spineDoc,
+  marksDoc,
   harnessDoc,
   mcpDoc,
   checkoutDoc,

@@ -54,8 +54,8 @@ let doc: VocabDoc = {
       },
     },
     // The two words the `tools` facet WRITES and does not own — @yaks/kernel's
-    // `opened` and @yaks/session's `archived` — said here for the same reason
-    // `member` is: a test needs the word, not the package.
+    // `opened` and `archived` — said here for the same reason `member` is: a
+    // test needs the word, not the package.
     opened: {
       component: true,
       type: 'object',

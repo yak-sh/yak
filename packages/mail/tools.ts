@@ -23,11 +23,12 @@
 // this one marks the letter read and gathers its THREAD, both of which are
 // facts about mail and about nothing else.
 //
-// `archived` and `opened` are NEIGHBOURS' words — @yaks/session's and
-// @yaks/kernel's. A tool answers BUNDLES, which are data, so naming one costs
-// no import; a host that composes neither simply has those columns dropped at
-// the door, and its inbox is then a list that never shrinks. Nothing here
-// declares a second spelling of either (M-17871).
+// `archived` and `opened` are a NEIGHBOUR's words — @yaks/kernel's, the marks
+// that say somebody looked at a thing and somebody put it away. A tool answers
+// BUNDLES, which are data, so naming one costs no import; a host that composes
+// the kernel has them, and one that does not simply has those columns dropped
+// at the door, its inbox then a list that never shrinks. Nothing here declares
+// a second spelling of either (M-17871).
 //
 // The SENDER is not this facet's business. `mail send` and `mail reply` MINT a
 // letter that asks to go (`deliver`), and ./effects.ts — built from the
@@ -75,9 +76,9 @@ import type { Options } from './options.ts'
 /** How many letters an inbox answers with, unasked. */
 export let PAGE = 50
 
-// The two words this facet WRITES that it does not own. `archived` is
-// @yaks/session's and `opened` is @yaks/kernel's; both are said here as the
-// strings they are, because a tool's answer is data (see the header).
+// The two words this facet WRITES that it does not own. Both are
+// @yaks/kernel's, and both are said here as the strings they are, because a
+// tool's answer is data (see the header).
 let ARCHIVED = 'archived'
 let OPENED = 'opened'
 
