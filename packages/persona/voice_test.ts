@@ -57,9 +57,12 @@ Deno.test('a numberless entity still has an id to show', () => {
 })
 
 Deno.test('a control byte in a title never reaches the document', () => {
-  let out = told({ carries: [says('m1', 3, 'be[31mred', 'body')] })
+  // Said as a code, never as the byte: a source file carrying one is binary to
+  // git, and a binary file cannot be merged (bin/check-bytes.ts).
+  let esc = String.fromCharCode(27)
+  let out = told({ carries: [says('m1', 3, `be${esc}[31mred`, 'body')] })
   assert(out.includes('# M-3 be[31mred'), out)
-  assert(!out.includes(''), 'an escape reached the reader')
+  assert(!out.includes(esc), 'an escape reached the reader')
 })
 
 Deno.test('a doc with no title is its id, and one with no body is its heading', () => {
