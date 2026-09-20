@@ -179,10 +179,18 @@ export let runs = (
 
   session_brief: async (_bundles, ctx): Promise<Bundle[]> => {
     let id = idIn(ctx)
-    let s = id ? await sessionOf(ctx, id) : undefined
-    let eid = s?.entity.eid ?? str(ctx.args.session)
-    if (!eid) throw new Error('which session? say --session')
-    return [briefed(eid, ctx.args.text)]
+    if (!id) throw new Error('which session? say --session')
+    let s = await sessionOf(ctx, id)
+    // A transcript nobody has reified yet is reified HERE, wearing its own
+    // name, the way `session_context` reifies one. Never on the word the
+    // caller typed: `--session S-37703` is a human id, not an eid, and taking
+    // it for one mints an entity whose eid IS `S-37703`.
+    return [
+      s ? briefed(s.entity.eid, ctx.args.text) : {
+        ...briefed('$session', ctx.args.text),
+        [SESSION]: { id },
+      },
+    ]
   },
 
   // The start of the loop: the transcript becomes an entity, and what it was

@@ -152,6 +152,30 @@ Deno.test('a session nobody reified wraps to nothing', async () => {
   assertEquals(await tools.session_wrap!([], ctx({ session: 'gone' })), [])
 })
 
+Deno.test('a brief lands on the transcript wearing that name', async () => {
+  let rows = [
+    row({ entity: { eid: 's1' }, session: { id: 'abc' } }, 'session.id'),
+  ]
+  let [said] = await tools.session_brief!(
+    [],
+    ctx({ session: 'abc', text: 'did the thing' }, rows),
+  ) as Bundle[]
+  assertEquals(said.entity.eid, 's1')
+  assertEquals(comp(said, 'brief'), { text: 'did the thing' })
+})
+
+Deno.test('a brief for a transcript nobody reified reifies it, never the word', async () => {
+  let [said] = await tools.session_brief!(
+    [],
+    ctx({ session: 'S-37703', text: 'did the thing' }),
+  ) as Bundle[]
+  // Not `S-37703` — a human id is not an eid, and writing it as one would mint
+  // an entity called that.
+  assertEquals(said.entity.eid, '$session')
+  assertEquals(comp(said, 'session'), { id: 'S-37703' })
+  assertEquals(comp(said, 'brief'), { text: 'did the thing' })
+})
+
 // ---- the checks ------------------------------------------------------------
 //
 // These read a whole graph rather than the stub above — a lock's holder, and
