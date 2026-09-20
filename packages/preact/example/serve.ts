@@ -6,7 +6,7 @@ import { transform } from 'sucrase'
 
 let root = new URL('../../../', import.meta.url)
 let packages = /^\/packages\/(preact|render|match|vocab|query|sql|id)\//
-let vendor = /^\/src\/vendor\/(preact|hooks)\.module\.js$/
+let vendor = /^\/vendor\/(preact|hooks)\.module\.js$/
 let types: Record<string, string> = {
   ts: 'text/javascript; charset=utf-8',
   js: 'text/javascript; charset=utf-8',

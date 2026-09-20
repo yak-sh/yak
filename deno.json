@@ -220,7 +220,7 @@
     "./packages/tmux"
   ],
   "exclude": [
-    "src/vendor",
+    "vendor",
     "packages/workerd/conform.ts",
     "packages/durable-object/conform.ts",
     "packages/blob/conform.ts",
@@ -261,8 +261,8 @@
     "preact": "npm:preact@^10.29.1",
     "@preact/signals": "npm:@preact/signals@^2.9.0",
     "@preact/signals-core": "npm:@preact/signals-core@^1.14.0",
-    "marked": "./src/vendor/marked.esm.js",
-    "highlight.js": "./src/vendor/highlight.bundle.mjs",
+    "marked": "./vendor/marked.esm.js",
+    "highlight.js": "./vendor/highlight.bundle.mjs",
     "linkedom": "npm:linkedom@^0.18.12",
     "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.12.0",
     "zod": "npm:zod@^3.24.0",

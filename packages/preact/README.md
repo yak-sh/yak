@@ -62,7 +62,7 @@ and a button that updates it through the subscription interface.
 
 The example serves TypeScript as individual JavaScript modules using the same
 Sucrase stripping as the application, with an import map pointing at the
-existing plain ESM Preact files in `src/vendor`. No bundler or `node_modules` is
+existing plain ESM Preact files in `vendor/`. No bundler or `node_modules` is
 needed. It runs from this repository; it is excluded from publication.
 
 ## Compatibility

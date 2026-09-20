@@ -5,7 +5,7 @@
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { parseHTML } from 'linkedom'
-import { marked } from '../../src/vendor/marked.esm.js'
+import { marked } from '../../vendor/marked.esm.js'
 import { entity } from '@yaks/preact'
 import { define } from '@yaks/render'
 import { parse } from '@yaks/query'
