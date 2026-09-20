@@ -166,6 +166,20 @@ Deno.test('the store a host names is where the bytes land', async () => {
   }])
 })
 
+Deno.test('the bound is on the bytes, not on what a header claimed', async () => {
+  let h = host(), ask = door(h, { limit: 4 })
+  let streamed = new Request(at(await addressOf(text)), {
+    method: 'PUT',
+    // a body with no content-length at all
+    body: new ReadableStream<Uint8Array>({
+      start: (c) => (c.enqueue(text), c.close()),
+    }),
+    duplex: 'half',
+  } as RequestInit)
+  assertEquals(streamed.headers.get('content-length'), null)
+  assertEquals((await ask(streamed)).status, 413)
+})
+
 Deno.test('a store nobody can build refuses at compose, not at a request', () => {
   let h = host()
   assertThrows(

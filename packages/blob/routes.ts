@@ -103,6 +103,32 @@ let no = (error: string, message: string, code: number): Response =>
 
 let missing = () => no('NotFound', 'no object at that address', 404)
 
+// The body, counted as it arrives: `null` where it ran past the bound. A
+// caller that declares no length must not be able to make the server hold one,
+// so the limit is enforced on the bytes themselves and never on what a header
+// claimed — and the rest is read and dropped rather than cut off, so the
+// refusal reaches the caller instead of a reset connection.
+let bounded = async (
+  request: Request,
+  limit: number,
+): Promise<Uint8Array | null> => {
+  let reader = request.body?.getReader()
+  if (!reader) return new Uint8Array()
+  let parts: Uint8Array[] = [], size = 0, over = false
+  while (true) {
+    let { done, value } = await reader.read()
+    if (done || !value) break
+    size += value.length
+    if (over) continue
+    if (size > limit) (over = true), (parts = [])
+    else parts.push(value)
+  }
+  if (over) return null
+  let bytes = new Uint8Array(size), at = 0
+  for (let part of parts) bytes.set(part, at), at += part.length
+  return bytes
+}
+
 // What the caller says these bytes are, as a media type and nothing else. The
 // parameters are dropped and the shape is checked because this string is
 // written into a response header every time the object is read back.
@@ -150,11 +176,8 @@ export let routes = (
         if (!sha) {
           return no('Refused', 'an address is 64 lowercase hex digits', 400)
         }
-        // The length the caller declared, before reading it, and then the
-        // length that arrived — a body may say nothing about its size.
-        if (Number(request.headers.get('content-length')) > limit) return big()
-        let bytes = new Uint8Array(await request.arrayBuffer())
-        if (bytes.length > limit) return big()
+        let bytes = await bounded(request, limit)
+        if (!bytes) return big()
         let got = await addressOf(bytes)
         if (got != sha) {
           return no('Refused', `these bytes address ${got}`, 400)
