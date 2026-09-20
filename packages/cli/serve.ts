@@ -101,7 +101,9 @@ export type Host = {
 }
 
 /** The facets a host takes from a plugin, one subpath each. `views` is not
- * among them: a renderer is the WEB door's to import, never a server's. */
+ * among them: a renderer is the WEB door's to import, never a server's. Nor is
+ * `words`: a word runs on the box that typed it, against the checkout it
+ * stands in, so the `yak` command carries those (yak.ts `here`). */
 export let FACETS = [
   'vocab',
   'rules',

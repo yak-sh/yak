@@ -236,6 +236,35 @@ For private repositories, the host must authenticate requests and enforce access
 before serving Git data. HTTP Basic authentication can be used to prompt Git
 clients for credentials; token validation belongs to the host.
 
+## Landing a branch
+
+`@yaks/git/land` is a pure git primitive, and `@yaks/git/words` is that
+primitive as a command-line word, so `yak land` works in any checkout — no
+graph, no server, no config:
+
+```sh
+yak land                            # fast-forward this branch into the base
+yak land --allow-revert=a.ts,b.ts   # …and vouch for those files' rewind
+```
+
+Every coordinate comes from git alone: the primary worktree is the shared
+checkout to merge into, and the branch it holds is the base. One invocation does
+at most one thing — fast-forward the branch into the base (then push, if the
+base has an upstream), or, if the base MOVED, rebase onto it and return WITHOUT
+merging, printing the diff it pulled in so the caller can re-gate and land
+again. ff-only is the compare-and-swap that serializes concurrent landers, and
+no gate is run or known about here.
+
+Before the fast-forward, `reverts` asks the two questions that catch a rebase
+which quietly rewinds the base: which files does `base...HEAD` change that no
+commit on the branch touched, and does the landing blob equal content that path
+already held earlier in the base's history? Either is a revert nobody wrote, and
+the landing is refused, naming the files, the diff to read, and the flag that
+lands anyway.
+
+`land` is a [word](https://jsr.io/@yaks/cli), not a tool: a tool runs where the
+graph is, and landing runs where the checkout is.
+
 ## What is not here
 
 No push, no delta compression, no shallow clone, and no negotiation — a `have`

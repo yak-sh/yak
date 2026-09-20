@@ -1,8 +1,9 @@
-// The `yak` command. It knows four words of its own — `help`, `login`,
-// `logout`, `apply` — and everything else arrives as more TOOLS: the apps'
-// commands (commands.ts) sit beside them in the list, and the server's own
-// tools (platform.ts) are the table that costs a round trip, so run.ts asks
-// for them only on a line that reaches them.
+// The `yak` command. It knows five words of its own — `help`, `login`,
+// `logout`, `serve`, `apply` — and everything else arrives as more TOOLS: the
+// packages' own WORDS ({@link here}) and the apps' commands (commands.ts) sit
+// beside them in the list, and the server's own tools (platform.ts) are the
+// table that costs a round trip, so run.ts asks for them only on a line that
+// reaches them.
 //
 //   yak app_list
 //   yak app_files --app recipes --path index.html --content @index.html
@@ -34,6 +35,7 @@ import { configPath } from './config.ts'
 import { listed, printed, rosterOf } from './platform.ts'
 import type { Result } from './roster.ts'
 import { forgetToken, saveToken } from './store.ts'
+import { words as git } from '@yaks/git/words'
 
 /** The platform this command talks to unless told otherwise. */
 export let HOST = 'yaks.app'
@@ -182,11 +184,23 @@ export let own: Word[] = [
   },
 ]
 
-/** What a plain install carries, in precedence order. The apps' commands come
- * after this command's own words and before the server's tools, because one of
- * those tools is `command` itself: the raw one takes the app's arguments as a
- * JSON object, and the word here takes them the way a person types them. */
-export let TOOLS: Word[] = [...own, ...appTools]
+/**
+ * The packages' own WORDS: a `./words` facet is what a package adds to a
+ * command line, run on the box that typed it rather than sent to a server.
+ * `yak land` fast-forwards THIS checkout, so it cannot be a tool — a tool runs
+ * where the graph is. They are imported, not configured: a word must work with
+ * no config and no server in sight, which is the state a checkout is usually
+ * in. A package's words are `Word`s and nothing more, so each literal is
+ * checked against that type here and the package depends on nothing of ours.
+ */
+export let here: Word[] = [...git]
+
+/** What a plain install carries, in precedence order. The packages' words come
+ * after this command's own, and the apps' commands after those and before the
+ * server's tools, because one of those tools is `command` itself: the raw one
+ * takes the app's arguments as a JSON object, and the word here takes them the
+ * way a person types them. */
+export let TOOLS: Word[] = [...own, ...here, ...appTools]
 
 /** One line, from argv to an exit code — the refusal printed on the way. A
  * box with words of its own passes them, and they shadow everything here. */

@@ -137,6 +137,7 @@ says so.
 | `./boot`    | `boot: (host, options)` — the one pass made at start-up         | anything            |
 | `./service` | `service: (host, options, signal)` — what keeps running         | anything            |
 | `./views`   | `views` — @yaks/render renderers for the web door and a TUI     | nothing server-side |
+| `./words`   | `words` — what the package adds to a COMMAND LINE               | anything            |
 | `.`         | types, and the pure functions the package offers as a library   |                     |
 
 ```ts
@@ -169,6 +170,33 @@ load what a plugin SAYS without loading what it DOES — `@yaks/process/vocab`
 describes a running program where `@yaks/process` starts one.
 
 `yak serve` takes the first five. `./views` is nobody's server business.
+
+### A word is a tool that runs HERE
+
+`./words` is the one facet no server takes. A tool runs where the graph is; a
+word runs on the box that typed it, against the checkout it is standing in —
+`yak land` fast-forwards THIS branch, and a `land` tool would fast-forward a
+branch on the server's box instead, which is nobody's intent. So a word is not
+declared in a `vocab.json`, is never listed by `/mcp`, and is not read from the
+config: the `yak` command imports the ones it ships with (`here` in
+[./yak.ts](./yak.ts)), because a word has to work in a checkout with no config
+and no server in sight.
+
+It is declared the way a tool is — a name, a description, an input schema the
+line is mapped through — so it is listed, helped and completed from the one
+declaration. Only the run differs: arguments in and an exit code out, printing
+as it goes, where a tool's is bundles in and bundles out. That shape is `Word`
+(./run.ts), and a contributing package writes the literal without importing it:
+
+```ts
+// @yaks/git/words
+export let words = [{
+  name: 'land',
+  description: 'Land the branch you are standing on…',
+  inputSchema: { type: 'object', properties: { 'allow-revert': … } },
+  run: async (args, c) => (c.out(`landed ${sha}`), 0),
+}]
+```
 
 `host` is `{ config, vocab, storage, sql, graph, who }`. `storage` and `graph`
 are live from the moment each is open — a factory may keep them, and may not

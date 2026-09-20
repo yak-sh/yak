@@ -4,7 +4,9 @@
   "exports": {
     ".": "./mod.ts",
     "./host": "./host.ts",
-    "./vocab": "./vocab.ts"
+    "./land": "./land.ts",
+    "./vocab": "./vocab.ts",
+    "./words": "./words.ts"
   },
   "license": "Apache-2.0",
   "description": "Stores Git objects as graph entities, builds trees and commits from file manifests, and serves clones through read-only smart HTTP.",

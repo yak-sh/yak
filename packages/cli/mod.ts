@@ -93,4 +93,4 @@ export {
 } from './config.ts'
 export { listed, printed, rosterOf } from './platform.ts'
 export { appStray, appTools } from './commands.ts'
-export { HOST, main, own, TOOLS, YAK } from './yak.ts'
+export { here, HOST, main, own, TOOLS, YAK } from './yak.ts'
