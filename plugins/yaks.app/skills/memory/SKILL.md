@@ -1,6 +1,6 @@
 ---
 name: memory
-description: 'What the person said (yaks.app). memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, and how a memory differs from the notes an app keeps.'
+description: "What the person said (yaks.app). memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, how a memory differs from the notes an app keeps, and where a document YOU wrote goes instead: project documents, written into the app's store as entities and found again with search."
 ---
 
 # What the person said
@@ -114,3 +114,53 @@ one app is known to every agent working anywhere in that space.
 
 When they state a rule for one app, both are right: keep their sentence with
 `memory_save`, and write the rule the app is to be built by into its `NOTES.md`.
+
+## Project documents
+
+A memory is the person's sentence. A `NOTES.md` is how one app is kept, in their
+terms, in four kilobytes. Neither is the place for a document YOU wrote — how
+the game's combat resolves, the shape a page expects its rows in, why the
+schedule is generated a month ahead, the overview somebody asked you to write
+down. That is not a sentence to preserve and it is not house rules.
+
+Write it where the app's own knowledge already lives: as an entity in the app's
+store, which is what `doc` is for.
+
+    graph_apply({ app: 'idler-rpg', entities: [{
+      entity: { eid: '$d' },
+      alias: { name: 'combat' },
+      note: {},
+      doc: {
+        title: 'Combat',
+        body: '# Combat\n\nA tick is ten seconds...' } }] })
+
+`doc.title` and `doc.body` are both searched, so the document is findable the
+moment it is written — by anyone, in any conversation, including you next week:
+
+    search({ text: 'a swing resolves' })
+    graph_query({ app: 'idler-rpg', query: '.note!&.doc?' })
+    graph_show({ ids: ['combat'] })
+
+Give `search` the WORDS that are in the document, not the question you want
+answered: it matches the text as a phrase, ranked, where `memory_recall` ranks
+by meaning. A trailing `*` prefix-matches the last word.
+
+Two small things make that work, and both are ordinary:
+
+- **A component of its own.** `note: {}` — declared in the app's `vocab.json`
+  with no columns at all — is what tells your documents from the app's data,
+  which wears `doc` too. Then `.note!` is the whole reading list.
+- **A name.** `alias: {name: 'combat'}` makes the write IDEMPOTENT: writing
+  "combat" again patches the document that already holds that name instead of
+  leaving two, and a name stands wherever an eid does, so `graph_show` reads it
+  back without a lookup.
+
+They are rows in the app's store like any other, so they travel with the app, a
+member reads them, and what they said an hour ago can be put back for thirty
+days.
+
+What they must not be is a memory. `memory_save` takes the person's words and
+nothing else, and a document of yours saved there is your prose wearing their
+authority — handed to the next agent as something they said. When they ask for
+an overview to be kept, both halves are right: keep their sentence with
+`memory_save`, and write the document into the store.

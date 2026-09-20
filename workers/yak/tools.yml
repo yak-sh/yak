@@ -622,7 +622,10 @@ memory_save:
     carry the rest. It is kept for the whole space, so everyone working
     there sees it, and the about tool hands the newest few to any agent that
     asks. What is only about ONE app belongs in that app's NOTES.md instead
-    (guide page notes).
+    (guide page notes), and a document YOU wrote — an overview, how something
+    works, why it was built that way — belongs in the app's store as a doc
+    entity, which search finds again (guide page memory, Project documents).
+    Only their own sentences go here.
 
 memory_recall:
   title: What they have said

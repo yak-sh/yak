@@ -80,7 +80,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'memory',
     'title': 'What the person said',
     'description':
-      'memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, and how a memory differs from the notes an app keeps.',
+      "memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, how a memory differs from the notes an app keeps, and where a document YOU wrote goes instead: project documents, written into the app's store as entities and found again with search.",
     'brief': 'the words a person wants remembered',
   },
   'notes': {
@@ -436,7 +436,7 @@ export let WORDS: Record<string, Words> = {
   'memory_save': {
     'title': 'Keep what they said',
     'description':
-      'Keep what the person said about how they want something built or handled — their words, as they said them. Reach for it the moment they state a preference, a standard, a taste, a way of working, a thing they never want done again: "use grams, never cups", "keep it soft, not technical", "always show me the link". Save the SENTENCE, verbatim — never your summary of it, never a tidied-up version, never what you concluded from it. A summary can only lose what they said, and nobody can get it back. Add context only where the words are unreadable without it — one line saying what was being talked about, and no more; the words themselves carry the rest. It is kept for the whole space, so everyone working there sees it, and the about tool hands the newest few to any agent that asks. What is only about ONE app belongs in that app\'s NOTES.md instead (guide page notes).',
+      'Keep what the person said about how they want something built or handled — their words, as they said them. Reach for it the moment they state a preference, a standard, a taste, a way of working, a thing they never want done again: "use grams, never cups", "keep it soft, not technical", "always show me the link". Save the SENTENCE, verbatim — never your summary of it, never a tidied-up version, never what you concluded from it. A summary can only lose what they said, and nobody can get it back. Add context only where the words are unreadable without it — one line saying what was being talked about, and no more; the words themselves carry the rest. It is kept for the whole space, so everyone working there sees it, and the about tool hands the newest few to any agent that asks. What is only about ONE app belongs in that app\'s NOTES.md instead (guide page notes), and a document YOU wrote — an overview, how something works, why it was built that way — belongs in the app\'s store as a doc entity, which search finds again (guide page memory, Project documents). Only their own sentences go here.',
   },
   'memory_recall': {
     'title': 'What they have said',

@@ -364,6 +364,81 @@ slow(
   },
 )
 
+// Where a document goes (T-37616, E#868fa3f25c answer 4). `memory_save` keeps
+// the person's sentence and nothing else, and a NOTES.md is four kilobytes of
+// house rules — so the overview an agent WRITES belongs in the app's own store,
+// as the entity `doc` already is. This is the guide's own example, run: the
+// section stops being true by failing here rather than by misleading somebody.
+slow('a project document is an entity, and search finds it', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    await agent.tool('app_new', { slug: 'idler-rpg', title: 'Idler' })
+    await agent.tool('app_files', {
+      app: 'idler-rpg',
+      files: [{
+        path: 'vocab.json',
+        // A component of its own, with no columns at all: what tells the
+        // documents from the app's data, which wears `doc` too.
+        content: vocabFile({ note: {}, hero: { level: num } }),
+      }],
+    })
+    await agent.tool('app_deploy', { app: 'idler-rpg' })
+    // The app's data wears `doc` as well, so the reading list must not be it.
+    await agent.tool('graph_apply', {
+      app: 'idler-rpg',
+      entities: [{
+        entity: { eid: '$h' },
+        doc: { title: 'Brakka the Bold' },
+        hero: { level: 3 },
+      }],
+    })
+    let write = (body: string) =>
+      agent.tool('graph_apply', {
+        app: 'idler-rpg',
+        entities: [{
+          entity: { eid: '$d' },
+          alias: { name: 'combat' },
+          note: {},
+          doc: { title: 'Combat', body },
+        }],
+      })
+    await write('# Combat\n\nA tick is ten seconds and a swing resolves once.')
+
+    // Found by what it SAYS, the moment it is written.
+    let hits = JSON.parse(
+      await agent.tool('search', { text: 'a swing resolves' }),
+    ) as { doc: { title: string } }[]
+    assertEquals(hits.map((h) => h.doc.title), ['Combat'])
+
+    // And listed by what it IS, without the app's own rows in the way.
+    let listed = JSON.parse(
+      await agent.tool('graph_query', {
+        app: 'idler-rpg',
+        query: '.note!&.doc?',
+      }),
+    ) as { doc: { title: string } }[]
+    assertEquals(listed.map((l) => l.doc.title), ['Combat'])
+
+    // The name is the address: read back whole without a lookup, and a
+    // rewrite under the same name patches it rather than leaving two.
+    let shown = JSON.parse(await agent.tool('graph_show', { ids: ['combat'] }))
+    assertStringIncludes(JSON.stringify(shown), 'A tick is ten seconds')
+    await write('# Combat\n\nA tick is five seconds now.')
+    let again = JSON.parse(
+      await agent.tool('graph_query', {
+        app: 'idler-rpg',
+        query: '.note!&.doc?',
+      }),
+    ) as { doc: { body: string } }[]
+    assertEquals(again.length, 1)
+    assertStringIncludes(again[0].doc.body, 'five seconds now')
+  } finally {
+    await k.stop()
+  }
+})
+
 // The five things four separate builders each had to guess at (T-33145), each
 // held here as well as written in the guide, so a guide sentence that stops
 // being true fails rather than misleads: what a `time` column takes, filtering
