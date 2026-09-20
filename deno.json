@@ -93,14 +93,14 @@
     "check:codegen": "deno task codegen --check",
     "check:content": "deno task content --check",
     "check:packages": {
-      "command": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno run -A bin/scratch.ts deno test --parallel --no-check -A packages/",
+      "command": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno run -A bin/scratch.ts deno test --parallel --no-check -A packages/ packages/*_test.ts",
       "dependencies": [
         "check:types"
       ]
     },
     "codegen": "deno run --allow-read --allow-write --allow-run=deno src/vocab/gen.ts",
     "content": "deno run --allow-read --allow-write --allow-run=deno workers/yak/gen.ts",
-    "test:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno run -A bin/scratch.ts deno test --parallel -A packages/",
+    "test:packages": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 deno run -A bin/scratch.ts deno test --parallel -A packages/ packages/*_test.ts",
     "test:workerd": "deno run -A bin/suite-time.ts test:workerd deno task test:workerd:run",
     "test:workers": "deno run -A bin/scratch.ts deno test -A workers/yak/ workers/yak-tail/",
     "gate": "deno task check && deno task test && deno task bench:gate && deno task bench:gate:web && deno run -A src/cli.ts sync --check",

@@ -33,7 +33,8 @@
         "by": {
           "type": "string",
           "ref": "entity",
-          "death": "keep"
+          "death": "keep",
+          "stamped": true
         },
         "at": {
           "type": "string",
@@ -55,12 +56,14 @@
       "properties": {
         "at": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "stamped": true
         },
         "by": {
           "type": "string",
           "ref": "entity",
-          "death": "keep"
+          "death": "keep",
+          "stamped": true
         },
         "verdict": {
           "enum": [
@@ -159,12 +162,14 @@
       "properties": {
         "at": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "stamped": true
         },
         "by": {
           "type": "string",
           "ref": "entity",
-          "death": "keep"
+          "death": "keep",
+          "stamped": true
         },
         "via": {
           "type": "string",
@@ -262,7 +267,8 @@
         "by": {
           "type": "string",
           "ref": "entity",
-          "death": "keep"
+          "death": "keep",
+          "stamped": true
         },
         "at": {
           "type": "string",

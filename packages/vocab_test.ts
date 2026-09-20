@@ -16,6 +16,9 @@ import { assert, assertEquals } from '@std/assert'
 import { blobKeywords } from '@yaks/blob'
 import { edgeKeywords } from '@yaks/edge'
 import { idKeywords } from '@yaks/id'
+import { keyKeywords } from '@yaks/key'
+import { kernelKeywords } from '@yaks/kernel'
+import { nameKeywords } from '@yaks/names'
 import {
   CORE_URI,
   type Keywords,
@@ -42,11 +45,24 @@ for (let e of Deno.readDirSync(here)) {
 }
 
 // The keyword vocabularies a file may name, by the URI it names them with.
+// Every one the packages ship: a URI missing here reads as a URI nobody owns,
+// which is the same complaint a typo earns and hides the difference.
 let words: Record<string, Keywords> = Object.fromEntries(
-  [blobKeywords, edgeKeywords, idKeywords].map((k) => [k.uri, k]),
+  [
+    blobKeywords,
+    edgeKeywords,
+    idKeywords,
+    keyKeywords,
+    kernelKeywords,
+    nameKeywords,
+  ].map((k) => [k.uri, k]),
 )
 
-let compsOf = (d: VocabDoc) => Object.keys(d.$defs ?? {})
+// The COMPONENTS a file declares. A `$defs` entry is not always one: a tool, a
+// rule and a bare enum (`task.statuses`) live there too, and only a component
+// answers `vocab.comp()`.
+let compsOf = (d: VocabDoc) =>
+  Object.entries(d.$defs ?? {}).filter(([, s]) => s.component).map(([k]) => k)
 
 let beforeOf = (d: VocabDoc) =>
   Object.values(d.$defs ?? {}).flatMap((s) => s.before ?? [])
