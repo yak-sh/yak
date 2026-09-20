@@ -17,6 +17,7 @@ import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { modelDoc } from '@yaks/model'
 import { wakeDoc } from '@yaks/wake'
 import { sessionDoc, sessions } from '@yaks/session'
+import { toolsDoc } from '@yaks/tools/vocab'
 import { dreamingDoc } from './vocab.ts'
 import { type Open, watches } from './desk.ts'
 
@@ -68,6 +69,7 @@ export let notebook: Vocab = loadVocab([
   modelDoc,
   wakeDoc,
   sessionDoc,
+  toolsDoc,
   dreamingDoc,
   doc,
 ], [edgeKeywords])

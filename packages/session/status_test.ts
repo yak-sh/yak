@@ -8,6 +8,7 @@ import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/harness.ts'
 import { modelDoc } from '@yaks/model'
+import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
 import {
   kindOf,
@@ -17,7 +18,7 @@ import {
   usingBefore,
 } from './status.ts'
 
-let vocab = loadVocab([sessionDoc, modelDoc])
+let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
 
 let S = 'sess'
 let entry = (n: number, kind: Record<string, unknown>): Bundle => ({

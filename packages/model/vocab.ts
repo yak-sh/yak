@@ -2,20 +2,16 @@
 // (`@yaks/model/vocab`). It reaches no storage, no SQL and no runtime, so a
 // browser tab loading this vocabulary loads nothing else.
 //
-// A model's `tool` and the artifacts a reply carries are said by the packages
-// that own them (@yaks/tools, @yaks/blob) and folded in here, because a graph
-// that keeps `provider` and `model` always keeps those beside them.
+// What a reply CARRIES is said elsewhere: a `tool` is @yaks/tools's word and an
+// `artifact` is @yaks/blob's. A host that wants them composes those packages —
+// that is what a plugin list is for. Saying them here as well would give one
+// word two homes, and `loadVocab` refuses that.
 
 import type { VocabDoc } from '@yaks/vocab'
-import { toolDoc } from '@yaks/tools/vocab'
-import { artifactDoc } from '@yaks/blob/vocab'
 import doc from './vocab.json' with { type: 'json' }
 
-/** The `provider`, `model` and `tool` components, to load beside your own. */
-export let modelDoc: VocabDoc = {
-  ...doc,
-  $defs: { ...doc.$defs, ...artifactDoc.$defs, ...toolDoc.$defs },
-}
+/** The `provider` and `model` components, to load beside your own. */
+export let modelDoc: VocabDoc = doc
 
 /** Every document this plugin declares. */
 export let docs: VocabDoc[] = [modelDoc]

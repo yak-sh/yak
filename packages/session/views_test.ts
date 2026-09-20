@@ -1,10 +1,11 @@
 import { assert, assertEquals } from '@std/assert'
 import { render } from '@yaks/text'
 import { loadVocab } from '@yaks/vocab'
+import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
 import { views } from './views.ts'
 
-let vocab = loadVocab(sessionDoc)
+let vocab = loadVocab([sessionDoc, toolsDoc])
 let body = 'x'.repeat(100) + '\nchild final output'
 let entry = {
   entity: { eid: 'e' },

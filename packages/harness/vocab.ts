@@ -12,8 +12,10 @@
 
 import { openrouterDoc } from '@yaks/openrouter/vocab'
 import { mcpDoc } from '@yaks/mcp-client/vocab'
-import { blobKeywords, blobRead } from '@yaks/blob/vocab'
+import { artifactDoc, blobKeywords, blobRead } from '@yaks/blob/vocab'
+import { contextDoc } from '@yaks/context/vocab'
 import { docDoc } from '@yaks/doc/vocab'
+import { toolsDoc } from '@yaks/tools/vocab'
 import { spineDoc } from '@yaks/kernel/vocab'
 import { edgeDoc, edgeKeywords } from '@yaks/edge/vocab'
 import { modelDoc } from '@yaks/model/vocab'
@@ -37,10 +39,15 @@ export let workspaceDoc: VocabDoc = { title: 'workspace', $defs: { home } }
 export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
 
 /** Every document the harness is made of: the words a transcript is made of
- * (@yaks/session), what serves it (@yaks/model, @yaks/openai), the programs it
- * starts (@yaks/process), and the work it is doing (@yaks/doc, @yaks/edge,
- * @yaks/task) — over @yaks/kernel's spine, which is where `entity` and the two
- * stamps live. */
+ * (@yaks/session), what it asks for and what answers (@yaks/tools,
+ * @yaks/context), what serves it (@yaks/model, @yaks/openai), what a reply
+ * carries (@yaks/blob), the programs it starts (@yaks/process), and the work it
+ * is doing (@yaks/doc, @yaks/edge, @yaks/task) — over @yaks/kernel's spine,
+ * which is where `entity` and the two stamps live.
+ *
+ * This is a LIST, package by package, because that is the only way a word has
+ * one home: no document here says another's words, so every one of them also
+ * loads beside this one (`packages/facets_test.ts`). */
 export let docs: VocabDoc[] = [
   spineDoc,
   harnessDoc,
@@ -50,6 +57,9 @@ export let docs: VocabDoc[] = [
   docDoc,
   edgeDoc,
   sessionDoc,
+  contextDoc,
+  toolsDoc,
+  artifactDoc,
   modelDoc,
   openaiDoc,
   openrouterDoc,

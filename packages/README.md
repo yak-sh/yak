@@ -278,8 +278,10 @@ These are designed for the use-case, not ported from the fleet server: that
 server is being dismantled, and `docs/transition.md` says, one row per fleet
 component, which package component its rows become when its data is exported
 into a plugin-powered graph — or why nothing takes them. A word has ONE home, so
-all of these load together with no name declared twice
-(`bin/transition_test.ts`).
+all of these load together with no name declared twice (`bin/transition_test.ts`
+says it of the `vocab.json` FILES; `packages/facets_test.ts` says it of the
+`./vocab` facet a host imports, which is where a package could still fold
+another's words into its own document and make the two uncomposable).
 
 ## Facets: a plugin is a package, a facet is a subpath
 
@@ -446,8 +448,15 @@ shape proposed for it.
   cannot search or walk. Each wants the three lines `@yaks/embedding/rules` has:
   its indexes raised through `host.sql`, its compiler returned from `extend`.
 - **`@yaks/render`'s `vocab.json` describes a column schema**, not a component
-  domain, so it is the one vocabulary document with no `./vocab` subpath and the
-  one the facet test names as an exception.
+  domain, so it is the one vocabulary document with no `./vocab` subpath, and
+  the facet test names it as an exception.
+- **`@yaks/harness`'s `./vocab` is an application's LIST**, package by package,
+  rather than the words that package owns — it is a host wearing a plugin's
+  shape, so it cannot compose beside the packages it names, and the facet test
+  names it as the other exception. It is a list and not a fold: every document
+  in it is another package's own `./vocab`, said once, so each still loads
+  beside every other. What it wants in the end is a config (`yak serve`), which
+  is T-37580's.
 
 ## How they compose
 

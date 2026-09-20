@@ -25,6 +25,7 @@ import { ram } from '@yaks/ram'
 import { render } from '@yaks/text'
 import { loadVocab } from '@yaks/vocab'
 import { cli, type Ctx, type Word } from '@yaks/cli'
+import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
 import { daemon } from './daemon.ts'
 import { sessions } from './plugin.ts'
@@ -57,7 +58,7 @@ let spike = async (
   let MODEL = env('MODEL') ?? 'gpt-6-astra'
   let prompt = String(args.prompt ?? '') || 'List your tools, then say done.'
 
-  let vocab = loadVocab([sessionDoc, modelDoc, openaiDoc])
+  let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, openaiDoc])
   let fx = effects(vocab)
   let g = graph({ storage: ram(vocab), vocab, plugins: [sessions(), fx] })
   // The Codex backend keeps nothing, so every ask replays the transcript and a

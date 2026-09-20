@@ -17,6 +17,7 @@ import {
   type Reply,
   type Request,
 } from '@yaks/model'
+import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
 import { kindOf, statusOf } from './status.ts'
 import { sessions } from './plugin.ts'
@@ -35,7 +36,7 @@ let fakeDoc: VocabDoc = {
     },
   },
 }
-let vocab = loadVocab([sessionDoc, modelDoc, fakeDoc])
+let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, fakeDoc])
 
 let ids = { s: 'sess', m: 'model', p: 'prov', t: 'tool', f: 'fork' }
 

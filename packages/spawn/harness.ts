@@ -11,12 +11,13 @@ import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
 import { modelDoc } from '@yaks/model'
 import { sessionDoc, sessions } from '@yaks/session'
+import { toolsDoc } from '@yaks/tools/vocab'
 import { processDoc, processes } from '@yaks/process'
 import { claude } from './adapters.ts'
 import type { Adapter } from './adapters.ts'
 
 /** Every word a managed session wears. */
-export let host: Vocab = loadVocab([sessionDoc, modelDoc, processDoc])
+export let host: Vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, processDoc])
 
 /** A graph over an empty store, with the transcript and process rules on it.
  * `fx` is the effects registry, for a test that composes the facet. */

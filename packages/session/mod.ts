@@ -48,10 +48,13 @@
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
+ * import { contextDoc } from '@yaks/context'
  * import { modelDoc } from '@yaks/model'
+ * import { toolsDoc } from '@yaks/tools'
  * import { sessionDoc, sessions } from '@yaks/session'
  *
- * let vocab = loadVocab([sessionDoc, modelDoc, mine])
+ * // a transcript is made of four packages' words, each said once
+ * let vocab = loadVocab([sessionDoc, toolsDoc, contextDoc, modelDoc, mine])
  * // let g = graph({ storage, vocab, plugins: [sessions()] })
  * ```
  *

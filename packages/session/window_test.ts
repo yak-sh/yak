@@ -2,9 +2,10 @@ import { assert, assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
+import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
 let tracked = () => {
-  let vocab = loadVocab([sessionDoc, {
+  let vocab = loadVocab([sessionDoc, toolsDoc, {
     $defs: {
       entity: {
         component: true,

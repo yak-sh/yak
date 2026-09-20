@@ -1,7 +1,9 @@
 /**
  * @yaks/model is the seam between a conversation and whoever serves it: the
- * shape of a request, the shape of a reply, and the three entities a graph
- * keeps about serving — `provider`, `model`, `tool`. It carries no transport.
+ * shape of a request, the shape of a reply, and the two entities a graph
+ * keeps about serving — `provider` and `model`. It carries no transport, and it
+ * says no word another package owns: a `tool` is @yaks/tools's and an
+ * `artifact` is @yaks/blob's, composed beside this one.
  * A provider package ({@link https://jsr.io/@yaks/openai | @yaks/openai}, an
  * Ollama or a Workers AI sibling) implements {@link Model}; a conversation
  * package (`@yaks/session`) shapes its record into {@link Item}s and hands them

@@ -1,5 +1,3 @@
-import { callDoc } from '@yaks/tools/vocab'
-import { contextDoc } from '@yaks/context'
 // The vocabulary this package ships, as one document to load beside your own
 // (./vocab.json — plain JSON Schema). A session is a TRANSCRIPT: nothing is
 // launched as a host process — entries appear, and a daemon reacts to the
@@ -36,8 +34,16 @@ import { contextDoc } from '@yaks/context'
 // There is no `input` comp: prose with no `output` beside it is one, so the
 // invalid state "input and output at once" cannot be written.
 //
-// What a `using` names — `provider`, `model` — and what a `call.to` reaches —
-// a `tool` — are @yaks/model's entities, loaded beside this document.
+// Half the entry comps above are another package's words, and this document
+// says only its own: `content`, `output`, `call`, `result`, `error` and
+// `exception` are @yaks/tools's — a call is the record of having asked a tool,
+// whoever asked it — and an instruction assembled from parts is @yaks/context's
+// `prompt`. What a `using` names — `provider`, `model` — is @yaks/model's, and
+// what a `call.to` reaches is @yaks/tools's `tool`. A host whose provider
+// returns pictures wants @yaks/blob too, since that is what ./react.ts writes a
+// reply's artifacts as. A host that wants a transcript composes those packages
+// beside this one; that is what a plugin list is for, and one word folded into
+// two documents is a vocabulary `loadVocab` refuses to load.
 //
 // The shape worth noticing is the CLAIM. A lock is not a row about a document
 // somewhere else — it is a component ON the document, so "who holds this?" is
@@ -52,12 +58,11 @@ import { contextDoc } from '@yaks/context'
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 
-/** The session vocabulary, to load beside your own and beside @yaks/model's:
- * `loadVocab([sessionDoc, modelDoc, ...mine])`. */
-export let sessionDoc: VocabDoc = {
-  ...doc,
-  $defs: { ...doc.$defs, ...contextDoc.$defs, ...callDoc.$defs },
-}
+/** The session vocabulary, to load beside the packages whose words a
+ * transcript names — what serves an ask (@yaks/model), what a call and its
+ * result are (@yaks/tools), what an instruction is made of (@yaks/context):
+ * `loadVocab([sessionDoc, modelDoc, toolsDoc, contextDoc, ...mine])`. */
+export let sessionDoc: VocabDoc = doc
 
 export let SESSION = 'session'
 export let CLAIM = 'claim'

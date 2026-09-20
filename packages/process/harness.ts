@@ -10,11 +10,12 @@ import { type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { modelDoc } from '@yaks/model'
 import { sessionDoc } from '@yaks/session'
+import { toolsDoc } from '@yaks/tools/vocab'
 import { processDoc } from './comp.ts'
 import { processes } from './plugin.ts'
 
 /** This package's words, and the transcript words its output rides. */
-export let host: Vocab = loadVocab([processDoc, sessionDoc, modelDoc])
+export let host: Vocab = loadVocab([processDoc, sessionDoc, toolsDoc, modelDoc])
 
 /** A graph over an empty store, with the process plugin on it. */
 export let tracked = (): Graph =>

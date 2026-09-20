@@ -6,6 +6,7 @@ import { modelDoc } from '@yaks/model'
 import { effects } from '@yaks/effects'
 import { runner } from '@yaks/tools'
 import type { Bundle, Graph } from '@yaks/graph'
+import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
 import { sessions } from './plugin.ts'
 
@@ -25,7 +26,7 @@ let saying = (g: Graph, at: string, say: () => unknown) =>
   })
 
 Deno.test('result membership is joined before sequence allocation and observers', async () => {
-  const vocab = loadVocab([sessionDoc, modelDoc])
+  const vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
   const fx = effects(vocab)
   const g = graph({ vocab, storage: ram(vocab), plugins: [sessions(), fx] })
   const observed: unknown[] = []
@@ -51,7 +52,7 @@ Deno.test('result membership is joined before sequence allocation and observers'
 })
 
 Deno.test('same-batch call/result join respects the absence gate and detached calls', async () => {
-  const vocab = loadVocab([sessionDoc, modelDoc])
+  const vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
   const g = graph({ vocab, storage: ram(vocab), plugins: [sessions()] })
   await g.apply([
     { entity: { eid: 's' }, session: {} },
@@ -79,7 +80,7 @@ Deno.test('same-batch call/result join respects the absence gate and detached ca
 })
 
 Deno.test('independent callers can complete out of order without losing transcript association', async () => {
-  const vocab = loadVocab([sessionDoc, modelDoc])
+  const vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
   const g = graph({ vocab, storage: ram(vocab), plugins: [sessions()] })
   await g.apply([
     { entity: { eid: 's' }, session: {} },

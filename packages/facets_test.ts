@@ -13,7 +13,9 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { compose, FACETS } from '@yaks/cli/serve'
-import type { VocabDoc } from '@yaks/vocab'
+import { type Keywords, loadVocab, type VocabDoc } from '@yaks/vocab'
+import { idKeywords } from '@yaks/id'
+import { nameKeywords } from '@yaks/names'
 
 let here = new URL('./', import.meta.url)
 let root = new URL('../', here)
@@ -66,6 +68,45 @@ Deno.test('a package with words exports them at ./vocab, and they load', async (
   assert(said.length > 25, said.join(' '))
   assert(said.includes('@yaks/task'), said.join(' '))
   assert(said.includes('@yaks/tmux'), said.join(' '))
+})
+
+// The aggregate: `@yaks/harness` is an APPLICATION whose `./vocab` is the list
+// of everything that application speaks, so it names other packages' documents
+// on purpose and cannot be composed beside them. Every other package's `./vocab`
+// says the words that package OWNS.
+let AGGREGATE = ['harness']
+
+Deno.test("every package's words load beside every other package's", async () => {
+  // A word has ONE home (packages/README.md). `bin/transition_test.ts` says
+  // that of the `vocab.json` FILES; this says it of the facet a host actually
+  // imports, which is where a package can still fold another's words into its
+  // own document and make the two uncomposable.
+  let home = new Map<string, string>()
+  let docs: VocabDoc[] = []
+  let keywords: Keywords[] = []
+  for (let p of packages) {
+    if (!has(p, 'vocab') || AGGREGATE.includes(p.dir)) continue
+    let mod = await import(file(p, 'vocab').href) as {
+      docs?: VocabDoc[]
+      keywords?: Keywords[]
+    }
+    for (let doc of mod.docs ?? []) {
+      for (let word of Object.keys(doc.$defs ?? {})) {
+        let held = home.get(word)
+        assert(!held, `'${word}' is ${held}'s word and ${p.name} says it too`)
+        home.set(word, p.name)
+      }
+      docs.push(doc)
+    }
+    keywords.push(...(mod.keywords ?? []))
+  }
+  assert(home.size > 60, `only ${home.size} words walked`)
+  // And they load as one vocabulary — the host's own keywords registered, since
+  // a `prefix` or a `by_name` nobody reads is silently dropped (@yaks/cli
+  // `understood`).
+  let vocab = loadVocab(docs, [...keywords, idKeywords, nameKeywords])
+  assert(vocab.all.includes('task'), 'no task')
+  assert(vocab.all.includes('session'), 'no session')
 })
 
 Deno.test('every other facet a package exports is shaped the way a host reads it', async () => {
