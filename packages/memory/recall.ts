@@ -7,9 +7,10 @@
 // they like the pages to look"), and this package never learns how that is
 // done. A host whose STORE does the same thing answers `.near=<entity>` on the
 // line itself (@yaks/embedding), and {@link Asked.near} is where that goes.
-// Where there is neither, the words rank themselves: {@link line} is a filter
-// line with the words on it, which every yaks store answers as a full-text
-// search over `doc` — which is where a memory's sentence lives. None of it is
+// Where there is neither, the words SELECT: {@link line} is a filter line with
+// the words on it, which every yaks store answers as a full-text search over
+// `doc` — which is where a memory's sentence lives — and the newest of what
+// they select lead, because a query line carries no bm25. None of it is
 // configured; a caller that has a ranker passes one.
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
@@ -68,9 +69,9 @@ export let heard = (b: Bundle): Memory => {
   }
 }
 
-// A word the filter line can carry: the line's own punctuation (`&`, `=`, `.`)
-// would be read as grammar, and a full-text index matches words anyway.
-let words = (said: string) =>
+/** The words a filter line can carry: the line's own punctuation (`&`, `=`,
+ * `.`) would be read as grammar, and a full-text index matches words anyway. */
+export let words = (said: string): string =>
   said.replace(/[^\p{L}\p{N}\s'-]+/gu, ' ').trim().replace(/\s+/g, ' ')
 
 /** What a recall is looking for: which memories, and what ranks them. */
@@ -83,19 +84,33 @@ export type Asked = {
   scope?: Eid
   /** only the ones recording a correction somebody gave */
   feedback?: boolean
-  /** the words to rank by — the store's own index over `doc` */
+  /** the words to select by — the store's own index over `doc` */
   said?: string
+  /** whether ANY one of those words is enough. A search means all of them, and
+   * is asked exactly (@yaks/fts ANDs a string's words); somebody asking what
+   * is worth recalling about a subject means any, and ranks what comes back */
+  any?: boolean
   /** an entity to rank by MEANING instead, where the host embeds */
   near?: Eid
   /** particular ones, by id */
   eids?: Eid[]
 }
 
+// The words as ALTERNATIVES: a parenthesised group, which @yaks/query reads as
+// one term whose `|` binds inside it, each word quoted so nothing in it is
+// read as grammar. A lone quoted word still prefix-matches (@yaks/fts `term`).
+let any = (said: string): string =>
+  `(${
+    [...new Set(said.toLowerCase().split(' '))].map((w) => `"${w}"`).join('|')
+  })`
+
 /**
- * The filter line that finds memories: with words, the store ranks them by its
- * own full-text index; with a `near`, by meaning; with neither, newest first.
- * The components are named so a row carries them — a row carries only what its
- * filter names.
+ * The filter line that finds memories: with words, the ones saying them — all
+ * of them, or any one where the caller said `any`; with a `near`, ranked by
+ * meaning; otherwise newest first. WORDS DO NOT RANK: @yaks/fts compiles a
+ * word to a condition and keeps its bm25 for the search door, so a line
+ * carrying words is a filter and the newest still lead. The components are
+ * named so a row carries them — a row carries only what its filter names.
  *
  * ```ts
  * line({ space: 's1', limit: 8 })
@@ -104,9 +119,9 @@ export type Asked = {
  */
 export let line = (asked: Asked): string => {
   let said = words(asked.said ?? '')
-  let ranked = !!(said || asked.eids?.length || asked.near)
+  let ranked = !!(asked.eids?.length || asked.near)
   return [
-    ...(said ? [said] : []),
+    ...(said ? [asked.any ? any(said) : said] : []),
     ...(asked.eids?.length ? [`.eid=${asked.eids.join(',')}`] : []),
     ...(asked.near ? [`.near=${asked.near}`] : []),
     // A memory is what is being asked for, so the word is always on the line;

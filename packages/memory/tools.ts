@@ -13,11 +13,12 @@
 // refused before it costs anybody the sentence.
 //
 // NOTHING HERE RANKS. `line()` (./recall.ts) says what to ask the store for,
-// and the store answers it: its full-text index over `doc` where the words
-// rank themselves — as a PHRASE, which is @yaks/fts and the same everywhere
-// here — its vectors where a `near` was named and the host composed
-// @yaks/embedding. A host with neither answers the newest, which is a worse
-// answer and not a broken one.
+// and the store answers it: its full-text index over `doc` selects the
+// memories saying the words — every one of them, which is what somebody
+// searching means — and its vectors put them in order where a `near` was named
+// and the host composed @yaks/embedding. A host with neither answers the
+// newest of what the words selected, which is a worse answer and not a broken
+// one.
 
 import {
   addressed,

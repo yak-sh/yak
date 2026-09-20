@@ -152,10 +152,11 @@ Deno.test('a memory this graph does not hold is said so', async () => {
 })
 
 Deno.test('a recall asks the store for the ranking it has', () => {
-  // Words: the store's own index over `doc` ranks them, so nothing orders.
+  // Words: the store's own index over `doc` selects them, and the newest of
+  // what they selected lead — there is no bm25 on a query line.
   assertEquals(
     line({ limit: 8, said: 'how do they like it?' }),
-    'how do they like it&.memory&.doc?&.created?&.limit=8',
+    'how do they like it&.memory&.doc?&.created?&.order=-entity.num&.limit=8',
   )
   // An anchor: the vectors rank them, where the host keeps any.
   assertEquals(
