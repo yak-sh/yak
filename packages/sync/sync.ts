@@ -1,22 +1,25 @@
-// The assembly: a client graph, wired to a server.
+// Where the pieces are assembled: a client graph connected to a server.
 //
-// Two hooks and one socket. The `precondition` hook runs inside the batch's
-// transaction, before the patches go in, and marks each bundle the caller sent
-// with the image of the entity it is about to change — that mark is what tells
-// the `effect` hook which bundles were asked for, and what to put back if the
-// server refuses them. The `effect` hook runs after the commit and sends the
-// batch, without waiting: a local write over a local store is synchronous, and
-// staying synchronous is most of the reason to run a graph in a page at all.
+// Two plugin hooks and one socket. The `precondition` hook runs inside the
+// write's transaction, before the patches go in, and marks each bundle the
+// caller passed in with a copy of the entity it is about to change — that mark
+// is what tells the `effect` hook which bundles came from a caller, and what to
+// put back if the server refuses them. The `effect` hook runs after the commit
+// and sends the write without waiting for a response: a local write over a
+// local store is synchronous, and staying synchronous is most of the reason to
+// run a graph in a page at all.
 //
-// One exception: a batch that DELETES is not applied optimistically. Death is
-// final in this model, so a refused delete could never be put back; the
-// precondition hook holds the whole batch out of the transaction and sends it
-// as it stands, and the server's applied answer lands as an echo carrying its
-// own tombstones — exactly as an accepted batch's answer does.
+// One exception: a write that DELETES is not applied optimistically. Deletion
+// is final in this model, so a refused delete could never be put back; the
+// precondition hook holds the whole list of bundles out of the transaction and
+// sends it as it stands, and the server's response is applied here marked as an
+// echo, carrying its own tombstones — exactly as the response to an accepted
+// write is.
 //
-// Posts are SERIALIZED. Two batches sent at once could reach the server in
-// either order, and the second one's answer could then reconcile the first
-// one's fields backwards. One chain, in the order the writes committed.
+// Requests are SERIALIZED. Two writes posted at once could reach the server in
+// either order, and the second one's response could then reconcile the first
+// one's columns backwards. One promise chain, in the order the writes
+// committed.
 
 import type { Bundle, Eid, Graph, Plugin } from '@yaks/graph'
 import { dead, then } from '@yaks/graph'
@@ -51,14 +54,14 @@ export type SubscribeOpts = {
   answerKey?: string
 }
 
-/** How a graph is wired to a server. Only `url` is required; both transports
- * default to the platform's own. */
+/** How a graph is connected to a server. Only `url` is required; both
+ * transports default to the platform's own. */
 export type SyncOpts = {
   /** the server's base URL — the origin `/apply`, `/query` and `/ws` sit under */
   url: string
   /** Working-set ownership, retention and pending-write protection. */
   replica?: Replica
-  /** how a batch is sent (default: the global `fetch`) */
+  /** how a write is sent (default: the global `fetch`) */
   fetch?: Fetch
   /** how the socket is opened (default: the global `WebSocket`) */
   connect?: Connect
@@ -74,27 +77,29 @@ export type SyncOpts = {
   report?: Report
 }
 
-/** A graph's wire: the subscriptions on it, and the state of the socket. */
+/** A graph's connection to a server: its subscriptions, and the state of the
+ * socket they are held on. */
 export type Sync = {
   /** the plugin this registered on the graph */
   plugin: Plugin
   /** open the socket without subscribing to anything */
   open: () => void
-  /** subscribe to a query (or `true` for every committed batch) */
+  /** subscribe to a query (or `true` for every committed write) */
   subscribe: (query: Ask, id?: string, opts?: SubscribeOpts) => string
   /** drop one subscription */
   unsubscribe: (id: string) => void
-  /** Ask one subscription, or every subscription, for a fresh authoritative frame. */
+  /** Ask one subscription, or every subscription, for a fresh full frame from
+   * the server. */
   refresh: (id?: string) => void
   /** whether the socket is open right now */
   connected: () => boolean
   /** whether this subscription has successfully applied an answer on the
    * current connection. Cached rows alone never make it ready. */
   ready: (id: string) => boolean
-  /** hear readiness changes (including an empty first answer); not called
-   * immediately. Unsubscribe with the returned function. */
+  /** be called when readiness changes (including on an empty first answer);
+   * not called immediately. The returned function removes the listener. */
   onReady: (fn: (id: string, ready: boolean) => void) => () => void
-  /** settle: resolves when every batch in flight has been answered */
+  /** resolves when every write in flight has been answered */
   idle: () => Promise<void>
   /** close the socket and stop reconnecting */
   close: () => void
@@ -104,8 +109,8 @@ let warn: Report = (t) =>
   console.warn('@yaks/sync —', t.refused ?? t.error, t.sent)
 
 /**
- * Wire a client graph to a server. The plugin registers itself on the graph you
- * hand it, so one line is the whole setup:
+ * Connect a client graph to a server. The plugin registers itself on the graph
+ * you pass in, so one line is the whole setup:
  *
  * ```ts
  * import { graph } from '@yaks/graph'
@@ -113,12 +118,12 @@ let warn: Report = (t) =>
  * import { sync } from '@yaks/sync'
  *
  * // let g = graph({ storage: ram(vocab, { adopt: true }), vocab })
- * // let wire = sync(g, { url: 'https://recipes.example' })
- * // wire.subscribe('.dinner&.serves>4')
+ * // let link = sync(g, { url: 'https://recipes.example' })
+ * // link.subscribe('.dinner&.serves>4')
  * ```
  *
- * From then on every write through `g.apply()` lands locally at once and is
- * forwarded; every batch the server pushes lands locally too.
+ * From then on every write through `g.apply()` is applied locally at once and
+ * then sent to the server; everything the server pushes is applied locally too.
  */
 export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   let report = opts.report ?? warn
@@ -138,8 +143,9 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     if (was) notify(id, false)
   }
 
-  // Post one batch on the chain. `held` says it never went in locally, so a
-  // refusal has nothing to revert and an unanswered post has nothing to pin.
+  // Post one write on the chain. `held` means it was never applied locally, so
+  // a refusal has nothing to revert and an unanswered request has nothing to
+  // keep pinned.
   let send = (batch: Bundle[], held = false) => {
     let release = opts.replica?.protect(batch.map((b) => b.entity.eid))
     sending = sending.then(() =>
@@ -159,7 +165,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   let plugin: Plugin = {
     name: '@yaks/sync',
     hooks: {
-      // Inside the transaction, before the patches: the image to put back.
+      // Inside the transaction, before the patches: the copy to put back.
       precondition: (bundles, tx) => {
         if (bundles.some(echoed)) return bundles
         let eids = [...new Set(bundles.map((b) => b.entity.eid))]
@@ -168,8 +174,8 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
           let asked = bundles.map((b) =>
             asking(b, was.get(b.entity.eid) ?? null)
           )
-          // A delete waits for the server: the batch leaves as one, and
-          // nothing of it lands here until the answer does.
+          // A delete waits for the server: the whole list is sent as it
+          // stands, and none of it is applied here until the response is.
           if (bundles.some(dead)) {
             send(asked, true)
             return []
@@ -177,15 +183,16 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
           return asked
         })
       },
-      // After the commit: tell the server, and reconcile whatever it says.
-      // The marks come off what the caller gets back — they were this
-      // package's note to itself, not part of anybody's data.
+      // After the commit: send it to the server, and reconcile the response.
+      // The marks are removed from what the caller gets back — they were this
+      // package's own bookkeeping, not part of anybody's data.
       effect: (bundles) => {
         if (bundles.length && !bundles.some(echoed)) {
           send(bundles)
-          // The relay half goes up the socket instead: the server holds it
-          // under this connection and clears it when the connection closes,
-          // so the connection has to be the one that wrote it.
+          // The `sync: peers` half is sent over the socket instead: the
+          // server holds it under this connection and clears it when the
+          // connection closes, so the connection has to be the one that wrote
+          // it.
           w.relay(relayed(bundles, graph.vocab))
         }
         return bundles.map(clean)

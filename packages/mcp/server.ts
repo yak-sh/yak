@@ -1,21 +1,22 @@
 import { type NamedTool, namedTool, toolName } from '@yaks/graph'
 import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { zodToJsonSchema } from 'zod-to-json-schema'
-// The server: a graph, its tools, and the MCP protocol machine that lists and
-// calls them. Everything transport-shaped lives in ./mount.ts and ./stdio.ts;
-// this file only knows how a `Tool` becomes an MCP tool.
+// The server: a graph, its tools, and the MCP protocol implementation that
+// lists and calls them. Everything transport-specific lives in ./mount.ts and
+// ./stdio.ts; this file only knows how a @yaks/graph `Tool` becomes an MCP
+// tool.
 //
-// `tools/call` calls the tool function, through @yaks/tools' runner, and what
-// the runner records as it goes is the TRANSCRIPT: a `call{to, args}` entity
-// signed as the identity the door authenticated, written before the function
-// runs, and the `result` after. The tool's own bundles are landed as the
-// CALLER, so a tool cannot write in the client's name even if the client asked
-// it to, and every call this door served is an entity somebody can read
-// afterwards.
+// An MCP `tools/call` reaches the tool function through @yaks/tools' runner,
+// and the runner records the call as it goes: a `call{to, args}` entity signed
+// as the identity this server authenticated, written before the function runs,
+// and a `result` entity after. The bundles the tool returned are applied as
+// the CALLER, so a tool cannot write in the client's name even if the client
+// asks it to, and every call this server handled is an entity somebody can
+// read afterwards.
 //
-// A refusal comes back as the tool's own error text with `isError`, never as a
-// protocol error: a bad argument or a rejected write is something the agent
-// reads and corrects, not a broken connection.
+// A refusal comes back as the tool's own error text with `isError` set, never
+// as a JSON-RPC protocol error: a bad argument or a rejected write is
+// something the agent reads and corrects, not a broken connection.
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
@@ -41,11 +42,11 @@ import { core, type CoreOpts, pointing, type Search } from './tools.ts'
 import type { Guide } from '@yaks/graph'
 
 /**
- * How a client signs in to call a tool: `noauth` is callable by anybody,
- * `oauth2` needs an access token, and both together say anonymous calls work
- * and linking unlocks more. It rides on the tool as `_meta.securitySchemes`,
- * which is how a host tells a mixed-auth server's open tools from its closed
- * ones without calling one to find out.
+ * How a client signs in to call a tool: `noauth` means anybody may call it,
+ * `oauth2` means it needs an access token, and both together mean anonymous
+ * calls work and signing in unlocks more. It is sent on the tool as
+ * `_meta.securitySchemes`, which is how a client tells a mixed-auth server's
+ * open tools from its authenticated ones without calling one to find out.
  */
 export type Security =
   | { type: 'noauth' }
@@ -55,19 +56,20 @@ export type Security =
 export type Options = {
   /** the graph its tools read and write */
   graph: Graph
-  /** the runner these tools are run by, where the host keeps one. A door that
-   * builds a server per request shares it so the `tool` rows are written once
-   * for the process rather than once per request. Built over `calls`
-   * otherwise. */
+  /** the runner these tools are run by, when the calling program already has
+   * one. The HTTP handler builds a server per request and shares its runner,
+   * so the `tool` rows are written once for the process rather than once per
+   * request. Otherwise a runner is built here over `calls`. */
   runner?: Runner
-  /** where a call and its result are RECORDED (default: `graph`). A
-   * door whose graph cannot take one — a composition over somebody else's
-   * stores, a connector that will not record a stranger's question — keeps a
-   * ledger of its own here; the tools still work on `graph`. */
+  /** the graph a call and its result are RECORDED in (default: `graph`). A
+   * server whose graph should not hold them — one composed over somebody
+   * else's stores, or a connector that will not write a stranger's question
+   * into them — passes a separate graph here; the tools still read and write
+   * `graph`. */
   calls?: Graph
-  /** who is calling — every write this server makes is signed with this actor,
-   * `by` the identity it acts for and `via` the run it came through
-   * (default: nobody, and batches land unattributed) */
+  /** who is calling — every write this server makes is signed with this actor:
+   * `by` the identity it acts for, `via` the run it came through (default:
+   * nobody, and writes are stored unattributed) */
   actor?: Actor | null
   /** the server's name, as a client displays it (default: `yaks`) */
   name?: string
@@ -76,15 +78,15 @@ export type Options = {
   /** the server's name as a person reads it, where `name` is the id a client
    * keys it by (MCP `Implementation.title`) */
   title?: string
-  /** one line saying what this server is, for a client that shows one
+  /** one line describing what this server is, for a client that displays one
    * (MCP `Implementation.description`) */
   description?: string
   /** where to read more about it (MCP `Implementation.websiteUrl`) */
   websiteUrl?: string
-  /** the square picture a client shows beside the name (MCP
+  /** the square icon a client shows beside the name (MCP
    * `Implementation.icons`, the 2025-11-25 revision). `sizes` is `['any']` for
-   * a scalable one, else `['512x512']` and the like; a `src` is an http(s) or
-   * a data URI, and an SVG behind one had better carry its own bytes — an
+   * a scalable icon, otherwise `['512x512']` and the like; `src` is an http(s)
+   * or a data URI, and an SVG behind one must embed its own assets — an
    * `<img>` loads nothing a referenced SVG points at. */
   icons?: {
     src: string
@@ -94,65 +96,72 @@ export type Options = {
   }[]
   /** what the agent should read before anything else */
   instructions?: string
-  /** how deeply each tool's output schema spells out the vocabulary
-   * (default: `full` — see {@link Depth}; the write door is always `full`) */
+  /** how much of the vocabulary each tool's output schema spells out
+   * (default: `full` — see {@link Depth}; `graph_apply`'s input schema is
+   * always `full`) */
   schema?: Depth
-  /** a column this host answers or takes differently than the vocabulary
-   * declares — a reference that reads back as a named object, a column two of
-   * its stores spell differently (see {@link BundleOpts}) */
+  /** a column the calling program returns or accepts differently than the
+   * vocabulary declares — a reference that reads back as a named object, or a
+   * column two of its stores name differently (see {@link BundleOpts}) */
   column?: BundleOpts['column']
-  /** where a component is documented at length, when this host has such a
-   * page — `graph_schema` hands it over beside the columns */
+  /** where a component is documented at length, when the calling program has
+   * such a page — `graph_schema` returns it beside the columns */
   guide?: Guide
   /** ranked full-text search; without it there is no `search` tool */
   search?: Search
-  /** this door only READS: the generic tier's `graph_apply` is not listed at
+  /** this server only READS: the generic tier's `graph_apply` is not listed at
    * all — see {@link CoreOpts.readOnly}. A plugin's own tools are untouched:
-   * this says what the GENERIC tier is here, not what every tool may do. */
+   * this constrains the GENERIC tier, not every tool. */
   readOnly?: boolean
-  /** extra arguments every generic READ takes here — see
+  /** extra arguments every generic READ tool takes here — see
    * {@link CoreOpts.scope} */
   scope?: CoreOpts['scope']
-  /** this host's way back out of a delete, ending `graph_apply`'s description
-   * — see {@link CoreOpts.undo} */
+  /** how a caller undoes a delete on this deployment, appended to
+   * `graph_apply`'s description — see {@link CoreOpts.undo} */
   undo?: CoreOpts['undo']
   /** what every tool this server lists declares about signing in
-   * ({@link Security}), said per TOOL because that is where a host reads it —
-   * a tool carrying `securitySchemes` in its own `meta` keeps that instead.
-   * A function is asked once per tool, for a door where the answer differs
-   * from one to the next: a read anybody may make beside a write that needs a
-   * token, listed together so a host has something to offer the sign-in for */
+   * ({@link Security}), declared per TOOL because that is where a client reads
+   * it — a tool carrying `securitySchemes` in its own `meta` keeps that
+   * instead. Pass a function to answer per tool, for a server where the answer
+   * differs between them: a read anybody may make listed beside a write that
+   * needs a token, so a client has something concrete to prompt the sign-in
+   * for */
   security?: Security[] | ((t: NamedTool) => Security[] | undefined)
-  /** tools beside the generic tier and the graph's plugins' */
+  /** tools to list beside the generic tier and the graph's plugins' */
   tools?: Tool[]
-  /** whether this door adds the generic tier itself (default: yes). A host
-   * that already carries it in `tools` — one whose command line runs the same
-   * `graph_apply` this door does, out of one list — says no, so the tier is
-   * listed once and is the same tool object either way. */
+  /** whether this server adds the generic tier itself (default: yes). A
+   * calling program that already has the tier in `tools` — one whose CLI runs
+   * the same `graph_apply` this server does, out of one list — passes false,
+   * so the tier is listed once and is the same tool object either way. */
   core?: boolean
-  /** what a result should ALSO say, given the names this server is listing
-   * right now: the staleness line for a client whose cached tool list has
-   * moved under it (roster.ts). Called once per tool result, and what it
-   * answers rides as a trailing content block — a JSON answer stays JSON. */
+  /** extra text to append to a tool result, given the tool names this server
+   * is listing right now: the staleness sentence for a client whose cached
+   * tool list has changed under it (roster.ts). Called once per tool result,
+   * and what it returns is sent as a trailing content block, so a JSON result
+   * stays valid JSON. */
   roster?: (names: string[]) => string | undefined | Promise<string | undefined>
 
-  /** a host with more than tools to serve — resources, prompts, a capability
-   * of its own — registers them on the same server here, after its tools are
-   * on it. It is handed the SDK's own server, and it is awaited. */
+  /** a calling program with more than tools to serve — resources, prompts,
+   * capabilities of its own — registers them on the same server here, after
+   * its tools are registered. It is handed the SDK's own server object, and it
+   * is awaited. */
   extend?: (server: McpServer) => void | Promise<void>
 }
 
-// The reply, said both ways from the answer's BUNDLES: the prose they carry
-// (or the bundles themselves, as JSON) for a client that reads text, and the
-// bundles as `structuredContent` for one that reads structure. MCP requires
-// structured content to be an object, so they ride under `result`.
+// The reply, built twice over from the BUNDLES the tool returned: the text
+// they carry (or the bundles themselves, as JSON) for a client that reads
+// text, and the bundles as `structuredContent` for one that reads structure.
+// MCP requires structured content to be an object, so the array is nested
+// under `result`.
 //
-// An answer carrying an `error` or an `exception` is the tool's refusal, and
-// it comes back as an error rather than a success that reads like an apology.
+// Bundles carrying an `error` or an `exception` component are the tool's
+// refusal, and come back as an error rather than a success that reads like an
+// apology.
 let said = (answer: Bundle[], failed: boolean): CallToolResult => {
   return {
-    // A refusal says where the words are: a client holding a tool list from
-    // before a column moved learns it here and nowhere else.
+    // A refusal points at the tool that has the current answer: a client
+    // holding a tool list from before a column was added or removed finds out
+    // here and nowhere else.
     content: [{
       type: 'text',
       text: failed ? pointing(worded(answer)) : worded(answer),
@@ -162,8 +171,8 @@ let said = (answer: Bundle[], failed: boolean): CallToolResult => {
   }
 }
 
-// A refusal IS an error: `isError` rides the reply so a harness counts it as
-// one instead of a success that reads like an apology.
+// A refusal IS an error: `isError` is set on the reply so a client counts it
+// as one instead of a success that reads like an apology.
 let failed = (err: unknown): CallToolResult => ({
   content: [{
     type: 'text',
@@ -172,10 +181,10 @@ let failed = (err: unknown): CallToolResult => ({
   isError: true,
 })
 
-// @yaks/graph leaves a tool's schemas opaque, because the core depends on no
-// validation library. Here is where `Schema` means something: the MCP SDK takes
-// Zod, so a schema that is not one is a mistake to say out loud at startup
-// rather than a tool that lists wrong.
+// @yaks/graph leaves a tool's schemas opaque, because the core package depends
+// on no validation library. This is where `Schema` gets a concrete meaning:
+// the MCP SDK takes Zod, so a schema that is not a Zod schema throws at
+// startup rather than producing a tool that lists the wrong arguments.
 let zodOf = (
   tool: string,
   where: string,
@@ -186,20 +195,20 @@ let zodOf = (
   throw new Error(`${tool}: ${where} must be a Zod schema`)
 }
 
-// One more thing said at the end of a reply, as its own content block. It is
-// not appended to the text because a text may be JSON — the generic tier
-// answers a described value — and a sentence glued to it would be a value the
-// caller can no longer parse.
+// One more sentence at the end of a reply, as its own content block. It is not
+// appended to the existing text because that text may be JSON — the generic
+// tier returns a typed value — and a sentence glued onto it would leave the
+// caller with something it can no longer parse.
 let noting = (out: CallToolResult, line: string | undefined): CallToolResult =>
   line
     ? { ...out, content: [...out.content, { type: 'text', text: line }] }
     : out
 
-// What the client is told about a tool beside its schemas: whatever the tool
-// says itself, plus this server's own security schemes where the tool declares
-// none. Per tool even when every tool is the same, because a host reads it
-// there — a mixed-auth server's open tools are told apart from its closed ones
-// by this field alone.
+// The `_meta` a tool is listed with, beside its schemas: whatever the tool
+// declares itself, plus this server's own security schemes when the tool
+// declares none. It is sent per tool even when every tool is the same, because
+// that is where a client reads it — a mixed-auth server's open tools are told
+// apart from its authenticated ones by this field alone.
 let metaOf = (
   tool: NamedTool,
   security: Options['security'],
@@ -213,15 +222,17 @@ let metaOf = (
   return Object.keys(meta).length ? meta : undefined
 }
 
-/** Where the command-line grammar rides on the wire. */
+/** The `_meta` key the command-line grammar is sent under. */
 export let COMMAND = 'yaks.sh/command'
 
-// The words a tool declared, and how a line spells its arguments. The protocol
-// has one flat `name` and no place for either, so they ride in `_meta` — which
-// is what `_meta` is for — and a command line reassembles `yak task new 'ship
-// it'` from the same declaration the vocabulary made (@yaks/cli platform.ts).
-// A word said alone rides alone, because that word IS the line; a tool that
-// declared neither says nothing, and lists as its name, as it always did.
+// A tool's `noun`, `verb` and `options` — the parts a CLI needs to build a
+// command out of it. MCP gives a tool one flat `name` and nowhere to put any
+// of them, so they are sent in `_meta`, which is what `_meta` is for, and a
+// CLI reassembles `yak task new 'ship it'` from the same declaration the
+// vocabulary made (@yaks/cli platform.ts). A tool that declared only a noun,
+// or only a verb, sends just that one, because that single word is the whole
+// command; a tool that declared neither sends nothing here and is listed under
+// its own name.
 let spelling = (tool: NamedTool): Record<string, unknown> | undefined => {
   let said = {
     ...(tool.noun ? { noun: tool.noun } : {}),
@@ -232,11 +243,11 @@ let spelling = (tool: NamedTool): Record<string, unknown> | undefined => {
 }
 
 /**
- * A tool's arguments as one Zod shape — the `input` bag with every schema
- * checked to be a Zod one. What this server hands the SDK, and what anything
- * else that has to say a tool's arguments in another dialect starts from: a
- * model's tool declaration takes JSON Schema, and `z.object(shapeOf(tool))` is
- * the thing to convert.
+ * A tool's arguments as one Zod shape — its `input` object, with every schema
+ * checked to be a Zod schema. This is what the server hands the MCP SDK, and
+ * the starting point for anything that has to express a tool's arguments in
+ * another format: a model's tool declaration takes JSON Schema, and
+ * `z.object(shapeOf(tool))` is what you convert.
  */
 export let shapeOf = (tool: Tool): Record<string, z.ZodTypeAny> =>
   Object.fromEntries(
@@ -247,9 +258,10 @@ export let shapeOf = (tool: Tool): Record<string, z.ZodTypeAny> =>
 
 /**
  * A tool's arguments as JSON Schema, whichever way it declared them: its own
- * `inputSchema`, or its Zod shape converted. This is what a listing sends, so
- * anything else that has to say a composed tool's grammar — a command line
- * mapping a line through it — reads exactly what a client over the wire reads.
+ * `inputSchema`, or its Zod shape converted. This is exactly what
+ * `tools/list` sends, so anything else that needs a tool's argument
+ * grammar — a CLI mapping a command onto it, say — reads what an MCP client
+ * reads.
  */
 export let inputSchemaOf = (
   tool: Tool,
@@ -261,8 +273,9 @@ export let inputSchemaOf = (
 
 /**
  * Every tool this server lists, in the order it registers them: the generic
- * tier, then the graph's plugins', then the host's own. A host that carries
- * the tier in its own list says `core: false` and the tier is not added twice.
+ * tier, then the graph's plugins', then the caller's own. A caller that
+ * already has the tier in its own list passes `core: false`, so the tier is
+ * not added twice.
  *
  * ```ts
  * let names = listing(opts).map(toolName)
@@ -283,18 +296,20 @@ export let listing = (opts: Options): Tool[] => [
   ...(opts.tools ?? []),
 ]
 
-/** The ROSTER this server serves: the names it lists, in listing order. What a
- * client caches at connect, and what {@link rosterVersion} names. */
+/** The ROSTER this server serves: the tool names it lists, in listing order.
+ * This is what a client caches when it connects, and what
+ * {@link rosterVersion} hashes. */
 export let roster = (opts: Options): string[] => listing(opts).map(toolName)
 
 /**
- * One tool's behavior, as MCP's four hints (`ToolAnnotations`). A host reads
- * them to decide what it may call without asking, so they are a contract and
- * not decoration — both directories review them against what the tool does.
+ * One tool's behavior, as MCP's four hints (`ToolAnnotations`). A client reads
+ * them to decide what it may call without asking the user first, so they are a
+ * contract and not decoration — the MCP directories review them against what
+ * the tool actually does.
  *
  * Only `destructive` has a default, and it is the safe one: a tool that writes
- * and has not said otherwise is taken to be destructive, so forgetting the
- * word can never loosen a prompt. A reading tool is never destructive.
+ * and has not declared otherwise is treated as destructive, so forgetting to
+ * declare it can never loosen a prompt. A read-only tool is never destructive.
  */
 export let annotated = (
   t: Pick<Tool, 'readOnly' | 'destructive' | 'idempotent' | 'openWorld'>,
@@ -322,11 +337,12 @@ export let server = (opts: Options): McpServer => {
   let mcp = new McpServer({
     name: opts.name ?? 'yaks',
     version: opts.version ?? '0.0.0',
-    // The face, when a host was given one: what `initialize` answers about
-    // itself beside its name, so a client that reads `serverInfo` needs
-    // nothing pasted into a form. Each is left OFF when unset rather than sent
-    // empty — an absent field is a server that says nothing, an empty one is a
-    // server that says nothing is its name.
+    // How the server presents itself, when the caller supplied any of it:
+    // what `initialize` reports beside the server's name, so a client reading
+    // `serverInfo` needs nothing pasted into a form. Each field is OMITTED
+    // when unset rather than sent empty — an absent field means the server
+    // said nothing, an empty one means the server said its title is the empty
+    // string.
     ...(opts.title ? { title: opts.title } : {}),
     ...(opts.description ? { description: opts.description } : {}),
     ...(opts.websiteUrl ? { websiteUrl: opts.websiteUrl } : {}),
@@ -337,10 +353,10 @@ export let server = (opts: Options): McpServer => {
   })
 
   let tools = listing(opts).map(namedTool)
-  // The TRANSCRIPT: where a call and its result are recorded, which is this
-  // graph unless the host keeps a ledger of its own (a door serving a
-  // composition, a connector that will not write a row into somebody's store
-  // for a question). The tools still work on `graph`.
+  // Where a call and its result are recorded, which is this graph unless the
+  // caller passed a separate one (a server over a composition of stores, or a
+  // connector that will not write a row into somebody else's store just
+  // because a question was asked). The tools still read and write `graph`.
   let calls = opts.calls ?? graph
   let run = opts.runner ?? runner(calls, {
     tools,
@@ -371,14 +387,16 @@ export let server = (opts: Options): McpServer => {
       } catch (err) {
         out = failed(err)
       }
-      // A refusal carries it too: an agent holding a stale list is likelier to
-      // be refused than served, and that is the reply worth telling.
+      // A refusal carries the roster sentence too: an agent holding a stale
+      // tool list is likelier to be refused than served, so that is exactly
+      // the reply worth attaching it to.
       return noting(out, await opts.roster?.(names))
     }
     mcp.registerTool(t.name, config, call)
   }
-  // Preserve JSON Schema declarations exactly on the wire. SDK argument parsing
-  // for these tools is passthrough; the runner validates before the handler.
+  // Send JSON Schema declarations to the client unchanged. The SDK's own
+  // argument parsing is passthrough for these tools; the runner validates the
+  // arguments before the handler runs.
   if (tools.some((t) => t.inputSchema)) {
     mcp.server.setRequestHandler(ListToolsRequestSchema, () => ({
       tools: tools.map((t) => ({

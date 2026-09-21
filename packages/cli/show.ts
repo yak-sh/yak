@@ -1,24 +1,26 @@
-// What reaches the terminal: the listing and the help a tool's own schema
-// already describes, and the boundary everything printed crosses first.
+// What reaches the terminal: the tool listing and the help pages, both
+// generated from a tool's own input schema, and the boundary everything
+// printed crosses first.
 //
-// Everything printed here came off a wire, so it passes `safe` first: the
-// control class is stripped, tabs become spaces chosen here rather than cursor
-// movement chosen by a terminal, and only `\n` survives. A tool's answer is
-// content, never an escape sequence.
+// Anything printed here may have come from a remote server, so it passes
+// through `safe` first: control characters are stripped, tabs become spaces
+// chosen here rather than cursor movement chosen by the terminal, and only
+// `\n` survives. A tool's output is content, never an escape sequence.
 
 import { type Grammar } from './args.ts'
 import { commandOf, type Prop, type Schema, titleOf, typeOf } from './tool.ts'
 
-// deno-lint-ignore no-control-regex -- the control class IS the subject
+// deno-lint-ignore no-control-regex -- control characters ARE the subject
 let ctrl = /[\x00-\x1f\x7f-\x9f]/g
 
-/** Text off the wire, with every escape a terminal could act on removed. */
+/** Text from a server, with every escape sequence a terminal could act on
+ * removed. */
 export let safe = (text: string): string =>
   text.replaceAll('\t', '  ').replace(ctrl, (c) => c == '\n' ? c : '')
 
 let pad = (s: string, n: number): string => s.padEnd(n)
 
-/** Every tool, one per line, with the one word that says what it is. */
+/** Every tool, one per line, with the short label that says what it is. */
 export let toolLines = (
   tools: (Grammar & { title?: string; description?: string })[],
 ): string => {
@@ -28,7 +30,7 @@ export let toolLines = (
     .join('\n')
 }
 
-// `--name <type>`, bracketed when the tool can do without it.
+// `--name <type>`, in brackets when the argument is optional.
 let slot = (name: string, p: Prop | undefined, need: boolean): string => {
   let said = `--${name} ${typeOf(p) == 'boolean' ? '' : `<${typeOf(p)}>`}`
     .trim()
@@ -36,10 +38,10 @@ let slot = (name: string, p: Prop | undefined, need: boolean): string => {
 }
 
 /**
- * The arguments part of the line to type: the positionals in their order, then
- * every other property as an option, bracketed where the tool can do without
- * it. The tool's own schema is the whole grammar, so this is the only place
- * that decides how one is spelled on a line.
+ * The argument part of the command line to type: the positional arguments in
+ * order, then every other property as an option, in brackets where it is
+ * optional. The tool's own schema is the whole grammar, so this is the only
+ * place that decides how a tool is written on a command line.
  */
 export let sketch = (t: Grammar): string => {
   let schema = (t.inputSchema ?? {}) as Schema
@@ -59,12 +61,13 @@ export let sketch = (t: Grammar): string => {
   ].join(' ')
 }
 
-/** The whole line to type, without the program's own name. */
+/** The whole command line to type, without the program's own name. */
 export let lineOf = (t: Grammar): string =>
   `${commandOf(t)} ${sketch(t)}`.trimEnd()
 
-/** One tool's help: the line to type, what it is for, and a row per argument
- * with its type, whether it is required, and what the schema says it means. */
+/** One tool's help page: the command line to type, what it is for, and a row
+ * per argument with its type, whether it is required, and the description the
+ * schema gives it. */
 export let toolHelp = (
   t: Grammar & { description?: string },
   program = 'yak',
@@ -94,8 +97,8 @@ export let toolHelp = (
   ].join('\n')
 }
 
-/** Prose at a width, so a description written for a model reads on a
- * terminal. */
+/** Wrap prose to a width, so a description written for a model is readable in
+ * a terminal. */
 export let wrap = (text: string, width: number, lead = ''): string => {
   let out: string[] = []
   for (let para of text.split('\n')) {

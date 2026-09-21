@@ -3,17 +3,18 @@
  * {@link https://jsr.io/@yaks/api | @yaks/api} from a Worker.
  *
  * `@yaks/api` is a plain `Request` → `Response` handler that knows nothing
- * about any host. Three things are Cloudflare's own, and they are all this
- * package is:
+ * about the runtime it is served from. Three things are specific to Cloudflare,
+ * and they are all this package contains:
  *
- * - **{@link workerUpgrade}** — a socket, made the way Cloudflare makes one:
- *   a `WebSocketPair`, the server half accepted, the client half returned on a
- *   101. It is the `upgrade` seam `/ws` needs.
+ * - **{@link workerUpgrade}** — a socket, created the way Cloudflare creates
+ *   one: a `WebSocketPair`, the server half accepted, the client half returned
+ *   on a 101. It is the implementation of the `upgrade` callback `/ws` needs.
  * - **{@link worker}** — the `fetch` entrypoint a Worker exports. Bindings
- *   arrive with the request, so the graph is built from `env` on the first one
- *   and kept for the isolate.
- * - **{@link door}** — who is writing, read off a Worker request: a session
- *   cookie or a bearer token, handed to the app's own `verify`.
+ *   arrive with the request, so the graph is built from `env` on the first
+ *   request and cached for the isolate.
+ * - **{@link door}** — the identity of the caller, read off a Worker request:
+ *   a session cookie or a bearer token, passed to the application's own
+ *   `verify` function.
  *
  * A graph that lives in a Durable Object is served the same way, one hop
  * further on: the Worker {@link forward}s the request to the object, and the

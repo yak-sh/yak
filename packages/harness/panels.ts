@@ -7,7 +7,7 @@ import type { Bundle, Comp, Eid } from '@yaks/graph'
 import type { Agent } from './run.ts'
 import { indicator } from './status.ts'
 
-/** The doors used by the UI; a test can supply just these. */
+/** The parts of the agent the UI calls; a test can supply just these. */
 export type UIAgent =
   & Pick<
     Agent,
@@ -36,7 +36,7 @@ export type UIAgent =
     >
   >
 
-/** The selection and graph doors handed to every panel. */
+/** The selection state and graph accessors passed to every panel. */
 export type Context = {
   agent: UIAgent
   session?: Eid

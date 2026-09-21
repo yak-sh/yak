@@ -4,9 +4,10 @@
 // at import time. So the graph cannot be built when this file loads: it is
 // built from `env` on the first request and kept for the isolate's life.
 //
-// That cache is why `api` takes only the bindings: an api built per request
-// would mint a fresh subscription registry each time, and the sockets already
-// open would be talking to a registry nobody applies through any more.
+// That cache is why `api` is given only the bindings: building the api per
+// request would create a fresh subscription registry each time, and the sockets
+// already open would be listening to a registry nothing writes through any
+// more.
 
 import { api, type Handler, type Options as Api, refuse } from '@yaks/api'
 import { workerUpgrade } from './upgrade.ts'
@@ -30,15 +31,16 @@ export type Worker<E extends Env = Env> = {
 
 /** How a Worker is built: what the api is, for a given set of bindings. */
 export type Options<E extends Env = Env> = {
-  /** the api this Worker fronts — its graph, and the door that names the
-   * writer — read off the bindings the request arrived with */
+  /** the api this Worker serves — its graph, and the authentication callback
+   * that identifies the caller — built from the bindings the request arrived
+   * with */
   api: (env: E) => Api | Promise<Api>
 }
 
 /**
  * The Worker export for a graph: build the api from the Worker's bindings once
- * per isolate, wire Cloudflare's socket upgrade into it, and answer every
- * request with it.
+ * per isolate, connect Cloudflare's socket upgrade to it, and serve every
+ * request from it.
  *
  * ```ts
  * import { worker } from '@yaks/workerd'
@@ -49,10 +51,10 @@ export type Options<E extends Env = Env> = {
  * ```
  *
  * The routes are [@yaks/api](https://jsr.io/@yaks/api)'s: `POST /apply`,
- * `GET|POST /query`, and `/ws`. An `upgrade` the options name is kept; when
- * they do not name one, {@link workerUpgrade} is used. A graph that lives in a
- * Durable Object instead is not this — the Worker {@link forward}s to the
- * object, and the object runs this.
+ * `GET|POST /query`, and `/ws`. An `upgrade` given in the options is used as
+ * is; when none is given, {@link workerUpgrade} is used. A graph that lives in
+ * a Durable Object is served differently — the Worker {@link forward}s to the
+ * object, and the object is what calls this.
  */
 export let worker = <E extends Env = Env>(opts: Options<E>): Worker<E> => {
   let built = new WeakMap<object, Promise<Handler>>()

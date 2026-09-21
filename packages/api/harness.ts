@@ -1,8 +1,8 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // bookshop vocabulary over an in-memory SQLite graph, and a stand-in socket
-// the socket tests drive by hand. The domain is a shop — books with a price
-// and a status, reviews about them, members who joined — so nothing here needs
-// knowledge from outside this file.
+// the socket tests drive by hand. The subject is a shop — books with a price
+// and a status, reviews about them, members who joined — so nothing here
+// needs knowledge from outside this file.
 
 import { Database } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -19,7 +19,7 @@ let doc: VocabDoc = {
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
-    // A named thing: everything in the shop wears one.
+    // A named thing: everything in the shop has one.
     doc: {
       component: true,
       type: 'object',
@@ -41,7 +41,8 @@ let doc: VocabDoc = {
         author: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },
-    // A review exists ABOUT a book — deleting the book takes its reviews too.
+    // A review exists ABOUT a book — deleting the book deletes its reviews
+    // too.
     review: {
       component: true,
       type: 'object',
@@ -51,8 +52,9 @@ let doc: VocabDoc = {
         book: { type: 'string', ref: 'book', death: 'cascade' },
       },
     },
-    // Where a browsing customer's finger is on a book's page. Everyone in the
-    // shop sees it, the shop keeps none of it, and it goes with the browser.
+    // Where a browsing customer's pointer is on a book's page. Everyone in
+    // the shop sees it, the shop stores none of it, and it disappears when
+    // that browser disconnects.
     browsing: {
       component: true,
       type: 'object',
@@ -60,7 +62,7 @@ let doc: VocabDoc = {
       durable: 'connection',
       properties: { x: { type: 'number' }, y: { type: 'number' } },
     },
-    // A typing indicator that gives up on its own after a moment.
+    // A typing indicator that clears itself after a few seconds.
     typing: {
       component: true,
       type: 'object',
@@ -69,7 +71,7 @@ let doc: VocabDoc = {
       properties: { who: { type: 'string' } },
     },
     // Provenance: server-owned, so the graph's stamp phase is their only
-    // writer — which is what makes the door's actor visible in a read.
+    // writer — which is what makes the authenticated actor readable back.
     created: {
       component: true,
       type: 'object',
@@ -96,7 +98,7 @@ export let shop: Vocab = loadVocab(doc)
 export let shopGraph = (): Graph => {
   let db = new Database(':memory:')
   db.exec('pragma foreign_keys = on')
-  // The shop numbers: a book is a thing a person points at by number.
+  // Numbered entities: a person refers to a book by its number.
   let store = storage(
     {
       query: (sql, params) => db.prepare(sql).all(...params),
@@ -115,29 +117,29 @@ export let comp = (b: Bundle, name: string): Record<string, unknown> => {
   return c && typeof c == 'object' ? { ...c } : {}
 }
 
-/** A request, spelled the way a test wants to say it. */
+/** A request against the fixture's host, built from a path. */
 export let req = (
   path: string,
   init: RequestInit = {},
 ): Request => new Request(`http://shop.test${path}`, init)
 
-/** A `POST /apply` request carrying a batch. */
+/** A `POST /apply` request carrying a JSON body. */
 export let post = (path: string, body: unknown): Request =>
   req(path, { method: 'POST', body: JSON.stringify(body) })
 
 /** A socket a test drives by hand: it records the frames sent to it, and
- * `emit` plays the events a real one would fire. */
+ * `emit` fires the events a WebSocket would fire. */
 export type Fake = Socket & {
   /** every frame the server has sent, parsed */
   sent: Frame[]
   /** fire an event at the listeners the server registered */
   emit: (type: string, data?: unknown) => void
-  /** frames sent since the last read, and forget them */
+  /** the frames sent since the last call, which it then forgets */
   taken: () => Frame[]
 }
 
 /** A stand-in socket, open by default. Set `readyState = 0` before attaching
- * to watch frames queue until `emit('open')`. */
+ * to watch frames queue up until `emit('open')`. */
 export let fake = (): Fake => {
   let at: Record<string, ((event: Event & { data?: unknown }) => void)[]> = {}
   let sent: Frame[] = []

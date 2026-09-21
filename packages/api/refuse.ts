@@ -1,13 +1,13 @@
-// How a refusal reaches the caller. Every door in this package answers a
+// How a refusal reaches the caller. Every endpoint in this package answers a
 // thrown error the same way: the error's own name, its message, and whatever
-// fields it carries, as JSON — so a client reads the SAME shape `apply()`
-// threw, not a prose translation of it. A stale precondition still says which
-// column moved and what the graph holds now; a refused column still names
-// itself.
+// fields it carries, as JSON — so a client reads the same shape `apply()`
+// threw, not a prose translation of it. A stale precondition still reports
+// which column moved and what the graph holds now; a refused column still
+// names itself.
 //
-// The status is derived from the error's `name` alone. That keeps this table
-// the one place statuses are decided, and lets any package's error join it by
-// naming itself.
+// The HTTP status is derived from the error's `name` alone. That keeps this
+// table the one place statuses are decided, and lets any package's error join
+// it by setting its own `name`.
 
 /** A refusal, as a client reads it: the error's name, its message, and any
  * fields the error carried (a {@link https://jsr.io/@yaks/graph | Stale}
@@ -22,7 +22,7 @@ export type Refusal = {
   [detail: string]: unknown
 }
 
-/** The door refused to say who is writing. Throw this from an
+/** The request could not be authenticated. Throw this from an
  * {@link https://jsr.io/@yaks/api/doc/~/Authenticate | Authenticate} to answer
  * a request with a 401. */
 export class Unauthorized extends Error {
@@ -33,21 +33,23 @@ export class Unauthorized extends Error {
   }
 }
 
-/** The status each error name answers with. Anything unlisted is a 500: an
- * error nobody named is a bug in the server, not a fault of the request. */
+/** The HTTP status each error name answers with. Anything unlisted is a 500:
+ * an error no package named is a bug in the server, not a fault of the
+ * request. */
 export let STATUS: Record<string, number> = {
   Refused: 400,
   Unsupported: 400,
   SyntaxError: 400,
-  // @yaks/vocab's `Unknown`: a word the vocabulary does not know. The query
-  // named it, so the fault is the request's — and so is its `Ambiguous`, a
-  // word several components claim on a line that picked none of them. Both
-  // carry the word, and the ambiguous one carries the choices.
+  // @yaks/vocab's `Unknown`: a component or column name the vocabulary does
+  // not define. The query named it, so the fault is the request's — and so is
+  // its `Ambiguous`, a column name several components define where the query
+  // did not say which one it meant. Both carry the name, and the ambiguous
+  // one also carries the candidates.
   Unknown: 400,
   Ambiguous: 400,
   Unauthorized: 401,
-  // The door knows who is asking; the answer is still no. @yaks/member's
-  // `Denied` is this, and so is any other policy refusal that names itself so.
+  // The request is authenticated; the answer is still no. @yaks/member's
+  // `Denied` is this, and so is any other policy refusal that uses that name.
   Denied: 403,
   NotFound: 404,
   Stale: 409,
@@ -75,9 +77,10 @@ export let json = (body: unknown, code = 200): Response =>
     headers: { 'content-type': 'application/json' },
   })
 
-/** A thrown error as its response: the refusal body, at its status. When a
- * request is supplied, log server failures with the method and path, never
- * the query string, headers or body. Expected client refusals stay quiet. */
+/** A thrown error as its response: the refusal body, at its HTTP status. When
+ * a request is supplied, server failures are logged with the method and path,
+ * never the query string, headers or body. Expected client refusals are not
+ * logged at all. */
 export let refuse = (err: unknown, request?: Request): Response => {
   let code = status(err)
   if (request && code >= 500) {

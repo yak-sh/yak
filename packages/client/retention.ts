@@ -1,5 +1,14 @@
-// Payloads live ONLY in RAM. This policy keeps ids/order/ownership, not a
-// parallel query cache. A release retains; an authoritative absence forgets.
+// The working set: which entities this client keeps, and which columns of
+// them it can be said to have loaded.
+//
+// Entity data lives ONLY in the in-memory @yaks/ram store. What this file
+// keeps beside it is bookkeeping — ids, the order the server delivered them
+// in, and which subscription covers which columns — never a second copy of
+// the data. Closing a subscription releases its rows to be evicted later;
+// only the server saying an entity is absent forgets it outright.
+//
+// The same bookkeeping is written to IndexedDB under the server's epoch, so
+// that a reopened page can show something before the server answers.
 import type { Bundle, Eid, Graph } from '@yaks/graph'
 import { comps, dead, then, transient } from '@yaks/graph'
 import type { Store } from '@yaks/ram'
@@ -20,39 +29,53 @@ import type { Saved } from './vault.ts'
 import type { WireVault } from './wire-vault.ts'
 import { ANSWER_BYTES, answerCache, type SavedAnswer } from './answers.ts'
 
-/** Default number of inactive server rows retained in memory and disk. */
+/** How many rows no subscription still covers are kept, in memory and on
+ * disk, by default. */
 export const RETENTION_ROWS = 20_000
 
-/** The client's working set policy and epoch-scoped paint floor. */
+/** The client's working set: what is kept, what is loaded, and what can be
+ * shown from the previous page load under the same server epoch. */
 export type Retained = Replica & {
-  /** Active coverage (including riders). False means unloaded, NOT deleted.
-   * Unready restored owners cover only the columns actually present in RAM. */
+  /** Whether an open subscription covers this column. False means not
+   * loaded, NOT deleted. A subscription restored from disk that the server
+   * has not answered yet covers only the columns actually present in
+   * memory. */
   loaded: (eid: Eid, component: string, property?: string) => boolean
-  /** Encoded bytes of retained answer metadata, independent of payload budget. */
+  /** how many bytes the retained subscription results take once encoded —
+   * a budget separate from the row limit */
   answerBytes: () => number
-  /** Whether this remote answer includes a row (or it has a pending local write). */
+  /** whether that server subscription's result includes this entity, or this
+   * page has an unacknowledged local write to it */
   includes: (id: string, eid: Eid) => boolean
-  /** Current server members in delivery order, with payloads from RAM. No
-   * local matcher, no speculative inclusion of unrelated pending writes. */
+  /** the subscription's current members, in the order the server delivered
+   * them, with the entities read from memory. Nothing is matched locally and
+   * no unrelated pending write is added to it. */
   answer: (id: string) => Bundle[]
-  /** Payload changes, including storage-only eviction. Read the current row
-   * from the client; absence here is eviction, not proof of graph deletion. */
+  /** called when entity data changed, including when a row was evicted from
+   * memory. Read the current row from the client: an entity missing here was
+   * evicted, which is not proof it was deleted from the graph. */
   onRows: (fn: (eids: Eid[]) => void) => () => void
-  /** Membership can change without the shared payload changing. */
+  /** called when a subscription's membership changed, which can happen
+   * without any entity's data changing */
   onMembership: (fn: (id: string) => void) => () => void
-  /** Stop late hydration and persistence observation when the client closes. */
+  /** stop loading from disk and writing to it — called when the client
+   * closes */
   close: () => void
-  /** Touch payloads without changing graph/query order. */
+  /** mark these entities as recently used, without changing any query's
+   * order */
   touch: (eids: Eid[]) => void
-  /** Validate a server epoch; restores only a bounded, non-authoritative floor. */
+  /** check a server epoch, and restore from disk only a bounded set of rows
+   * to show until the server answers */
   epoch: (epoch: string) => Promise<void>
-  /** Wait for queued persistence. */
+  /** wait for the queued disk writes to finish */
   idle: () => Promise<void>
-  /** Number of inactive payloads (active/pending rows are not in the budget). */
+  /** how many entities no subscription covers are held; rows a subscription
+   * covers, and rows with a pending write, do not count against the limit */
   size: () => number
 }
 
-/** Assemble retention around the client's existing graph, store and watches. */
+/** Build the working set around a client's existing graph, store and
+ * watches. */
 export let retention = (
   graph: Graph,
   store: Store,
@@ -132,10 +155,10 @@ export let retention = (
     }
     return false
   }
-  // Disk writes coalesce: a burst of frames becomes one vault transaction per
-  // tick instead of one per frame, so a busy socket never keeps the store
-  // locked against the other tabs. idle() flushes first, so nothing waits on
-  // the timer.
+  // Disk writes are coalesced: a burst of frames becomes one IndexedDB
+  // transaction per tick instead of one per frame, so a busy socket never
+  // holds the object store locked against the other tabs. idle() flushes
+  // first, so nothing waits on the timer.
   let timer = opts.timer ?? ((fn, ms) => setTimeout(fn, ms))
   let staged = () => ({
     epoch: undefined as string | undefined,
@@ -181,8 +204,10 @@ export let retention = (
       pending.answers = true
     }
   }
-  // Restored memberships are paint, not fresh field knowledge. Intersect them
-  // with RAM; never re-run the server query, nor claim evicted fields loaded.
+  // Memberships restored from disk are there so the page has something to
+  // show, not evidence that any column is current. They are intersected with
+  // what is in memory; the server's query is never re-run locally, and an
+  // evicted column is never reported as loaded.
   let floor = (entries: SavedAnswer['members']) =>
     new Map(entries.flatMap(([eid, scope]) => {
       let row = held(eid)
@@ -213,8 +238,10 @@ export let retention = (
       pending.gone.add(eid)
     }
   }
-  // Storage-only eviction: no tombstone, cascade, outbound post, or local-vault
-  // deletion. Watch invalidation sees the physically absent payload too.
+  // Eviction from memory only: it writes no tombstone, cascades to nothing,
+  // POSTs nothing to the server, and deletes nothing from this browser's own
+  // vault. The watches are notified, and they see the row is gone from
+  // memory.
   let forget = (eids: Eid[], stale = false) => {
     let changed: Eid[] = []
     let dropped: Eid[] = []
@@ -267,13 +294,16 @@ export let retention = (
     set?.delete(id)
     if (!set?.size) owners.delete(eid)
   }
-  // Relinquishing a role can unload columns while another role still pins the
-  // row. This is storage maintenance, never a graph deletion or outbound write.
+  // Giving up membership of one subscription can unload columns while
+  // another subscription still holds the row. This is memory maintenance,
+  // never a deletion from the graph and never a write to the server.
   let trim = (eids: Eid[]) => {
-    // Some hosts render one-shot fields beside a standing narrow projection.
-    // Keep their payload in the ONE row, not a second read cache or permanent
-    // owner. loaded() still consults active coverage only. snapshot() still
-    // clears covered omissions; ordinary row eviction bounds this floor too.
+    // Some applications render a one-off field beside a standing query that
+    // projects only a few columns. Keep that value in the SAME row rather
+    // than in a second cache or under a permanent owner. loaded() still
+    // consults open subscriptions only; snapshot() still clears a column a
+    // covering subscription omitted; and ordinary row eviction bounds this
+    // too.
     if (opts.retainUnownedColumns) return
     let changed: Eid[] = []
     for (let eid of eids) {
@@ -359,7 +389,8 @@ export let retention = (
           retain(eid)
         }
         save(eids)
-        // Sync's effect installs optimistic pins in the same commit turn.
+        // @yaks/sync's effect hook pins the rows a local write touched,
+        // during the same commit.
         queueMicrotask(sweep)
         return bundles
       },
@@ -399,7 +430,8 @@ export let retention = (
     },
     unsubscribe,
     subscribe: (id, query, subOpts: SubscribeOpts = {}) => {
-      // Re-pointing the same id must not drop the old floor before new pins.
+      // Pointing the same subscription id at a new query must not drop the
+      // rows it already held before the new ones are pinned.
       let old = subscriptions.get(id)
       let prime = subOpts.prime !== false
       let cached = subOpts.answerKey
@@ -446,7 +478,8 @@ export let retention = (
       transient(graph).forget(frame.transientReset ?? [])
       let bundles = frame.bundles ?? []
       let peers = frame.peers ?? []
-      // A content delta must not re-pin/trim every row in a large answer.
+      // A frame carrying only changed entities must not re-pin and re-trim
+      // every row of a large result.
       let affected = new Set([
         ...bundles.map((b) => b.entity.eid),
         ...peers.map((b) => b.entity.eid),
@@ -493,8 +526,9 @@ export let retention = (
       let gone = [...before].filter((eid) => !owns(eid))
       for (let eid of gone) disown(frame.id, eid)
       forget(gone, true)
-      // Pending optimistic state beats subscription snapshots. The post reply
-      // reconciles it; a query snapshot must not roll it backwards meanwhile.
+      // An unacknowledged local write wins over what a subscription
+      // delivers. The response to the POST reconciles it; a subscription
+      // result must not roll it back in the meantime.
       let receive = (rows: Bundle[], role: Map<Eid, Coverage>) =>
         snapshot(
           graph,
@@ -583,8 +617,9 @@ export let retention = (
         loading = undefined
         return
       }
-      // Order epoch validation after previous writes; future writes queue behind
-      // it. A stale tab's save/drop is independently guarded by the vault.
+      // The epoch check is queued after the writes already pending, and
+      // later writes queue behind it. A tab still on the previous epoch is
+      // guarded separately, by the vault's own epoch check.
       flush()
       let read = queued.then(async () => {
         let rows = await opts.vault!.load(epoch, limit)
@@ -603,8 +638,9 @@ export let retention = (
       for (let answer of saved) {
         if (!answers.get(answer.key)) answers.put(answer)
       }
-      // A reopened watch owns its cached hits BEFORE the first frame. Hydration
-      // must add late hits to that same ownership set, not invent another watch.
+      // A reopened watch owns the rows restored for it BEFORE the first
+      // frame arrives. Rows that finish loading later must join that same
+      // subscription, not create a second one.
       await then(snapshot(graph, bundles), () => {
         for (let [id, sub] of subscriptions) {
           if (sub.confirmed) continue

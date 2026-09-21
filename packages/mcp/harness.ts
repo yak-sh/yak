@@ -20,7 +20,7 @@ let doc: VocabDoc = {
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
-    // A named thing: everything in the shop wears one.
+    // A named thing: everything in the shop has one.
     doc: {
       component: true,
       type: 'object',
@@ -54,7 +54,7 @@ let doc: VocabDoc = {
       },
     },
     // Provenance: server-owned, so the graph's stamp phase is their only
-    // writer — which is what makes the door's actor visible in a read.
+    // writer — which is what makes the authenticated actor visible in a read.
     created: {
       component: true,
       type: 'object',
@@ -74,9 +74,9 @@ let doc: VocabDoc = {
   },
 }
 
-// The shop's own words, and the words a CALL is written in: this server
-// writes `call{to, args}` into the graph and awaits what answers it, so the
-// ledger's vocabulary has to know them (@yaks/tools `toolsDoc`).
+// The shop's own components, plus the components a CALL is written with: this
+// server writes `call{to, args}` into the graph and waits for the result, so
+// the graph's vocabulary has to declare those too (@yaks/tools `toolsDoc`).
 /** The bookshop vocabulary the package's tests read and write against. */
 export let shop: Vocab = loadVocab([doc, toolsDoc])
 
@@ -102,7 +102,8 @@ export let comp = (b: Bundle, name: string): Record<string, unknown> => {
   return c && typeof c == 'object' ? { ...c } : {}
 }
 
-/** The BUNDLES a tool answered with — what rides under `result`. */
+/** The BUNDLES a tool returned — what is nested under `result` in the reply's
+ * `structuredContent`. */
 export let result = (out: { structuredContent?: unknown }): unknown => {
   let said = out.structuredContent
   return said && typeof said == 'object' && 'result' in said
@@ -110,7 +111,7 @@ export let result = (out: { structuredContent?: unknown }): unknown => {
     : undefined
 }
 
-/** The words of a reply: its first text block. */
+/** The text of a reply: its first text content block. */
 export let text = (out: { content?: unknown }): string => {
   let blocks = out.content
   return Array.isArray(blocks) ? String(blocks[0]?.text ?? '') : ''

@@ -1,18 +1,19 @@
-// The one environment-specific step, kept in the one file that knows about an
-// environment. Everything else in this package is standard `Request`,
-// `Response` and `WebSocket`; an upgrade is not standard, so it is injected —
-// and this is the default for the runtime most hosts start on.
+// The one runtime-specific step, kept in the one file that knows about a
+// runtime. Everything else in this package is standard `Request`, `Response`
+// and `WebSocket`; a WebSocket upgrade is not standard, so the application
+// supplies one — and this is the default for the runtime most applications
+// start on.
 //
-// The global is LOOKED UP rather than imported, so this module loads and
-// type-checks anywhere, with no Deno types in the package's compile at all.
-// Off Deno it throws when called, which is the honest answer: pass your host's
-// upgrade.
+// The `Deno` global is looked up at call time rather than imported, so this
+// module loads and type-checks anywhere, with no Deno types in the package's
+// compile at all. On another runtime it throws when called, and the error
+// names the fix: pass your own `upgrade`.
 
 import type { Socket, Upgrade } from './socket.ts'
 
 type Upgrader = (request: Request) => { socket: Socket; response: Response }
 
-// This runtime's `Deno.upgradeWebSocket`, or null where there is none.
+// This runtime's `Deno.upgradeWebSocket`, or null when there is none.
 let found = (): Upgrader | null => {
   let host: unknown = globalThis
   if (!host || typeof host != 'object' || !('Deno' in host)) return null
@@ -25,8 +26,8 @@ let found = (): Upgrader | null => {
 }
 
 /**
- * Deno's WebSocket upgrade, as an {@link Upgrade}. The default for `/ws`; it
- * throws off Deno, where the host passes its own.
+ * Deno's WebSocket upgrade, as an {@link Upgrade}. The default for `/ws`; on
+ * any other runtime it throws, and the application passes its own.
  *
  * ```ts
  * Deno.serve(api({ graph, upgrade: denoUpgrade }))

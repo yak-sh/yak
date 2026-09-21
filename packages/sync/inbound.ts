@@ -1,15 +1,16 @@
-// What the server says, landing in the local graph. A push is applied through
-// the same `apply()` a local write goes through — trusted, because the server
-// is where the stamps and the numbers were minted — and marked as an echo so
-// the outbound hook does not send it straight back.
+// What the server pushes, applied to the local graph. An incoming frame goes
+// through the same `apply()` a local write goes through — trusted, because the
+// server is where the stamped columns and the numbers were written — and marked
+// as an echo so the outbound hook does not send it straight back.
 //
-// `gone` is the half no client could work out for itself: an entity that LEFT
-// a subscription's set, whether it was deleted or merely stopped matching. The
-// frame does not say which, so this module strips the entity of its components
-// rather than tombstoning it: a stripped entity matches no query — which is
-// what "left the set" means — and can come back whole when it matches again,
-// where a tombstone could never be lifted. A DELETE still tombstones, because
-// a real death arrives as a `tombstone` component in the bundles.
+// `gone` is the part no client could work out for itself: an entity that LEFT a
+// subscription's set, whether it was deleted or merely stopped matching. The
+// frame does not distinguish the two, so this module removes the entity's
+// components rather than tombstoning it: an entity with no components matches
+// no query — which is what leaving the set means — and it can come back whole
+// when it matches again, where a tombstone could never be lifted. A deletion
+// still tombstones, because a deletion arrives as a `tombstone` component in
+// the frame's bundles.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { comps, dead, detached, then, transient } from '@yaks/graph'
@@ -18,11 +19,11 @@ import type { Frame } from './socket.ts'
 import { type Coverage, covers } from './coverage.ts'
 import { outbound } from './tier.ts'
 
-// A patch that takes server components off an entity, preserving local state. The
-// entity is then invisible to every query, which is the local shape of "no
-// longer in the set".
+// A patch that removes an entity's server-owned components, leaving its local
+// state alone. The entity is then invisible to every query, which is what "no
+// longer in the set" looks like locally.
 let bare = (graph: Graph, b: Bundle): Bundle[] => {
-  if (dead(b)) return [] // already in the grave; nothing left to take
+  if (dead(b)) return [] // already tombstoned; nothing left to remove
   let out: Bundle = { entity: { eid: b.entity.eid } }
   for (let [name] of comps(b)) {
     if (outbound(graph.vocab, name)) out[name] = null
@@ -31,8 +32,9 @@ let bare = (graph: Graph, b: Bundle): Bundle[] => {
 }
 
 /**
- * Take these entities out of the local graph: their wire-tier components are
- * dropped, their identity stays. What a subscription's `gone` list means.
+ * Take these entities out of the local graph: their server-owned components are
+ * dropped, their identity stays. This is what a subscription's `gone` list
+ * means.
  */
 export let strip = (
   graph: Graph,
@@ -44,9 +46,10 @@ export let strip = (
   })
 
 /**
- * One frame from the server, landed: the bundles it carries are applied whole
- * and trusted, and the entities it says are gone are stripped. A refused
- * subscription changes nothing in the graph — it is reported, not applied.
+ * One frame from the server, applied: the bundles it carries go in whole and
+ * trusted, and the entities it lists as gone have their components removed. A
+ * refused subscription changes nothing in the graph — it is reported, not
+ * applied.
  */
 export let land = (
   graph: Graph,
@@ -71,15 +74,16 @@ export let land = (
   )
 }
 
-/** Replace the wire tier with a query's whole rows, including absent columns.
- * Raw feeds are patches and must use land() instead. Local/none never come
- * from the server, and are never removed by a query snapshot. */
+/** Replace the server-owned components with a query's whole rows, including
+ * the columns it reports as absent. A raw feed carries patches instead, and
+ * must use land(). `sync: none` components never come from the server, and a
+ * query snapshot never removes them. */
 export let snapshot = (
   graph: Graph,
   bundles: Bundle[],
   opts: {
     coverage?: Record<Eid, Coverage>
-    /** Other owners protect their columns against this snapshot's omissions. */
+    /** Lets another owner of a column keep it when this snapshot omits it. */
     preserve?: (eid: Eid, name: string, prop?: string) => boolean
   } = {},
 ): Bundle[] | Promise<Bundle[]> =>

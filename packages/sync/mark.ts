@@ -1,54 +1,53 @@
-// Two marks this package puts on a batch, and neither is ever stored. A
-// component is data associated with an entity; where that data lives is a
-// separate question, and one that a phase of `apply()` can answer with "only
-// here, only long enough to tell a later phase what I decided". Both marks are
-// spelled with a leading `$`, which is what keeps them out of admission's
-// column checks and out of every adapter's write path.
+// Two marks this package puts on bundles while they pass through `apply()`.
+// Neither is ever stored: they exist only to carry a decision from one phase of
+// the write to a later one. Both names begin with `$`, which is what keeps them
+// out of admission's column checks and out of every storage adapter's write
+// path.
 //
-//   $sent   put on each bundle the caller asked for, before the patches went
-//           in, carrying the image of that entity as it stood. Its PRESENCE
-//           says "a caller wrote this" — the stamps and casualties later
-//           phases synthesize carry none — and its contents are the inverse to
-//           patch back if the server refuses the batch.
+//   $sent   added to each bundle the caller passed in, before the patches went
+//           in, carrying a copy of that entity as it then stood. Its presence
+//           means a caller wrote this bundle — the stamps and the cascade
+//           deletions that later phases add have no such mark — and its
+//           contents are what to patch back if the server refuses the write.
 //
-//   $echo   put on every batch that CAME FROM the server: the reply to a post,
-//           and a push over the socket. The outbound hook skips a bundle
-//           wearing it, which is the whole reason a client can apply what it
-//           just heard without telling the server about it again.
+//   $echo   added to every list of bundles that CAME FROM the server: the
+//           response to a POST, and a push over the socket. The outbound hook
+//           skips any bundle carrying it, which is how a client can apply what
+//           it just received without sending it straight back.
 
 import type { Bundle } from '@yaks/graph'
 
-/** The mark on a bundle a caller sent, carrying the entity as it stood. */
+/** The mark on a bundle a caller sent, carrying the entity as it then stood. */
 export let SENT = '$sent'
 
 /** The mark on a batch that arrived FROM the server and must not go back. */
 export let ECHO = '$echo'
 
-/** Mark a bundle as the caller's, with the image of the entity it patches
+/** Mark a bundle as the caller's, with a copy of the entity it patches
  * (`null` when there was no such entity yet). */
 export let asking = (b: Bundle, was: Bundle | null): Bundle => ({
   ...b,
   [SENT]: { before: was },
 })
 
-/** Whether a caller asked for this bundle — as opposed to a later phase
- * synthesizing it. */
+/** Whether a caller passed this bundle in — as opposed to a later phase
+ * adding it. */
 export let asked = (b: Bundle): boolean => b[SENT] !== undefined
 
-/** The entity as it stood before this batch: the bundle for it, `null` if it
+/** The entity as it stood before this write: the bundle for it, `null` if it
  * did not exist, `undefined` if this bundle is not a caller's. */
 export let before = (b: Bundle): Bundle | null | undefined =>
   (b[SENT] as { before: Bundle | null } | undefined)?.before
 
-/** Mark a batch as the server's, so the outbound hook lets it pass. */
+/** Mark bundles as the server's, so the outbound hook lets them pass. */
 export let echo = (bundles: Bundle[]): Bundle[] =>
   bundles.map((b) => ({ ...b, [ECHO]: true }))
 
 /** Whether a bundle came from the server. */
 export let echoed = (b: Bundle): boolean => b[ECHO] === true
 
-/** A bundle with both marks taken off: what a caller gets back from
- * `apply()`, which is their data and not this package's notes. */
+/** A bundle with both marks removed: what a caller gets back from `apply()`,
+ * which is their data and not this package's bookkeeping. */
 export let clean = (b: Bundle): Bundle => {
   if (b[SENT] === undefined && b[ECHO] === undefined) return b
   let out = { ...b }

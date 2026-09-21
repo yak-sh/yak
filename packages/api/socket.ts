@@ -1,12 +1,13 @@
-// The socket half: a WebSocket wired to the subscription registry, and
-// nothing else. Two verbs go up, one frame shape comes down (see the README's
-// Protocol), and no write ever crosses this seam — a batch is applied with
-// `POST /apply`, and the socket is how you hear about it.
+// The WebSocket half: a socket wired to the subscription registry, and
+// nothing else. Clients send two kinds of message, the server sends one frame
+// shape back (see the README's Protocol), and no durable write ever crosses
+// this connection — changes are applied with `POST /apply`, and the socket is
+// how a client learns about them.
 //
-// Frames sent before the socket opens are held: a host's upgrade hands back a
-// socket that is still CONNECTING until its response is returned to the
+// Frames sent before the socket opens are queued: an upgrade hands back a
+// socket that is still CONNECTING until its response has been returned to the
 // runtime, and a subscription opened on that first tick would otherwise throw
-// on its own opening set.
+// while sending its own initial result.
 
 import { refusal } from './refuse.ts'
 import type { Frame, Sink, Subs } from './subs.ts'
@@ -14,7 +15,7 @@ import type { Frame, Sink, Subs } from './subs.ts'
 /** The part of a WebSocket this package uses: the standard `WebSocket`
  * satisfies it, and so does a Cloudflare Worker's server-side half. */
 export type Socket = {
-  /** `0` connecting, `1` open — frames sent before it opens are held */
+  /** `0` connecting, `1` open — frames sent before it opens are queued */
   readyState: number
   /** send one frame, already serialized */
   send(data: string): void
@@ -26,10 +27,11 @@ export type Socket = {
 }
 
 /**
- * How the host turns a request into a WebSocket. This is the one thing about
- * serving that no standard covers, so it is injected: Deno's default is
- * {@link https://jsr.io/@yaks/api/doc/~/denoUpgrade | denoUpgrade}, and a
- * Cloudflare Worker's is a `WebSocketPair` (see the README).
+ * How the runtime turns a request into a WebSocket. This is the one thing
+ * about serving that no web standard covers, so the application supplies it:
+ * the Deno default is
+ * {@link https://jsr.io/@yaks/api/doc/~/denoUpgrade | denoUpgrade}, and on
+ * Cloudflare Workers you build one from `WebSocketPair` (see the README).
  */
 export type Upgrade = (
   request: Request,
@@ -37,7 +39,7 @@ export type Upgrade = (
 
 let OPEN = 1
 
-/** A {@link Sink} that writes frames to a socket, holding them until it
+/** A {@link Sink} that writes frames to a socket, queueing them until it
  * opens. */
 export let sink = (socket: Socket): Sink => {
   let waiting: Frame[] = []
@@ -54,17 +56,17 @@ export let sink = (socket: Socket): Sink => {
 }
 
 /**
- * One frame from a client, dispatched: `{subscribe, id}` opens a subscription
- * (a query line, or `true` for the raw feed of committed batches),
- * `{unsubscribe}` closes one, and `{relay: [...]}` hands `sync: peers`
- * components to the other subscribers. Anything else is refused under its own
- * id.
+ * One message from a client, dispatched: `{subscribe, id}` opens a
+ * subscription (a query string, or `true` for the raw feed of every committed
+ * transaction), `{unsubscribe}` closes one, and `{relay: [...]}` forwards
+ * `sync: peers` components to the other subscribers. Anything else is refused
+ * under its own id.
  *
- * The relay is the only write that crosses this seam, and the invariant it
- * leaves standing is the one that matters: no DURABLE write crosses it.
- * Nothing a relay frame says is stored, and the connection it arrives on is
- * what holds it — which is precisely why it cannot go through `/apply`,
- * a separate request with no connection to name.
+ * A relay is the only write that crosses this connection, and it leaves the
+ * invariant that matters standing: no DURABLE write crosses it. Nothing in a
+ * relay message is stored, and the connection it arrived on is what holds it
+ * — which is precisely why it cannot go through `/apply`, a separate request
+ * with no connection to name.
  */
 export let receive = (subs: Subs, to: Sink, data: unknown): void => {
   let id = ''
@@ -90,9 +92,9 @@ export let receive = (subs: Subs, to: Sink, data: unknown): void => {
 }
 
 /**
- * Wire a socket to a registry: its messages become subscriptions, its close
- * drops them all. Returns the sink its frames go to, which is also the key its
- * subscriptions are held under.
+ * Connect a socket to a subscription registry: its messages become
+ * subscriptions, and closing it drops them all. Returns the sink its frames
+ * go to, which is also the key its subscriptions are held under.
  */
 export let attach = (subs: Subs, socket: Socket): Sink => {
   let to = sink(socket)

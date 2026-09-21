@@ -1,11 +1,11 @@
 /**
- * The `yak` command, and the seams it is made of.
+ * The `yak` command line, as a library.
  *
  * The command itself is the other export — `deno install -gAf jsr:@yaks/cli/yak`
- * — and this one is what it is built from, for anybody wrapping the same idea:
- * the tools of the graph a config names, or the ones an MCP server lists, read
- * at run time, every tool a subcommand, and a command line mapped through each
- * tool's own input schema.
+ * — and this module is what it is assembled from, for anybody building the same
+ * thing: the tools of the graph a config file names, or the ones an MCP server
+ * lists, read at run time, every tool a subcommand, and the command line parsed
+ * through each tool's own input schema.
  *
  * ```ts
  * import { argsFor, doorUrl, rpc } from '@yaks/cli'
@@ -14,7 +14,8 @@
  * let { tools } = await ask('tools/list') as { tools: [] }
  * ```
  *
- * A box with commands of its own hands them over and runs the same program:
+ * A program with subcommands of its own passes them in and runs the same
+ * program:
  *
  * ```ts
  * import { main } from '@yaks/cli/yak'
@@ -22,8 +23,8 @@
  * Deno.exit(await main(Deno.args, mine))
  * ```
  *
- * A program that is not `yak` at all is `cli(commands, opts)` — the commands,
- * and what it calls itself.
+ * A program that is not `yak` at all calls `cli(commands, opts)` — its
+ * subcommands, and the name it goes by.
  *
  * @module
  */

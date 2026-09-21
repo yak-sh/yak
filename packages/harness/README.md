@@ -2,14 +2,15 @@
 
 A local agent runner with SQLite persistence, command-line tools and a terminal
 interface. It composes `@yaks/session` for model execution, `@yaks/process` for
-host commands, and graph-backed task and transcript storage. No server is
-required. Model calls may use an external provider; shell tools execute on the
-host and are not sandboxed.
+running commands on this machine, and graph-backed task and transcript storage.
+No server is required. Model calls may use an external provider; shell tools run
+on this machine and are not sandboxed.
 
 - `open()` creates or opens storage and registers vocabulary and plugins.
 - `harnessTools()` combines shell, delegation and graph tools.
 - `agent()` configures the model and session daemon and exposes session methods.
-- `plugin` supplies the tools vocab.json declares for `@yaks/cli`.
+- `plugin` supplies the implementations of the tools vocab.json declares, for
+  `@yaks/cli`.
 
 ## Use
 
@@ -75,8 +76,8 @@ kitty keyboard sequences (Alt+Enter also inserts a newline).
 
 Tab toggles the visible composer mode between **message** (the default) and
 **task**, without changing the draft. Task mode requires a selected session;
-Enter calls `a.taskEntry(session, text)` to mint a `doc` and bare `task{}` (no
-filing metadata), contain it under the session's claimed tasks, and spawn a
+Enter calls `a.taskEntry(session, text)` to create a `doc` and a bare `task{}`
+(no filing metadata), contain it under the session's claimed tasks, and spawn a
 child that claims it. With no claimed tasks, containment is under the session
 itself. The first line (up to 120 characters) is the title; the entire text is
 the body. Admission, task, edges, child and claim are one atomic write through
@@ -112,7 +113,7 @@ directories and clean them up; `TASKS_HOME` moves the process supervisor's files
 cache. If a probe must move `HOME`, export the invoking `DENO_DIR` before moving
 it.
 
-The model is `gpt-6-astra` unless `--model` says otherwise, reached with
+The model is `gpt-6-astra` unless `--model` names another, reached with
 `$OPENAI_API_KEY` or the Codex CLI's sign-in (@yaks/openai).
 
 ```ts
@@ -140,22 +141,24 @@ isolate that database.
 - **Two statuses are computed, never stored.** `sessionDerived` and @yaks/task's
   `derived(taskMarks)` are registered as derived columns. The task plugin uses
   the same `taskMarks` from @yaks/session: completed/cancelled win, then a claim
-  means wip, otherwise open. `blocked` stays a facet, never a status. Queries
-  filter in the database, and the sidebar reads that same status.
+  means wip, otherwise open. `blocked` stays a component of its own, never a
+  status. Queries filter in the database, and the sidebar reads that same
+  status.
 - **Work need not be filed.** `doc` + bare `task{}` is a microtask; optional
   `filed{project, priority, domain, assignee}` places it in the portfolio.
   `a.tasks()` reads `.task.status=open,wip`, oldest first, without requiring
   filing or a project. The CLI and sidebar use that same interface.
 - **The agent holds its own graph.** `harnessTools()` is @yaks/process's shell
   plus @yaks/mcp's generic tier (`graph_apply`, `graph_query`, `graph_show`,
-  `graph_schema`), each tool's Zod arguments said as JSON Schema for the model.
+  `graph_schema`), each tool's Zod arguments converted to JSON Schema for the
+  model.
 - **Boot reconciles.** `open()` frees the leases of holders that are gone;
   `resume()` wakes the transcripts a restart left owed a turn.
 
 ## Not here
 
 No sync, no server, no durable effect ledger — the daemon is woken again by
-`resume()` instead. The terminal host and widgets come from @yaks/tui.
+`resume()` instead. The terminal renderer and its widgets come from @yaks/tui.
 
 ## Compatibility
 
@@ -354,8 +357,8 @@ Tasks shrinks to their content within bounded shares. Context usage is last at
 the bottom; the session tree receives remaining height and scrolls.
 
 `Alt+a` archives/unarchives only the selected session, never its root. `Alt+z`
-shows archived roots so they can be selected and restored. Archival is a
-persistent `archived` facet: it neither stops execution nor removes history.
+shows archived roots so they can be selected and restored. Archiving writes a
+persistent `archived` component: it neither stops execution nor removes history.
 Archiving a session hides its subtree; descendants receive no additional archive
 marks. Selection and visibility preferences live only in the frontend graph.
 Trees are keyboard-controlled for now; no coordinate-specific mouse hacks were
@@ -419,9 +422,9 @@ Read accepts `entity`, `component`, `property`, `start`, `count`, and optional
 `revision`. Search accepts the same address with a literal `query` and bounded
 `limit`. These tools inspect any authorized text property, including `doc.body`,
 not only tool results. They don't open files or grant access through a raw hash.
-See [`@yaks/blob`](../blob/README.md#bounded-graph-value-inspection) for range
-units and [`@yaks/context`](../context/README.md#large-tool-results) for policy
-limits.
+See [`@yaks/blob`](../blob/README.md#bounded-text-inspection-for-tools) for
+range units and [`@yaks/context`](../context/README.md#large-tool-results) for
+policy limits.
 
 ## Worker runtime
 
@@ -450,9 +453,16 @@ Binary bytes use `@yaks/blob`'s external file backend under `~/.yak/images`, or
 backups. Do not point it at an unrelated shared directory: the harness enforces
 mode 0700 on it.
 
-Programmatic configuration is
-`agent({h, name: 'gpt-4.1', images: {directory,
-tool: {output_format: 'png'}, maxBytes: 33554432}})`.
+Configure it in code with:
+
+```ts
+agent({
+  h,
+  name: 'gpt-4.1',
+  images: { directory, tool: { output_format: 'png' }, maxBytes: 33554432 },
+})
+```
+
 `remote` accepts the same cloneable `images` options; storage callbacks are
 constructed inside the worker. Custom model implementations own their own
 artifact storage configuration.
@@ -640,20 +650,21 @@ compatibility check when an older binary first opens the file.
 
 ## The harness as a plugin module
 
-`./plugin` is where the harness says what it is made of, once: the documents it
-speaks, the columns it computes rather than keeps, the rules that decide what a
-batch means, and the runs behind its tool declarations. `store.ts` takes those
-facets for the harness's own file, and a host takes the same ones for a served
-one — `yak serve --config harness.json` (@yaks/cli `compose`) is the harness
-with doors on it. Importing the module opens no database and starts nothing.
+`./plugin` is where the harness declares what it is made of, once: the
+vocabulary documents it contributes, the columns it computes rather than stores,
+the rules that validate a write, and the implementations behind its tool
+declarations. `store.ts` imports those for the harness's own SQLite file, and a
+server imports the same ones for a served database. Running `yak serve` with a
+harness config (@yaks/cli `compose`) is the harness with HTTP endpoints in front
+of it. Importing the module opens no database and starts nothing.
 
 The executable accepts `session list` and `list session`, returning session
 bundles as JSON. The same definition is exposed as MCP `session_list` through
-the MCP adapter. Both CLI word orders derive from the same Tool noun/verb
-fields, without alias declarations. `bin.ts` hands `@yaks/cli`'s `cli()` one
-flat list — the graph's tools, then the harness's own words — and there is no
-plugin registration in between. See
-[the host and the export shape](../cli/README.md).
+the MCP adapter. Both word orders on the command line derive from the same Tool
+noun/verb fields, without alias declarations. `bin.ts` passes `@yaks/cli`'s
+`cli()` one flat list — the graph's tools, then the harness's own — and there is
+no plugin registration in between. See
+[the command-line entry point and the export shape](../cli/README.md).
 
 Mouse clicks select session rows, **New session**, and task rows in the sidebar.
 A claimed task opens its worker session; an unclaimed task selects only the row.
@@ -694,9 +705,9 @@ restarts; configuration changes take effect on the next ask, without restarting.
 The panel identifies each server by display name and EID and reports invalid
 definitions. Query `.mcp_server` to list them. Set `mcp_server.enabled` to
 `false` to disable a server, patch its URL or options to edit it, or remove its
-`mcp_server` component to remove it. The `$server` batch alias above asks the
-graph to mint a UUID; use the returned EID for later edits. The server name
-supplies a readable tool namespace: `yaks.app` exposes `app_list` as
+`mcp_server` component to remove it. The `$server` alias in the write above asks
+the graph to generate a UUID; use the returned EID for later edits. The server
+name supplies a readable tool namespace: `yaks.app` exposes `app_list` as
 `yaks_app__app_list`. Renaming changes future exposed names, not the server
 entity or its OAuth credentials. Distinct configuration revisions have derived
 UUID tool entities, so changing an endpoint cannot retarget already-issued calls
@@ -804,17 +815,17 @@ Unauthorized optional servers are omitted until signed in; other discovery
 failures remain errors. Refresh uses the SDK and private store, not a model
 tool.
 
-Programmatic hosts can call
-`agent.authorizeMCP('list' | 'begin' | 'complete' |
-'cancel', serverName?, returnUrl?)`.
-These calls are host controls, not agent instructions. Never paste a return URL
-into the ordinary conversation input.
+A program embedding the harness can call `authorizeMCP` on the agent, passing an
+action — `'list'`, `'begin'`, `'complete'` or `'cancel'` — and optionally a
+server name and a return URL. These calls are controls for the embedding
+program, not agent instructions. Never paste a return URL into the ordinary
+conversation input.
 
 ## OpenRouter
 
 OpenAI remains the default. OpenRouter is a separate provider, selected through
 ordinary graph model configuration—not by pointing OpenAI credentials at a new
-URL. Add configuration (the `$` names mint entities in this batch):
+URL. Add configuration (the `$` names create entities in this write):
 
 ```json
 [

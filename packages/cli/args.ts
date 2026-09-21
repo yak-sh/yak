@@ -1,27 +1,27 @@
-// The command line as a tool's arguments. The tool's own input schema is the
-// only grammar there is: `--name value` names a property, and what the schema
-// says that property IS decides whether the word stays a word, parses as JSON,
-// or becomes a number.
+// The command line, parsed into a tool's arguments. The tool's own input
+// schema is the only grammar there is: `--name value` names a property, and
+// the type that property declares decides whether the argument stays a string,
+// is parsed as JSON, or becomes a number.
 //
-// Three spellings inflate a value before its type is ever consulted, because a
-// body is rarely something a person types: `@path` is that file's text, `-` and
-// `@-` are stdin, and everything else is the word itself. That is what makes
+// Three forms expand a value before its type is ever consulted, because a body
+// is rarely something a person types out: `@path` is that file's text, `-` and
+// `@-` are stdin, and anything else is the argument itself. That is what makes
 //
 //   yak app_files --app recipes --path index.html --content @index.html
 //
 // the same command whether the page is two lines or two hundred.
 //
-// Refusing a name the schema does not declare is deliberate: the roster keeps
-// the cached schema fresh (store.ts), so an undeclared `--nmae` is a typo and
-// worth a sentence here rather than a refusal one round trip away.
+// Rejecting a name the schema does not declare is deliberate: the cached
+// schema is kept fresh (store.ts), so an undeclared `--nmae` is a typo worth
+// an error message here rather than a rejection one round trip away.
 
 import { validateToolInput } from '@yaks/vocab/tools'
 import { commandOf, type Prop, type Schema, typeOf } from './tool.ts'
 
 /** As much of a tool as a command line reads: what it is called, the schema
- * its arguments must satisfy, and how it likes them typed. A tool a server
- * listed (tool.ts `Listed`) and one this box runs (@yaks/graph `Tool`) are
- * both this much. */
+ * its arguments must satisfy, and how they are written on a command line. A
+ * tool an MCP server listed (tool.ts `Listed`) and one this process runs
+ * (@yaks/graph `Tool`) both carry this much. */
 export type Grammar = {
   name?: string
   noun?: string
@@ -34,18 +34,18 @@ export type Grammar = {
   }
 }
 
-/** The command line was wrong — nothing was called, and the exit code is 2. */
+/** The command line was wrong — nothing ran, and the exit code is 2. */
 export class Usage extends Error {}
 
-/** Where an inflated value comes from. A test hands over two functions and
+/** Where an expanded value is read from. A test passes two functions and
  * touches no disk. */
 export type Reads = {
   file: (path: string) => string | Promise<string>
   stdin: () => string | Promise<string>
 }
 
-/** What the words on a command line said: options in the order they were
- * given (a bare flag says `true`), and the words that named nothing. */
+/** A parsed command line: options in the order they were given (a bare flag
+ * is `true`), and the bare words that named no option. */
 export type Said = {
   opts: [string, string | true][]
   words: string[]
@@ -53,9 +53,9 @@ export type Said = {
 
 /**
  * Split a command line into options and bare words. A `--name` whose next word
- * is not itself an option takes it as its value; otherwise it is a flag.
- * `--name=value` always takes the value, which is how a value that starts with
- * `--` is given at all.
+ * is not itself an option takes that word as its value; otherwise it is a
+ * flag. `--name=value` always takes the value, which is the only way to pass a
+ * value that itself starts with `--`.
  *
  * ```ts
  * saidIn(['--q', '.recipe!', '--json'])
@@ -84,7 +84,8 @@ export let saidIn = (argv: string[]): Said => {
   return { opts, words }
 }
 
-/** `@path` is that file, `-` and `@-` are stdin, anything else is itself. */
+/** `@path` reads that file, `-` and `@-` read stdin, anything else is used as
+ * given. */
 export let inflate = async (word: string, reads: Reads): Promise<string> => {
   if (word == '-' || word == '@-') return await reads.stdin()
   return word.startsWith('@') ? await reads.file(word.slice(1)) : word
@@ -98,9 +99,9 @@ let parsed = (name: string, raw: string, want: string): unknown => {
   }
 }
 
-/** One inflated word given the type its property declares. A string stays a
- * string — JSON-looking or not — so a title that reads like a number is still
- * a title. */
+/** One expanded argument, converted to the type its property declares. A
+ * string stays a string — JSON-looking or not — so a title that reads like a
+ * number is still a title. */
 export let valueOf = (name: string, raw: string, p?: Prop): unknown => {
   let want = typeOf(p)
   if (want == 'boolean') {
@@ -125,7 +126,7 @@ export let valueOf = (name: string, raw: string, p?: Prop): unknown => {
   if (want == 'array') {
     // A whole array as JSON, or one item — repeat the option for more
     // (`--filters .a --filters .b`), which is how a list is typed without
-    // quoting brackets past a shell.
+    // getting brackets past a shell.
     let v = raw.trimStart().startsWith('[')
       ? parsed(name, raw, 'an array')
       : null
@@ -136,11 +137,11 @@ export let valueOf = (name: string, raw: string, p?: Prop): unknown => {
 }
 
 /**
- * Bare `key=value` words as an object — the arguments of something whose
- * schema this program does not hold, like an app's own command. The value is
- * JSON where it parses as JSON, so a number stays a number and a list stays a
- * list, and the word itself otherwise; `@path` and `-` inflate first, the same
- * three spellings every value here takes.
+ * Bare `key=value` arguments as an object — the arguments of something whose
+ * schema this program does not have, such as an app's own command. Each value
+ * is parsed as JSON where it parses as JSON, so a number stays a number and a
+ * list stays a list, and is used as given otherwise; `@path` and `-` expand
+ * first, the same three forms every value here accepts.
  *
  * ```ts
  * await pairsIn(['serves=4', 'title=Lemon cake'], reads)
@@ -169,15 +170,16 @@ let listed = (names: string[]): string =>
   names.length ? names.map((n) => `--${n}`).join(', ') : '(no arguments)'
 
 /**
- * The arguments a tool was given, mapped through its own input schema — the
+ * The arguments a tool was given, parsed through its own input schema — the
  * one grammar there is. The bare words fill `options.positional` in order and
- * then `options.rest`; `--name value`, `--name=value` and a short `-n` name a
- * property, a boolean one is a flag, a repeated one builds its list, and `--`
- * ends the options. Every value inflates (`@path`, `-`) before its type is
- * consulted, and the whole bag is then checked against the schema, which is
- * also what fills in its defaults.
+ * then `options.rest`; `--name value`, `--name=value` and a declared short
+ * `-n` name a property, a boolean one is a flag, a repeated one builds its
+ * list, and `--` ends the options. Every value expands (`@path`, `-`) before
+ * its type is consulted, and the whole object is then validated against the
+ * schema, which is also what fills in its defaults.
  *
- * Throws {@link Usage} — exit code 2 — for anything the line got wrong.
+ * Throws {@link Usage} — exit code 2 — for anything the command line got
+ * wrong.
  */
 export let argsFor = async (
   tool: Grammar,
@@ -221,8 +223,8 @@ export let argsFor = async (
       continue
     }
     // An option is `--name`, or a `-n` the tool DECLARED as a short. Anything
-    // else that opens with a dash is a word: `-5` is a number somebody typed,
-    // not an option nobody named.
+    // else starting with a dash is a bare word: `-5` is a number somebody
+    // typed, not an option nobody declared.
     let eq = word.indexOf('=')
     let flag = eq > 0 ? word.slice(0, eq) : word
     let short = flag.length > 1 && !flag.startsWith('--') &&
@@ -254,8 +256,8 @@ export let argsFor = async (
     }
   }
 
-  // The words nobody named, where the tool asked for them: an app's own
-  // arguments as `key=value` pairs, or a plain list.
+  // The bare words nothing claimed, where the tool asked for them: an app's
+  // own arguments as `key=value` pairs, or a plain list.
   if (rest && spare.length) {
     out[rest] = typeOf(props[rest]) == 'array'
       ? await Promise.all(spare.map((w) => inflate(w, reads)))

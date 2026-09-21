@@ -32,10 +32,10 @@ execute.
 
 `remote.tools()` returns existing `@yaks/graph.Tool` definitions with JSON
 Schema `inputSchema` and a `run` handler. They can be passed to the CLI/MCP
-graph-tool adapters or invoked directly with the host's execution context. There
-is no session dependency and no extra invocation/result vocabulary. Existing
-executors own call/result records; this client owns only the protocol
-connection.
+graph-tool adapters, or called directly with the application's own execution
+context. There is no session dependency and no extra invocation/result
+vocabulary. Existing executors own call/result records; this client owns only
+the protocol connection.
 
 Remote tool names remain opaque and unchanged in `tools/call`. Exposed names
 combine a readable local namespace and the exact remote name: `yaks.app` +
@@ -52,8 +52,8 @@ consumer adapters may validate too.
 
 `clients(servers, options)` composes several named connections. An optional
 `allow` array restricts discovery and calls to exact remote names. Discovered
-lists are cached and invalidated by `notifications/tools/list_changed`; a host
-requests the next snapshot at an execution boundary. `refresh()` on one
+lists are cached and invalidated by `notifications/tools/list_changed`; the
+application requests the next list at an execution boundary. `refresh()` on one
 connection also invalidates its list. Names must be unique across configured
 servers.
 
@@ -63,14 +63,14 @@ servers.
 `structuredContent`, and content blocks. Protocol/transport failures throw
 `MCPError`; they are distinct from successful protocol replies carrying
 `isError`. Applications must not dump base64 content blocks into a model prompt.
-A host can save those bytes in `@yaks/blob` and return artifact references
-instead, as the harness adapter does.
+An application can save those bytes in `@yaks/blob` and return artifact
+references instead, as the harness adapter does.
 
 Each request defaults to a 60-second deadline. `call` accepts an AbortSignal;
 remote cancellation is best-effort, not proof that a side effect was undone.
 `close()` closes the SDK transport and attempts to terminate its protocol
-session. Hosts should drain admitted calls before closing, and bound forced
-shutdown.
+session. An application should let accepted calls finish before closing, and put
+a bound on a forced shutdown.
 
 This version supports tools over Streamable HTTP only. It does not provide
 stdio, legacy HTTP+SSE fallback, prompts/resources browsing, sampling,
@@ -94,7 +94,7 @@ const tools = (await remote.tools()).map((tool) => ({
 For multiple tools, choose a unique pair for each. The `@yaks/cli/structured`
 adapter accepts these definitions and an execution callback that invokes
 `tool.run(args, context)`. The same original definition remains usable by graph
-executors and model adapters without a CLI spelling.
+executors and model adapters that have no CLI names at all.
 
 ## Browser authorization with a pasted return URL
 
@@ -116,15 +116,15 @@ const { url } = await login.begin()
 // Display url. The person authorizes in their browser, then supplies the
 // complete return URL through a private input, not an agent conversation.
 await login.complete(returnUrl)
-const token = await login.token() // trusted host code only
+const token = await login.token() // trusted application code only
 ```
 
 The default return address is `http://127.0.0.1:8765/oauth/callback`. This flow
 starts no HTTP listener: after authorization, the browser may show a connection
 error. Copy its full address bar. A server must accept that registered redirect;
 configure `redirectUrl` to match a pre-registered client when necessary. A
-loopback listener or hosted return page can be supplied by another host. This is
-not the deprecated out-of-band OAuth grant.
+loopback listener, or a hosted return page, can be supplied by the application.
+This is not the deprecated out-of-band OAuth grant.
 
 The pending state/verifier expires after ten minutes and lives only in memory.
 Restarting or cancelling requires a new authorization. Callback origin/path,
@@ -134,9 +134,9 @@ expiry; an unsuccessful refresh requires sign-in again. A server revoking a
 token before expiry may return an error; mutations are never replayed merely to
 try another credential.
 
-`AuthorizationStore` has `read` and serialized `update` operations. The host
-implementation uses a versioned JSON file, private file permissions, an advisory
-file lock across processes, and atomic file replacement. It is **not
+`AuthorizationStore` has `read` and serialized `update` operations. The
+implementation in `./host` uses a versioned JSON file, private file permissions,
+an advisory file lock across processes, and atomic file replacement. It is **not
 encrypted**. Token expiry is stored with the private record; no OAuth graph
 vocabulary is introduced by this first implementation. Application-specific
 secret stores can implement the same interface. The access token must only be
@@ -150,8 +150,9 @@ a general SSRF sandbox or a provider-independent OAuth package.
 ## Graph server definitions
 
 `@yaks/mcp-client/graph` exports `mcpDoc` and `serverOf(bundle)`. This optional
-adapter has no harness or session dependency. Load `mcpDoc` with the host's
-vocabulary and store shared server definitions as `mcp_server` components:
+adapter has no harness or session dependency. Load `mcpDoc` with the
+application's vocabulary and store shared server definitions as `mcp_server`
+components:
 
 ```ts
 await graph.apply([{
@@ -162,14 +163,14 @@ await graph.apply([{
 
 `serverOf` validates an enabled row and returns its display label, entity ID,
 and portable `Server` configuration. The `$server` alias above asks the graph to
-mint a UUID. `graphToolName` creates the readable namespace/name spelling;
+generate a UUID. `graphToolName` builds the readable namespace/name pair;
 `graphToolEid` derives a UUID from the server EID and configuration revision.
 Use that UUID for retained handler dispatch, not the displayed name. Renaming
 the label changes future exposed tools. `enabled: false` disables the row.
 `allow` is optional JSON text containing an array of exact remote names. OAuth
 configuration uses `redirect_url`, `client_id`, `client_metadata_url`, and
-`scope`; `credential` is a host-interpreted reference, never a bearer token.
-Credentials and open transports remain outside the graph.
+`scope`; `credential` is a reference the application interprets, never a bearer
+token. Credentials and open transports remain outside the graph.
 
 Low-level `connect(server)` and `clients(servers)` remain usable without a
 graph. The harness reads the shared graph instead of maintaining an

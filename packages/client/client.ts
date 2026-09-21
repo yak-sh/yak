@@ -1,16 +1,16 @@
-// The assembly: one call for the whole client side.
+// The assembly: one call builds the whole client side.
 //
 // A graph in a page is four things that always go together — a map to hold the
-// entities, the wire to a server, somewhere durable for what the server will
-// never send back, and a way for a render to hear that an answer moved. Wiring
-// them up is the same twenty lines in every application, so it is this
-// function instead.
+// entities, a connection to a server, somewhere durable for what the server
+// will never send back, and a way for a render to find out that a query's
+// result changed. Connecting them is the same twenty lines in every
+// application, so this function does it instead.
 //
-// Everything it builds stays reachable on the returned object: the graph is the
-// graph, and `apply()`, `read()`, plugins and hooks are all still there. This
-// package adds no layer over them — `mutate` and `ent` below are two lines
-// each, kept because a page reaches for them constantly and because the
-// application this package was cut from spells them that way.
+// Everything it builds stays reachable on the object it returns: the graph is
+// the graph, and `apply()`, `read()`, plugins and hooks are all still there.
+// This package adds no layer over them — `mutate` and `ent` below are two
+// lines each, kept because a page calls them constantly and because the
+// application this package was extracted from names them that way.
 
 import type {
   Bundle,
@@ -44,107 +44,126 @@ import {
   type WatchOpts,
 } from './watch.ts'
 
-/** How a client is put together. Every field has a default; `{}` is a graph in
- * this page with nobody else in it and nothing kept. */
+/** How a client is put together. Every field has a default; `{}` is a graph
+ * in this page alone, connected to no server and storing nothing. */
 export type ClientOpts = {
-  /** the server's base URL — the origin `/apply`, `/query` and `/ws` sit
-   * under. Omitted, the graph is local only and nothing is posted anywhere. */
+  /** the server's base URL — the origin `/apply`, `/query` and `/ws` are
+   * served under. Omit it and the graph is local only: nothing is posted
+   * anywhere. */
   url?: string
-  /** how a batch is sent (default: the global `fetch`) */
+  /** how changes are POSTed to `/apply` (default: the global `fetch`) */
   fetch?: Fetch
-  /** how the socket is opened (default: the global `WebSocket`) */
+  /** how the WebSocket is opened (default: the global `WebSocket`) */
   connect?: Connect
   /** how a reconnect is scheduled (default: `setTimeout`) */
   timer?: Timer
-  /** headers on every `POST /apply` — an authorization, say */
+  /** headers added to every `POST /apply` — an `authorization`, say */
   headers?: Record<string, string>
   /** the first reconnect delay in ms, doubling to `most` (default: 250) */
   wait?: number
   /** the longest reconnect delay in ms (default: 30_000) */
   most?: number
-  /** where a refusal or a transport failure is surfaced (default: a warning) */
+  /** where a refusal or a network failure is reported (default: a console
+   * warning) */
   report?: Report
-  /** where the local tier is kept: a {@link Vault}, or `false` for none.
-   * Default: IndexedDB where the browser has it, nothing where it does not. */
+  /** where this browser's own components are stored: a {@link Vault}, or
+   * `false` for none. Default: IndexedDB where the browser has it, nothing
+   * where it does not. */
   vault?: Vault | false
-  /** Maximum inactive wire payloads (default: 20,000). */
+  /** how many inactive server-synchronized entities to keep (default:
+   * 20,000) */
   retention?: number
-  /** Keep uncovered columns as a paint floor in the same RAM row. They do
-   * not count as loaded; covered omissions, deaths and epoch changes still
-   * reconcile them. Useful for one-shot field reads beside live projections. */
+  /** Keep columns no subscription covers in the same in-memory row, so a
+   * render still has something to show. They do not count as loaded; a
+   * covering subscription omitting them, a delete, and an epoch change all
+   * still reconcile them. Useful for one-off field reads made alongside live
+   * queries. */
   retainUnownedColumns?: boolean
-  /** Maximum encoded bytes of retained server membership/coverage metadata. */
+  /** the byte budget for the retained server membership and coverage
+   * metadata, once encoded */
   answerBytes?: number
-  /** Server tier, separate from local drafts. Default: wireIdb in browsers.
-   * No disk reads/writes occur until an authoritative epoch is supplied. */
+  /** where server-synchronized rows are stored, separate from this browser's
+   * own drafts. Default: {@link wireIdb} in a browser. Nothing is read from
+   * or written to disk until the server's epoch has been supplied. */
   wireVault?: WireVault | false
-  /** Authoritative boot epoch, never an unvalidated disk epoch. */
+  /** the server's epoch for this boot; never an epoch read back from disk
+   * without validation */
   epoch?: string
-  /** the signal factory every watch's `value` is held in — pass `signal` from
-   * `@preact/signals` and a render tracks it (default: a plain object) */
+  /** the signal factory every watch's `value` is held in — pass `signal`
+   * from `@preact/signals` and a render tracks it (default: a plain
+   * object) */
   signal?: Make
-  /** what names an entity minted under an alias (default: a random uuid) */
+  /** how an eid is generated for an entity minted under an alias (default: a
+   * random uuid) */
   mint?: () => Eid
-  /** Replica hosts may leave provenance exclusively to their authority. */
+  /** how `created` and `updated` are stamped. A client that mirrors another
+   * graph can leave provenance entirely to that server. */
   provenance?: StampPolicy
 }
 
-/** A client: the graph, the pieces around it, and the four calls a page makes
- * all day. */
+/** A client: the graph, the pieces around it, and the four calls a page
+ * makes all day. */
 export type Client = {
-  /** the vocabulary it speaks */
+  /** the vocabulary it uses */
   vocab: Vocab
   /** the graph itself — `apply`, `read`, `use`, all of it */
   graph: Graph
   /** the map underneath, for a caller that wants a synchronous read */
   store: Store
-  /** the wire to the server, when there is one */
+  /** the connection to the server, when there is one */
   wire?: Sync
   /** the watches on this graph */
   watches: Watches
-  /** Working-set retention and persistence diagnostics. */
+  /** the working set: what is retained in memory and on disk, and what is
+   * loaded */
   cache: Retained
-  /** Validate a boot epoch, invalidate server-only state on mismatch, and
-   * request fresh subscription answers. Local drafts are never invalidated. */
+  /** Check a boot epoch: on a mismatch, discard the server-synchronized state
+   * and ask the server for fresh subscription results. This browser's own
+   * drafts are never discarded. */
   setEpoch: (epoch: string) => Promise<void>
-  /** Resolves after local hydration and any explicitly supplied epoch restore. */
+  /** resolves once this browser's stored components are back in the graph,
+   * and once any epoch passed in `opts.epoch` has been restored */
   ready: Promise<void>
-  /** watch a query: its answer now, and every later one. Identical query lines
-   * and options share one evaluation and server subscription. Each returned
-   * handle closes independently; the last close drops the subscription. */
+  /** watch a query: its result now, and every later one. Identical query
+   * strings with identical options share one evaluation and one server
+   * subscription. Each handle returned closes independently; the last close
+   * drops the subscription. */
   watch: (query: string, opts?: ClientWatchOpts) => Watch
   /** read a query once, synchronously */
   read: (query: Query, opts?: ReadOpts) => Bundle[]
-  /** one entity, whole, by id — `undefined` if this client has never held it.
-   * A dead one comes back wearing `tombstone`. */
+  /** one entity, whole, by id — `undefined` if this client has never held
+   * it. A deleted entity comes back with a `tombstone` component. */
   ent: (eid: Eid) => Bundle | undefined
-  /** apply a batch: locally at once, then forwarded to the server */
+  /** apply changes: to the local graph at once, then POSTed to the server */
   mutate: (change: Change) => Bundle[] | Promise<Bundle[]>
-  /** close the socket and every watch */
+  /** close the WebSocket and every watch */
   close: () => void
 }
 
-/** What a watch may say about itself, plus the client's own question. */
+/** The options one watch takes, plus the two this package adds. */
 export type ClientWatchOpts = WatchOpts & {
-  /** open the server's subscription for this query too (default: true when the
-   * client has a `url`) */
+  /** open the server's subscription for this query too (default: true when
+   * the client has a `url`) */
   remote?: boolean
-  /** Let the server alone evaluate membership/order, without parsing or
-   * priming from incomplete local data. Requires a remote watch. Cached
-   * payloads remain in RAM; a bounded same-epoch answer may prime an unready reopen. */
+  /** `'server'` lets the server alone decide membership and order: the query
+   * is not parsed or evaluated locally against data that may be incomplete.
+   * It requires a remote watch. Entity data stays in memory either way, and a
+   * bounded result saved under the same epoch can fill a reopened watch in
+   * before it is ready. */
   evaluate?: 'local' | 'server'
 }
 
-// The vault a browser gets for free, and nothing anywhere else. Building it is
-// lazy — no database is opened until something is written — so this costs
-// nothing in a page that keeps nothing.
+// The vault a browser gets for free, and nothing on any other runtime.
+// Building it is lazy — no database is opened until something is written — so
+// this costs nothing in a page that stores nothing.
 let ordinary = (): Vault | null => globalThis.indexedDB ? idb() : null
 
 /**
  * Assemble a client graph: a {@link https://jsr.io/@yaks/ram | @yaks/ram}
  * store under a {@link https://jsr.io/@yaks/graph | @yaks/graph}, your plugins
- * on it, {@link https://jsr.io/@yaks/sync | @yaks/sync} to a server if you name
- * one, IndexedDB for the local tier, and watches for the render.
+ * on it, {@link https://jsr.io/@yaks/sync | @yaks/sync} to a server if you
+ * give it a URL, IndexedDB for this browser's own components, and watches for
+ * the render.
  *
  * ```ts
  * import { client } from '@yaks/client'
@@ -159,15 +178,15 @@ let ordinary = (): Vault | null => globalThis.indexedDB ? idb() : null
  * box.mutate([{ entity: { eid: mint() }, doc: { title: 'Dal' } }])
  * ```
  *
- * The vocabulary must be the one your server speaks, loaded with
- * nothing extra: `sync` and `durable` are core keywords.
+ * The vocabulary must be the one your server uses, loaded with nothing
+ * extra: `sync` and `durable` are core keywords.
  */
 export let client = (
   vocab: Vocab,
   plugins: Plugin[] = [],
   opts: ClientOpts = {},
 ): Client => {
-  // `adopt`: the numbers come from the server, not from this map.
+  // `adopt`: entity numbers come from the server, not from this map.
   let store = ram(vocab, { adopt: true, number: true })
   let g = graph({
     storage: store,
@@ -176,7 +195,8 @@ export let client = (
     mint: opts.mint,
     provenance: opts.provenance,
   })
-  // Sync pins local commits before any rendering or asynchronous vault effect.
+  // @yaks/sync pins locally committed rows before anything renders or the
+  // vault's asynchronous write runs.
   let cache: Retained
   let wire = opts.url
     ? sync(g, {
@@ -223,8 +243,9 @@ export let client = (
   let handles = new Set<() => void>()
   let closed = false
 
-  // Exact query text is deliberate: no normalizing quoted text, projection
-  // order or relative dates in a way that silently merges different asks.
+  // Watches are shared by exact query text, deliberately: normalizing quoted
+  // text, projection order or relative dates would silently merge two
+  // different queries into one.
   let watch = (query: string, o: ClientWatchOpts = {}): Watch => {
     if (closed) throw new Error('client is closed')
     let remote = !!wire && o.remote !== false
@@ -264,8 +285,10 @@ export let client = (
             next.length !== value.value.length ||
             next.some((b, i) => {
               let was = value.value[i]
-              // RAM get() assembles a bundle, but unchanged component/identity
-              // references are stable. Do not wake on another answer's pins.
+              // @yaks/ram's get() assembles a new bundle object, but the
+              // component and identity objects inside it keep their
+              // references when they have not changed. So compare those, and
+              // do not notify listeners because another query pinned a row.
               return b !== was && (!server ||
                 Object.keys(b).length !== Object.keys(was).length ||
                 Object.keys(b).some((name) => b[name] !== was[name]))
@@ -342,7 +365,8 @@ export let client = (
       },
       subscribe: (fn) => {
         if (!active) return () => {}
-        // Wrap even identical callbacks: another handle may own the same fn.
+        // Wrap even identical callbacks: another handle may have registered
+        // the same function.
         let off = own.watch.subscribe((value) => fn(value))
         let stop = () => {
           off()

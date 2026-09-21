@@ -1,14 +1,15 @@
-// The words the harness speaks, as DOCUMENTS and as one loaded vocabulary: the
-// `vocab` facet a host takes (`@yaks/harness/vocab`).
+// The vocabulary the harness uses, both as separate DOCUMENTS and as one
+// loaded vocabulary, exported as `@yaks/harness/vocab`.
 //
-// The list is here and nowhere else — a host composing the harness (@yaks/cli
-// `compose`) takes it through the subpath, and `store.ts` loads it for the
-// harness's own file — so a word added here is a word both speak.
+// The list is here and nowhere else — a server composing the harness (@yaks/cli
+// `compose`) imports it through that subpath, and `store.ts` loads it for the
+// harness's own SQLite file — so a component added here is available to both.
 //
-// Every document comes from another package's OWN `./vocab`, never its front
-// door: `@yaks/process` mod.ts starts child processes, and the harness's words
-// should be loadable by anything that wants to know what a harness SAYS,
-// including a browser tab that will never run one.
+// Every document is imported from another package's OWN `./vocab` subpath,
+// never from its main module: `@yaks/process`'s mod.ts starts child processes,
+// and the harness's vocabulary has to be loadable by anything that wants to
+// know which components and tools a harness has, including a browser tab that
+// will never run one.
 
 import { openrouterDoc } from '@yaks/openrouter/vocab'
 import { mcpDoc } from '@yaks/mcp-client/vocab'
@@ -38,18 +39,19 @@ const { home, ...core } = doc.$defs
 export let workspaceDoc: VocabDoc = { title: 'workspace', $defs: { home } }
 export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
 
-/** Every document the harness is made of: the words a transcript is made of
- * (@yaks/session), what it asks for and what answers (@yaks/tools,
- * @yaks/context), what serves it (@yaks/model, @yaks/openai), what a reply
- * carries (@yaks/blob), the programs it starts (@yaks/process), and the work it
- * is doing (@yaks/doc, @yaks/edge, @yaks/task) — over @yaks/kernel's spine,
- * which is where `entity` and the two stamps live, and its marks, which is
- * where `archived` lives: a harness archives a session, it does not own the
- * word for putting a thing away.
+/** Every vocabulary document the harness is made of: the components a
+ * transcript is made of (@yaks/session), what it asks for and what answers
+ * (@yaks/tools, @yaks/context), what serves it (@yaks/model, @yaks/openai),
+ * what a reply carries (@yaks/blob), the programs it starts (@yaks/process),
+ * and the work it is doing (@yaks/doc, @yaks/edge, @yaks/task) — over
+ * @yaks/kernel's `entity` table, which is where `entity` and the two stamps
+ * live, and its marks, which is where `archived` lives: a harness archives a
+ * session, it does not own the component for putting something away.
  *
- * This is a LIST, package by package, because that is the only way a word has
- * one home: no document here says another's words, so every one of them also
- * loads beside this one (`packages/facets_test.ts`). */
+ * This is a LIST, package by package, because that is the only way each
+ * component has exactly one home: no document here redeclares another's
+ * components, so any of them also loads alongside this one
+ * (`packages/facets_test.ts`). */
 export let docs: VocabDoc[] = [
   spineDoc,
   marksDoc,
@@ -74,14 +76,15 @@ export let docs: VocabDoc[] = [
 /** The JSON Schema keywords those documents use. */
 export let keywords: Keywords[] = [edgeKeywords, blobKeywords]
 
-/** Everything the harness speaks, loaded once. */
+/** Every one of those documents, loaded into one vocabulary. */
 export let vocab: Vocab = loadVocab(docs, keywords)
 
-/** The columns a harness graph computes rather than keeps: a transcript's
- * status and a task's — both @yaks/session's, since the lease rung in a task's
- * ladder is the one this graph adds — and a body whose text lives in the blob
- * table. Every part of this facet comes from another package's `./vocab`, so
- * the harness's words load in a browser tab as readily as in the daemon. */
+/** The columns a harness graph computes rather than stores: a transcript's
+ * status and a task's — both from @yaks/session, since the claim this graph
+ * adds is the step in a task's status that it contributes — and a body whose
+ * text lives in the blob table. Every part of this comes from another package's
+ * `./vocab` subpath, so the harness's vocabulary loads in a browser tab as
+ * readily as in the daemon. */
 export let derived = (vocab: Vocab): Derived => ({
   ...sessionColumns(),
   ...blobRead(vocab),

@@ -1,19 +1,26 @@
-// Only keys, ordered ids and coverage. Payloads remain exclusively in RAM.
+// The saved results of server subscriptions: a query key, its members in
+// order, and which columns the server covered for each. Only ids and that
+// coverage are saved here — the entities themselves stay in memory only.
 import type { Eid } from '@yaks/graph'
 import type { Coverage } from '@yaks/sync'
 
-/** An unready, epoch-scoped server answer floor. Never locally re-evaluated. */
+/** One server subscription's result as it was last delivered, scoped to a
+ * server epoch. It is what a reopened watch can show before the server
+ * answers again, and it is never re-evaluated against local data. */
 export type SavedAnswer = {
   key: string
   members: [Eid, Coverage][]
   peers: [Eid, Coverage][]
 }
 
-/** Byte budget includes query text, every id and all coverage metadata. */
+/** The default byte budget, counting the query text, every id and all the
+ * coverage metadata. */
 export const ANSWER_BYTES = 1_000_000
 
-/** Bounded LRU of semantic answers, not a payload cache. Oversized answers are
- * omitted whole rather than misrepresenting a truncated ranking as complete. */
+/** A least-recently-used cache of those results, bounded in bytes. It holds
+ * no entity data. A result too large for the whole budget is dropped rather
+ * than truncated, because a truncated ranking would be indistinguishable from
+ * a complete one. */
 export let answerCache = (limit: number = ANSWER_BYTES): {
   get: (key: string) => SavedAnswer | undefined
   put: (answer: SavedAnswer) => void

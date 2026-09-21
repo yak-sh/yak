@@ -1,24 +1,24 @@
-// The inbound half's plumbing: one socket, the subscriptions held open across
-// it, and the reconnect that puts them back.
+// The receiving side: one WebSocket, the subscriptions held open across it,
+// and the reconnect that opens them again.
 //
 // A socket dies for reasons that have nothing to do with the client — a laptop
-// lid, a deploy, a proxy timeout — so "connected" is a state this module
-// maintains rather than a thing the caller checks. There is ONE reconnect timer
-// per instance: a second one turns a server that is merely slow into a client
-// that hammers it, which is how a wedged server stays wedged.
+// lid, a deploy, a proxy timeout — so "connected" is a state this module keeps
+// track of rather than something the caller checks. There is ONE reconnect
+// timer per instance: a second one turns a server that is merely slow into a
+// client that hammers it, which is how a wedged server stays wedged.
 //
-// Reopening is not the same as never having disconnected. The server holds
-// each subscription's membership per connection, so a fresh subscription
-// answers with the set as it stands and says nothing about what left while the
-// client was away. This module therefore remembers each subscription's members
-// itself and treats the first frame after a reopen as a RESET: whatever it held
-// and did not hear again is reported as gone.
+// Reopening is not the same as never having disconnected. The server tracks
+// each subscription's membership per connection, so a subscription opened again
+// answers with the set as it stands and reports nothing about what left while
+// the client was away. This module therefore tracks each subscription's members
+// itself and treats the first frame after a reopen as a RESET: whatever it was
+// holding and did not hear about again is reported as gone.
 
 import type { Bundle, Eid } from '@yaks/graph'
 import type { Coverage } from './coverage.ts'
 
 /** The part of a WebSocket this package uses. The standard `WebSocket`
- * satisfies it, and so does any stand-in a test or a host provides. */
+ * satisfies it, and so does any stand-in a test or a caller provides. */
 export type Socket = {
   /** `0` connecting, `1` open, `2` closing, `3` closed */
   readyState: number
@@ -41,8 +41,8 @@ export type Connect = (url: string) => Socket
  * and fires the reconnect when it wants one. */
 export type Timer = (fn: () => void, ms: number) => void
 
-/** What a subscriber asks for: a query line, or `true` for the raw feed of
- * every committed batch. */
+/** What a subscriber asks for: a query, or `true` for the raw feed of every
+ * committed write. */
 export type Ask = string | true
 
 /** One push from the server: the entities now in the set, the ones that left
@@ -52,7 +52,8 @@ export type Frame = {
   transientReset?: string[]
   /** the subscription this frame answers */
   id: string
-  /** the entities now in the set (whole), or the applied batch for a raw feed */
+  /** the entities now in the set (whole rows), or, for a raw feed, the
+   * bundles as applied */
   bundles?: Bundle[]
   /** Per-row coverage for result bundles. Omitted entries are full rows. Each delivery
    * replaces that role's coverage. Adapters must repeat projected coverage on
@@ -73,9 +74,9 @@ export type Frame = {
    * writer — or by that writer's connection closing — arrives as the component
    * set to `null`.
    *
-   * Not to be confused with `peers` above, which is this package's older word
-   * for a join's payload riders. The two are unrelated; this one is the
-   * `sync: peers` tier.
+   * Not to be confused with `peers` above, which is this package's older name
+   * for a join's payload riders. The two are unrelated; this one carries the
+   * `sync: peers` components.
    */
   relay?: Bundle[]
   /** why the subscription was refused, when it was */
@@ -84,7 +85,7 @@ export type Frame = {
   reset?: boolean
 }
 
-/** The socket's half of a sync: what it needs to be told, and what it reports. */
+/** The socket's half of a sync: what it has to be told, and what it reports. */
 export type WireOpts = {
   /** the server's base URL — `https://…` or `http://…` */
   url: string
@@ -104,21 +105,21 @@ export type WireOpts = {
   report: (err: unknown) => void
 }
 
-/** A live socket with subscriptions on it. */
+/** A live WebSocket with subscriptions held open on it. */
 export type Wire = {
   /** open the socket if it is not already opening or open */
   open: () => void
-  /** subscribe (or re-point an existing id) and answer with the id */
+  /** subscribe (or re-point an existing id); returns the id */
   subscribe: (query: Ask, id?: string) => string
   /** drop one subscription */
   unsubscribe: (id: string) => void
   /**
-   * Hand a batch of `sync: peers` components to the server to RELAY. It is the
-   * one write that crosses this seam, and it crosses here because its lifetime
-   * is this socket's: the server holds it under this connection and clears it
-   * when the connection closes. A relay frame sent while the socket is down is
-   * DROPPED, never queued — ephemeral state has no backlog worth replaying,
-   * and the next write carries the current value.
+   * Send `sync: peers` components to the server to RELAY. It is the only write
+   * sent over the socket rather than posted, and it goes here because its
+   * lifetime is this socket's: the server holds it under this connection and
+   * clears it when the connection closes. A relay message sent while the socket
+   * is down is DROPPED, never queued — this state is short-lived, there is no
+   * backlog worth replaying, and the next write carries the current value.
    */
   relay: (bundles: Bundle[]) => void
   /** whether the socket is open right now */
@@ -131,8 +132,8 @@ export type Wire = {
 export let backoff = (wait: number, most: number): number =>
   Math.min(wait * 2, most)
 
-// `https://shelf.example/api` → `wss://shelf.example/api/ws`. The socket lives
-// beside the routes on the same origin, so the scheme is the only edit.
+// `https://shelf.example/api` → `wss://shelf.example/api/ws`. The socket is
+// served from the same origin as the HTTP routes, so only the scheme changes.
 let wsUrl = (url: string): string =>
   `${url.replace(/^http/, 'ws').replace(/\/$/, '')}/ws`
 
@@ -145,7 +146,7 @@ let global = (): Connect | undefined => {
 
 /**
  * The socket half of a sync: subscriptions that survive a disconnection, one
- * reconnect timer, and a reset frame after each reopen so a client can tell
+ * reconnect timer, and a reset frame after each reopen so a client can work out
  * what left the set while it was away.
  */
 export let wire = (opts: WireOpts): Wire => {
@@ -167,9 +168,9 @@ export let wire = (opts: WireOpts): Wire => {
     if (socket && socket.readyState == OPEN) socket.send(JSON.stringify(msg))
   }
 
-  // A frame, with the reopen bookkeeping done: a reset frame reports what the
-  // client held and did not hear about as gone, and every frame keeps the
-  // membership set current so the NEXT reset can do the same.
+  // A frame, with the reopen bookkeeping done: a reset frame reports whatever
+  // the client was holding and did not hear about again as gone, and every
+  // frame keeps the membership set current so the NEXT reset can do the same.
   let landed = (frame: Frame) => {
     // An unsubscribe can race a frame already in transit. It must not refill
     // the cache or recreate membership bookkeeping after its last owner left.
@@ -206,9 +207,9 @@ export let wire = (opts: WireOpts): Wire => {
     socket = s
     s.addEventListener('open', () => {
       if (socket != s || closed) return
-      wait = first // the server is reachable: the next drop retries promptly
+      wait = first // the server is reachable: retry promptly after the next drop
       for (let [id, query] of asks) {
-        resetting.add(id) // its answer is the whole set, as it now stands
+        resetting.add(id) // its answer will be the whole set, as it now stands
         s.send(JSON.stringify({ subscribe: query, id }))
       }
     })

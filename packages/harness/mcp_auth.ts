@@ -13,7 +13,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { home } from './paths.ts'
 
 /** A remote tool wearing the connection that listed it: `reply` is that
- * server's own door, captured, so an issued call never moves to a transport
+ * server's own endpoint, recorded, so an issued call never moves to a transport
  * opened after it. */
 export type Remote = Tool & {
   reply: (args: Record<string, unknown>) => Promise<CallToolResult>

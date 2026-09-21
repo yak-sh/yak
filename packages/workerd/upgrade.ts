@@ -1,11 +1,12 @@
-// The one step no web standard covers, in the one file that knows a runtime.
-// Everywhere else a socket is just a `WebSocket`; making one out of a request
-// is the host's own trick, and Cloudflare's is `WebSocketPair`: a Worker keeps
-// one half and hands the other back on a 101 response.
+// The one step no web standard covers, in the one file that depends on a
+// specific runtime. Everywhere else a socket is just a `WebSocket`; creating
+// one from a request is runtime-specific, and Cloudflare's way is
+// `WebSocketPair`: a Worker keeps one half and returns the other on a 101
+// response.
 //
 // The global is LOOKED UP rather than imported, so this module loads and
-// type-checks anywhere — off Workers it throws when called, which is the
-// honest answer for a package named after the runtime it needs.
+// type-checks anywhere — outside Workers it throws when called, which is the
+// right behaviour for a package named after the runtime it requires.
 
 import type { Socket, Upgrade } from '@yaks/api'
 
@@ -16,10 +17,10 @@ export type Accepting = Socket & {
   accept: () => void
 }
 
-/** `new WebSocketPair()` — an object of two sockets, client first. */
+/** `new WebSocketPair()` — an object holding two sockets, client first. */
 type Pair = new () => Record<string, Accepting>
 
-// This runtime's `WebSocketPair`, or null where there is none.
+// This runtime's `WebSocketPair`, or null if it has none.
 let found = (): Pair | null => {
   let host: unknown = globalThis
   if (!host || typeof host != 'object' || !('WebSocketPair' in host)) {
@@ -30,16 +31,16 @@ let found = (): Pair | null => {
   return typeof make == 'function' ? make as Pair : null
 }
 
-// The 101 hands the client half back. `webSocket` is Cloudflare's own addition
-// to `ResponseInit` — no standard has a word for it, and the half we hold is
-// described here only by the little this package uses — so the shape is
-// asserted at this one line, and nowhere else.
+// The 101 returns the client half. `webSocket` is Cloudflare's own addition to
+// `ResponseInit` — no standard declares it, and the half this package keeps is
+// typed here only by the few members it uses — so the type is asserted on this
+// one line, and nowhere else.
 let handing = (client: unknown): ResponseInit =>
   ({ status: 101, webSocket: client }) as ResponseInit
 
 /**
  * Cloudflare's WebSocket upgrade, as an
- * {@link https://jsr.io/@yaks/api/doc/~/Upgrade | Upgrade}: mint a
+ * {@link https://jsr.io/@yaks/api/doc/~/Upgrade | Upgrade}: create a
  * `WebSocketPair`, accept the server half, and answer 101 with the client
  * half. Pass it to `api()` on a Worker, or let {@link worker} pass it for you.
  *
@@ -50,7 +51,7 @@ let handing = (client: unknown): ResponseInit =>
  * let handler = api({ graph, upgrade: workerUpgrade })
  * ```
  *
- * It throws off the Workers runtime, where `WebSocketPair` does not exist.
+ * It throws outside the Workers runtime, where `WebSocketPair` does not exist.
  */
 export let workerUpgrade: Upgrade = (_request) => {
   let Pair = found()

@@ -1,5 +1,6 @@
-/** Ordered RPC and subscription frames over a Worker or MessagePort.
- * Ports are owned by the caller; closing the link removes its listeners.
+/** Ordered request/reply calls and subscription frames over a Worker or a
+ * MessagePort. The port belongs to the caller; closing the link removes the
+ * listeners it added but does not close the port.
  */
 import type { Frame } from './socket.ts'
 export type Port = Pick<
@@ -15,11 +16,12 @@ type Packet = {
   frame?: Frame
   closed?: boolean
 }
-/** One end of a link: what it has carried, and the three things it can do. */
 export type RequestOptions = {
-  /** Override the link deadline; null waits until reply or disconnect. */
+  /** Override the link's timeout for this request; `null` waits until a reply
+   * or a disconnection. */
   timeout?: number | null
 }
+/** One end of a link: what it has carried, and the three things it can do. */
 export type PortLink = {
   stats: { sent: number; received: number; frames: number }
   request: (
@@ -35,7 +37,7 @@ export let portLink = (port: Port, opts: {
   frame?: (frame: Frame) => void
   report?: (error: unknown) => void
   timeout?: number
-  /** Maximum outstanding requests before callers must wait. */
+  /** Maximum outstanding requests before a further one is rejected. */
   maxPending?: number
 } = {}): PortLink => {
   let next = 0, closed = false

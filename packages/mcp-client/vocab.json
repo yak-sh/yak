@@ -20,7 +20,7 @@
         },
         "credential": {
           "type": "string",
-          "description": "Optional host credential-store reference, never a token."
+          "description": "Optional reference into the application's credential store, never a token."
         },
         "allow": {
           "type": "string",

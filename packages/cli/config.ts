@@ -1,67 +1,70 @@
 // The config file, read. It is the one statement of where a graph IS: the
-// SQLite file, the plugins that speak over it, and who the box writes as.
+// SQLite file, the plugins that read and write it, and how the host behaves.
 //
-// A config names a GRAPH, not a server. `yak --config yak.json task list`
-// opens that file, composes those plugins and runs the tool in this process —
-// SQLite in WAL mode takes as many writers as there are `yak` lines, so
-// nothing has to be listening for a command line to work. `yak serve` is one
-// more process over the same file, the one that answers HTTP.
+// A config file names a GRAPH, not a server. `yak --config yak.json task list`
+// opens that file, imports those plugins and runs the tool in this process —
+// SQLite in WAL mode accepts as many writers as there are `yak` commands
+// running, so nothing has to be listening for a command line to work.
+// `yak serve` is one more process over the same file, the one that serves HTTP
+// requests.
 //
-// That is why this is its own module. A line that only needs to know WHERE
-// must not import the host — serve.ts pulls in every plugin a config names,
-// which is a cost a `yak login` should not pay. So the config is read here, by
-// a module that imports nothing.
+// That is why this is its own module. A command that only needs to know WHERE
+// the graph is must not import serve.ts, which pulls in every plugin a config
+// names — a cost `yak login` should not pay. So the config is read here, by a
+// module that imports nothing.
 
-/** What a config says TO one plugin: its own options, handed to each facet
- * factory beside the host. A value written `{"env": "NAME"}` is read out of
- * the environment every time it is asked for, so a config names a secret
- * without holding one — and a facet that re-reads its options sees a key
- * exported after the host booted. */
+/** The options a config passes to one plugin, given to each of that plugin's
+ * exported factories as the second argument, after the host. A value written
+ * `{"env": "NAME"}` is read from the environment every time it is accessed, so
+ * a config names a secret without storing one — and a factory that re-reads
+ * its options picks up a variable exported after the host started. */
 export type Options = Record<string, unknown>
 
 /** A plugin a config names: a bare specifier, or one with options. */
 export type Plug = string | { use: string; with?: Options }
 
-/** What a config file says: where the graph lives, and what speaks over it. */
+/** A config file: where the graph lives, and what reads and writes it. */
 export type Config = {
-  /** the SQLite file, `:memory:` for a graph that lasts as long as the
+  /** the SQLite file, or `:memory:` for a graph that lasts as long as the
    * process. Required — a host never guesses a database. */
   db?: string
-  /** the plugin modules, by import specifier. A relative one is resolved
-   * against the config file itself; `{use, with}` names one with options. */
+  /** the plugin packages, by import specifier. A relative specifier is
+   * resolved against the config file itself; `{use, with}` names one with
+   * options. */
   plugins?: Plug[]
   /** what `yak serve` listens on (default 8787) */
   port?: number
   /** which interface it binds (default Deno's own) */
   hostname?: string
-  /** whether the store mints human numbers beside eids. OPT-IN: unsaid, no
-   * entity gets one, because a number is for a person to type and most hosts
-   * have nobody typing. `{ except: [comp, …] }` turns them on while keeping a
-   * component's entities off the line — what a host composing @yaks/archetype
-   * wants, since a descriptor is bookkeeping and nobody ever types its
-   * number. */
+  /** whether the store mints a short human-readable number beside each entity
+   * id. OPT-IN: left out, no entity gets one, because a number exists for a
+   * person to type and most hosts have nobody typing. `{ except: [comp, …] }`
+   * turns them on for everything except entities carrying those components —
+   * what a host using @yaks/archetype wants, since a descriptor is bookkeeping
+   * nobody refers to by number. */
   numbers?: boolean | { except: string[] }
-  /** adopt the `num` a batch's identity carries instead of minting one — what
-   * a store seeded from another store's export needs, and never what a host
-   * serving clients wants (default false) */
+  /** reuse the `num` an incoming entity already carries instead of minting a
+   * new one — what a store seeded from another store's export needs, and never
+   * what a host serving clients wants (default false) */
   adopt?: boolean
-  /** what the MCP door calls itself (default `yak`) */
+  /** what the MCP server calls itself (default `yak`) */
   name?: string
-  /** how long this process's hold on a DUTY stands before another process may
-   * take it, in milliseconds (default 30_000). A holder still doing the work
-   * pushes it out on a beat; one that was killed leaves a lease that lapses,
-   * which is how a second long-lived process takes over without anybody
-   * reaping anything. */
+  /** how long this process's lease on a background job stands before another
+   * process may take it over, in milliseconds (default 30_000). A holder still
+   * doing the work renews it on a timer; one that was killed leaves a lease
+   * that expires, which is how a second long-running process takes over
+   * without anybody having to reap the first. */
   lease?: number
 }
 
-/** Where a box keeps the config for its own graph. */
+/** Where a machine keeps the config for its own graph. */
 export let OWN_CONFIG = '.yak/yak.json'
 
-/** The config a line opens: what it said, else `$YAK_CONFIG`, else the one
- * this box keeps for its own graph. A box that HAS a graph is the ordinary
- * case, so a bare `yak task list` there answers from it rather than reaching
- * for a door it was never told about. Nothing there is nothing said. */
+/** The config a command opens: the path it was given, else `$YAK_CONFIG`,
+ * else the one this machine keeps for its own graph. A machine that HAS a
+ * graph is the ordinary case, so a bare `yak task list` there reads from it
+ * rather than reaching for a remote server it was never told about. No file
+ * there means no config. */
 export let configPath = (
   said?: string,
   env: (name: string) => string | undefined = Deno.env.get,
@@ -71,7 +74,8 @@ export let configPath = (
   let home = env('HOME')
   if (!home) return undefined
   let own = `${home}/${OWN_CONFIG}`
-  // A line may be running without read permission at all; that is no config.
+  // The command may be running without read permission at all; that is no
+  // config.
   try {
     return Deno.statSync(own).isFile ? own : undefined
   } catch {
@@ -79,22 +83,23 @@ export let configPath = (
   }
 }
 
-// A specifier the config file owns — `./plugins/mail`, `/srv/mail` — is
-// resolved against the config, so a config is movable and a bare `@yaks/…` is
-// left to the import map. It names a PACKAGE, never a file: the facets are its
-// subpaths, and only a package has those.
+// A specifier belonging to the config file — `./plugins/mail`, `/srv/mail` —
+// is resolved against the config, so a config file is movable and a bare
+// `@yaks/…` is left to the import map. It names a PACKAGE, never a file: a
+// plugin's modules are its subpaths, and only a package has those.
 let near = (spec: string, base: URL): string =>
   spec.startsWith('.') || spec.startsWith('/') ? new URL(spec, base).href : spec
 
-/** What a plugin entry names, either way it is written. */
+/** The package a plugin entry names, either way it is written. */
 export let used = (plug: Plug): string =>
   typeof plug == 'string' ? plug : plug.use
 
-/** What it was given, either way it is written. */
+/** The options it was given, either way it is written. */
 export let given = (plug: Plug): Options =>
   typeof plug == 'string' ? {} : plug.with ?? {}
 
-// The name `{"env": "NAME"}` says, and nothing else said in that object.
+// The variable name in `{"env": "NAME"}`, when the object holds nothing
+// else.
 let named = (value: unknown): string | undefined => {
   let said = value as Record<string, unknown> | null
   return said && typeof said == 'object' && typeof said.env == 'string' &&
@@ -103,17 +108,18 @@ let named = (value: unknown): string | undefined => {
     : undefined
 }
 
-// `{"env": "NAME"}` anywhere in an options object is the environment's value
-// AT THE MOMENT IT IS ASKED FOR — the one thing a config file cannot hold in
-// the open, and the one thing that can arrive after the host is already up. A
-// facet that re-reads its options on each pass therefore starts the moment a
-// key is exported, rather than needing the process restarted for a config that
-// never changed. A name nothing exports reads as undefined rather than as a
-// guess, so the plugin says in its own words what it is waiting for.
+// `{"env": "NAME"}` anywhere in an options object reads the environment
+// variable AT THE MOMENT THE VALUE IS ACCESSED — the one thing a config file
+// cannot hold in the open, and the one thing that can arrive after the host is
+// already running. A plugin that re-reads its options on each pass therefore
+// starts the moment a key is exported, rather than needing the process
+// restarted for a config that never changed. A variable nothing exports reads
+// as undefined rather than as a guess, so the plugin reports in its own words
+// what it is waiting for.
 let sourced = (value: unknown): unknown => {
   let name = named(value)
-  // A whole options object written `{"env": …}` has no parent to hang the
-  // reading off, so it is read here and once.
+  // A whole options object written `{"env": …}` has no parent object to
+  // define a getter on, so it is read here, once.
   if (name) return Deno.env.get(name)
   if (!value || typeof value != 'object') return value
   let out = (Array.isArray(value) ? [] : {}) as Record<string, unknown>
@@ -161,5 +167,5 @@ export let read = (path: string): Config => {
   }
 }
 
-/** The default port `yak serve` binds. */
+/** The default port `yak serve` listens on. */
 export let PORT = 8787

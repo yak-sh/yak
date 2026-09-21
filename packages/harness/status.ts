@@ -1,4 +1,5 @@
-/** Sidebar indicators select graph facets by query specificity. */
+/** Sidebar indicators choose a component to show by how specific its query
+ * is. */
 import type { Bundle, Comp } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { define, type Renderer } from '@yaks/render'

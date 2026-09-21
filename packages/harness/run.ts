@@ -33,22 +33,23 @@ import { collecting, going, homes, sweep } from './worktrees.ts'
 import { render as tree } from '@yaks/preact'
 import type { VNode } from 'preact'
 import { transcriptViews } from './transcript.ts'
-// The harness running: the rows every transcript is served from, the daemon
-// over them, and the four things a door asks for — start one, say something to
-// one, list them, read one back.
+// The harness running: the rows every transcript is read from, the daemon over
+// them, and the four operations a caller needs — start a session, send it a
+// message, list sessions, read one back.
 //
 // Everything in and out of here is a BUNDLE or a QUERY. Nothing writes SQL,
-// nothing reads a table, and no state lives in this process that the graph
-// does not already hold: what is running is `.session.status=running`, what
-// was said is `.entry.session=<s>`, and the harness could be handed the
-// fleet's graph tomorrow with none of this changing. The one thing it keeps in
-// memory is the daemon's queue, which is not state but a place in a queue.
+// nothing reads a table, and no state lives in this process that the graph does
+// not already hold: which sessions are running is `.session.status=running`,
+// what was written is `.entry.session=<s>`, and the harness could be pointed at
+// the fleet's graph tomorrow with none of this changing. The one thing it keeps
+// in memory is the daemon's queue, which is a position in a queue rather than
+// state.
 //
-// The seed is idempotent because its ids are DERIVED from the names — a
-// provider is `provider:openai`, a model `model:gpt-6-astra`, a tool
-// `tool:shell` — so a second boot patches the rows the first one wrote instead
-// of minting a second set. That is what makes `using{model}` on an entry mean
-// the same thing across restarts.
+// Seeding is idempotent because the ids are DERIVED from the names — a provider
+// is `provider:openai`, a model `model:gpt-6-astra`, a tool `tool:shell` — so a
+// second startup patches the rows the first one wrote instead of creating a
+// second set. That is what makes `using{model}` on an entry mean the same thing
+// across restarts.
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import { MODEL, type Model, PROVIDER, TOOL } from '@yaks/model'
@@ -72,12 +73,12 @@ import { render } from '@yaks/text'
 import { dbPath, type Harness, open } from './store.ts'
 import { harnessTools } from './tools.ts'
 
-/** The model the harness asks when nobody says otherwise. */
+/** The model the harness uses when nothing names another. */
 export let ASTRA = 'gpt-6-astra'
 
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
-/** The eid a name is seeded under — the same one, every boot. */
+/** The eid a name is seeded under — the same one on every startup. */
 export let idOf = (comp: string, name: string): Eid => `${comp}:${name}`
 
 /** The provider, model and tool rows a transcript is served from, as one
@@ -337,10 +338,10 @@ export let agent = (opts: Opts = {}): Agent => {
     model: modelEid(provider, name),
   }
   let entries = (session: Eid) => transcript(h.g, session)
-  // What signs a write this door makes: the transcript it is about. The
-  // harness runs for whoever is at the keyboard and holds no entity for them,
-  // so the instrument is said and the actor is left unclaimed rather than
-  // guessed; a model turn signs itself (@yaks/session react.ts).
+  // What attributes a write made here: the transcript it is about. The harness
+  // runs for whoever is at the keyboard and holds no entity for them, so the
+  // instrument is recorded and the actor is left unset rather than guessed; a
+  // model turn attributes itself (@yaks/session react.ts).
   let through = (session: Eid) => ({ via: session })
 
   let migrationError: Error | undefined
@@ -610,8 +611,7 @@ export let sessionTitle = async (
   )
 }
 
-/** What a transcript is called on a listing line: the first words anybody said
- * to it. */
+/** What a transcript is called in a listing: the first message sent to it. */
 export let titleOf = (entries: Bundle[]): string =>
   String(
     comp(

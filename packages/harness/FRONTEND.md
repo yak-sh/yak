@@ -32,7 +32,7 @@ return read-only query projections; the frontend does **not** insert copies of
 session/task/entry entities into its RAM graph. No transient state is inserted
 into the durable harness graph.
 
-## Pilot findings / unfinished larger seam
+## Pilot findings / unfinished larger refactor
 
 This is **not** the finished ideal graph frontend yet:
 
@@ -83,8 +83,8 @@ adapter, not a graph dependency in TUI components.
 This first slice uses a temporary plain **source view**, preserving
 draft/Markdown bytes rather than attempting to reverse-map styled terminal
 cells. It supports one item at a time (`[`/`]` choose neighbors), not cross-item
-ranges. This exposes a remaining package seam: rendered-cell selection needs
-source-span metadata in portable Markdown renderers, plus
+ranges. This exposes a remaining boundary between packages: rendered-cell
+selection needs source-span metadata in portable Markdown renderers, plus
 grapheme/display-column mapping. Do not infer source offsets from ANSI or
 eagerly render history to paper over that gap.
 
@@ -128,11 +128,11 @@ requested with `?`. Modified legacy actions remain aliases, not a second mode.
 
 ## Local draft recovery
 
-The terminal host opens a `@yaks/client` Vault before mounting the UI. Only
+The terminal frontend opens a `@yaks/client` Vault before mounting the UI. Only
 `savedDraft`, `pendingDraft`, and `recovery` enter it; domain replicas, prompt
 context, visual selections, and credentials do not. `sync` and `durable` are
-core vocabulary keywords, so a component that says neither silently syncs to the
-server and is kept forever.
+core vocabulary keywords, so a component that declares neither silently syncs to
+the server and is kept forever.
 
 Drafts include source text, cursor, and message/task mode for each session and
 for the unsent new-session composer. The last selected session and local yank

@@ -102,10 +102,11 @@ const shellCommand: Renderer['render'] = (b, h, ctx) => {
   return body.render(b, h, { ...ctx, full: true })
 }
 
-// More predicates beat the generic entry/content rows. Equal facet scores use
-// registration order: failures outrank tool results, which outrank prose.
-// Older content-only receipts have no author facet; their durable delivery IDs
-// keep them out of the user-message fallback. Other machine facets win ties.
+// A view matching more predicates beats the generic entry/content rows. Views
+// with equal scores fall back to registration order: failures outrank tool
+// results, which outrank prose. Older content-only receipts carry no author
+// component; their durable delivery IDs keep them out of the user-message
+// fallback. Other machine-written components win ties.
 export let transcriptViews = define([
   {
     view: 'Transcript',

@@ -1,20 +1,20 @@
-// `yak apply`: graph_apply with a door for a stream of bundles.
+// `yak apply`: `graph_apply` fed from a stream of bundles.
 //
-// A batch is atomic, and a file with fifty thousand bundles in it is not a
-// batch anybody wants to be atomic — it is a load. So NDJSON on stdin, one
-// bundle per line, goes over in chunks: each chunk is its own batch, applied
-// or refused whole, and a line that is not JSON is named by its number rather
-// than swallowing the file.
+// One batch is applied in one transaction, and a file with fifty thousand
+// bundles in it is not something anybody wants in one transaction — it is a
+// bulk load. So NDJSON on stdin, one bundle per line, is sent in chunks: each
+// chunk is its own transaction, applied or rejected whole, and a line that is
+// not JSON is reported by its line number rather than swallowing the file.
 //
-// A JSON array reads the same way, because that is what the tool takes anyway
-// and a person pasting one should not have to reformat it.
+// A JSON array is read the same way, because that is the shape the tool takes
+// anyway and a person pasting one should not have to reformat it.
 
-/** How many bundles ride in one `graph_apply`. */
+/** How many bundles are sent in one `graph_apply` call. */
 export let CHUNK = 50
 
 /**
  * The bundles in a body: one JSON value per line, or a single JSON array.
- * Blank lines are nothing.
+ * Blank lines are ignored.
  *
  * ```ts
  * bundlesIn('{"a":1}\n\n{"b":2}\n') // [{a: 1}, {b: 2}]
@@ -41,7 +41,7 @@ export let bundlesIn = (body: string): unknown[] => {
 }
 
 /**
- * A list cut into batches.
+ * A list split into fixed-size chunks.
  *
  * ```ts
  * chunks([1, 2, 3], 2) // [[1, 2], [3]]

@@ -1,19 +1,21 @@
 /**
- * @yaks/harness — an agent harness with nothing under it but a file.
+ * @yaks/harness — an agent harness with nothing under it but a SQLite file.
  *
  * A session in the fleet is a process the server spawns, watched by a daemon,
  * writing into the live graph. This package is the same session with all three
- * removed: one SQLite file it makes itself, the {@link agent} loop in this
- * process, and no server anywhere. It is the composition, not new machinery —
+ * removed: one SQLite file it creates itself, the {@link agent} loop in this
+ * process, and no server anywhere. It composes existing packages rather than
+ * adding machinery —
  *
  * ```
  * open()          the file, the vocabulary, the plugins        (./store.ts)
- * harnessTools()  the shell (@yaks/process) + the graph tier (@yaks/mcp)
- * agent()         the seed, the daemon (@yaks/session), the doors (./run.ts)
- * tools           the words, over @yaks/cli                      (./cli.ts)
+ * harnessTools()  the shell (@yaks/process) + the graph tools (@yaks/mcp)
+ * agent()         the seed rows, the daemon (@yaks/session), and the
+ *                 operations a caller needs                      (./run.ts)
+ * tools           the commands, over @yaks/cli                   (./cli.ts)
  * ```
  *
- * — and every one of those four lines is a package doing its own job.
+ * — and each of those four lines is a package doing its own job.
  *
  * ```ts
  * import { agent, open } from '@yaks/harness'
@@ -29,8 +31,9 @@
  * so the same rows move into the fleet's graph the day the harness is pointed
  * at it, with no export step and no second model of anything.
  *
- * The command is the other export (`deno run -A jsr:@yaks/harness/bin`):
- * `new`, `send`, `ls`, `show`, `models`.
+ * The command-line program is the other export
+ * (`deno run -A jsr:@yaks/harness/bin`): `new`, `send`, `ls`, `show`,
+ * `models`.
  *
  * @module
  */

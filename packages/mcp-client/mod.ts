@@ -1,5 +1,5 @@
 import { extractWWWAuthenticateParams } from '@modelcontextprotocol/sdk/client/auth.js'
-/** MCP tools over Streamable HTTP, independent of a session or UI host. */
+/** MCP tools over Streamable HTTP, with no dependency on a session or a UI. */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import {
@@ -27,7 +27,8 @@ const schemas: jsonSchemaValidator = {
   },
 }
 
-/** Host-wide trusted server configuration. Credentials are resolved separately. */
+/** A trusted server's configuration, shared across the application.
+ * Credentials are resolved separately. */
 export type Server = {
   name: string
   /** Friendly display label; defaults to name. */
@@ -37,9 +38,9 @@ export type Server = {
   url: string
   /** Exact remote names; omission exposes all discovered tools. */
   allow?: string[]
-  /** Private credential reference interpreted by the host. */
+  /** Private credential reference, interpreted by the application. */
   credential?: string
-  /** Explicit OAuth settings; tokens remain in host storage. */
+  /** Explicit OAuth settings; tokens stay in the application's own storage. */
   oauth?: {
     redirectUrl?: string
     clientId?: string
@@ -290,11 +291,12 @@ export const connect = (server: Server, options: Options = {}): Connection => {
         idempotent: t.annotations?.idempotentHint,
         openWorld: t.annotations?.openWorldHint,
         meta: { server: server.name, remoteName: t.name },
-        // A tool on another server answers in ITS words, and this graph holds
-        // words as prose: the reply's text blocks, and its structured content
-        // where it sent any, as one entity saying which call produced it. A
-        // host that needs the reply whole — artifacts, resources, the error
-        // flag — asks the connection's own `call` instead.
+        // A tool on another server replies in the MCP result format, and this
+        // graph stores text: the reply's text blocks, plus its structured
+        // content when it sent any, written as one entity recording which call
+        // produced it. A caller that needs the reply whole — artifacts,
+        // resources, the error flag — calls the connection's own `call`
+        // instead.
         run: async (_bundles, ctx) => {
           let reply = await call(t.name, ctx.args)
           let blocks = (reply.content ?? []) as Record<string, unknown>[]
@@ -326,7 +328,8 @@ export const connect = (server: Server, options: Options = {}): Connection => {
   }
 }
 
-/** Shared configured connections, usable by CLI, graph tools, or other hosts. */
+/** Several configured connections at once, usable from a CLI, from graph
+ * tools, or from anywhere else. */
 export const clients = (
   servers: readonly Server[],
   options: Options = {},

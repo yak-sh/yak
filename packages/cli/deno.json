@@ -7,7 +7,7 @@
     "./serve": "./serve.ts"
   },
   "license": "Apache-2.0",
-  "description": "Builds the yak command's subcommands from the tool schemas of the graph a config names, or of an MCP server, read at runtime, plus any commands the program hands it.",
+  "description": "The yak command line: it opens the graph a config file names, or connects to an MCP server, and turns every tool it finds there into a subcommand parsed through that tool's own input schema.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

@@ -1,4 +1,4 @@
-/** Thin session integration over @yaks/git's host checkout model. */
+/** A thin layer connecting sessions to @yaks/git's local checkout model. */
 import { checkoutAt, createWorktree, discover } from '@yaks/git/host'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { ChildLimits } from '@yaks/session'
@@ -8,9 +8,9 @@ export { workspaceDoc } from './vocab.ts'
 
 let row = async (g: Graph, eid: string) =>
   (await g.storage.tx((tx) => tx.get([eid])))[0]
-/** Where a worktree entity stands — the ONE door anything here asks through,
- * so a checkout collected while its session was over is cut again before
- * anything runs in it (worktrees.ts `restore`). */
+/** Where a worktree entity is checked out — the ONE function everything here
+ * goes through, so a worktree removed while its session was over is created
+ * again before anything runs in it (worktrees.ts `restore`). */
 let treeAt = async (g: Graph, eid: string): Promise<string> => {
   let tree = await row(g, eid)
   if (!tree?.worktree) throw new Error('not a worktree entity: ' + eid)

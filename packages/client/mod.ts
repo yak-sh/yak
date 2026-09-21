@@ -1,16 +1,16 @@
 /**
- * @yaks/client — the frontend tier for a client
- * {@link https://jsr.io/@yaks/graph | @yaks/graph}: one call assembles it, a
- * query is a value that changes, and what belongs to this browser is kept in
- * IndexedDB.
+ * @yaks/client — everything a browser page needs around a
+ * {@link https://jsr.io/@yaks/graph | @yaks/graph} graph: one call assembles
+ * it, a query is a value that changes, and what belongs to this browser is
+ * stored in IndexedDB.
  *
  * The pieces already exist — a map to hold entities
- * ({@link https://jsr.io/@yaks/ram | @yaks/ram}), a wire to a server
- * ({@link https://jsr.io/@yaks/sync | @yaks/sync}), a query evaluator with no
- * database under it ({@link https://jsr.io/@yaks/match | @yaks/match}). This
- * package is the three things a page still has to add: the assembly, the
- * reactivity, and somewhere durable to put the state the server will never send
- * back.
+ * ({@link https://jsr.io/@yaks/ram | @yaks/ram}), an HTTP and WebSocket
+ * connection to a server ({@link https://jsr.io/@yaks/sync | @yaks/sync}), a
+ * query evaluator with no database under it
+ * ({@link https://jsr.io/@yaks/match | @yaks/match}). This package adds the
+ * three things a page still needs: the assembly, the reactivity, and somewhere
+ * durable to put the state the server will never send back.
  *
  * ## One call
  * ```ts
@@ -29,10 +29,11 @@
  * ```
  *
  * ## A query is a value
- * {@link Watch} is the reading half: `value` is the answer now, `subscribe`
- * hears the next one, `close` stops. It is framework-free — and it is a signal
- * when you hand {@link ClientOpts.signal} a signal factory, and React's
- * `useSyncExternalStore` when you hand it `subscribe` and `() => value`.
+ * {@link Watch} is the reading half: `value` is the result now, `subscribe`
+ * is called with the next one, `close` stops it. It depends on no framework —
+ * it becomes a signal when you pass {@link ClientOpts.signal} a signal
+ * factory, and it drives React's `useSyncExternalStore` when you pass that
+ * hook `subscribe` and `() => value`.
  *
  * ```ts
  * let dinners = box.watch('.course=dinner&.serves>4')
@@ -41,21 +42,24 @@
  * ```
  *
  * With a `url`, identical watches share one server subscription until the last
- * handle closes. `ready` is false until its first answer lands, even if cached
- * rows can paint, and false again on disconnect. Both `value` and `ready` are
- * reactive; listeners hear readiness changes even for an empty answer.
+ * handle closes. `ready` is false until the first result from the server
+ * arrives, even when cached rows are already on screen, and false again on
+ * disconnect. Both `value` and `ready` are reactive; listeners are called when
+ * readiness changes, even if the result is empty.
  *
- * ## Three tiers, one apply()
- * A component's `sync` and `durable` keywords say where its state lives:
- * `wire` is the server's and syncs, `local` is this browser's and is kept in
- * IndexedDB ({@link idb}), `none` dies with the tab. All three ride the same
- * `apply()`, and the local tier is back in the graph by the time
+ * ## Three places state lives, one apply()
+ * A component's `sync` and `durable` keywords in the vocabulary decide where
+ * its state is kept: `sync: server` is the server's and is synchronized with
+ * it; `sync: none` with `durable: forever` belongs to this browser and is
+ * stored in IndexedDB ({@link idb}); any other `sync: none` component is held
+ * in memory and disappears with the tab. All three are written through the
+ * same `apply()`, and what IndexedDB held is back in the graph by the time
  * {@link Client.ready} resolves.
  *
- * ## Nothing is imported from a platform
- * `fetch`, `WebSocket` and `indexedDB` are all looked up through options with
- * the global as the default, so the whole package runs — and is tested — in one
- * process with no browser at all.
+ * ## Nothing is imported from a runtime
+ * `fetch`, `WebSocket` and `indexedDB` are all read from options that default
+ * to the global, so the whole package runs — and is tested — in one process
+ * with no browser at all.
  *
  * @module
  */

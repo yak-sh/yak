@@ -1,14 +1,14 @@
 import { tools as declared } from './declared.ts'
-// The tools @yaks/cli runs: start a transcript, say something more to one,
-// list them, read one back, and ask what the credential can reach. A handful
-// of words and no state of their own — each one opens the graph, does the one
-// thing, and closes it, because the file IS the harness and two commands a
-// minute apart are the same harness.
+// The tools @yaks/cli runs: start a transcript, send another message to one,
+// list them, read one back, and ask which models the credential can reach. A
+// handful of commands with no state of their own — each one opens the graph,
+// does its one thing, and closes it, because the SQLite file is the harness and
+// two commands a minute apart are the same harness.
 //
-// Nothing is printed by hand. An entry prints through @yaks/render's session
-// views and @yaks/text (run.ts `line`), the same trees a browser or a terminal
-// UI mounts, so a listing and a transcript cannot drift from what any other
-// door shows.
+// Nothing is printed by hand. An entry is rendered through @yaks/render's
+// session views and @yaks/text (run.ts `line`), the same component trees a
+// browser or a terminal UI mounts, so a listing and a transcript cannot drift
+// from what the other interfaces show.
 
 import type { Comp, Eid } from '@yaks/graph'
 import { answerOf, runner, toolEid, worded } from '@yaks/tools'
@@ -126,8 +126,8 @@ let tasks = async (args: Args, c: Ctx): Promise<number> => {
   }
 }
 
-// What the harness would sign an ask with, and where it found it. The token
-// itself is never printed — only which door it opens.
+// Which credential the harness would send with a request, and where it found
+// it. The token itself is never printed — only which endpoint it is for.
 let models = async (_args: Args, c: Ctx): Promise<number> => {
   let env = Deno.env.get
   let key = fromEnv(env)
@@ -177,12 +177,13 @@ let howto = (props: Record<string, unknown>) => ({
   additionalProperties: false,
   properties: {
     ...props,
-    model: { type: 'string', description: 'which model to speak to' },
+    model: { type: 'string', description: 'which model to use' },
     provider: { type: 'string', description: 'which backend' },
   },
 })
 
-/** The harness's own words, for a `yak` (or a `harness`) that carries them. */
+/** The harness's own commands, for a `yak` (or a `harness`) executable that
+ * includes them. */
 export let own: Command[] = [
   {
     name: 'new',

@@ -1,15 +1,19 @@
-// Wire durability is deliberately separate from Vault: local drafts load
-// unconditionally, but server snapshots need an authoritative epoch and a bound.
+// Where the server-synchronized rows are stored, deliberately separate from
+// the Vault: this browser's own drafts are loaded unconditionally, while rows
+// that came from the server are only loaded for the epoch the server named,
+// and only up to a row limit.
 import type { Eid } from '@yaks/graph'
 import { answerCache, type SavedAnswer } from './answers.ts'
 import type { Saved } from './vault.ts'
 
-/** A bounded server-tier checkpoint. load validates the epoch atomically and
- * clears ONLY this tier on mismatch. save/drop are conditional on that epoch,
- * so a late write from an obsolete tab cannot revive the previous server. */
+/** A bounded store of server-synchronized rows. `load` checks the epoch
+ * atomically and, on a mismatch, clears only these rows — never the vault.
+ * `save` and `drop` are conditional on that same epoch, so a late write from a
+ * tab still on the previous epoch cannot bring its rows back. */
 export type WireVault = {
-  /** Optional bounded semantic checkpoint. Must use the same epoch guard as rows.
-   * loadAnswers never validates/changes the epoch itself. */
+  /** Optionally, the saved query results: ids and coverage, bounded by a byte
+   * budget. They are guarded by the same epoch as the rows, and `loadAnswers`
+   * never checks or changes the epoch itself. */
   loadAnswers?: (epoch: string, bytes: number) => Promise<SavedAnswer[]>
   saveAnswers?: (
     epoch: string,
@@ -21,7 +25,8 @@ export type WireVault = {
   drop: (epoch: string, eids: Eid[]) => Promise<void>
 }
 
-/** In-memory equivalent of wireIdb, useful to hosts without IndexedDB. */
+/** The in-memory equivalent of {@link wireIdb}, for an application with no
+ * IndexedDB. */
 export let wireStash = (): WireVault => {
   let epoch: string | undefined
   let answers: SavedAnswer[] = []

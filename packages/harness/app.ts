@@ -32,7 +32,8 @@ import {
 import { type Context, type Panel, panels, type UIAgent } from './panels.ts'
 import type { Agent } from './run.ts'
 
-/** UI contributions and an event door, independent of the terminal backend. */
+/** UI contributions and an event callback, independent of the terminal
+ * backend. */
 export type Opts = {
   agent: UIAgent
   panels?: Panel[]

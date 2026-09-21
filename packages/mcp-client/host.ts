@@ -1,4 +1,4 @@
-/** Private MCP OAuth records using the shared host store. */
+/** Private MCP OAuth records, stored in the shared local file store. */
 import { fileAuthorizationStore as fileStore } from '@yaks/oauth/host'
 import type { AuthorizationRecord, AuthorizationStore } from './oauth.ts'
 export const fileAuthorizationStore = (path: string): AuthorizationStore =>

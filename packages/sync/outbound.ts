@@ -1,46 +1,49 @@
-// A committed batch on its way to the server, and what comes back.
+// A committed write on its way to the server as `POST /apply`, and the
+// response.
 //
-// The local commit has already happened — this runs on the `effect` phase, and
+// The local commit has already happened — this runs in the `effect` phase, and
 // an effect is by definition post-commit — so every write here is OPTIMISTIC:
-// the page has already rendered it, and the server's answer is a reconciliation
-// rather than a permission. Three answers are possible:
+// the page has already rendered it, and the server's response reconciles it
+// rather than permitting it. Three responses are possible:
 //
-//   applied    the batch comes back as the server applied it — numbers,
-//              stamps, casualties — and that batch is applied locally in turn,
-//              marked as an echo so it is not sent again.
+//   applied    the bundles come back as the server applied them — assigned
+//              numbers, stamped columns, cascade deletions — and they are
+//              applied locally in turn, marked as an echo so they are not sent
+//              back again.
 //   refused    the server would not take it. The optimistic change is undone
-//              from the image captured before it, and the refusal is reported.
-//              A batch that was HELD (a delete — see sync.ts) never went in,
-//              so there is nothing to undo.
-//   unreachable  nothing is undone. The batch may have landed and the answer
-//              been lost, and a client that guesses wrong about that turns a
-//              network blip into data loss.
+//              from the copy taken before it, and the refusal is reported. A
+//              write that was HELD (a delete — see sync.ts) was never applied
+//              locally, so there is nothing to undo.
+//   unreachable  nothing is undone. The write may have been applied on the
+//              server with only the response lost, and a client that guesses
+//              wrong about that turns a network blip into data loss.
 
 import type { Bundle, Graph } from '@yaks/graph'
 import { echo } from './mark.ts'
 import { inverse, outward } from './tier.ts'
 
-/** A server's refusal body: the error's own name, its message, and whatever
- * fields it carried — a `Stale` names the column and what the graph holds. */
+/** The body of a server's refusal: the error's own name, its message, and
+ * whatever fields it carried — a `Stale` names the column and the value the
+ * graph holds. */
 export type Refusal = { error: string; message: string; [k: string]: unknown }
 
-/** How a batch is sent. The global `fetch` satisfies it, and so does an
+/** How a request is sent. The global `fetch` satisfies it, and so does an
  * in-process handler, which is how this package is tested with no network. */
 export type Fetch = (request: Request) => Response | Promise<Response>
 
-/** One outbound batch that did not land. */
+/** One outgoing write that was not applied on the server. */
 export type Trouble = {
-  /** the batch as it was sent */
+  /** the bundles as they were sent */
   sent: Bundle[]
-  /** the server's refusal, when it answered with one */
+  /** the server's refusal, when it responded with one */
   refused?: Refusal
-  /** the transport error, when the batch never arrived */
+  /** the transport error, when the request never arrived */
   error?: unknown
   /** whether the optimistic local change was undone */
   reverted: boolean
 }
 
-/** Where trouble is surfaced: a page shows it, a test collects it. */
+/** Where a failure is reported: a page shows it, a test collects it. */
 export type Report = (trouble: Trouble) => void
 
 /** What {@link post} needs: where to send, how, and where to put the answer. */
@@ -50,13 +53,13 @@ export type PostOpts = {
   fetch: Fetch
   headers?: Record<string, string>
   report: Report
-  /** the batch was held out of the local graph, not applied: a refusal has
+  /** the write was held out of the local graph, not applied: a refusal has
    * nothing to revert */
   held?: boolean
 }
 
-// A refusal body, however the server phrased it. A door that answered with
-// prose rather than JSON still names itself.
+// The refusal body, however the server phrased it. An endpoint that responded
+// with plain text rather than JSON still produces a named error.
 let refusalOf = async (res: Response): Promise<Refusal> => {
   let text = await res.text()
   try {
@@ -69,11 +72,12 @@ let refusalOf = async (res: Response): Promise<Refusal> => {
 }
 
 /**
- * Send one committed batch to the server and reconcile the answer. Returns
- * when the exchange is over — the caller (the `effect` hook) does not wait for
- * it, so a local write stays as fast as the local store. Returns true when
- * settled (accepted/refused/no wire writes), false for uncertain transport;
- * retention must keep the optimistic payload pinned in the latter case.
+ * Send one committed write to the server as `POST /apply` and reconcile the
+ * response. Resolves when the exchange is over — the caller (the `effect`
+ * hook) does not await it, so a local write stays as fast as the local store.
+ * Resolves to true when the outcome is known (applied, refused, or nothing to
+ * send), and to false when the request failed and the outcome is unknown; in
+ * that case retention has to keep the optimistic bundles pinned.
  */
 export let post = async (
   batch: Bundle[],
@@ -81,7 +85,7 @@ export let post = async (
 ): Promise<boolean> => {
   let { graph } = opts
   let sent = outward(batch, graph.vocab)
-  if (!sent.length) return true // an entirely local batch: nothing to tell
+  if (!sent.length) return true // an entirely local write: nothing to send
   let res: Response
   try {
     res = await opts.fetch(
@@ -92,7 +96,7 @@ export let post = async (
       }),
     )
   } catch (error) {
-    // Undelivered is not refused: the batch may have landed.
+    // Undelivered is not refused: the write may have been applied.
     opts.report({ sent, error, reverted: false })
     return false
   }

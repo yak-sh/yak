@@ -38,10 +38,10 @@ export default worker({
 That serves `POST /apply`, `GET|POST /query` and `/ws` — the routes and the
 errors are [@yaks/api](https://jsr.io/@yaks/api)'s, unchanged.
 
-`api` is called with the Worker's bindings and its answer is kept for the life
-of the isolate, not rebuilt per request: an api built twice would mint a second
-subscription registry, and the sockets already open would be listening to a
-registry nobody applies through. Give it a graph and, if you want writes
+`api` is called with the Worker's bindings and its result is cached for the life
+of the isolate, not rebuilt per request: building the api twice would create a
+second subscription registry, and the sockets already open would be listening to
+a registry nothing writes through. Give it a graph and, if you want writes
 attributed, an authentication callback.
 
 ```toml
@@ -59,8 +59,8 @@ database_id = "…"
 ## Request authentication
 
 `door` reads the credential a request carries — the named cookie first, then an
-`authorization: Bearer …` header — and hands it to your `verify`, which is the
-only part that knows what a token means:
+`authorization: Bearer …` header — and passes it to your `verify` function,
+which is the only part that knows what a token means:
 
 ```ts
 let authenticate = door({
@@ -69,15 +69,16 @@ let authenticate = door({
     let person = await verifyJwt(token, env.SHOP_SECRET)
     return person ? { by: person } : null
   },
-  required: true, // a request naming nobody is answered 401
+  required: true, // a request with no identity gets a 401
 })
 ```
 
-Without `required`, a request with no credential still reads and writes — its
-batch simply lands with no actor on it. With it, an unnamed request is refused
-before the graph sees it. The authentication callback runs on **every** request,
-reads and socket upgrades included, and the identity it returns is what signs
-the batch: whatever `$actor` a client sent is thrown away.
+Without `required`, a request carrying no credential can still read and write —
+its changes are simply stored with no actor recorded on them. With it, a request
+with no verified identity is rejected before the graph sees it. The
+authentication callback runs on **every** request, reads and socket upgrades
+included, and the identity it returns is the actor recorded on the write:
+whatever `$actor` a client sent is discarded.
 
 `cookies(request)` and `bearer(request)` are exported on their own, for an
 authentication callback that wants to decide differently.
@@ -94,17 +95,17 @@ import { workerUpgrade } from '@yaks/workerd'
 let handler = api({ graph, authenticate, upgrade: workerUpgrade })
 ```
 
-It mints a `WebSocketPair`, accepts the half the server keeps, and answers 101
-with the half the client gets. Off the Workers runtime it throws saying so.
+It creates a `WebSocketPair`, accepts the half the server keeps, and answers 101
+with the half the client gets. Outside the Workers runtime it throws, saying so.
 
 ## When the graph lives in a Durable Object
 
 A Durable Object is one graph's home: single-threaded, strongly consistent, with
 its own SQLite and its own open sockets
 ([@yaks/durable-object](https://jsr.io/@yaks/durable-object) is the storage
-adapter for it). The Worker in front of it is then a switchboard rather than a
-server — work out **which** graph the request is for, and hand the request over
-unopened:
+adapter for it). The Worker in front of it is then a router rather than a server
+— work out **which** graph the request is for, and forward the request without
+reading it:
 
 ```ts
 import { forward, type Namespace } from '@yaks/workerd'
@@ -119,9 +120,9 @@ export default {
 ```
 
 The object at the other end runs `api()` over its own storage — it is the
-server; this Worker is the route to it. Because the request crosses whole, its
-method, path, body and `upgrade` header arrive intact, and the socket the object
-answers with belongs to the client.
+server; this Worker only routes to it. Because the request is forwarded whole,
+its method, path, body and `upgrade` header arrive intact, and the socket the
+object answers with belongs to the client.
 
 ```toml
 # wrangler.toml
@@ -158,8 +159,8 @@ Its dependencies are the sibling packages: `@yaks/api` and `@yaks/graph`.
 ## Related packages
 
 [@yaks/api](https://jsr.io/@yaks/api) owns the routes, the errors and the
-subscription model; [@yaks/graph](https://jsr.io/@yaks/graph) owns the bundle
-wire and `apply()`; the bytes belong to a storage adapter —
+subscription model; [@yaks/graph](https://jsr.io/@yaks/graph) owns the JSON
+bundle format and `apply()`; the bytes belong to a storage adapter —
 [@yaks/durable-object](https://jsr.io/@yaks/durable-object) inside a Durable
 Object, `@yaks/d1` over D1, [@yaks/ram](https://jsr.io/@yaks/ram) in memory.
 This package is only the integration between them and Cloudflare.

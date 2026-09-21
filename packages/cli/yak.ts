@@ -1,33 +1,34 @@
-// The `yak` command. It knows five words of its own — `help`, `login`,
-// `logout`, `serve`, `apply` — and everything else arrives as TOOLS: the ones
-// of the graph this line opens (local.ts) or the ones a door lists
-// (platform.ts), with the apps' commands (commands.ts) beside them. Either
-// table costs something to gather, so run.ts asks for it only on a line that
-// reaches past the five.
+// The `yak` command. It has five subcommands of its own — `help`, `login`,
+// `logout`, `serve`, `apply` — and every other subcommand is a TOOL: one of
+// the tools of the graph this command opens (local.ts), or one an MCP server
+// lists (platform.ts), with the apps' own commands (commands.ts) beside them.
+// Either list costs something to gather, so run.ts asks for it only when the
+// five built-in subcommands did not match.
 //
 //   yak app_list
 //   yak app_files --app recipes --path index.html --content @index.html
 //   yak recipes add_recipe title='Lemon cake' serves=4
 //   cat bundles.ndjson | yak apply
 //
-//   yak --config yak.json task list   # opens that graph, runs it, exits
-//   yak land                          # the same, on the checkout you stand in
-//   yak serve --config yak.json       # the HTTP doors onto the same graph
+//   yak --config yak.json task list   # opens that graph, runs the tool, exits
+//   yak land                          # the same, on the checkout you are in
+//   yak serve --config yak.json       # an HTTP server over the same graph
 //
-// THERE IS NO SERVER. A config names a GRAPH — a SQLite file and the plugins
-// that speak over it — and a `yak` line opens it, composes them, runs the tool
-// in this process and exits. WAL takes as many writers as there are lines, so
-// nothing waits on a process somebody had to start. `--host` is for a graph
-// this box cannot open as a file, and then the line talks to that door over
+// THERE IS NO SERVER PROCESS TO START. A config file names a GRAPH — a SQLite
+// file and the plugins that read and write it — and a `yak` command opens it,
+// imports them, runs the tool in this process and exits. SQLite in WAL mode
+// accepts as many writers as there are commands running, so nothing waits on a
+// daemon somebody had to start. `--host` is for a graph this machine cannot
+// open as a file, and then the command talks to that machine's MCP server at
 // `/mcp`; `yak serve` is the process that answers one.
 //
-// The door's table is why there is no list of tools in this package: it reads
-// `tools/list` at run time, so the CLI cannot drift from the connector an
-// agent is talking to, and a tool a release adds is a subcommand the day it
-// ships without anybody publishing this package again.
+// Reading the server's tool list at run time is why this package contains no
+// list of tools: the CLI cannot drift from the MCP server an agent is talking
+// to, and a tool a release adds becomes a subcommand the day it ships without
+// anybody publishing this package again.
 //
-// Exit codes are the contract a script reads: 0 said, 1 the tool or the door
-// refused, 2 the command line was wrong.
+// Exit codes are the contract a script reads: 0 succeeded, 1 the tool or the
+// server refused, 2 the command line was wrong.
 
 import { Usage } from './args.ts'
 import { bundlesIn, chunks } from './apply.ts'
@@ -37,29 +38,32 @@ import { configPath } from './config.ts'
 import { listed } from './platform.ts'
 import { forgetToken, saveToken } from './store.ts'
 
-/** The platform this command talks to where it opens no graph of its own. */
+/** The platform this command talks to when it opens no graph of its own. */
 export let HOST = 'yaks.app'
 
-let HEAD = 'yak — the tools of the graph this line runs against'
+let HEAD = 'yak — the tools of the graph this command runs against'
 
 let TAIL =
-  `  --config <path> the config naming the graph to OPEN — its db and its
-                  plugins, composed in this process (default $YAK_CONFIG)
-  --host <host>   a graph to talk to over /mcp instead, for one this box
-                  cannot open as a file (default $YAKS_HOST, else ${HOST})
-  --json          print the structured result instead of the words
-  --timing        a line on stderr per answer, with its Server-Timing
+  `  --config <path> the config file naming the graph to OPEN — its db and
+                  its plugins, imported in this process (default $YAK_CONFIG)
+  --host <host>   an MCP server to call over /mcp instead, for a graph this
+                  machine cannot open as a file (default $YAKS_HOST, else
+                  ${HOST})
+  --json          print the structured result instead of the text
+  --timing        one line on stderr per response, with its Server-Timing
                   (or YAKS_TIMING=1)
-  --help          this, or one command's own
+  --help          this page, or one subcommand's own
 
-A value that is @path is that file, and - is stdin. $YAKS_TOKEN is the
-bearer when it is set; otherwise the one \`yak login\` wrote.`
+An argument value written @path is read from that file, and - is read from
+stdin. $YAKS_TOKEN is the bearer token when set; otherwise the one
+\`yak login\` saved.`
 
-// `apply` is graph_apply with a door for a stream: a batch is atomic, and a
-// file of bundles is a load rather than one batch, so it goes over in chunks.
-// It runs the SAME `graph_apply` every other line runs — the one the graph
-// this line opened implements, or the one the door it named lists — so a load
-// goes wherever the rest of the session went.
+// `apply` is `graph_apply` fed from a stream. One batch is applied in one
+// transaction, and a file of fifty thousand bundles is a bulk load rather than
+// one transaction, so it is sent in chunks. It calls the SAME `graph_apply`
+// every other subcommand would — the one implemented by the graph this command
+// opened, or the one the MCP server it named lists — so a load goes wherever
+// the rest of the session went.
 let applied = async (
   args: Record<string, unknown>,
   c: Ctx,
@@ -69,14 +73,15 @@ let applied = async (
     throw new Usage(`${c.config ?? c.host} has no graph_apply to apply through`)
   }
   // A dry run is the tool's `check`: every phase runs and the transaction is
-  // rolled back, so the answer is what would have landed.
+  // rolled back, so the result is what would have been written.
   let dry = args['dry-run'] === true
   let asked = (change: unknown) =>
     tool.run({ change, ...(dry ? { check: true } : {}) }, c)
   if (args.change) return await asked(args.change)
-  // The BODY, already: `@path` is that file and `-` is stdin for every value
-  // on every line (args.ts `inflate`), so what arrives here is the bundles
-  // themselves. A line that said nothing at all means stdin.
+  // This is already the BODY: `@path` is read from that file and `-` from
+  // stdin for every argument value of every subcommand (args.ts `inflate`), so
+  // what arrives here is the bundles themselves. Given no argument at all,
+  // read stdin.
   let body = typeof args.file == 'string' ? args.file : await c.reads.stdin()
   let code = 0
   for (let change of chunks(bundlesIn(body))) {
@@ -86,19 +91,20 @@ let applied = async (
   return code
 }
 
-// The graph this line opened, where it opened one. Imported only on a line
-// that named a config, because importing it drags in a database driver and
-// every plugin the config names — `yak login` on a box with no graph at all
-// must not pay for that, and neither must a line aimed at a door.
+// The graph this command opened, when it opened one. Imported only when the
+// command named a config, because importing it pulls in a database driver and
+// every plugin the config names — `yak login` on a machine with no graph at
+// all must not pay for that, and neither must a command aimed at an MCP
+// server.
 let local: typeof import('./local.ts') | undefined
 
-// The table this line's tools come from: the graph a config names, opened
-// here, or the door the line named.
+// Where this command's tools come from: the graph a config names, opened here,
+// or the MCP server the command named.
 let table = async (c: Ctx): Promise<Command[]> =>
   c.config ? (local ??= await import('./local.ts')).commands(c) : listed(c)
 
-// `serve` is the HTTP doors and nothing else: one config, the plugins it
-// names, and what @yaks/api and @yaks/mcp mount over the graph they compose.
+// `serve` is the HTTP server and nothing else: one config, the plugins it
+// names, and what @yaks/api and @yaks/mcp mount over the graph they assemble.
 let served = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
   let { read, serve } = await import('./serve.ts')
   let path = configPath(
@@ -120,7 +126,7 @@ let served = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
   return 0
 }
 
-/** What a plain `yak` is, besides its tools. */
+/** What `yak` itself is, besides the tools it lists. */
 export let YAK: Opts = {
   name: 'yak',
   about: HEAD,
@@ -130,12 +136,13 @@ export let YAK: Opts = {
   stray: appStray,
 }
 
-/** The command's own five words, which shadow a tool any table names. */
+/** The command's own five subcommands, which shadow a tool of the same name
+ * from either list. */
 export let own: Command[] = [
   helpTool(YAK),
   {
     name: 'login',
-    description: 'remember a bearer for this host',
+    description: 'save a bearer token for this host',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -145,24 +152,26 @@ export let own: Command[] = [
     options: { positional: ['token'] },
     run: (args, c) => {
       c.out(
-        `bearer for ${c.host} kept in ${saveToken(c.host, String(args.token))}`,
+        `bearer token for ${c.host} saved in ${
+          saveToken(c.host, String(args.token))
+        }`,
       )
       return 0
     },
   },
   {
     name: 'logout',
-    description: 'forget it',
+    description: 'forget the saved bearer token',
     inputSchema: { type: 'object', additionalProperties: false },
     run: (_args, c) => {
       forgetToken(c.host)
-      c.out(`forgot the bearer for ${c.host}`)
+      c.out(`forgot the bearer token for ${c.host}`)
       return 0
     },
   },
   {
     name: 'serve',
-    description: 'the doors onto the graph a config composes',
+    description: 'run an HTTP server over the graph a config names',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -171,8 +180,11 @@ export let own: Command[] = [
           type: 'string',
           description: 'the config file (default $YAK_CONFIG)',
         },
-        db: { type: 'string', description: 'the graph, over the config' },
-        port: { type: 'number', description: 'what to listen on' },
+        db: {
+          type: 'string',
+          description: 'the SQLite file, overriding the config',
+        },
+        port: { type: 'number', description: 'the port to listen on' },
       },
     },
     options: { positional: ['config'] },
@@ -181,17 +193,20 @@ export let own: Command[] = [
   {
     name: 'apply',
     description:
-      'bundles as NDJSON, in batches of 50; --dry-run says what would land ' +
-      'and writes none of it',
+      'apply bundles read as NDJSON, in transactions of 50; --dry-run ' +
+      'reports what would be written and writes none of it',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
       properties: {
         file: { type: 'string', description: '@file, or - for stdin' },
-        change: { type: 'array', description: 'one batch, inline' },
+        change: {
+          type: 'array',
+          description: 'one batch of bundles, inline',
+        },
         'dry-run': {
           type: 'boolean',
-          description: 'answer what would land, and write none of it',
+          description: 'report what would be written, and write none of it',
         },
       },
     },
@@ -202,15 +217,17 @@ export let own: Command[] = [
 ]
 
 /** What a plain install carries, in precedence order. The apps' commands come
- * after this command's own and before the graph's tools, because one of those
- * tools is `command` itself: the raw one takes the app's arguments as a JSON
- * object, and the one here takes them the way a person types them. */
+ * after this command's own five and before the graph's tools, because one of
+ * those tools is `command` itself: the graph's version takes the app's
+ * arguments as a JSON object, and the one here takes them the way a person
+ * types them. */
 export let TOOLS: Command[] = [...own, ...appTools]
 
-/** One line, from argv to an exit code — the refusal printed on the way. A
- * box with commands of its own passes them, and they shadow everything here.
- * Whatever graph the line opened is let go when it is done, and the code the
- * line answers is what its `process` row records as its ending. */
+/** One command line, from argv to an exit code, printing any refusal on the
+ * way. A program with subcommands of its own passes them in, and they shadow
+ * everything here. Whatever graph the command opened is closed when it is
+ * done, and the exit code it returns is what its `process` row records as its
+ * ending. */
 export let main = async (
   argv: string[],
   extra: readonly Command[] = [],

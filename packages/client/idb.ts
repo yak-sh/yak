@@ -1,16 +1,16 @@
 // The vault a browser has: one IndexedDB object store, keyed by eid, holding
-// one record per entity that wears a local-tier component.
+// one record per entity that has a browser-owned component.
 //
-// IndexedDB is an events API, so everything here is one small promise wrapper
-// around a request, plus one rule: a WRITE resolves on the transaction, not on
-// the request. A request succeeds as soon as the store accepted the value; the
-// transaction is what says it is durable, and a caller writing through after a
-// commit wants the second one.
+// IndexedDB is an event-based API, so everything here is a small promise
+// wrapper around a request, plus one rule: a WRITE resolves on the
+// transaction, not on the request. A request succeeds as soon as the object
+// store accepts the value; the transaction is what makes it durable, and a
+// caller writing through after a commit wants the second one.
 //
-// The database is opened lazily and once, on the first call. A page that never
-// writes a local-tier component therefore never opens a database at all — and
-// a browser that refuses storage (private mode, a blocked origin) fails at that
-// first call rather than at import time.
+// The database is opened lazily and once, on the first call. A page that
+// never writes a browser-owned component therefore never opens a database at
+// all — and a browser that refuses storage (private mode, a blocked origin)
+// fails at that first call rather than at import time.
 
 import { answerCache } from './answers.ts'
 import type { Eid } from '@yaks/graph'
@@ -23,7 +23,7 @@ export type IdbOpts = {
   /** the object store inside it (default: `local`) */
   store?: string
   /** the IndexedDB implementation (default: the global `indexedDB`) — a test
-   * hands in a stand-in, a worker hands in its own */
+   * passes a stand-in, a worker passes its own */
   indexedDB?: IDBFactory
 }
 
@@ -41,16 +41,17 @@ let done = (tx: IDBTransaction): Promise<void> =>
   })
 
 /**
- * A {@link Vault} over IndexedDB: what {@link client} keeps the local tier in
- * when it is running in a browser.
+ * A {@link Vault} over IndexedDB: where {@link client} stores this browser's
+ * own components when it is running in a browser.
  *
  * ```ts
  * let kept = keep(graph, idb({ name: 'recipes' }))
  * ```
  *
- * Give each application its own database name. The store is created on first
- * open and nothing in it is versioned: a record is an entity's id, its number,
- * and the components it wore, which is the same shape the graph reads back.
+ * Give each application its own database name. The object store is created
+ * on first open and nothing in it is versioned: a record is an entity's id,
+ * its number, and the components it had, which is the same shape the graph
+ * reads back.
  */
 export let idb = (opts: IdbOpts = {}): Vault => {
   let name = opts.name ?? 'yaks'
@@ -74,8 +75,8 @@ export let idb = (opts: IdbOpts = {}): Vault => {
       req.onerror = () => no(req.error)
     })
 
-  // One read-write transaction, its body run against the store, awaited to
-  // completion — which is the point at which the browser has it.
+  // One readwrite transaction, its body run against the object store, awaited
+  // to completion — which is the point at which the data is durable.
   let write = async (body: (s: IDBObjectStore) => void) => {
     let tx = (await db()).transaction(store, 'readwrite')
     body(tx.objectStore(store))
@@ -101,10 +102,12 @@ export let idb = (opts: IdbOpts = {}): Vault => {
   }
 }
 
-/** Epoch-scoped wire-tier IndexedDB. Uses a separate database (default:
- * `yaks-wire`), so epoch invalidation cannot erase the local Vault. Reads use
- * an ordered cursor, never getAll; both disk and the returned array are bounded.
- * The supplied name must be distinct from the local vault's database name. */
+/** IndexedDB for the server-synchronized rows, scoped to one server epoch. It
+ * uses a separate database (default: `yaks-wire`), so discarding the rows on
+ * an epoch mismatch cannot erase this browser's own {@link Vault}. Reads walk
+ * an index cursor rather than calling getAll, and both what is kept on disk
+ * and the array returned are bounded. The name passed must differ from the
+ * vault's database name. */
 export let wireIdb = (
   opts: IdbOpts = {},
 ): import('./wire-vault.ts').WireVault => {
@@ -142,9 +145,10 @@ export let wireIdb = (
       throw error
     }
   }
-  // Every put takes a fresh order, so the newest `limit` orders hold at most
-  // `limit` rows: prune walks the oldest keys up to that bound, one step when
-  // there is nothing to delete, and never counts the store.
+  // Every put is given a fresh `order` number, so the newest `limit` order
+  // numbers cover at most `limit` rows: prune walks the oldest keys up to
+  // that bound, takes one step when there is nothing to delete, and never
+  // counts the object store.
   let prune = (rows: IDBObjectStore, order: number, limit: number) =>
     new Promise<void>((ok, no) => {
       if (order <= limit) {
@@ -197,8 +201,9 @@ export let wireIdb = (
       let bounded = answerCache(bytes)
       let oversized = await transaction('readonly', async (_rows, meta) => {
         if (await ask(meta.get('epoch')) !== epoch) return false
-        // Inspect the scalar envelope before materializing the checkpoint. A
-        // smaller new budget discards it whole, never reads an oversized blob.
+        // Read the recorded size before reading the saved results
+        // themselves. A budget smaller than last time's discards them whole
+        // rather than reading an oversized record in.
         let size = await ask(meta.get('answerBytes'))
         if (typeof size !== 'number' || size > bytes) return true
         for (let answer of await ask(meta.get('answers')) ?? []) {

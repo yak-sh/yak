@@ -1,24 +1,24 @@
 import { repairSequences } from '@yaks/session'
 import { diagnostics } from './diagnostics.ts'
 import { home } from './paths.ts'
-// The harness's own graph: one SQLite file, the vocabulary it speaks, and the
-// plugins that decide what a batch means. Nothing here reaches a server — the
-// harness holds its whole world in `~/.yak/yak.db` (or wherever
-// `HARNESS_DB` points, `:memory:` for a test), so an agent runs with the
-// tasks daemon down and the same bundles move into the fleet's graph later.
+// The harness's own graph: one SQLite file, the vocabulary it loads, and the
+// plugins that decide what a write means. Nothing here reaches a server — the
+// harness holds everything in `~/.yak/yak.db` (or wherever `HARNESS_DB` points,
+// `:memory:` for a test), so an agent runs with the tasks daemon down and the
+// same rows can move into the fleet's graph later.
 //
-// What the harness is MADE of is said once, in its facets (./vocab.ts,
-// ./rules.ts, ./runs.ts): the documents it
-// speaks, the columns it computes rather than keeps, and the rules that decide
-// what a batch means. This file takes those same facets for the harness's own
-// file, and a host composing the harness (@yaks/cli `compose`) takes them for
-// a served one. What is here and not there is BOOT: the upgrades an older file
-// needs, and the reconciliation an abnormal ending leaves behind.
+// What the harness is MADE of is declared once, in ./vocab.ts, ./rules.ts and
+// ./runs.ts: the vocabulary documents it loads, the columns it computes rather
+// than stores, and the plugins that decide what a write means. This file
+// imports those same three for the harness's own SQLite file, and a server
+// composing the harness (@yaks/cli `compose`) imports them for a served
+// database. What is here and not there is STARTUP: the migrations an older file
+// needs, and the reconciliation an abnormal shutdown leaves behind.
 //
-// Boot reconciles what an abnormal ending leaves behind: `reapLeases` frees
-// every lock whose holder is not a session in this graph. What a half-done
-// STEP leaves is reconciled a rung up, by run.ts `resume()`, because waking a
-// transcript needs a model and this file has none.
+// That reconciliation is `reapLeases`, which frees every lease whose holder is
+// not a session in this graph. What a half-finished STEP leaves behind is
+// reconciled one level up, by run.ts `resume()`, because waking a transcript
+// needs a model and this file has none.
 
 import {
   address,
@@ -40,14 +40,14 @@ import { rules } from './rules.ts'
 import { vocab } from './vocab.ts'
 export { harnessDoc, vocab } from './vocab.ts'
 
-/** Where the graph lives when nobody says: `$HARNESS_DB`, else
- * `$HARNESS_HOME/yak.db` (home defaults to `~/.yak`). */
+/** Where the graph lives when nothing names a path: `$HARNESS_DB`, else
+ * `$HARNESS_HOME/yak.db` (the home directory defaults to `~/.yak`). */
 export let dbPath = (
   env: (name: string) => string | undefined = Deno.env.get,
 ): string => env('HARNESS_DB') || `${home(env)}/yak.db`
 
-/** An open harness graph: the file it is, the store under it, the graph over
- * it, and the effects registry the daemon hangs on. */
+/** An open harness graph: its file, the store under it, the graph over it, and
+ * the effects registry the daemon registers its handlers on. */
 export type Harness = {
   path: string
   db: Database
@@ -70,10 +70,11 @@ export type Harness = {
  * ```
  */
 /** Move every body column this vocabulary marks `store: blob` into the blob
- * table, once. A marker row decides, never the shape of the text: a body that
- * happens to read like a hash is prose like any other, and re-running the sweep
- * over already-addressed rows would address the addresses. The marker and the
- * rows it speaks for commit together, so a half-moved database cannot exist. */
+ * table, once. A marker row decides whether it has run, never the shape of the
+ * text: a body that happens to look like a hash is prose like any other, and
+ * re-running the migration over already-moved rows would store the hashes
+ * themselves. The marker and the rows it covers commit together, so a
+ * half-moved database cannot exist. */
 let toBlobs = (sql: Driver, bytes: Blobs) => {
   let quote = (name: string) => '"' + name.replaceAll('"', '""') + '"'
   sql.exec('begin immediate')
@@ -143,9 +144,9 @@ export let open = (path: string = dbPath()): Harness => {
     derived: derived(vocab),
   })
   store.install()
-  // The short-lived completed.actor spelling duplicated the completion
-  // author. Preserve that author (including anonymous nulls), not the old
-  // work-attribution value in by. The column itself is the migration guard.
+  // The short-lived `completed.actor` column duplicated the completion author.
+  // Preserve that author (including anonymous nulls), not the old
+  // work-attribution value in `by`. The column itself is the migration guard.
   sql.exec('begin immediate')
   try {
     if (
@@ -163,10 +164,11 @@ export let open = (path: string = dbPath()): Harness => {
     db.close()
     throw error
   }
-  // Provenance moved off the prose it describes: a model's words were
-  // `content{body, source}`, and direction was read from whether `source` was
-  // set. It is `output{source}` now, worn only by an output. The old column is
-  // the migration's own guard — once it is gone the pass is over.
+  // Provenance moved off the text it describes: a model's reply used to be
+  // `content{body, source}`, and which direction it went was read from whether
+  // `source` was set. It is `output{source}` now, carried only by an output.
+  // The old column is the migration's own guard — once it is gone the migration
+  // is done.
   sql.exec('begin immediate')
   try {
     if (
@@ -187,9 +189,9 @@ export let open = (path: string = dbPath()): Harness => {
     db.close()
     throw error
   }
-  // A lock's timestamp is `claim.at` now, the word every other mark uses.
-  // `install` above has already planted the new column; this carries the taken
-  // moment across and takes the old spelling away, which is its own guard.
+  // A lease's timestamp is `claim.at` now, the same column name every other
+  // mark uses. `install` above has already added the new column; this copies
+  // the values across and drops the old column, which is its own guard.
   sql.exec('begin immediate')
   try {
     if (
@@ -233,9 +235,9 @@ export let open = (path: string = dbPath()): Harness => {
         sql.exec("insert into harness_upgrade values ('entry-seq-v1')")
       })
     } catch (error) {
-      // A transcript this pass cannot straighten is a warning, never a locked
-      // door: the harness must always open. The upgrade stays unrecorded, so
-      // the next boot tries again with whatever the repair has learned.
+      // A transcript this pass cannot repair is a warning, never a failure to
+      // open: the harness must always start. The migration stays unrecorded, so
+      // the next startup tries again.
       let ties = sql.query(
         'select count(*) as n from (select "session", "seq" from entry' +
           ' group by "session", "seq" having count(*) > 1)',
@@ -248,8 +250,8 @@ export let open = (path: string = dbPath()): Harness => {
       )
     }
   }
-  // The effects registry writes through the graph's own door, trusted: what an
-  // effect writes is the harness's own word, never a client's.
+  // The effects registry writes through the graph's own `apply()`, trusted:
+  // what an effect writes is the harness's own data, never a client's.
   let fx = effects(vocab, {
     write: (b) => g.apply(b, { trusted: true }),
     report: (error) => diagnostics().report(error, { phase: 'effect' }),

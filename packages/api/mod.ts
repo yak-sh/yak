@@ -1,47 +1,55 @@
 /**
- * @yaks/api — the transport in front of a yaks graph, as a plain request
- * handler that runs in any JavaScript environment.
+ * @yaks/api — an HTTP and WebSocket interface to a yaks graph, as a plain
+ * request handler that runs in any JavaScript runtime.
  *
  * Given a {@link https://jsr.io/@yaks/graph | @yaks/graph} `Graph`, this
- * package answers the three routes a client needs and nothing more:
+ * package serves the three endpoints a client needs and nothing more:
  *
- * - **`POST /apply`** — a batch of bundles in, the batch as applied out;
- *   `?check=1` rehearses it instead, rolling back at the commit so a caller
- *   spreading one batch over several graphs can ask before any of them keeps
- *   it; `content-type: application/x-ndjson` is the same door a line at a time,
- *   for a load too big to parse or commit whole ({@link pour});
- * - **`GET /query?q=…`** (or `POST /query`) — a query line in, bundles out;
- * - **`/ws`** — subscriptions: a saved query whose answer is pushed again
- *   whenever a committed batch changes it.
+ * - **`POST /apply`** — the request body is a JSON array of bundles, applied
+ *   in one transaction; the response body is that array as applied.
+ *   `?check=1` runs every phase and then rolls the transaction back, so a
+ *   caller spreading one array over several graphs can ask each of them
+ *   before any of them keeps it. `content-type: application/x-ndjson` is the
+ *   same endpoint with one bundle per line, for an import too big to parse or
+ *   commit whole ({@link pour}).
+ * - **`GET /query?q=…`** (or `POST /query`) — a query string in, the bundles
+ *   it selects out.
+ * - **`/ws`** — subscriptions: a saved query whose result is pushed again
+ *   whenever a committed transaction changes it.
  *
  * ```ts
  * import { api } from '@yaks/api'
  * // Deno.serve(api({ graph, authenticate }))
  * ```
  *
- * ## The door is where trust lives
- * A bundle can say anything, including whose name is on it. So every batch
- * that arrives has its `$actor` component replaced by the identity
- * {@link Authenticate} returned for that request — never the client's word.
- * `authenticate` runs on every request, and throwing {@link Unauthorized} from
- * it refuses one with a 401.
+ * ## Attribution is decided here, not by the client
+ * A client can put anything in the JSON it posts, including whose name is on
+ * it. So every array that arrives has its `$actor` component replaced by the
+ * identity {@link Authenticate} returned for that request. `authenticate`
+ * runs on every request, and throwing {@link Unauthorized} from it answers
+ * that request with a 401.
  *
- * ## Two injected seams
+ * ## Two callbacks the application supplies
  * {@link Authenticate} names the writer. {@link Upgrade} turns a request into
  * a WebSocket — the one step no web standard covers — and defaults to
- * {@link denoUpgrade}; a Cloudflare Worker passes a `WebSocketPair` (see the
- * README). Everything else here is standard `Request`, `Response` and
- * `WebSocket`, so the same handler serves on Deno, Node and a Worker.
+ * {@link denoUpgrade}; on Cloudflare Workers you pass one built on
+ * `WebSocketPair` (see the README). Everything else here is standard
+ * `Request`, `Response` and `WebSocket`, so the same handler serves on Deno,
+ * Node and a Worker.
  *
- * ## The socket protocol, whole
+ * ## The WebSocket protocol
  * ```text
- * → { subscribe: "<query>" | true, id: "<id>" }   open (true = every batch)
+ * → { subscribe: "<query>" | true, id: "<id>" }   open (true = every commit)
  * → { unsubscribe: "<id>" }                       close
+ * → { relay: Bundle[] }                           forward `sync: peers` values
  * ← { id, bundles: Bundle[], gone?: Eid[] }        the set, then every change
+ * ← { id, relay: Bundle[] }                        peer values from a client
  * ← { id, refused: { error, message, … } }         the subscription was refused
  * ```
- * No write crosses the socket: a batch is applied with `POST /apply`, and the
- * socket is how everyone hears about it.
+ * No durable write crosses the socket: changes are applied with
+ * `POST /apply`, and the socket is how every connected client learns about
+ * them. A relayed value is the one exception: it is forwarded to the other
+ * subscribers and never stored.
  *
  * @module
  */

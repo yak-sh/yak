@@ -1,21 +1,22 @@
-// What this box remembers between commands: the bearer a `yak login` wrote,
-// and the tool list a host last served.
+// What this machine remembers between commands: the bearer token `yak login`
+// saved, and the tool list a host last served.
 //
 // Two files, not one, and the reason is the difference between them. The token
-// is a secret and lives at 0600 in a directory of its own at 0700; the cache is
-// a copy of something the server says to anyone who asks. Keeping them apart
-// means no widening of the cache can ever widen the token, and a cache that has
-// to be deleted takes nothing with it.
+// is a secret and is written 0600 in a directory of its own at 0700; the cache
+// is a copy of something the server tells anyone who asks. Keeping them apart
+// means loosening the cache's permissions can never loosen the token's, and a
+// cache that has to be deleted takes nothing else with it.
 //
 // The cache is keyed by host and stamped with the ROSTER VERSION (T-34277) —
-// the eight hex characters `about` names its list by. Nothing here checks that
-// version: checking would cost the round trip the cache exists to save. It is
-// dropped instead on the two signals that arrive for free — a result carrying
-// the roster line, and an `about` naming a different version.
+// the eight hex characters the `about` tool names its tool list by. Nothing
+// here checks that version, because checking would cost the round trip the
+// cache exists to save. The cache is dropped instead on the two signals that
+// arrive for free — a tool result carrying the roster notice, and an `about`
+// result naming a different version.
 
 import type { Listed } from './tool.ts'
 
-/** The tools a host served, and the name of that list. */
+/** The tools a host served, and the version stamp of that list. */
 export type Roster = {
   version?: string
   protocol?: string
@@ -30,7 +31,7 @@ let env = (name: string): string | undefined => {
   }
 }
 
-/** Where this OS keeps a program's configuration. */
+/** Where this operating system keeps a program's configuration. */
 export let configDir = (): string => {
   let home = env('HOME') ?? env('USERPROFILE') ?? '.'
   if (Deno.build.os == 'windows') {
@@ -56,16 +57,16 @@ let write = (path: string, body: unknown, secret = false) => {
   Deno.writeTextFileSync(path, JSON.stringify(body, null, 2) + '\n', {
     mode: secret ? 0o600 : 0o644,
   })
-  // The mode above only lands on a file this call created; an older one keeps
-  // whatever it had until it is told.
+  // The mode above only applies to a file this call created; an existing file
+  // keeps whatever mode it had until it is changed explicitly.
   if (secret && Deno.build.os != 'windows') Deno.chmodSync(path, 0o600)
 }
 
 let tokensPath = (): string => `${stateDir()}/token.json`
 let rostersPath = (): string => `${stateDir()}/tools.json`
 
-/** The bearer for a host: the environment first, so a sandbox that sets
- * `YAKS_TOKEN` never has a file to write. */
+/** The bearer token for a host: the environment first, so a sandbox that sets
+ * `YAKS_TOKEN` never has to write a file. */
 export let tokenFor = (host: string): string | null => {
   let said = env('YAKS_TOKEN')
   if (said) return said
@@ -73,14 +74,14 @@ export let tokenFor = (host: string): string | null => {
   return typeof kept == 'string' ? kept : null
 }
 
-/** Remember a bearer for a host, readable by nobody else. */
+/** Save a bearer token for a host, readable by nobody else. */
 export let saveToken = (host: string, token: string): string => {
   let path = tokensPath()
   write(path, { ...read(path), [host]: token }, true)
   return path
 }
 
-/** Forget it. */
+/** Delete the saved bearer token for a host. */
 export let forgetToken = (host: string): void => {
   let path = tokensPath()
   let kept = read(path)
@@ -88,19 +89,20 @@ export let forgetToken = (host: string): void => {
   write(path, kept, true)
 }
 
-/** The tool list this box has for a host, if any. */
+/** The cached tool list for a host, if there is one. */
 export let cached = (host: string): Roster | null => {
   let kept = read(rostersPath())[host]
   return kept && typeof kept == 'object' ? kept as Roster : null
 }
 
-/** Keep one. */
+/** Cache one. */
 export let remember = (host: string, roster: Roster): void => {
   let path = rostersPath()
   write(path, { ...read(path), [host]: roster })
 }
 
-/** Drop one — the tool list moved, so the next command lists again. */
+/** Drop one — the tool list changed, so the next command calls `tools/list`
+ * again. */
 export let forget = (host: string): void => {
   let path = rostersPath()
   let kept = read(path)

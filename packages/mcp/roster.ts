@@ -1,23 +1,26 @@
-// The ROSTER: the tool list a client cached at connect, named by a version it
-// can be compared against, and the one line a reply carries when it has moved.
+// The ROSTER: the tool list a client cached when it connected, identified by a
+// version string it can be compared against, plus the one sentence a reply
+// carries when the list has changed since.
 //
-// A client lists the tools once, at `initialize`, and holds that list for the
-// whole conversation. Everything after that is the server's problem: a tool
-// added by a release, or by an app of the person's own, is a tool the agent
-// cannot see and will not call, and a tool that went is one it calls into a
-// refusal. `notifications/tools/list_changed` is the protocol's answer and is
-// sent (stream.ts), but a client that holds no stream, or whose host ignores
-// the notification, hears nothing — so the server says it again where the
-// agent is certainly reading: on the next result.
+// An MCP client lists the tools once, at `initialize`, and caches that list for
+// the whole conversation. Everything after that is the server's problem: a tool
+// a release added, or one an app of the person's own contributed, is a tool the
+// agent cannot see and will not call, and a tool that was removed is one it
+// calls and is refused. `notifications/tools/list_changed` is the protocol's
+// answer, and a host holding an open stream should send it — but a client with
+// no stream, or whose host ignores the notification, never hears it. So the
+// server repeats it where the agent is certainly reading: in the next tool
+// result.
 //
-// The version is a HASH of the names plus the release the server is running,
-// so it moves when either does and is the same on every isolate of one deploy.
-// The names are what the line names, because "the list moved" tells an agent
-// nothing it can act on and "new: mail_send" tells it everything.
+// The version is a HASH of the tool names plus the server's release id, so it
+// changes when either changes and is identical on every isolate of one deploy.
+// The sentence names the tools that changed, because "the list changed" tells
+// an agent nothing it can act on and "new: mail_send" tells it everything.
 
-/** A stable name for one tool list: its names, and the release that served
- * them. Two servers of the same deploy listing the same tools agree; a tool
- * added, a tool gone, or a new release each move it. */
+/** A stable version string for one tool list: its names, and the release that
+ * served them. Two servers of the same deploy listing the same tools produce
+ * the same string; a tool added, a tool removed, or a new release each change
+ * it. */
 export let rosterVersion = (names: string[], mark = ''): string => {
   let said = [...names].sort().join(',') + '@' + mark
   let h = 0x811c9dc5
@@ -29,10 +32,11 @@ export let rosterVersion = (names: string[], mark = ''): string => {
 }
 
 /**
- * The line a result carries when the roster moved under the client — naming
- * what moved, since an agent can act on a name and not on "something changed".
- * A release that moved no tool name moves the version and says nothing: there
- * is nothing for the agent to do about it.
+ * The sentence a tool result carries when the roster changed after the client
+ * cached it. It names the tools that came and went, since an agent can act on
+ * a tool name and not on "something changed". A release that changed no tool
+ * name changes the version but produces no sentence: there is nothing for the
+ * agent to do about it.
  *
  * ```ts
  * rosterLine(['about'], ['about', 'mail_send'])

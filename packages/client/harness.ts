@@ -1,14 +1,14 @@
 // Shared test fixtures (not part of the published package — see deno.json).
 //
-// The domain is @yaks/sync's recipe box, and so is the server: this package
+// The subject is @yaks/sync's recipe box, and so is the server: this package
 // sits on top of that one, so its tests are best run against the same graph,
-// the same handler and the same stand-in sockets. What is added here is a
-// CLIENT built by `client()` rather than by hand, an in-process socket for it,
-// and a stand-in IndexedDB.
+// the same request handler and the same stand-in sockets. What is added here
+// is a CLIENT built by `client()` rather than by hand, an in-process socket
+// for it, and a stand-in IndexedDB.
 //
 // Nothing here touches a network, a timer or a browser. `fire()` runs a
-// scheduled reconnect, `idle()` settles everything in flight, and the
-// IndexedDB is npm's `fake-indexeddb`, which is the same API in a Map.
+// scheduled reconnect, `idle()` waits for everything in flight, and the
+// IndexedDB is npm's `fake-indexeddb`, which is the same API over a Map.
 
 import { IDBFactory } from 'fake-indexeddb'
 import type { Bundle } from '@yaks/graph'
@@ -27,30 +27,32 @@ export {
   server,
 } from '../sync/harness.ts'
 
-/** A client under test: what {@link client} returned, plus the handles a test
- * needs to drive its wire. */
+/** A client under test: what {@link client} returned, plus what a test needs
+ * to drive its connection to the server. */
 export type Box = Client & {
-  /** everything the wire reported */
+  /** everything the connection reported */
   trouble: Trouble[]
   /** run the pending reconnect, if one is scheduled */
   fire: () => void
   /** the socket this client currently holds */
   socket: () => Fake | undefined
-  /** settle: the local tier hydrated, every batch answered, every frame landed */
+  /** wait until this browser's stored components are loaded, every POST has
+   * been answered, and every frame has been handled */
   idle: () => Promise<void>
 }
 
-/** A client over the recipe box. With a server, its transports are pointed at
- * that server in this process; without one, it is a graph with nobody else in
- * it. Nothing is kept unless the caller hands in a vault. */
+/** A client over the recipe box. Given a server, its `fetch` and its socket
+ * are pointed at that server in this same process; without one, it is a graph
+ * in this page alone. Nothing is stored unless the caller passes a vault. */
 export let boxClient = (srv?: Server, opts: ClientOpts = {}): Box => {
   let trouble: Trouble[] = []
   let timers: (() => void)[] = []
   let opening: Promise<unknown> = Promise.resolve()
   let mine: Fake | undefined
 
-  // The handler takes the server half and attaches to it; both ends open once
-  // it has, which is when the held subscribe frames go out.
+  // The request handler is given the server half of the socket pair and
+  // attaches to it; both ends open once it has, which is when the queued
+  // subscribe frames are sent.
   let connect: Connect = () => {
     let { client: c, server: s } = pair()
     mine = c
@@ -88,8 +90,9 @@ export let boxClient = (srv?: Server, opts: ClientOpts = {}): Box => {
   })
 }
 
-/** A stand-in IndexedDB: npm's `fake-indexeddb`, which is the same API over a
- * Map. Two vaults over one of these are two page loads of one browser. */
+/** A stand-in IndexedDB: npm's `fake-indexeddb`, which is the same API over
+ * a Map. Two vaults over one of these stand for two page loads of the same
+ * browser. */
 export let fakeDb = (): IDBFactory => new IDBFactory()
 
 /** The package's own IndexedDB vault, pointed at a stand-in. */
@@ -105,7 +108,7 @@ export let comp = (
   return c && typeof c == 'object' ? { ...c } as Record<string, unknown> : {}
 }
 
-/** The titles of a set of bundles, in the order they came — what most of these
- * tests assert on. */
+/** The titles of a set of bundles, in the order they arrived — what most of
+ * these tests assert on. */
 export let titles = (bundles: Bundle[]): string[] =>
   bundles.map((b) => String(comp(b, 'doc').title))

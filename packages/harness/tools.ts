@@ -6,22 +6,22 @@ import { valueTools } from '@yaks/blob'
 // What the agent can do here: run a program, and read and write its own graph.
 //
 // Both halves already exist as packages — @yaks/process declares the shell as
-// session tools, @yaks/mcp declares the generic graph tier as graph tools — and
-// the only thing missing between them is a dialect. A graph tool says its
-// arguments in Zod, because that is what MCP's SDK takes; a model wants JSON
-// Schema. So this file is one conversion and one adapter: `parametersOf` says a
-// tool's arguments the way a model reads them, and `graphTools` WRITES A CALL
-// for each one and says what answered it.
+// session tools, @yaks/mcp declares the generic graph tools — and the only
+// thing between them is a difference of format. A graph tool declares its
+// arguments as a Zod schema, because that is what the MCP SDK takes; a model
+// wants JSON Schema. So this file is one conversion and one adapter:
+// `parametersOf` renders a tool's arguments as JSON Schema, and `graphTools`
+// WRITES A CALL entity for each one and records what it returned.
 //
-// The model never reaches a tool function here either. A call is an entity
-// signed as the SESSION that asked, so what the tool writes is written in the
-// agent's name and not the daemon's, and the transcript's own record of the
-// call is the same entity @yaks/tools' runner answered.
+// The model never calls a tool function directly here either. A call is an
+// entity attributed to the SESSION that asked for it, so what the tool writes
+// is written in the agent's name and not the daemon's, and the transcript's own
+// record of the call is the same entity @yaks/tools' runner answered.
 //
 // The conversion is not hand-written. `shapeOf` (@yaks/mcp) is where a tool's
 // Zod shape already comes from, and `zod-to-json-schema` is what the MCP SDK
-// itself converts with — a second reading of Zod's type table would be a copy
-// to keep in step for nothing. References are inlined ($refStrategy 'none'):
+// itself converts with — reimplementing Zod's type table here would be a second
+// copy to keep in step for nothing. References are inlined ($refStrategy 'none'):
 // a provider reads a tool's parameters on its own, without a document to
 // resolve `$ref` against.
 

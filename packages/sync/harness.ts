@@ -1,13 +1,13 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // recipe-box vocabulary, a server graph behind a @yaks/api handler, client
-// graphs wired to it, and pairs of stand-in sockets that carry frames between
-// them. Everything runs in one process: the `fetch` a client is handed IS the
-// server's handler, and a socket is two objects passing strings.
+// graphs connected to it, and pairs of stand-in sockets that carry frames
+// between them. Everything runs in one process: the `fetch` a client is given
+// IS the server's handler, and a socket is two objects passing strings.
 //
 // The domain is a shared recipe box — recipes with a course and a serving
 // count, notes about them, cooks who wrote them — so nothing here needs
-// knowledge from outside this file. `draft` is the one local-tier component:
-// what a cook has typed and not saved.
+// knowledge from outside this file. `draft` is the one component that never
+// leaves the client: what a cook has typed and not saved.
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
@@ -25,7 +25,7 @@ let doc: VocabDoc = {
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
-    // A named thing: everything in the box wears one.
+    // A named thing: everything in the box has one.
     doc: {
       component: true,
       type: 'object',
@@ -61,7 +61,7 @@ let doc: VocabDoc = {
       sync: 'none',
       properties: { text: { type: 'string' } },
     },
-    // The words in the search box: gone when the tab closes.
+    // The text in the search box: gone when the tab closes.
     sieve: {
       component: true,
       type: 'object',
@@ -106,8 +106,9 @@ export let boxGraph = (adopt = false): Graph =>
   graph({ storage: ram(box, { adopt, number: true }), vocab: box })
 
 /** A stand-in socket, driven by hand: it records what this side sent, and
- * `emit` plays the events a real one would fire. It starts CONNECTING, so a
- * frame sent before `emit('open')` waits exactly as it would on a real one. */
+ * `emit` fires the events a WebSocket would. It starts in the CONNECTING
+ * state, so a frame sent before `emit('open')` waits exactly as it would on a
+ * WebSocket. */
 export type Fake = Socket & {
   /** every message this side sent, parsed */
   sent: unknown[]
@@ -165,8 +166,8 @@ export let pair = (): { client: Fake; server: Fake } => {
   return { client, server }
 }
 
-/** A server: a graph, the handler in front of it, and the socket halves it has
- * accepted. */
+/** A server: a graph, the request handler in front of it, and the socket
+ * halves it has accepted. */
 export type Server = {
   graph: Graph
   handler: Handler
@@ -176,8 +177,9 @@ export type Server = {
   offer: (half: Fake) => void
 }
 
-/** The cook the server's door says every request is from — so a stamp the
- * client could not have written itself is visible in a read. */
+/** The cook the server's handler treats every request as coming from — so a
+ * stamped column the client could not have written itself shows up in a
+ * read. */
 export let COOK = 'c1'
 
 /** A server graph behind a @yaks/api handler, upgrading to stand-in sockets. */
@@ -197,22 +199,24 @@ export let server = (): Server => {
   return { graph: g, handler, sockets, offer: (half) => waiting.push(half) }
 }
 
-/** A client graph wired to a server, with the transports pointed in-process
- * and no timers of its own: `fire()` is what runs a scheduled reconnect. */
+/** A client graph connected to a server, with both transports pointed at an
+ * in-process handler and no timers of its own: `fire()` is what runs a
+ * scheduled reconnect. */
 export type Client = {
   graph: Graph
   wire: Sync
-  /** everything the wire reported */
+  /** everything the sync reported */
   trouble: Trouble[]
   /** run the pending reconnect, if one is scheduled */
   fire: () => void
   /** the socket this client currently holds */
   socket: () => Fake | undefined
-  /** settle: every batch in flight answered, every frame landed */
+  /** resolves when every write in flight has been answered and every frame
+   * applied */
   idle: () => Promise<void>
 }
 
-/** A client graph over its own map, wired to `srv` in this process. */
+/** A client graph over its own map, connected to `srv` in this process. */
 export let client = (srv: Server): Client => {
   let g = boxGraph(true)
   let trouble: Trouble[] = []
@@ -223,8 +227,8 @@ export let client = (srv: Server): Client => {
     let { client: c, server: s } = pair()
     mine = c
     srv.offer(s)
-    // The handler takes the server half and attaches to it; both ends open
-    // once it has, which is when the held subscribe frames go out.
+    // The handler receives the server half and attaches to it; both ends open
+    // once it has, which is when the waiting subscribe messages are sent.
     opening = Promise.resolve(srv.handler(
       new Request('http://box.test/ws', { headers: { upgrade: 'websocket' } }),
     )).then(() => {

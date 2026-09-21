@@ -1,22 +1,23 @@
-// The relay: the values a server hands on without owning.
+// The relay: the values the server forwards without storing.
 //
 // A `sync: peers` component is somebody's cursor, caret or presence dot. The
-// server is not its home — it is the only thing that can see every subscriber,
-// so it forwards. Nothing is written: no row, no journal line, no commit, and
-// therefore no `effect` phase and no subscription re-read. A relay write is a
-// message that happens to be shaped like a patch.
+// server is not where it belongs — it is only the one place that can see
+// every subscriber, so it forwards. Nothing is written: no row, no journal
+// line, no commit, and therefore no `effect` phase and no subscription
+// running its query again. A relayed value is a message that happens to be
+// shaped like a patch.
 //
 // What makes it more than a broadcast is the LIFETIME the component declares
 // (@yaks/vocab `durable`). The relay holds the last value per (entity,
-// component) under the CONNECTION that wrote it, so three things are possible
-// that a bare broadcast cannot do:
+// component) under the CONNECTION that sent it, so three things are possible
+// that a plain broadcast cannot do:
 //
-//   a subscriber that arrives LATE is told what is already there
-//   a connection that CLOSES clears everything it was saying
+//   a subscriber that connects LATE is sent what is already there
+//   a connection that CLOSES clears every value it was relaying
 //   a value with a duration clears itself, its timer restarted on each write
 //
-// All three are the same act — a `{comp: null}` cast to the peers — so this
-// file has one way to say it.
+// All three send the same thing — a `{comp: null}` bundle to the other
+// connections — so this file implements it once.
 //
 // The connection is a type parameter. This module never asks what one IS: the
 // subscription registry keys by its `Sink`, and a test keys by a string.
@@ -25,7 +26,8 @@ import type { Bundle, Comp, Eid } from '@yaks/graph'
 import { comps } from '@yaks/graph'
 import { durableOf, ms, syncOf, type Vocab } from '@yaks/vocab'
 
-/** How a timer is set, so a test can hold the clock. Answers the cancel. */
+/** How a timer is set, so a test can control the clock. Returns the function
+ * that cancels it. */
 export type Timer = (fn: () => void, after: number) => () => void
 
 let clock: Timer = (fn, after) => {
@@ -33,30 +35,31 @@ let clock: Timer = (fn, after) => {
   return () => clearTimeout(t)
 }
 
-/** One value the relay is holding: which entity, which component, and what it
- * last said. */
+/** One value the relay is holding: which entity, which component, and the
+ * patch last sent for it. */
 export type Holding = { eid: Eid; comp: string; patch: Comp }
 
 /** The relay over one graph's vocabulary. */
 export type Relay<C> = {
   /**
-   * A relay batch from one connection: held, and answered with the bundles to
-   * fan out. Components that do not sync to peers are dropped — this door
-   * forwards, it does not store, so a durable component sent here would
-   * silently vanish.
+   * Relayed bundles from one connection: held, and returned as the bundles
+   * to forward. Components that do not declare `sync: peers` are dropped —
+   * the relay forwards, it does not store, so a durable component sent here
+   * would silently vanish.
    */
   write: (conn: C, bundles: Bundle[]) => Bundle[]
   /** What one connection is holding, as `"<eid> <comp>"` keys — small enough
-   * to write somewhere that survives losing this process's memory. */
+   * to store somewhere that survives losing this process's memory. */
   holds: (conn: C) => string[]
-  /** Take those keys back, valueless, so a close can still clear them. */
+  /** Take those keys back, without their values, so a close can still clear
+   * them. */
   adopt: (conn: C, keys: string[]) => void
-  /** What a subscriber arriving now should be told: every OTHER connection's
-   * held values, for the entities it can see. */
+  /** What a subscriber connecting now should be sent: every OTHER
+   * connection's held values, for the entities it can see. */
   snapshot: (mine: C, sees: (eid: Eid) => boolean) => Bundle[]
-  /** A connection went away: forget it, answered with the nulls to cast. */
+  /** A connection went away: forget it, and return the nulls to forward. */
   drop: (conn: C) => Bundle[]
-  /** Cancel every timer — for a shutdown, so nothing is left ticking. */
+  /** Cancel every timer — for a shutdown, so nothing is left running. */
   close: () => void
 }
 
@@ -67,8 +70,8 @@ let split = (k: string): [Eid, string] => {
   return [k.slice(0, at), k.slice(at + 1)]
 }
 
-/** One bundle saying a component is gone — the same sentence a clear, a close
- * and an expiry all make. */
+/** One bundle clearing a component — the same bundle a clear, a close and an
+ * expiry all produce. */
 let cleared = (eid: Eid, comp: string): Bundle => ({
   entity: { eid },
   [comp]: null,
@@ -76,15 +79,15 @@ let cleared = (eid: Eid, comp: string): Bundle => ({
 
 /**
  * A relay. `expire` is how a value that ran out of time reaches the
- * subscribers — the registry passes its own fan-out, so an expiry looks to a
- * client exactly like the writer clearing it.
+ * subscribers — the registry passes its own broadcast function, so an expiry
+ * looks to a client exactly like the writer clearing the value.
  */
 export let relay = <C>(
   vocab: Vocab,
   expire: (bundles: Bundle[]) => void,
   timer: Timer = clock,
 ): Relay<C> => {
-  // conn → key → the value it last said. A Map per connection, so forgetting
+  // conn → key → the value it last sent. A Map per connection, so forgetting
   // a connection is one delete and the iteration order is the write order.
   let held = new Map<C, Map<string, Comp | null>>()
   // conn → key → cancel. Separate because most values have no timer at all.
@@ -119,13 +122,14 @@ export let relay = <C>(
           continue
         }
         if (!mine) held.set(conn, mine = new Map())
-        // A relay value is a PATCH like any other: what is held is the merge,
-        // what is forwarded is what this write said.
+        // A relayed value is a PATCH like any other: what is held is the
+        // merge, what is forwarded is only what this write carried.
         mine.set(k, { ...mine.get(k), ...patch })
         sent[name] = patch
         said = true
         // The timer restarts on every write: a cursor that keeps moving keeps
-        // its value alive, and one that stops is swept at the declared span.
+        // its value alive, and one that stops is cleared after the declared
+        // duration.
         cancel(conn, k)
         let span = ms(durableOf(vocab, name))
         if (span == null) continue
@@ -148,8 +152,9 @@ export let relay = <C>(
     write,
     holds: (conn) => [...held.get(conn)?.keys() ?? []],
     adopt: (conn, keys) => {
-      // Valueless on purpose: this is what is left after the process forgot
-      // what it was holding, and a null needs no value to be cast.
+      // Stored without values on purpose: this is what is left after the
+      // process forgot what it was holding, and clearing a component needs no
+      // value.
       let mine = held.get(conn) ?? new Map<string, Comp | null>()
       held.set(conn, mine)
       for (let k of keys) if (!mine.has(k)) mine.set(k, null)
@@ -159,7 +164,8 @@ export let relay = <C>(
       for (let [conn, values] of held) {
         if (conn === mine) continue
         for (let [k, patch] of values) {
-          if (patch == null) continue // adopted, its value lost to a wake
+          // adopted after a restart, so its value is not known any more
+          if (patch == null) continue
           let [eid, comp] = split(k)
           if (!sees(eid)) continue
           let b = out.get(eid) ?? { entity: { eid } }
@@ -184,8 +190,8 @@ export let relay = <C>(
   }
 }
 
-/** Every value one connection is holding, as one bundle per entity — what
- * {@link Relay.holds} means, spelled out for a reader. */
+/** Every value one connection is holding, as one record per (entity,
+ * component) — {@link Relay.holds}'s keys, split back apart for a reader. */
 export let holding = <C>(r: Relay<C>, conn: C): Holding[] =>
   r.holds(conn).map((k) => {
     let [eid, comp] = split(k)
