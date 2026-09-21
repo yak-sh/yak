@@ -3,7 +3,8 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { storage } from './mod.ts'
+import { type Driver, storage, type Store } from './mod.ts'
+import { Database, driver } from './db.ts'
 import { mem, shop } from './harness.ts'
 
 Deno.test('ddl() lists the statements install() runs', () => {
@@ -68,4 +69,63 @@ Deno.test('a bundle written and read back is the same entity', () => {
   assertEquals((p.doc as Record<string, unknown>).title, 'Kettle')
   assertEquals((p.product as Record<string, unknown>).price, 40)
   assertEquals((p.product as Record<string, unknown>).status, 'live')
+})
+
+Deno.test('a driver over a FILE takes the write lock up front', () => {
+  // The arrangement every `yak` line depends on: a graph is a file, and as
+  // many processes as there are lines typed have it open. A deferred
+  // transaction that read before it wrote cannot upgrade once another
+  // connection has committed — SQLITE_BUSY, instantly, whatever the busy
+  // timeout says — so the outermost unit says `begin immediate` and the
+  // timeout has something to wait on. Everything inside it is a savepoint, as
+  // ever: one connection has one transaction whatever the nesting says.
+  let said: string[] = []
+  let watched = (over: Driver): Driver => ({
+    ...over,
+    exec: (sql) => {
+      said.push(sql)
+      over.exec(sql)
+    },
+  })
+  let write = (s: Store) =>
+    s.tx((tx) => {
+      tx.read('.doc')
+      tx.patch([{ entity: { eid: 'p1' }, doc: { title: 'Kettle' } }])
+    })
+
+  let dir = Deno.makeTempDirSync({ prefix: 'yaks-file-' })
+  let db = new Database(`${dir}/graph.sqlite`)
+  try {
+    db.exec('pragma journal_mode = wal')
+    let file = storage(watched(driver(db)), shop)
+    file.install()
+    said.length = 0
+    write(file)
+    assertEquals(said.filter((sql) => /^(begin|commit|savepoint)/.test(sql)), [
+      'begin immediate',
+      'commit',
+    ])
+    // And a unit inside that one is a savepoint: the lock is already held.
+    said.length = 0
+    file.tx(() => file.tx(() => 0))
+    assertEquals(
+      said.filter((sql) => /^(begin|savepoint)/.test(sql)).map((sql) =>
+        sql.split('_')[0]
+      ),
+      ['begin immediate', 'savepoint yaks'],
+    )
+  } finally {
+    db.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+
+  // An in-memory database is this process's alone, so nothing else can be
+  // writing it and there is no lock to take.
+  said.length = 0
+  let alone = storage(watched(mem()), shop)
+  alone.install()
+  said.length = 0
+  write(alone)
+  assertEquals(said.filter((sql) => /^(begin|commit)/.test(sql)), [])
+  assert(said.some((sql) => sql.startsWith('savepoint')), said.join(' · '))
 })

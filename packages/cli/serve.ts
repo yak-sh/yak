@@ -45,6 +45,7 @@ import {
   type Graph,
   graph,
   type NamedTool,
+  namedTool,
   type Plugin,
   then,
 } from '@yaks/graph'
@@ -69,7 +70,7 @@ import {
   type Route,
   routed,
 } from '@yaks/api'
-import { mcp, type Search } from '@yaks/mcp'
+import { core, mcp, type Search } from '@yaks/mcp'
 import { adopt, fields as searched, find, search } from '@yaks/fts'
 import {
   type Effects,
@@ -495,13 +496,31 @@ export let compose = async (
     // vocabulary says and rebuilds one that drifted, and writes nothing on a
     // boot where nothing moved.
     if (text.length) adopt(sql, text, derived)
-    let tools = loadTools(
-      docs,
-      Object.assign(
-        {},
-        ...tooled.map(([t, options]) => t.runs?.(host, options) ?? {}),
-      ) as Runs,
-    )
+    // Ranked words, for whoever asks for them. Membership is already answered
+    // by the extension above; this is the order they come back in.
+    let ranked: Search | undefined = text.length
+      ? async (words, opts) => {
+        let hits = find(sql, text, words, { limit: opts?.limit })
+        let found = await detached(host.storage).get(hits.map((h) => h.entity))
+        let at = new Map(found.map((b) => [b.entity.eid, b]))
+        return hits.map((h) => at.get(h.entity)).filter((b) => !!b)
+      }
+      : undefined
+    // THE GENERIC TIER IS THIS GRAPH'S, not the HTTP door's. `graph_apply` over
+    // this graph is one tool whether a person typed it or an agent asked for
+    // it, so it is composed here beside the plugins' own (@yaks/mcp `core`)
+    // and `/mcp` is told not to add a second copy. That is what lets a command
+    // line run every tool the door lists.
+    let tools = [
+      ...core({ vocab, search: ranked }).map(namedTool),
+      ...loadTools(
+        docs,
+        Object.assign(
+          {},
+          ...tooled.map(([t, options]) => t.runs?.(host, options) ?? {}),
+        ) as Runs,
+      ),
+    ]
     // The one RUNNER over this graph. A door calls a tool and records the ask
     // and the answer as it goes; what this adds is the calls NOBODY here is
     // waiting on — one written by another process through `/apply`, or one
@@ -529,21 +548,11 @@ export let compose = async (
     }
     let routes = served.flatMap(([r, o]) => r.routes?.(host, o) ?? [])
     let door = api({ graph: g, authenticate: host.who })
-    // Ranked words, for the door that asks for them. Membership is already
-    // answered by the extension above; this is the order they come back in.
-    let ranked: Search | undefined = text.length
-      ? async (words, opts) => {
-        let hits = find(sql, text, words, { limit: opts?.limit })
-        let found = await detached(host.storage).get(hits.map((h) => h.entity))
-        let at = new Map(found.map((b) => [b.entity.eid, b]))
-        return hits.map((h) => at.get(h.entity)).filter((b) => !!b)
-      }
-      : undefined
     let agents = mcp({
       graph: g,
       authenticate: host.who,
       tools,
-      search: ranked,
+      core: false,
       name: config.name ?? 'yak',
     })
     let handler: Handler = (request) => {

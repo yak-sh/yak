@@ -37,6 +37,19 @@ export type Driver = {
    */
   tx?: <R>(body: () => R) => R
   /**
+   * This driver owns a whole SQLite FILE, which other processes may have open
+   * at the same time. The outermost unit then takes the write lock UP FRONT
+   * (`begin immediate`) instead of letting a deferred transaction try to
+   * upgrade: a transaction that read first and writes second cannot upgrade
+   * once another connection has committed, and SQLite answers that with
+   * `SQLITE_BUSY` the busy handler is NOT allowed to retry — "database is
+   * locked", instantly, however long `busy_timeout` says to wait. Taking the
+   * lock first turns that refusal into the bounded wait the timeout is for,
+   * which is what lets many `yak` lines write one graph at once. A driver over
+   * a private or in-memory database says nothing and nests savepoints as ever.
+   */
+  file?: boolean
+  /**
    * How many terms one compound SELECT may carry on this engine. Workerd — the
    * SQLite under a Durable Object — is built with SQLITE_MAX_COMPOUND_SELECT =
    * 5 and answers a sixth term with `too many terms in compound SELECT`, where

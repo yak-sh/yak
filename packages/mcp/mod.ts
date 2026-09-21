@@ -77,6 +77,7 @@ export { mcp, type MountOptions } from './mount.ts'
 export {
   annotated,
   COMMAND,
+  inputSchemaOf,
   listing,
   type Options,
   roster,

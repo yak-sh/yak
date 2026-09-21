@@ -1,47 +1,59 @@
 # @yaks/cli
 
-The `yak` command, and the server behind it.
+The `yak` command, and the graph behind it.
 
 Two halves, one vocabulary of tools:
 
-- **the client** — every tool an MCP server lists is a subcommand, read at run
-  time, with the command line mapped through each tool's own input schema;
-- **the host** (`yak serve`, [./serve.ts](./serve.ts)) — one config file naming
-  plugin packages, whose facets are imported one subpath at a time and composed
-  into a running graph with its doors on it. There is no other server wiring: a
-  server IS a config and a list of packages.
+- **the composition** ([./serve.ts](./serve.ts)) — one config file naming plugin
+  packages, whose facets are imported one subpath at a time and composed into a
+  running graph. A command line composes it to run one tool and exits
+  ([./local.ts](./local.ts)); `yak serve` composes the same thing and puts the
+  HTTP doors on it. There is no other wiring: a graph IS a config and a list of
+  packages.
+- **the client** ([./platform.ts](./platform.ts)) — for a graph this box cannot
+  open as a file, every tool an MCP server lists is a subcommand, read at run
+  time, with the command line mapped through each tool's own input schema.
 
 ```sh
 deno install -gAf jsr:@yaks/cli/yak
 
-yak app_list                       # a tool the server lists
-yak serve --config yak.json        # the doors onto the graph that config names
-yak --config yak.json task list    # a line aimed at that server
+yak --config yak.json task list    # opens that graph, runs the tool, exits
+yak land                           # the same, on the checkout you stand in
+yak serve --config yak.json        # the HTTP doors onto the same graph
+yak app_list                       # a tool yaks.app lists, over /mcp
 ```
 
-## Where a line is aimed
+## Where a line runs
 
-**A config names a SERVER, not a second copy of the graph.**
-`yak serve
---config yak.json` binds the `hostname` and `port` that config says,
-and every other line naming the same config talks to whatever is listening
-there, over `/mcp`. One graph, one writer, one tool list — the same words
-whether the caller is a person, a lifecycle hook or an agent. There is no local
-path that opens the database a server is holding, and there will not be one:
-that is a second writer, a second runner and a second boot.
+**There is no server.** A config names a GRAPH — a SQLite file and the plugins
+that speak over it — and a `yak` line OPENS it, composes them, runs the tool in
+its own process and exits. SQLite in WAL mode takes as many writers as there are
+lines typed, each serialized by the file itself, so nothing bottlenecks on a
+process somebody had to remember to start. `yak serve` is one more process over
+the same file.
 
-In order, a line goes to:
+`--host` is for a graph this box cannot open as a file — yaks.app, a box
+somewhere else — and then the line talks to that door over `/mcp`. Said with
+`--config`, the two name two places and the line is refused.
 
-| said                       | where it goes                                                       |
-| -------------------------- | ------------------------------------------------------------------- |
-| `--host <host>`            | there — a bare name is `https://`, an origin is as given            |
-| `$YAKS_HOST`               | there                                                               |
-| `--config` / `$YAK_CONFIG` | `http://<hostname>:<port>` of that config (`127.0.0.1:8787` unsaid) |
-| nothing                    | `yaks.app`                                                          |
+In order, a line runs:
+
+| said              | where                                                 |
+| ----------------- | ----------------------------------------------------- |
+| `--config <path>` | here, over the graph that config names                |
+| `--host <host>`   | there — a bare name is `https://`, an origin as given |
+| `$YAKS_HOST`      | there                                                 |
+| `$YAK_CONFIG`     | here, over the graph that config names                |
+| nothing           | `yaks.app`                                            |
 
 So a box whose shell exports `YAK_CONFIG=/etc/yak.json` types `yak task list`
-and reaches its own server; `yak --host yaks.app app_list` still reaches the
+and opens its own graph; `yak --host yaks.app app_list` still reaches the
 platform from the same shell.
+
+A tool runs the same way either way: the line writes a CALL and the runner
+answers it (@yaks/tools), so the transcript says the same thing about a tool a
+person typed and a tool an agent asked for, and the rules, the effects and the
+attribution are one set for both.
 
 ## The config
 
@@ -73,8 +85,8 @@ One JSON file. `--config` names it, else `$YAK_CONFIG`.
 | ---------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `db`       | the SQLite file, or `:memory:`. Relative to the config file itself.                                                      |
 | `plugins`  | the packages, by import specifier; a relative one resolves against the config                                            |
-| `port`     | what `serve` listens on, and so where a client aimed at this config talks (default 8787)                                 |
-| `hostname` | which interface `serve` binds; a client reads it as the host to talk to                                                  |
+| `port`     | what `serve` listens on (default 8787)                                                                                   |
+| `hostname` | which interface `serve` binds                                                                                            |
 | `actor`    | the eid every request is signed with, where no plugin authenticates                                                      |
 | `numbers`  | whether the store mints human numbers beside eids (default true)                                                         |
 | `adopt`    | take the `num` a batch's identity carries instead of minting one — what a store seeded from another store's export needs |
@@ -137,7 +149,6 @@ says so.
 | `./boot`    | `boot: (host, options)` — the one pass made at start-up         | anything            |
 | `./service` | `service: (host, options, signal)` — what keeps running         | anything            |
 | `./views`   | `views` — @yaks/render renderers for the web door and a TUI     | nothing server-side |
-| `./words`   | `words` — what the package adds to a COMMAND LINE               | anything            |
 | `.`         | types, and the pure functions the package offers as a library   |                     |
 
 ```ts
@@ -169,34 +180,30 @@ checks both with only the web platform in scope. That is what lets a browser
 load what a plugin SAYS without loading what it DOES — `@yaks/process/vocab`
 describes a running program where `@yaks/process` starts one.
 
-`yak serve` takes the first five. `./views` is nobody's server business.
+`compose` takes every facet but `./views`, which is nobody's business here.
 
-### A word is a tool that runs HERE
+### A tool that acts on the BOX
 
-`./words` is the one facet no server takes. A tool runs where the graph is; a
-word runs on the box that typed it, against the checkout it is standing in —
-`yak land` fast-forwards THIS branch, and a `land` tool would fast-forward a
-branch on the server's box instead, which is nobody's intent. So a word is not
-declared in a `vocab.json`, is never listed by `/mcp`, and is not read from the
-config: the `yak` command imports the ones it ships with (`here` in
-[./yak.ts](./yak.ts)), because a word has to work in a checkout with no config
-and no server in sight.
-
-It is declared the way a tool is — a name, a description, an input schema the
-line is mapped through — so it is listed, helped and completed from the one
-declaration. Only the run differs: arguments in and an exit code out, printing
-as it goes, where a tool's is bundles in and bundles out. That shape is `Word`
-(./run.ts), and a contributing package writes the literal without importing it:
+Some tools are not about the graph at all. `land` fast-forwards a branch;
+`hooks install` writes a settings file. They are tools like any other — declared
+in a `vocab.json`, listed by `/mcp`, run by the same runner — and what tells
+them where to act is `ctx.cwd`, the directory the process running the call
+stands in. On a command line that is where the person typed, because the line
+opened the graph itself and ran the tool in the same process.
 
 ```ts
-// @yaks/git/words
-export let words = [{
-  name: 'land',
-  description: 'Land the branch you are standing on…',
-  inputSchema: { type: 'object', properties: { 'allow-revert': … } },
-  run: async (args, c) => (c.out(`landed ${sha}`), 0),
-}]
+// @yaks/git/tools
+export let runs = () => ({
+  land: async (_bundles, ctx) => {
+    let outcome = await land({ cwd: ctx.cwd, write })
+    if (!('landed' in outcome)) throw new CallError('diverged', said)
+    return [{ entity: { eid: '$landed' }, content: { body: … } }]
+  },
+})
 ```
+
+A tool that ANSWERS a refusal rather than landing throws a `CallError`: the
+runner records it, and the command line's exit code says which it was.
 
 `host` is `{ config, vocab, storage, sql, graph, who }`. `storage` and `graph`
 are live from the moment each is open — a factory may keep them, and may not
@@ -223,12 +230,12 @@ where it says nobody, the answer is the host itself.
 
 ## Who the host writes as
 
-`actor` in the config is one sentence about a whole server: who its own writing
-is by. A NAME is the host's own identity — it mints that entity at start-up and
-derives its id from the name (@yaks/kernel `hosted`), so `"actor": "yak"` is a
-server that is `yak` in every graph it writes to and nothing has to be looked
-up. An id this family minted (a uuid, a content hash) names something somebody
-else made, and is signed with as it stands.
+`actor` in the config is one sentence about every process that composes it: who
+its own writing is by. A NAME is the host's own identity — it mints that entity
+at start-up and derives its id from the name (@yaks/kernel `hosted`), so
+`"actor": "yak"` is `yak` in every graph it writes to and nothing has to be
+looked up. An id this family minted (a uuid, a content hash) names something
+somebody else made, and is signed with as it stands.
 
 It is not only the doors. A batch that reaches `apply()` with no `$actor` at all
 — a rule's effect, a plugin's boot pass, a load poured in through `yak apply` —
@@ -257,18 +264,20 @@ here as a row nobody wrote. A door that authenticated somebody signs over it.
 7. mounts the doors: @yaks/api at `/apply`, `/query` and `/ws`, @yaks/mcp at
    `/mcp`, then the `./routes`.
 
-It answers a `Served`: the host, its `tools`, its `fx`, one `handler`, and
-`close`. `serve(config)` is that plus `Deno.serve`. Reading the config file is
-`./config.ts`, which imports nothing — a line that only needs the ADDRESS must
-never drag a database in.
+It answers a `Served`: the host, its `tools`, its `runner`, its `fx`, one
+`handler`, and `close`. `serve(config)` is that plus `Deno.serve`, plus the
+things only a long-lived process does — the boot passes, the effect sweep, the
+services. A one-shot line composes the same host and starts none of them.
+Reading the config file is `./config.ts`, which imports nothing, so a line that
+only needs to know WHERE never drags a database in.
 
-## The client half
+## The command line
 
-`cli(tools, opts)` is the seam: hand it tools and it reads the line — the word,
-either order of a two-word tool, the arguments through that tool's own input
-schema — runs the one it found, and answers the exit code (0 said, 1 refused, 2
-the line was wrong). A program with words of its own passes more tools; the
-first tool to name a word wins, so the order of the list is the precedence.
+`cli(commands, opts)` is the seam: hand it commands and it reads the line — the
+word, either order of a two-word tool, the arguments through that tool's own
+input schema — runs the one it found, and answers the exit code (0 said, 1
+refused, 2 the line was wrong). A program with commands of its own passes more;
+the first to name a word wins, so the order of the list is the precedence.
 
 ```ts
 import { cli, helpTool } from '@yaks/cli'

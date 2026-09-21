@@ -125,6 +125,11 @@ export type Options = {
   security?: Security[] | ((t: NamedTool) => Security[] | undefined)
   /** tools beside the generic tier and the graph's plugins' */
   tools?: Tool[]
+  /** whether this door adds the generic tier itself (default: yes). A host
+   * that already carries it in `tools` — one whose command line runs the same
+   * `graph_apply` this door does, out of one list — says no, so the tier is
+   * listed once and is the same tool object either way. */
+  core?: boolean
   /** what a result should ALSO say, given the names this server is listing
    * right now: the staleness line for a client whose cached tool list has
    * moved under it (roster.ts). Called once per tool result, and what it
@@ -239,15 +244,30 @@ export let shapeOf = (tool: Tool): Record<string, z.ZodTypeAny> =>
   )
 
 /**
+ * A tool's arguments as JSON Schema, whichever way it declared them: its own
+ * `inputSchema`, or its Zod shape converted. This is what a listing sends, so
+ * anything else that has to say a composed tool's grammar — a command line
+ * mapping a line through it — reads exactly what a client over the wire reads.
+ */
+export let inputSchemaOf = (
+  tool: Tool,
+): { type: 'object'; [key: string]: unknown } =>
+  (tool.inputSchema ?? zodToJsonSchema(z.object(shapeOf(tool)), {
+    target: 'jsonSchema7',
+    $refStrategy: 'none',
+  })) as { type: 'object'; [key: string]: unknown }
+
+/**
  * Every tool this server lists, in the order it registers them: the generic
- * tier, then the graph's plugins', then the host's own.
+ * tier, then the graph's plugins', then the host's own. A host that carries
+ * the tier in its own list says `core: false` and the tier is not added twice.
  *
  * ```ts
  * let names = listing(opts).map(toolName)
  * ```
  */
 export let listing = (opts: Options): Tool[] => [
-  ...core({
+  ...(opts.core === false ? [] : core({
     vocab: opts.graph.vocab,
     depth: opts.schema,
     column: opts.column,
@@ -256,7 +276,7 @@ export let listing = (opts: Options): Tool[] => [
     readOnly: opts.readOnly,
     scope: opts.scope,
     undo: opts.undo,
-  }),
+  })),
   ...toolsOf(opts.graph.plugins),
   ...(opts.tools ?? []),
 ]
@@ -363,10 +383,7 @@ export let server = (opts: Options): McpServer => {
         name: t.name,
         ...(t.title ? { title: t.title } : {}),
         description: t.description,
-        inputSchema: (t.inputSchema ?? zodToJsonSchema(z.object(shapeOf(t)), {
-          target: 'jsonSchema7',
-          $refStrategy: 'none',
-        })) as { type: 'object'; [key: string]: unknown },
+        inputSchema: inputSchemaOf(t),
         annotations: annotated(t),
         ...(metaOf(t, opts.security)
           ? { _meta: metaOf(t, opts.security) }

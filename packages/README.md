@@ -101,7 +101,9 @@ In dependency order:
   builders that turn a `path → sha256` manifest into trees and a commit. Source
   as a graph says it too: the `repository` and `worktree` a checkout is, the
   landed `commit` attached to the work it is about, and the `anchor` a document
-  makes into source.
+  makes into source. Its `land` tool is the one that acts on the BOX: it
+  fast-forwards the branch standing at `ctx.cwd`, which on a command line is
+  where the person typed.
 - **[@yaks/effects](./effects)** — what a graph DOES about what it commits:
   handlers run after the transaction, each isolated, with an optional durable
   ledger. Registered on a component and one of the three things that happen to
@@ -220,16 +222,16 @@ In dependency order:
 - **[@yaks/mcp-client](./mcp-client)** — the other side of that door: a remote
   MCP server's tools over Streamable HTTP, exposed as the same `Tool`
   definitions a graph hands its own model, with the host resolving credentials.
-- **[@yaks/cli](./cli)** — that door from a shell: the `yak` command, which
-  reads an MCP server's `tools/list` at run time and makes every tool a
-  subcommand, mapping the command line through each tool's own input schema. It
-  has no verb list of its own, so it cannot drift from the connector an agent is
-  talking to — and a PLUGIN, a table of tools contributed at boot, is how a box
-  adds words of its own beside them under one help. It is also the HOST:
-  `yak serve` reads one config naming plugin modules, imports each, and composes
-  what they export — vocabulary, rules, tool runs, effects, routes — into a
-  graph with the doors on it. A plugin is a plain module; there is no registry
-  and no other server wiring.
+- **[@yaks/cli](./cli)** — that door from a shell: the `yak` command. A config
+  names a GRAPH, and a line OPENS it — composes the plugins it names, runs the
+  tool in that same process, exits. There is no server to wait on; WAL takes as
+  many writers as there are lines typed. `--host` is for a graph this box cannot
+  open as a file, and then the line reads that server's `tools/list` at run time
+  instead. Either way it has no verb list of its own, so it cannot drift from
+  what it is talking to, and a table of commands contributed at boot is how a
+  box adds its own beside them under one help. `yak serve` is the same
+  composition with the HTTP doors on it — one more process over the same file,
+  never the one everything goes through.
 - **[@yaks/harness](./harness)** — the packages above as a working agent, with
   nothing under it but a file: one SQLite database it makes itself, the session
   daemon in the same process, the shell and the generic graph tools handed to

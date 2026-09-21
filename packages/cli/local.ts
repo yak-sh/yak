@@ -16,6 +16,7 @@
 // opens a database and pulls in every plugin the config names — a cost `yak
 // login` on a box with no graph should not pay.
 
+import { inputSchemaOf } from '@yaks/mcp'
 import { answerOf, faulted, toolEid, worded } from '@yaks/tools'
 import { read } from './config.ts'
 import type { Command, Ctx } from './run.ts'
@@ -44,8 +45,16 @@ export let close = async (): Promise<void> => {
  * table a `cli` gathers where the line named a config (run.ts `more`). */
 export let commands = async (c: Ctx): Promise<Command[]> => {
   let host = await opened(c.config!)
-  return host.tools.map((tool) => ({
-    ...tool,
+  return host.tools.map((declared) => ({
+    ...declared,
+    // The grammar of the line is the tool's own arguments as JSON Schema —
+    // the same thing a listing sends, so a line typed here and a line typed at
+    // a door are spelled identically even for a tool that declared its
+    // arguments in Zod (@yaks/mcp `inputSchemaOf`). The Zod goes: a
+    // declaration says its arguments once, and the runner still checks the
+    // call against the TOOL's own (@yaks/tools `checked`).
+    input: undefined,
+    inputSchema: inputSchemaOf(declared),
     run: async (args: Record<string, unknown>): Promise<number> => {
       // The `tool` rows a call's `to` points at, first: a call naming an
       // entity nothing minted would be a dangling reference. Once per process,
@@ -53,7 +62,7 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
       await host.runner.ensure()
       let landed = await host.runner.call([{
         entity: { eid: '$call' },
-        call: { to: toolEid(tool.name), args: JSON.stringify(args ?? {}) },
+        call: { to: toolEid(declared.name), args: JSON.stringify(args ?? {}) },
         ...(host.config.actor ? { $actor: { by: host.config.actor } } : {}),
       }])
       c.out(

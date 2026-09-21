@@ -74,10 +74,10 @@ let applied = async (
   let asked = (change: unknown) =>
     tool.run({ change, ...(dry ? { check: true } : {}) }, c)
   if (args.change) return await asked(args.change)
-  let source = typeof args.file == 'string' ? args.file : '-'
-  let body = source == '-' || source == '@-'
-    ? await c.reads.stdin()
-    : await c.reads.file(source.replace(/^@/, ''))
+  // The BODY, already: `@path` is that file and `-` is stdin for every value
+  // on every line (args.ts `inflate`), so what arrives here is the bundles
+  // themselves. A line that said nothing at all means stdin.
+  let body = typeof args.file == 'string' ? args.file : await c.reads.stdin()
   let code = 0
   for (let change of chunks(bundlesIn(body))) {
     code = await asked(change) || code

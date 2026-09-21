@@ -25,6 +25,10 @@ export { sqlitePath } from './sqlitepath.ts'
  * preparing each one afresh costs a compile for nothing; the cache is bounded
  * and `Database.close()` finalizes what it holds.
  *
+ * A database on DISK is a file other processes may have open too, so it says
+ * so ({@link Driver.file}) and the outermost unit takes the write lock up
+ * front. An in-memory one belongs to this process alone and says nothing.
+ *
  * ```ts
  * import { Database, driver } from '@yaks/sqlite/db'
  *
@@ -33,6 +37,12 @@ export { sqlitePath } from './sqlitepath.ts'
  */
 export let driver = (db: Database): Driver => {
   let cache = new Map<string, ReturnType<Database['prepare']>>()
+  // Whether this is a file other processes may have open, asked of SQLite
+  // itself rather than of the string somebody passed: `main` has a path on
+  // disk, and an in-memory or temporary database has none.
+  let file = !!(db.prepare(
+    `select file from pragma_database_list where name = 'main'`,
+  ).all()[0] as { file?: string } | undefined)?.file
   let live = () => {
     // @db/sqlite closes and finalizes its native handles without invalidating
     // the JS Statement objects. Calling a cached one after close is a SIGSEGV,
@@ -77,6 +87,7 @@ export let driver = (db: Database): Driver => {
       live()
       db.exec(sql)
     },
+    file,
     arms: STOCK,
   }
 }

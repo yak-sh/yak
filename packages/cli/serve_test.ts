@@ -179,7 +179,20 @@ Deno.test('compose takes each facet from its own subpath, and mounts the doors',
   )
   try {
     assertEquals(host.vocab.comp('book')?.name, 'book')
-    assertEquals(host.tools.map((t) => t.name), ['book_list', 'book_add'])
+    // The generic tier is this graph's own, ahead of the plugins': one list,
+    // which the command line runs and `/mcp` lists (`core: false` there, so
+    // the tier is not added a second time).
+    assertEquals(host.tools.map((t) => t.name), [
+      'graph_apply',
+      'graph_query',
+      'graph_show',
+      'graph_schema',
+      // `search` is there because a column of this vocabulary said
+      // `search: true`; a vocabulary that indexes nothing lists no search.
+      'search',
+      'book_list',
+      'book_add',
+    ])
 
     let applied = await host.handler(
       new Request('http://h/apply', {
