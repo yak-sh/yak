@@ -53,15 +53,15 @@ g.apply([{
 }])
 ```
 
-Compose `docs()` once per graph. A vocabulary refuses a component declared
+Compose `docs()` once per graph. A vocabulary rejects a component declared
 twice, so packages that need `doc` — [@yaks/mail](https://jsr.io/@yaks/mail) is
 one — depend on this package and leave the composing to you, rather than
-shipping a second copy of the word.
+shipping a second copy of the component.
 
 ## The body may be content-addressed, and `doc` never knows
 
-`body` declares `store: "blob"` — a keyword this package **names** and does not
-import. It is inert on its own:
+`body` declares `store: "blob"` — a keyword this package **names** but does not
+import. On its own it does nothing:
 
 - Load without [@yaks/blob](https://jsr.io/@yaks/blob)'s `blobKeywords` and
   `body` is an ordinary text column.
@@ -76,7 +76,7 @@ depends on nothing to make that true.
 
 `doc` is a kind, and it declares no `before`. A `before` may only name a kind
 the loaded vocabulary declares, so a base package cannot order itself against
-words it does not ship. Your own document says which wins:
+components it does not ship. Your own vocabulary decides which wins:
 
 ```ts
 // recipe takes display-kind precedence over doc

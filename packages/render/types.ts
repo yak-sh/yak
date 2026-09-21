@@ -1,7 +1,8 @@
 /**
  * The portable renderer contract: a tree belongs to the injected hyperscript,
- * while selection and verbs remain data. A renderer is generic over the host's
- * node so the same registration can be handed to a browser or a text host.
+ * while selection and actions remain data. A renderer is generic over the node
+ * type its backend builds, so the same registration can be given to a browser
+ * backend or to a text one.
  */
 
 import type { Bundle } from '@yaks/match'
@@ -9,7 +10,8 @@ import type { Query } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import type { ArchetypeLookup } from './archetype.ts'
 
-/** A host node, literal content, an empty child, or nested children. */
+/** A node the backend built, literal content, an empty child, or nested
+ * children. */
 export type Child<Node> =
   | Node
   | string
@@ -19,29 +21,32 @@ export type Child<Node> =
   | undefined
   | readonly Child<Node>[]
 
-/** The common element vocabulary; a host owns what each tag becomes. */
+/** The shared set of element names; each backend decides what a tag becomes. */
 export type H<Node> = (
   tag: string,
   props: Record<string, unknown> | null,
   ...children: Child<Node>[]
 ) => Node
 
-/** Extra values a host supplies; comp and col together select a column schema. */
+/** Extra values the caller supplies; comp and col together select a column
+ * schema. */
 export type Context = {
   comp?: string
   col?: string
   [key: string]: unknown
 }
 
-/** A host supplies nested rendering through the same registry and bundle. */
+/** The backend supplies nested rendering through the same registry and
+ * bundle. */
 export type RenderContext<Node> = Context & {
   render?: (view: string, ctx?: Context) => Node | null
 }
 
-/** Selection metadata shared by portable and host-owned renderer payloads. */
+/** The fields selection needs, shared by portable renderers and by ones a
+ * backend defines itself. */
 export type Registration = { view: string; match: Query | true }
 
-/** A pure view of a bundle, independent of any host's node representation. */
+/** A pure view of a bundle, independent of any backend's node type. */
 export type Renderer = Registration & {
   render: <Node>(bundle: Bundle, h: H<Node>, ctx: RenderContext<Node>) => Node
 }
@@ -64,7 +69,7 @@ export type Contributor<A = Action, E = Bundle> = {
 
 /** Registry configuration; actions preserve component and contribution order. */
 export type Options<A = Action, E = Bundle> = {
-  /** Immutable table sets held by the host's descriptor subscription. */
+  /** Immutable table sets held by the caller's descriptor subscription. */
   archetypes?: ArchetypeLookup
   actions?:
     | Readonly<Record<string, readonly (A & { when?: Query })[]>>
@@ -75,7 +80,7 @@ export type Options<A = Action, E = Bundle> = {
   views?: readonly string[]
 }
 
-/** One curated registry, with no global registrations or host state. */
+/** One curated registry, with no global registrations and no backend state. */
 export type Registry<
   R extends Registration = Renderer,
   A = Action,

@@ -14,11 +14,11 @@
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "description": "what the pane is showing — a session, a process, anything that runs"
+          "description": "what is running in the pane — a session, a process, anything that runs"
         },
         "pane": {
           "type": "string",
-          "description": "the target tmux answers to: a pane id (`%42`), or `session:window.pane`"
+          "description": "the target string tmux accepts: a pane id (`%42`), or `session:window.pane`"
         }
       },
       "description": "a terminal somebody can watch: one tmux pane, and what is running in it"

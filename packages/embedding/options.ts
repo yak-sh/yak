@@ -1,9 +1,12 @@
-// What a CONFIG says to this plugin, and the embedder it names.
+// What a CONFIG declares to this plugin, and the embedder it names. "The
+// server" below means whichever process opened the graph and loaded this
+// package.
 //
-// The vectors are this package's business; the MODEL is not. So a host names
-// one beside the plugin and both facets build it from that one sentence — the
-// rules facet for the space it NAMES (a stored vector is only comparable
-// inside its own), the effects facet for the function it IS:
+// The vectors are this package's business; the MODEL is not. So the config
+// names one beside the plugin, and both exports build what they need from that
+// one declaration — `./rules` needs the vector SPACE it names (a stored vector
+// is only comparable with others in the same space), `./effects` needs the
+// embedding function itself:
 //
 // ```json
 // { "use": "@yaks/embedding",
@@ -15,19 +18,20 @@
 //             "text": ["doc.title", "doc.body"] } }
 // ```
 //
-// MISSING CONFIG NEVER PREVENTS BOOT. A host that composes this plugin and
-// has not been given a key yet is a host WAITING for one: it comes up, it
-// keeps no vectors, its check says what it is waiting for, and the first pass
-// after the key appears embeds. So nothing here throws — what a config amounts
-// to is a {@link Ready} value, read on every pass rather than once at compose,
-// which is what lets a key exported into the environment (or, later, written
-// into the graph) start the sweep without a restart.
+// MISSING CONFIG NEVER PREVENTS STARTUP. A server that composes this plugin
+// and has not been given a key yet is a server WAITING for one: it starts, it
+// stores no vectors, its check reports what it is waiting for, and the first
+// pass after the key appears is the one that embeds. So nothing here throws —
+// a config amounts to a {@link Ready} value, read on every pass rather than
+// once when the plugin is composed, which is what lets a key exported into the
+// environment (or, later, written into the graph) start the sweep without a
+// restart.
 //
-// A name nothing here implements is still a refusal — it will never become an
-// embedder by waiting — but it is SAID, once, where it is read, rather than
-// taking the host down with it. `{"via": "hash"}` is the offline embedder
+// A `via` nothing here implements is still an error — waiting will never turn
+// it into an embedder — but it is reported, once, where it is read, rather than
+// taking the server down with it. `{"via": "hash"}` is the offline embedder
 // shipped here — instant, deterministic, and no model at all — which is what a
-// development box and a test want.
+// development machine and a test want.
 
 import type { Vocab } from '@yaks/vocab'
 import type { Embedder } from './embedder.ts'
@@ -43,7 +47,7 @@ export type Named = Remote | {
   dim?: number
 }
 
-/** What a config says to `@yaks/embedding`. */
+/** What a config declares to `@yaks/embedding`. */
 export type Options = {
   /** which embedder the vectors are made with — required, and it names the
    * space every stored row is stamped with */
@@ -65,12 +69,12 @@ export type Options = {
   stale?: number
 }
 
-/** What the config amounts to: the embedder it names, or the one sentence
- * saying why there is none yet. */
+/** What the config amounts to: the embedder it names, or the single message
+ * explaining why there is none yet. */
 export type Ready = {
-  /** the vector SPACE — the model name every stored row is stamped with. It
-   * comes from the config alone, so the read door can rank `.near` over what
-   * is already stored while the sweep is still waiting for a key. */
+  /** the vector SPACE — the model name stored on every row. It comes from the
+   * config alone, so a query can rank `.near` over what is already stored
+   * while the sweep is still waiting for a key. */
   model?: string
   /** the embedder itself: absent while the config is incomplete */
   embedder?: Embedder
@@ -78,10 +82,10 @@ export type Ready = {
   waiting?: string
 }
 
-/** The embedder a config named, or what it is waiting for. Absent config is
- * WAITING: the host comes up with no vectors and starts the moment the config
- * appears. A `via` nothing here implements never will, so that is a refusal —
- * said here, where it is read, and not at boot. */
+/** The embedder a config named, or what it is waiting for. Missing config
+ * means WAITING: the server starts with no vectors and begins embedding the
+ * moment the config appears. A `via` nothing here implements never will, so
+ * that is an error — reported here, where it is read, and not at startup. */
 export let embedderOf = (options: Options): Ready => {
   let said = options.embedder
   if (!said) {
@@ -95,10 +99,10 @@ export let embedderOf = (options: Options): Ready => {
     return { model: embedder.model, embedder }
   }
   if (said.via == 'ollama' || said.via == 'openai') {
-    // A config that NAMES a key and has none is waiting for it: the
-    // environment has not got one yet, and every request until it does is a
-    // 401 paid for once per entity. A config that names none never wanted one
-    // — a box on your own subnet — and goes straight through.
+    // A config that NAMES a key but has no value for it is waiting: the
+    // environment does not have one yet, and every request until it does would
+    // be a 401 paid for once per entity. A config that names no key never
+    // wanted one — a machine on your own network — and goes straight through.
     return 'key' in said && said.key == null
       ? {
         model: said.model,
@@ -112,8 +116,8 @@ export let embedderOf = (options: Options): Ready => {
   }
 }
 
-/** The fields a config chose, or every textual one. A name nothing declares is
- * a refusal rather than a field silently embedding nothing. */
+/** The fields a config chose, or every text column. A name the vocabulary does
+ * not declare is an error rather than a field that silently embeds nothing. */
 export let chosen = (vocab: Vocab, options: Options): Field[] => {
   if (!options.text) return fields(vocab)
   return options.text.map((said) => {
@@ -130,19 +134,19 @@ export let chosen = (vocab: Vocab, options: Options): Field[] => {
 }
 
 /**
- * Everything a pass needs, as the config has it AT THIS MOMENT: the text a
- * vector is made of, the embedder that makes it, and the sentence to say when
- * there is none.
+ * Everything a pass needs, as the config stands AT THIS MOMENT: the text a
+ * vector is made from, the embedder that makes it, and the message to report
+ * when there is none.
  *
- * Read it on every pass rather than once at compose. That is what makes a key
- * arriving late a host that starts embedding instead of one that has to be
- * restarted — the same call answers a config read out of the environment
- * (@yaks/cli reads `{"env": …}` when it is asked) and one that will come out
- * of the graph.
+ * Read it on every pass rather than once when the plugin is composed. That is
+ * what makes a key arriving late a server that starts embedding instead of one
+ * that has to be restarted — the same call handles a config read from the
+ * environment (@yaks/cli resolves `{"env": …}` when it is asked for) and one
+ * that will later come from the graph.
  *
- * A `text` name nothing declares is the one thing here that cannot wait: it
- * says what it is, and this plugin does nothing, which is the same degrading
- * as a key that has not arrived.
+ * A `text` name the vocabulary does not declare is the one thing here that
+ * cannot wait: it is reported, and this plugin does nothing, which degrades the
+ * same way a key that has not arrived does.
  */
 export let ready = (
   vocab: Vocab,

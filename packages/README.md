@@ -49,9 +49,9 @@ In dependency order:
 - **[@yaks/telemetry](./telemetry)** — RETIRED: the graph holds what the
   tool-call log held. A call is a `call` settled as a `result` with its `ms` and
   its `created.by`, and a failure is the `error` or `exception` stored with it
-  ([@yaks/tools](./tools/README.md#what-the-tool-call-log-was)), so `/telemetry`
-  is a query. Nothing composes this package; it dies with the fleet server that
-  imports it.
+  ([@yaks/tools](./tools/README.md#what-replaced-the-tool-call-log)), so
+  `/telemetry` is a query. Nothing composes this package; it dies with the fleet
+  server that imports it.
 - **[@yaks/match](./match)** — the other evaluator of the same grammar: a
   `@yaks/query` AST run as a predicate over bundles held in memory, with no
   database. Tested query by query for parity with `@yaks/sql`.
@@ -464,7 +464,7 @@ design question, and each paragraph records the resolution proposed for it.
   (`{"via": "cloudflare", "account", "token": {"env": "…"}}`), and a value
   written as `{"env": "NAME"}` is read from the environment when the config is
   loaded — so a config can name a secret without containing one. See
-  [@yaks/cli](./cli/README.md#what-a-config-says-to-one-plugin).
+  [@yaks/cli](./cli/README.md#what-a-config-passes-to-one-plugin).
 - **`authenticate` is access policy, not a route.** It is exported from
   `./routes` because the HTTP server is where authentication happens, but it is
   not an HTTP path, and at most one plugin in a program may define it.

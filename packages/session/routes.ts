@@ -1,29 +1,30 @@
-// Who is calling, for a graph that has transcripts: the `routes` facet a host
-// takes (`@yaks/session/routes`).
+// Who is calling, for a graph that has transcripts: the `authenticate` function
+// exported as `@yaks/session/routes`.
 //
-// A client says which RUN it speaks for and the door says what that means.
-// The word rides on `x-via` — the fleet's own spelling, an instrument behind
-// a write rather than a credential — and it is read the way every other id a
-// caller types is read (./who.ts): an eid, a human id, a name, or the
-// harness's own name for the transcript. What it names is a lease and a
-// byline, never an authorization: a host that gates access authenticates with
-// a key and lets this name the run beside it.
+// A client names which RUN it speaks for, and this decides what that means.
+// The id arrives in the `x-via` request header — the fleet's own header name,
+// naming the instrument behind a write rather than a credential — and it is
+// resolved the way every other id a caller types is resolved (./who.ts): an
+// eid, a human-readable id, a name, or the harness's own id for the transcript.
+// What it names is a lease and an attribution, never an authorization: a server
+// that gates access checks a key and lets this identify the run alongside it.
 //
 // A request that names nothing, or names a run this graph has never heard of,
-// is left to the host's own answer — the composer signs those as the server
-// itself (@yaks/cli `writer`), so a write is attributed either way.
+// is left to the server's own fallback — the composer attributes those to the
+// server itself (@yaks/cli `writer`), so a write is attributed either way.
 
 import type { Authenticate } from '@yaks/api'
 import type { Actor, Graph } from '@yaks/graph'
 import { sessionFor, speaking, where } from './who.ts'
 
-/** The header a caller names its run on. */
+/** The request header a caller names its run in. */
 export let VIA = 'x-via'
 
-/** What the facet is handed: the graph, once it is open. */
+/** What this module is given: the graph, once it is open. */
 export type Host = { graph: Graph }
 
-/** The facet a host takes: a request's `x-via` as the actor behind it. */
+/** The `authenticate` function an HTTP server imports: it reads a request's
+ * `x-via` header and returns the actor behind the request. */
 export let authenticate =
   (host: Host): Authenticate =>
   async (request: Request): Promise<Actor | null> => {

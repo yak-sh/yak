@@ -4,7 +4,8 @@ import { bare, type Clause, type Query } from '@yaks/query'
 import { type Bundle, filter } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
 
-/** Resolve a wire archetype eid to its immutable physical table names. */
+/** Resolve an archetype eid from a bundle to its immutable physical table
+ * names. */
 export type ArchetypeLookup = (eid: string) => readonly string[] | undefined
 
 let presence = (c: Clause, vocab: Vocab): boolean => {
@@ -51,7 +52,8 @@ export let archetypeMatch = (
     byVocab.set(vocab, compiled)
   }
   if (!compiled) return
-  // A lazy host should not fetch a descriptor for a query it cannot answer.
+  // A caller that loads descriptors lazily should not fetch one for a query it
+  // cannot answer anyway.
   let tables = lookup(id)
   if (!tables) return
   let answer = compiled.answers.get(tables)

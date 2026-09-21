@@ -1,21 +1,22 @@
-// The transcript a caller names, and the actor it writes as. One meaning for
-// both, because they are the same question asked at two doors.
+// The transcript a caller names, and the actor it writes as. One resolution
+// for both, because the CLI and the HTTP server are asking the same question.
 //
-// `--session` used to mean two things: an eid or a human id to `claim take`,
-// and the harness's OWN name for the run to `session brief|wrap|context`. So
-// `claim take --session S-37703` locked something for the session a person
-// could see, and `session wrap S-37703` answered `[]` and released nothing —
-// the same word, two graphs apart. It means the SESSION ENTITY now, reached
-// the way any id is reached here: addressed first (an eid, `S-37703`, a name
-// the graph resolves), and where nothing answers to it, read as the harness's
-// own name for a transcript — which is the only one of the three that may not
-// exist yet, and the one `session context --hook -` mints.
+// `--session` used to mean two things: an eid or a human-readable id to
+// `claim take`, and the harness's OWN id for the run to
+// `session brief|wrap|context`. So `claim take --session S-37703` locked
+// something for the session a person could see, and `session wrap S-37703`
+// returned `[]` and released nothing — the same id, two different entities. It
+// means the SESSION ENTITY now, resolved the way any id is resolved here:
+// addressed first (an eid, `S-37703`, a name the graph resolves), and where
+// nothing matches, read as the harness's own id for a transcript — which is the
+// only one of the three that may not exist yet, and the one
+// `session context --hook -` mints.
 //
-// The same ladder answers the DOOR. A request says which run it speaks for
-// (`x-via`, the fleet's own spelling for the instrument behind a write), and
-// what it writes is signed `by` the identity that run speaks as and `via` the
-// run itself: a session's work reads as the persona's, without losing which
-// transcript did it.
+// The same sequence resolves an HTTP request. A request names which run it
+// speaks for (in `x-via`, the fleet's own header for the instrument behind a
+// write), and what it writes is attributed `by` the identity that run speaks as
+// and `via` the run itself: a session's work is attributed to the persona,
+// without losing which transcript did it.
 
 import {
   type Actor,
@@ -29,8 +30,8 @@ import {
 } from '@yaks/graph'
 import { SESSION } from './comp.ts'
 
-/** What reaching a session needs: the ids a caller may say, and a read. A
- * tool passes its own context; a door passes the graph. */
+/** What resolving a session needs: the ids a caller may pass, and a read. A
+ * tool passes its own context; an HTTP server passes the graph. */
 export type Where = {
   graph: Pick<Graph, 'address' | 'storage'>
   read: (query: string) => Bundle[] | Promise<Bundle[]>
@@ -40,9 +41,9 @@ export type Where = {
 export let where = (g: Graph): Where => ({ graph: g, read: (q) => g.read(q) })
 
 /**
- * The transcript a word names: the entity it addresses, else the one wearing
- * it as its runner's own name. Nothing is minted here — a door reads, and a
- * tool that wants a transcript reified says so itself.
+ * The transcript an id names: the entity it addresses, else the one carrying it
+ * as its runner's own id. Nothing is minted here — resolution only reads, and a
+ * tool that wants a transcript created does that itself.
  */
 export let sessionFor = async (
   ctx: Where,
@@ -57,8 +58,8 @@ export let sessionFor = async (
 
 /**
  * The actor a transcript writes as: `by` whoever it speaks for — the identity
- * that survives a `/clear` — and `via` the run itself. A session speaking for
- * nobody speaks for itself.
+ * that survives a `/clear` — and `via` the run itself. A session that speaks
+ * for nobody speaks for itself.
  */
 export let speaking = (s: Bundle): Actor => {
   let eid = s.entity.eid

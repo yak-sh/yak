@@ -1,29 +1,30 @@
-// The object index: git objects as entities, written once.
+// The object index: Git objects written into a graph, once each.
 //
 // An object's entity id IS its SHA-1 object id, so the same object written by
 // two deploys, two apps or two runs is one row — there is no lookup, no
-// uniqueness constraint, and nothing to reconcile. Beside each row goes an
-// @yaks/key naming the same object's SHA-256 id, so a client that asks for
-// `object-format=sha256` is answered by a `get`.
+// uniqueness constraint and nothing to reconcile. Beside each row goes an
+// @yaks/key holding the same object's SHA-256 object id, so a client that asks
+// for `object-format=sha256` is answered by a single read.
 //
 // WHAT IS A ROW AND WHAT IS BYTES. The body is the truth about a tree or a
-// commit — byte-for-byte, because git's ids are digests of it — so the body
-// goes to the @yaks/blob store and the row keeps only what a query has to walk:
-// the type and size a pack entry's header needs, the `blob{sha}` its bytes are
-// under, `entry` edges (tree → child, the name on the link) and `parent` edges
-// (commit → commit). Author, message, entry order and mode all live in the body
-// already; a column for them would be a second copy free to drift.
+// commit — byte for byte, because Git's ids are digests of it — so the body
+// goes to the @yaks/blob store and the row keeps only what a query has to
+// follow: the type and size a packfile entry header needs, the `blob{sha}`
+// the bytes are stored under, `tree_entry` edges (tree → child, with the name
+// on the link) and `parent` edges (commit → commit). Author, message, entry
+// order and mode are all in the body already; a column for them would be a
+// second copy free to drift.
 //
-// A GIT BLOB IS OUR BLOB. The bytes an app deployed are already in the store
-// under their SHA-256; a git blob object is those same bytes with a header
-// hashed over them, so nothing is re-encoded and the row simply points at what
-// is there. Naming a manifest's file twice, or across versions, costs one query
-// and no read at all.
+// A GIT BLOB IS THE BLOB YOU ALREADY HAVE. The bytes an app deployed are
+// already in the store under their SHA-256 address; a Git blob object is those
+// same bytes with a header hashed over them, so nothing is re-encoded and the
+// row simply points at what is there. Naming a manifest's file twice, or
+// across versions, costs one query and no read of the bytes.
 //
-// This module writes objects and nothing else: it never reads a pack, speaks
-// HTTP, or touches a branch. Landing a manifest on one is ./refs.ts, and the
-// row joining a commit to whatever it was minted from is the host's own word,
-// written there beside the moved ref.
+// This module writes objects and nothing else: it never reads a packfile,
+// serves HTTP, or touches a branch. Landing a manifest on a branch is
+// ./refs.ts, and the row joining a commit to whatever it was built from is the
+// application's own, written there alongside the moved ref.
 
 import type { Blobs } from '@yaks/blob'
 import { EDGE, link } from '@yaks/edge'
@@ -38,21 +39,21 @@ import { DIR, type Dir, FILE, type Files, nest, treeBody } from './tree.ts'
 /** One child of a tree, named both ways. */
 export type Child = { name: string; mode: string } & Oids
 
-/** A commit to mint: the same as a {@link Commit}, with every id in both of
- * its names, since the two bodies are built from the two flavours. */
+/** A commit to write: the same as a {@link Commit}, but with every id given
+ * under both hash algorithms, since the two bodies are built from the two. */
 export type Mint = Omit<Commit, 'tree' | 'parents'> & {
   tree: Oids
   parents?: Oids[]
 }
 
 /**
- * What writing objects asks of a graph: a query and a batch, and nothing else.
+ * What writing objects needs from a graph: a read and an apply, nothing else.
  *
  * Narrower than `Graph` on purpose. The object index is the same code whether
- * the graph is in this process or behind a door — a Durable Object's `/query`
- * and `/apply` answer both of these — and a parameter that demanded a whole
- * `Graph` would have made a remote caller invent a storage and a vocabulary it
- * has no use for.
+ * the graph is in this process or behind an HTTP API — a Durable Object's
+ * `/query` and `/apply` endpoints satisfy both of these — and a parameter that
+ * demanded a whole `Graph` would have forced a remote caller to invent a
+ * storage layer and a vocabulary it has no use for.
  */
 export type Writes = Pick<Graph, 'read' | 'apply'>
 
@@ -65,17 +66,19 @@ export type Index = {
   /** a commit over a tree and parents already written */
   commit: (mint: Mint) => Promise<Oids>
   /** a whole deploy manifest, bottom up: every blob, every directory, and the
-   * root tree it answers with */
+   * root tree it returns */
   files: (manifest: Files) => Promise<Oids>
 }
 
 /**
- * The entity a tree's child link is: `sha256("entry|<tree>|<name>")`.
+ * The entity id of a tree's link to one child, derived from the string
+ * `tree_entry|<tree>|<name>`.
  *
- * Not @yaks/edge's own derivation, and for a reason a duplicate file makes
- * loud: two names in one tree may point at ONE blob (two empty files), and
- * `from|entry|to` is the same sentence for both, so one entry would overwrite
- * the other. Within a tree a NAME is unique — that is the sentence.
+ * Not @yaks/edge's own derivation, for a reason a duplicate file makes
+ * obvious: two names in one tree may point at ONE blob (two empty files, say),
+ * and `from|relation|to` is the same string for both, so one link would
+ * overwrite the other. Within a tree it is the NAME that is unique, so the
+ * name is what the id is derived from.
  */
 export let entryEid = (tree: Eid, name: string): Eid =>
   derivedEid(`${TREE_ENTRY}|${tree}|${name}`)
@@ -84,8 +87,8 @@ let sha256 = async (bytes: Uint8Array<ArrayBuffer>): Promise<string> =>
   hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))
 
 /**
- * An object index over a graph carrying this package's vocabulary and a
- * @yaks/blob store holding the bytes.
+ * An object index over a graph that carries this package's components and a
+ * @yaks/blob store that holds the bytes.
  *
  * ```ts
  * // let git = index(g, store)
@@ -94,8 +97,8 @@ let sha256 = async (bytes: Uint8Array<ArrayBuffer>): Promise<string> =>
  * ```
  */
 export let index = (g: Writes, store: Blobs): Index => {
-  // The bytes of a body we minted, under their own address. A blob object's
-  // bytes are already there under the same address, which is why this is only
+  // Stores a body we built, under its own address. A blob object's bytes are
+  // already in the store under that same address, which is why this is only
   // ever called for trees and commits.
   let put = async (body: Uint8Array<ArrayBuffer>): Promise<string> => {
     let sha = await sha256(body)
@@ -103,8 +106,8 @@ export let index = (g: Writes, store: Blobs): Index => {
     return sha
   }
 
-  // The row every object gets, plus its SHA-256 name and whatever walk it
-  // contributes. Writing it again is a patch of what is already there.
+  // The row every object gets, plus its SHA-256 object id and whatever edges
+  // it contributes. Writing it again updates what is already there.
   let write = async (
     oids: Oids,
     type: Kind,
@@ -120,9 +123,9 @@ export let index = (g: Writes, store: Blobs): Index => {
     return oids
   }
 
-  // The git blob object over these bytes, if we have already named it. This is
-  // the whole of the caching story: a manifest repeating a file, or a second
-  // version of the same app, reads a row instead of the bytes.
+  // The Git blob object over these bytes, if we have computed its id before.
+  // This is the whole of the caching: a manifest that repeats a file, or a
+  // second version of the same app, reads a row instead of the bytes.
   let named = async (sha: string): Promise<Oids | undefined> => {
     let [obj] = await g.read(`.gitobj.type=blob&.blob.sha=${sha}`)
     if (!obj) return
@@ -136,7 +139,7 @@ export let index = (g: Writes, store: Blobs): Index => {
     if (had) return had
     let bytes = await store.get(sha)
     if (!bytes) throw new Error(`git: no bytes stored under ${sha}`)
-    // One body, two names: a blob's bytes are what both digests are over.
+    // One body, two ids: a blob's bytes are what both digests are taken over.
     return write(
       {
         oid: await oid('blob', bytes),
@@ -196,7 +199,7 @@ export let index = (g: Writes, store: Blobs): Index => {
     )
   }
 
-  // Bottom up: a directory cannot be named until every child under it is.
+  // Bottom up: a directory has no id until every child under it has one.
   let fold = async (at: Dir): Promise<Oids> => {
     let children: Child[] = []
     for (let [name, sha] of at.files) {

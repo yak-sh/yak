@@ -1,4 +1,5 @@
-// One Responses wire implementation, shared by the neutral Model adapter and
+// One implementation of the Responses HTTP protocol, shared by the
+// provider-neutral Model adapter and
 // callers that need provider-native items, usage, evidence, and frame hooks.
 import type { Credential as ProviderCredential } from './credential.ts'
 
@@ -73,12 +74,12 @@ export type ResponseOptions = {
   base?: string
   fetch?: typeof fetch
   headers?: Record<string, string>
-  /** Additional attempts for credential loads and transient wire failures;
+  /** Additional attempts for credential loads and transient HTTP failures;
    * default 2 (three total attempts). Wire backoff is 1s, 4s, then capped at
    * 60s; Retry-After may extend it, up to 60s. */
   retries?: number
-  /** How long a transient wire failure may go on being retried once `retries`
-   * is spent — a backend outage answers every attempt the same way, and five
+  /** How long a transient HTTP failure may go on being retried once `retries`
+   * is spent — a backend outage fails every attempt the same way, and five
    * seconds of patience is not an outage. 0 (the default) stops at `retries`;
    * the wait is the same backoff, so the total is wall-clock, not attempts. */
   patienceMs?: number
@@ -173,7 +174,8 @@ let watchdog = (ms: number, stop?: AbortSignal) => {
   }
 }
 
-/** A wire failure. `kind` is stable even when the provider supplies no code. */
+/** An HTTP or connection failure. `kind` is stable even when the provider
+ * supplies no code. */
 export class ResponseError extends Error {
   status?: number
   code?: string
@@ -205,9 +207,10 @@ let busy = new Set([
   'rate_limit_exceeded',
 ])
 
-// Terminal provider failures and malformed events are not network failures.
-// A stall is one of them: a bus that connected and went silent said nothing
-// about this request, so the next attempt is as clean as a dropped connection
+// Final provider failures and malformed events are not network failures.
+// A stall is a network failure: a connection that was established and then went
+// silent told us nothing about this request, so the next attempt starts as
+// cleanly as it would after a dropped connection
 // (T-37332 — two stalls ended a session that had retries left).
 let transient = (error: ResponseError) =>
   error.kind == 'transport' || error.kind == 'disconnected' ||
@@ -463,8 +466,8 @@ let terminal = async (
     let reason = incomplete(ended) ?? eventCode(ended)
     throw fault(status, `responses: ${status}${reason ? ` — ${reason}` : ''}`, {
       code: eventCode(ended) ?? reason,
-      // A 200 that ends in an overload still answers with the account's rate
-      // headers; carry them so the backoff honors a Retry-After sent there.
+      // A 200 that ends in an overload still carries the account's rate-limit
+      // headers; pass them along so the backoff honors a Retry-After sent there.
       limits: limits(response.headers),
       evidence: ended ? [...unknown, ended] : unknown,
       items,
@@ -658,9 +661,9 @@ export let transport = (options: ResponseOptions): {
         ) {
           fail = fault('stalled', 'responses: stream stalled')
         }
-        // Patience outlives the attempt count: an outage answers every attempt
-        // the same way, and a caller that says how long it can wait keeps its
-        // turn alive through one instead of failing in five seconds.
+        // Patience outlasts the attempt count: an outage fails every attempt
+        // the same way, and a caller that states how long it can wait rides one
+        // out instead of failing in five seconds.
         if (
           run.noRetry || !(fail instanceof ResponseError) || !transient(fail) ||
           (failures >= retries && waited >= patienceMs)

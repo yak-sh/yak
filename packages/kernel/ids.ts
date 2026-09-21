@@ -1,25 +1,28 @@
-// The id a person says out loud, as the eid it names. `T-37580` is stored
-// nowhere: the NUMBER beside the entity is, and the letter is derived from the
-// component it wears (@yaks/id). So addressing one is a read — find the entity
-// carrying that number, and check the letter it would print with.
+// The id a person types, resolved to the eid it names. `T-37580` is stored
+// nowhere: what is stored is the NUMBER beside the entity, and the letter is
+// derived from the components the entity has (@yaks/id). So resolving one is a
+// read — find the entity carrying that number, and check which letters it could
+// be printed with.
 //
-// It is a plugin's `address`, the seam @yaks/graph asks before a door reads an
-// id, so every door takes the id people type: `/mcp`, `/query`, the command
-// line. A number with no letter (`37580`) lands too, because the number IS the
-// identity; a letter that disagrees with the entity's own is refused by simply
-// not answering, and the caller's word is left to fail as the eid it is not.
+// This is a graph plugin's `address`, which @yaks/graph calls before a caller's
+// ids are used, so every entry point accepts the ids people type: the MCP
+// server, the HTTP `/query` endpoint, the command line. A bare number
+// (`37580`) resolves too, because the number is the identity. A letter that
+// disagrees with the entity's own is refused by being left out of the answer,
+// and the caller's string goes on to fail as the eid it is not.
 
 import type { Eid, Plugin } from '@yaks/graph'
 import { parse, prefixOf } from '@yaks/id'
 import type { Vocab } from '@yaks/vocab'
 
-/** Human ids as eids, for a graph whose store mints numbers. */
+/** Resolves human ids to eids, for a graph whose storage mints numbers. */
 export let ids = (vocab: Vocab): Plugin => {
   let letter = prefixOf(vocab)
   return {
     name: 'ids',
     address: async (tx, said) => {
-      // One read for every id on the line: the numbers, as one any-of.
+      // One read for the whole list: every number asked for, as a single
+      // any-of filter.
       let want = new Map<number, string[]>()
       for (let id of said) {
         let p = parse(id)
@@ -32,8 +35,8 @@ export let ids = (vocab: Vocab): Plugin => {
       ) {
         let num = Number(b.entity.num)
         // Every letter this entity could be printed with, not only the one it
-        // displays as. An entity wears several kinds at once — a task is a
-        // `doc` too — and a person typing `T-17` for the thing to do is right
+        // displays as. An entity has several kinds at once — a task is a `doc`
+        // too — and a person typing `T-17` for the thing to do is right
         // whichever kind happens to win the display.
         let series = new Set(
           vocab.kinds.filter((k) => b[k]).map((k) => letter(k)),

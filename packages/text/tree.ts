@@ -1,12 +1,13 @@
 /**
- * A text host tree records elements until serialization. Keeping text leaves
- * separate from host formatting lets the boundary remove content's control
- * bytes without erasing line breaks introduced by paragraphs, lists or br.
+ * A tree of recorded elements, kept until serialization. Keeping text leaves
+ * separate from the formatting this renderer adds lets the content boundary
+ * remove control bytes without erasing the line breaks that paragraphs, lists
+ * and `br` introduce.
  */
 
 import type { Child, H } from '@yaks/render'
 
-/** An element produced by the text hyperscript; no DOM is needed. */
+/** An element produced by this package's `h`; no DOM is needed. */
 export type Node = {
   tag: string
   props: Record<string, unknown> | null
@@ -14,8 +15,9 @@ export type Node = {
 }
 
 /**
- * Record an element for markdown() or plain(). Text is escaped at serialization,
- * so code can keep its literal punctuation and every path shares the boundary.
+ * Record an element for markdown() or plain(). Text is escaped at serialization
+ * time, so code can keep its literal punctuation and every path goes through the
+ * same content boundary.
  *
  * Headings:
  * ```ts

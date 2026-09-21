@@ -1,24 +1,25 @@
-// The capture: the seam an archiver plugs into, and the effect that uses it.
+// The capture: the `Archive` interface an archiver implements, the function
+// that stores one document, and the effect handler that calls both.
 //
-// A page is FROZEN when it has no bytes yet. That is the whole rule, and it
-// is why the same landing serves both doors: a tab that posts its own DOM has
-// the bytes already (nobody else can get them — a server refetching a page
-// behind a login archives the login), and a page witnessed by its address
-// alone is fetched afterwards by whatever archiver the host named.
+// A page is archived when it has no bytes yet. That is the whole rule, and it
+// is why both ways in end up here: a browser tab that posts its own DOM already
+// has the bytes (nobody else can get them — a server refetching a page behind a
+// login archives the login), and a page recorded by its address alone is
+// fetched afterwards by whatever archiver the server was configured with.
 //
-// The fetch runs POST-COMMIT, which is the right place for it: the address is
-// durable before anybody reaches for the network, a site that is down cannot
-// refuse the write, and a capture that takes thirty seconds is not a request
-// somebody is holding open. The outcome goes back through the graph's own
-// `apply()`, so "this page is frozen now" is journaled and pushed to whoever
-// is watching it. A capture that fails throws, and the effects registry
-// records it: telemetry, never a broken batch.
+// The fetch runs AFTER THE COMMIT, which is the right place for it: the address
+// is durable before anybody reaches for the network, a site that is down cannot
+// cause the write to fail, and a capture that takes thirty seconds is not a
+// request somebody is holding open. The result goes back through the graph's
+// own `apply()`, so "this page is archived now" is journaled and pushed to
+// whoever is subscribed to it. A capture that fails throws, and the effects
+// registry records the failure: telemetry, never a rolled-back transaction.
 //
 // The archiver itself is INJECTED. Turning a live URL into one self-contained
 // document is an external tool's job (monolith, say), and which tool — with
-// which flags, under which time limit — is the host's business, named in this
-// plugin's options and built in ./host.ts. This module composes the capture
-// and knows nothing about processes.
+// which arguments, under which time limit — is the server's business, named in
+// this plugin's options and built in ./host.ts. This module composes the
+// capture and knows nothing about processes.
 
 import type { Bundle, Comp, Entity, Tx } from '@yaks/graph'
 import { then } from '@yaks/graph'
@@ -30,28 +31,28 @@ import { scrub } from './scrub.ts'
 import { fetchable } from './url.ts'
 
 /**
- * An archiver: one address in, ONE self-contained document out. It rejects
- * when it could not get one — the rejection's message is what the host
+ * An archiver: one address in, ONE self-contained document out. It rejects when
+ * it could not produce one — the rejection's message is what the server
  * records, so make it worth reading.
  */
 export type Archive = (url: string) => Promise<string>
 
-/** Where a capture goes, and what says when. */
+/** Where a capture is stored, and what supplies the timestamp. */
 export type Keep = {
-  /** the content-addressed store the frozen document lands in */
+  /** the content-addressed store the archived document is written to */
   blobs: Blobs
   /** the clock, injected so a test can hold it still (default: now) */
   now?: () => string
 }
 
-/** How the freezing effect is built. */
+/** Everything the freezing effect handler is built from. */
 export type Capture = Keep & { archive: Archive }
 
 let clock = () => new Date().toISOString()
 
-// The whole page as it stands, post-commit: the effect works from storage
-// rather than from the patch, so it sees the address however the batch that
-// wrote it was shaped.
+// The whole page as it stands after the commit: the handler reads it back from
+// storage rather than from the change that triggered it, so it sees the address
+// however the transaction that wrote it was shaped.
 let whole = (tx: Tx, entity: Entity) =>
   then(tx.get([entity.eid]), (found) => found[0])
 
@@ -59,17 +60,17 @@ let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
 
 /**
- * One page's bytes, landed: the document scrubbed of every external
- * reference, stored under its own SHA-256, and the page stamped with where it
- * went and when.
+ * Store one page's bytes: scrub the document of every external reference, write
+ * it under its own SHA-256, and return the changes that stamp the page with
+ * where it went and when.
  *
- * It takes the page AS IT STANDS, because the archive's `<title>` names the
+ * It is given the page AS IT STANDS, because the archive's `<title>` names the
  * page only while nothing else does — a title somebody wrote by hand is never
- * overwritten by a visit.
+ * overwritten by a later capture.
  *
- * The bytes are content-addressed, so freezing a page whose document has not
- * changed since the last capture stores nothing new; the address in `bytes` is
- * simply the same one again.
+ * The bytes are content-addressed, so archiving a page whose document has not
+ * changed since the last capture stores nothing new; `bytes` is simply the same
+ * address again.
  */
 export let froze = async (
   page: Bundle,
@@ -87,8 +88,8 @@ export let froze = async (
 }
 
 /**
- * The `created(web)` handler: fetch a page that was witnessed by its address
- * alone, and land its bytes.
+ * The `created(web)` handler: fetch a page that was recorded by its address
+ * alone, and store its bytes.
  *
  * ```ts
  * import { effects } from '@yaks/effects'
@@ -98,9 +99,10 @@ export let froze = async (
  * // fx.created('web', freezing({ archive, blobs }))
  * ```
  *
- * Idempotent, which is what lets a boot sweep re-run it: a page that already
- * carries `bytes` is left alone, and so is one whose address is not something
- * this package can fetch (a `file:` note, an app's own scheme).
+ * Idempotent, which is what lets a start-up sweep re-run it: a page that
+ * already carries `bytes` is left alone, and so is one whose address is not
+ * something this package can fetch (a `file:` note, an application's own
+ * scheme).
  */
 export let freezing =
   ({ archive, ...keep }: Capture): Handler => (event, tx, write) =>

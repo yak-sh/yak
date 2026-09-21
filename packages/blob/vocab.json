@@ -7,7 +7,7 @@
     "artifact": {
       "component": true,
       "type": "object",
-      "description": "A binary object in the configured external blob store.",
+      "description": "Bytes stored in the configured blob store: their SHA-256 address, media type and size.",
       "properties": {
         "size": {
           "type": "number"
@@ -24,7 +24,7 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "An artifact produced by a model response; the entry belongs to its session.",
+      "description": "A file attached to a session entry: the artifact entity holding its bytes, and the model call that produced it.",
       "properties": {
         "artifact": {
           "type": "string",

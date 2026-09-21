@@ -1,12 +1,12 @@
-// The words, and only the words: the `vocab` facet a host takes
-// (`@yaks/embedding/vocab`). This package declares no COMPONENT — a vector is
-// not a word anybody writes: it is derived from text somebody else's
-// vocabulary declares, it never rides the wire, and no patch mints one, which
-// is why the table is raised in SQL by ./rules.ts.
+// The vocabulary this package contributes, and nothing else
+// (`@yaks/embedding/vocab`). It declares no COMPONENT — no client ever writes
+// a vector: it is derived from text another package's vocabulary declares, it
+// is never sent to a client, and no patch creates one, which is why the table
+// is created in SQL by ./rules.ts.
 //
-// What it does declare is one TOOL: the check in ./tools.ts. A tool is a word
-// a vocabulary says and a host lists, so the index's own invariant is asked
-// for the same way every other package's is.
+// What it does declare is one TOOL: the check in ./tools.ts. A tool is
+// declared in a vocabulary and listed by the server, so the index's own
+// invariant can be asked about the same way every other package's is.
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 

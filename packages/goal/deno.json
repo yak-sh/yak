@@ -6,7 +6,7 @@
     "./vocab": "./vocab.ts"
   },
   "license": "Apache-2.0",
-  "description": "A standing purpose that work satisfies, and the edge that says which work satisfied it.",
+  "description": "A standing purpose that work satisfies, and the link recording which work satisfied it.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

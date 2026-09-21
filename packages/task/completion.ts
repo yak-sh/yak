@@ -1,4 +1,12 @@
-/** Keep the completion author on its mark, including across later edits. */
+// Who completed a task, kept on the `completed` component across later edits.
+//
+// The hook runs in the `precondition` phase, before @yaks/graph fills in the
+// mark's `{at, by, via}`. For every bundle that writes `completed`, it reads
+// the row already stored: if that row had a `completed` component, its `by` is
+// carried over, so a later patch of the same mark cannot change who finished
+// the task. If there was no such component, `by` is the one on the incoming
+// component, or the `$actor.by` the `apply()` call carries, or null.
+
 import { type Comp, type Hook, then } from '@yaks/graph'
 
 export let completing: Hook = (bundles, tx) => {

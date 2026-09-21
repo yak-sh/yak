@@ -10,13 +10,14 @@
 //
 // The canonical form lowercases the local part and drops underscores. The
 // lowercase is the ordinary courtesy; the underscore is a hard-won fact —
-// Cloudflare Email Routing refuses an underscore in the local part at RCPT,
+// Cloudflare Email Routing rejects an underscore in the local part at RCPT,
 // upstream of anything you deploy, so a letter to `book_club@…` bounces
-// whatever your routing rules say. Shedding it at the door is the only place
+// whatever your routing rules say. Dropping it on the way in is the only place
 // the fix works.
 //
-// Everything here is curried domain-first, so an app binds its own domain once
-// and passes the result around: `let mine = canon('books.example')`.
+// Every function here is curried domain-first, so an app applies its own
+// domain once and passes the result around:
+// `let mine = canon('books.example')`.
 
 /** An address split at its one `@`, or `null` when it has none or several. */
 export let parts = (address: string): [string, string] | null => {
@@ -24,7 +25,7 @@ export let parts = (address: string): [string, string] | null => {
   return local && domain && !extra.length ? [local, domain] : null
 }
 
-/** An address at a domain, spelled: `address('ana', 'books.example')`. */
+/** An address at a domain: `address('ana', 'books.example')`. */
 export let address = (local: string, domain: string): string =>
   `${local}@${domain}`
 
@@ -57,7 +58,7 @@ export let at = (domain: string): (address: string) => boolean => {
  * The canonical, deliverable form of an address at `domain`: the local part
  * lowercased with its underscores dropped, at the domain as configured. An
  * address at any other domain is returned as it was given — canonicalizing
- * somebody else's namespace is a guess, and a guess here misdelivers mail.
+ * somebody else's domain is a guess, and a guess here misdelivers mail.
  *
  * ```ts
  * import { canon } from '@yaks/mail'

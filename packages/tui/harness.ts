@@ -4,8 +4,8 @@ import { clearMouse, routeMouse } from './mouse.ts'
  * A mounted app for a test: a fake terminal of a fixed size, the ANSI backend
  * writing into an array instead of a tty, and keys delivered the way the real
  * loop delivers them — raw bytes through `decode` into the focus stack. `send`
- * answers with the number of screen lines that keystroke cost, which is what
- * makes "snappy" an assertion rather than a hope.
+ * returns the number of screen lines that keystroke repainted, which is what
+ * lets a test assert that a keystroke is cheap rather than just hoping it is.
  *
  * @module
  */

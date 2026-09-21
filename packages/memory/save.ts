@@ -1,11 +1,11 @@
 // Writing one down. Two rules live here, and both are about keeping the
 // person's words the person's words.
 //
-// AN EMPTY `said` IS REFUSED. A memory with no sentence in it is an agent's
+// AN EMPTY `said` IS REJECTED. A memory with no sentence in it is an agent's
 // note about a conversation, which is the thing this whole package exists to
 // not be.
 //
-// THE CONTEXT IS CLAMPED to two lines. Context is what somebody needs in order
+// THE CONTEXT IS TRUNCATED to two lines. Context is what somebody needs in order
 // to read the sentence — what was being talked about, which app, which
 // afternoon — and left unbounded it grows into the summary the sentence was
 // saved instead of. Two lines is enough to say "we were looking at the recipe
@@ -17,14 +17,14 @@ import { MEMORY } from './comp.ts'
 /** The most context a memory carries, in lines. */
 export let LINES = 2
 
-/** What a save is refused for, said so an agent can fix it. */
+/** Why a save was rejected, worded so an agent can fix it. */
 export let EMPTY =
   'said: the words the person used, as they used them — a memory is their ' +
   'sentence, never your summary of it'
 
 /**
- * The context, clamped: blank lines dropped, each line trimmed, {@link LINES}
- * kept.
+ * The context, truncated: blank lines dropped, each line trimmed,
+ * {@link LINES} kept.
  *
  * ```ts
  * clamped('  we were looking at\n\nthe recipe app\nand also this\nand this')
@@ -58,13 +58,13 @@ export type Saving = {
   about?: string
 }
 
-/** The component that says a memory records a correction somebody gave. */
+/** The component marking a memory as a correction somebody gave. */
 export let FEEDBACK = 'feedback'
 
 /**
- * One memory as the batch that writes it: the words in `doc.body` exactly as
- * they were said, everything else in `memory`. The byline is the graph's own
- * stamp, so nothing here writes one.
+ * One memory as the list of changes that writes it: the words in `doc.body`
+ * exactly as they were said, everything else in `memory`. The byline is
+ * stamped by the graph, so nothing here writes one.
  */
 export let saved = (m: Saving): Bundle[] => {
   let said = m.said.trim()

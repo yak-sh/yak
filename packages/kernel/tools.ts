@@ -1,18 +1,19 @@
-// What anybody may ask of the base words: the `tools` facet a host takes
-// (`@yaks/kernel/tools`) — the runs behind the `tool: true` declarations in
-// ./vocab.json.
+// The implementations of the tools declared with `tool: true` in ./vocab.json,
+// exported as `@yaks/kernel/tools` — the entry point a server imports to
+// register them.
 //
-// One word lives here, and it is the one people type all day: a comment. A
-// comment is not a table of its own — it is `doc{body}` aimed by
-// `comment{target}` — so the tool writes two components on one new entity and
-// the runner signs it as whoever asked.
+// There is one, and it is the one people call all day: a comment. A comment has
+// no table of its own — it is `doc{body}` aimed by `comment{target}` — so the
+// tool returns one new entity carrying both components, and the tool runner
+// commits it signed as whoever called it.
 
 import { addressed, type Bundle, type ToolCtx } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 
-/** The runs behind the tools ./vocab.json declares. A factory, as every facet
- * is, though this one needs nothing from the host: what a run reads arrives on
- * the call's own context. */
+/** The implementations of the tools ./vocab.json declares. A function that
+ * builds them, the way every entry point here is, though this one needs nothing
+ * from the server: what an implementation reads arrives on the call's own
+ * context. */
 export let runs = (): Runs => ({
   comment_new: async (_bundles, ctx: ToolCtx): Promise<Bundle[]> => {
     let [target] = await addressed(ctx.graph, [String(ctx.args.target)])

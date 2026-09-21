@@ -1,6 +1,6 @@
-// The base words, and only the words: the `vocab` facet a host takes
-// (`@yaks/kernel/vocab`). It reaches no storage, no SQL and no runtime, so a
-// browser tab loading this vocabulary loads nothing else.
+// The component declarations and nothing else, exported as
+// `@yaks/kernel/vocab`. It imports no storage, no SQL and no runtime API, so a
+// browser tab loading this vocabulary loads nothing else with it.
 
 import type { Keywords, VocabDoc } from '@yaks/vocab'
 import { kernelKeywords } from './keywords.ts'
@@ -11,7 +11,8 @@ export { kernelKeywords }
 /** The kernel vocabulary, as the document `loadVocab` takes. */
 export let kernelDoc: VocabDoc = doc as VocabDoc
 
-// A few of these words, under a title of their own — one home, read two ways.
+// A few of these components under a title of their own: one declaration, read
+// two ways.
 let some = (title: string, names: string[]): VocabDoc =>
   ({
     title,
@@ -20,14 +21,15 @@ let some = (title: string, names: string[]): VocabDoc =>
     ),
   }) as VocabDoc
 
-/** Just the spine and the two stamps every graph wants, for a host that takes
- * the base words without the rest of the kernel's: `entity{num, archetype}`,
- * `created{at, by, via}` and `updated{at, by, via}`. */
+/** Just `entity{num, archetype}` and the two provenance marks every graph
+ * wants, `created{at, by, via}` and `updated{at, by, via}` — for a program that
+ * loads those without the rest of the kernel's components. */
 export let spineDoc: VocabDoc = some('spine', ['entity', 'created', 'updated'])
 
-/** The two marks anything at all can wear — `opened`, somebody looked at it,
- * and `archived`, somebody put it away — for a host that takes the spine
- * without the rest of the kernel's words and still keeps listings. */
+/** The two marks anything at all can carry — `opened`, somebody looked at it,
+ * and `archived`, somebody put it away — for a program that loads `spineDoc`
+ * without the rest of the kernel's components and still wants listings to hide
+ * what was put away. */
 export let marksDoc: VocabDoc = some('marks', ['opened', 'archived'])
 
 /** Every document this plugin declares. */

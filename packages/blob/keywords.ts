@@ -1,16 +1,17 @@
-// The registration: what @yaks/blob adds to a component vocabulary, said in
+// The registration: what @yaks/blob adds to a component vocabulary, declared in
 // JSON Schema's own extension form. `meta/blob.vocab.json` is the authored
-// source (the keyword's schema and its prose); this module gives it a name and
-// the shape `loadVocab(docs, [blobKeywords])` takes.
+// source (the keyword's schema and its prose); this module gives it a URI and
+// wraps it in the shape `loadVocab(docs, [blobKeywords])` accepts.
 //
-// One keyword, on a COLUMN rather than a component, because what is open is
-// which values are too big — or too repeated — to keep in the row. The
-// meta-model has no opinion about that; it only carries the word.
+// One keyword, on a COLUMN rather than a component, because what varies from
+// application to application is which values are too big — or too repeated — to
+// keep in the row. The schema language itself has no opinion about that; it
+// only carries the keyword.
 
 import type { Keywords } from '@yaks/vocab'
 import doc from './meta/blob.vocab.json' with { type: 'json' }
 
-/** The URI a vocab file declares under `$vocabulary` to use `store`. */
+/** The URI a vocabulary file lists under `$vocabulary` to use `store`. */
 export let BLOB_URI = 'https://yaks.sh/vocab/blob'
 
 /**

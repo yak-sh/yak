@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "A tool-call log beside a yaks graph: what was called, by whom, how long it took, whether it worked; recorded without ever throwing, read back newest-first with repeated errors folded into counted cohorts.",
+  "description": "A tool-call log stored beside a yaks graph: what was called, by whom, how long it took, and whether it worked; recorded without ever throwing, and read back newest first with repeated errors grouped into counted cohorts.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@db/sqlite": "jsr:@db/sqlite@0.13.0"

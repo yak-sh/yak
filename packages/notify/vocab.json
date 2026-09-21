@@ -26,7 +26,7 @@
           "death": "detach"
         }
       },
-      "description": "an open conversation between an actor and a thing — one per pair"
+      "description": "an open conversation between an actor and an entity — one per actor/entity pair"
     },
     "knock": {
       "component": true,
@@ -40,7 +40,7 @@
           "death": "cascade"
         }
       },
-      "description": "a nudge pointed at a thing, with the words that rode along"
+      "description": "a nudge aimed at an entity, with the message that came with it"
     },
     "subscription": {
       "component": true,
@@ -68,10 +68,10 @@
             "watch",
             "mute"
           ],
-          "description": "watch: tell me. mute: do not"
+          "description": "watch: notify this actor. mute: do not"
         }
       },
-      "description": "what one actor watches, or mutes, about one thing"
+      "description": "whether one actor watches or mutes one entity"
     }
   }
 }

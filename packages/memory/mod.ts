@@ -25,16 +25,17 @@
  *
  * - {@link memoryDoc} is the component, as JSON Schema — the words themselves
  *   are the entity's `doc.body`, so a store's own search index finds them;
- * - {@link saved} is the write: an empty sentence is refused, and the context
- *   is clamped to {@link LINES} lines so it stays context and never becomes the
- *   summary the sentence was saved instead of;
- * - {@link line} is the read, as a filter line every yaks store answers — with
- *   words, its full-text index ranks them; with none, newest first — and
- *   {@link Ranker} is the seam a host with a vector service ranks by MEANING
- *   through, ordered back with {@link ordered};
- * - {@link passage} is what an agent is handed at the start of a conversation:
- *   the newest few, whole, under one heading, bounded by {@link LAST} and
- *   {@link BYTES}.
+ * - {@link saved} is the write: an empty sentence is rejected, and the context
+ *   is truncated to {@link LINES} lines so it stays context and never becomes
+ *   the summary the sentence was saved instead of;
+ * - {@link line} builds the read: a query string in the filter grammar every
+ *   yaks store answers — with words in it, the store's full-text index ranks
+ *   them; with none, newest first — and {@link Ranker} is the interface a
+ *   server with a vector service implements to rank by MEANING instead, with
+ *   {@link ordered} putting the store's result into that order;
+ * - {@link passage} builds the text an agent is given at the start of a
+ *   conversation: the newest few, whole, under one heading, bounded by
+ *   {@link LAST} and {@link BYTES}.
  *
  * It imports no platform API, so the same package runs on a server, in a
  * worker, and in a browser tab.

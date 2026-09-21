@@ -1,41 +1,42 @@
 /**
- * @yaks/member — who belongs, and what they may touch: the membership
- * component domain for a {@link https://jsr.io/@yaks/graph | @yaks/graph}.
+ * @yaks/member — access control for a
+ * {@link https://jsr.io/@yaks/graph | @yaks/graph}: who belongs to a space, and
+ * what each of them may do.
  *
- * Say a book club keeps its reading list, its potluck sign-up sheet and its
- * private notes in one place. Three questions come up at once, and this
- * package is the three answers:
+ * A **principal** is the entity acting — a person, or the grant behind a share
+ * link. An **app** is any entity access is decided about; this package never
+ * declares what an app is. Three components answer three questions:
  *
- * - **Who belongs?** A `member{space, person, role}` row is a seat on the
- *   club's roster. `owner` runs the club; `member` belongs to it.
- * - **What may they touch?** A `grant{app, person, access}` hands one person
- *   one level — `owner`, `editor` or `viewer` — on one thing.
- * - **And everyone else?** An `access{mode}` on that thing says: `public`
+ * - **Who belongs?** A `member{space, person, role}` row puts one person on a
+ *   space's roster. `owner` runs the space; `member` belongs to it.
+ * - **What may they do?** A `grant{app, person, access}` gives one principal
+ *   one level — `owner`, `editor` or `viewer` — on one app.
+ * - **And everyone else?** An `access{mode}` on the app declares `public`
  *   (anyone with the link reads it), `open` (anyone with the link reads AND
- *   writes it, signed in or not), or `private` (only the granted see it at
- *   all).
+ *   writes it, signed in or not), or `private` (only principals holding a
+ *   permission see it at all).
  *
- * ## Belonging is not access
- * A seat on the roster gives nothing on its own. A member with no grant
- * reaches the potluck sheet exactly as far as a stranger with the link does —
- * which is what makes a roster safe to be generous with. The one shortcut is
- * the club's **owner**, who is an implicit owner of everything in it, never
- * stored per thing. Eviction is then one row: take the seat away and every
- * implicit ownership goes with it.
+ * ## Membership is not permission
+ * A row on the roster gives nothing by itself. A member with no grant reaches
+ * an app exactly as far as a stranger with the link does — which is what makes
+ * a roster safe to be generous with. The one shortcut is the space's **owner**,
+ * who holds `owner` on every app in it, never stored per app. Removing someone
+ * is then one row: delete the membership and every permission implied by it
+ * goes too.
  *
- * ## Two rules, said once
+ * ## The two checks
  * ```text
- * read    the mode is not `private`, OR the asker holds any level
- * write   the mode is `open`,        OR the asker holds owner or editor
+ * read    the mode is not `private`, OR the principal holds any level
+ * write   the mode is `open`,        OR the principal holds owner or editor
  * ```
  * A `viewer` never writes, under any mode. A `member` who was never granted
  * anything holds no level at all.
  *
- * ## Two places they are enforced
+ * ## Where each check runs
  * A WRITE is refused inside `apply()`: {@link members} registers a
- * `precondition` hook, so the check reads through the batch's own transaction
- * before a row moves, and a refused batch rolls back whole ({@link Denied}).
- * A READ never reaches `apply()`, so the door asks first —
+ * `precondition` hook, which runs inside the transaction before any row has
+ * moved, so a refused set of changes rolls back whole ({@link Denied}). A READ
+ * never reaches `apply()`, so the HTTP layer checks first —
  * {@link policy}`(storage).canRead(who, app)`.
  *
  * ```ts
@@ -49,25 +50,26 @@
  * // may.canRead(dana, list)
  * ```
  *
- * ## The roster governs itself
- * Only an owner may write a `member`, a `grant` or an `access` — an editor
- * writes the data and does not hand out keys. That matters most on an `open`
- * thing, where anyone may write: without the rule, a visitor invited to sign
- * the guest book could rewrite the roster. The first owner is therefore seeded
- * before the guard is added; see {@link members}.
+ * ## Only an owner edits the access rows
+ * Writing a `member`, a `grant` or an `access` requires `owner` — an editor
+ * writes the app's data and does not hand out permissions. That matters most on
+ * an `open` app, where anyone may write: without the rule, a visitor invited to
+ * sign the guest book could rewrite the roster. The first owner is therefore
+ * written before the guard is installed; see {@link members}.
  *
  * ## Share links
  * A grant may name a `token` instead of a person. Whoever opens that link acts
- * AS the grant, so the door signs their writes with the grant's own entity and
- * everything above works unchanged — no account, no seat, one revocable row.
+ * AS the grant, so the HTTP layer signs their changes with the grant's own
+ * entity id and everything above works unchanged — no account, no roster row,
+ * one revocable row.
  *
  * ## What is deliberately not here
- * Authentication: establishing who someone IS belongs to the door. Invitations:
- * a new `member` row usually means writing to somebody, which is a
+ * Authentication: establishing who someone IS belongs to the HTTP layer.
+ * Invitations: a new `member` row usually means messaging somebody, which is a
  * `created('member')` handler on
- * {@link https://jsr.io/@yaks/effects | @yaks/effects} — the slot this package
- * leaves for `@yaks/mail` to fill. And per-grant filters (a grant good for
- * only part of the data) — one level per thing, on purpose.
+ * {@link https://jsr.io/@yaks/effects | @yaks/effects} — the hook this package
+ * leaves for `@yaks/mail` to register. And per-grant filters (a grant good for
+ * only part of an app's data) — one level per app, on purpose.
  *
  * It imports no platform API, so the same rules run on a server, in a worker,
  * and in a browser tab.

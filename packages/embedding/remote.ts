@@ -1,18 +1,18 @@
-// An embedder over HTTP — the one transport shipped here, because a model a
-// host actually wants is almost always behind a URL.
+// An embedder over HTTP — the one transport shipped here, because a model worth
+// using is almost always behind a URL.
 //
 // It holds no credential and reads no environment: the endpoint, the model and
 // the token are arguments, which is what lets the same code run on a server
 // (where the token arrives from the process), in a Worker (where it arrives on
 // `env`), and in a test (where it is made up and the `fetch` is a stub).
 //
-// Two servers, one sentence. Ollama answers `/api/embed` with
-// `{embeddings: [[…]]}` and an OpenAI-compatible one answers `/v1/embeddings`
+// Two kinds of server, one declaration. Ollama answers `/api/embed` with
+// `{embeddings: [[…]]}`, and an OpenAI-compatible one answers `/v1/embeddings`
 // with `{data: [{embedding: […]}]}`; `via` names which, and nothing else here
-// differs. A fault — a status, a shape, a timeout — is THROWN, because the
-// sweep is the one that decides what a dark embedder means (it stops, and the
-// corpus stays stale) and a vector quietly invented here would be worse than
-// no vector at all.
+// differs. A failure — an error status, an unexpected body, a timeout — is
+// THROWN, because the sweep is what decides what an unreachable embedder means
+// (it stops, and the corpus stays stale), and a vector invented here to avoid
+// the error would be worse than no vector at all.
 
 import type { Embedder } from './embedder.ts'
 import { unit } from './vector.ts'
@@ -36,7 +36,7 @@ export type Remote = {
   model: string
   /** the server's root, without a path (`https://ollama.example`) */
   base: string
-  /** a bearer token; a box on your own subnet may need none */
+  /** a bearer token; a server on your own network may need none */
   key?: string
   /** Matryoshka width: keep this many leading coordinates (see {@link cut}) */
   dim?: number

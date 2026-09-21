@@ -2,10 +2,11 @@
 // transaction before anything moves.
 //
 // A `fork.from` names an entry that exists. A `using` names a provider and a
-// model that exist. Both are references, so the vocabulary already refuses a
-// dangling id at the engine on SQLite; this hook says WHY in words, and holds
-// on a store with no foreign keys (@yaks/ram, a browser tab). A referent
-// minted in the same batch counts: the batch is the world as it will be.
+// model that exist. Both are references, so the vocabulary already rejects a
+// dangling id at the engine on SQLite; this hook explains WHY in the error
+// message, and works on a store with no foreign keys (@yaks/ram, a browser
+// tab). A target minted in the same batch counts: the check is against the
+// graph as the batch will leave it.
 //
 // `session.rewind` — when a claimed task settles, mint the forks that continue
 // on the parent task and on each open unclaimed child — belongs here as a
@@ -19,7 +20,8 @@ import { over, then } from '@yaks/graph'
 import { MODEL, PROVIDER } from '@yaks/model'
 import { ENTRY, FORK, USING } from './native.ts'
 
-/** A reference in a native comp named something that is not what it must be. */
+/** A reference in one of this package's components named an entity of the
+ * wrong kind. */
 export class Unnamed extends Error {
   constructor(public comp: string, public column: string, public eid: string) {
     super(`${comp}.${column} names ${eid}, which is not a ${column}`)
@@ -32,7 +34,7 @@ let ref = (b: Bundle, comp: string, col: string) => {
   return v == null ? undefined : String(v)
 }
 
-// [comp, column, eid, the comp the referent must wear]
+// [comp, column, eid, the component the target must have]
 type Check = [string, string, string, string]
 
 let checks = (b: Bundle): Check[] => {

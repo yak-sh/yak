@@ -1,27 +1,31 @@
-// What an agent may ASK for here: the `tools` facet a host takes
-// (`@yaks/embedding/tools`) — the run behind the `vector_check` declaration in
-// ./vocab.json. One tool, and it is a CHECK: a tool whose verb is `check`,
-// which is the whole of what a "doctor" is (@yaks/tools ./check.ts).
+// What an agent can ASK about here: the `tools` export
+// (`@yaks/embedding/tools`) — the implementation behind the `vector_check`
+// declaration in ./vocab.json. One tool, and it is a CHECK: a tool whose verb
+// is `check`, which is all a "doctor" is (@yaks/tools ./check.ts). "The server"
+// below means whichever process opened the graph and loaded this package.
 //
-// The failure it exists for is invisible from outside: an approximate index
-// has exactly one writer — the process whose sweep rebuilds it — and when that
+// The failure it exists for is invisible from outside: an approximate index has
+// exactly one writer — the process whose sweep rebuilds it — and when that
 // process is gone, or its connection never opened the index it thought it had,
-// the writes still land, the searches still answer, and the neighbours are
-// quietly frozen at the last good rebuild. Nothing errors. The graph looks
-// well. Semantic search is just wrong now, and stays wrong.
+// writes still succeed, searches still return results, and the neighbours are
+// silently frozen at the last good rebuild. Nothing raises an error. The graph
+// looks healthy. Semantic search is simply wrong from then on.
 //
-// The tell is ./mark.ts: the triggers set the mark inside the same statement
-// as a write, and only a landed rebuild clears it, so a mark that outlives the
-// sweep's own interval means nobody is quantizing. `state()` was written for
-// exactly this reading ("what a health check reads"); this is the check.
+// The evidence is in ./mark.ts: the triggers set the dirty flag inside the same
+// statement as a write, and only a finished rebuild clears it, so a flag older
+// than the sweep's own interval means nothing is rebuilding the index.
+// `state()` was written for exactly this reading ("what a health check reads");
+// this is that check.
 //
-// A host that composed no vector table has no index to be behind on, and says
-// so rather than passing: asking the question is what tells the two apart.
+// A server that created no vector table has no index to be behind on, and
+// reports that rather than passing: asking the question is what tells the two
+// apart.
 //
-// The other invisible failure is a host that is WAITING: missing config never
-// prevents boot (./options.ts), so a graph with no key comes up perfectly well
-// and quietly embeds nothing. This is where that is said out loud, and it is
-// said every time it is asked rather than once into a log nobody kept.
+// The other invisible failure is a server that is WAITING: missing config never
+// prevents startup (./options.ts), so a graph with no key starts perfectly well
+// and quietly embeds nothing. This is where that is reported, and it is
+// reported every time the tool is called rather than once into a log nobody
+// kept.
 
 import type { Runs } from '@yaks/graph/tools'
 import { checked, type Finding } from '@yaks/tools'
@@ -33,8 +37,8 @@ export type { Options }
 
 let STALE = 30
 
-/** The run behind the tool ./vocab.json declares — over this host's own
- * connection, which is why the facet is a factory. */
+/** The implementation behind the tool ./vocab.json declares, over this
+ * server's own database connection — which is why this export is a factory. */
 export let runs = (
   host: { sql: Driver },
   options: Options = {},
@@ -42,8 +46,8 @@ export let runs = (
   vector_check: (_bundles, ctx) => {
     let about = 'the vector index is being rebuilt by the sweep that owns it'
     let minutes = options.stale ?? STALE
-    // What this host is waiting for, if anything: a sweep that cannot embed
-    // is not behind on a rebuild, it has not started.
+    // What this server is waiting for, if anything: a sweep that cannot embed
+    // is not behind on a rebuild, it has not started at all.
     let { waiting } = embedderOf(options)
     if (waiting) {
       return checked(ctx.call, about, [{
@@ -56,8 +60,9 @@ export let runs = (
     try {
       said = state(host.sql)
     } catch {
-      // No vector table: this host composed `@yaks/embedding/rules` nowhere,
-      // so there is no index and no sweep. Not a fault, and not a pass either.
+      // No vector table: this server never composed `@yaks/embedding/rules`,
+      // so there is no index and no sweep. Not a failure, and not a pass
+      // either.
       return checked(ctx.call, about, [{
         level: 'warn',
         text: 'this host keeps no vector table, so there is no index to ' +

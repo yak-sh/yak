@@ -1,11 +1,11 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // graph with personas in it, over @yaks/ram, so the tests need no database and
-// no host.
+// no server.
 //
-// The two tier relations are stated here rather than imported: `contains` is
-// @yaks/task's word and `reads` is @yaks/kernel's, and a test of what a persona
-// holds has no business loading a to-do list to say so. A composed host loads
-// the packages that own them; this loads the same two words.
+// The two edge relations are declared here rather than imported: `contains` is
+// @yaks/task's and `reads` is @yaks/kernel's, and a test of what a persona
+// includes has no business loading a to-do list to find out. A composed server
+// loads the packages that own them; this declares the same two components.
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import {
@@ -35,7 +35,7 @@ let doc: VocabDoc = {
   },
 }
 
-/** A vocabulary with the persona words, both tier relations, and ids. */
+/** A vocabulary with the persona components, both relations, and ids. */
 export let said: Vocab = loadVocab(
   [edgeDoc, docDoc, personaDoc, doc],
   [edgeKeywords, idKeywords],
@@ -43,7 +43,8 @@ export let said: Vocab = loadVocab(
 
 let { contains: _carries, ...rest } = doc.$defs ?? {}
 
-/** The same vocabulary with no `contains` — a host that composed no @yaks/task. */
+/** The same vocabulary without `contains` — a server that did not compose
+ * @yaks/task. */
 export let thin: Vocab = loadVocab(
   [edgeDoc, docDoc, personaDoc, { $defs: rest }],
   [edgeKeywords, idKeywords],
@@ -56,7 +57,7 @@ export let world = (vocab: Vocab = said): Graph =>
 /** The storage a graph is keeping its entities in. */
 export let held = (g: Graph): Storage => g.storage
 
-/** One entity with a doc on it, plus whatever else it wears. */
+/** One entity with a `doc` on it, plus any other components given. */
 export let says = (
   eid: string,
   title: string,
@@ -64,11 +65,11 @@ export let says = (
   wears: Record<string, Comp> = {},
 ): Bundle => ({ ...wears, entity: { eid }, doc: { title, body } })
 
-/** A persona: a doc that is the voice. */
+/** A persona: a doc whose body is the instruction text. */
 export let voiced = (eid: string, title: string, body: string): Bundle =>
   says(eid, title, body, { persona: {} })
 
-/** A memory: a doc somebody said. */
+/** A memory: a doc somebody wrote. */
 export let memory = (eid: string, title: string, body: string): Bundle =>
   says(eid, title, body, { memory: {} })
 

@@ -1,5 +1,5 @@
 /**
- * @yaks/mail — letters, in the graph: the mail component domain for a
+ * @yaks/mail — letters, in the graph: the mail components for a
  * {@link https://jsr.io/@yaks/graph | @yaks/graph}.
  *
  * Say a book club runs on a graph. It has people, a reading list, a potluck
@@ -16,43 +16,44 @@
  * //   mail: { from: 'hello@books.example', target: potluck },
  * //   deliver: { to: ana } }
  * ```
- * `mail` is the ENVELOPE, `deliver` is the ask to send it, and `target` is what
- * it is about — any entity at all. Because the recipient is an ENTITY rather
- * than a string, the address it goes to is whatever their {@link mailDoc |
- * `email`} says at the moment it leaves.
+ * `mail` is the ENVELOPE, `deliver` is the request to send it, and `target` is
+ * what it is about — any entity at all. Because the recipient is an ENTITY
+ * rather than a string, the address it goes to is whatever their
+ * {@link mailDoc | `email`} component holds at the moment it leaves.
  *
  * ## The subject and the body are a `doc`
  * They are `doc{title, body}`, from
  * {@link https://jsr.io/@yaks/doc | @yaks/doc}, which this package depends on.
- * The words a person reads live in the one component every readable thing
- * wears, so a letter is searched, rendered and edited by whatever already
+ * The words a person reads belong in the one component every readable thing
+ * has, so a letter is searched, rendered and edited by whatever already
  * handles a `doc` — instead of by a second copy of the same two columns.
  *
  * Compose `docs()` BESIDE {@link mailbox}, never inside it: a vocabulary
- * refuses a component declared twice, so an application that already has `doc`
- * is not fought over it.
+ * rejects a component declared twice, so an application that already declares
+ * `doc` is not fought over it.
  *
  * ## Sending is an effect, not a write
  * Nothing in `apply()` talks to a mail server. {@link sending} is a
  * `created(mail)` handler on {@link https://jsr.io/@yaks/effects | @yaks/effects}:
- * it runs after the batch commits, hands the letter to an injected
- * {@link Sender}, and writes back what happened — `delivered{at, via}` or
- * `bounced{at, reason}`. So the write cannot fail because a mail server is
- * down, and "what became of that letter?" is a query.
+ * it runs after the transaction commits, hands the letter to the
+ * {@link Sender} the caller supplied, and writes back what happened —
+ * `delivered{at, via}` or `bounced{at, reason}`. So the write cannot fail
+ * because a mail server is down, and "what became of that letter?" is a query.
  *
  * Two senders ship: {@link cloudflare} (Cloudflare Email Sending, credentials
- * injected, never held here) and {@link stash} (keeps them in a list — what a
- * test and a development environment want).
+ * passed in, never held here) and {@link stash} (keeps them in an array — what
+ * a test and a development environment want).
  *
  * ## Receiving is a pure function
  * {@link inbound} turns a message as an Email Worker receives it into the
- * bundles that record it. It asks the graph nothing, so it tests without one.
- * The two columns that ARE lookups — whom the letter is about, which letter it
- * answers — are {@link arrived} one file over, where there is a graph to ask,
- * and `@yaks/mail/routes` is the path a mail edge posts a letter on.
+ * bundles that record it. It queries the graph for nothing, so it can be
+ * tested without one. The two columns that ARE lookups — whom the letter is
+ * about, which letter it answers — are answered by {@link arrived} one file
+ * over, where there is a graph to query, and `@yaks/mail/routes` exports the
+ * HTTP route a mail edge posts a letter on.
  *
  * ## The worked example
- * {@link invited} fills the `created(member)` slot
+ * {@link invited} fills the `created(member)` handler slot
  * {@link https://jsr.io/@yaks/member | @yaks/member} documents and leaves
  * empty: somebody joins the club, and an invitation is WRITTEN — the sending
  * effect carries it like any other letter.
@@ -80,8 +81,8 @@
  * ```
  *
  * ## What is deliberately not here
- * MIME parsing (hand {@link inbound} the text — a parser is a parser's job),
- * queues and retries (a bounced letter is data; minting a fresh one is the
+ * MIME parsing (pass {@link inbound} the text — a parser is a parser's job),
+ * queues and retries (a bounced letter is data; writing a fresh one is the
  * retry), and any credential of any kind.
  *
  * The core — the vocabulary, {@link canon}, {@link inbound}, {@link sending} —

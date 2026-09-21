@@ -10,7 +10,7 @@
     "ask": {
       "component": true,
       "type": "object",
-      "description": "the model was asked here, from the prefix ending at `through`; what the provider keeps about it rides in that provider's own comp beside this one",
+      "description": "the model was asked here, from the prefix ending at `through`; what the provider keeps about it is stored in that provider's own component beside this one",
       "properties": {
         "to": {
           "type": "string",
@@ -45,7 +45,7 @@
       "type": "object",
       "bare": false,
       "properties": {},
-      "description": "a line that wants to be read before the next ask"
+      "description": "an entry to be read before the next ask"
     },
     "brief": {
       "component": true,
@@ -69,7 +69,7 @@
           "death": "keep"
         }
       },
-      "description": "a line that withdraws an earlier one"
+      "description": "an entry that withdraws an earlier one"
     },
     "checkpoint": {
       "component": true,
@@ -88,7 +88,7 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "a session’s lock on the entity carrying it",
+      "description": "a session’s lock on the entity it is stored on",
       "properties": {
         "session": {
           "type": "string",
@@ -166,7 +166,7 @@
           "seq"
         ]
       ],
-      "description": "one line of a transcript; the comp beside it says what kind",
+      "description": "one entry of a transcript; the component stored beside it is its kind",
       "properties": {
         "session": {
           "type": "string",
@@ -208,7 +208,7 @@
           "stamped": true
         }
       },
-      "description": "a line that came from somewhere else — which transcript, and which line of it"
+      "description": "an entry imported from somewhere else — which source, and which line of it"
     },
     "notice": {
       "component": true,
@@ -231,7 +231,7 @@
       "type": "object",
       "bare": false,
       "properties": {},
-      "description": "a line the model thought rather than said"
+      "description": "an entry the model reasoned with rather than returned"
     },
     "resume": {
       "component": true,
@@ -264,7 +264,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "the runner’s own name for it"
+          "description": "the runner’s own id for it"
         },
         "actor": {
           "type": "string",
@@ -279,7 +279,7 @@
         "standing": {
           "type": "string",
           "stamped": true,
-          "description": "a session that stays: named here rather than ended when its work is done"
+          "description": "a long-running session: recorded here rather than ended when its work is done"
         },
         "status": {
           "enum": [
@@ -291,7 +291,7 @@
             "failed"
           ],
           "computed": true,
-          "description": "what the newest entry says: pending awaits the model, running awaits an answer, settled has nothing to do"
+          "description": "what the newest entry implies: pending is waiting on the model, running is waiting on an answer, settled has nothing to do"
         }
       }
     },
@@ -317,7 +317,7 @@
     "stop": {
       "component": true,
       "type": "object",
-      "description": "a mark in the transcript: the daemon performs nothing after it",
+      "description": "a marker in the transcript: the daemon does nothing after it",
       "properties": {}
     },
     "using": {
@@ -329,13 +329,13 @@
           "type": "string",
           "ref": "provider",
           "death": "keep",
-          "description": "the provider asked — kept as history when that entity is deleted, so a past ask still says what answered it"
+          "description": "the provider asked — kept as history when that entity is deleted, so a past ask still records what answered it"
         },
         "model": {
           "type": "string",
           "ref": "model",
           "death": "keep",
-          "description": "the model asked — kept as history when that entity is deleted, so a past ask still says what answered it"
+          "description": "the model asked — kept as history when that entity is deleted, so a past ask still records what answered it"
         },
         "effort": {
           "type": "string"
@@ -379,7 +379,7 @@
       "noun": "claim",
       "verb": "release",
       "title": "Let it go",
-      "description": "Drop the lock on an entity. Unguarded on purpose: letting go is how a lock is handed over, and a dead session’s locks are freed by whoever notices.",
+      "description": "Drop the lock on an entity. Unguarded on purpose: releasing is how a lock is handed over, and a dead session’s locks are freed by whichever process notices first.",
       "input": {
         "target": {
           "type": "string",
@@ -402,15 +402,15 @@
       "noun": "session",
       "verb": "context",
       "title": "What this session was in the middle of",
-      "description": "Start of a transcript: find or mint the session entity for a harness’s session id, and answer what it was in the middle of — what it holds a claim on, and the last thing the actor behind it said about itself. The harness injects the prose; nothing here fails loudly.",
+      "description": "Start of a transcript: find or mint the session entity for a harness’s session id, and report what it was in the middle of — what it holds a claim on, and the last thing the actor behind it wrote about itself. The harness injects the prose; nothing here fails loudly.",
       "input": {
         "session": {
           "type": "string",
-          "description": "the harness's own name for the transcript"
+          "description": "the harness's own id for the transcript"
         },
         "hook": {
           "type": "string",
-          "description": "a harness lifecycle payload as JSON — `-` reads it from stdin, which is how a hook hands its event over"
+          "description": "a harness lifecycle payload as JSON — `-` reads it from stdin, which is how a hook passes its event in"
         },
         "actor": {
           "type": "string",
@@ -430,15 +430,15 @@
       "noun": "session",
       "verb": "wrap",
       "title": "End of a transcript",
-      "description": "End of a transcript: record the session’s own account of itself, and release every lock it still holds. A session that was never reified wraps to nothing.",
+      "description": "End of a transcript: record the session’s own account of itself, and release every lock it still holds. A session that was never created does nothing.",
       "input": {
         "session": {
           "type": "string",
-          "description": "the harness's own name for the transcript"
+          "description": "the harness's own id for the transcript"
         },
         "hook": {
           "type": "string",
-          "description": "a harness lifecycle payload as JSON — `-` reads it from stdin, which is how a hook hands its event over"
+          "description": "a harness lifecycle payload as JSON — `-` reads it from stdin, which is how a hook passes its event in"
         },
         "brief": {
           "type": "string",
@@ -459,16 +459,16 @@
       "tool": true,
       "noun": "session",
       "verb": "brief",
-      "title": "Say what happened",
-      "description": "Write the session’s own account of itself — the brief the next session by the same actor is handed. Replaces whatever it said before.",
+      "title": "Record what happened",
+      "description": "Write the session’s own account of itself — the brief the next session by the same actor is given. Replaces whatever it recorded before.",
       "input": {
         "session": {
           "type": "string",
-          "description": "the harness's own name for the transcript"
+          "description": "the harness's own id for the transcript"
         },
         "hook": {
           "type": "string",
-          "description": "a harness lifecycle payload as JSON — `-` reads it from stdin, which is how a hook hands its event over"
+          "description": "a harness lifecycle payload as JSON — `-` reads it from stdin, which is how a hook passes its event in"
         },
         "text": {
           "type": "string",
@@ -489,8 +489,8 @@
       "tool": true,
       "noun": "hooks",
       "verb": "install",
-      "title": "Wire the injection loop",
-      "description": "Write this package’s lifecycle entries into a harness settings file, so every session starts by reading its context back and ends by wrapping. Replaces an earlier install and leaves every other entry alone. Runs on the box the tool runs on.",
+      "title": "Install the injection loop",
+      "description": "Write this package’s lifecycle entries into a harness settings file, so every session starts by reading its context back and ends by wrapping up. Replaces an earlier install and leaves every other entry alone. Writes to the machine the tool runs on.",
       "input": {
         "path": {
           "type": "string",
@@ -498,7 +498,7 @@
         },
         "yak": {
           "type": "string",
-          "description": "how the yak command is spelled on this box"
+          "description": "the path to the yak command on this machine"
         },
         "remove": {
           "type": "boolean",
@@ -517,7 +517,7 @@
       "noun": "claim",
       "verb": "check",
       "title": "Check the locks",
-      "description": "No entity is locked by a session that is over: a holder this graph has no session for, or one whose transcript stopped or failed. The board otherwise says somebody is working on what nobody is working on.",
+      "description": "Check that no entity is locked by a session that is over: a holder this graph has no session for, or one whose transcript stopped or failed. Otherwise the board reports that somebody is working on what nobody is working on.",
       "input": {},
       "readOnly": true
     },
@@ -526,7 +526,7 @@
       "noun": "session",
       "verb": "check",
       "title": "Check the transcripts",
-      "description": "No transcript has stalled — owed a turn or owed an answer for hours with nothing appended. A daemon that died mid-turn leaves a session that simply stops, and nothing anywhere says so.",
+      "description": "Check that no transcript has stalled — waiting on a turn or an answer for hours with nothing appended. A daemon that died mid-turn leaves a session that simply stops, and nothing anywhere reports it.",
       "input": {},
       "readOnly": true
     }

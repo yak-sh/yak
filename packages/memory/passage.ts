@@ -2,10 +2,10 @@
 // sentences, newest first, under one heading per space.
 //
 // BOUNDED, because it is paid for on every connection — {@link LAST} of them
-// and {@link BYTES} bytes, whichever runs out first, and then a line saying how
-// many are not shown and which tool answers with the rest. A person who has
-// said forty things is not owed forty of them at the top of every context; they
-// are owed the last few and a door to the others.
+// and {@link BYTES} bytes, whichever runs out first, and then a line saying
+// that there are more and which tool returns the rest. A person who has said
+// forty things is not owed forty of them at the top of every context; they are
+// owed the last few and a way to reach the others.
 //
 // Each entry is the SENTENCE, whole and in quotes, with its context indented
 // under it. Whole, because half of what somebody said is worse than none of it
@@ -34,14 +34,14 @@ let entry = (m: Memory, name: string): string => {
   return [said, ...under.map((l) => `  ${l}`)].join('\n')
 }
 
-// What is not shown, said once. Never a number: the passage reads what it can
-// afford and nothing counts the rest, which would be a second query on every
-// connection to say something the tool already answers.
+// What is not shown, in one line. Never a count: the passage reads what it can
+// afford and nothing counts the rest, which would mean a second query on every
+// connection to report something the recall tool already answers.
 let MORE = 'There are more — memory_recall finds any of them by what they ' +
   'are about.'
 
 /**
- * One space's memories as the passage says them, or '' where it has none.
+ * One space's memories as the passage renders them, or '' where it has none.
  * `name` is the person the heading is about — whoever said most of them.
  *
  * ```ts

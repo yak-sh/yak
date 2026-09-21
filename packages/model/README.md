@@ -17,21 +17,21 @@ Three things, and no transport:
 - **`Item`** — one line of a conversation as a model sees it: a user turn, an
   assistant turn, a call the model asked for, the result it was given.
 - **`Model`** — `(Request) => Promise<Reply>`. A request is a model name, the
-  items, the tools, an optional anchor to continue from; a reply is an id, the
-  model that served, and the items it produced. A provider that keeps replies
-  adds `mark` (what to stamp on the record of a reply, as its own comp),
-  `anchor` (reads an anchor back off that record, or nothing) and `vocab` (the
-  comp `mark` writes).
-- **`provider`, `model`, `tool`** — the entities a graph keeps about serving, as
-  one vocabulary document (`modelDoc`), so which models exist is data.
+  items, the tools, and an optional anchor to continue from; a reply is an id,
+  the model that served it, and the items it produced. A provider that stores
+  its replies adds three optional members: `mark` (the component to write on the
+  record of a reply), `anchor` (reads an anchor back off that record, or returns
+  nothing) and `vocab` (the component `mark` writes).
+- **`provider`, `model`, `tool`** — the entities a graph stores about serving,
+  as one vocabulary document (`modelDoc`), so that which models exist is data.
 
 A provider package implements `Model`: [@yaks/openai](../openai) does it over
-the Responses API; an Ollama or a Workers AI sibling would sit beside it. A
-conversation package ([@yaks/session](../session)) shapes its record into items
-and asks. Neither imports the other.
+the Responses API; an Ollama or a Workers AI package would sit beside it. A
+conversation package ([@yaks/session](../session)) turns its stored transcript
+into items and calls the model. Neither imports the other.
 
-A model that throws `ModelError` said something the caller expects — a refusal,
-a rate limit, no credential. Anything else it throws is a defect.
+A model that throws `ModelError` failed in a way the caller expects — a refusal,
+a rate limit, a missing credential. Anything else it throws is a bug.
 
 ## Minimal implementation
 

@@ -2,9 +2,9 @@ import { CallError, runner, UnfinishedCall } from '@yaks/tools'
 export { CallError as ToolError } from '@yaks/tools'
 import { transient } from '@yaks/graph'
 // The daemon's one step. `react(graph, session)` reads the newest entry of a
-// transcript and does the one next thing it says: a pending input or result
-// asks the model; an open tool call is performed; an error under the retry
-// bound asks the model again; everything else is nothing. It appends what
+// transcript and does the one next thing it calls for: a pending input or
+// result asks the model; an open tool call is run; an error within the retry
+// limit asks the model again; everything else does nothing. It appends what
 // happened as entries and returns, so a loop over it is a session and a
 // `created(entry)` effect over it is the daemon (./daemon.ts).
 //
@@ -13,13 +13,13 @@ import { transient } from '@yaks/graph'
 // fake in a test, and inside a Store on Cloudflare. It imports no platform API.
 //
 // A fork's transcript is the parent's entries up to the anchor plus its own.
-// When the model can continue from a kept reply (`model.anchor` answers for
-// the newest ask), the model is asked with that anchor plus only what
-// followed; otherwise the whole transcript travels every time. That one rule is
-// what makes a fork's first ask cheap where the provider allows it: the anchor
-// is the parent's last reply, and only the fork's new input travels. What the
-// provider keeps about an ask is its own comp on the ask entry (`model.mark`),
-// which is why the question is the model's to answer.
+// When the model can continue from a kept reply (`model.anchor` returns one for
+// the newest ask), the model is asked with that anchor plus only what followed;
+// otherwise the whole transcript is sent every time. That one rule is what
+// makes a fork's first ask cheap where the provider allows it: the anchor is
+// the parent's last reply, and only the fork's new input is sent. What the
+// provider keeps about an ask is its own component on the ask entry
+// (`model.mark`), which is why only the model can answer the question.
 
 import type {
   Actor,
@@ -135,7 +135,8 @@ export let transcript = async (g: Graph, session: Eid): Promise<Bundle[]> => {
 }
 
 /** The model's view of a window of the transcript: inputs as user turns, what
- * the model said as assistant turns, tool calls and results as the pair a
+ * what the model returned as assistant turns, tool calls and results as the
+ * pair a
  * model expects. Ask entries are our record, not the model's; a tool call the
  * anchored reply itself asked for is already in the provider's state, so only
  * its result travels. */
@@ -176,7 +177,8 @@ export let project = (
 
 /**
  * One step of the daemon over one transcript. Reads the newest entry, does the
- * one thing it asks for, appends the entries that record it, and says what it
+ * one thing it calls for, appends the entries that record it, and reports what
+ * it
  * did. Safe to call when there is nothing to do.
  */
 export let react = async (
@@ -262,7 +264,8 @@ export let react = async (
     const added: Bundle[] = []
     // The runner is what runs a call — here and everywhere else (@yaks/tools).
     // A session tool answers a STRING and this is where that becomes bundles:
-    // the words it said, wearing `output{source}` so the answer names the call
+    // the text it returned, carrying `output{source}` so the result names the
+    // call
     // it came from. The runner lands them beside the `result{call, ms}` entity
     // it derives, and that result is the transcript's entry.
     //
@@ -270,7 +273,8 @@ export let react = async (
     // run in the order the transcript asked for, one at a time, and an
     // effect-phase runner would race that.
     const at = new Map(open.map((b) => [b.entity.eid, b]))
-    // What a session tool is, said as a graph tool: the words it answers wear
+    // What a session tool is, expressed as a graph tool: the text it returns
+    // carries
     // `content` and `output{source}`, so the answer names the call it came
     // from and the runner lands it like any other.
     const served = (eid: Eid, tool: Tool): GraphTool => ({
@@ -295,7 +299,7 @@ export let react = async (
     // A call naming a tool this session does not serve is answered by a tool
     // that refuses. The runner leaves a call it has no word for alone —
     // another runner may own it — and here nobody else does, so the refusal is
-    // a word in this table and lands as every other answer does.
+    // an entry in this table and lands like every other result does.
     const unserved = (to: Eid): GraphTool => ({
       eid: to,
       name: to,

@@ -1,5 +1,5 @@
-// What a batch MEANS about a running program: the `rules` facet a host takes
-// (`@yaks/process/rules`).
+// This package as a graph plugin, exported as `@yaks/process/rules` for a
+// caller assembling a graph's plugin list.
 
 import type { Plugin } from '@yaks/graph'
 import { processes } from './plugin.ts'

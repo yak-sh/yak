@@ -1,5 +1,6 @@
-// What a batch MEANS on a canvas: the `rules` facet a host takes
-// (`@yaks/canvas/rules`).
+// The graph plugins this package contributes: the module a server imports at
+// `@yaks/canvas/rules`. The only write-time rule is declared in the
+// vocabulary, as `death: cascade` on `card.target`.
 
 import type { Plugin } from '@yaks/graph'
 import { canvas } from './plugin.ts'

@@ -1,12 +1,12 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
-// notebook that dreams.
+// small graph, called a notebook, with dreams in it.
 //
-// One project, one voice to wear, and a graph that speaks the words a desk is
-// written in — @yaks/session's transcript and lock, @yaks/doc's words,
-// @yaks/edge's link, @yaks/wake's schedule — beside dreaming's own. The store
-// is @yaks/ram: a Map holding the bundles, the same `apply()` and the same
-// rules as a database. Nothing spawns: a desk here is the rows a host would
-// hand to whoever runs sessions.
+// It holds one project and one persona, and loads the components a desk is
+// written with — @yaks/session's session and claim, @yaks/doc's body text,
+// @yaks/edge's links, @yaks/wake's schedules — alongside dreaming's own. The
+// storage is @yaks/ram: a Map holding the bundles, with the same `apply()` and
+// the same rules as a database. No process is started: a desk here is just the
+// rows a server would hand to whatever runs sessions.
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph } from '@yaks/graph'
@@ -35,8 +35,8 @@ let doc: VocabDoc = {
       kind: true,
       properties: { name: {} },
     },
-    // The voice a desk wears is @yaks/persona's; said here so these tests need
-    // no dependency on that package, and `references` with it.
+    // The persona a desk uses is @yaks/persona's; declared here, along with
+    // `references`, so these tests need no dependency on that package.
     persona: {
       component: true,
       type: 'object',
@@ -61,8 +61,8 @@ let doc: VocabDoc = {
   },
 }
 
-/** The notebook's vocabulary: dreaming's words, and the ones a desk is
- * written in. */
+/** The notebook's vocabulary: dreaming's components, plus the ones a desk is
+ * written with. */
 export let notebook: Vocab = loadVocab([
   docDoc,
   edgeDoc,
@@ -80,9 +80,9 @@ export let noon = (): string => '2026-09-19T12:00:00.000Z'
 /** The ids the tests share. */
 export let ids = {
   work: 'p-work', // the project a dream is filed under
-  voice: 'n-scribe', // the persona a desk wears
+  voice: 'n-scribe', // the persona a desk runs with
   dream: 'z-writeup', // the standing intention
-  house: 'y-house', // the provider this box has
+  house: 'y-house', // the provider this machine has
   mind: 'o-mind', // the model it serves
 }
 
@@ -92,12 +92,13 @@ export type Notebook = {
   g: Graph
   /** its effect registry, for a test that registers another handler */
   fx: Effects
-  /** what a failing handler reported — telemetry, never a broken batch */
+  /** what a failing handler reported — recorded, never a failed
+   * transaction */
   failed: unknown[]
 }
 
-/** A notebook with a project and a voice in it, watching for dreams the way
- * the `effects` facet registers them. */
+/** A notebook with a project and a persona in it, watching for dreams the way
+ * the `effects` export registers them. */
 export let notes = async (o: Open): Promise<Notebook> => {
   let failed: unknown[] = []
   let fx = effects(notebook, {
@@ -119,7 +120,7 @@ export let notes = async (o: Open): Promise<Notebook> => {
   return { g, fx, failed }
 }
 
-/** Eids in order, so a test can name what the desk minted. */
+/** Eids in order, so a test can name the entities a desk created. */
 export let counter = (): () => string => {
   let n = 0
   return () => `new-${++n}`

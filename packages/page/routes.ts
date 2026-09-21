@@ -1,26 +1,28 @@
-// The two doors a witnessed page needs: the `routes` facet a host takes
-// (`@yaks/page/routes`).
+// The two HTTP endpoints a recorded page needs, exported as
+// `@yaks/page/routes`.
 //
-// `POST /page` is THE WITNESS. A browser tab carries three things no server
-// has: the address somebody is actually standing at, the document after a
-// login and its scripts (refetch a paywalled page and you archive the
-// paywall), and the moment. So one door takes all three at once and lands
-// them in one batch — which is also why the tab's bytes are scrubbed and
-// stored INSIDE the request rather than left to the capture effect: a page
-// that arrives already frozen never asks anybody to fetch it again.
+// `POST /page` is how a browser reports a page it is looking at. A browser tab
+// has three things no server has: the address somebody is actually standing at,
+// the document as it looks after login and after scripts ran (refetch a
+// paywalled page and you archive the paywall), and the moment. So one endpoint
+// accepts all three at once and writes them in one transaction — which is also
+// why the tab's bytes are scrubbed and stored inside this handler rather than
+// left to the capture effect: a page that arrives already archived never asks
+// anybody to fetch it again.
 //
-// `GET /page/<eid>` is the archive, read back. The bytes are content-
-// addressed and `GET /blob/<sha>` (@yaks/blob) already answers for them, but
-// nothing there knows they are a document or where they came from, so this
-// door answers by the PAGE: its own fence, its media type, and the two
-// headers that let a reader date a snapshot without asking the graph
-// (RFC 7089 — `Memento-Datetime` is the moment these bytes were what the page
-// said, and the `rel="original"` link is the address they were said at).
+// `GET /page/<eid>` returns the archive. The bytes are content-addressed and
+// `GET /blob/<sha>` (@yaks/blob) already serves them, but nothing there knows
+// they are a document or where they came from, so this endpoint answers by the
+// PAGE: the restrictive headers, the media type, and the two headers that let a
+// reader date a snapshot without querying the graph (RFC 7089 —
+// `Memento-Datetime` is the moment these bytes were what the page said, and the
+// `rel="original"` link is the address they were read from).
 //
-// The fence is @yaks/blob's `served`: a sandbox CSP with no scripts, and
-// nosniff. It is defence in DEPTH — ./scrub.ts already removed every external
-// reference before these bytes were stored, and it had to, because an archive
-// mailed, copied or opened from a file has no header in front of it.
+// The restrictive headers come from @yaks/blob's `served()`: a sandbox CSP with
+// no scripts, plus nosniff. They are defence in DEPTH — ./scrub.ts already
+// removed every external reference before these bytes were stored, and it had
+// to, because an archive mailed, copied or opened from a file has no header in
+// front of it.
 
 import type { Route } from '@yaks/api'
 import type { Bundle, Comp, Graph, Storage } from '@yaks/graph'
@@ -33,16 +35,17 @@ import { froze } from './freeze.ts'
 import { blobsOf, type Options } from './host.ts'
 import { canon, fetchable, pageEid } from './url.ts'
 
-/** Where a frozen page answers from. */
+/** The path prefix an archived page is served under. */
 export let PREFIX = '/page/'
 
-/** What a witness says: where it was, what it was called, what it saw. */
+/** The JSON body `POST /page` accepts: where the browser was, what it called
+ * the page, and the document it had. */
 export type Filing = {
-  /** the address the tab was standing at */
+  /** the address the tab was at */
   url?: string
   /** what the tab called it */
   title?: string
-  /** the document as the tab had it, after login and scripts */
+  /** the document as the tab had it, after login and after scripts ran */
   html?: string
 }
 
@@ -58,8 +61,8 @@ export let routes = (
   options: Options = {},
 ): Route[] => {
   let blobs = blobsOf(host, options)
-  // One entity by its id is a GET, never a query: it needs no grammar, no
-  // vocabulary beyond this package's own, and no index.
+  // One entity by its id is a direct get, never a query: it needs no grammar,
+  // no vocabulary beyond this package's own, and no index.
   let at = detached(host.storage)
   let find = async (eid: string): Promise<Bundle | undefined> =>
     (await at.get([eid]))[0]
@@ -74,16 +77,16 @@ export let routes = (
       }
       let url = canon(String(said.url ?? ''))
       if (!fetchable(url)) return bad('a http(s) url is required')
-      // Find-or-mint is the id itself: the entity a canonical address names
-      // (./url.ts), so a second witness of one page patches the first.
+      // Find-or-create is the id itself: the entity a canonical address names
+      // (./url.ts), so a second report of one page patches the first.
       let eid = pageEid(url)
       let page = await find(eid) ?? { entity: { eid } }
       let [landed] = said.html
         ? await froze(page, String(said.html), { blobs })
         : [{ entity: page.entity }]
       // The tab's own title beats the archive's — it is what the person was
-      // looking at — and either one names a page only while nothing else
-      // does, so a title somebody wrote by hand survives every later visit.
+      // looking at — and either one names a page only while nothing else does,
+      // so a title somebody wrote by hand survives every later capture.
       let title = String(said.title ?? '').trim()
       let bundle: Bundle = {
         ...landed,
@@ -91,8 +94,9 @@ export let routes = (
         ...(title && !comp(page, DOC) ? { [DOC]: { [TITLE]: title } } : {}),
       }
       try {
-        // `frozen_at` and `bytes` are server-owned: this door IS the server,
-        // and a client could otherwise claim an archive nobody holds.
+        // `frozen_at` and `bytes` are server-owned columns: this handler IS the
+        // server, and a client could otherwise claim an archive that does not
+        // exist.
         return Response.json(
           await host.graph.apply([bundle], {
             trusted: true,
@@ -117,8 +121,8 @@ export let routes = (
       let bytes = await blobs.get(String(web.bytes))
       if (!bytes) return gone()
       let out = served(bytes, { mime: 'text/html; charset=utf-8' })
-      // Not immutable: this address is the PAGE, and a page frozen again is
-      // new bytes at the same one. The immutable door is `/blob/<sha>`.
+      // Not immutable: this URL names the PAGE, and a page archived again is
+      // new bytes at the same URL. The immutable one is `/blob/<sha>`.
       out.headers.set('cache-control', 'no-cache')
       let at = new Date(String(web.frozen_at ?? ''))
       if (!isNaN(+at)) out.headers.set('memento-datetime', at.toUTCString())

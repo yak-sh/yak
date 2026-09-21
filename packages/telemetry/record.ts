@@ -1,15 +1,16 @@
-// Writing a row. Recording is best-effort BY CONTRACT: a telemetry failure
-// must never break the thing it watches, so `record` swallows and warns. A
-// record that observes its own append failure would turn one broken call into
-// a loop, so a re-entrant record is dropped, not chased.
+// Writing a row. Recording is best-effort BY DESIGN: a telemetry failure must
+// never break what it is measuring, so `record` catches the error and logs a
+// warning. A `record` that tried to record its own failed insert would turn one
+// broken call into a loop, so a `record` call made from inside another one is
+// dropped.
 
 import type { Driver } from './driver.ts'
 import { type Source, TABLE } from './ddl.ts'
 import { scrub } from './scrub.ts'
 
 /**
- * What a caller reports. `ok` is the only judgement: a tool that answered with
- * an error is a call that happened AND failed, and both facts matter.
+ * What a caller reports. `ok` is the only verdict: a tool that returned an
+ * error is a call that happened AND failed, and both facts matter.
  */
 export type Call = {
   source: Source
@@ -23,7 +24,7 @@ export type Call = {
 
 let inside = false
 
-/** Append one call. Never throws. */
+/** Insert one call. Never throws. */
 export let record = (db: Driver, c: Call): void => {
   if (inside) return
   inside = true

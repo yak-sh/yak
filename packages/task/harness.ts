@@ -1,12 +1,12 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // small team's to-do list, written as a vocabulary.
 //
-// The team writes `doc{title}` on everything and files its tasks under projects.
-// That `doc` is @yaks/doc's, loaded beside this package's rather than spelled
-// out again here — which is also the composition the README teaches. The store
-// is @yaks/ram, which is how a page or a test composes this package — a Map
-// holding the bundles, the same apply() and the same query grammar as a
-// database.
+// The team writes `doc{title}` on everything and files its tasks under
+// projects. That `doc` is @yaks/doc's, loaded beside this package's rather than
+// declared again here — which is also the composition the README teaches. The
+// storage is @yaks/ram, which is how a page or a test composes this package: a
+// Map holding the bundles, with the same apply() and the same query grammar as
+// a database.
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph, type Storage } from '@yaks/graph'
@@ -32,7 +32,8 @@ let doc: VocabDoc = {
       kind: true,
       properties: { name: {} },
     },
-    // A lease, so a test can add the `wip` rung the way an application would.
+    // A lease, so that a test can add the `wip` rung the way an application
+    // would.
     claim: {
       component: true,
       type: 'object',
@@ -53,7 +54,7 @@ export let team: Vocab = loadVocab(
 /** A fresh in-memory storage over that vocabulary. */
 export let store = (): Storage => ram(team, { number: true })
 
-/** A graph over a fresh store, with the edge and task plugins wired. */
+/** A graph over a fresh store, with the edge and task plugins loaded. */
 export let teamGraph = (
   storage: Storage = store(),
   marks?: Mark[],

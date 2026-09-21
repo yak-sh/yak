@@ -1,8 +1,8 @@
 # @yaks/text
 
-Markdown and plain text from the same renderer trees used by `@yaks/preact`. The
-host imports no DOM or framework. `h` records elements; `markdown` and `plain`
-serialize them:
+Markdown and plain text from the same renderer trees `@yaks/preact` uses. This
+package imports no DOM and no framework. `h` records elements; `markdown` and
+`plain` serialize them:
 
 ```ts
 import { h, markdown, plain } from '@yaks/text'
@@ -17,13 +17,14 @@ markdown(node) // 'Open [yaks\\.app](https://yaks.app)'
 plain(node) // 'Open yaks.app (https://yaks.app)'
 ```
 
-Or use `render(registry, bundle, view, vocab, ctx?, mode?)` with a registry from
-`@yaks/render`. The first five arguments match the Preact host. Mode defaults to
-`'markdown'`; pass `'plain'` for undecorated text. Context includes
-`{comp, col}` for column selection and `ctx.render(view, overrides?)` for
-composing nested views through the same registry. The host always supplies
-`readOnly: true`, including for nested views, so portable editors display their
-values. An unmatched view produces an empty string.
+Or call `render(registry, bundle, view, vocab, ctx?, mode?)` with a registry
+from `@yaks/render`. The first five arguments are the same as the Preact
+renderer's. Mode defaults to `'markdown'`; pass `'plain'` for undecorated text.
+Context includes `{comp, col}` for column selection and
+`ctx.render(view, overrides?)` for composing nested views through the same
+registry. This renderer always passes `readOnly: true`, including to nested
+views, so that portable editors display their values. An unmatched view produces
+an empty string.
 
 | Elements                                                              | Markdown                                 | Plain text            |
 | --------------------------------------------------------------------- | ---------------------------------------- | --------------------- |
@@ -43,7 +44,8 @@ Inline siblings preserve the spaces their renderer supplies. Output has no added
 trailing newline. Literal Markdown punctuation is escaped; code chooses a
 delimiter longer than any backtick run in its content. Ordered lists honor an
 integer `start` value. Plain links omit a duplicate destination when the label
-already equals the URL. Event handlers and other host props are ignored.
+already equals the URL. Event handlers and other props meant for a live DOM are
+ignored.
 
 Markdown uses empty HTML comments between adjacent emphasis/code elements or
 independent lists so their delimiters do not merge. Nested emphasis uses inline
@@ -55,9 +57,9 @@ that remove HTML may lose those distinctions.
 Every text node and href loses the entire C0/DEL/C1 class before formatting.
 Tabs, literal newlines and control-based search-highlight markers are removed.
 Use `br` or block/list elements to express line breaks, including inside `pre`.
-Only the host emits formatting newlines. Code and unknown wrappers cross the
-same boundary. Links also encode characters that would break Markdown's
-destination syntax; this package does not impose a URL scheme policy.
+Only this renderer emits formatting newlines. Code and unknown wrapper elements
+cross the same boundary. Links also encode characters that would break
+Markdown's destination syntax; this package does not impose a URL scheme policy.
 
 ## Compatibility
 

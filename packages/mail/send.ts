@@ -1,21 +1,23 @@
-// Sending: the seam a transport plugs into, and the effect that uses it.
+// Sending: the interface a transport implements, and the effect that calls it.
 //
-// A letter GOES when it asks to. The ask is the `deliver` component: an entity
-// wearing `mail` and `deliver` is outbound, and one wearing `mail` alone is a
-// letter you are keeping — a draft, or one that arrived. That is the whole
-// rule, and it is why an inbound letter (which carries the address it came to,
-// in `mail.to`) can never echo itself back out.
+// A letter is sent when it asks to be. The request is the `deliver` component:
+// an entity carrying `mail` and `deliver` is outbound, and one carrying `mail`
+// alone is a letter you are keeping — a draft, or one that arrived. That is the
+// whole rule, and it is why an inbound letter (which carries the address it was
+// delivered to, in `mail.to`) can never echo itself back out.
 //
 // The effect runs POST-COMMIT, which is the right place for it: the letter is
 // durable before anyone tries to send it, a mail server that is down cannot
-// refuse the write, and the outcome — `delivered` or `bounced` — goes back
-// through the graph's own `apply()` as a batch of its own. So "what happened to
-// that letter?" is a query AND a frame: it is journaled and pushed to whoever
-// is watching, rather than a row found on the next look (T-34044).
+// fail the write, and the outcome — `delivered` or `bounced` — is written back
+// through the graph's own `apply()` as a transaction of its own. So "what
+// happened to that letter?" is both a query and a live update: it is journaled
+// and pushed to whoever is subscribed, rather than a row found on the next read
+// (T-34044).
 //
-// The transport itself is INJECTED. This package composes a message and hands
-// it over; whether that is Cloudflare, an SMTP relay, or a list in memory is
-// the host's business (./cloudflare.ts and ./stash.ts are two answers).
+// The transport itself is SUPPLIED BY THE CALLER. This package composes a
+// message and hands it over; whether that is Cloudflare, an SMTP relay, or an
+// array in memory is the caller's business (./cloudflare.ts and ./stash.ts are
+// two implementations).
 //
 // A letter is TWO components: the envelope is `mail` and the words a person
 // reads are @yaks/doc's `doc{title, body}`. So the composition works from the
@@ -45,9 +47,9 @@ export type Message = {
   replyTo?: string
 }
 
-/** What a transport says about a message it took. */
+/** What a transport reports about a message it accepted. */
 export type Receipt = {
-  /** the id the transport gave it, if it gave one — kept as `delivered.via` */
+  /** the id the transport returned, if any — stored as `delivered.via` */
   id?: string
 }
 
@@ -63,12 +65,12 @@ export type Sender = {
 
 /** How the effect is built. */
 export type Post = {
-  /** what to do about a letter that asks to go */
+  /** what to do about a letter that asks to be sent */
   sender: Sender
-  /** the clock, injected so a test can hold it still (default: now) */
+  /** the clock, passed in so a test can hold it still (default: now) */
   now?: () => string
-  /** a domain whose addresses are this GRAPH's own rather than a mail
-   * server's. A letter to one is delivered by writing it — see below. */
+  /** a domain whose addresses belong to this GRAPH rather than to a mail
+   * server. A letter to one is delivered by writing it — see below. */
   local?: string
 }
 
@@ -76,7 +78,7 @@ let clock = () => new Date().toISOString()
 
 // The whole letter as it stands, post-commit: the effect works from storage
 // rather than from the patch, so it sees `mail` and `deliver` together however
-// the batch that wrote them was shaped.
+// the transaction that wrote them was shaped.
 let whole = (tx: Tx, entity: Entity) =>
   then(tx.get([entity.eid]), (found) => found[0])
 
@@ -93,8 +95,8 @@ export let addressOf = (
 ): string | Promise<string> =>
   then(tx.get([eid]), (found) => str(comp(found[0], EMAIL), 'address'))
 
-// The Message-ID a reply threads on: what the answered letter arrived as, else
-// the id our own transport gave it when it went.
+// The Message-ID a reply threads on: the one the answered letter arrived with,
+// else the id our own transport returned when it was sent.
 let threadOf = (tx: Tx, eid: string): string | Promise<string> =>
   then(tx.get([eid]), (found) =>
     str(comp(found[0], MAIL), 'message_id') ||
@@ -102,8 +104,8 @@ let threadOf = (tx: Tx, eid: string): string | Promise<string> =>
 
 /**
  * The letter as a message: the subject and both body renderings, with the
- * addresses already resolved. Pure — the seam a test asserts on without a
- * transport anywhere.
+ * addresses already resolved. Pure — a test asserts on it without a transport
+ * anywhere.
  *
  * It takes the whole letter rather than one component, because a letter is two
  * of them: the envelope is `mail` and the words are
@@ -140,21 +142,21 @@ export let message = (
  * ```
  *
  * Register it on `created('deliver')` too and a letter that gains its
- * recipient later goes then — the handler reads the whole entity, so it does
- * not care which component woke it. It is idempotent either way: a letter that
- * already carries `delivered` or `bounced` is left alone.
+ * recipient later is sent then — the handler reads the whole entity, so it does
+ * not care which component triggered it. It is idempotent either way: a letter
+ * that already carries `delivered` or `bounced` is left alone.
  *
- * The outcome goes back through @yaks/effects' WRITE door — a new batch through
- * the graph's own `apply()` — so "this letter left" is journaled and pushed to
- * whoever is watching the letter, rather than a row they find next time they
- * ask. The registry needs that door: `effects(vocab, { write })`, applied
- * trusted, since `delivered` and `bounced` are the sender's word and therefore
- * server-owned.
+ * The outcome is written back through @yaks/effects' WRITE function — a new
+ * transaction through the graph's own `apply()` — so "this letter left" is
+ * journaled and pushed to whoever is subscribed to the letter, rather than a
+ * row they find next time they read. The registry needs that function:
+ * `effects(vocab, { write })`, applied trusted, since `delivered` and
+ * `bounced` are the sender's report and therefore server-owned.
  *
- * `local` names a domain whose addresses are this GRAPH's — an agent, a
+ * `local` names a domain whose addresses belong to this GRAPH — an agent, a
  * project, anything reachable here and nowhere else. A letter to one is
  * already where it is going, so it is stamped `delivered{via: 'local'}` and
- * never handed to the transport; posting it out would bring it home as a
+ * never handed to the transport; sending it out would bring it back as a
  * second letter about the same words. Leave it out where somebody reads that
  * domain's mail in a mail client: then the mailbox is the destination, and the
  * graph is only the record.
@@ -164,7 +166,7 @@ export let sending =
     then(whole(tx, event.entity), (letter) => {
       let mail = comp(letter, MAIL)
       let deliver = comp(letter, DELIVER)
-      // Not a letter, not an ask to send one, or one already settled.
+      // Not a letter, not a request to send one, or one already settled.
       if (!mail || !deliver) return
       if (comp(letter, DELIVERED) || comp(letter, BOUNCED)) return
       let settle = (out: Comp, name: string) =>
@@ -175,10 +177,10 @@ export let sending =
       return then(addressOf(tx, recipient), (to) => {
         if (!to) return fail(`no address on file for ${recipient}`)
         if (!str(mail, 'from')) return fail('the letter has no from address')
-        // Local delivery: the address is in a namespace this graph owns, so
-        // the letter has arrived by being written. The envelope is stamped the
-        // same way a sent one is — what an address book edit later says must
-        // never rewrite where this letter went.
+        // Local delivery: the address is at a domain this graph owns, so the
+        // letter has arrived by being written. The envelope is stamped the same
+        // way a sent one is — a later address-book edit must never rewrite
+        // where this letter went.
         if (local && at(local)(to)) {
           return write([{
             entity: event.entity,

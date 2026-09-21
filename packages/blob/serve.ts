@@ -1,16 +1,18 @@
-// A stored object as an HTTP answer. Content-addressed bytes can never change
-// under their address, so they cache forever; and because what was stored may
-// be an HTML page or an SVG, the answer is fenced — a sandbox CSP with no
-// scripts, and nosniff — so opening it directly in a tab shows it and runs
-// nothing. The name, when there is one, rides as an inline disposition with
-// the characters that could break the header stripped out.
+// A stored object as an HTTP response. Content-addressed bytes can never change
+// under their address, so they are cached indefinitely; and because what was
+// stored may be an HTML page or an SVG, the response is fenced — a sandbox
+// content security policy with no scripts, plus nosniff — so opening it
+// directly in a tab displays it and runs nothing. The name, when there is one,
+// goes in an inline `content-disposition`, with the characters that could break
+// the header stripped out.
 //
-// `Response` is the web platform's, so this loads anywhere the package does.
+// `Response` is the web platform's own, so this loads anywhere the package
+// does.
 
-/** What an answer needs to know about the object besides its bytes. */
+/** What the response needs to know about the object besides its bytes. */
 export type Served = { mime?: string | null; name?: string | null }
 
-/** The bytes as a fenced, immutable HTTP response. */
+/** The bytes as a fenced, immutably cached HTTP response. */
 export let served = (bytes: Uint8Array, meta: Served = {}): Response =>
   new Response(bytes as Uint8Array<ArrayBuffer>, {
     headers: {

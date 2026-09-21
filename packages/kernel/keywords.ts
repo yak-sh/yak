@@ -1,18 +1,21 @@
-// The registration: what @yaks/kernel adds to a component vocabulary, said in
-// JSON Schema's own extension form. `meta/kernel.vocab.json` is the authored
-// source (each keyword's schema and its prose); this module gives it a name and
-// the shape `loadVocab(docs, [kernelKeywords])` takes.
+// The registration: the custom JSON Schema keywords @yaks/kernel adds to a
+// component vocabulary, declared in JSON Schema's own extension form.
+// `meta/kernel.vocab.json` is the authored source (each keyword's schema and
+// the prose describing it); this module gives it a name and the shape
+// `loadVocab(docs, [kernelKeywords])` expects.
 //
 // Three keywords, because three things about a graph of WORK are not the core
-// meta-model's business: what a project governs, which log lines stay off a
-// boot snapshot, and where a text column's completions come from. What IS a log
-// line needs no word of its own — the core meta-model already says it, as a
-// component that never claims a bare spelling (`bare: false`).
+// meta-model's business: which components a project answers for, which
+// components stay out of the snapshot a client loads at startup, and where a
+// text column's suggested values come from. What MAKES a component a log line
+// needs no keyword of its own — the core meta-model already covers it, as a
+// component reached only by its qualified filter name (`bare: false`).
 
 import type { Keywords } from '@yaks/vocab'
 import doc from './meta/kernel.vocab.json' with { type: 'json' }
 
-/** The URI a vocab file declares under `$vocabulary` to use these keywords. */
+/** The URI a vocabulary file declares under `$vocabulary` to use these
+ * keywords. */
 export let KERNEL_URI = 'https://yaks.sh/vocab/kernel'
 
 /**

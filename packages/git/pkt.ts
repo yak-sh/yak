@@ -1,5 +1,6 @@
-// pkt-line: the framing every byte of git's wire travels in. Four hex digits
-// saying how long the packet is, counting the four, then that many bytes.
+// pkt-line: the framing every byte of Git's protocol travels in. Four hex
+// digits giving the packet's length, counting the four digits themselves, then
+// that many bytes.
 //
 //   0009done\n            a line: 9 bytes in all, 5 of payload
 //   0000                  flush — the end of a message
@@ -12,16 +13,16 @@
 // legal empty line rather than a marker.
 //
 // A marker is read back as its own number, and a line as its text with the
-// trailing newline cut — so `typeof p == 'string'` is the whole of telling a
-// line from a marker, and no line's text can be mistaken for one.
+// trailing newline removed — so `typeof p == 'string'` is all it takes to tell
+// a line from a marker, and no line's text can be mistaken for one.
 //
-// The longest packet is 65520 bytes, so the longest payload is 65516; git
+// The longest packet is 65520 bytes, so the longest payload is 65516; Git
 // calls that LARGE_PACKET_MAX. A side-band packet spends one more byte on the
 // band it belongs to, which is why {@link BAND} is one less again.
 //
-// Nothing here streams. A request off the wire is wants and haves — kilobytes
-// — and reading it whole is simpler than a decoder with a resume point. The
-// answer is what streams (./http.ts), and it is written, not parsed.
+// Nothing here streams. A request body is wants and haves — kilobytes — and
+// reading it whole is simpler than a decoder that can resume mid-packet. The
+// response is what streams (./http.ts), and it is written, not parsed.
 
 import { concat } from './oid.ts'
 
@@ -37,7 +38,7 @@ export let DELIM = 1
 /** The end of one response inside a multiplexed stream. */
 export let END = 2
 
-/** A packet as it is read back: a line's text, or the marker's own number. */
+/** A packet as it is read back: a line's text, or a marker's own number. */
 export type Pkt = string | number
 
 /** The most one packet can carry. */
@@ -48,12 +49,12 @@ export let BAND = MAX - 1
 
 let four = (n: number) => n.toString(16).padStart(4, '0')
 
-/** One of the markers, as the four bytes it is on the wire. */
+/** One of the markers, as the four bytes it is sent as. */
 export let mark = (which: number): Uint8Array<ArrayBuffer> =>
   utf8.encode(four(which))
 
-/** One pkt-line over this payload. Give a line its own trailing newline: git
- * writes one and this does not add it, because a packet is bytes. */
+/** One pkt-line over this payload. Give a line its own trailing newline: Git
+ * writes one and this does not add it, because a packet is just bytes. */
 export let pkt = (data: string | Uint8Array): Uint8Array<ArrayBuffer> => {
   let body = typeof data == 'string' ? utf8.encode(data) : data
   if (body.length > MAX) {

@@ -1,46 +1,47 @@
 // The components this package ships, as one vocabulary document to load beside
 // your own.
 //
-//   task{}                            a to-do item, with derived status
+//   task{}                            a to-do item, with a computed status
 //   completed{at, by}                 it got done, when, and by whom
 //   cancelled{at, by, reason}         it got called off, and why
 //   blocked{on}                       something outside is in the way
-//   requires / contains               the two relations tasks state
+//   requires / contains               the two relations between tasks
 //
 // What a task is filed UNDER — `project`, `filed`, the `board` that is a saved
-// filter over the filing — is @yaks/project's: a task is a task with nothing
-// filed, and a portfolio is a different idea from a to-do item.
+// filter over the filing — belongs to @yaks/project: a task with nothing filed
+// is still a task, and a portfolio is a different idea from a to-do item.
 //
-// Four things are worth saying about the shapes, because each is a decision
+// Four things are worth explaining about the shapes, because each is a decision
 // somebody would otherwise make differently.
 //
 // STATUS IS NOT STORED. `task.status` is declared `computed: true`: it is
-// readable and filterable, and no writer sets it. Its value is read off the
-// `completed` and `cancelled` marks (./status.ts), which is why finishing a task
-// is writing a fact with a time and an author rather than overwriting a word.
-// Both evaluators get that rule from one list, so `.status=done` selects the
-// same tasks in a database and in a page. Its `enum` in the document is the
-// DEFAULT ladder's words; an application that adds a rung widens them where it
-// declares its own document.
+// readable and filterable, and no writer sets it. Its value is computed from
+// the `completed` and `cancelled` components (./status.ts), which is why
+// finishing a task means writing a fact with a time and an author rather than
+// overwriting a value. Both evaluators get that rule from one list, so
+// `.status=done` selects the same tasks in a database and in a page. The `enum`
+// in the document holds the DEFAULT ladder's values; an application that adds a
+// rung widens them where it declares its own document.
 //
 // THE TWO RELATIONS are `requires` and `contains`, as @yaks/edge reads them: a
-// component an edge entity wears beside `edge{from, to}`. Neither carries
-// columns — the sentence is the whole of what they say.
+// component that an edge entity carries beside `edge{from, to}`. Neither has
+// any columns — the link itself is the whole of what they mean.
 //
-// BLOCKED IS A FACET, NOT A STATUS. `blocked{on}` says something OUTSIDE the
-// graph is in the way — waiting on a vendor, on a decision, on a person. It is
-// deliberately not a rung on the status ladder: a blocked task is still open
-// work, and rolling it into the status would hide it from every open-work query
-// exactly when somebody needs to see it. Unfinished `requires` children are not
-// blocking either; they are ordinary work, counted and shown, never an alarm.
+// BLOCKED IS A COMPONENT, NOT A STATUS. `blocked{on}` records that something
+// OUTSIDE the graph is in the way — waiting on a vendor, on a decision, on a
+// person. It is deliberately not a rung on the status ladder: a blocked task is
+// still open work, and rolling it into the status would hide it from every
+// open-work query exactly when somebody needs to see it. Unfinished `requires`
+// children are not blocking either; they are ordinary work, counted and shown,
+// never an alarm.
 //
-// THE MARKS DIE WITH NOBODY. `completed.by` and `cancelled.by` are `death: keep`
-// — deleting the person who finished a task does not unfinish it. The reference
-// stands as history.
+// THE MARKS OUTLIVE THE PEOPLE. `completed.by` and `cancelled.by` are
+// `death: keep` — deleting the person who finished a task does not unfinish it.
+// The reference stands as history.
 //
 // The document itself is `./vocab.json` — plain JSON Schema, readable by
 // anything that reads JSON. This file re-exports it under the name callers
-// say and keeps the prose about why it is shaped the way it is.
+// import, and keeps the prose about why it is shaped the way it is.
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
@@ -48,19 +49,19 @@ import doc from './vocab.json' with { type: 'json' }
 /** The component that makes an entity a task. */
 export let TASK = 'task'
 
-/** The mark a finished task wears. */
+/** The mark on a finished task. */
 export let COMPLETED = 'completed'
 
-/** The mark a called-off task wears. */
+/** The mark on a task that was called off. */
 export let CANCELLED = 'cancelled'
 
-/** The facet saying something outside the graph is in the way. */
+/** The component recording that something outside the graph is in the way. */
 export let BLOCKED = 'blocked'
 
-/** The relation a task states about work it waits for. */
+/** The relation from a task to work it waits for. */
 export let REQUIRES = 'requires'
 
-/** The relation a task states about work that is part of it. */
+/** The relation from a task to work that is part of it. */
 export let CONTAINS = 'contains'
 
 /**
@@ -68,11 +69,12 @@ export let CONTAINS = 'contains'
  * `loadVocab([taskDoc, ...mine], [edgeKeywords, ...])`. It declares nothing
  * about what a person or a document IS — bring your own `doc` (or
  * {@link https://jsr.io/@yaks/doc | @yaks/doc}'s), and whatever else your tasks
- * wear.
+ * carry.
  *
  * `requires` and `contains` are declared through
  * {@link https://jsr.io/@yaks/edge | @yaks/edge}'s `relation` keyword, so an
- * edge entity wearing one states that link. Register `edgeKeywords` when you
- * load, or the loader carries the declaration without anybody reading it.
+ * edge entity carrying one of them states that link. Register `edgeKeywords`
+ * when you load, or the loader will carry the declaration with nobody reading
+ * it.
  */
 export let taskDoc: VocabDoc = doc

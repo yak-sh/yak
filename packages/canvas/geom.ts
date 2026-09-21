@@ -2,7 +2,7 @@
 // around a set of them, and whether two overlap. No DOM, no matrices, no
 // units — a canvas unit is whatever the client decides one is.
 //
-// Everything here is a plain function over plain objects, so the same answers
+// Everything here is a plain function over plain objects, so the same results
 // serve a browser laying out divs, a terminal laying out rows, and a test with
 // no screen at all.
 
@@ -18,9 +18,9 @@ export type Size = { w: number; h: number }
 export type Rect = Point & Size
 
 /**
- * The box a pin occupies. A pin that never said where it is sits at the
- * origin, and one that never said how big it is has no extent — which is what
- * `w: 0` means on the wire: "however big it needs to be", not yet measured.
+ * The box a pin occupies. A pin with no position sits at the origin, and one
+ * with no size has no extent — which is what a stored `w: 0` means: "however
+ * big it needs to be", not yet measured.
  */
 export let rect = (p: Pin): Rect => ({
   x: p.x ?? 0,

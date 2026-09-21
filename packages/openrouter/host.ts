@@ -1,4 +1,5 @@
-/** Private host storage for OpenRouter keys obtained through PKCE or provisioned locally. */
+/** Private local file storage for OpenRouter keys obtained through PKCE or
+ * provisioned by hand. */
 import { fileAuthorizationStore } from '@yaks/oauth/host'
 import { authorization, type Record } from './oauth.ts'
 

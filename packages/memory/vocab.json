@@ -27,7 +27,7 @@
       ],
       "prefix": "M",
       "governed": true,
-      "description": "one thing a person said about how they want something built or handled, kept in their own words. The words themselves are the entity's doc.body, verbatim; this says where they belong and what is needed to read them. The byline is the entity's created{at, by}",
+      "description": "one thing a person said about how they want something built or handled, kept in their own words. The words themselves are the entity's doc.body, verbatim; these columns record where they belong and what is needed to read them. The byline is the entity's created{at, by}",
       "properties": {
         "scope": {
           "type": "string",
@@ -43,7 +43,7 @@
           "type": "string",
           "ref": "entity",
           "death": "cascade",
-          "description": "whose place they were said in — every member of it reads them, and they die with it"
+          "description": "whose space they were said in — every member of that space can read them, and they are deleted with it"
         },
         "about": {
           "type": "string",
@@ -60,7 +60,7 @@
       "noun": "memory",
       "verb": "save",
       "title": "Keep what was said",
-      "description": "Keep somebody's words as they said them. The sentence itself is the memory — never your summary of it, which can only ever hold less — plus the line or two of context somebody needs to read it six weeks from now. scope names the project it belongs to; leave it out for a principle everybody carries. feedback names who GAVE the correction, when the words are one. Pass id instead to patch one that already exists: anything you leave out is left alone, and replacing the words needs was — the token memory recall hands back beside them — so a memory another writer moved since you read it is refused whole rather than clobbered.",
+      "description": "Keep somebody's words as they said them. The sentence itself is the memory — never your summary of it, which can only ever hold less — plus the line or two of context somebody needs to read it six weeks from now. scope names the project it belongs to; leave it out for a principle everybody carries. feedback names who GAVE the correction, when the words are one. Pass id instead to patch a memory that already exists: anything you leave out is left unchanged, and replacing the words requires was — the token memory recall returns beside them — so a memory another writer changed since you read it is rejected as a whole rather than overwritten.",
       "input": {
         "said": {
           "type": "string",
@@ -90,7 +90,7 @@
         "id": {
           "type": "string",
           "ref": "memory",
-          "description": "a memory to patch instead of minting one"
+          "description": "a memory to patch instead of creating one"
         },
         "was": {
           "type": "string",
@@ -112,7 +112,7 @@
       "noun": "memory",
       "verb": "recall",
       "title": "What was said about this",
-      "description": "The memories nearest what you are doing. said is matched against their text as a PHRASE, so say the words you expect them to use rather than a sentence of your own; near names an entity and ranks by MEANING instead, where this host keeps vectors, which is the one that answers a sentence; with neither, the newest come back. Each comes back WHOLE — half of what somebody said is worse than none of it — carrying the $was token memory save asks for before it replaces any of them.",
+      "description": "The memories nearest what you are doing. said is matched against their text as a PHRASE, so use the words you expect the memory to contain rather than a sentence of your own; near names an entity and ranks by MEANING instead, where this server keeps vectors, which is the ranking that answers a sentence; with neither, the newest are returned. Each is returned WHOLE — half of what somebody said is worse than none of it — carrying the $was token memory save requires before it replaces any of them.",
       "input": {
         "said": {
           "type": "string",
@@ -121,7 +121,7 @@
         "near": {
           "type": "string",
           "ref": "entity",
-          "description": "an entity to rank by meaning, where this host keeps vectors"
+          "description": "an entity to rank by meaning, where this server keeps vectors"
         },
         "ids": {
           "type": "array",
@@ -141,7 +141,7 @@
         },
         "limit": {
           "type": "number",
-          "description": "at most this many (default 8)"
+          "description": "return at most this many (default 8)"
         }
       },
       "options": {

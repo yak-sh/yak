@@ -1,16 +1,16 @@
-// Bytes that are not text: a picture, a PDF, anything a column would only be
-// in the way of. They are kept the same way a body column is — under the
-// SHA-256 of the bytes themselves — so an artifact has ONE identity wherever
-// it came from, and a row that names it is a row naming that exact object.
+// Bytes that are not text: a picture, a PDF, anything a column would only get
+// in the way of. They are stored the same way a body column is — under the
+// SHA-256 of the bytes themselves — so an artifact has ONE identity wherever it
+// came from, and a row that names it names that exact object.
 //
 // The address is computed here rather than taken on trust, and the store is
-// read back and compared before anything is told the bytes are kept: a backend
-// that cannot hold what it was given (a text table handed a PNG) says so at
+// read back and compared before the caller is told the bytes are kept: a store
+// that cannot hold what it was given (a text table handed a PNG) reports it at
 // the write, not at the next read.
 //
-// `crypto.subtle` is the web platform's, so this loads anywhere the package
-// does — which is why the digest is a promise, and why ./store.ts keeps its
-// own synchronous one for text columns.
+// `crypto.subtle` is the web platform's own, so this loads anywhere the package
+// does — which is why the digest here returns a promise, and why ./store.ts
+// keeps a separate synchronous one for text columns.
 
 import type { Blobs } from './store.ts'
 import type { VocabDoc } from '@yaks/vocab'
@@ -26,8 +26,9 @@ export type ArtifactStore = (
   mediaType: string,
 ) => Promise<Artifact>
 
-/** What these bytes are called: their SHA-256, lowercase hex. It is the key in
- * the store and the eid of the row, so nothing has to agree on a second name. */
+/** What these bytes are called: their SHA-256, lowercase hex. It is both the
+ * key in the store and the eid of the row, so there is no second name for the
+ * two sides to agree on. */
 export let addressOf = async (bytes: Uint8Array): Promise<string> => {
   let digest = await crypto.subtle.digest(
     'SHA-256',
@@ -39,10 +40,10 @@ export let addressOf = async (bytes: Uint8Array): Promise<string> => {
   ).join('')
 }
 
-/** Put bytes under their address, once, and prove the store kept them. Writing
+/** Put bytes under their address, once, and verify the store kept them. Writing
  * the same pair twice is a no-op — the second copy IS the first one — and a
- * store that hands back anything else has not kept this object, which is a
- * refusal here rather than a corrupt answer later. */
+ * store that hands back anything else has not kept this object, which throws
+ * here rather than returning corrupt bytes later. */
 export let keep = async (
   blobs: Blobs,
   address: string,
@@ -56,7 +57,8 @@ export let keep = async (
   }
 }
 
-/** Bytes and what they are, stored: the {@link Artifact} a row records. */
+/** Store bytes and their media type, and return the {@link Artifact} a row
+ * records. */
 export let artifactStore =
   (blobs: Blobs): ArtifactStore => async (bytes, mediaType) => {
     let address = await addressOf(bytes)

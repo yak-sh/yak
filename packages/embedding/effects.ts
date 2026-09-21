@@ -1,30 +1,32 @@
-// What a host DOES about text that moved: the `effects` facet
-// (`@yaks/embedding/effects`) — one watch per embedded component, each nudging
-// the sweep a moment after the batch commits.
+// What the server does about text that changed: the `effects` export
+// (`@yaks/embedding/effects`) — one watch per embedded component, each
+// scheduling a sweep a moment after the write commits. "The server" here means
+// whichever process opened the graph and loaded this package.
 //
-// Embedding is slow and remote; a write is neither. So no handler here embeds
-// anything: a write starts a timer and returns, and the sweep runs on its own
-// once the burst has settled. Nothing is awaited into `apply()` — a graph that
-// waited on a model to answer before it could say a title changed would be a
-// graph nobody could write to.
+// Embedding is slow and usually remote; a write is neither. So no handler here
+// embeds anything: a write starts a timer and returns, and the sweep runs on
+// its own once the burst of writes has settled. Nothing is awaited inside
+// `apply()` — a graph that waited for a model to respond before it could record
+// that a title changed would be a graph nobody could write to.
 //
-// The sweep reconciles the WHOLE corpus rather than the entity that woke it,
-// which is what makes a model change heal itself: the vectors are all stale
-// under the new model's name, and the first write after the change drains them
-// (`sweep.ts` decides "stale" by a content hash, so an unchanged corpus costs
-// one query and no embedder calls). What this facet does NOT have is a clock —
-// an effects facet is a list of watches and owns no lifecycle, so a host that
-// wants a reconciliation on a schedule rather than on a write calls `sweep()`
-// from a wake (@yaks/wake) or a cron.
+// The sweep reconciles the WHOLE corpus rather than the one entity that
+// triggered it, which is what makes a model change repair itself: under the new
+// model's name every vector is stale, and the first write after the change
+// starts re-embedding them (`sweep.ts` decides "stale" from a content hash, so
+// an unchanged corpus costs one query and no calls to the embedder). What this
+// export does NOT have is a clock — it is a list of watches and owns no
+// lifecycle, so a server that wants to reconcile on a schedule rather than on a
+// write calls `sweep()` from a wake (@yaks/wake) or from cron.
 //
-// The CONFIG is read on every pass, never once at compose (./options.ts). A
-// host whose key has not arrived boots, keeps no vectors, says what it is
-// waiting for once, and keeps the settle timer beating — so the first pass
-// after the key appears is the one that embeds, and nobody restarts anything.
+// The CONFIG is read on every pass, never once when the plugin is composed
+// (./options.ts). A server whose key has not arrived starts up, stores no
+// vectors, reports what it is waiting for once, and keeps the timer running —
+// so the first pass after the key appears is the one that embeds, and nothing
+// has to be restarted.
 //
-// Every timer here hangs off the host's own ending (@yaks/cli `Host.stopping`),
-// because a callback that fires after the database is closed is a stack trace
-// about nothing and a process a timer holds open.
+// Every timer here is cancelled when the server shuts down (@yaks/cli
+// `Host.stopping`), because a callback that fires after the database is closed
+// is a stack trace about nothing, and a pending timer keeps the process alive.
 
 import type { Watch } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
@@ -36,24 +38,24 @@ import { sweep } from './sweep.ts'
 /** How long a burst of writes settles before one sweep answers all of it. */
 export let AFTER = 3_000
 
-/** How often a pass that did nothing asks again where the settle beat is zero
- * — a beat that means "now" would be a spin for a host that has nothing to do
- * but look at its config. */
+/** How long a pass that did nothing waits before looking again, when the
+ * settle delay is zero — a delay of zero would spin, for a server whose only
+ * remaining work is to re-read its config. */
 export let AGAIN = 1_000
 
-// The handler a watch fires: it starts nothing and returns nothing, so the
-// commit that woke it is never held open. A burst of writes is ONE sweep — the
-// timer is re-armed, never stacked — and one pass runs at a time, because a
-// pass may be a long line of model calls and a second one into the same
-// backlog would pay for every vector twice. A nudge that arrives mid-pass is
-// remembered and runs when that pass is over, rather than dropped: the writes
-// it was about would otherwise stay stale until something else moved.
+// The handler a watch calls: it starts a timer and returns, so the commit that
+// triggered it is never held open. A burst of writes produces ONE sweep — the
+// timer is reset, never stacked — and one pass runs at a time, because a pass
+// may be a long series of model calls and a second one over the same backlog
+// would pay for every vector twice. A request that arrives mid-pass is
+// remembered and runs when that pass is over rather than being dropped: the
+// writes it was about would otherwise stay stale until something else changed.
 //
-// A pass that asks for another one gets it on the same beat: that is how a
-// host waiting for config keeps asking, cheaply, until the config arrives.
+// A pass that asks for another one gets it after the same delay: that is how a
+// server waiting for config keeps checking, cheaply, until the config arrives.
 //
-// A failure is reported where it happens. A write that already landed cannot
-// be failed by an embedder nobody can reach, and a graph whose box cannot
+// A failure is reported where it happens. A write that has already committed
+// cannot be failed by an embedder nobody can reach, and a machine that cannot
 // reach its model has stale vectors, not a broken write.
 let nudge = (
   run: () => Promise<boolean>,
@@ -84,34 +86,35 @@ let nudge = (
       await go()
     } else if (more) arm(ms || AGAIN)
   }
-  // The host going down is what stops this: the pending settle is dropped
-  // rather than fired into a closed store.
+  // The server shutting down is what stops this: the pending timer is dropped
+  // rather than firing into a closed store.
   stopping?.addEventListener('abort', () => clearTimeout(timer), { once: true })
   return () => arm(ms)
 }
 
-// The components those fields live on, each with the columns watched on it:
-// an entity's vector is made of every field it wears, so any of them moving is
-// the same news.
+// The components those fields live on, each with the columns watched on it: an
+// entity's vector is made from all of its text fields, so a change to any of
+// them means the same thing.
 let watched = (text: Field[]): Map<string, string[]> => {
   let by = new Map<string, string[]>()
   for (let f of text) by.set(f.comp, [...by.get(f.comp) ?? [], f.prop])
   return by
 }
 
-/** The watches that keep the vectors true: a component gained, one of its
- * embedded columns patched, or the component gone — each a reason to
- * reconcile. A host with no embedder yet still takes them: what it is missing
- * is the model, not the news. */
+/** The watches that keep the vectors in step with the text: a component added,
+ * one of its embedded columns patched, or the component removed — each is a
+ * reason to reconcile. A server with no embedder yet still registers them:
+ * what it is missing is the model, not the notifications. */
 export let effects = (
   host: { vocab: Vocab; sql: Driver; stopping?: AbortSignal },
   options: Options = {},
 ): Watch[] => {
-  // The watch LIST is what the text says, and text is a fact about the
-  // vocabulary rather than a secret that arrives late.
+  // Which components to watch follows from the `text` option, and that is a
+  // fact about the vocabulary rather than a secret that arrives late.
   let { text } = ready(host.vocab, options)
-  // Said once per sentence: a host waiting on a key says so on the first pass
-  // and then goes quiet, and `vector check` is where the answer keeps living.
+  // Reported once per distinct message: a server waiting for a key reports it
+  // on the first pass and then goes quiet, and `vector_check` is where the
+  // answer stays available.
   let told = new Set<string>()
   let pass = async (): Promise<boolean> => {
     let now = ready(host.vocab, options)
@@ -120,7 +123,7 @@ export let effects = (
         told.add(now.waiting!)
         console.warn('@yaks/embedding —', now.waiting)
       }
-      // Ask again on the next beat: the config may be one export away.
+      // Look again after the next delay: the config may be one export away.
       return true
     }
     await sweep(host.sql, now.text, now.embedder, options.batch)

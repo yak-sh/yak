@@ -1,5 +1,5 @@
 {
-  "_": "The browser gate: @yaks/task must type-check with only the web platform in scope — no Deno namespace, no Node types. `deno check --config packages/task/browser.json packages/task/mod.ts` is the check; it is part of `deno task check`.",
+  "_": "@yaks/task must type-check with only the web platform in scope — no Deno namespace, no Node types — so that a browser can import it. The check is `deno check --config packages/task/browser.json packages/task/mod.ts`, and it runs as part of `deno task check`.",
   "compilerOptions": {
     "lib": ["dom", "esnext"],
     "strict": true

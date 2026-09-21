@@ -1,36 +1,36 @@
-// The whole scheduling rule, as two pure-ish functions over a graph. There is
-// no timer here and no loop: this package answers WHICH wakes are owed and
-// WHAT consuming one writes, and the host arranges the coming back — a Deno
-// tick, a Durable Object `alarm()`, a browser tab, a cron job hitting a route.
-// Every one of them runs the same two functions, which is the point.
+// The whole scheduling rule, as two nearly pure functions over a graph. There
+// is no timer here and no loop: this module computes WHICH wakes are due and
+// WHAT firing one writes, and the program running it arranges to be called — a
+// Deno tick, a Durable Object `alarm()`, a browser tab, a cron job hitting a
+// route. Every one of them calls the same two functions, which is the point.
 //
 // The rule is one predicate: a wake is DUE when its `at` has passed. That is
-// all, and it holds no matter how long the host was away, because `at` is a
-// row and not a process's memory of when to come back.
+// all, and it holds no matter how long the process was down, because `at` is a
+// stored column and not a running process's memory of when to come back.
 //
-// Consuming one moves that row forward, and the shape of the move is what
-// separates a cadence from a one-shot:
+// Firing one moves that row forward, and how it moves is what separates a
+// cadence from a one-shot:
 //
 //   recurring   `at` becomes the next instant, so it stops being due
 //   one-shot    `at` is cleared, so it can never be due again
 //
-// Both stamp `fired`. Neither deletes anything: a fired wake is a fact worth
-// keeping, and a host that wants it gone deletes the entity itself. Clearing
-// `at` rather than tombstoning also means a finished wake can be set again by
-// writing a new `at` — the same alarm clock, wound back up.
+// Both write `fired`. Neither deletes anything: that a wake fired is worth
+// keeping, and an application that wants it gone deletes the entity itself.
+// Clearing `at` rather than deleting the entity also means a finished wake can
+// be set again by writing a new `at` — the same alarm clock, wound back up.
 //
-// Nothing here reads a clock it was not handed. `now` is a parameter
-// everywhere, which is why the tests take microseconds and why two hosts
-// reading the same graph at the same instant agree.
+// Nothing here reads a clock it was not given. `now` is a parameter everywhere,
+// which is why the tests take microseconds, and why two processes reading the
+// same graph at the same instant agree.
 
 import type { Bundle, Comp, Entity, Storage } from '@yaks/graph'
 import { then } from '@yaks/graph'
 import { FIRED, WAKE, type Wake } from './comp.ts'
 import { after } from './every.ts'
 
-/** How a schedule is read: the zone a cron line means. */
+/** How a schedule is read: the time zone a cron line is interpreted in. */
 export type Clock = {
-  /** the zone a cron `every` is read in (default `UTC`) */
+  /** the time zone a cron `every` is read in (default `UTC`) */
   tz?: string
 }
 
@@ -41,12 +41,12 @@ export let wakeOf = (b: Bundle): Wake | undefined =>
   (b[WAKE] ?? undefined) as Wake | undefined
 
 /**
- * The wakes owed at `now`, oldest first — every entity whose `wake.at` has
+ * The wakes due at `now`, oldest first — every entity whose `wake.at` has
  * passed, as whole bundles.
  *
- * This is the only read the package makes, and it is an ordinary query, so a
- * host that would rather ask its own way (a narrower filter, a page at a time)
- * can: `.wake.at<=<instant>`.
+ * This is the only read the package makes, and it is an ordinary query, so an
+ * application that would rather run its own (a narrower filter, a page at a
+ * time) can: `.wake.at<=<instant>`.
  *
  * ```ts
  * import { due, ring } from '@yaks/wake'
@@ -56,8 +56,8 @@ export let wakeOf = (b: Bundle): Wake | undefined =>
  * // for (let w of owed) graph.apply([ring(w, now)])
  * ```
  *
- * It threads @yaks/graph's sync pass-through: over a synchronous storage it
- * returns the bundles, over an asynchronous one a promise for them.
+ * It follows @yaks/graph's synchronous pass-through: over a synchronous storage
+ * it returns the bundles, and over an asynchronous one a promise for them.
  */
 export let due = (
   storage: Pick<Storage, 'read'>,
@@ -66,12 +66,13 @@ export let due = (
   storage.read(`.${WAKE}.at<=${iso(now)}&.order=${WAKE}.at`, { now })
 
 /**
- * The next ISO instant after `now`, from a recurrence string or a wake —
- * `null` for a one-shot or a recurrence this package cannot read. A string
- * counts a duration from `now`; a wake keeps its original cadence.
+ * The next ISO instant after `now`, computed from a recurrence string or from a
+ * wake — `null` for a one-shot, or for a recurrence this package cannot parse.
+ * Given a string, a duration is counted from `now`; given a wake, the cadence
+ * keeps its original phase.
  *
- * A duration counts from the wake's own `at`, so a cadence keeps its phase;
- * a cron line is read against the calendar. See
+ * A duration is counted from the wake's own `at`, so a cadence keeps its phase;
+ * a cron line is evaluated against the calendar. See
  * {@link https://jsr.io/@yaks/wake/doc/~/after | after}.
  *
  * ```ts
@@ -102,11 +103,11 @@ export let next = (
 }
 
 /**
- * The patch that CONSUMES a due wake: the `fired` stamp, plus its `at` moved
- * on to the next instant — or cleared, when there is no next one.
+ * The patch that FIRES a due wake: the `fired` value, plus its `at` moved on to
+ * the next instant — or cleared, when there is no next one.
  *
- * It is a bundle rather than a write. `tick` applies one such bundle per wake,
- * and the graph's rules react to that write through their own phases.
+ * It returns a bundle rather than applying it. `tick` applies one such bundle
+ * per wake, and the graph's rules react to that write in their own phases.
  *
  * ```ts
  * // let owed = due(storage, now)
@@ -124,12 +125,12 @@ export let ring = (
 })
 
 /**
- * The instant a host should next come back — the earliest `at` still in the
- * future, or `null` when nothing is pending. What a Durable Object hands to
- * `setAlarm()`, and what a server hands to `setTimeout`.
+ * The instant the scheduler should next run — the earliest `at` still in the
+ * future, or `null` when nothing is pending. This is what a Durable Object
+ * passes to `setAlarm()`, and what a server passes to `setTimeout`.
  *
- * A host may equally ignore this and sweep on a fixed cadence; it is here so
- * that one that can sleep until an exact instant does not have to.
+ * An application may equally ignore this and poll on a fixed cadence; it is
+ * here so that one able to sleep until an exact instant does not have to poll.
  */
 export let soonest = (
   storage: Pick<Storage, 'read'>,

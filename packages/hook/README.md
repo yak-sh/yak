@@ -2,13 +2,13 @@
 
 An event another system delivered.
 
-`hook{source, event, payload, spool_id, received_at, method, path, headers,
-sig_ok}`
-— the body as it arrived, the route it came in on, and whether the sender signed
-for it.
+The component is
+`hook{source, event, payload, spool_id, received_at, method, path, headers, sig_ok}`:
+the body as it arrived, the route it came in on, and whether the sender's
+signature verified.
 
-An unsigned hook is still recorded: the reader decides what to trust.
+An unsigned hook is still recorded; whoever reads it decides what to trust.
 
 ## Compatibility
 
-Deno and Node — a JSON document, no runtime calls.
+Deno and Node — a JSON document, with no runtime calls.

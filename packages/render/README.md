@@ -1,8 +1,10 @@
 # @yaks/render
 
-A renderer registry shared by browser, text and terminal hosts. Each portable
-renderer receives `(bundle, h, ctx)` and returns whatever the injected `h`
-builds. The package imports no host and performs no action.
+A renderer registry shared by every rendering backend: `@yaks/preact` in a
+browser, `@yaks/text` for Markdown and plain text, `@yaks/tui` in a terminal.
+Each portable renderer receives `(bundle, h, ctx)` and returns whatever the `h`
+it is given builds. This package imports no backend and performs no action of
+its own.
 
 ```ts
 import { define, resolve } from '@yaks/render'
@@ -30,10 +32,10 @@ walk tries `Board.List.Tile`, `List.Tile`, then `Tile`. A missing view falls to
 a matching `JSON` registration, or returns `undefined`. An unnamed request
 considers `options.views`, or every registered view when omitted.
 
-`Registration` is the selection contract, `{view, match}`. A registry preserves
-any additional renderer payload and its type, including native `Render`
+`Registration` is what selection needs, `{view, match}`. A registry preserves
+any further fields on a renderer, and their types, including native `Render`
 components and file metadata. `@yaks/preact` mounts native components; the
-portable `Renderer` remains the default for text and other hosts.
+portable `Renderer` remains the default for text and the other backends.
 
 `extend(registry, renderers)` prepends an overlay to that registry; an overlay
 wins equal scores while a more specific base renderer still wins. Other
@@ -42,18 +44,25 @@ returns matching exact view names in `options.views` order, or registration
 order when views are omitted. It does not use the JSON fallback to invent tabs
 for unmatched names.
 
-Hosts can supply `define(renderers, {archetypes: eid => tables})`, where
+A caller can supply `define(renderers, {archetypes: eid => tables})`, where
 `tables` is an immutable array of physical table names from `@yaks/archetype`.
 Presence-only queries then match `bundle.entity.archetype` without reading
 component bodies, with one cached answer per query, vocabulary and table set.
 Scores, view traversal and overlays are unchanged. Value predicates and column
 controls still use the ordinary matcher; absent or unknown descriptor ids also
-fall back to it. Hosts must load descriptors before painting projected bundles
-and keep their descriptor subscription open for newly minted sets.
+fall back to it. A caller must load the descriptors before rendering projected
+bundles, and keep its descriptor subscription open so that newly created sets
+arrive.
 
-Actions are contributed with
-`define(renderers, {vocab, actions: {doc: [
-{name: 'clear', run: () => ({doc: {title: null}})}]}})`.
+Actions are contributed through `define`:
+
+```ts
+define(renderers, {
+  vocab,
+  actions: { doc: [{ name: 'clear', run: () => ({ doc: { title: null } }) }] },
+})
+```
+
 Call `actions(registry, bundle)` to get their union in component registration
 order. Optional `when: parse('.task')` conditions filter the offerings.
 Duplicate names remain separate contributions. `run(bundle, input?)` returns a
@@ -94,21 +103,27 @@ timestamp (`time`), boolean and JSON. Enum options come from
 stored as JSON text. References accept entity ids; applications can overlay a
 picker with a more specific `.column.type=ref, .column.ref=project` query.
 
-Controls carry an `Action` as their `onChange` property. The Preact host turns
-that data into a change handler, calls `run(bundle, input)` and delivers the
-patch to `onPatch`. Validation failures reach `onError` and the control's native
+Controls carry an `Action` as their `onChange` property. `@yaks/preact` turns
+that data into a change handler, calls `run(bundle, input)` and passes the patch
+to `onPatch`. Validation failures reach `onError` and the control's native
 validation feedback. The package itself never applies a patch. Native controls
 can call the same `edit()` action while retaining their own gestures and paint.
 
-`Props` takes `{comp}` and uses the host's nested render callback to select each
-column's `Edit` in the same registry, including overlays. Its definition list
-includes absent values and read-only columns. The text host renders both views
-read-only in Markdown or plain text; values such as false and zero remain
+`Props` takes `{comp}` and uses the backend's nested render callback to select
+each column's `Edit` in the same registry, including overlays. Its definition
+list includes absent values and read-only columns. `@yaks/text` renders both
+views read-only in Markdown or plain text; values such as false and zero remain
 visible, and unset values show `—`. `readOnly: true` also works on Preact.
 
-When both `comp` and `col` are supplied, selection reads a schema projection
-`{entity: {eid: 'doc.title'}, column: {comp: 'doc', col: 'title', type: 'string',
-ref: undefined}}`.
+When both `comp` and `col` are supplied, selection reads a schema projection:
+
+```ts
+{
+  entity: { eid: 'doc.title' },
+  column: { comp: 'doc', col: 'title', type: 'string', ref: undefined },
+}
+```
+
 Its queryable fields are `comp`, `col`, `type`, `ref` under `column`. `type` is
 `string`, `number`, `boolean`, `ref`, `enum`, `time`, `url`, `query` or
 `priority` or `json`, according to the declaration. This selects the declared
@@ -123,20 +138,22 @@ details. No second registry is needed.
 `run(bundle, input)` parses a value and returns only `{[comp]: {[col]: value}}`.
 It never writes. Text remains text; numbers and booleans become typed values,
 enum aliases resolve to declared members, and timestamps require an explicit
-timezone. JSON columns hold validated JSON text. Null clears a column. Computed,
-stamped and non-wire columns refuse edits.
+timezone. JSON columns hold validated JSON text. Null clears a column. Computed
+columns, stamped columns, and columns the vocabulary does not mark `wire: true`
+refuse edits.
 
 An application's `options.parse(input, column, bundle)` supplies its value
 language; vocabulary checks still run afterward.
 `options.validate(value, column, bundle)` may throw to refuse a value before the
-action returns a patch. Creating or listing an action invokes neither hook.
-Hosts may inject `ctx.render(view, context?)` to compose nested views through
-the same registry and bundle, merging child context over the parent.
+action returns a patch. Creating or listing an action invokes neither hook. A
+backend may supply `ctx.render(view, context?)` to compose nested views through
+the same registry and bundle, merging the child context over the parent.
 
 ## Compatibility
 
 Deno, Node, browsers and workers. Depends on `@yaks/query`, `@yaks/match` and
-`@yaks/vocab`; no DOM, runtime globals, database or framework is required.
+`@yaks/vocab`; it needs no DOM, no runtime globals, no database and no
+framework.
 
 ## Verification
 

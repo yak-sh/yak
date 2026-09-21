@@ -1,22 +1,25 @@
 # @yaks/telemetry
 
-**Retired.** The graph holds what this log held. A tool call is a `call` entity
-claimed by an `execution` and settled as a `result` with its `ms`, its
-`created.by`, and — when it failed — an `error` or `exception` beside it whose
-prose is the `content` and whose `output.source` names the call
-([@yaks/tools](../tools)). A second table of the same fact, off the spine and
-unqueryable beside anything else, is one shape too many. `/telemetry` is a query
-now: see [@yaks/tools](../tools/README.md#what-the-tool-call-log-was).
+**Retired.** The graph now holds what this log held. A tool call is a `call`
+entity, claimed by an `execution` and completed as a `result` carrying its `ms`
+and its `created.by`; when it failed, an `error` or `exception` component sits
+beside it, with the message in `content` and `output.source` pointing at the
+call ([@yaks/tools](../tools)). A second table holding the same facts, outside
+the entity tables and impossible to query alongside anything else, is one
+storage layout too many. `/telemetry` is a graph query now: see
+[@yaks/tools](../tools/README.md#what-replaced-the-tool-call-log).
 
-Nothing in `packages/` composes this. It is still in the workspace because the
-fleet server (`src/telemetry.ts`, `src/db.ts`) imports it, and it is deleted
-with `src/` at cutover (T-37584). It gets no facets and no plugin.
+No package in `packages/` uses this one. It remains in the workspace only
+because the fleet server (`src/telemetry.ts`, `src/db.ts`) imports it, and it
+will be deleted along with `src/` at cutover (T-37584). It exports no plugin
+entry points.
 
 ---
 
-A tool-call log beside a yaks graph: every call through a door, who made it, how
-long it took, whether it worked. Recorded without ever throwing; read back
-newest-first with repeated errors folded into counted cohorts.
+A tool-call log stored beside a yaks graph: every call, whichever entry point it
+arrived through, who made it, how long it took, and whether it worked. Recorded
+without ever throwing; read back newest first, with repeated errors grouped into
+counted cohorts.
 
 ## Install
 
@@ -63,19 +66,21 @@ let { ok, error } = outcome(reply)
 
 ## What it owns
 
-- **The table.** One row per call, keyed by its rowid. Log data, deliberately
-  outside the graph: no entity id, no component, nothing links rows. The sources
-  are a CHECK, so a door nobody declared fails loudly at the table.
-- **`record` never throws.** A telemetry failure must never break the thing it
-  watches; a failed append is warned and dropped, and a re-entrant record is
-  dropped rather than looped.
-- **Scrubbing on write.** Home paths, URLs, uuids, long hex and long tokens are
-  replaced and the field is capped at 2048, so a served log is already clean.
-- **Cohorts on read.** An error's fingerprint is its class, its door and the
-  shape of its top frames, never the message or the line numbers; N copies of
-  one crash read as one row with `count`, `first`, `last`.
-- **The MCP classifier.** `toolCall` and `outcome` are pure; a host times the
-  exchange and records the pair.
+- **The table.** One row per call, keyed only by its rowid. Log data,
+  deliberately outside the graph: no entity id, no component, and no references
+  between rows. The set of sources is a CHECK constraint, so a row from a source
+  nobody declared fails loudly at the table.
+- **`record` never throws.** A telemetry failure must never break what it is
+  measuring; a failed insert is logged as a warning and dropped, and a `record`
+  call made from inside another one is dropped rather than looping.
+- **Scrubbing on write.** Home directory paths, URLs, UUIDs, long hex strings
+  and long opaque tokens are replaced, and the field is truncated at 2048
+  characters, so the log is already clean before it is served.
+- **Cohorts on read.** An error's fingerprint is its class, its source and the
+  shape of its top stack frames — never the message or the line numbers — so N
+  copies of one crash are returned as one row with `count`, `first` and `last`.
+- **The MCP classifier.** `toolCall` and `outcome` are pure functions; the
+  caller times the exchange and records the pair.
 
-The database is a two-method `Driver` (`query`, `exec`); a host hands over the
-methods it already has. `stats` uses SQLite's `percentile_cont` (3.53+).
+The database is a two-method `Driver` (`query`, `exec`); the caller passes in
+the methods it already has. `stats` uses SQLite's `percentile_cont` (3.53+).

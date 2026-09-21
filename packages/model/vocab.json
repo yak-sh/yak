@@ -66,7 +66,7 @@
           "ref": "provider",
           "death": "keep",
           "bare": false,
-          "description": "who serves it — kept when the provider entity is deleted, because every past ask names this model and a model with no provider still says which one answered"
+          "description": "which provider serves it — kept when the provider entity is deleted, because every past request names this model, and a model with no provider still records which one served it"
         },
         "label": {
           "type": "string"
@@ -77,7 +77,7 @@
         "effort": {
           "type": "string",
           "bare": false,
-          "description": "the reasoning effort asked for unless a session says otherwise"
+          "description": "the reasoning effort requested, unless a session overrides it"
         },
         "offered": {
           "type": "boolean"
@@ -87,7 +87,7 @@
     "usage": {
       "component": true,
       "type": "object",
-      "description": "provider-reported token counts for one completed model request, stored on its ask entry; not cumulative and not a live context estimate",
+      "description": "provider-reported token counts for one completed model request, stored on the entry for that request; not cumulative, and not an estimate of current context size",
       "properties": {
         "input": {
           "type": "number",

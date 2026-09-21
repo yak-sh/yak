@@ -1,4 +1,4 @@
-// The handle the SQLite backend runs statements through. Deliberately the
+// The handle the SQLite byte store runs statements through. Deliberately the
 // smallest shape a SQLite binding can satisfy — one function that runs a
 // statement with bound params and returns rows, one that runs a statement for
 // its effect — so nothing here names a concrete library, and an application

@@ -1,13 +1,13 @@
 /**
- * @yaks/model is the seam between a conversation and whoever serves it: the
- * shape of a request, the shape of a reply, and the two entities a graph
- * keeps about serving — `provider` and `model`. It carries no transport, and it
- * says no word another package owns: a `tool` is @yaks/tools's and an
- * `artifact` is @yaks/blob's, composed beside this one.
- * A provider package ({@link https://jsr.io/@yaks/openai | @yaks/openai}, an
- * Ollama or a Workers AI sibling) implements {@link Model}; a conversation
- * package (`@yaks/session`) shapes its record into {@link Item}s and hands them
- * over. Neither needs the other.
+ * @yaks/model is the interface between a conversation and whoever serves it:
+ * the shape of a request, the shape of a reply, and the two entities a graph
+ * stores about serving — `provider` and `model`. It implements no transport,
+ * and it declares no component another package owns: `tool` belongs to
+ * @yaks/tools and `artifact` to @yaks/blob, each composed beside this one.
+ * A provider package ({@link https://jsr.io/@yaks/openai | @yaks/openai}, or an
+ * Ollama or Workers AI equivalent) implements {@link Model}; a conversation
+ * package (`@yaks/session`) turns its stored transcript into {@link Item}s and
+ * calls it. Neither needs the other.
  *
  * ```ts
  * import { type Model, ModelError } from '@yaks/model'
@@ -22,17 +22,18 @@
  *
  * An {@link Item} is provider-neutral on purpose: a user turn, an assistant
  * turn, a call the model asked for, the result it was given. The Responses API
- * spells those four ways; a chat-completions API spells them differently; the
- * conversation should not know.
+ * encodes those four one way; a chat-completions API encodes them another; the
+ * conversation should not have to know.
  *
- * What a provider keeps about a reply — an id that anchors the next request,
- * say — is the provider's own comp, declared and stamped by its package
+ * What a provider stores about a reply — an id that anchors the next request,
+ * say — is that provider's own component, declared and written by its package
  * ({@link Model.mark}, {@link Model.vocab}) and read back by it
- * ({@link Model.anchor}). The seam carries the question, never the answer.
+ * ({@link Model.anchor}). This interface carries the request, never the
+ * provider's own bookkeeping.
  *
- * A model that throws a {@link ModelError} said something the caller expects —
- * a refused request, a rate limit, no credential. Anything else it throws is a
- * defect, and the caller records it as one.
+ * A model that throws a {@link ModelError} failed in a way the caller expects —
+ * a refused request, a rate limit, a missing credential. Anything else it
+ * throws is a bug, and the caller records it as one.
  *
  * @module
  */
@@ -70,7 +71,7 @@ export type Tool = {
   parameters: Record<string, unknown>
 }
 
-/** One ask of a model. */
+/** One request to a model. */
 /** Output text only; never private reasoning or partial tool arguments.
  * Index identifies the final assistant item order in Reply.items. */
 export type TextDelta = { index: number; id?: string; text: string }
@@ -83,9 +84,9 @@ export type Request = {
   instructions?: string
   items: Item[]
   tools: Tool[]
-  /** an anchor to continue from, with `items` being only what followed it:
-   * whatever the same model's {@link Model.anchor} answered for an earlier
-   * reply. Opaque to the caller. */
+  /** an anchor to continue from, in which case `items` holds only what
+   * followed it: whatever the same model's {@link Model.anchor} returned for an
+   * earlier reply. Opaque to the caller. */
   anchor?: string
 }
 
@@ -99,7 +100,8 @@ export type Usage = {
   reasoning_tokens?: number
 }
 
-/** One answer: the provider's id, the model that served, and what it said. */
+/** One reply: the provider's id, the model that served it, and the items it
+ * produced. */
 export type Reply = {
   id: string
   model: string
@@ -108,16 +110,17 @@ export type Reply = {
   artifacts?: (Artifact & { call: string; revised_prompt?: string })[]
 }
 
-/** The comps a provider stamps on the entry that records a reply. */
+/** The components a provider writes on the entry that records a reply. */
 export type Mark = Record<string, Record<string, unknown>>
 
 /**
- * A model: one request in, one reply out. A provider that keeps something
- * about a reply says so in three optional parts, so the conversation never
- * learns a provider's words: `mark` is what to stamp on the entry recording the
- * reply, `anchor` reads an anchor back off such an entry's comps (or answers
- * nothing, and the caller replays the conversation), and `vocab` declares the
- * comps `mark` writes. A bare function is a model that keeps nothing.
+ * A model: one request in, one reply out. A provider that stores something
+ * about a reply does so through three optional members, so that the
+ * conversation never has to know that provider's components: `mark` returns
+ * what to write on the entry recording the reply, `anchor` reads an anchor back
+ * off such an entry's components (or returns nothing, in which case the caller
+ * replays the conversation), and `vocab` declares the components `mark` writes.
+ * A plain function is a model that stores nothing.
  */
 export type Model = ((req: Request) => Promise<Reply>) & {
   mark?: (reply: Reply) => Mark
@@ -125,8 +128,8 @@ export type Model = ((req: Request) => Promise<Reply>) & {
   vocab?: VocabDoc
 }
 
-/** The world said no, in a way the caller expects: `code` is the provider's
- * word for it when it has one, else the kind of refusal. */
+/** A failure the caller expects: `code` is the provider's own error code when
+ * it gave one, otherwise a name for the kind of failure. */
 export class ModelError extends Error {
   code: string
   constructor(code: string, message = code) {

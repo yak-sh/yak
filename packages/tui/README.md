@@ -1,7 +1,7 @@
 # @yaks/tui
 
 Preact, rendered to a terminal. Preact draws into a fake DOM; a **backend**
-turns that tree into what the screen shows. The backend that ships is a ANSI
+turns that tree into what the screen shows. The backend that ships is an ANSI
 painter that repaints only the lines that changed.
 
 ```ts
@@ -61,7 +61,7 @@ so a wrapper is not a layout.
 ## Style
 
 `theme.ts` is the default sheet — `Block_Element-modifier` class names, the same
-spelling the web uses, in Everforest. Pass `{sheet}` to `ansiBackend` or `run`
+convention the web uses, in Everforest. Pass `{sheet}` to `ansiBackend` or `run`
 to add to it or replace an entry. `Style` is the whole vocabulary a class has:
 `fg`, `bold`, `dim`, `italic`, `underline`, `strike`, `inverse`, `glyph`,
 `indent`, `gap`.
@@ -149,12 +149,12 @@ continue to support keyboard input but do not provide pointer targets.
 `Scroll` and `VirtualList` accept unmodified vertical wheel notches at the
 pointed region, consuming movement and allowing known boundaries to bubble.
 Keyboard scrolling is unchanged. Virtual item trees remain detached/lazy;
-currently their painted cells target the list host, not individual item nodes.
-Terminal mode 1000 supplies buttons/wheels, 1006 selects SGR; their previous
-modes are saved/restored using DEC private mode save/restore. Alternate-scroll
-mode remains enabled for terminals without mouse reporting. Terminals must
-support these mode controls for restoration to work. Motion is decoded if
-received, but motion reporting is not enabled.
+currently their painted cells target the list element itself, not individual
+item nodes. Terminal mode 1000 supplies buttons/wheels, 1006 selects SGR; their
+previous modes are saved/restored using DEC private mode save/restore.
+Alternate-scroll mode remains enabled for terminals without mouse reporting.
+Terminals must support these mode controls for restoration to work. Motion is
+decoded if received, but motion reporting is not enabled.
 
 Hit coordinates follow the painter's existing string-length width model, so wide
 glyphs/combining characters share its existing limitations. No pointer capture,
@@ -175,10 +175,11 @@ show the thumb; an end-following list places it at the bottom.
 
 ### Characterwise VISUAL selection
 
-A host supplies `useVisualController(get, set)`; application state stays outside
-TUI widgets. `useTextSurface({id, snapshot, width, adjacent?})` opts in any text
-region. Textarea registers its draft; VirtualList registers only when given
-`textOf(item)`. That callback reads one anchored item, not rendered history.
+The application supplies `useVisualController(get, set)`; its state stays
+outside TUI widgets. `useTextSurface({id, snapshot, width, adjacent?})` opts in
+any text region. Textarea registers its draft; VirtualList registers only when
+given `textOf(item)`. That callback reads one anchored item, not rendered
+history.
 
 Alt+v enters VISUAL (or cycles regions), Tab cycles opt-in regions, hjkl/arrows
 extend an inclusive selection, Home/End select to row boundaries, `y` yanks and
@@ -284,7 +285,7 @@ navigation shortcuts without changing the standalone editor's bindings.
 `useKeymap(handler)` registers a mounted interceptor before widget focus and
 VISUAL handling. Returning true consumes an event. This supports application
 modes without coupling widgets to an application store. Keep mode state in the
-host; unregistering on unmount restores ordinary key handling.
+application; unregistering on unmount restores ordinary key handling.
 
 `useKeys(handler, id)` optionally names a target. `pressTo(id, key)` sends a
 command to that target without moving focus; changing its ID does not reorder
@@ -376,14 +377,14 @@ exits immediately. Fatal errors still restore the terminal.
 `onRange({ anchor?, edge? })`. The flags describe unloaded neighbors. The widget
 requests an overlapping range near a visible boundary; Home/End can request the
 actual start/end rather than treating the loaded slice as the entire list. The
-host fetches data, preserves the controlled item anchor, and replaces the loaded
-items. Set `pending` while replacing a requested edge so the temporary
-collection cannot overwrite the saved position. While pending, the last painted
-viewport and scrollbar remain visible; an initially unloaded list displays
-`Loading…` with its scrollbar. Changing the list identity clears that paint
-cache. Pending lists do not accept navigation or publish normalized positions. A
-finished empty result must use `pending: false`, so it clears the previous
-content.
+application fetches the data, preserves the controlled item anchor, and replaces
+the loaded items. Set `pending` while replacing a requested edge so the
+temporary collection cannot overwrite the saved position. While pending, the
+last painted viewport and scrollbar remain visible; an initially unloaded list
+displays `Loading…` with its scrollbar. Changing the list identity clears that
+paint cache. Pending lists do not accept navigation or publish normalized
+positions. A finished empty result must use `pending: false`, so it clears the
+previous content.
 
 The widget remains storage-independent. It uses the same item identity,
 selection, and measured-line cache as a complete list. Its scrollbar estimates
@@ -411,9 +412,9 @@ clicks, modified presses, and reported drags do not activate it. Handlers can
 call `stopPropagation()` or `preventDefault()`. Unmounting clears unfinished
 presses. VISUAL source selection continues to suppress mouse navigation.
 
-Virtualized item contents still target their list host, not individual controls
-inside the item; this does not yet provide per-item controls or mouse text
-selection.
+Virtualized item contents still target the list element itself, not individual
+controls inside the item; this does not yet provide per-item controls or mouse
+text selection.
 
 A block can set `max-height` to cap its rendered rows without padding shorter
 content. Optional `overflow-text` adds a plain-text final row only when the cap

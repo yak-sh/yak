@@ -2,18 +2,18 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yaks.sh/vocab/kernel",
   "title": "yaks kernel keyword vocabulary",
-  "description": "The three things a graph of work says about its own words that the core meta-model does not: which facets a project governs, which log lines never ride a boot snapshot, and which text column completes out of a named well.",
+  "description": "Three keywords a graph of work needs that the core meta-model does not define: which components a project answers for, which components stay out of the snapshot a client loads at startup, and where a text column's suggested values come from.",
   "$defs": {
     "governed": {
-      "description": "true = a durable work or knowledge facet governed by project-rooted edge paths: what a project's reach is computed over.",
+      "description": "true = a project answers for the entities carrying this component, reached by edges rooted at the project. It is what a project's reach is computed over.",
       "type": "boolean"
     },
     "lazy": {
-      "description": "true = this component never rides a boot snapshot; a reader asks for its rows by the partition they belong to.",
+      "description": "true = this component's rows are left out of the snapshot a client loads at startup; a reader asks for them by the partition they belong to.",
       "type": "boolean"
     },
     "well": {
-      "description": "The named well a text column's completions are drawn from, beside the column's own live distinct values. The name is the well's, registered by whoever holds the values — the schema stays declarative.",
+      "description": "Names a list of suggested values for this text column, offered for completion beside the values already in the column. The list is registered by whoever holds the values, so the schema stays declarative.",
       "type": "string"
     }
   }

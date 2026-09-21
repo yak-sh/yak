@@ -3,18 +3,19 @@
  * point at it instead of keeping a pid of its own.
  *
  * - `service{command, cwd, restart, attempts}` — a program that SHOULD run,
- *   riding the same entity its process lands on. Effects are data: this row is
- *   what a supervisor acts on, and `stop` beside it says the wanting is over.
- * - `process{pid, command, cwd}` — a program on a host; `command`/`cwd` are
- *   present exactly when we launched it.
+ *   stored on the same entity its process lands on. The supervisor acts on
+ *   this component, and a `stop` component beside it means the program is no
+ *   longer wanted.
+ * - `process{pid, command, cwd}` — a program running on this machine;
+ *   `command` and `cwd` are present exactly when we launched it.
  * - `exit{code}` — it is over, and how. Absent means running.
- * - output is `content{body}` + `output{source}` (@yaks/session), `source`
- *   the process.
+ * - output is `content{body}` plus `output{source}` (@yaks/session), where
+ *   `source` names the process.
  *
  * The program doing the launching is one too: {@link started} and
- * {@link ended} are the rows a process writes about ITSELF on the way in and
- * the way out (./self.ts), which is what a host signs with and what a
- * start-up effect fires on.
+ * {@link ended} return the components a process writes about ITSELF on the way
+ * in and the way out (./self.ts). That is the entity the server signs its
+ * writes with, and the one a start-up effect handler fires on.
  *
  * ```ts
  * import { launch, store, supervise, watch } from '@yaks/process'
@@ -22,22 +23,23 @@
  * // let processes = store(graph)
  * // let run = await launch(processes, { command: 'sh', args: ['-c', 'echo hi'] })
  * // await run.done            // 0, and the line is a content entry
- * // await watch(processes)    // at boot: pick the unfinished ones back up
- * // let pass = supervise(processes)   // then drive it from your own tick
+ * // await watch(processes)    // at start-up: pick the unfinished ones back up
+ * // let pass = supervise(processes)   // then drive it from your own timer
  * ```
  *
  * Four entry points over one loop: {@link launch} starts a process detached
- * (a setsid wrapper in its own systemd user scope, a pidfile, two stream
- * files), {@link adopt} tracks one nobody here started, {@link watch}
- * re-adopts every row with no `exit` at boot and stamps the ones already gone,
- * and {@link supervise} makes the world match the `service` rows — spawn,
- * respawn with a bounded backoff, stop. The supervisor can restart without
- * taking any of them with it, which is the only reason the launcher is shaped
- * the way it is, and exactly one supervisor sits above it (see ./run.ts).
+ * (a setsid wrapper in its own systemd user scope, a pidfile, a stdout file
+ * and a stderr file), {@link adopt} tracks one nobody here started,
+ * {@link watch} adopts every row with no `exit` again at start-up and records
+ * an exit code for the ones already gone, and {@link supervise} makes the
+ * machine match the `service` rows — start, start again with a bounded
+ * backoff, stop. The server can restart without taking any of those processes
+ * with it, which is the only reason the launcher is shaped the way it is, and
+ * exactly one supervisor sits above it (see ./run.ts).
  *
  * {@link shellTools} hands the same rows to a session as three tools — `shell`,
- * `wait`, `stop` — so a tool call that outlives its budget answers with the
- * process instead of blocking on it.
+ * `wait`, `stop` — so a tool call that outlives its timeout returns the process
+ * entity instead of blocking on it.
  *
  * @module
  */

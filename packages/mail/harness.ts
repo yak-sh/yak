@@ -1,11 +1,11 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // book club that writes to its members.
 //
-// The club is a `space`, its people are `person` entities wearing an `email`,
-// and its roster is a `member` row — the same three words @yaks/member ships,
-// declared here so this package's tests need no dependency on it. The store is
-// @yaks/ram: a Map holding the bundles, the same apply() and the same
-// queries as a database.
+// The club is a `space`, its people are `person` entities carrying an `email`,
+// and its roster is a `member` row — the same three components @yaks/member
+// ships, declared here so this package's tests need no dependency on it. The
+// store is @yaks/ram: a Map holding the bundles, with the same apply() and the
+// same queries as a database.
 
 import { type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -36,8 +36,8 @@ let doc: VocabDoc = {
       kind: true,
       properties: { name: {} },
     },
-    // The roster row @yaks/member ships, said here so the invitation example
-    // has something to be woken by.
+    // The roster row @yaks/member ships, declared here so the invitation
+    // example has something to be triggered by.
     member: {
       component: true,
       type: 'object',
@@ -53,9 +53,9 @@ let doc: VocabDoc = {
         role: { enum: ['owner', 'member'], default: 'member' },
       },
     },
-    // The two words the `tools` facet WRITES and does not own — @yaks/kernel's
-    // `opened` and `archived` — said here for the same reason `member` is: a
-    // test needs the word, not the package.
+    // The two components ./tools.ts WRITES and does not declare —
+    // @yaks/kernel's `opened` and `archived` — declared here for the same
+    // reason `member` is: a test needs the component, not the package.
     opened: {
       component: true,
       type: 'object',
@@ -70,8 +70,8 @@ let doc: VocabDoc = {
         at: { type: 'string', format: 'date-time', stamped: true },
       },
     },
-    // What a tool's answer says in words, and which call it came from
-    // (@yaks/tools) — declared here so a run's prose can be applied.
+    // The text of a tool's result, and which call it came from (@yaks/tools) —
+    // declared here so a handler's prose result can be applied.
     content: {
       component: true,
       type: 'object',
@@ -101,7 +101,7 @@ let doc: VocabDoc = {
   },
 }
 
-/** The club's vocabulary: its own words, this package's, and the `doc` a
+/** The club's vocabulary: its own components, this package's, and the `doc` a
  * letter's subject and body live in. */
 export let club: Vocab = loadVocab([docDoc, mailDoc, doc])
 
@@ -129,9 +129,9 @@ export type Rig = {
 
 /** A club with a post room. */
 export let clubhouse = ({ refuse, local }: Rig = {}): Club => {
-  // The write door the sending effect settles a letter through: the club's own
-  // graph, trusted, since `delivered` and `bounced` are server-owned. `g` is
-  // built below and this only ever runs post-commit.
+  // The write function the sending effect records an outcome through: the
+  // club's own graph, trusted, since `delivered` and `bounced` are
+  // server-owned. `g` is built below, and this only ever runs post-commit.
   let fx = effects(club, { write: (b) => g.apply(b, { trusted: true }) })
   let post = stash(refuse ? { refuse } : {})
   let g = graph({

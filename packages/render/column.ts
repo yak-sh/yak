@@ -2,8 +2,8 @@
  * A vocabulary column as a matchable bundle. This is a projection for selection,
  * never a stored entity: editors receive the original bundle and {comp, col}.
  * The four queryable fields are column.comp, column.col, column.type and
- * column.ref. Type uses the vocabulary's scalar spelling, with text → string
- * and bool → boolean; ref and enum keep their own categories.
+ * column.ref. Type uses the vocabulary's own name for the scalar type, with
+ * text → string and bool → boolean; ref and enum keep their own categories.
  */
 
 import type { Bundle } from '@yaks/match'

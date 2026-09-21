@@ -1,49 +1,51 @@
-// The words this package spells, and the one list the status rule is read from.
+// The status values this package defines, and the one list every reading of a
+// task's status is computed from.
 //
-// A task's STATUS is not a column somebody writes. It is read off the marks the
-// task wears, independently of any optional `filed` component: `cancelled`
-// means cancelled, `completed` means done, and a task wearing neither is open. That is the whole rule, and it
-// lives here as DATA — an ordered list of marks — so the two evaluators that
-// need it (a database through @yaks/sql, an array through @yaks/match) are built
-// from one declaration rather than from two copies that drift.
+// A task's STATUS is not a column somebody writes. It is computed from the
+// components the task carries, independently of any optional `filed`
+// component: `cancelled` means cancelled, `completed` means done, and a task
+// with neither is open. That is the whole rule, and it lives here as DATA — an
+// ordered list of marks — so that the two evaluators which need it (a database
+// through @yaks/sql, an array through @yaks/match) are built from one
+// declaration rather than from two copies that drift.
 //
-// Order is the rule. The first mark the task wears wins, so a task that was
+// Order is the rule. The first mark the task has wins, so a task that was
 // cancelled after it was completed reads `cancelled`: calling work off is a
 // later fact about it than finishing was.
 //
 // The ladder is EXTENSIBLE because status is: an application that leases its
-// tasks adds a rung of its own — a held lease reads `wip`, and says
+// tasks adds a rung of its own — a held lease reads `wip`, and declares
 // `settled: false`, because somebody working on it has not finished it. Every
-// door here takes a `marks` list; {@link MARKS} is the default.
+// function here accepts a `marks` list; {@link MARKS} is the default.
 
-/** What a task's status can be: the three the marks below spell, plus whatever
+/** What a task's status can be: the three the marks below define, plus whatever
  * rung an application adds. It is a plain string on purpose — a closed union
  * would make an added rung a type error rather than a declaration. */
 export type Status = string
 
 /**
- * One rung of the status ladder: wearing `comp` means the task reads `status`.
+ * One rung of the status ladder: a task carrying `comp` reads as `status`.
  * A mark is a COMPONENT's presence, never a column's value, so marking a task
- * done is writing `completed{at, by}` — a fact with an author and a time — and
- * un-marking it is dropping that component.
+ * done means writing `completed{at, by}` — a fact with an author and a time —
+ * and un-marking it means removing that component.
  */
 export type Mark = {
-  /** what a task wearing this component reads as */
+  /** what a task carrying this component reads as */
   status: Status
   /** the component whose presence is the mark */
   comp: string
   /** whether this status ends the work. Default `true` — a mark ordinarily
-   * says the task is over; a rung that only says somebody is ON it (a lease)
+   * means the task is over; a rung that only means somebody is ON it (a lease)
    * declares `false`. */
   settled?: boolean
 }
 
-/** What a task with no mark on it reads. */
+/** What a task with no mark on it reads as. */
 export let OPEN = 'open'
 
 /**
  * The default ladder, most decisive first: cancelled outranks done, and a task
- * wearing neither is {@link OPEN}. Spread it into your own list to add a rung.
+ * with neither is {@link OPEN}. Spread it into your own list to add a rung.
  *
  * ```ts
  * import { MARKS } from '@yaks/task'
@@ -57,7 +59,7 @@ export let MARKS: Mark[] = [
   { status: 'done', comp: 'completed' },
 ]
 
-/** Every status a ladder can read, in ladder order with {@link OPEN} last —
+/** Every status a ladder can produce, in ladder order with {@link OPEN} last —
  * the closed set a status filter is checked against. */
 export let statuses = (marks: Mark[] = MARKS): Status[] => [
   ...marks.map((m) => m.status),
@@ -66,12 +68,12 @@ export let statuses = (marks: Mark[] = MARKS): Status[] => [
 
 /**
  * The closed set a VOCABULARY declares: the `statuses` enum this package
- * ships, which names every rung a task's status can read — the three the
- * default ladder spells, and the one a host that leases its tasks adds, since
- * the word list is the same wherever the marks come from. A door that checks a
- * status without being handed marks reads this, so a board filtering on `wip`
- * is routed rather than refused; a vocabulary without the enum reads as the
- * default ladder.
+ * ships, which names every rung a task's status can read as — the three the
+ * default ladder defines, and the one a graph that leases its tasks adds, since
+ * the set of values is the same wherever the marks come from. Code that checks
+ * a status without being handed a marks list reads this, so a board filtering
+ * on `wip` is routed rather than refused; a vocabulary without the enum reads
+ * as the default ladder.
  */
 export let declared = (
   vocab: { docs: { $defs?: Record<string, unknown> }[] },

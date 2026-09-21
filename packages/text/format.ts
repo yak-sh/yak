@@ -1,15 +1,16 @@
 /**
  * Serialize a portable tree as Markdown or plain text. Block boundaries are
- * joined locally, rather than normalizing the finished string, because code
- * and explicit breaks must keep the spacing the host supplied. Every literal
- * and destination crosses safe, including the separate code paths.
+ * joined as they are produced, rather than by normalizing the finished string,
+ * because code and explicit breaks must keep the spacing the tree gave them.
+ * Every literal and every link destination passes through `safe`, including the
+ * separate code paths.
  */
 
 import type { Child } from '@yaks/render'
 import { safe, safeHref } from './safe.ts'
 import type { Node } from './tree.ts'
 
-/** The two text presentations supported by this host. */
+/** The two text formats this renderer produces. */
 export type Mode = 'markdown' | 'plain'
 
 type Piece = {
@@ -226,7 +227,7 @@ let piece = (child: Child<Node>, mode: Mode): Piece => {
   }
   if (md && text && emphasis.has(tag)) {
     // Nested delimiter runs have ambiguous Markdown parses. Inline HTML is
-    // Markdown's spelling for the precise nesting; its children remain escaped.
+    // Markdown's own syntax for the precise nesting; its children stay escaped.
     if (nestedEmphasis(child)) {
       return {
         text: `<${tag}>${text}</${tag}>`,

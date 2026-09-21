@@ -29,7 +29,8 @@ let reached = (
     (id ? ` (${id.slice(0, 12)}…)` : '')
 }
 
-/** Shared prose tree; hosts keep metadata structural rather than stripping text. */
+/** Shared prose tree; renderers keep metadata structural rather than stripping
+ * text. */
 export let entryBody: Renderer['render'] = (b, h, ctx) => {
   let first = ctx.full ? textOf(b) : textOf(b).split('\n')[0].slice(0, 70)
   let names = (ctx.names ?? {}) as Record<string, string>
@@ -38,8 +39,9 @@ export let entryBody: Renderer['render'] = (b, h, ctx) => {
     reached(b, names, anchor),
     first,
   ].filter(Boolean).join(' ')
-  // Text hosts strip literal control bytes. Structural breaks preserve
-  // transcript lines without letting other controls through.
+  // Text renderers strip literal control bytes. Structural line breaks
+  // preserve transcript lines without letting other control characters
+  // through.
   return h(
     'span',
     null,

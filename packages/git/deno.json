@@ -9,7 +9,7 @@
     "./vocab": "./vocab.ts"
   },
   "license": "Apache-2.0",
-  "description": "Stores Git objects as graph entities, builds trees and commits from file manifests, and serves clones through read-only smart HTTP.",
+  "description": "Builds Git trees and commits from a file manifest, stores the objects as graph entities, and serves clones over Git's read-only smart HTTP protocol.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@db/sqlite": "jsr:@db/sqlite@0.13.0"

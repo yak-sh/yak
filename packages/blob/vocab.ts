@@ -1,12 +1,12 @@
-// The stored-value words, and only the words: the `vocab` facet a host takes
-// (`@yaks/blob/vocab`). It reaches no storage and no runtime, so a browser tab
+// The schema declarations, and only those: the module a server imports from
+// `@yaks/blob/vocab`. It reaches no storage and no runtime, so a browser tab
 // loading this vocabulary loads nothing else.
 //
-// The `store` keyword is the whole of what this package says to a vocabulary:
-// a text column marked with it keeps its value's hash, and the value lives
-// wherever the composed store puts it. `derived` is the reading back — the SQL
-// that joins the row's hash to the text — which is part of what the keyword
-// MEANS rather than a rule about a batch.
+// The `store` keyword is the whole of what this package contributes to a
+// vocabulary: a text column marked with it keeps its value's hash, and the
+// value itself lives wherever the configured store puts it. `derived` is the
+// read back — the SQL that resolves the row's hash to the text — which is part
+// of what the keyword MEANS rather than a rule about how a write is applied.
 
 import type { Keywords, Vocab, VocabDoc } from '@yaks/vocab'
 import type { Derived } from '@yaks/sql'

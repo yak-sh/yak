@@ -10,7 +10,7 @@
       "type": "object",
       "governed": true,
       "properties": {},
-      "description": "what stands: the shape a system HAS, rather than one being proposed"
+      "description": "what stands: the structure a system HAS, rather than one being proposed"
     },
     "design": {
       "component": true,
@@ -20,14 +20,14 @@
         "alias"
       ],
       "properties": {},
-      "description": "a change being proposed: what it is, said in the doc beside it. `proposed` and `decided` carry the lifecycle"
+      "description": "a change being proposed; what it is, is written in the doc beside it. `proposed` and `decided` carry its lifecycle"
     },
     "design_new": {
       "tool": true,
       "noun": "design",
       "verb": "new",
       "title": "Propose a design",
-      "description": "Write a change down so it can be argued with: an entity wearing design{} and doc{title, body}, put forward by the proposed mark. Who proposed it and when are stamped from the caller, never said on the line.",
+      "description": "Write a change down so it can be argued with: an entity with design{}, doc{title, body} and proposed{} on it. Who proposed it and when are stamped from the caller, never passed as arguments.",
       "input": {
         "title": {
           "type": "string",
@@ -61,13 +61,13 @@
       "tool": true,
       "noun": "design",
       "verb": "decide",
-      "title": "Settle a design",
-      "description": "Record the decision on a proposal: approved, or declined. The decider is whoever is calling — stamped from the caller, so an agent's own decision is recorded as the agent's and an owner's only when the owner is the one asking.",
+      "title": "Decide a design",
+      "description": "Record the decision on a proposal: approved, or declined. The decider is whoever is calling — stamped from the caller, so an agent's own decision is recorded as the agent's, and as an owner's only when the owner is the one calling.",
       "input": {
         "design": {
           "type": "string",
           "ref": "design",
-          "description": "the design being settled"
+          "description": "the design being decided"
         },
         "verdict": {
           "type": "string",
@@ -113,7 +113,7 @@
           "description": "approved, rejected, or approved once these changes are made"
         }
       },
-      "description": "one reading of a design: the verdict, and the words beside it"
+      "description": "one person's assessment of a design: the verdict, and the comment beside it"
     }
   }
 }

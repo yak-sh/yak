@@ -8,7 +8,7 @@
     "./tools": "./tools.ts"
   },
   "license": "Apache-2.0",
-  "description": "Task vocabulary with a status nobody writes, dependency checks, and completion stamping for graph entities.",
+  "description": "Task components for a graph: a status computed from marks instead of stored, dependency counts, and completion attribution.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

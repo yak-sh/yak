@@ -1,14 +1,15 @@
-// Folding repeats. N copies of one crash read as ONE counted row: a cohort key
-// is an error's CLASS, its door, and the SHAPE of its top stack frames, never
-// the variable message. Frames drop their line:col so a rebuild that shifts
-// every line still cohorts. Successful calls pass through untouched: each
-// timed call is its own datum.
+// Grouping repeats. N copies of one crash are returned as ONE counted row: a
+// cohort key is an error's CLASS, its source, and the SHAPE of its top stack
+// frames, never the message, which varies. Frames drop their line:column, so a
+// rebuild that shifts every line still groups them together. Successful calls
+// pass through untouched: each timed call is its own measurement.
 
 import type { Source } from './ddl.ts'
 
 /**
- * A row read back. A run of identical errors reads as one row carrying the
- * cohort's count and span; the extra fields are absent on a lone row.
+ * A row read back. A run of identical errors is returned as one row carrying
+ * the cohort's count and time span; those extra fields are absent on a row that
+ * stands alone.
  */
 export type Log = {
   ts: string

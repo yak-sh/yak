@@ -1,6 +1,6 @@
 /**
  * @yaks/blob — content-addressed storage for a text column, applied without
- * anybody noticing.
+ * any caller having to know.
  *
  * A blog post's body, a product description, a page of notes: values that are
  * long, often repeated, and awkward in a row. Mark the column and they move:
@@ -33,32 +33,32 @@
  * // db.read('.post!')[0].post.body // 'a long essay…'
  * ```
  *
- * Nothing between those two lines says `blob`. The write went in as text and
+ * Nothing between those two lines mentions blobs. The write went in as text and
  * came back as text; in between, the row kept the SHA-256 of the essay and the
  * essay itself went to the store — once, however many posts quote it.
  *
  * ## What it is made of
  *
  * - **One keyword.** {@link blobKeywords} registers `store` with @yaks/vocab,
- *   so the meta-model carries the word and this package is what it means. To
+ *   so a schema can carry the word and this package supplies its meaning. To
  *   the schema a body column is a plain string column, and it stays one for
  *   validation, routing and queries.
- * - **One plugin.** {@link blobs} swaps the text for its address on the way in
- *   and swaps it back before `apply()` returns. It runs INSIDE the batch's
- *   transaction, so the bytes and the row that names them commit together.
- * - **One backend interface.** {@link Blobs} is `has`, `get` and `put` over
- *   `Uint8Array`, keyed by {@link address}. Three ship with the package:
- *   {@link sqliteBlobs} (a table beside your rows — synchronous, and the only
- *   one SQL can read through), {@link fileBlobs} (a directory), and
+ * - **One plugin.** {@link blobs} replaces the text with its address on the way
+ *   in and puts it back before `apply()` returns. It runs INSIDE the
+ *   transaction, so the bytes and the row that addresses them commit together.
+ * - **One byte-store interface.** {@link Blobs} is `has`, `get` and `put` over
+ *   `Uint8Array`, keyed by {@link address}. Three implementations ship with the
+ *   package: {@link sqliteBlobs} (a table beside your rows — synchronous, and
+ *   the only one SQL can read through), {@link fileBlobs} (a directory), and
  *   {@link objectBlobs} (an S3-shaped bucket, R2 included).
- * - **Two read sides.** Over SQL, {@link blobRead} resolves the address in the
- *   statement itself; over anything else, {@link hydrate} resolves gathered
- *   bundles.
+ * - **Two read paths.** Over SQL, {@link blobRead} resolves the address in the
+ *   statement itself; over any other store, {@link hydrate} resolves the
+ *   bundles a read returned.
  *
- * Dropping the plugin does not strand your data: a body column is a text column
+ * Removing the plugin does not strand your data: a body column is a text column
  * holding a hash, and the store is a table of hashes and text.
  *
- * The core — the keyword, the plugin, the interface, and the SQLite backend —
+ * The core — the keyword, the plugin, the interface, and the SQLite store —
  * imports no platform API, so the same code runs on a server, in a worker, and
  * in a browser tab. {@link fileBlobs} looks its runtime's filesystem up rather
  * than importing one, and throws where there is none.

@@ -1,26 +1,26 @@
-// The backend seam: where the bytes go. Three methods over one key — and the
-// key is not the caller's to choose, it is the SHA-256 of the bytes themselves,
-// which is what makes the store content-addressed: the same value written twice
-// is one stored object, and a stored object can never be the wrong one for its
-// key.
+// The byte-store interface: where the bytes go. Three methods over one key —
+// and the key is not the caller's to choose, it is the SHA-256 of the bytes
+// themselves, which is what makes the store content-addressed: the same value
+// written twice is one stored object, and a stored object can never be the
+// wrong one for its key.
 //
-// Everything above this seam is bytes and hashes; nothing above it knows
-// whether they landed in a table, a directory or a bucket. That is why a
-// backend is three functions and not a class: `sqliteBlobs`, `fileBlobs` and
+// Everything above this interface deals in bytes and hashes; nothing above it
+// knows whether they landed in a table, a directory or a bucket. That is why a
+// store is three functions and not a class: `sqliteBlobs`, `fileBlobs` and
 // `objectBlobs` in this package are each a small object of this shape, and so
 // is anything you write yourself.
 //
-// Every method is async-OR-sync, the same pass-through rule @yaks/graph's
+// Every method may return a value OR a promise, the same rule @yaks/graph's
 // `Storage` follows: a table in the database you are already writing answers
-// immediately and keeps `apply()` synchronous, a bucket over the network
+// immediately and keeps `apply()` synchronous, while a bucket over the network
 // answers with a promise and makes it asynchronous.
 
 import { sha256 } from '@yaks/graph'
 
 /**
  * A content-addressed byte store. `sha` is always the lowercase-hex SHA-256 of
- * the bytes — {@link address} computes it, and a backend may take it on trust
- * rather than re-hashing.
+ * the bytes — {@link address} computes it, and an implementation may take it on
+ * trust rather than re-hashing.
  */
 export type Blobs = {
   /** whether the store already holds an object under this hash */

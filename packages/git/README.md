@@ -1,8 +1,9 @@
 # @yaks/git
 
-Git objects and repository operations backed by graph entities and a blob store.
-The package also provides host-checkout integration; these APIs have different
-storage and runtime requirements, described below.
+Builds Git objects out of a file manifest, stores them as graph entities, and
+serves `git clone` over Git's read-only smart HTTP protocol. A second entry
+point, `@yaks/git/host`, tracks the Git checkouts on the machine it runs on, and
+a third, `@yaks/git/land`, merges a branch in one of them.
 
 ## Install
 
@@ -13,10 +14,10 @@ deno add jsr:@yaks/git
 
 ## The idea
 
-A file manifest maps `path → sha256`, over bytes already in a
-[@yaks/blob](https://jsr.io/@yaks/blob) store. Git wants the same thing said its
-way — blobs, trees, a commit — and every one of those is named by the digest of
-its own bytes. So the object IS its id, and the id is the entity:
+A file manifest maps `path → sha256`, over bytes that are already in a
+[@yaks/blob](https://jsr.io/@yaks/blob) store. Git describes the same set of
+files as blobs, trees and a commit, and names each of those by the digest of its
+own bytes. So the object id is the entity id, and no separate lookup is needed:
 
 ```ts
 import { index } from '@yaks/git'
@@ -35,41 +36,51 @@ let head = await git.commit({
   message: 'deploy 7',
 })
 
-head.oid // '2b72ae1c151a…' — git's name, and the entity's eid
-head.oid256 // the same commit's SHA-256 name
+head.oid // '2b72ae1c151a…' — the Git object id, and the entity id
+head.oid256 // the same commit's SHA-256 object id
 ```
 
-Writing the same manifest again writes the same ids, which are the same rows: an
-object is stored once however many versions, apps or runs mention it.
+Writing the same manifest again produces the same ids, which are the same rows:
+an object is stored once no matter how many versions, apps or runs mention it.
 
-## Four things follow
+## Four consequences
 
-- **An object's entity id is its object id.** No `sha` column, no uniqueness
-  constraint, no reconciliation — a `want` off the wire is a `get`.
-- **Every object has a SHA-256 name too, from the first day.** `oid256` is the
-  same object with its children translated, kept as a @yaks/key of kind `compat`
-  (git's own word for the name in the other hash function). A client asking for
-  `object-format=sha256` is answered by a lookup, never a migration.
-- **Bodies are bytes; rows are walks.** The body of a tree or a commit is what
-  its digest was taken over, so it goes to the byte store verbatim and the graph
-  keeps only `gitobj{type, size}`, `blob{sha}`, and the two walks a pack makes:
-  `entry` edges (tree → child, the name on the link) and `parent` edges.
-- **A git blob is your blob.** The bytes are already stored under their SHA-256;
-  the object is a header hashed over them. Nothing is re-encoded, and a file
-  named twice costs a query and no read.
+- **An object's entity id is its Git object id.** There is no `sha` column, no
+  uniqueness constraint and nothing to reconcile: a `want` line in a fetch
+  request is a lookup by primary key.
+- **Every object also has a SHA-256 object id, from the first write.** `oid256`
+  is the same object with its children's ids translated, stored as a @yaks/key
+  of kind `compat` (Git's own term for the id under the other hash function). A
+  client that asks for `object-format=sha256` is answered from that key rather
+  than by converting the repository.
+- **Bodies are bytes; rows are the links a walk follows.** The body of a tree or
+  a commit is exactly what its digest was taken over, so it goes into the byte
+  store unchanged and the graph keeps only `gitobj{type, size}`, `blob{sha}`,
+  and the two sets of edges a pack has to follow: `tree_entry` edges (tree →
+  child, with the name on the link) and `parent` edges.
+- **A Git blob is the blob you already have.** The bytes are already in the
+  store under their SHA-256 address; the Git object is those same bytes with a
+  header hashed over them. Nothing is re-encoded, and naming the same file twice
+  costs one query and no read of the bytes.
 
-## The vocabulary
+## The components
 
 ```
-gitobj{type, size}      one git object — eid = its SHA-1 object id
-blob{sha}               where its bytes are, in the @yaks/blob store
-entry{name, mode}       @yaks/edge relation: a tree holds a child under a name
-parent                  @yaks/edge relation: a commit follows a commit
-compat                  @yaks/key kind: the same object's SHA-256 name
-ref{app, name, commit}  where one branch of one repository stands
+gitobj{type, size}       one Git object — entity id = its SHA-1 object id
+blob{sha}                where its bytes are, in the @yaks/blob store
+tree_entry{name, mode}   @yaks/edge relation: a tree holds a child under a name
+parent                   @yaks/edge relation: a commit follows a commit
+compat                   @yaks/key kind: the same object's SHA-256 object id
+ref{app, name, commit}   where one branch of one repository points
 ```
 
-Source as the rest of a graph refers to it:
+The tree-to-child relation is called `tree_entry` rather than `entry` because
+@yaks/session already declares an `entry` component for a transcript line.
+
+`@yaks/git/vocab` exports these declarations on their own, with no storage and
+no runtime behind them, for code that only needs to read the schema.
+
+Components for source code, as the rest of a graph refers to it:
 
 ```
 repository{common, origin}             a local object database, and its remote
@@ -78,12 +89,13 @@ commit{target, repo, message}          a landed commit, attached to its work
 anchor{paths, sha, symbol, hunk, …}    what a document promised about source
 ```
 
-A `commit` is the whole message, not its first line, and its eid IS the sha — so
-recording the same commit twice is one entity, and it carries no `sha` column to
-disagree with its own id. An `anchor` stores the promise and nothing derived:
-freshness is re-read from git against the `sha`.
+A `commit` stores the whole commit message, not just its first line, and its
+entity id is the commit sha — so recording the same commit twice produces one
+entity, and it carries no `sha` column that could disagree with its own id. An
+`anchor` stores the promise and nothing derived from it: whether it is still
+current is re-read from Git against the `sha`.
 
-Load it beside the two carriers it uses:
+Load the components beside the two packages whose mechanisms they use:
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
@@ -95,16 +107,17 @@ let vocab = loadVocab([edgeDoc, keyDoc, gitDoc], [edgeKeywords, keyKeywords])
 let g = graph({ storage, vocab, plugins: [edges(vocab), keys(vocab)] })
 ```
 
-An `entry` is named `sha256("entry|<tree>|<name>")` rather than by @yaks/edge's
-own sentence, because two names in one tree may point at one blob — within a
-tree the NAME is what is unique. A `ref` is named `sha256("ref|<app>|<name>")`,
-so moving a branch patches the row that was already there.
+A `tree_entry` entity id is derived from the string `tree_entry|<tree>|<name>`
+rather than from @yaks/edge's usual `from|relation|to`, because two names in one
+tree may point at the same blob; within a tree it is the NAME that is unique. A
+`ref` entity id is derived from `ref|<app>|<name>`, so moving a branch updates
+the row that is already there.
 
 Objects are global — an object is the digest of its own bytes, so the same file
 in two repositories is one row — while a branch belongs to exactly one
-repository. A host that decides access per repository therefore keeps its refs
-where that decision is made and its objects in a store of their own, and loads
-`refDoc` in the one and `gitDoc` in the other.
+repository. A server that decides read access per repository therefore keeps its
+refs in the graph where that decision is made and its objects in a store of
+their own, loading `refDoc` in the first and `gitDoc` in the second.
 
 ## A branch, and landing a release on it
 
@@ -125,14 +138,15 @@ let head = await commitOnto(repo, {
 await refAt(repo.refs, app) // head.oid
 ```
 
-Every object written, the branch patched onto the new commit, and whatever the
-caller records ABOUT that commit written in the same batch — this package spells
-no such word itself, because joining a commit to what it was minted from is the
-host's sentence, not git's. The PARENT is read from the ref rather than carried,
-so a commit minted the moment a release landed and one minted by a repair pass
-follow the same chain.
+That writes every object, points the branch at the new commit, and writes
+whatever the caller wants recorded about that commit — all in one transaction.
+This package declares no component joining a commit to the thing it was built
+from, because what that thing is depends on the application; `beside` is where
+the caller supplies those rows. The parent commit is read from the ref rather
+than passed in, so a commit written the moment a release landed and a commit
+written later by a repair pass end up on the same chain.
 
-And that step as a plugin, mounted on the `effect` phase:
+The same step is also available as a graph plugin, hooked on the `effect` phase:
 
 ```ts
 import { commits } from '@yaks/git'
@@ -143,13 +157,14 @@ let plugin = commits({
 })
 ```
 
-Everything about a release this package cannot know — what one is called, where
-its manifest is, who authored it, which stores its objects and branches are in,
-and whether it has been committed already — is that one `of`. A host with its
-own post-commit registry registers `minting(…)` on it directly instead; the
-plugin is the same step and the phase it sits on.
+Everything about a release this package cannot know — what a release is called,
+where its manifest is, who authored it, which graphs and byte store hold its
+objects and branches, and whether it has been committed already — is answered by
+that one `of` function. An application with its own post-commit hook registry
+can register `minting(…)` on it directly instead; the plugin is that same
+function plus the phase it is hooked on.
 
-## A clone is a pack
+## A clone is a packfile
 
 ```ts
 import { objects } from '@yaks/git'
@@ -160,24 +175,29 @@ await from.reach([head.oid]) // every object it needs, each once
 await from.pack([head.oid], have) // …as a v2 packfile, streaming
 ```
 
-`reach` walks `parent` edges for history and `entry` edges for reachability — a
-commit's tree is read from the first line of its body, the one link no row
-carries. A `have` is subtraction, not negotiation: everything the client says it
-holds is walked first and is simply missing from the answer, and a `have` naming
-an object this graph never had is ignored.
+`reach` follows `parent` edges for history and `tree_entry` edges for
+reachability. A commit's own tree is read from the first line of its body, which
+is the one link no row carries.
 
-`pack` writes the format as it is: `PACK`, version 2, the count, then each
-object's type-and-size varint and its zlib-deflated body, then the SHA-1 of
-every byte before it. Whole objects, never deltas — a pack is always allowed to
-be. Two things a hand-written one usually gets wrong: the entry states the
-UNPACKED size, and the body is zlib (`CompressionStream('deflate')`), not raw
-deflate. It streams, and ./sha1.ts takes the trailer as the bytes go by, so a
-clone of any size costs one object's body in memory.
+A `have` line is handled by subtraction, not by negotiation: everything the
+client reports it already holds is walked first, so those objects are simply
+absent from the answer, and a `have` naming an object this graph never held is
+ignored.
 
-## The bytes, on their own
+`pack` writes the packfile format as it is specified: `PACK`, version 2, the
+object count, then each object's type-and-size varint followed by its
+zlib-deflated body, then the SHA-1 of every byte before it. Every object is
+stored whole, never as a delta, which the format always permits. Two details a
+hand-written packer usually gets wrong: the size in an entry header is the
+UNPACKED size, and the body is zlib — `CompressionStream('deflate')` — not raw
+deflate. The pack is written as a stream, and ./sha1.ts folds the trailer digest
+in as the bytes go past, so a clone of any size holds only one object's body in
+memory.
 
-The builders are independent of any graph, and each is checked against what git
-itself produced for the same input:
+## The byte-level builders
+
+The builders do not touch a graph at all, and each one is tested against the
+bytes Git itself produced for the same input:
 
 ```ts
 import { commitBody, DIR, FILE, oid, oid256, treeBody } from '@yaks/git'
@@ -189,12 +209,12 @@ treeBody([{ name: 'a.txt', mode: FILE, oid }, { name: 'a', mode: DIR, oid: t }])
 // a.txt FIRST: a directory sorts as though its name ended in `/`
 ```
 
-Two details are the whole of the tree format, and both are where a hand-written
-one usually goes wrong: a directory's mode is `40000` in the body (no leading
-zero, unlike `git ls-tree`'s printing), and a directory sorts as `name + '/'`,
-over UTF-8 bytes.
+Two details are most of the tree format, and both are where a hand-written tree
+usually goes wrong: a directory's mode is `40000` in the body (no leading zero,
+unlike the `040000` that `git ls-tree` prints), and a directory sorts as
+`name + '/'`, compared over UTF-8 bytes.
 
-## And a clone is HTTP
+## Serving a clone over HTTP
 
 ```ts
 import { advertise, uploadPack } from '@yaks/git'
@@ -207,119 +227,140 @@ advertise(req)
 await uploadPack(req, refs, objects(g, store))
 ```
 
-Git's smart HTTP, protocol version 2, read only. The advertisement says what
-this server can do and no refs at all — that is what v2 is for, and `ls-refs` is
-where a client asks. `fetch` answers a pack, side-band framed as v2 requires, of
-everything the wants reach less everything the haves reach.
+This is Git's smart HTTP protocol, version 2, read-only. The response to the
+`GET` advertises what this server supports and lists no refs at all — that is
+what version 2 changed, and `ls-refs` is the command a client sends to get them.
+The `fetch` command is answered with a packfile, side-band framed as version 2
+requires, holding everything the `want` lines reach minus everything the `have`
+lines reach.
 
 Only what is implemented is advertised: `ls-refs`, `fetch`, `object-format=sha1`
-and `server-option`, so a client never asks for a shallow clone, a filter or a
-SHA-256 pack. And a `want` no ref reaches is refused with an `ERR` line — git's
-own `uploadpack.allowAnySHA1InWant=false` — because serving an object by
-guessing its id publishes what nobody published.
+and `server-option`. A client that is never told about shallow clones,
+partial-clone filters or SHA-256 packs never asks for them. A `want` for an
+object that no ref reaches is refused with an `ERR` line — the same rule as
+Git's `uploadpack.allowAnySHA1InWant=false` — because serving an object to
+whoever guesses its id would publish something nobody published.
 
-It routes nothing: which repository a URL names, and who may read it, belong to
-whoever mounts it. yaks.app mounts an app's deploy history at `<app>.git` and
-answers the app's own address — the URL from the browser's address bar — with a
-301 to it, so either is a clone:
+The module does no routing: which repository a URL names, and who is allowed to
+read it, belong to whatever mounts these two handlers. yaks.app mounts an app's
+deploy history at `<app>.git` and responds to a request for the app's own
+address — the URL you would type in a browser — with a 301 redirect to it, so
+either address can be cloned:
 
 ```sh
 git clone https://ada.yaks.app/recipes/
 git clone https://ada.yaks.app/recipes.git   # where the first one lands
 ```
 
-The query is what tells a clone from a page: `?service=git-upload-pack` is
-something no browser asks for, and git follows that first redirect and fetches
-from where it landed.
+The query string is what distinguishes a clone from a page request:
+`?service=git-upload-pack` is something no browser sends, and Git follows that
+first redirect and fetches from where it landed.
 
-For private repositories, the host must authenticate requests and enforce access
-before serving Git data. HTTP Basic authentication can be used to prompt Git
-clients for credentials; token validation belongs to the host.
+For a private repository, the server that mounts these handlers must
+authenticate the request and check access before calling them. HTTP Basic
+authentication is what prompts a Git client for credentials; validating the
+credentials is that server's job.
 
 ## Landing a branch
 
-`@yaks/git/land` is a pure git primitive, and `@yaks/git/tools` is that
-primitive as a tool, so `yak land` works in any checkout — the line opens the
-graph its config names, runs `land` in that same process, and lands where the
-person is standing:
+`@yaks/git/land` is a plain Git operation with no graph in it, and
+`@yaks/git/tools` exposes that operation as a tool, so `yak land` works in any
+checkout: the CLI opens the graph named in its config, calls `land` in that same
+process, and lands the checkout the person is standing in.
 
 ```sh
 yak land                            # fast-forward this branch into the base
-yak land --allow-revert=a.ts,b.ts   # …and vouch for those files' rewind
+yak land --allow-revert=a.ts,b.ts   # …and accept those files' rewind
 ```
 
-Every coordinate comes from git alone: the primary worktree is the shared
-checkout to merge into, and the branch it holds is the base. One invocation does
-at most one thing — fast-forward the branch into the base (then push, if the
-base has an upstream), or, if the base MOVED, rebase onto it and return WITHOUT
-merging, printing the diff it pulled in so the caller can re-gate and land
-again. ff-only is the compare-and-swap that serializes concurrent landers, and
-no gate is run or known about here.
+Every coordinate comes from Git alone: the primary worktree is the shared
+checkout to merge into, and the branch that checkout has checked out is the
+base. One invocation does at most one of two things — fast-forward the branch
+into the base (then push, if the base has an upstream), or, if the base has
+MOVED, rebase onto it and return WITHOUT merging, printing the diff it pulled in
+so the caller can re-run its tests and land again. The `--ff-only` merge is the
+compare-and-swap that serializes concurrent landers. No test suite is run here,
+and this operation knows of none.
 
 Before the fast-forward, `reverts` asks the two questions that catch a rebase
 which quietly rewinds the base: which files does `base...HEAD` change that no
 commit on the branch touched, and which files does it ADD lines to that land at
-content the path already held earlier in the base's history? Either is a revert
-nobody wrote, and the landing is refused, naming the files, the diff to read,
-and the flag that lands anyway. Only added lines can put content back, so a hunk
-that only takes lines away is a deletion however far back its result matches.
+content the path already held earlier in the base's history? Either one is a
+revert nobody wrote, so the landing is refused, naming the files, the diff to
+read and the flag that lands anyway. Only added lines can put old content back,
+so a hunk that only removes lines is a deletion however far back its result
+happens to match.
 
-`land` acts on the BOX rather than the graph: the checkout standing at
-`ctx.cwd`, which the host says and a command line's is where the person typed. A
-divergence comes back as a refusal, so the exit code says whether anything
-landed.
+`land` operates on the filesystem rather than on the graph: the checkout at
+`ctx.cwd`, which the caller supplies and which on a command line is the
+directory the person ran the command in. A diverged base comes back as a
+refusal, so the exit code tells you whether anything landed.
 
-## What is not here
+## What is not implemented
 
-No push, no delta compression, no shallow clone, and no negotiation — a `have`
-is subtraction, so a client still exchanging them is answered `NAK` and gets its
-pack when it says `done`. It keeps one branch per `ref` row and nothing that
-walks a reflog. And it writes no row joining a commit to what it was minted
-from: that word is the host's, written `beside` the moved ref.
+There is no `git-receive-pack` service, so nothing can be pushed to this server;
+there is also no delta compression, no shallow clone and no negotiation — a
+`have` is subtraction, so a client that is still negotiating is answered `NAK`
+and gets its pack once it sends `done`. There is one branch per `ref` row, and
+nothing here walks a reflog. And nothing here writes a row joining a commit to
+the thing it was built from: those rows are the application's, written through
+`beside` alongside the moved ref.
 
-`crypto.subtle` and `CompressionStream` are the platform APIs, so the same code
-runs on a server, in a worker and in a browser tab — and because they are async,
-so is writing an object.
+`crypto.subtle` and `CompressionStream` are the only platform APIs used, so the
+same code runs on a server, in a worker and in a browser tab — and because both
+are async, writing an object is async too.
 
-## Host checkouts and shared refs
+## Checkouts on one machine
 
-`@yaks/git/host` adds host-only `discover`, `checkoutAt`, and `createWorktree`.
-The portable object/HTTP entrypoint still type-checks without Deno. Load
-`checkoutDoc` when composing with transcripts: it excludes Git tree `entry`,
-which is a different vocabulary from transcript `entry`.
+`@yaks/git/host` adds `discover`, `checkoutAt` and `createWorktree`, which run
+`git` as a subprocess and therefore need Deno. They are kept out of the main
+entry point, which still type-checks with only the web platform in scope. Load
+`checkoutDoc` to get just the four components below — `repository`, `worktree`,
+`ref` and `checkout` — without the Git object components.
 
-- `repository{common}` identifies a local object database by canonical common
-  Git directory. Independent clones are different repositories.
-- `worktree{repository,path,gitdir,head,branch,managed}` is a checkout entity.
-  Its derived eid uses repository + canonical root path; branches and HEAD can
-  change without changing identity. Symlink aliases converge. Moving a checkout
-  creates a new identity; this deliberately avoids relying on reusable linked
-  admin-directory names. These are local-host identities, not portable clone
-  IDs.
-- Existing `ref{app,name,commit}` is reused: `app` can name the repository
-  entity, and `refEid(repository, fullName)` remains stable through branch
-  movement. Host observations add `oid` (raw target, including annotated tags),
-  `target` (symbolic full name), and `present`. Deleted refs are marked absent,
-  not tombstoned, so recreation reuses their identity. No competing branch
-  entity.
-- HEAD belongs to each worktree: `head` is its resolved object id, `branch`
-  points to the shared ref or is absent for detached HEAD. Unborn branches have
-  absent refs with stable IDs. Discovery refreshes refs on demand, not via a
-  watcher; it does not import every commit body into the graph.
-- `checkout` is durable creation intent on the prospective worktree entity:
-  requested base, pinned commit, branch, preparation state and failure message.
-  Creation is serialized per path in-process and through an OS advisory lock in
-  the repository across processes. The OS releases the lock on process death.
-  Retry reconciles Git success before graph completion. Git errors leave intent
-  visible; preparation never silently falls back to another checkout.
+Git is authoritative here; the graph holds an observation of it that can be
+refreshed at any time without changing anything.
 
-Creation defaults to detached HEAD at the source's committed HEAD. Dirty files
-are neither copied, committed, reset nor stashed. An optional short branch name
-creates a new branch. Existing checkouts must be discovered/attached explicitly;
-creation refuses to adopt arbitrary existing directories. No automatic merging,
-pruning or deletion happens when an agent settles. A lost managed directory is
-an error, not permission to recreate potentially lost uncommitted work.
+- `repository{common}` identifies a local object database by its canonical
+  common Git directory. Independent clones are different repositories.
+- `worktree{repository,path,gitdir,head,branch,managed}` is a checkout. Its
+  entity id is derived from the repository plus the canonical checkout root
+  path, so the branch and HEAD can change without changing its identity, and
+  paths that differ only by a symlink resolve to the same entity. Moving a
+  checkout gives it a new identity; this deliberately avoids depending on Git's
+  linked-worktree administrative directory names, which Git may reuse. These
+  identities are local to one machine, not portable between clones.
+- The existing `ref{app,name,commit}` component is reused: `app` may name the
+  repository entity, and `refEid(repository, fullName)` stays stable as the
+  branch moves. Observing a repository on this machine adds `oid` (the raw
+  target, which for an annotated tag is the tag object), `target` (the full name
+  a symbolic ref points at) and `present`. A deleted ref is marked absent rather
+  than deleted, so recreating it reuses the same entity. There is no separate
+  branch component competing with `ref`.
+- HEAD belongs to each worktree: `head` is its resolved object id, and `branch`
+  names the shared ref entity, or is absent for a detached HEAD. A branch that
+  has no commits yet gets a ref row marked absent, with the same stable id it
+  will keep once it exists. Discovery refreshes refs when it is called; there is
+  no watcher, and it does not import commit bodies into the graph.
+- `checkout` records the intent to create a worktree, stored on the entity that
+  worktree will have: the requested base, the commit that base resolved to, the
+  branch, how far preparation got, and the error if it failed. Creation is
+  serialized per path within the process, and across processes by an advisory
+  lock file in the repository, which the kernel releases if a process dies. A
+  retry reconciles the case where Git succeeded but the graph was not updated.
+  When Git fails, the intent row stays visible; preparation never quietly falls
+  back to a different checkout.
 
-Identity/locking assumes one host filesystem and a shared graph for cooperating
-harness processes. Filesystem moves and external Git mutations are observed on
-explicit discovery; there is no continuous reconciliation service.
+Creating a worktree defaults to a detached HEAD at the source checkout's
+committed HEAD. Uncommitted files in the source are not copied, committed, reset
+or stashed. Passing a short branch name creates a new branch instead. An
+existing checkout has to be discovered and attached explicitly; creation refuses
+to adopt a directory that is already there. Nothing is merged, pruned or deleted
+automatically when an agent finishes. A managed directory that has gone missing
+is an error, not permission to recreate it and lose whatever was uncommitted in
+it.
+
+Identity and locking assume one filesystem and one shared graph, used by
+cooperating processes on that machine. A checkout moved on disk, or changed by
+Git outside this package, is noticed the next time discovery runs; there is no
+background reconciliation.

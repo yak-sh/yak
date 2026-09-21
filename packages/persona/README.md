@@ -1,31 +1,38 @@
 # @yaks/persona
 
-Who is speaking, what they are for, and what they say.
+Who is acting, what they are responsible for, and the instructions they run
+with.
 
-- `person` — a human the graph knows, addressed by name.
-- `persona{home}` — a voice an agent wears: a doc whose body is the voice, filed
-  under the project it speaks for. A governed facet.
-- `role{state, surface, scope}` — what an agent wearing a persona is FOR: the
-  work it is responsible for, and whether it is running. When it wakes is a
-  [@yaks/wake](../wake) `wake` pointed at it, where it works is a
+```sh
+deno add jsr:@yaks/persona
+```
+
+- `person` — a human being the graph knows, addressable by name.
+- `persona{home}` — a set of instructions an agent runs with. The `doc` body on
+  the same entity IS the instruction text, and `home` is the project it works
+  for. The component is marked `governed`, so [@yaks/project](../project)'s
+  check reports a persona no project can reach.
+- `role{state, surface, scope}` — what an agent running a persona is responsible
+  for, and whether it is currently running. When it next runs is a
+  [@yaks/wake](../wake) `wake` pointing at it, where it works is a
   [@yaks/git](../git) `worktree`, and what it last decided is
-  [@yaks/kernel](../kernel)'s `decided` — a role does not keep a second copy of
-  any of them.
+  [@yaks/kernel](../kernel)'s `decided` — the role does not keep a second copy
+  of any of them.
 
-There is no verify/fix loop here. `verifier`, `fixer`, `finding`, `bug`, `nofix`
-and `noverify` were the fleet's review pipeline, and that pipeline is what
-stopped things being built; a persona needs none of it.
+There is no verify/fix loop in this package. `verifier`, `fixer`, `finding`,
+`bug`, `nofix` and `noverify` were the fleet's review pipeline, and that
+pipeline is what stopped things getting built; a persona needs none of it.
 
-An agent is not a person. Keeping the two words apart is what makes a byline
-(`created.by`) worth reading — and a role is neither: it is a job, which a
-persona is hired into.
+An agent is not a person, and a role is neither: it is a job that a persona is
+assigned to. Keeping the three apart is what makes an author stamp
+(`created.by`) worth reading.
 
-## The act: a persona, said
+## Rendering a persona
 
-A persona holds edges to the documents it stands on — `contains` for the ones it
-carries and `reads` for the ones it only names — and those, plus its own body,
-are one markdown document: the projection an agent reads at the top of its
-context.
+A persona links to the documents it is built from — a `contains` edge for each
+document included in full, a `reads` edge for each one mentioned by id only —
+and those documents, plus the persona's own body, render as a single markdown
+document: what an agent is given at the top of its context.
 
 ```ts
 import { voice, wear } from '@yaks/persona'
@@ -34,10 +41,13 @@ let worn = await wear(storage, vocab)('N-1')
 if (worn) console.log(voice(vocab)(worn))
 ```
 
+`wear(storage, vocab)(eid)` reads the persona and the documents its edges point
+at. `voice(vocab)(worn)` renders them:
+
 ```md
 # N-1 TaskMaster
 
-the voice itself
+the instructions themselves
 
 ---
 
@@ -58,39 +68,41 @@ Named here, not carried — ask the graph for one by id.
 
 Three things this shape decides:
 
-- **It answers TEXT, never a file.** Where the document lands — `AGENTS.md` in a
-  repo, a spawn's system prompt, a card in a browser — is the host's, and a
-  package that wrote files could only ever guess at one of them. That is also
-  why there is no `./effects` here: an effect would have to know that landing
-  place to be worth registering.
-- **A tier holds DOCS, not memories.** A memory is [@yaks/memory](../memory)'s
-  word and a goal is [@yaks/goal](../goal)'s; a persona carrying either renders
-  the same way, because the only thing this package asks of what it holds is a
-  `doc`. Nothing here restates another package's words.
-- **A carried persona folds in.** Its voice is carried like any other document
-  and what IT holds joins what this one holds, so a base persona reaches every
-  voice worn on top of it and nobody copies its text. A NAMED persona is only
-  named.
+- **It returns TEXT, and never writes a file.** Where the document goes —
+  `AGENTS.md` in a repo, the system prompt of a spawned agent, a card in a
+  browser — is the caller's decision, and a package that wrote files could only
+  guess at one of those. That is also why there is no `./effects` export here:
+  an effect would have to know that destination to be worth registering.
+- **What a persona links to is a `doc`, nothing more specific.** A memory is
+  [@yaks/memory](../memory)'s component and a goal is [@yaks/goal](../goal)'s; a
+  persona that links to either renders it the same way, because the only thing
+  this package requires of a linked entity is that it has a `doc`. Nothing here
+  restates another package's components.
+- **An included persona is folded in.** Its instruction text is included like
+  any other document, and the documents IT links to are added to the ones this
+  persona links to, so a base persona reaches every persona built on top of it
+  and nobody copies its text. A persona linked by `reads` is only listed by id.
 
-Order is the order somebody authored: an edge's `ord`, then the end it points
-at. The fleet's materializer sorted these by a warmth score that decays against
-the wall clock, so two documents nobody touched could swap places between
-renders — a file written from it went stale with no graph write behind it.
+The order is the order someone authored: an edge's `ord` column first, then the
+id of the entity it points at. The fleet's materializer used to sort these by a
+warmth score that decayed against the wall clock, so two documents nobody had
+touched could swap places between renders — a file written from it went stale
+with no graph write behind it.
 
-## Facets
+## Exports
 
-| subpath   | what a host takes                                             |
-| --------- | ------------------------------------------------------------- |
-| `.`       | `wear`, `voice`, the component names, the vocabulary document |
-| `./vocab` | the words                                                     |
-| `./tools` | `persona_read` — a persona, as the markdown an agent wears    |
+| subpath   | what it provides                                                      |
+| --------- | --------------------------------------------------------------------- |
+| `.`       | `wear`, `voice`, the component names, and the vocabulary document     |
+| `./vocab` | the component declarations alone                                      |
+| `./tools` | `persona_read` — a persona rendered as the markdown an agent is given |
 
-The two tier relations are borrowed, not coined: `contains` is
-[@yaks/task](../task)'s word and `reads` is [@yaks/kernel](../kernel)'s. A
-relation a composed vocabulary does not declare contributes nothing rather than
-throwing — a graph with no `contains` in it has a persona that carries nothing,
-which is a fair reading of that graph.
+The two edge relations are borrowed rather than invented here: `contains` is
+[@yaks/task](../task)'s and `reads` is [@yaks/kernel](../kernel)'s. A relation
+the composed vocabulary does not declare contributes nothing rather than
+throwing — a graph with no `contains` in it has a persona that includes no
+documents, which is a fair reading of that graph.
 
 ## Compatibility
 
-Deno, Node and the browser — it reaches no platform API.
+Deno, Node and the browser — it calls no platform API.

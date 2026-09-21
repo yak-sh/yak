@@ -1,8 +1,8 @@
-// Where a stored value LIVES: the `rules` facet a host takes
-// (`@yaks/blob/rules`). This is the facet that needs a database — it raises
-// the blob tables through the host's own connection before the rule that
-// writes to them — which is why the words are in ./vocab.ts, where a browser
-// can reach them and this file's SQL is nowhere in sight.
+// Where a stored value LIVES: the module a server imports from
+// `@yaks/blob/rules`. This is the one that needs a database — it creates the
+// blob tables through the server's own connection before returning the plugin
+// that writes to them — which is why the schema declarations are in ./vocab.ts,
+// where a browser can load them without this file's SQL coming with them.
 
 import type { Plugin } from '@yaks/graph'
 import type { Driver } from '@yaks/sqlite'
@@ -10,8 +10,9 @@ import type { Vocab } from '@yaks/vocab'
 import { blobs } from './plugin.ts'
 import { blobSchema, sqliteBlobs } from './sqlite.ts'
 
-/** Every body column this vocabulary marks `store: blob`, kept once in the
- * host's own SQLite file however many rows hold the same text. */
+/** The plugin for every body column this vocabulary marks `store: blob`,
+ * storing each distinct value once in the server's own SQLite file however
+ * many rows hold the same text. */
 export let rules = (host: { vocab: Vocab; sql: Driver }): Plugin[] => {
   for (let statement of blobSchema()) host.sql.exec(statement)
   return [blobs(host.vocab, sqliteBlobs(host.sql))]

@@ -1,44 +1,47 @@
-// The package as a graph plugin: the `ref` word, and the post-commit step that
-// mints a commit when a RELEASE lands.
+// The package as a graph plugin: the `ref` component, and the post-commit step
+// that writes a Git commit when a RELEASE lands.
 //
-// It needs nothing from the application, because everything it would have to
-// know about a release — what a release is called, where its manifest is, who
-// authored it, what clock it happened on, which stores its objects and branches
-// are in — is the one seam the factory takes ({@link Releases}). What is left
-// is git's: the objects, the branch, and the order they are written in.
+// It needs nothing from the application, because everything it would otherwise
+// have to know about a release — what a release is called, where its manifest
+// is, who authored it, what clock it happened on, which graphs and byte store
+// hold its objects and branches — is supplied by the one callback passed to
+// the factory ({@link Releases}). What is left is Git's: the objects, the
+// branch, and the order they are written in.
 //
-// It hooks `effect` and only `effect`. A commit is made ABOUT data that is
-// already durable — the release stands whether or not its history was written —
-// so a failure here costs that release its commit and nothing else, which is
-// exactly what the phase promises. It also means the same step is registered
-// straight onto a post-commit registry (@yaks/effects) by a host that has one:
-// {@link minting} is the step, and the plugin is the phase it is mounted on.
+// It hooks `effect` and only `effect`. A Git commit is written ABOUT data that
+// is already durable — the release stands whether or not its history was
+// written — so a failure here costs that release its Git commit and nothing
+// else, which is exactly what the phase promises. It also means an application
+// with its own post-commit hook registry (@yaks/effects) can register the same
+// step there directly: {@link minting} is the step, and the plugin is that step
+// plus the phase it is hooked on.
 
 import type { Bundle, Plugin, Tx } from '@yaks/graph'
 import { refDoc } from './comp.ts'
 import { commitOnto, type Landing, type Repo } from './refs.ts'
 
-/** A release read whole: what to commit, and the repository to commit it in. */
+/** A release, read in full: what to commit, and the repository to commit it
+ * in. */
 export type Released = Landing & { repo: Repo }
 
-/** How a host's releases become commits. */
+/** How an application's releases become Git commits. */
 export type Releases = {
-  /** the component a release wears — `deploy`, say */
+  /** the component that marks a bundle as a release — `deploy`, say */
   comp: string
   /**
-   * One committed bundle as a release to land, or `null` where there is
-   * nothing to commit: a bundle that is not a release, one whose manifest will
-   * not parse, or one this graph already holds a commit for. Everything the
-   * host knows and this package cannot — the manifest, the author, the clock,
-   * the stores — is read here.
+   * Turns one committed bundle into a release to land, or returns `null` when
+   * there is nothing to commit: a bundle that is not a release, one whose
+   * manifest will not parse, or one this graph already holds a commit for.
+   * Everything the application knows and this package cannot — the manifest,
+   * the author, the clock, the stores — is read here.
    */
   of: (b: Bundle, tx: Tx) => Promise<Released | null> | Released | null
 }
 
 /**
- * The step itself: land every release in a committed batch. A host with its
- * own post-commit registry registers this directly; {@link commits} is the
- * same step as a graph plugin.
+ * The step itself: land every release in a committed transaction. An
+ * application with its own post-commit hook registry calls this directly;
+ * {@link commits} is the same step wrapped as a graph plugin.
  */
 export let minting =
   (r: Releases) => async (bundles: Bundle[], tx: Tx): Promise<void> => {
@@ -50,8 +53,8 @@ export let minting =
   }
 
 /**
- * The git plugin: the `ref` word, and an `effect` hook that mints a commit for
- * every release the batch committed.
+ * The Git plugin: the `ref` component, and an `effect` hook that writes a Git
+ * commit for every release the transaction committed.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
@@ -62,9 +65,9 @@ export let minting =
  * // let g = graph({ storage, vocab, plugins: [commits({ comp: 'deploy', of })] })
  * ```
  *
- * The OBJECTS' words are not among its vocabulary: a host keeping them in a
- * store of their own loads {@link gitDoc} there, and this plugin's graph is
- * wherever the branches are.
+ * The Git object components are not part of this plugin's vocabulary: an
+ * application that keeps them in a store of their own loads {@link gitDoc}
+ * there, and this plugin's graph is wherever the branches are.
  */
 export let commits = (r: Releases): Plugin => {
   let mint = minting(r)

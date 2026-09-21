@@ -23,7 +23,7 @@
         "event": {
           "type": "string",
           "stamped": true,
-          "description": "what they called it"
+          "description": "the event name the sender gave it"
         },
         "payload": {
           "type": "string",
@@ -50,10 +50,10 @@
         "verified": {
           "type": "boolean",
           "stamped": true,
-          "description": "whether the sender's signature checked out — the same word @yaks/mail's `mail.verified` says"
+          "description": "whether the sender's signature verified — the same column name @yaks/mail uses in `mail.verified`"
         }
       },
-      "description": "an event another system delivered, kept as it arrived — the payload is the body it sent, not our reading of it"
+      "description": "an event another system delivered, kept as it arrived — the payload is the body that was sent, not a parsed version of it"
     }
   }
 }

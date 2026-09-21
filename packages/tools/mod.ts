@@ -1,14 +1,16 @@
 /**
- * @yaks/tools — a tool is a function from bundles to bundles, a CALL is the
- * record of having asked one, and this package is what keeps that record.
+ * @yaks/tools — a tool is a function that takes entity patches and returns
+ * entity patches; a `call` entity is the stored record of having asked for
+ * one. This package runs the function and keeps that record.
  *
- * A host invokes a tool DIRECTLY: `call()` writes the `call` entity, runs the
- * function named by `call.to` with the call's bundles and a host carrying the
- * CALLER's actor, and lands what it answered beside a `result{call, ms}`
- * entity whose id a declared rule's own emit derives. Nothing watches the
- * graph — a call somebody else wrote, or one wearing a wake, is found by
- * registering those same rules as effects (@yaks/effects `on`). See
- * ./runner.ts for the claim, the crash and the schedule.
+ * A caller invokes a tool directly: `call()` writes the `call` entity, runs
+ * the function named by `call.to` with the call's bundles and a context
+ * carrying the CALLER's identity, and applies what the function returned
+ * together with a `result{call, ms}` entity whose id is derived from the rule
+ * that emits it. Nothing polls the graph — a call another process wrote, or
+ * one deferred by a `wake` component, is picked up by registering those same
+ * rules as effects (@yaks/effects `on`). See ./runner.ts for the claim, crash
+ * recovery, and scheduling.
  *
  * @module
  */

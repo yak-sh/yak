@@ -4,21 +4,23 @@
 // They are deliberately different questions with different answers, because
 // conflating them is what makes a board shout.
 //
-// GATED is the alarm. `blocked{on}` says something OUTSIDE the graph has stopped
-// this — a vendor, a decision, a person who has not replied. Nobody here can
-// move it, so it is worth a mark on the row.
+// GATED is the alarm. `blocked{on}` records that something OUTSIDE the graph
+// has stopped this — a vendor, a decision, a person who has not replied. Nobody
+// here can move it, so it is worth a mark on the row.
 //
-// OPEN DEPS is not an alarm. A task with three unfinished `requires` children is
-// a task with three unfinished children: ordinary work, in progress, exactly as
-// it should be. It is a COUNT — "3 left" — and zero renders nothing at all.
-// Showing it in red would mean flagging every plan the moment somebody made one.
+// OPEN DEPS is not an alarm. A task with three unfinished `requires` children
+// is a task with three unfinished children: ordinary work, in progress, exactly
+// as it should be. It is a COUNT — "3 left" — and zero renders nothing at all.
+// Showing it in red would mean flagging every plan the moment somebody made
+// one.
 //
-// A child that is not a task cannot settle, so it counts as open: a task waiting
-// on a document is waiting until somebody removes the link.
+// A child that is not a task cannot settle, so it counts as open: a task
+// waiting on a document is waiting until somebody removes the link.
 //
-// Sync in, sync out: over a storage that answers immediately (a Map, an embedded
-// database) so does this, while an asynchronous one turns it into a promise.
-// Nothing in between has to know which.
+// Synchronous in, synchronous out: over a storage that answers immediately (a
+// Map, an embedded database) so do these functions, while an asynchronous
+// storage turns the answer into a promise. Nothing in between has to know
+// which.
 
 import type { Bundle, Eid, Storage, Tx } from '@yaks/graph'
 import { detached, each, then } from '@yaks/graph'
@@ -29,9 +31,9 @@ import { statusOf } from './status.ts'
 import { BLOCKED, CONTAINS, REQUIRES } from './comp.ts'
 
 /**
- * Is something outside the graph in the way? Reads the `blocked` facet, which is
- * never a status — a blocked task is still open work, and still shows up in
- * every query for open work.
+ * Is something outside the graph in the way? Reads the `blocked` component,
+ * which is never a status — a blocked task is still open work, and still shows
+ * up in every query for open work.
  *
  * ```ts
  * import { gated } from '@yaks/task'
@@ -44,8 +46,8 @@ export let gated = (b: Bundle): boolean => {
   return c != null && typeof c == 'object'
 }
 
-/** Which links count as work this task is waiting on, and which ladder reads a
- * child's status. */
+/** Which links count as work this task is waiting on, and which ladder a
+ * child's status is computed from. */
 export type DepOpts = {
   /** the relation tags to follow. Default: `requires` and `contains`. */
   relations?: string[]
@@ -53,9 +55,10 @@ export type DepOpts = {
   marks?: Mark[]
 }
 
-// The far ends of every edge of these relations leading away from `eid`,
-// deduplicated. An edge is a component, so "the links out of t1" is an ordinary
-// query — one per relation, folded so a synchronous storage stays synchronous.
+// The far ends of every edge with one of these relations leading away from
+// `eid`, deduplicated. An edge is a component, so "the links out of t1" is an
+// ordinary query — one per relation, folded so that a synchronous storage stays
+// synchronous.
 let kidsOf = (tx: Tx, eid: Eid, rels: string[]): Eid[] | Promise<Eid[]> => {
   let seen = new Set<Eid>()
   return then(
@@ -99,7 +102,7 @@ export let openDeps = (
     (kids) =>
       kids.length == 0 ? 0 : then(tx.get(kids), (bundles) => {
         // Counted by what HAS settled, so a child the storage does not hold —
-        // and therefore cannot be shown to have finished — stays counted.
+        // and which therefore cannot be shown to have finished — stays counted.
         let done = bundles.filter((b) => {
           let s = statusOf(b, marks)
           return s != null && settled(s, marks)
@@ -113,9 +116,10 @@ export let openDeps = (
  * Has this task settled AND finished its dependencies? Completion alone does
  * not release a parent while `requires` or `contains` children remain open.
  * Like {@link openDeps}, this counts direct far ends, not a recursive walk.
- * A missing entity or an entity without `task` is never done.
+ * A missing entity, or an entity without a `task` component, is never done.
  *
- * Sync storage returns a boolean; async storage returns a promise.
+ * Synchronous storage returns a boolean; asynchronous storage returns a
+ * promise.
  */
 export let done = (
   storage: Storage,

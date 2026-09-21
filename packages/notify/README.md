@@ -2,13 +2,16 @@
 
 How somebody is told.
 
-- `knock{target}` — a nudge pointed at a thing, with the words that rode along.
-- `subscription{actor, target, mode}` — watch it, or mute it.
-- `chat{actor, target}` — an open conversation with a thing, one per pair.
+- `knock{target}` — a nudge aimed at an entity, with the message that came with
+  it.
+- `subscription{actor, target, mode}` — whether an actor watches an entity or
+  mutes it.
+- `chat{actor, target}` — an open conversation with an entity, one per
+  actor/entity pair.
 
-A letter is [@yaks/mail](../mail)'s; a reminder is [@yaks/wake](../wake)'s. This
-is the rest of being told.
+A letter belongs to [@yaks/mail](../mail); a reminder belongs to
+[@yaks/wake](../wake). This package covers the rest of being notified.
 
 ## Compatibility
 
-Deno and Node — a JSON document, no runtime calls.
+Deno and Node — a JSON document, with no runtime calls.

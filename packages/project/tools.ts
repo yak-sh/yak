@@ -1,24 +1,24 @@
-// What an agent may ASK for here: the `tools` facet a host takes
-// (`@yaks/project/tools`) — the runs behind the `tool: true` declarations in
-// ./vocab.json. Both are CHECKS: tools whose verb is `check`, which is the
-// whole of what a "doctor" is (@yaks/tools ./check.ts).
+// The implementations of the tools declared with `tool: true` in
+// ./vocab.json, exported as `@yaks/project/tools` — the entry point a server
+// imports to register them. Both are CHECKS: tools whose verb is `check`,
+// which is all a "doctor" is (@yaks/tools ./check.ts).
 //
 // Two invariants, and both are about a portfolio quietly stopping being one:
 //
-// A BOARD IS ITS QUERY. ./guard.ts refuses an unroutable query at the door,
-// while whoever typed it is still there — but the door is not the only way a
-// query stops routing. The VOCABULARY moves: a column is renamed, a status
-// word retires, a component this host used to compose is gone. Every board
-// written against the old words is now a board that matches nothing and never
-// says why, which is exactly the failure the guard exists to prevent, arriving
-// from the other direction.
+// A BOARD IS ITS QUERY. ./guard.ts refuses an unroutable query as it is
+// written, while whoever typed it is still there — but that is not the only way
+// a query stops routing. The VOCABULARY moves: a column is renamed, a status
+// retires, a component this server used to load is gone. Every board written
+// against the old declarations now matches nothing and reports no error, which
+// is exactly the failure the precondition hook exists to prevent, arriving from
+// the other direction.
 //
-// GOVERNED WORK IS UNDER A PROJECT. `governed` is the kernel keyword a
-// component wears to say a project answers for its entities (@yaks/kernel):
-// a task, a memory, a design. One that is filed under no project and hangs off
-// no project's containment is work nobody's portfolio can see — it does not
-// show on a board, it is not in anybody's queue, and nothing ever says it was
-// dropped.
+// GOVERNED WORK IS UNDER A PROJECT. `governed` is the keyword a component
+// declares to mean that a project answers for the entities carrying it
+// (@yaks/kernel): a task, a memory, a design. One that is filed under no
+// project, and that no project reaches along a containment edge, is work
+// nobody's portfolio can see — it is on no board, in nobody's queue, and
+// nothing will ever report that it was dropped.
 
 import { and, present } from '@yaks/query'
 import { human } from '@yaks/id'
@@ -29,23 +29,23 @@ import type { Vocab } from '@yaks/vocab'
 import { BOARD, FILED, PROJECT } from './comp.ts'
 import { unroutable } from './guard.ts'
 
-/** What a config says to `@yaks/project`'s checks. */
+/** The configuration `@yaks/project`'s checks accept. */
 export type Options = {
-  /** which relation tags carry containment, for reading whether a project
-   * reaches a thing. The default is `contains` — @yaks/task's word, and the
-   * one a fleet graph uses — because a package cannot know what another
-   * package called the edge that means "part of". */
+  /** which relation tags mean containment, when working out whether a project
+   * reaches something. The default is `contains` — @yaks/task's tag, and the
+   * one the fleet graph uses — because a package cannot know what another
+   * package named the edge meaning "part of". */
   through?: string[]
 }
 
-/** The containment relations this host links with. */
+/** The containment relation tags assumed when configuration names none. */
 let CONTAINS = ['contains']
 
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
 // The components a project answers for, read off the loaded vocabulary rather
-// than listed here: a host that composes another governed word gets it watched
-// without touching this file.
+// than listed here: a server that loads another governed component gets it
+// checked without an edit to this file.
 let governedIn = (v: Vocab): string[] =>
   v.all.filter((name) => v.comp(name)?.keywords.governed === true)
 
@@ -83,9 +83,10 @@ let reached = async (
   return seen
 }
 
-/** The runs behind the tools ./vocab.json declares. The host's vocabulary is
- * what a board's query routes through and what says which words are governed,
- * so both checks are built against the words this host actually speaks. */
+/** The implementations of the tools ./vocab.json declares. The loaded
+ * vocabulary is what a board's query routes through, and what declares which
+ * components are governed, so both checks are built against the components this
+ * graph actually has. */
 export let runs = (
   host: { vocab: Vocab },
   options: Options = {},

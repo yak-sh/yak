@@ -1,6 +1,7 @@
-// The package as a graph plugin: the components, and the stamp a finished task
-// gets. What a task is FILED under, and the board that is a saved filter over
-// the filing, are @yaks/project's — and so is the guard over a board's query.
+// The package as a graph plugin: the components it declares, plus the hook that
+// keeps the author of a completion on the mark. What a task is FILED under, and
+// the board that is a saved filter over the filing, belong to @yaks/project —
+// and so does the guard over a board's query.
 
 import type { Plugin } from '@yaks/graph'
 import { completing } from './completion.ts'
@@ -8,8 +9,8 @@ import { taskDoc } from './comp.ts'
 
 /**
  * The task plugin: the `task`, `completed`, `cancelled` and `blocked`
- * components, the `requires` and `contains` relations, and the `precondition`
- * hook that stamps a completion with its moment and its author.
+ * components, the `requires` and `contains` relations, and a `precondition`
+ * hook that records who completed a task.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
@@ -18,20 +19,22 @@ import { taskDoc } from './comp.ts'
  * import { taskDoc, tasks } from '@yaks/task'
  *
  * let vocab = loadVocab([edgeDoc, taskDoc, mine], [edgeKeywords])
- * // let g = graph({ storage, vocab, plugins: [edges(vocab), tasks(vocab)] })
+ * // let g = graph({ storage, vocab, plugins: [edges(vocab), tasks()] })
  * ```
  *
- * Pass `marks` to add a rung to the status ladder — a graph that leases its
- * tasks reads a held lease as `wip`:
+ * The status ladder is not this plugin's to extend: a graph that leases its
+ * tasks reads a held lease as `wip` by passing its own `marks` list to the
+ * status readers, and to whoever checks a board's query
+ * (`projects(vocab, marks)`, @yaks/project).
  *
  * ```ts
- * import { MARKS, tasks } from '@yaks/task'
+ * import { MARKS } from '@yaks/task'
  *
- * // tasks(vocab, [...MARKS, { status: 'wip', comp: 'claim', settled: false }])
+ * // let marks = [...MARKS, { status: 'wip', comp: 'claim', settled: false }]
  * ```
  *
- * The status itself is not stored and not written. It is read off the marks —
- * see {@link https://jsr.io/@yaks/task/doc/~/derived | derived} for the
+ * The status itself is not stored and not written. It is computed from the
+ * marks — see {@link https://jsr.io/@yaks/task/doc/~/derived | derived} for the
  * database's reading of that rule and
  * {@link https://jsr.io/@yaks/task/doc/~/compute | compute} for the in-memory
  * one.

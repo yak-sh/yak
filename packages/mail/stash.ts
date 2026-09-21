@@ -1,4 +1,4 @@
-// The sender that sends nothing: it keeps the messages in a list.
+// The sender that sends nothing: it keeps the messages in an array.
 //
 // This is what a test uses, and it is also what a development environment
 // wants — a club's whole invitation flow runs end to end, and the letters pile
@@ -16,7 +16,7 @@ export type Stash = Sender & {
 
 /** How a stash behaves. */
 export type Kept = {
-  /** refuse every message with this reason, to exercise the bounce path */
+  /** reject every message with this reason, to exercise the bounce path */
   refuse?: string
 }
 

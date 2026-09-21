@@ -1,15 +1,16 @@
 import { dispatch, pool } from './pool.ts'
 // The daemon: a `created(entry)` effect over `react`. Every entry that lands
-// wakes one step over its transcript, and the steps of one transcript run one
-// after another — the step that asks the model appends entries, those wake the
-// step that runs the tool, and so on until a step finds nothing to do. Two
-// transcripts proceed side by side.
+// triggers one step over its transcript, and the steps of one transcript run
+// one after another — the step that asks the model appends entries, those
+// trigger the step that runs the tool, and so on until a step finds nothing to
+// do. Two transcripts proceed side by side.
 //
-// A step writes through the graph's own door, not the effect's `write`: each
-// step is a fresh batch at generation zero, so the chain is never cut short by
-// the registry's depth. The handler itself returns at once — the step is
-// queued, not awaited — so a batch is committed and cast before anything
-// reacts to it, and a slow model never holds a writer.
+// A step writes through the graph's own `apply()`, not the effect's `write`
+// callback: each step is a fresh batch at generation zero, so the chain is
+// never cut short by the registry's depth limit. The handler itself returns at
+// once — the step is queued, not awaited — so a batch is committed and
+// broadcast before anything reacts to it, and a slow model never blocks a
+// writer.
 
 import type { Comp, Eid, Graph } from '@yaks/graph'
 import type { Effects, Event } from '@yaks/effects'

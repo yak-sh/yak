@@ -40,7 +40,7 @@
         },
         "message_id": {
           "type": "string",
-          "description": "the Message-ID the world knows this letter by — written from what arrived, and what a reply threads on"
+          "description": "the Message-ID other mail systems know this letter by — written from what arrived, and what a reply threads on"
         },
         "verified": {
           "type": "boolean",
@@ -48,12 +48,12 @@
         },
         "in_reply_to": {
           "type": "string",
-          "description": "the Message-ID this letter answers, as the header spelled it — what arrives before `reply_to` can name an entity, and all a reply to a letter nobody kept ever has"
+          "description": "the Message-ID this letter answers, exactly as the header wrote it — what arrives before `reply_to` can name an entity, and all a reply to a letter nobody kept ever has"
         },
         "sent_id": {
           "type": "string",
           "stamped": true,
-          "description": "the id the sending service gave this letter when it took it — written by whoever sent it, and what a delivery report is looked up by"
+          "description": "the id the sending service returned when it accepted this letter — written by whoever sent it, and what a delivery report is looked up by"
         }
       }
     },
@@ -97,7 +97,7 @@
         "via": {
           "type": "string",
           "stamped": true,
-          "description": "how it went — the id the sender gave it back, or the address it went to"
+          "description": "how it went — the id the sender returned, or the address it went to"
         }
       }
     },
@@ -115,7 +115,7 @@
         "reason": {
           "type": "string",
           "stamped": true,
-          "description": "what went wrong, as the sender said it"
+          "description": "what went wrong, as the sender reported it"
         }
       }
     },
@@ -151,7 +151,7 @@
       "noun": "inbox",
       "verb": "list",
       "title": "What is waiting for me",
-      "description": "Every letter addressed to one reader and not yet archived, newest first — routed to them, written to them, or delivered to an address they wear. `●` is unread, `·` read, `×` archived. Archiving is the only thing that takes a letter out, so an empty list is one they emptied.",
+      "description": "Every letter addressed to one reader and not yet archived, newest first — routed to them, written to them, or delivered to an address they have. `●` is unread, `·` read, `×` archived. Archiving is the only thing that takes a letter out, so an empty list is one they emptied.",
       "input": {
         "who": {
           "type": "string",
@@ -164,7 +164,7 @@
         },
         "limit": {
           "type": "integer",
-          "description": "how many letters to answer with (default 50)"
+          "description": "how many letters to return (default 50)"
         }
       },
       "options": {
@@ -182,7 +182,7 @@
       "noun": "inbox",
       "verb": "archive",
       "title": "Hide it until it needs me again",
-      "description": "Take one item out of the inbox. Nothing is deleted and no history is lost — `inbox list --all` is the way back, and a later letter on the same thread arrives as its own item.",
+      "description": "Take one item out of the inbox. Nothing is deleted and no history is lost — `inbox list --all` shows it again, and a later letter on the same thread arrives as its own item.",
       "input": {
         "item": {
           "type": "string",
@@ -228,7 +228,7 @@
       "noun": "mail",
       "verb": "reply",
       "title": "Answer it",
-      "description": "Write a reply threaded on one letter and ask for it to go. It is addressed to the FAR side — an arrival's author, your own sent letter's recipient — from the desk the original used, with the subject prefixed `Re:`. Answering an arrival archives it: a thread you have replied to is not one waiting on you. The configured sender carries it; a graph that names none records the letter and never sends it.",
+      "description": "Write a reply threaded on one letter and request that it be sent. It is addressed to the FAR side — an arrival's author, or your own sent letter's recipient — from the address the original used, with the subject prefixed `Re:`. Answering an arrival archives it: a thread you have replied to is not one waiting on you. The configured sender carries it; a graph that names none records the letter and never sends it.",
       "input": {
         "letter": {
           "type": "string",
@@ -260,7 +260,7 @@
       "noun": "mail",
       "verb": "send",
       "title": "Write a letter",
-      "description": "Mint a letter and ask for it to go. `to` is an address, or the id of somebody in this graph; an address nobody here wears becomes an `email` entity, so the address book grows by use. `from` defaults to the address whoever is asking wears. The configured sender carries it and settles `delivered` or `bounced` back onto the letter.",
+      "description": "Create a letter and request that it be sent. `to` is an address, or the id of somebody in this graph; an address nobody here has becomes an `email` entity, so the address book grows by use. `from` defaults to the address whoever is asking has. The configured sender carries it and writes `delivered` or `bounced` back onto the letter.",
       "input": {
         "to": {
           "type": "string",
@@ -276,7 +276,7 @@
         },
         "from": {
           "type": "string",
-          "description": "the address it is from (default: the asker's own)"
+          "description": "the address it is from (default: the caller's own)"
         },
         "about": {
           "type": "string",
@@ -305,7 +305,7 @@
       "noun": "mail",
       "verb": "check",
       "title": "Check the mail",
-      "description": "Every letter that arrived carries a sender. A letter with the Message-ID the world knows it by and no `from` is one nobody can ever answer — the reply has no address to go to.",
+      "description": "Check that every letter that arrived carries a sender. A letter that has a Message-ID but no `from` is one nobody can ever answer — the reply has no address to go to.",
       "input": {},
       "readOnly": true
     }

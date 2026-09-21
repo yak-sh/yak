@@ -6,18 +6,18 @@ and persists the entries.
 
 ## Storage and limitations
 
-The package returns bundles; it does not persist them. Compose session
+The package returns bundles; it does not persist them. Compose the session
 vocabulary for `entry` and `content`, and optionally `@yaks/blob` for
-content-addressed storage of text. The host decides when to load files and admit
-their snapshots.
+content-addressed storage of text. The calling program decides when to load
+files and when to admit their snapshots.
 
 The file loader records disk provenance. It does not resolve graph references
 from generated file headers. `revision` hashes one text snapshot, not an entire
 provider request, and does not imply provider cache validity.
 
-The host loader is POSIX-oriented. The core has no filesystem dependency.
-Snapshot immutability is an admission convention, not a graph write guard:
-callers with graph write access can still edit historical entries.
+The file loader in `./host` is POSIX-oriented. The core has no filesystem
+dependency. Snapshot immutability is an admission convention, not a graph write
+guard: callers with graph write access can still edit historical entries.
 
 ## Construct an entry
 

@@ -33,20 +33,20 @@ runs wherever `fetch` does.
 
 Every request streams and is read to its end; only the completed items come back
 as neutral items. `store` is `false` unless asked for: the Codex backend refuses
-anything else. What the API keeps about a reply is this package's own comp,
-`openai{response_id}` (`openaiDoc`, stamped by the model's `mark`); with `store`
-on, `anchor` reads it back so the next request continues from the reply with
-only what followed, and without it `anchor` answers nothing and a caller replays
-the conversation.
+anything else. What the API keeps about a reply is this package's own component,
+`openai{response_id}` (`openaiDoc`, written by the model's `mark`); with `store`
+on, `anchor` reads it back so that the next request continues from that reply
+and sends only what followed it. Without `store`, `anchor` returns nothing and
+the caller replays the conversation.
 
-A refusal the API named, a missing credential, and a transport that never
-connected are `ModelError`s. Anything else thrown is a defect.
+A refusal the API named, a missing credential, and a connection that was never
+established are all `ModelError`s. Anything else thrown is a bug.
 
 ## Provider-native transport
 
 `responses` adapts the shared `transport` to neutral model items. A caller that
 needs encrypted reasoning replay, usage, rate limits, unknown provider events,
-or partial failure evidence can use that same wire directly:
+or the details of a partial failure can use that same HTTP transport directly:
 
 ```ts
 import { credential, transport } from '@yaks/openai'
@@ -81,16 +81,16 @@ later runs, and hides credential-loader exception messages. It is not a general
 PII filter. Observation vocabulary is not part of this package.
 
 The native transport defaults to two bounded retries for credential loading and
-for every transient wire failure — a connection that never landed, a body that
-dropped, a stream that ended with no completion, a 5xx or 429, and any fault
-whose provider `code` names capacity (`server_is_overloaded`, `server_error`,
-`overloaded`, `overloaded_error`, `rate_limit_exceeded`) whatever its status.
-Auth and validation refusals fail fast. `Retry-After` extends the backoff, up to
-60s. One refresh on 401 when supplied. `retries` and `pause` configure the
-backoff. `shape` replaces the default request shaping for compatible providers;
-otherwise requests always stream, default to `store: false`, and request
-encrypted reasoning. `reach()` probes `/models` with a five-second timeout: any
-HTTP answer proves connectivity, not authorization.
+for every transient HTTP failure — a connection that was never established, a
+body that was cut off, a stream that ended with no completion, a 5xx or 429, and
+any failure whose provider `code` indicates capacity (`server_is_overloaded`,
+`server_error`, `overloaded`, `overloaded_error`, `rate_limit_exceeded`)
+whatever its status. Auth and validation refusals fail fast. `Retry-After`
+extends the backoff, up to 60s. One refresh on 401 when supplied. `retries` and
+`pause` configure the backoff. `shape` replaces the default request shaping for
+compatible providers; otherwise requests always stream, default to
+`store: false`, and request encrypted reasoning. `reach()` probes `/models` with
+a five-second timeout: any HTTP answer proves connectivity, not authorization.
 
 Native failures are `ResponseError`s with a stable `kind` and optional provider
 `code` (the error body's or event's `code`, or its `type` when the code is

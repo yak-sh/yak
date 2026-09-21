@@ -4,17 +4,17 @@
 // ENTITY is deleted takes its locks with it (`death: 'release'` in the
 // vocabulary). What neither covers is a lock naming a session the graph has no
 // entity for at all — a holder that was never committed, or was removed on
-// another store — so the graph says somebody is working on a document that
-// nobody is working on. Nothing expires on its own (a lease with a timeout
+// another store — so the graph reports that somebody is working on a document
+// that nobody is working on. Nothing expires on its own (a lease with a timeout
 // would have to be renewed, and a worker that is merely thinking hard would
-// lose its lock mid-edit), so the correction happens at the one moment there is
-// a fresh, honest answer available: start-up.
+// lose its lock mid-edit), so the correction happens at the one moment a fresh,
+// reliable answer is available: start-up.
 //
 // A session that is merely over — its transcript settled — still holds what it
 // holds. Letting go is the rewind's business (D-35040), not a sweep's.
 //
-// The universe read here is exactly the locks and the sessions holding them,
-// never the whole graph: locks are few by nature, since only live work holds
+// What is read here is exactly the locks and the sessions holding them, never
+// the whole graph: locks are few by nature, since only work in progress holds
 // one. It is idempotent by construction — a freed lock is gone, so the next
 // start-up finds nothing to do.
 

@@ -1,11 +1,11 @@
-// What a host DOES about a dream: the `effects` facet
-// (`@yaks/dreaming/effects`) — two watches that open one desk on a dream that
-// has come back, and nothing at all where no desk was named.
+// What a server DOES about a dream, exported as `@yaks/dreaming/effects`: two
+// watches that open one session on a dream that has come due, and nothing at
+// all when the configuration names no session to open.
 //
-// The desk is the reason this facet takes OPTIONS. Opening one means asking a
-// provider, at an effort, in a voice — an account, a model, a persona that
-// exists on THIS box — and none of that is a fact about the graph. So the
-// config names what opens and this package says when:
+// That session is why this export takes OPTIONS. Opening one means asking a
+// provider, at an effort, with a persona — an account, a model and a persona
+// that exist on THIS machine — and none of that is a fact about the graph. So
+// the configuration names what to open and this package decides when:
 //
 // ```json
 // { "use": "@yaks/dreaming",
@@ -18,30 +18,32 @@
 //             "rest": "1h" } }
 // ```
 //
-// A host that names no desk gets no watch, which is what a graph that only
-// KEEPS dreams wants — a reading list, a page of standing intentions — rather
-// than a transcript opening on a box with no agent on it.
+// A configuration that names no `desk` registers no watches, which is what a
+// graph that only STORES dreams wants — a reading list, a page of standing
+// intentions — rather than a session opening on a machine with no agent on it.
 //
-// `rest` is read at compose time on purpose: a recurrence this box cannot
-// read would otherwise be a dream that never rests, one desk per stir, and the
-// place to find that out is the boot rather than the bill. It is SAID at the
-// boot rather than thrown there — config that is missing or malformed never
-// stops a host coming up — and this plugin then does nothing, which is what a
-// desk that would open on every stir must not do.
+// `rest` is parsed when the plugin is composed, deliberately: a recurrence
+// this machine cannot parse would otherwise mean a dream that never rests and
+// a session opened on every trigger, and boot is a cheaper place to discover
+// that than the bill. It is reported at boot rather than thrown — missing or
+// malformed configuration never stops the server coming up — and the plugin
+// then registers nothing, which is the safe outcome for a session that would
+// otherwise open every time.
 
 import type { Watch } from '@yaks/effects'
 import { next } from '@yaks/wake'
 import { type Desk, watches } from './desk.ts'
 
-/** What a config says to this plugin. */
+/** The configuration this plugin accepts. */
 export type Options = {
-  /** what opens on a dream that has come back; none, and none opens */
+  /** the session to open on a dream that has come due; omitted, none opens */
   desk?: Desk
   /** how long a dream rests afterwards — a @yaks/wake recurrence */
   rest?: string
 }
 
-/** The watches, where a desk was named. */
+/** The watches to register, when the configuration named a session to
+ * open. */
 export let effects = (_host: unknown, options: Options = {}): Watch[] => {
   let { desk, rest } = options
   if (!desk) return []

@@ -6,22 +6,23 @@
 //   "remind me every two hours" means "on the even hours".
 //
 //   A CRON LINE — `0 9 * * 1-5`, `@daily`. It names positions on a calendar,
-//   so it lands at nine whatever time you wrote it. Parsed by croner, which is
-//   dependency-free and runs unchanged in a browser, a Worker and a server —
-//   the one thing here worth not hand-rolling, since a cron parser is all
-//   edges (step ranges, day-of-week vs day-of-month, month names).
+//   so it lands at nine whatever time of day you wrote it. Parsed by croner,
+//   which has no dependencies and runs unchanged in a browser, a Worker and a
+//   server — the one thing here worth not hand-rolling, since a cron parser is
+//   all edge cases (step ranges, day-of-week vs day-of-month, month names).
 //
-// Cron is read in UTC unless its last word names an IANA zone, for example
+// Cron is read in UTC unless its last field is an IANA time zone, for example
 // `0 9 * * 1-5 America/New_York`, or the caller supplies a default. The zone
-// travels with `every`, without adding a fifth column to `wake`. Croner's
+// is stored in `every` itself, so `wake` needs no fifth column. Croner's
 // calendar uses Intl, available in Deno and workerd without a build step.
-// A stored schedule is read by a server, a Worker in another region, or a
-// browser tab on a plane. A recurrence that answered a different instant per
-// reader would not be one schedule.
+// A stored schedule may be read by a server, by a Worker in another region, or
+// by a browser tab on a plane. A recurrence that produced a different instant
+// per reader would not be one schedule.
 //
-// A recurrence that cannot be read is `null`, never a throw and never a
-// guess: a wake with an unreadable `every` still fires once, on its `at`, and
-// then stops. Loud beats silent, and stopped beats a storm.
+// A recurrence that cannot be parsed returns `null`, never a throw and never a
+// guess: a wake with an unparseable `every` still fires once, on its `at`, and
+// then stops. A visible failure beats a silent one, and stopping beats firing
+// repeatedly.
 
 import { Cron } from 'croner'
 
@@ -36,7 +37,7 @@ let MS: Record<string, number> = {
   w: 604_800_000,
 }
 
-// The spelled-out units, folded onto the same letters.
+// The units written out in full, mapped onto the same letters.
 let WORDS: Record<string, string> = {
   sec: 's',
   secs: 's',
@@ -61,8 +62,8 @@ let WORDS: Record<string, string> = {
 let DURATION = /^(?:every\s+)?(\d+)?\s*([a-z]+)$/
 
 /**
- * A recurrence read as a fixed length of time, in milliseconds — `null` when
- * it is a cron line, or nothing this grammar knows.
+ * A recurrence parsed as a fixed length of time, in milliseconds — `null` when
+ * it is a cron line, or anything this grammar does not accept.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -82,9 +83,10 @@ export let span = (every: string): number | null => {
   return ms > 0 && Number.isFinite(ms) ? ms : null
 }
 
-// Five calendar fields (or a nickname), optionally followed by a zone. Croner
-// also accepts seconds, years and ISO instants; those are not `every` spellings.
-// In particular, a sixth numeric field must never masquerade as a zone.
+// Five calendar fields (or an `@` shorthand), optionally followed by a time
+// zone. Croner also accepts seconds, years and ISO instants; those are not
+// valid in `every`. In particular, a sixth numeric field must never be read as
+// a time zone.
 let cron = (every: string, tz: string): Cron | null => {
   let fields = every.trim().split(/\s+/)
   let count = fields[0].startsWith('@') ? 1 : 5
@@ -117,9 +119,10 @@ let cron = (every: string, tz: string): Cron | null => {
  * assertEquals(after('@hourly', t, t), Date.parse('2026-01-01T10:00:00Z'))
  * ```
  *
- * Cron follows the named zone's calendar. At a spring DST gap, a missing
- * local time moves forward by the gap; a repeated fall time occurs once,
- * at its first occurrence. These are Croner's existing calendar semantics.
+ * Cron follows the named time zone's calendar. At a spring DST gap, a local
+ * time that does not exist moves forward by the gap; a local time that occurs
+ * twice in autumn fires once, at the first occurrence. These are Croner's
+ * existing calendar semantics.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -134,10 +137,11 @@ let cron = (every: string, tz: string): Cron | null => {
  *
  * @param every the recurrence: a duration, a cron line, or a `@` shorthand
  * @param from the instant a duration counts from (a cron line ignores it)
- * @param now the moment to land past
- * @param tz the default zone for a cron line without a trailing zone (`UTC`)
- * @returns the instant, in epoch milliseconds, or `null` if `every` is
- * unreadable
+ * @param now the moment the result must be strictly after
+ * @param tz the default time zone for a cron line with no trailing zone
+ * (`UTC`)
+ * @returns the instant, in epoch milliseconds, or `null` if `every` cannot be
+ * parsed
  */
 export let after = (
   every: string,

@@ -1,17 +1,20 @@
 /**
- * @yaks/render owns renderer selection and the verbs a bundle offers. A view
- * walks role-rightmost (Board.List.Tile → List.Tile → Tile), applying an alias
- * at every step; within a step, more query clauses win and registration order
- * breaks ties. A true catch-all scores 0.5. No host is imported here.
+ * @yaks/render selects which renderer draws a bundle, and lists the actions a
+ * bundle offers. A view name is tried from the right (Board.List.Tile →
+ * List.Tile → Tile), applying any alias at each step; within one step, the
+ * registration whose query has the most clauses wins, and registration order
+ * breaks ties. A catch-all `true` scores 0.5. No rendering backend is imported
+ * here.
  *
  * Editors use this same registry. Pass {comp, col} to resolve and it matches
- * a bundle-shaped projection of that column's declared schema instead of the
- * entity: parse('.column.type=string') selects a string editor. The renderer
- * still receives the original bundle and that context, so it knows the value
- * and where a patch belongs. Column queries and entity queries describe
- * different subjects; register them under appropriate views. See column.ts
- * for the four queryable schema fields. editors(vocab) supplies the portable
- * Edit family; properties(vocab) lays out a component through that registry.
+ * against a bundle-shaped projection of that column's declared schema rather
+ * than against the entity: parse('.column.type=string') selects a string
+ * editor. The renderer still receives the original bundle and that context, so
+ * it knows both the value and where a patch belongs. Column queries and entity
+ * queries describe different subjects; register them under separate view
+ * names. See column.ts for the four queryable schema fields. editors(vocab)
+ * supplies the portable Edit family; properties(vocab) lays out a whole
+ * component through that registry.
  *
  * A missing view returns undefined unless a matching JSON view is registered.
  * An unnamed request considers the configured views (all by default).
@@ -94,7 +97,8 @@ export function define<R extends Registration, A = Action, E = Bundle>(
   return { ...options, renderers: [...renderers] }
 }
 
-/** Prepend a host overlay to this registry; earlier rows win equal scores. */
+/** Prepend an overlay of renderers to this registry; earlier rows win equal
+ * scores. */
 export let extend = <R extends Registration>(
   registry: Selection<R>,
   renderers: readonly R[],

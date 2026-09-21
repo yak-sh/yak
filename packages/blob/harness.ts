@@ -3,9 +3,9 @@
 // long body kept in the blob store, which is the whole distinction this package
 // exists to make.
 //
-// The store is @yaks/sqlite over an in-memory database, which is how an
+// Storage is @yaks/sqlite over an in-memory database, which is how an
 // application composes this package: the adapter owns the rows, the graph owns
-// the rules, this package moves the long values out of the way.
+// the rules, and this package moves the long values out of the way.
 
 import { Database } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -51,7 +51,8 @@ let doc: VocabDoc = {
       kind: true,
       properties: { name: {} },
     },
-    // a component with no body column at all, to prove the swap is per column
+    // a component with no body column at all, to prove the substitution is
+    // made per column
     tag: {
       component: true,
       type: 'object',

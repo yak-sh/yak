@@ -1,11 +1,11 @@
-// The serving words, and only the words: the `vocab` facet a host takes
-// (`@yaks/model/vocab`). It reaches no storage, no SQL and no runtime, so a
-// browser tab loading this vocabulary loads nothing else.
+// The component declarations, and nothing else: the module a server or a
+// browser page imports at `@yaks/model/vocab`. It reaches no storage, no SQL
+// and no runtime, so a browser tab loading this vocabulary loads nothing else.
 //
-// What a reply CARRIES is said elsewhere: a `tool` is @yaks/tools's word and an
-// `artifact` is @yaks/blob's. A host that wants them composes those packages —
-// that is what a plugin list is for. Saying them here as well would give one
-// word two homes, and `loadVocab` refuses that.
+// What a reply CARRIES is declared elsewhere: `tool` belongs to @yaks/tools and
+// `artifact` to @yaks/blob. An application that wants them composes those
+// packages in — that is what a plugin list is for. Declaring them here as well
+// would declare one component in two places, which `loadVocab` rejects.
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }

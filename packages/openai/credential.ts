@@ -8,10 +8,11 @@
 // Codex credential run out (a sign-in nothing but a person can renew, and
 // every spawn failing `credential unavailable` until they do) by reading one
 // file on one box against that box's clock. That is a deployment's health, not
-// this package's invariant: which file, whose box, and what to do about it are
-// all the host's, and a package that reads neither file nor environment cannot
-// ask. A deployment that wants the warning asks its own `check` (a tool whose
-// verb is `check`, @yaks/tools), where the answer is about the box it runs on.
+// this package's concern: which file, which machine, and what to do about it
+// all belong to the deployment, and a package that reads neither a file nor the
+// environment cannot find out. A deployment that wants the warning implements
+// its own `check` (a tool whose verb is `check`, @yaks/tools), where the answer
+// is about the machine it runs on.
 
 /** A bearer and the endpoint it is good for. */
 export type Credential = {

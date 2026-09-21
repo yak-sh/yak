@@ -1,19 +1,20 @@
 /**
- * The base words a graph of work wears: the spine (`entity`) and the marks
- * every entity may carry — who made it and when (`created`, `updated`), what
- * was decided about it (`proposed`, `decided`, `quarantined`), what it is
- * attached to (`comment`, `image`, `favorite`) — plus the
- * relation tags an edge says (`about`, `reads`, `references`, `supersedes`, …).
+ * The components most graphs of work need: the `entity` row every entity has,
+ * the marks recording what happened to a thing and who did it (`created`,
+ * `updated`, `proposed`, `decided`, `quarantined`), the things that attach to
+ * an entity (`comment`, `image`, `favorite`), and the tags that give an edge
+ * its meaning (`about`, `reads`, `references`, `supersedes`, …).
  *
- * It ships almost no machinery: a vocabulary document, the four keywords that
+ * It ships almost no code: a vocabulary document, the three keywords that
  * describe what the core meta-model does not (see {@link kernelKeywords}), and
- * the one thing the spine implies — the human id (`T-37580`) a person types,
- * addressed back to the entity that wears that number (see {@link ids}).
+ * the one thing the `entity` row implies — resolving the id a person types
+ * (`T-37580`) to the entity carrying that number (see {@link ids}).
  *
- * Who signs a write no door authenticated is NOT here and is not a name: it is
- * the `process` row this run wrote (@yaks/process `started`), because a run of
- * a program is not a singleton and two `yak` lines over one file are two
- * writers.
+ * Who a write is signed as is not here, and it is not a name out of a config
+ * file: a write that did not arrive through an authenticated HTTP or MCP
+ * request is signed as the `process` row this run wrote about itself
+ * (@yaks/process `started`), because a program that runs twice is two writers —
+ * two `yak` commands over one database file are two of them.
  */
 export { KERNEL_URI, kernelKeywords } from './keywords.ts'
 export { kernelDoc, marksDoc, spineDoc } from './vocab.ts'

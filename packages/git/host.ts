@@ -1,13 +1,23 @@
-/** Host Git checkouts. Git is authoritative; the graph is an idempotent observation.
- * Kept off the portable object/HTTP entrypoint: these operations require a host.
- */
+// Git checkouts on the machine this process runs on: find one, record what Git
+// reports about it, and create a new worktree.
+//
+// Git is authoritative here. The graph holds an observation of what Git
+// reports, and writing that observation again changes nothing, so discovery
+// can be run at any time. These functions run `git` as a subprocess, so they
+// are kept out of ./mod.ts, which type-checks with only the web platform in
+// scope.
+
 import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
 import { refEid } from './refs.ts'
 
 export { checkoutDoc } from './checkout_vocab.ts'
 
+/** The entity id of a repository, derived from its canonical common Git
+ * directory. */
 export let repositoryEid = (common: string): string =>
   derivedEid('repository|' + common)
+/** The entity id of a checkout, derived from its repository and its canonical
+ * root path. */
 export let worktreeEid = (repository: string, path: string): string =>
   derivedEid('worktree|' + repository + '|' + path)
 
@@ -30,7 +40,8 @@ let git = async (cwd: string, args: string[], optional = false) => {
 let row = async (g: Graph, eid: string) =>
   (await g.storage.tx((tx) => tx.get([eid])))[0]
 let canonical = async (path: string): Promise<string> => {
-  // Existing parents are canonicalized even before a new checkout exists.
+  // The parent directories that do exist are canonicalized, so a path can be
+  // canonicalized before the checkout at the end of it has been created.
   try {
     return await Deno.realPath(path)
   } catch (e) {
@@ -48,7 +59,8 @@ let canonical = async (path: string): Promise<string> => {
   }
 }
 
-/** Discover a checkout and refresh shared refs. Deleted refs remain historical rows. */
+/** Find the checkout containing `cwd`, and update the repository's refs from
+ * Git. A ref that Git no longer has keeps its row, marked absent. */
 export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
   let path = await Deno.realPath(
     (await git(cwd, ['rev-parse', '--show-toplevel']))!,
@@ -91,7 +103,8 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
       },
     })
   }
-  // Unborn branches still have an identity even though no shared ref exists yet.
+  // A branch with no commits yet still gets an entity, even though Git has no
+  // ref for it.
   if (branch && !found.has(refEid(repository, branch))) {
     let id = refEid(repository, branch)
     found.add(id)
@@ -127,7 +140,8 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
     },
   }
   changes.push(tree)
-  // No timestamp churn or graph notifications when Git has not changed.
+  // Write only the rows whose values actually changed, so that discovering an
+  // unchanged checkout updates no timestamps and notifies nobody.
   let previous = await g.storage.tx((tx) =>
     tx.get(changes.map((b) => b.entity.eid))
   )
@@ -148,10 +162,11 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
 }
 
 export type CheckoutRequest = { path: string; base?: string; branch?: string }
-/** Retry-safe creation. Existing paths must be checkouts of the same repository.
- * Detached by default; base is resolved to a commit, never dirty working files.
- * Git's own worktree/ref locks arbitrate concurrent processes.
- */
+/** Create a worktree, safely repeatable after a failure. A path that already
+ * exists must be a checkout of the same repository. HEAD is detached unless a
+ * branch is named, and the base is resolved to a commit, so uncommitted files
+ * are never copied. Git's own worktree and ref locks settle races between
+ * processes. */
 let create = async (g: Graph, source: string, request: CheckoutRequest) => {
   let home = await discover(g, source)
   let repository = String((home.worktree as Comp).repository)
@@ -222,7 +237,8 @@ let create = async (g: Graph, source: string, request: CheckoutRequest) => {
   try {
     await git(source, args)
   } catch (failure) {
-    // A rival or a crash after git add may already have completed this operation.
+    // Another process, or a crash after `git worktree add` succeeded, may have
+    // already done this; check before reporting a failure.
     try {
       let current = await discover(g, path)
       let c = current.worktree as Comp
@@ -250,7 +266,8 @@ let create = async (g: Graph, source: string, request: CheckoutRequest) => {
   return (await row(g, current.entity.eid))!
 }
 
-/** Outside Git is an ordinary workspace. Explicit creation always uses strict discovery. */
+/** The checkout containing `cwd`, or undefined when `cwd` is not inside one.
+ * Creating a worktree always goes through `discover`, which refuses that. */
 export let checkoutAt = async (
   g: Graph,
   cwd: string,
@@ -261,8 +278,9 @@ export let checkoutAt = async (
   return discover(g, cwd)
 }
 
-// Serialize same-path requests within the host, including distinct graph clients.
-// Across processes Git's locks and the durable intent provide recovery.
+// Serialize requests for the same path within this process, including ones
+// from different graph clients. Across processes, Git's own locks and the
+// stored `checkout` row are what allow recovery.
 let pending = new Map<string, Promise<unknown>>()
 export let createWorktree = async (
   g: Graph,
@@ -272,8 +290,9 @@ export let createWorktree = async (
   let path = await canonical(request.path)
   let before = pending.get(path) ?? Promise.resolve()
   let run = before.catch(() => {}).then(async () => {
-    // Advisory OS lock survives process contention; kernel releases it on crash.
-    // Leave lock files in place: unlinking them races waiting processes.
+    // An advisory lock file holds across processes, and the kernel releases it
+    // if this one dies. The lock files are left in place: unlinking one races
+    // with the processes waiting on it.
     let common = await Deno.realPath(
       (await git(source, [
         'rev-parse',

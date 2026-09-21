@@ -1,6 +1,6 @@
-// Reading the log back: the recent page, newest first, and the latency
-// distribution per door and tool. This is a debugging door, not a bulk export,
-// so the page clamps at a hard cap and cohorting happens inside that window.
+// Reading the log back: a page of recent calls, newest first, and the latency
+// distribution per source and tool. This is for debugging, not bulk export, so
+// a page is clamped to a hard maximum and grouping happens within that window.
 
 import type { Driver, Param } from './driver.ts'
 import { TABLE } from './ddl.ts'
@@ -24,9 +24,10 @@ let clause = ({ since, only }: Filter) => {
 }
 
 /**
- * Newest first, errors folded into counted cohorts. `limit` clamps to
- * [1, {@link PAGE}], 50 when absent. The whole cap is read and cohorted before
- * slicing, so a crash's count is right even when its copies outnumber the page.
+ * Newest first, with errors grouped into counted cohorts. `limit` is clamped to
+ * [1, {@link PAGE}], and defaults to 50. The full window is read and grouped
+ * before the page is sliced off, so a crash's count is correct even when its
+ * copies outnumber the page.
  */
 export let recent = (
   db: Driver,

@@ -1,11 +1,11 @@
 // The refusal. Shaped like every other refusal a graph throws — an Error with a
 // name, a message, and the facts as fields — so a caller reads why rather than
-// a translated summary of why, and a door can turn it into a status code
-// without parsing prose.
+// a translated summary of why, and an HTTP server can turn it into a status
+// code without parsing prose.
 //
 // It is also the input to the audit: the three eids it carries are exactly
-// what the `conflict` record needs, so the refusal that rolls a batch back is
-// the same value that writes the record of it once the rollback is done.
+// what the `conflict` row needs, so the refusal that rolls a batch back is the
+// same value that writes the record of it once the rollback is done.
 
 import type { Eid } from '@yaks/graph'
 

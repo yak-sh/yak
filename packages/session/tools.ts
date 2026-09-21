@@ -1,47 +1,47 @@
-// What anybody may ask of a transcript: the `tools` facet a host takes
-// (`@yaks/session/tools`) — the runs behind the `tool: true` declarations in
+// What anybody may ask of a transcript: the tool implementations exported as
+// `@yaks/session/tools` — the code behind the `tool: true` declarations in
 // ./vocab.json.
 //
-// Two things live here. The LEASE is the pair every worker types: take the
-// lock on the thing you are about to work on, let it go when you are done. The
-// INJECTION LOOP is the other, and it is the same idea one level up — a
-// session starts by reading back what it was in the middle of, and ends by
-// saying what it did and releasing what it held. `hooks install` is what makes
-// a harness run those two at the right moments (./hooks.ts).
+// Two things live here. The LEASE is the pair every worker calls: take the lock
+// on the thing you are about to work on, release it when you are done. The
+// INJECTION LOOP is the other, and it is the same idea one level up — a session
+// starts by reading back what it was in the middle of, and ends by recording
+// what it did and releasing what it held. `hooks install` is what makes a
+// harness run those two at the right moments (./hooks.ts).
 //
-// WHAT A SESSION SHOULD BE TOLD IS UNDECIDED. `session_context` answers what
-// a hook needs and nothing else: the transcript becomes an entity under the
-// harness's own name for it, and what comes back is that entity's id and the
-// work it holds a lock on. There was a composed digest here — the owner's
-// turns, a handoff, recalled memories, the standing goals — and it is gone
-// (T-37707): the owner's word is that the existing system never worked well
-// and none of it is worth porting until there is a design. Leave it so.
+// WHAT A SESSION SHOULD BE TOLD IS UNDECIDED. `session_context` returns what a
+// hook needs and nothing else: the transcript becomes an entity under the
+// harness's own id for it, and what comes back is that entity's id and the work
+// it holds a lock on. There was a composed digest here — the owner's turns, a
+// handoff, recalled memories, the standing goals — and it is gone (T-37707):
+// the owner's word is that the existing system never worked well and none of it
+// is worth porting until there is a design. Leave it so.
 //
-// A hook hands its event over as JSON on stdin, which reaches a tool as the
+// A harness hands its event over as JSON on stdin, which reaches a tool as the
 // `hook` argument (`yak session context --hook -`). Parsing it here is what
-// keeps the harness's dialect out of everything else: one field is read from
-// it, the session's own id, and a payload that is not JSON at all is no
+// keeps the harness's own JSON format out of everything else: one field is read
+// from it, the session's own id, and a payload that is not JSON at all is no
 // reason to fail — a hook that fails is a session that will not start.
 //
 // The third thing here is the two CHECKS — tools whose verb is `check`, which
-// is the whole of what a "doctor" is (@yaks/tools ./check.ts).
+// is all a "doctor" command is (@yaks/tools ./check.ts).
 //
 // A LOCK OUTLIVES ITS HOLDER. ./effects.ts frees the locks whose holder is not
-// a session in this graph, at the one moment there is an honest answer — this
-// process starting — so one
-// found here appeared since, and the board is lying about who is working. The
-// other half is the lock held by a transcript that ENDED: `stopped` or
-// `failed` is a run nothing will resume, and its lock is a document nobody is
-// editing that nobody else may edit. Neither is corruption, so both are
-// `warn`; and a `settled` transcript is NOT one of them — a run between turns
-// still holds what it holds (./reap.ts).
+// a session in this graph, at the one moment there is a reliable answer — this
+// process starting — so any lock the check finds appeared since then, and the
+// board is misreporting who is working. The other half is the lock held by a
+// transcript that ENDED: `stopped` or `failed` is a run nothing will resume,
+// and its lock is a document nobody is editing that nobody else may edit.
+// Neither is corruption, so both are `warn`; and a `settled` transcript is NOT
+// one of them — a run between turns still holds what it holds (./reap.ts).
 //
-// A TRANSCRIPT STALLS. `pending` is the model owed a turn and `running` is a
-// model or a tool owed an answer; both are moments, not states to live in. One
-// that has been owed for hours means the daemon died mid-turn, or the answer
-// came back to a process that was gone — the transcript just stops, and
-// nothing anywhere says so. Both read the same rule everything else reads,
-// ./status.ts `statusOf` over the entries, rather than a second copy of it.
+// A TRANSCRIPT STALLS. `pending` means the model owes a turn and `running`
+// means a model or a tool owes an answer; both are moments, not states to live
+// in. One that has been waiting for hours means the daemon died mid-turn, or
+// the answer came back to a process that was gone — the transcript just stops,
+// and nothing anywhere reports it. Both checks read the same rule everything
+// else reads, ./status.ts `statusOf` over the entries, rather than a second
+// copy of it.
 
 import {
   addressed,
@@ -62,23 +62,24 @@ import { ENTRY } from './native.ts'
 import { ordered, statusOf } from './status.ts'
 import { install, settingsPath } from './hooks.ts'
 
-/** What a config says to `@yaks/session`'s checks. */
+/** What configuration this package's checks accept. */
 export type Options = {
-  /** how long a transcript may be owed a turn or an answer before that is a
-   * stall rather than work in progress (default 2 hours) */
+  /** how long a transcript may be waiting on a turn or an answer before that
+   * counts as a stall rather than work in progress (default 2 hours) */
   hours?: number
 }
 
 let HOURS = 2
 
 // A run nothing will resume. `settled` is left out on purpose: it means
-// nothing is owed, not that the session is over.
+// nothing is outstanding, not that the session is over.
 let ENDED = ['stopped', 'failed']
 
 let str = (v: unknown): string => v == null ? '' : String(v)
 
-/** The session id a hook payload names, where the line did not say one. A
- * payload that will not parse says nothing, and says it quietly. */
+/** The session id a hook payload names, where the command line did not give
+ * one. A payload that will not parse returns an empty string, and does so
+ * quietly. */
 export let hookSession = (hook: unknown): string => {
   try {
     let said = JSON.parse(str(hook)) as { session_id?: unknown }
@@ -88,10 +89,10 @@ export let hookSession = (hook: unknown): string => {
   }
 }
 
-// The session this call is about, as the caller SAID it: the line's word,
-// else the one in the hook payload. What it means is ./who.ts's to answer —
-// an eid, a human id, or the harness's own name for the run, which is the
-// only one of the three that may not exist yet.
+// The session this call is about, exactly as the caller wrote it: the command
+// line's argument, else the one in the hook payload. Resolving it is ./who.ts's
+// job — an eid, a human-readable id, or the harness's own id for the run, which
+// is the only one of the three that may not exist yet.
 let idIn = (ctx: ToolCtx): string =>
   str(ctx.args.session) || hookSession(ctx.args.hook)
 
@@ -109,7 +110,7 @@ export let line = (vocab: Vocab, b: Bundle): string => {
 // and nothing in the graph refers to it.
 let minted = (eid: string) => !eid.startsWith('$')
 
-// The transcript a word names, however the caller says it (./who.ts).
+// The transcript an id names, however the caller wrote it (./who.ts).
 let sessionOf = (ctx: ToolCtx, id: string): Promise<Bundle | undefined> =>
   sessionFor(ctx, id)
 
@@ -122,19 +123,19 @@ let briefed = (eid: string, text: unknown): Bundle => ({
 /** The session a lock names. */
 let holderOf = (b: Bundle): string => str(comp(b, CLAIM).session)
 
-// One transcript's entries. Few sessions hold a lock, so this is asked per
+// One transcript's entries. Few sessions hold a lock, so this is queried per
 // holder rather than by reading every entry in the graph.
 let transcript = (ctx: Pick<ToolCtx, 'read'>, session: string) =>
   ctx.read(and(eq(`${ENTRY}.session`, session)))
 
 // When an entry was written, as the kernel stamps it. A graph that stamps
-// nothing has no clock to judge a stall by, which the check says out loud
-// rather than passing.
+// nothing has no timestamp to judge a stall by, which the check reports rather
+// than passing silently.
 let writtenAt = (b: Bundle): number => Date.parse(str(comp(b, 'created').at))
 
-/** The runs behind the tools ./vocab.json declares. The host's vocabulary is
- * what the checks name an entity with, and its options are what they judge a
- * stall by. */
+/** The implementations behind the tools ./vocab.json declares. The calling
+ * application's vocabulary is what the checks name an entity with, and its
+ * options are what they judge a stall by. */
 export let runs = (
   host: { vocab: Vocab },
   options: Options = {},
@@ -142,8 +143,8 @@ export let runs = (
   claim_take: async (_bundles, ctx): Promise<Bundle[]> => {
     let [on] = await addressed(ctx.graph, [str(ctx.args.target)])
     let said = str(ctx.args.session)
-    // Whoever is asking, where the line named nobody: the actor a door signed
-    // this call with says which run it came through.
+    // Whoever is asking, where the command line named nobody: the actor the
+    // caller was authenticated as records which run this call came through.
     let holder = said
       ? (await sessionOf(ctx, said))?.entity.eid
       : str(ctx.actor?.via || ctx.actor?.by)
@@ -166,7 +167,7 @@ export let runs = (
     let id = idIn(ctx)
     if (!id) throw new Error('which session? say --session')
     let s = await sessionOf(ctx, id)
-    // A transcript nobody has reified yet is reified HERE, wearing its own
+    // A transcript nobody has created yet is created HERE, carrying its own
     // name, the way `session_context` reifies one. Never on the word the
     // caller typed: `--session S-37703` is a human id, not an eid, and taking
     // it for one mints an entity whose eid IS `S-37703` (./who.ts is what
@@ -255,8 +256,8 @@ export let runs = (
     let rows = holders.length
       ? await detached(ctx.graph.storage).get(holders)
       : []
-    // A tombstoned holder is a holder that is gone: `claim.session` dies by
-    // release, so a lock still naming one is the same leak.
+    // A tombstoned holder is a holder that is gone: `claim.session` is declared
+    // `death: 'release'`, so a lock still naming one is the same leak.
     let held = new Map(
       rows.filter((b) => b[TOMBSTONE] == null && b[SESSION] != null)
         .map((b) => [b.entity.eid, b]),

@@ -1,5 +1,6 @@
-// What a batch MEANS about the words a person reads: the `rules` facet a host
-// takes (`@yaks/doc/rules`).
+// The graph plugins this package contributes: the module a server imports at
+// `@yaks/doc/rules`. There are no write-time rules here, only the component
+// itself.
 
 import type { Plugin } from '@yaks/graph'
 import { docs as plugin } from './plugin.ts'

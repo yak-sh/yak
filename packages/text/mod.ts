@@ -1,7 +1,7 @@
 /**
- * @yaks/text owns the text host for portable renderer trees: Markdown for mail
- * and documents, plain text for a CLI or terminal. h records the same tags
- * Preact receives; markdown and plain serialize them without a DOM. Content
+ * @yaks/text renders portable renderer trees as text: Markdown for mail and
+ * documents, plain text for a CLI or terminal. `h` records the same tags Preact
+ * receives; `markdown` and `plain` serialize them without a DOM. Content
  * loses every C0/DEL/C1 byte in text and hrefs, including literal newlines and
  * tabs. Only structural elements introduce output line breaks. Code retains
  * punctuation, not control bytes. Unknown elements keep their children.

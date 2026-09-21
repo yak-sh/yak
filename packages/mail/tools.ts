@@ -1,50 +1,52 @@
-// What an agent may ASK for here: the `tools` facet a host takes
-// (`@yaks/mail/tools`) — the runs behind the `tool: true` declarations in
-// ./vocab.json. Five words a person types all day, and one CHECK.
+// What an agent may ASK for here: the `@yaks/mail/tools` entry point — the
+// implementations behind the `tool: true` declarations in ./vocab.json. Five
+// commands a person runs all day, and one CHECK.
 //
-// THE INBOX IS A QUERY, never a pile. A letter is addressed to somebody three
-// ways — the entity it was routed to (`mail.target`, ./arrive.ts), the entity
-// it was written to (`deliver.to`), and the address that entity wears
+// THE INBOX IS A QUERY, never a folder. A letter is addressed to somebody
+// three ways — the entity it was routed to (`mail.target`, ./arrive.ts), the
+// entity it was written to (`deliver.to`), and the address that entity has
 // (`mail.to`) — so the inbox is those three asked as one `or`, minus what has
 // been archived. Nothing is moved, copied, or marked on the way in, which is
-// why the same letter reads the same through every door.
+// why the same letter reads the same through every interface.
 //
 // ARCHIVING IS THE ONE ACT THAT HIDES. Reading a letter marks it read and
-// leaves it in the list; only `inbox archive` takes it out, and `--all` is the
-// way back. That asymmetry is the point (M-7048): no sweep, subagent or second
-// reader can drain somebody's inbox behind them, so a list that is empty is a
-// list they emptied. The one thing that archives on its own is answering an
-// arrival — a thread you have replied to is not waiting on you, and without
-// that every fresh session re-presents the same letter and replies again.
+// leaves it in the list; only `inbox archive` takes it out, and `--all` shows
+// the hidden ones again. That asymmetry is the point (M-7048): no sweep,
+// subagent or second reader can drain somebody's inbox behind them, so a list
+// that is empty is a list they emptied. The one thing that archives on its own
+// is answering an arrival — a thread you have replied to is not waiting on
+// you, and without that every fresh session shows the same letter again and
+// replies again.
 //
 // READING IS THE MARK, so `mail show` WRITES: it stamps `opened` on the letter
-// it renders. That is what keeps it from being a second spelling of
-// `graph_show` (@yaks/mcp's generic tier, which shows any entity at all) —
-// this one marks the letter read and gathers its THREAD, both of which are
-// facts about mail and about nothing else.
+// it renders. That is what keeps it from being a duplicate of `graph_show`
+// (@yaks/mcp's generic tier, which shows any entity at all) — this one marks
+// the letter read and gathers its THREAD, both of which are facts about mail
+// and about nothing else.
 //
-// `archived` and `opened` are a NEIGHBOUR's words — @yaks/kernel's, the marks
-// that say somebody looked at a thing and somebody put it away. A tool answers
-// BUNDLES, which are data, so naming one costs no import; a host that composes
-// the kernel has them, and one that does not simply has those columns dropped
-// at the door, its inbox then a list that never shrinks. Nothing here declares
-// a second spelling of either (M-17871).
+// `archived` and `opened` are another package's components — @yaks/kernel's,
+// the marks recording that somebody looked at a thing and that somebody put it
+// away. A tool returns BUNDLES, which are plain data, so naming a component
+// costs no import; a server that composes the kernel stores them, and one that
+// does not has those components dropped on write, leaving an inbox that never
+// shrinks. Nothing here declares a second copy of either (M-17871).
 //
-// The SENDER is not this facet's business. `mail send` and `mail reply` MINT a
-// letter that asks to go (`deliver`), and ./effects.ts — built from the
+// The SENDER is not this file's business. `mail send` and `mail reply` CREATE
+// a letter that asks to be sent (`deliver`), and ./effects.ts — built from the
 // `sender` the config names beside this plugin — is what hands it to a
-// transport and settles `delivered` or `bounced` back onto it. So a tool that
-// writes mail never talks to a mail server, and a test fakes the whole of it
-// with `{"via": "stash"}`.
+// transport and writes `delivered` or `bounced` back onto it. So a tool that
+// writes mail never talks to a mail server, and a test replaces the whole of
+// it with `{"via": "stash"}`.
 //
 // WHAT IS NOT CHECKED in `mail check`, deliberately: whether each address this
-// graph can mint is deliverable at the MTA — the fleet's doctor read Cloudflare
-// Email Routing's live rule set to say so. That is a question about a zone
-// somebody deployed, answered by a credential the host holds, and its answer is
-// the same whatever graph is running; a package's check reads the graph its own
-// words describe. A deployment that wants it asks its provider, in its own
-// deployment's check, and this package's `bounced{reason}` is what records the
-// answer arriving the hard way.
+// graph can create is deliverable at the MTA — the fleet's doctor read
+// Cloudflare Email Routing's live rule set to determine that. That is a
+// question about a zone somebody deployed, answered using a credential the
+// server holds, and its answer is the same whatever graph is running; a
+// package's check reads the graph its own components describe. A deployment
+// that wants that check asks its provider, in its own deployment's check, and
+// this package's `bounced{reason}` is what records the answer arriving the
+// hard way.
 
 import {
   addressed,
@@ -74,12 +76,12 @@ import { post } from './effects.ts'
 import { DELIVER, EMAIL, MAIL } from './comp.ts'
 import type { Options } from './options.ts'
 
-/** How many letters an inbox answers with, unasked. */
+/** How many letters an inbox returns when the caller gave no limit. */
 export let PAGE = 50
 
-// The two words this facet WRITES that it does not own. Both are
-// @yaks/kernel's, and both are said here as the strings they are, because a
-// tool's answer is data (see the header).
+// The two components this file WRITES that it does not declare. Both are
+// @yaks/kernel's, and both are written here as plain strings, because a tool's
+// result is data (see the header).
 let ARCHIVED = 'archived'
 let OPENED = 'opened'
 
@@ -95,18 +97,19 @@ let col = (c: Comp | undefined, k: string): string => str(c?.[k])
 let one = async (ctx: ToolCtx, eid: Eid): Promise<Bundle | undefined> =>
   (await detached(ctx.graph.storage).get([eid]))[0]
 
-// The eid an argument names, whatever a person typed.
+// The eid an argument names, whatever form a person typed it in.
 let at = async (ctx: ToolCtx, said: unknown): Promise<Eid> =>
   (await addressed(ctx.graph, [str(said)]))[0]
 
-// The letter an argument names, refused by the one thing that makes it one.
+// The letter an argument names, rejected unless it carries `mail`.
 let letterIn = async (ctx: ToolCtx, said: unknown): Promise<Bundle> => {
   let found = await one(ctx, await at(ctx, said))
   if (!comp(found, MAIL)) throw new Error(`not a letter: ${str(said)}`)
   return found!
 }
 
-/** Whose inbox this is: the entity the line named, else whoever is asking. */
+/** Whose inbox this is: the entity the arguments named, else whoever is
+ * asking. */
 export let reader = async (ctx: ToolCtx): Promise<Eid> => {
   if (ctx.args.who != null) return await at(ctx, ctx.args.who)
   let me = ctx.actor?.by
@@ -116,8 +119,8 @@ export let reader = async (ctx: ToolCtx): Promise<Eid> => {
 
 /**
  * Everything addressed to one reader: routed to them, written to them, or
- * delivered to the address they wear. Three spellings of one question, asked
- * as one — a letter that answers any of them is in their inbox.
+ * delivered to the address they have. Three forms of one question, asked as
+ * one — a letter matching any of them is in their inbox.
  */
 export let addressedTo = (who: Eid, address: string): Clause =>
   or(
@@ -126,10 +129,10 @@ export let addressedTo = (who: Eid, address: string): Clause =>
     ...(address ? [eq(`${MAIL}.to`, address)] : []),
   )
 
-// Newest first, said by the WINDOW rather than by a clock column: `mail.at` is
+// Newest first, from the LIMIT rather than from a clock column: `mail.at` is
 // written when a letter ARRIVES, so ordering by it would sort a letter written
-// to you here — an invitation, a reply from the desk beside you — to the
-// bottom. A limited answer is newest-first by the order rows were written
+// to you here — an invitation, a reply from the address beside you — to the
+// bottom. A limited result is newest-first by the order rows were written
 // (@yaks/sql bind.ts), which is the order they reached this graph.
 let inbox = (who: Eid, address: string, all: boolean, n: number): Query =>
   and(
@@ -145,11 +148,11 @@ export let reSubject = (said: string): string =>
   `Re: ${said.replace(/^(\s*(re|fwd?):\s*)+/i, '').trim()}`
 
 // The far side's address as an ENTITY, since `deliver.to` names a recipient
-// rather than a string: whoever already wears it, else a fresh `email` row for
-// it. That is what makes the address book grow by use instead of by
-// bookkeeping — and why writing to a stranger needs no step before it. NO
-// address is nobody, never a blank row: an `email` entity wearing no address
-// is a recipient a letter can be aimed at and never reach.
+// rather than a string: whoever already has that address, else a new `email`
+// row for it. That is what makes the address book grow by use instead of by
+// bookkeeping — and why writing to a stranger needs no step before it. An
+// empty address resolves to nobody, never to a blank row: an `email` entity
+// with no address is a recipient a letter can be aimed at and never reach.
 let recipientOf = async (
   ctx: ToolCtx,
   address: string,
@@ -162,7 +165,8 @@ let recipientOf = async (
     : { to: '$to', made: [{ entity: { eid: '$to' }, [EMAIL]: { address } }] }
 }
 
-// Whom a line means: an address is an address, anything else is an id.
+// Whom an argument means: a string with an `@` is an address, anything else is
+// an id.
 let aimedAt = async (
   ctx: ToolCtx,
   said: string,
@@ -196,8 +200,9 @@ export let threadOf = async (
     for (let b of down) seen.add(b.entity.eid), found.push(b)
     front = down.map((b) => b.entity.eid)
   }
-  // Chronological where the letters say when, insertion order where they do
-  // not — a sort that is stable either way rather than one that invents a time.
+  // Chronological where the letters record a time, insertion order where they
+  // do not — a sort that is stable either way rather than one that invents a
+  // time.
   return found.sort((a, b) =>
     col(comp(a, MAIL), 'at').localeCompare(col(comp(b, MAIL), 'at'))
   )
@@ -242,11 +247,11 @@ let page = (id: (b: Bundle) => string, letter: Bundle, thread: Bundle[]) => {
   return said.join('\n')
 }
 
-/** The runs behind the tools ./vocab.json declares. A factory, as every facet
- * is: the domain is what an address a person typed is canonicalized against
- * before the address book is asked, the same spelling the canonicalizer wrote
- * it in (./plugin.ts). Everything else a run needs arrives on the call's own
- * context. */
+/** The implementations of the tools ./vocab.json declares. A factory, like
+ * every other entry point in these packages: the domain is what an address a
+ * person typed is canonicalized against before the address book is queried,
+ * into the same form the canonicalizer stored it in (./plugin.ts). Everything
+ * else a handler needs arrives on the call's own context. */
 export let runs = (_host?: unknown, options: Options = {}): Runs => ({
   inbox_list: async (_bundles, ctx): Promise<Bundle[]> => {
     let who = await reader(ctx)
@@ -260,8 +265,8 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
     [ARCHIVED]: {},
   }],
 
-  // Reading IS the mark, so this writes. The prose is the answer; the `opened`
-  // patch is what makes asking twice honest.
+  // Reading IS the mark, so this writes. The prose is the result; the `opened`
+  // patch is what keeps a second call from reporting it as unread.
   mail_show: async (_bundles, ctx): Promise<Bundle[]> => {
     let letter = await letterIn(ctx, ctx.args.letter)
     let thread = await threadOf(ctx, letter)
@@ -275,10 +280,10 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
     ]
   },
 
-  // The reply goes to the FAR side — an arrival's author, our own sent
-  // letter's recipient — and never to a fallback between the two: the near
-  // miss is this graph's own desk, so a reply that quietly went there would
-  // look sent and not be.
+  // The reply goes to the FAR side — an arrival's author, or our own sent
+  // letter's recipient — and never to a fallback between the two: the wrong
+  // choice here is this graph's own address, so a reply that quietly went
+  // there would look sent without being sent.
   mail_reply: async (_bundles, ctx): Promise<Bundle[]> => {
     let letter = await letterIn(ctx, ctx.args.letter)
     let mail = comp(letter, MAIL)!
@@ -291,7 +296,7 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
         'cannot reply: that letter names nobody to answer — send a fresh mail',
       )
     }
-    // The desk it goes from: the address an arrival was delivered to, or the
+    // The address it goes from: the one an arrival was delivered to, or the
     // one our own letter went out from. Either way, this side of the thread.
     let from = arrived ? col(mail, 'to') : col(mail, 'from')
     return [
@@ -309,9 +314,9 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
         [MAIL]: { ...(from ? { from } : {}), reply_to: letter.entity.eid },
         [DELIVER]: { to: far.to },
       },
-      // Answering an arrival retires it: a thread you have replied to is not
+      // Answering an arrival archives it: a thread you have replied to is not
       // one waiting on you. Only an arrival — following up on your own letter
-      // never rang the inbox to begin with, so there is nothing to hide.
+      // never put anything in the inbox, so there is nothing to hide.
       ...(arrived && !letter[ARCHIVED]
         ? [{ entity: { eid: letter.entity.eid }, [ARCHIVED]: {} }]
         : []),
@@ -346,9 +351,9 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
   },
 
   mail_check: async (_bundles, ctx) => {
-    // The Message-ID is what the world knows a letter by, written from what
-    // arrived — so it is the mark of a letter this graph RECEIVED, and the
-    // pair of predicates is the whole question.
+    // The Message-ID is what other mail systems know a letter by, written from
+    // what arrived — so it marks a letter this graph RECEIVED, and this pair
+    // of predicates is the whole question.
     let orphans = await ctx.read(
       and(present(`${MAIL}.message_id`), absent(`${MAIL}.from`)),
     )
@@ -357,9 +362,9 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
       level: 'fail',
       text: `${id(b)} arrived with no sender — a reply has nowhere to go`,
     }))
-    // And the other direction: a transport this host could not build is a
-    // graph whose outbound letters sit there. Missing config never stops the
-    // boot (./effects.ts), so this is where it is said.
+    // And the other direction: a transport this server could not build leaves
+    // outbound letters sitting in the graph. Missing config never stops the
+    // server from starting (./effects.ts), so this is where it is reported.
     let { waiting } = options.sender
       ? post(options.sender)
       : { waiting: undefined }
@@ -372,7 +377,7 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
     }
     return checked(
       ctx.call,
-      'every letter that arrived carries a sender, and this host can send',
+      'every letter that arrived carries a sender, and this server can send',
       found,
     )
   },

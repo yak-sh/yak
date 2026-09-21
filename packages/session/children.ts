@@ -22,7 +22,8 @@ export type ChildLimits = {
   taskDefaults?: (parent: Eid, child: Eid) => Promise<Record<string, unknown>>
   maxChildren?: number
   maxSessions?: number
-  /** Host-owned optional spawn parameters and preparation, when the child is admitted. */
+  /** Application-owned optional spawn parameters and preparation, applied when
+   * the child is admitted. */
   childProperties?: Record<string, unknown>
   prepareChild?: (
     input: { parent: Eid; child: Eid; args: Record<string, unknown> },
@@ -53,7 +54,8 @@ let taskRow = async (g: Graph, id: string): Promise<Bundle> => {
 export let children = (g: Graph, session: Eid): Promise<Bundle[]> =>
   Promise.resolve(g.read(`.spawned.parent=${session}`))
 
-/** The harness's admission door, shared by root starts and delegated starts. */
+/** The admission path the harness calls, shared by root starts and delegated
+ * starts. */
 export let admit = <T>(
   g: Graph,
   parent: Eid | undefined,
@@ -309,7 +311,8 @@ let delegation = (
  * it holds no task). The task, containment, child and claim commit together:
  * queued work is accepted without preparing a checkout. No filing metadata is inherited.
  * The first line is the title; the complete submitted text is kept as body.
- * This is a user door, not a model call, so delivery is an ordinary input. */
+ * This is called by a person, not by a model, so delivery is an ordinary
+ * input. */
 export let taskEntry = async (
   g: Graph,
   session: Eid,
@@ -335,7 +338,8 @@ export let taskEntry = async (
   return { task, child: String(child) }
 }
 
-/** The model doors use the same admission and spawn write as taskEntry. */
+/** The model-facing tools use the same admission and spawn write as
+ * taskEntry. */
 export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
   configurePool(g, limits)
   return [delegation(g, limits, true), delegation(g, limits, false), {

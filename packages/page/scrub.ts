@@ -1,37 +1,37 @@
 // Self-containment, enforced at FREEZE TIME.
 //
-// THE INVARIANT: a frozen page renders from its OWN bytes. An archiver
-// inlines what it could reach, but everything it could not — a 404'd asset, a
-// preload hint, a `srcset` variant, a favicon, a tracking pixel — keeps its
-// URL and would fetch the live web the moment somebody opened the archive,
-// years later, announcing the reader to whoever is still serving it. So every
+// THE INVARIANT: a frozen page renders from its OWN bytes. An archiver inlines
+// what it could reach, but everything it could not — an asset that 404'd, a
+// preload hint, a `srcset` variant, a favicon, a tracking pixel — keeps its URL
+// and would fetch the live web the moment somebody opened the archive, years
+// later, announcing the reader to whoever is still serving it. So every
 // remaining external reference is REMOVED here, once, before the bytes are
-// stored. A serving CSP is defence in depth and never the mechanism: an
-// archive handed to a person, mailed, or opened from a file has no header in
-// front of it.
+// stored. The Content-Security-Policy header sent when the archive is served is
+// defence in depth and never the mechanism: an archive handed to a person,
+// mailed, or opened from a file has no header in front of it.
 //
-// It is a parse and not a pass of regular expressions: an attribute's value
-// is decided by the HTML parser's reading of the document, not by ours, and a
-// scrubber that disagrees with the parser about where an attribute ends is a
-// scrubber that leaves one behind.
+// It parses the document rather than running regular expressions over it: where
+// an attribute's value begins and ends is decided by the HTML parser, not by
+// us, and a scrubber that disagrees with the parser about where an attribute
+// ends is a scrubber that leaves one behind.
 //
-// What survives: text, structure, `data:` URIs, and CSS with its `url()`
-// values emptied. What goes: scripts and every other document a page can
-// embed, link tags that are not data, meta refresh, inline handlers, and
-// every url-bearing attribute pointing anywhere but at the document itself.
+// What survives: text, structure, `data:` URIs, and CSS with its `url()` values
+// emptied. What is removed: scripts and every other document a page can embed,
+// `link` tags that are not `data:`, meta refresh, inline event handlers, and
+// every URL-bearing attribute pointing anywhere but at the document itself.
 
 import { parseHTML } from 'linkedom'
 
-/** An archive, and the title the document gave itself. */
+/** An archived document, and the title it gave itself. */
 export type Scrubbed = {
   /** the document with every external reference removed */
   html: string
-  /** its `<title>`, when it had one — what a page is known by */
+  /** its `<title>`, when it had one — what the page calls itself */
   title?: string
 }
 
-// The attributes that can name something to fetch. `data` and `background`
-// are old, and still honoured by browsers; `xlink:href` is how an SVG points.
+// The attributes that can name something to fetch. `data` and `background` are
+// old, and still honoured by browsers; `xlink:href` is how an SVG points.
 let URLISH = [
   'src',
   'href',
@@ -55,7 +55,7 @@ let cssScrub = (css: string): string =>
   css.replace(/url\(\s*(?!['"]?\s*data:)[^)]*\)/gi, 'url()')
 
 /**
- * One document, scrubbed of every external reference, and its title.
+ * One document with every external reference removed, and its title.
  *
  * ```ts
  * import { scrub } from '@yaks/page'
@@ -66,8 +66,8 @@ let cssScrub = (css: string): string =>
 export let scrub = (raw: string): Scrubbed => {
   let { document } = parseHTML(raw)
   let all = (sel: string) => [...document.querySelectorAll(sel)]
-  // A document a page EMBEDS is a document this one cannot vouch for, and a
-  // script is the one thing no attribute sweep can make inert.
+  // A document this page EMBEDS is a document it cannot vouch for, and a script
+  // is the one thing no attribute sweep can make inert.
   for (let el of all('script, base, iframe, frame, embed, object')) el.remove()
   for (let el of all('link')) {
     if (!(el.getAttribute('href') ?? '').startsWith('data:')) el.remove()

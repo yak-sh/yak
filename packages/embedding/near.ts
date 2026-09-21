@@ -9,14 +9,15 @@
 //
 // A {@link Screen} is the other half of "nearest": nearest AMONG WHAT. The
 // eight nearest entities of any kind are the wrong eight for `.near=X&.memory`
-// — intersecting them with "and a memory" usually answers nothing — so the
-// rest of the query line comes in as a statement over the eids it admits, the
-// scan reads only those vectors, and the cut to `limit` happens after. Filter,
-// then rank, then cut.
+// — intersecting them with "and a memory" usually leaves nothing — so the rest
+// of the query comes in as a statement selecting the eids it admits, the scan
+// reads only those vectors, and the cut to `limit` happens after. Filter, then
+// rank, then cut.
 //
-// A neighbour carries its integer owner id beside its eid. That is not leakage
-// for its own sake: the ranking has to become SQL, and an integer id is the one
-// thing an ORDER BY can carry safely without a bound param.
+// A neighbour carries its integer owner id beside its eid. That is not an
+// implementation detail leaking for no reason: the ranking has to become SQL,
+// and an integer id is the one thing an ORDER BY can carry safely without a
+// bound parameter.
 
 import type { Eid } from '@yaks/graph'
 import type { Driver } from './driver.ts'
@@ -31,17 +32,17 @@ import { cosine, unpack } from './vector.ts'
 export type Near = { entity: Eid; owner: number; similarity: number }
 
 /**
- * A statement selecting the eids a neighbour must be among — @yaks/sql's
- * compiled shape, so what it compiled for the rest of a query line is handed
- * straight in (the same seam @yaks/fts's `find` takes as its `screen`).
+ * A statement selecting the eids a neighbour must be among — in @yaks/sql's
+ * own compiled form, so what it compiled for the rest of the query is passed
+ * straight in (the same interface @yaks/fts's `find` takes as its `screen`).
  */
 export type Screen = { sql: string; params: (string | number)[] }
 
 /**
  * A ranking: the nearest `limit` entities to a query vector, most similar
  * first, among the eids `within` allows. {@link nearest} is the exact one; an
- * approximate index has the same shape, and one that cannot honour `within`
- * answers the wrong neighbourhood for every line that filters.
+ * approximate index has the same type, and one that cannot honour `within`
+ * returns the wrong neighbourhood for every query that also filters.
  */
 export type Rank = (
   query: Float32Array,
@@ -49,9 +50,9 @@ export type Rank = (
   within?: Screen,
 ) => Near[]
 
-// Every living vector in one model's space. The graves are screened here as
-// well as pruned by the sweep: a delete between two sweeps must not leave a
-// neighbour that no longer exists.
+// Every vector in one model's space whose entity still exists. Deleted entities
+// are excluded here as well as pruned by the sweep: a delete between two sweeps
+// must not leave a neighbour that no longer exists.
 let vectors = (db: Driver, model: string, within?: Screen) =>
   db.query(
     `select e.entity as owner, o.eid as eid, e.vec as vec from ${q(TABLE)} e` +
@@ -90,7 +91,7 @@ export type NearOpts = {
   floor?: number
   /** an entity to leave out — nothing is its own neighbour */
   without?: Eid
-  /** the eids a neighbour must be among — the rest of the query line */
+  /** the eids a neighbour must be among — what the rest of the query selects */
   within?: Screen
 }
 

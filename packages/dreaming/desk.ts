@@ -1,26 +1,27 @@
-// Opening the desk: what a host does about a dream that has come back, and
-// the two guards that keep it to one desk.
+// Opening the desk — one agent session on a dream that has come due — and the
+// two guards that keep a dream to one session at a time.
 //
-// A `dream` is a standing intention with a floor under it — do not come back
-// before this — and that floor is the whole queue. Whatever wants writing
-// files a dream, in its own words, with the floor set to the quiet it wants;
-// when the dream is stirred and the floor has passed, ONE transcript opens on
-// it and is asked those words. The desk takes the dream's `claim` while it
-// works, so a second stir finds the lock and leaves, and the floor moves past
-// the rest the host configured, so a desk that died without releasing cannot
-// reopen before then either: one guard for the desk that is up, one for the
-// desk that went away.
+// A `dream` is a standing intention whose `floor` column is the earliest it
+// may run again, and that column is the whole queue: anything that wants
+// writing later files a dream with its body text and sets `floor` to when it
+// should next run. When the dream is checked and its floor has passed, ONE
+// session opens on it and is asked that text. The session takes the dream's
+// `claim` while it runs, so a second check finds the claim and does nothing,
+// and the floor moves forward by the configured rest interval, so a session
+// that died without releasing its claim cannot reopen before then either: one
+// guard for the session that is running, one for the session that vanished.
 //
-// WHAT opens is not decided here. A transcript wearing a voice, asked of a
-// provider at an effort, is a fact about the box and never about the graph, so
-// the config names it (./effects.ts) and this module writes it. Nothing is
-// launched: what dreaming writes is a session and its first entry —
-// @yaks/session's words — and whoever runs sessions on this host runs it.
+// WHAT gets opened is not decided here. A session with a persona, asked of a
+// provider at an effort, is a fact about the machine and never about the
+// graph, so the configuration names it (./effects.ts) and this module writes
+// it. No process is launched: this package writes a session row and its first
+// entry — @yaks/session's components — and whatever runs sessions on this
+// machine runs it.
 //
-// The dream's own record of coming back is `recall`: how many times it has
-// surfaced, and when it last did. Its columns are stamped, so the write goes
-// through the effects door trusted, like any other thing a host says about
-// itself.
+// The dream's own record of having run is `recall`: how many times it has come
+// due, and when it last did. Those columns are server-stamped, so the write
+// goes through the effects pipeline as trusted, like anything else the server
+// records about itself.
 
 import type { Bundle, Comp, Tx } from '@yaks/graph'
 import { then } from '@yaks/graph'
@@ -29,16 +30,15 @@ import { BODY, DOC } from '@yaks/doc'
 import { link } from '@yaks/edge'
 import { FIRED, next, WAKE } from '@yaks/wake'
 
-/** This package's own words. */
+/** The components this package declares. */
 export let DREAM = 'dream'
 export let RECALL = 'recall'
 
-// The words the desk is WRITTEN IN, which belong to other packages: a
-// transcript, its lines and its lock are @yaks/session's, a voice is
-// @yaks/persona's entity said through @yaks/kernel's `references` relation.
-// Dreaming writes them; it declares none of them, and a host that composes
-// this facet without those vocabularies is refused by the vocabulary, not
-// here.
+// The components a desk is written with, which belong to other packages: the
+// session, its entries and its claim are @yaks/session's, and the persona is
+// @yaks/persona's entity, linked through @yaks/kernel's `references` relation.
+// This package writes them but declares none of them, so composing this plugin
+// without those vocabularies is refused by the vocabulary loader, not here.
 export let SESSION = 'session'
 export let ENTRY = 'entry'
 export let CONTENT = 'content'
@@ -46,8 +46,9 @@ export let USING = 'using'
 export let CLAIM = 'claim'
 export let REFERENCES = 'references'
 
-/** What a host starts when a dream comes back, as a config names it. Every
- * field is the host's to say: nothing here has a default worth guessing. */
+/** The session to open when a dream comes due, as the configuration names it.
+ * Every field comes from the configuration: nothing here has a default worth
+ * guessing. */
 export type Desk = {
   /** the provider entity the first entry asks */
   provider?: string
@@ -55,21 +56,22 @@ export type Desk = {
   model?: string
   /** the reasoning effort it asks at */
   effort?: string
-  /** the voice it wears — a persona, said as a `references` edge */
+  /** the persona it runs with, linked by a `references` edge */
   persona?: string
-  /** who the transcript speaks as */
+  /** the identity the session writes as */
   actor?: string
-  /** the words to ask, for a dream that carries none of its own */
+  /** the text to ask, for a dream that has no body text of its own */
   ask?: string
 }
 
-/** How the desk opens: what it starts, and how long the dream rests after. */
+/** How a desk opens: what session to start, and how long the dream rests
+ * afterwards. */
 export type Open = {
-  /** what to start */
+  /** the session to start */
   desk: Desk
-  /** how long the dream rests once a desk opens — a @yaks/wake recurrence
-   * (`1h`, `@daily`, `0 9 * * 1-5`). Absent, the floor is left where it is and
-   * the lock is the only guard. */
+  /** how long the dream rests once a session opens — a @yaks/wake recurrence
+   * (`1h`, `@daily`, `0 9 * * 1-5`). Omitted, the floor is left where it is
+   * and the claim is the only guard. */
   rest?: string
   /** the clock, injected so a test can hold it still (default: now) */
   now?: () => string
@@ -88,21 +90,21 @@ let str = (c: Comp | undefined, k: string): string =>
 
 let num = (c: Comp | undefined, k: string): number => Number(c?.[k] ?? 0)
 
-/** Whether a dream may come back at `at`: it has no floor, or the floor has
- * passed. A floor nobody can read is no floor — a dream is not held down by a
- * date that says nothing. */
+/** Whether a dream may run at time `at`: it has no floor, or its floor has
+ * passed. A floor that cannot be parsed counts as no floor — a dream is not
+ * held back by a date nothing can read. */
 export let due = (dream: Comp | undefined, at: string): boolean => {
   let floor = Date.parse(str(dream, 'floor'))
   return Number.isNaN(floor) || floor <= Date.parse(at)
 }
 
 /**
- * The bundles that open a desk on a dream: the transcript, its first entry
- * asked in `words`, the voice it wears, and — on the dream itself — the lock
- * that says a desk is up, the floor moved past its rest, and the count of how
- * often it has come back.
+ * The bundles that open a desk on a dream: the session, its first entry
+ * carrying `words`, the persona edge, and — on the dream itself — the claim
+ * recording that a session is open, the floor moved forward by its rest, and
+ * the count of how often it has run.
  *
- * Pure: the seam a test asserts on with no graph anywhere.
+ * A pure function, so a test can assert on it with no graph involved.
  */
 export let desk = (
   dreamed: Bundle,
@@ -145,10 +147,10 @@ export let desk = (
   ]
 }
 
-// The decision, over the dream as it stands post-commit: the desk opens when
-// the entity is a dream, its floor has passed, nothing holds its lock, and
-// there are words to ask. Every other case is a dream that is simply not
-// asking for anything right now, which is the ordinary case and not a fault.
+// The decision, made against the dream as it stands after the commit: a
+// session opens when the entity is a dream, its floor has passed, nothing
+// holds its claim, and there is text to ask. Every other case is a dream that
+// has nothing to do right now, which is ordinary and not an error.
 let open = (o: Open, eid: string, tx: Tx, write: Write) =>
   then(tx.get([eid]), (found) => {
     let it = found[0]
@@ -162,9 +164,10 @@ let open = (o: Open, eid: string, tx: Tx, write: Write) =>
   })
 
 /**
- * The handler a dream's own stirring runs: registered on `created(dream)` and
- * on `changed(dream.floor)`, so a dream filed now opens a desk now, and a
- * dream whose floor was moved back into the present opens one then.
+ * The handler that runs when a dream itself changes: registered on
+ * `created(dream)` and on `changed(dream.floor)`, so a dream created now opens
+ * a session now, and a dream whose floor was moved back into the present opens
+ * one then.
  *
  * ```ts
  * import { effects } from '@yaks/effects'
@@ -175,22 +178,23 @@ let open = (o: Open, eid: string, tx: Tx, write: Write) =>
  * ```
  *
  * It is idempotent, which is what lets a boot reconciliation replay it over
- * every dream in the graph: the second run finds the lock, or the floor it
- * moved, and opens nothing. Its own write moves that floor, so the write wakes
- * this handler once more and that run is the one that finds the dream resting.
+ * every dream in the graph: the second run finds the claim, or the floor it
+ * moved, and opens nothing. Its own write moves that floor, so the write
+ * triggers this handler once more, and that run is the one that finds the
+ * dream resting.
  */
 export let opening = (o: Open): Handler => (event, tx, write) =>
   open(o, event.entity.eid, tx, write)
 
 /**
  * The handler a WAKE runs: registered on `created(fired)` and
- * `changed(fired.at)`, it is how a dream that rests comes back at all. A
+ * `changed(fired.at)`, it is how a resting dream comes back at all. A
  * recurring @yaks/wake `wake` on the dream — or one aimed at it through
- * `wake.target` — fires, and the dream is asked again whether it is due.
+ * `wake.target` — fires, and the dream is checked again for whether it is due.
  *
- * A wake that fires on something that is not a dream is nothing to this
- * handler, which is why it may be registered on the component rather than on
- * one schedule.
+ * A wake that fires on something that is not a dream does nothing here, which
+ * is why this can be registered on the component rather than on one particular
+ * schedule.
  */
 export let ringing = (o: Open): Handler => (event, tx, write) =>
   then(tx.get([event.entity.eid]), (found) =>
@@ -202,10 +206,10 @@ export let ringing = (o: Open): Handler => (event, tx, write) =>
     ))
 
 /**
- * The two watches that make a dream come back: the dream stirring — filed now,
- * or its floor moved into the present — and a @yaks/wake `wake` firing on one.
- * {@link https://jsr.io/@yaks/dreaming/doc/effects/~/effects | the effects
- * facet} is this list, built from what a config named.
+ * The two watches that bring a dream back: the dream itself changing — created
+ * now, or its floor moved into the present — and a @yaks/wake `wake` firing on
+ * one. {@link https://jsr.io/@yaks/dreaming/doc/effects/~/effects | the
+ * `effects` export} is this list, built from what the configuration named.
  */
 export let watches = (o: Open): Watch[] => {
   let stir = opening(o)
@@ -216,8 +220,8 @@ export let watches = (o: Open): Watch[] => {
       created: stir,
       changed: { floor: stir },
       // The handler opens nothing on a dream that is resting or already has a
-      // desk, so replaying it over every dream at boot is safe: what a crash
-      // interrupted is picked up, and what it did not is left alone.
+      // session, so replaying it over every dream at boot is safe: what a
+      // crash interrupted is picked up, and what it did not is left alone.
       sweep: { pending: `.${DREAM}` },
       doc: 'open a desk on a dream whose floor has passed',
     },
@@ -225,7 +229,7 @@ export let watches = (o: Open): Watch[] => {
       comp: FIRED,
       created: rang,
       changed: { at: rang },
-      doc: 'a wake came back on a dream: ask whether it is due',
+      doc: 'a wake fired on a dream: check whether it is due',
     },
   ]
 }

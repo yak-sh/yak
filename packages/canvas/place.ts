@@ -7,8 +7,8 @@
 // windows given the same wall choose the same spot.
 //
 // A client that knows better (a pointer position, a drop point) should place
-// the card there instead; this is the answer for "somewhere sensible", which
-// is what a keyboard, a search result, or a script has to work with.
+// the card there instead; this computes "somewhere sensible", which is all a
+// keyboard shortcut, a search result, or a script has to go on.
 
 import type { Pin } from './comp.ts'
 import { bounds, overlaps, rect, type Size } from './geom.ts'

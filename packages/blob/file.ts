@@ -1,20 +1,20 @@
-// The backend that is a directory: one file per object, named by its address.
-// It is the oldest content-addressed store there is, and it is the right one
-// for large or binary content — nothing reads it but this package, and a
-// filesystem is very good at handing back a big file.
+// The byte store that is a directory: one file per object, named by its
+// address. It is the oldest form of content-addressed storage there is, and it
+// is the right one for large or binary content — nothing reads it but this
+// package, and a filesystem is very good at handing back a big file.
 //
 // The runtime's file API is LOOKED UP rather than imported, so this module
 // loads and type-checks anywhere — in a browser bundle, in a Worker — with no
 // platform types in the package's compile at all. Where there is no filesystem
-// it throws when called, which is the honest answer: use a store that exists
+// it throws when called, which is the correct answer: use a store that exists
 // there.
 //
-// A name is never taken from a caller: the file is named by the address, which
-// this package computes, so no path can escape the directory.
+// No part of the name comes from a caller: the file is named by the address,
+// which this package computes, so no path can escape the directory.
 
 import type { Blobs } from './store.ts'
 
-// The three calls this backend needs, as the runtime spells them.
+// The three calls this store needs, under the names the runtime gives them.
 type Fs = {
   mkdir: (path: string, opts: { recursive: boolean }) => Promise<unknown>
   read: (path: string) => Promise<Uint8Array>

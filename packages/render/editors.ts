@@ -1,4 +1,5 @@
-/** The portable Edit family: declarations select controls, hosts apply actions. */
+/** The portable Edit family: column declarations select controls, and the
+ * rendering backend applies the actions. */
 
 import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'

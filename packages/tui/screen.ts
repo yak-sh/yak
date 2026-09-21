@@ -30,7 +30,7 @@ export let terminalFocused: Signal<boolean> = signal(true)
 /** What the last paint measured, per element id. */
 export let metrics: Signal<Metrics> = signal<Metrics>({})
 
-/** What a key handler answers: true when it consumed the key. */
+/** What a key handler returns: true when it consumed the key. */
 export type Keys = (key: Key) => boolean | void
 
 let stack: Keys[] = []

@@ -1,10 +1,11 @@
-// Keeping the vectors true to the text, off the write path.
+// Keeping the vectors in step with the text, off the write path.
 //
-// Embedding is slow and remote; a write is neither. So nothing here runs when a
-// row changes — the sweep runs on its own schedule and reconciles: it drops the
-// vectors of entities that no longer have text, and re-embeds the ones whose
-// text (or model) moved. What decides "moved" is the content hash stored beside
-// each vector, so an unchanged corpus costs one query and no embedder calls.
+// Embedding is slow and usually remote; a write is neither. So nothing here
+// runs when a row changes — the sweep runs on its own schedule and reconciles:
+// it deletes the vectors of entities that no longer have text, and re-embeds
+// the ones whose text (or model) changed. What decides "changed" is the content
+// hash stored beside each vector, so an unchanged corpus costs one query and no
+// calls to the embedder.
 //
 // The sweep is the only asynchronous thing in this package, because an embedder
 // may be a network call. Everything a query touches stays synchronous.
@@ -17,9 +18,9 @@ import { TABLE } from './ddl.ts'
 import { pack, unit } from './vector.ts'
 
 /**
- * One entity's embeddable text: its integer owner id, its eid, the text joined
- * from every field it wears, and the hash of the vector already stored for it
- * (null when it has none).
+ * One entity's embeddable text: its integer owner id, its eid, the text of all
+ * its embedded fields joined together, and the hash of the vector already
+ * stored for it (null when it has none).
  */
 export type Source = {
   owner: number
@@ -29,7 +30,7 @@ export type Source = {
 }
 
 // The pieces joined per entity, in field order. Assembled here rather than with
-// a SQL group_concat because the join order matters and SQLite does not promise
+// a SQL group_concat because the order matters and SQLite does not guarantee
 // one for an aggregate.
 let assemble = (
   rows: { owner: number; eid: Eid; had: string | null; t: string }[],
@@ -45,9 +46,9 @@ let assemble = (
 }
 
 /**
- * Every living entity with text to embed, its text assembled and its stored
- * hash beside it. The graves are excluded here rather than pruned later, so a
- * deleted entity stops being a neighbour immediately.
+ * Every entity that still exists and has text to embed, its text assembled and
+ * its stored hash beside it. Deleted entities are excluded here rather than
+ * pruned later, so an entity stops being a neighbour as soon as it is deleted.
  */
 export let sources = (db: Driver, fields: Field[]): Source[] => {
   let text = pieces(fields)
@@ -80,9 +81,10 @@ export let stale = (
     .slice(0, limit)
 
 /**
- * Drop the vectors of entities that no longer have any: deleted, emptied, or
- * no longer wearing an embedded component. Reads the SAME rule {@link sources}
- * embeds by, so the table can never keep a vector the sweep would never refresh.
+ * Delete the vectors of entities that should no longer have one: deleted,
+ * emptied, or no longer carrying an embedded component. It uses the SAME
+ * statement {@link sources} embeds from, so the table can never keep a vector
+ * the sweep would never refresh.
  */
 export let prune = (db: Driver, fields: Field[]): void => {
   let text = pieces(fields)
@@ -122,10 +124,10 @@ export type Swept = {
 
 /**
  * One reconciliation pass: prune, then embed what is stale, oldest work first.
- * `limit` bounds a pass so a huge backlog can be drained in slices; the default
- * drains it whole. An embedder that throws stops the pass — the rest stay stale
- * for the next one, and the error reaches the caller rather than being swallowed
- * into a quietly half-embedded corpus.
+ * `limit` bounds a pass so a large backlog can be worked through in slices; the
+ * default works through it all. An embedder that throws stops the pass — the
+ * rest stay stale until the next one, and the error reaches the caller rather
+ * than being swallowed into a quietly half-embedded corpus.
  */
 export let sweep = async (
   db: Driver,

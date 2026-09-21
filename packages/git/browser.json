@@ -1,5 +1,5 @@
 {
-  "_": "The browser gate: @yaks/git must type-check with only the web platform in scope — no Deno namespace, no Node types. `deno check --config packages/git/browser.json packages/git/mod.ts` is the check; it is part of `deno task check`. The one platform API this package uses is `crypto.subtle`, which every runtime has.",
+  "_": "The browser check: @yaks/git must type-check with only the web platform in scope — no Deno namespace, no Node types. The command is `deno check --config packages/git/browser.json packages/git/mod.ts`, and it is part of `deno task check`. The one platform API this package needs is `crypto.subtle`, which every runtime has.",
   "compilerOptions": {
     "lib": ["dom", "esnext"],
     "strict": true

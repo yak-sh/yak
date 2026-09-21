@@ -1,6 +1,6 @@
-// The persona words, and only the words: the `vocab` facet a host takes
-// (`@yaks/persona/vocab`). It reaches no storage, no SQL and no runtime, so a
-// browser tab loading this vocabulary loads nothing else.
+// The persona component declarations alone, exported as
+// `@yaks/persona/vocab`. Nothing here touches storage, SQL or any runtime API,
+// so a browser tab that only needs these components loads nothing else.
 
 import type { VocabDoc } from '@yaks/vocab'
 import { personaDoc } from './comp.ts'

@@ -16,22 +16,22 @@
           "type": "string",
           "format": "uri",
           "identity": true,
-          "description": "the canonical address — what the page IS, so the entity's id is derived from it and witnessing one page twice is one entity"
+          "description": "the canonical address of the page; the entity id is derived from it, so recording the same page twice lands on one entity"
         },
         "frozen_at": {
           "type": "string",
           "format": "date-time",
           "stamped": true,
-          "description": "when its bytes were captured, if they were"
+          "description": "when a copy of the document was stored, if one was"
         },
         "bytes": {
           "type": "string",
           "bare": false,
           "stamped": true,
-          "description": "where the captured document is: its SHA-256 address in the host's blob store"
+          "description": "where the stored copy is: its SHA-256 address in the server's blob store"
         }
       },
-      "description": "a page as witnessed: the address it was at, and when and where its bytes were frozen"
+      "description": "a web page as it was seen: the address that was read, and when and where a copy of it was stored"
     }
   }
 }

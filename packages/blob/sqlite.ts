@@ -1,19 +1,20 @@
-// The backend that lives in the database the rows already live in: one table
-// of `(sha, value)` beside the component tables. It is the backend to reach for
+// The byte store that lives in the database the rows already live in: one table
+// of `(sha, value)` beside the component tables. It is the one to reach for
 // first — the bytes land in the same transaction as the row that addresses
 // them, so a committed document can never point at a value that was not
 // written, and there is no second thing to back up.
 //
-// It also gives the read side something no other backend can: the resolution is
-// a SQL EXPRESSION, so a query and a whole-entity gather both read text without
-// a second round trip. {@link blobRead} builds that expression as an @yaks/sql
+// It also gives the read side something no other store can: the resolution is a
+// SQL EXPRESSION, so a query and a whole-entity read both get text without a
+// second round trip. {@link blobRead} builds that expression as an @yaks/sql
 // read override, one per content-addressed column; {@link blobText} builds its
-// smaller half — the address alone, resolved — for the places that already hold
-// one, chiefly a full-text index's triggers and the view it reads back through.
+// smaller half — an address resolved to its text — for the places that already
+// hold an address, chiefly a full-text index's triggers and the view it reads
+// back through.
 //
 // The table holds TEXT, not bytes — which is what lets the read be an ordinary
-// string expression — so this backend is for prose. Binary content belongs in
-// the file or object backends, whose bytes never have to be read by SQL.
+// string expression — so this store is for prose. Binary content belongs in the
+// file or object stores, whose bytes never have to be read by SQL.
 //
 // Every name in the layout is configurable because this table is often one an
 // application already has: point {@link Layout} at it and the existing rows are
@@ -49,10 +50,11 @@ let named = (l: Layout = {}): Named => ({
 
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
-// This table's column is TEXT, so bytes that are not UTF-8 have no spelling in
-// it. Refusing them here is the difference between a store that cannot hold an
-// object and a store that holds a mangled one: the address would answer bytes
-// that do not hash to it, which is the one thing content addressing promises.
+// This table's column is TEXT, so bytes that are not valid UTF-8 have no
+// representation in it. Refusing them here is the difference between a store
+// that cannot hold an object and one that holds a mangled copy: the address
+// would return bytes that do not hash to it, breaking the one thing content
+// addressing promises.
 let strict = new TextDecoder('utf-8', { fatal: true })
 let asText = (bytes: Uint8Array): string => {
   try {
@@ -81,7 +83,7 @@ export let blobSchema = (layout: Layout = {}): string[] => {
 
 /**
  * A {@link Blobs} over a SQLite table. Synchronous, so a graph writing through
- * it stays synchronous end to end; `put` is insert-or-ignore, because writing
+ * it stays synchronous end to end; `put` is `insert or ignore`, because writing
  * the same address twice is writing the same bytes twice.
  */
 export let sqliteBlobs = (driver: Driver, layout: Layout = {}): Blobs => {
@@ -109,14 +111,14 @@ export let sqliteBlobs = (driver: Driver, layout: Layout = {}): Blobs => {
 
 /**
  * How a stored address reads as its text, keyed `comp.prop`: given SQL naming
- * the ADDRESS, each entry answers SQL naming the text it stands for. It is the
+ * the ADDRESS, each entry returns SQL naming the text it stands for. It is the
  * smaller half of a read override — no entity, no join, just the value — which
- * is the form a place that already holds the address needs: an FTS5 trigger
+ * is the form needed wherever the address is already in hand: an FTS5 trigger
  * (`new."body"`), a view column, a report.
  *
- * @yaks/fts and @yaks/sqlite take a map of this shape so their indexes hold
- * WORDS rather than addresses; both declare it structurally, so neither has to
- * depend on this package to be handed one.
+ * @yaks/fts and @yaks/sqlite accept a map of this shape so their indexes hold
+ * WORDS rather than addresses; both declare the type structurally, so neither
+ * has to depend on this package to be handed one.
  */
 export type Text = Record<string, (address: string) => string>
 
@@ -126,8 +128,8 @@ let textExpr = (l: Named) => (address: string) =>
   ` where __b.${q(l.key)} = ${address})`
 
 /**
- * The resolution of every content-addressed column in a vocabulary, as
- * {@link Text}. Hand it to `@yaks/sqlite`'s `storage()` (or to @yaks/fts's
+ * The resolution for every content-addressed column in a vocabulary, as
+ * {@link Text}. Pass it to `@yaks/sqlite`'s `storage()` (or to @yaks/fts's
  * `schema()`) and a full-text index over a body column holds the prose instead
  * of the hash that stands for it:
  *
@@ -152,9 +154,9 @@ export let blobText = (vocab: Vocab, layout: Layout = {}): Text => {
 
 // The read expression for one column: the stored text, found by joining the
 // column's address to the blob table. It is written self-contained — it names
-// its own component table rather than assuming the query joined one — so the
-// same expression serves a membership predicate, a dereferenced path, and a
-// whole-entity gather.
+// its own component table rather than assuming the query already joined one —
+// so the same expression serves a filter predicate, a dereferenced path, and a
+// whole-entity read.
 let readExpr = (l: Named, comp: string, prop: string) => (owner: string) =>
   textExpr(l)(
     `(select __c.${q(prop)} from ${q(comp)} __c where __c."entity" = ${owner})`,
@@ -163,9 +165,9 @@ let readExpr = (l: Named, comp: string, prop: string) => (owner: string) =>
 /**
  * The read side, as @yaks/sql read overrides: one entry per content-addressed
  * column, each resolving the stored address to its text in the statement
- * itself. Hand them to a compile (or to `@yaks/sqlite`'s `storage()`, which
- * passes them on to both the query and the whole-entity gather) and a body
- * column reads as text everywhere:
+ * itself. Pass them to a compile (or to `@yaks/sqlite`'s `storage()`, which
+ * passes them on to both the query and the whole-entity read) and a body column
+ * reads as text everywhere:
  *
  * ```ts
  * import { storage } from '@yaks/sqlite'

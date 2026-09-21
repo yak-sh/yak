@@ -17,7 +17,7 @@
         ]
       ],
       "sync": "server",
-      "description": "where one window is looking at one canvas — shared so another tab, or a tool, can read and move it",
+      "description": "where one window is looking at one canvas — synced to the server so another tab, or a tool, can read it and move it",
       "properties": {
         "client": {
           "type": "string",
@@ -73,7 +73,7 @@
           "type": "string",
           "ref": "entity",
           "death": "cascade",
-          "description": "the entity shown — the card dies with it, because a card about nothing is nothing"
+          "description": "the entity shown — the card is deleted with it, because a card showing nothing is nothing"
         },
         "view": {
           "type": "string",
@@ -90,18 +90,18 @@
       "properties": {
         "user_agent": {
           "type": "string",
-          "description": "what the window said it was"
+          "description": "the user-agent string the window reported"
         },
         "actor": {
           "type": "string",
           "ref": "entity",
           "death": "detach",
-          "description": "who is at the window — cleared, not killed, when they are gone"
+          "description": "who is at the window — the column is cleared, not the row deleted, when they are gone"
         },
         "ip": {
           "type": "string",
           "stamped": true,
-          "description": "where it connected from — the server writes this"
+          "description": "the address it connected from — written by the server"
         }
       }
     },
@@ -115,7 +115,7 @@
         ]
       ],
       "sync": "server",
-      "description": "what one window has open — shared, so a tool can move somebody there by writing it",
+      "description": "what one window has open — synced to the server, so a tool can move someone there by writing it",
       "properties": {
         "client": {
           "type": "string",
@@ -127,7 +127,7 @@
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "description": "the entity it is showing — kept when that dies, so the trail back still reads"
+          "description": "the entity it is showing — kept when that entity is deleted, so the history still makes sense"
         },
         "view": {
           "type": "string",
@@ -158,7 +158,7 @@
           "type": "string",
           "ref": "board",
           "death": "cascade",
-          "description": "the list whose sections are folded — a `board` in your own vocabulary"
+          "description": "the list whose sections are collapsed — a `board` in your own vocabulary"
         },
         "statuses": {
           "type": "string",
@@ -179,7 +179,7 @@
           "type": "string",
           "ref": "pane",
           "death": "detach",
-          "description": "the pane everything else hangs under"
+          "description": "the pane every other pane sits inside"
         }
       }
     },
@@ -188,7 +188,7 @@
       "type": "object",
       "kind": true,
       "sync": "server",
-      "description": "one region of a layout: a split, or something shown",
+      "description": "one region of a layout: either a split, or a region showing an entity",
       "properties": {
         "layout": {
           "type": "string",
@@ -222,7 +222,7 @@
           "type": "string",
           "ref": "entity",
           "death": "detach",
-          "description": "the entity shown in it, when it shows one"
+          "description": "the entity shown in it, if it shows one"
         },
         "view": {
           "type": "string",
@@ -273,13 +273,13 @@
         ]
       ],
       "sync": "server",
-      "description": "what one window is holding, off the canvas",
+      "description": "what one window is holding aside, off the canvas",
       "properties": {
         "client": {
           "type": "string",
           "ref": "client",
           "death": "release",
-          "description": "the window holding it — the shelf empties when the window goes, the things on it live on"
+          "description": "the window holding it — when the window goes the shelf empties, and the entities on it remain"
         }
       }
     }

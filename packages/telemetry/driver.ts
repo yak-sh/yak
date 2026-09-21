@@ -1,10 +1,10 @@
-// The handle this package runs statements through: the smallest shape a
-// SQLite binding can satisfy, one function that runs a statement with bound
-// params and returns rows, one that runs a statement for its effect. Nothing
-// here names a concrete library; an application hands over the two methods it
-// already has.
+// The database handle this package runs statements through: the smallest
+// interface a SQLite binding can satisfy — one function that runs a statement
+// with bound parameters and returns rows, and one that runs a statement for its
+// effect. Nothing here names a specific library; the application passes in the
+// two methods it already has.
 
-/** One row, a bag of column values keyed by name. */
+/** One row: its column values, keyed by column name. */
 export type Row = Record<string, unknown>
 
 /** A bound parameter; nothing is ever concatenated into the SQL text. */
@@ -12,8 +12,8 @@ export type Param = string | number | null
 
 /**
  * A database handle reduced to what this package calls: `query` runs a
- * parameterized statement and returns every row, `exec` runs one for its
- * effect (the schema).
+ * parameterized statement and returns every row, and `exec` runs one for its
+ * effect (creating the schema).
  */
 export type Driver = {
   query: (sql: string, params: Param[]) => Row[]

@@ -1,7 +1,7 @@
 /**
- * @yaks/preact owns the browser door for portable renderers. render hands
- * Preact's hyperscript to the selected renderer; entity binds a registry,
- * vocabulary and store into an <Entity eid view/> component. The store remains
+ * @yaks/preact is the Preact rendering backend for portable renderers. `render`
+ * passes Preact's hyperscript to the selected renderer; `entity` binds a
+ * registry, a vocabulary and a store into an <Entity eid view/> component. The store remains
  * a function, with an optional per-entity subscription supplied beside it.
  * Missing bundles or unmatched views render nothing. Subscriptions belong to
  * the mounted component and are released when its eid changes or it unmounts.

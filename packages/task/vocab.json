@@ -24,11 +24,11 @@
     "blocked": {
       "component": true,
       "type": "object",
-      "description": "something outside the graph is in the way. A facet, never a status: a blocked task is still open work.",
+      "description": "something outside the graph is in the way. Not a status: a blocked task is still open work.",
       "properties": {
         "on": {
           "type": "string",
-          "description": "what it is waiting on, said in words"
+          "description": "what it is waiting on, in words"
         },
         "since": {
           "type": "string",
@@ -40,7 +40,7 @@
     "cancelled": {
       "component": true,
       "type": "object",
-      "description": "the mark a called-off task wears",
+      "description": "the mark on a task that was called off",
       "properties": {
         "at": {
           "type": "string",
@@ -64,7 +64,7 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "the instrument it was written through — the session or client the write came in on"
+          "description": "what the write came in through — the session or client that made it"
         }
       }
     },
@@ -76,7 +76,7 @@
           "at"
         ]
       ],
-      "description": "the mark a finished task wears",
+      "description": "the mark on a finished task",
       "properties": {
         "at": {
           "type": "string",
@@ -96,7 +96,7 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "the instrument it was written through — the session or client the write came in on"
+          "description": "what the write came in through — the session or client that made it"
         }
       }
     },
@@ -134,12 +134,12 @@
             "open"
           ],
           "computed": true,
-          "description": "where the task stands — read off the completed and cancelled marks, never written"
+          "description": "where the task stands — computed from the completed and cancelled marks, never written"
         }
       }
     },
     "statuses": {
-      "description": "every word a task's derived status can be, the host's extra marks included: `wip` is what a task under a live claim reads as, contributed by whoever ships the claim (see MARKS).",
+      "description": "every value a task's computed status can take, including marks other plugins add: a task under a live claim reads `wip`, contributed by the plugin that owns the claim component (see MARKS).",
       "enum": [
         "open",
         "wip",
@@ -152,7 +152,7 @@
       "noun": "task",
       "verb": "new",
       "title": "File a task",
-      "description": "Write down something to do: an entity wearing task{} and doc{title, body}, open by the only definition there is — it wears neither the completed nor the cancelled mark. Say where it is filed and it wears filed{} too.",
+      "description": "Write down something to do: an entity with task{} and doc{title, body}. It is open because it has neither the completed nor the cancelled mark. Name a project, priority, assignee or domain and it gets a filed{} component too.",
       "input": {
         "title": {
           "type": "string",
@@ -160,7 +160,7 @@
         },
         "body": {
           "type": "string",
-          "description": "the irreducible ask and its pointers, as Markdown"
+          "description": "what is being asked for, plus pointers to the details, as Markdown"
         },
         "project": {
           "type": "string",
@@ -199,12 +199,12 @@
       "tool": true,
       "noun": "task",
       "verb": "list",
-      "title": "The list",
-      "description": "The tasks a query line selects, as whole bundles. `.task` is always on the line; what you say is joined onto it, and saying nothing means `.status=open`. The grammar is the query grammar: `.status=done`, `.filed.project=P-19`, `.priority<3`, a bare word for its text.",
+      "title": "List tasks",
+      "description": "The tasks a query selects, as whole bundles. `.task` is always part of the query and yours is joined onto it; passing no query lists `.task.status=open`. The grammar is the query grammar: `.status=done`, `.filed.project=P-19`, `.priority<3`, a bare word to match text.",
       "input": {
         "query": {
           "type": "string",
-          "description": "dot-params joined onto `.task`"
+          "description": "query parameters joined onto `.task`"
         },
         "limit": {
           "type": "number",
@@ -225,13 +225,13 @@
       "tool": true,
       "noun": "task",
       "verb": "update",
-      "title": "Move a task",
-      "description": "Change where a task stands or where it is filed. `status` is not a column: done adds the completed mark and drops the cancelled one, cancelled the other way about, and open drops both. Anything you leave out is left alone.",
+      "title": "Update a task",
+      "description": "Change a task's status, title, body or filing. `status` is not a column: done adds the completed mark and removes the cancelled one, cancelled does the reverse, and open removes both. Anything you leave out is left alone.",
       "input": {
         "task": {
           "type": "string",
           "ref": "task",
-          "description": "the task to move"
+          "description": "the task to change"
         },
         "status": {
           "type": "string",

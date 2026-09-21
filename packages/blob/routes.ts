@@ -1,25 +1,26 @@
-// A stored object as an address anyone can GET, and the door that puts one
-// there: the `routes` facet a host takes (`@yaks/blob/routes`). One path,
-// `/blob/<sha256>`, both ways.
+// The two HTTP endpoints: a stored object at an address anyone can GET, and the
+// PUT that puts one there. This is the module a server imports from
+// `@yaks/blob/routes`. One path, `/blob/<sha256>`, both ways.
 //
 // The address is the NAME, which is what makes an upload a PUT: the caller
-// says what the bytes are and the server has only to agree. So the same file
-// sent twice — or by two people, or by one retrying — is one stored object and
-// one row, and bytes that do not hash to the address they were sent to are
-// refused. Nothing else about them is inspected; whoever knows the hash has
-// the bytes, and to know it you had them already.
+// states what the bytes are and the server only has to agree. So the same file sent
+// twice — or by two people, or by one client retrying — is one stored object
+// and one row, and bytes that do not hash to the address they were sent to are
+// refused. Nothing else about them is inspected; whoever knows the hash has the
+// bytes, and to know it you had them already.
 //
-// Who may upload is the GRAPH's question, never a second one this door asks.
-// A PUT rehearses its `artifact` row against the graph first, so whatever
-// refuses that write refuses the upload, and a host with an upload policy
-// writes it as a rule like any other. The two things left over are the ones
-// only a host can know, and they are its options: where the bytes live
+// Who may upload is the GRAPH's question, never a second one these endpoints
+// ask. A PUT first runs its `artifact` row against the graph as a check, so
+// whatever refuses that write refuses the upload, and a server with an upload
+// policy writes it as a rule like any other. The two things left over are the
+// ones only the server can know, and they are its options: where the bytes live
 // (`store`) and how large one may be (`limit`).
 //
-// The read is a prefix route because the address is the rest of it: a
-// content-addressed read has no query, no range and no identity. The row the
-// PUT minted supplies the one thing the bytes cannot say about themselves —
-// what they are — and the answer is fenced either way (./serve.ts).
+// The GET is a prefix route because the address is the rest of the path: a
+// content-addressed read takes no query string, no range and no identity. The
+// row the PUT created supplies the one thing the bytes cannot state about
+// themselves — what they are — and the response is fenced either way
+// (./serve.ts).
 
 import { type Authenticate, json, refuse, type Route, signed } from '@yaks/api'
 import type { Graph } from '@yaks/graph'
@@ -31,27 +32,29 @@ import { served } from './serve.ts'
 import { sqliteBlobs } from './sqlite.ts'
 import type { Blobs } from './store.ts'
 
-/** Where a stored object answers from. */
+/** The path prefix both endpoints are mounted under. */
 export let PREFIX = '/blob/'
 
-/** The largest upload this door takes where a config names no `limit`. */
+/** The largest upload accepted when the configuration sets no `limit`. */
 export let LIMIT = 25 * 1024 * 1024
 
-/** What a config says to this plugin. */
+/** The options a configuration passes to this plugin. */
 export type Options = {
-  /** where the objects this door serves and takes LIVE; name none and they
-   * live in the host's own table, beside the text `./rules` keeps there */
+  /** where the objects these endpoints serve and accept LIVE; name none and
+   * they live in the server's own table, beside the text `./rules` keeps
+   * there */
   store?: Backend
   /** the largest upload, in bytes (default {@link LIMIT}) */
   limit?: number
 }
 
-/** A backend, as a config names one — the same three ./store.ts describes. */
+/** A byte store, as a configuration names one — the same three ./store.ts
+ * describes. */
 export type Backend =
   | {
-    /** the host's own SQLite table — the default, and TEXT: it is the table
-     * SQL reads a body column through (./sqlite.ts), so a host taking binary
-     * uploads names one of the others */
+    /** the server's own SQLite table — the default, and TEXT: it is the table
+     * SQL reads a body column through (./sqlite.ts), so a server accepting
+     * binary uploads names one of the others */
     via: 'sqlite'
   }
   | {
@@ -63,19 +66,20 @@ export type Backend =
   | {
     /** an S3-shaped bucket, R2 included */
     via: 'object'
-    /** the binding itself, so this store is named by a host composing in
-     * code rather than by a JSON config */
+    /** the binding object itself, so this store is configured by a server
+     * composing in code rather than from a JSON file */
     bucket: Bucket
     /** what to namespace the keys with */
     prefix?: string
   }
 
-/** A named store, built — or the sentence saying why there is none. A host
- * that thinks it is keeping uploads somewhere and is not is worse than one
- * that will not boot, so it is SAID rather than kept quiet; it is said rather
- * than thrown, because missing config never stops a host coming up. A door
- * with nowhere to put bytes is not mounted at all, so an upload is refused
- * where it is attempted instead of answering into nothing. */
+/** The named store, built — or the message explaining why there is none. A
+ * server that believes it is keeping uploads somewhere and is not is worse than
+ * one that does not start, so the reason is REPORTED rather than swallowed; it
+ * is reported rather than thrown, because missing configuration never stops a
+ * server coming up. With nowhere to put bytes, the endpoints are not mounted at
+ * all, so an upload is refused where it is attempted instead of being written
+ * into nothing. */
 export let backend = (
   said: Backend,
   host: { sql: Driver },
@@ -103,17 +107,18 @@ let addressed = (request: Request): string | null => {
   return /^[0-9a-f]{64}$/.test(sha) ? sha : null
 }
 
-// A refusal in the shape every other door here answers with (@yaks/api).
+// A refusal in the JSON shape every other endpoint here uses (@yaks/api).
 let no = (error: string, message: string, code: number): Response =>
   json({ error, message }, code)
 
 let missing = () => no('NotFound', 'no object at that address', 404)
 
-// The body, counted as it arrives: `null` where it ran past the bound. A
-// caller that declares no length must not be able to make the server hold one,
-// so the limit is enforced on the bytes themselves and never on what a header
-// claimed — and the rest is read and dropped rather than cut off, so the
-// refusal reaches the caller instead of a reset connection.
+// The request body, counted as it arrives: `null` where it ran past the limit.
+// A caller that declares no length must not be able to make the server hold an
+// unbounded body, so the limit is enforced on the bytes themselves and never on
+// what a `content-length` header claimed — and the remainder is read and
+// discarded rather than cut off, so the refusal reaches the caller instead of a
+// reset connection.
 let bounded = async (
   request: Request,
   limit: number,
@@ -135,8 +140,8 @@ let bounded = async (
   return bytes
 }
 
-// What the caller says these bytes are, as a media type and nothing else. The
-// parameters are dropped and the shape is checked because this string is
+// What the caller declares these bytes are, as a media type and nothing else.
+// The parameters are dropped and the shape is validated because this string is
 // written into a response header every time the object is read back.
 let mediaOf = (request: Request): string => {
   let said = (request.headers.get('content-type') ?? '').split(';')[0].trim()
@@ -146,7 +151,8 @@ let mediaOf = (request: Request): string => {
     : 'application/octet-stream'
 }
 
-/** `GET /blob/<sha256>` — the bytes; `PUT /blob/<sha256>` — the bytes in. */
+/** The two endpoints: `GET /blob/<sha256>` returns the bytes, and
+ * `PUT /blob/<sha256>` stores them. */
 export let routes = (
   host: { sql: Driver; graph: Graph; who?: Authenticate },
   options: Options = {},
@@ -158,9 +164,9 @@ export let routes = (
   }
   let limit = options.limit ?? LIMIT
 
-  // What the row says this object is. The bytes are the truth about
-  // themselves and answer without it, so a store holding an object no row
-  // names still serves it — as the octet-stream it is to anyone but its owner.
+  // What the row records this object as. The bytes stand on their own and are
+  // served without it, so a store holding an object no row names still serves
+  // it — as the octet-stream it is to anyone but its owner.
   let mimeOf = async (sha: string) => {
     let [found] = await host.graph.read(`.eid=${sha}`)
     return (found?.artifact as Artifact | undefined)?.media_type
@@ -197,17 +203,18 @@ export let routes = (
           media_type: mediaOf(request),
           size: bytes.length,
         }
-        // Ask, store, write — signed as whoever the door says is calling, so
-        // an upload is attributed the way a write through `/apply` beside it
-        // is. The ask is a rehearsal (`check`), so the policy that governs a
-        // write decides the upload BEFORE anything is kept, and the bytes are
-        // in place before the row that names them — nothing ever points at an
-        // object the store does not hold. A PUT that died in the middle left
-        // an unnamed object, which is what a content-addressed store has
+        // Check, store, write — signed as whoever `host.who` reports is
+        // calling, so an upload is attributed the way a write through `/apply`
+        // beside it is. The first apply runs with `check`, which validates the
+        // write without committing it, so the policy that governs a write
+        // decides the upload BEFORE anything is kept; and the bytes are in
+        // place before the row that names them, so nothing ever points at an
+        // object the store does not hold. A PUT that died in between left an
+        // object no row names, which is what a content-addressed store has
         // instead of a mess, and repeating the PUT is the repair.
         let actor = await host.who?.(request) ?? null
-        // A fresh batch each time: `apply` reads and writes the bundles it is
-        // given, so the rehearsal's is not the write's.
+        // Fresh rows each time: `apply` reads and writes the bundles it is
+        // given, so the check's must not be the write's.
         let batch = () => signed([{ entity: { eid: sha }, artifact }], actor)
         await host.graph.apply(batch(), { check: true })
         await keep(store, sha, bytes)

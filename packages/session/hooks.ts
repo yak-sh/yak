@@ -5,31 +5,31 @@
 // command at the edges of a session and hands it the event as JSON on stdin.
 // That is all a graph needs to be told: the START of a session is where a
 // transcript becomes an entity and reads back what it was in the middle of,
-// and the END is where it says what it did and lets go of what it held. So the
-// entries here are two words of `yak` and a `-`, which is the command line's
-// own spelling for "this value is stdin" — the tool parses the payload, and
-// nothing in between has to know the harness's dialect.
+// and the END is where it records what it did and releases what it held. So
+// each entry here is two `yak` subcommands and a `-`, which is the conventional
+// command-line argument for "read this value from stdin" — the tool parses the
+// payload, and nothing in between has to know the harness's own JSON format.
 //
 // NOTHING HERE MAY FAIL LOUDLY. A hook that exits non-zero is a session that
 // will not start, so every entry ends `|| true`: a graph that is not there
 // means no context today, never a wedged harness.
 //
-// It is NOT re-exported from the package's front door, and never will be: a
-// browser tab loading @yaks/session must reach no runtime, and this module
-// writes a file. `@yaks/session/tools` is where it is reached from — a host
-// facet, which is the side of the door a settings file belongs on.
+// It is NOT re-exported from the package's main module, and never will be: a
+// browser tab loading @yaks/session must reach no runtime API, and this module
+// writes a file. It is reached through `@yaks/session/tools`, which is a
+// server-side module and the right side of that boundary for a settings file.
 //
 // The merge is the careful part. A settings file is the person's, with their
 // own entries in it, so an install REPLACES what an earlier install wrote and
-// leaves everything else exactly where it was — told apart by the commands,
-// which is the only durable mark a JSON file carries.
+// leaves everything else exactly where it was — identified by the commands,
+// which is the only durable marker a JSON file carries.
 
-/** One lifecycle entry, as a harness settings file spells it. */
+/** One lifecycle entry, in the form a harness settings file stores it. */
 export type Hook = {
   hooks: { type: 'command'; command: string; timeout?: number }[]
 }
 
-/** Where the entries go, unless the caller says otherwise. */
+/** Where the entries go, unless the caller names another path. */
 export let settingsPath = (home = Deno.env.get('HOME') ?? '.'): string =>
   `${home}/.claude/settings.json`
 
@@ -42,9 +42,9 @@ let cmd = (command: string, timeout?: number): Hook => ({
 })
 
 /**
- * The entries this package owns, keyed by the event each answers.
+ * The entries this package owns, keyed by the harness event each responds to.
  *
- * `yak` is how the command is spelled on this box — a full path where it is
+ * `yak` is the path to the command on this machine — a full path where it is
  * not on the harness's PATH.
  */
 export let lifecycle = (yak = 'yak'): Record<string, Hook[]> => ({
@@ -53,7 +53,8 @@ export let lifecycle = (yak = 'yak'): Record<string, Hook[]> => ({
   SessionEnd: [cmd(`${yak} session wrap --hook - || true`, 5)],
 })
 
-// Ours, told apart by what it runs. A person's own entry never says this.
+// Ours, identified by the command it runs. A person's own entry never runs
+// this.
 let MINE = /\byak\b.*\bsession (context|wrap) --hook\b/
 let mine = (h: unknown): boolean =>
   ((h as Hook | undefined)?.hooks ?? []).some((x) =>

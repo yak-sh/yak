@@ -11,36 +11,36 @@
 //   fold{client, board}        the sections one window has collapsed
 //   shelf{client}              what one window is holding, off the wall
 //
-// A card is an ENTITY, not a private view-model, which is what lets anything
-// else read the interface and move it — a second window, a script, an agent.
+// A card is an ENTITY, not a private view model, which is what lets anything
+// else read the interface and change it — a second window, a script, an agent.
 //
-// DEATH. `card.target` is `death: cascade`: a note about a thing that no
-// longer exists is not a note, so the card dies with what it shows, and its
-// `pin` (which cascades on the canvas) goes with the wall. Nothing sweeps
-// orphans because none are left behind.
+// DELETION. `card.target` is `death: cascade`: a note about a thing that no
+// longer exists is not a note, so the card is deleted with what it shows, and
+// its `pin` (which cascades on the canvas) is deleted with the canvas. Nothing
+// sweeps for orphans, because none are left behind.
 //
-// TIERS. Every component says where its data lives, in @yaks/vocab's `sync`
-// keyword. The per-window ones — `camera`, `cursor`, `fold`, `shelf`, and the
-// `client` they hang off — are the interesting call: they describe ONE
-// window, so `sync: none` looks right, and it is wrong. They say `server`
-// because something else has to read and write them: a second tab
-// restoring the viewport it left, a directory of who is looking at what, a
-// tool that moves somebody's open card by writing their `cursor`. State that
-// never leaves the tab can do none of that.
+// SYNC. Every component declares where its data goes, through @yaks/vocab's
+// `sync` keyword. The per-window ones — `camera`, `cursor`, `fold`, `shelf`,
+// and the `client` they belong to — are the interesting decision: they describe
+// ONE window, so `sync: none` looks right, and it is wrong. They declare
+// `server` because something else has to read and write them: a second tab
+// restoring the viewport it left, a directory of who is looking at what, a tool
+// that moves somebody's open card by writing their `cursor`. State that never
+// leaves the tab can do none of that.
 //
-// `pane.parent` yields its bare word (`bare: false`): `parent` is far too
-// ordinary a word for this component to claim vocabulary-wide, so it is said
-// in full — `.pane.parent=<id>`.
+// `pane.parent` does not claim its property name as query shorthand
+// (`bare: false`): `parent` is far too ordinary a name for this component to
+// own vocabulary-wide, so a query writes it in full — `.pane.parent=<id>`.
 //
 // No component here declares `before`. A `before` names ANOTHER kind, and
-// `kindOrder` refuses one that no loaded document declares — so a package
-// that ordered itself against a kind it does not ship could not load on its
-// own. A vocabulary that pairs these components with its own content
-// component says which of the two wins, in its own document.
+// `kindOrder` rejects one that no loaded document declares — so a package that
+// ordered itself against a kind it does not ship could not load on its own. A
+// vocabulary that combines these components with its own content component
+// decides which of the two wins, in its own document.
 //
-// The document itself is `./vocab.json` — plain JSON Schema, readable by
-// anything that reads JSON. This file re-exports it under the name callers
-// say and keeps the prose about why it is shaped the way it is.
+// The components themselves are declared in `./vocab.json` — plain JSON Schema,
+// readable by anything that reads JSON. This file re-exports it under the name
+// callers import and keeps the explanation of why it is shaped this way.
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }

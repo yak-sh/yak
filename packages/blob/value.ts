@@ -1,6 +1,18 @@
-/** Bounded text inspection over a caller-authorized graph entity reader.
- * Does not expose raw blob addresses or bypass graph access control.
- */
+// Two tools that read a long text value in bounded pieces, through a reader the
+// caller supplies. They exist because a model asked for a 200 KB body would
+// otherwise get all of it: `graph_value_read` returns a slice and
+// `graph_value_search` returns matching excerpts, both capped.
+//
+// The reader is the caller's own authorized entity reader, so these tools add
+// no access of their own: they never take a filesystem path or a raw blob
+// address, and they read a graph property by name like any other tool. An
+// optional `revision` is the SHA-256 of the text the caller last saw, so a
+// value that changed underneath fails instead of returning a mix of two
+// versions.
+//
+// Neither tool exposes a raw blob address, and neither bypasses graph access
+// control.
+
 import type { Bundle, Comp } from '@yaks/graph'
 import { address } from './store.ts'
 
@@ -14,7 +26,7 @@ const integer = (v: unknown, fallback: number, max: number) => {
   return n
 }
 
-/** A provider-neutral tool: JSON Schema arguments in, text back. */
+/** A provider-neutral tool declaration: JSON Schema arguments in, text out. */
 export type ValueTool = {
   name: string
   description: string
@@ -22,7 +34,8 @@ export type ValueTool = {
   run: (args: Record<string, unknown>) => Promise<string>
 }
 
-/** Use the same authorized reader as the application's other graph tools. */
+/** The two tools, built over a reader. Pass the same authorized reader the
+ * application's other graph tools use. */
 export const valueTools = (
   read: (entity: string) => Promise<Bundle | undefined>,
 ): ValueTool[] => {
@@ -78,7 +91,8 @@ export const valueTools = (
       const count = integer(args.count, 2048, VALUE_LIMIT)
       if (!count) throw new Error('count must be positive')
       let end = Math.min(text.length, start + count)
-      // JSON escapes control characters; bound the serialized tool response too.
+      // JSON escapes control characters, so the serialized response can be much
+      // larger than the slice; halve the slice until the response fits too.
       while (JSON.stringify(text.slice(start, end).join('')).length > 12000) {
         end = start + Math.floor((end - start) / 2)
       }

@@ -1,19 +1,20 @@
-// What a transcript is doing, read off its entries — never stored. The rule is
-// written twice on purpose, once over bundles (for the daemon, @yaks/ram, and
-// any code holding entries) and once as SQL (the `session.status` derived
-// column @yaks/sqlite reads and filters through), and a test holds the two
-// together. There is no third copy: a `status` column that had to be kept in
-// sync is exactly what the old session comp was, and why its views disagreed.
+// What a transcript is doing, computed from its entries — never stored. The
+// rule is written twice on purpose, once over bundles (for the daemon,
+// @yaks/ram, and any code holding entries) and once as SQL (the
+// `session.status` derived column @yaks/sqlite reads and filters through), and
+// a test holds the two together. There is no third copy: a stored `status`
+// column that had to be kept in sync is exactly what the old session component
+// was, and why its views disagreed.
 //
-// Settled means NOTHING IS OWED. The newest entry says most of it, but not all:
-// a model that says something before it calls a tool leaves an `output` newest
-// in the middle of its turn, and reading that alone ended a run 14 minutes
-// early (T-35230). So an open call — one the newest ask asked for that no
-// result answers — outranks the newest entry, and it is the same set `react`
-// performs next, so the word and the step cannot disagree.
-//   an open call  → running   a tool is owed an answer, whatever landed after
-//   input, result → pending   the model is owed a turn
-//   ask, call     → running   a model or a tool is owed an answer
+// Settled means NOTHING IS OUTSTANDING. The newest entry covers most of it, but
+// not all: a model that returns prose before it calls a tool leaves an `output`
+// as the newest entry in the middle of its turn, and reading that alone ended a
+// run 14 minutes early (T-35230). So an open call — one the newest ask made
+// that no result answers — outranks the newest entry, and it is the same set
+// `react` runs next, so the status and the step cannot disagree.
+//   an open call  → running   a tool owes an answer, whatever landed after
+//   input, result → pending   the model owes a turn
+//   ask, call     → running   a model or a tool owes an answer
 //   output        → settled   the turn returned prose and asked for nothing
 //   stop          → stopped   nothing may be done
 //   exception     → failed    the daemon could not continue past it
@@ -25,8 +26,9 @@
 // no reader ever sees the prose without the calls that came with it.
 //
 // Prose is `content{body}`; alone it is an input, and an `output{source}`
-// beside it says what produced it — the ask, for what a model said. A result,
-// error or exception carries its prose the same way and is itself.
+// beside it records what produced it — the ask, for what a model returned. A
+// result, error or exception carries its prose the same way and is its own
+// kind.
 
 import type { Bundle, Comp } from '@yaks/graph'
 import {
@@ -41,8 +43,8 @@ import {
   USING,
 } from './native.ts'
 
-/** The kinds of entry: the comp an entry wears beside `entry`, or for prose,
- * `output` when an `output` rides beside it and `input` when none does. */
+/** The kinds of entry: the component stored beside `entry`, or for prose,
+ * `output` when an `output` is stored beside it and `input` when none is. */
 export type Kind =
   | 'input'
   | 'ask'
@@ -77,14 +79,14 @@ let KINDS: [string, Kind][] = [
 
 let content = (b: Bundle) => b[CONTENT] as Comp | undefined
 
-/** The ask an entry's prose came from, when a model said it. */
+/** The ask an entry's prose came from, when a model returned it. */
 export let sourceOf = (b: Bundle): string | undefined => {
   let s = (b[OUTPUT] as Comp | undefined)?.source
   return s == null ? undefined : String(s)
 }
 
-/** Which kind of entry a bundle is, or `undefined` for one wearing none of the
- * kind comps and carrying no prose. */
+/** Which kind of entry a bundle is, or `undefined` for one carrying none of
+ * the kind components and no prose. */
 export let kindOf = (b: Bundle): Kind | undefined =>
   KINDS.find(([comp]) => comp in b)?.[1] ??
     (OUTPUT in b ? 'output' : content(b) ? 'input' : undefined)
@@ -103,9 +105,8 @@ export let ordered = (entries: Bundle[]): Bundle[] =>
 export let newestAsk = (entries: Bundle[]): Bundle | undefined =>
   ordered(entries).filter((b) => kindOf(b) == 'ask').at(-1)
 
-/** The calls that no result answers — what the daemon
- * performs next, and what keeps a transcript running past the prose the model
- * said beside them. */
+/** The calls that no result answers — what the daemon runs next, and what
+ * keeps a transcript running past the prose the model returned beside them. */
 export let openCalls = (entries: Bundle[]): Bundle[] => {
   let all = ordered(entries)
   let answered = new Set(
@@ -208,7 +209,7 @@ export let sessionStatus = {
       where e2."session" = ${owner} and e2.seq > ${seq} - ${RETRIES}
         and exists (select 1 from "error" x where x.entity = e2.entity)) = ${RETRIES}`
     // The newest ask, and whether a call it made is still unanswered — the
-    // openCalls rule above, said in SQL.
+    // openCalls rule above, expressed in SQL.
     let ask = `(select e.entity from "entry" e where e."session" = ${owner}
       and exists (select 1 from "${ASK}" a where a.entity = e.entity)
       order by e.seq desc limit 1)`

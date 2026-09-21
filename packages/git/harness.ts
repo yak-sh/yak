@@ -1,9 +1,9 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
-// graph carrying this package's vocabulary beside @yaks/edge's and @yaks/key's,
-// and a byte store with nothing under it but a Map.
+// graph carrying this package's components beside @yaks/edge's and @yaks/key's,
+// and a byte store that is nothing but a Map.
 //
 // The byte store is a Map rather than @yaks/blob's SQLite backend because a
-// tree body is BINARY — raw ids, not text — and that backend holds text. A
+// tree body is BINARY — raw ids, not text — and that backend stores text. A
 // deployment uses the file or object backend for the same reason.
 
 import { Database } from '@yaks/sqlite/db'
@@ -27,7 +27,7 @@ let entity: VocabDoc = {
   },
 }
 
-/** The git vocabulary as a store would load it. */
+/** This package's components, loaded the way a store would load them. */
 export let git: Vocab = loadVocab([entity, edgeDoc, keyDoc, gitDoc], [
   edgeKeywords,
   keyKeywords,
@@ -42,8 +42,8 @@ let mem = (): Driver => {
   }
 }
 
-/** A byte store over a Map, counting the reads so a test can prove an object
- * already named is never read again. */
+/** A byte store over a Map, counting the reads so that a test can prove an
+ * object whose id is already known is never read again. */
 export let store = (): Blobs & { reads: () => number } => {
   let bytes = new Map<string, Uint8Array>()
   let reads = 0
@@ -63,9 +63,10 @@ export let store = (): Blobs & { reads: () => number } => {
 /**
  * The whole stack: a graph, a byte store, and the index over both.
  *
- * A caller testing the PLUGIN brings the words its own releases are said in,
- * and the plugin that watches for them — a host's two contributions, which is
- * the only thing a fixture cannot guess.
+ * A caller testing the PLUGIN supplies the components its own releases are
+ * described with, and the plugin that watches for them. Those are the two
+ * things the application contributes, and the only things a fixture cannot
+ * guess.
  */
 export let fixture = (
   more: { docs?: VocabDoc[]; plugins?: Plugin[] } = {},
@@ -91,7 +92,8 @@ export let fixture = (
   return { g, bytes, git: index(g, bytes) }
 }
 
-/** A file in the byte store, as a deploy manifest names it: its address. */
+/** Puts a file in the byte store and returns its address, which is how a
+ * deploy manifest names it. */
 export let file = (bytes: Blobs, text: string): string => {
   let sha = address(text)
   bytes.put(sha, encode(text))
@@ -99,7 +101,7 @@ export let file = (bytes: Blobs, text: string): string => {
 }
 
 // ---------------------------------------------------------------------------
-// What git said.
+// What git produced.
 //
 // Every id below was computed once by git itself, in two throwaway
 // repositories — one `--object-format=sha1`, one `--object-format=sha256` —
@@ -142,7 +144,7 @@ export let ROOT_OID = 'ac1c5891ad5273a54f42e865c3db6a45fff0b472'
 export let ROOT_OID256 =
   '133367cabc1b9be778cb8ea2c153968ea1b4500d8fc43775ed85861d59310361'
 
-/** A tree holding the directory `a` and the file `a.txt` — the sort rule, in
+/** A tree holding the directory `a` and the file `a.txt` — the sort rule in
  * one object: `a.txt` comes FIRST, because `a` sorts as `a/`. */
 export let SORT_OID = 'ad94769f8d8ffb761d45605960041a5a43a3fe24'
 
@@ -154,7 +156,7 @@ export let TWO_OID = 'a8ac25d0b48d7f164c003a207298fef1f357c0de'
 export let TWO_OID256 =
   '5411674d3cb34e9f54b3b6941b41e5530a2f080c33bbd44342bbe7144e7a4a97'
 
-/** Who those commits say wrote and recorded them. */
+/** Who those commits record as their author and committer. */
 export let AUTHOR = {
   name: 'yaks',
   email: 'a6433884@users.yaks.app',

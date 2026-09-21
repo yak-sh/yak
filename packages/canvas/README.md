@@ -41,7 +41,8 @@ hook; reference deletion is enforced by the graph vocabulary.
 
 ## Where each piece lives
 
-Every component says who hears about a write, and all of them say `server`.
+Every component declares who is notified when it is written, and all of them
+declare `server`.
 
 | component                                     | sync     | why                                                  |
 | --------------------------------------------- | -------- | ---------------------------------------------------- |
@@ -57,12 +58,12 @@ such as an in-progress drag.
 ## The geometry is plain functions
 
 No DOM, no matrices, no units — a canvas unit is whatever you decide one is. A
-browser and a terminal share one answer instead of drifting apart.
+browser and a terminal compute the same result instead of drifting apart.
 
 ```ts
 import { frame, place, visible } from '@yaks/canvas'
 
-visible(camera, pins) // what is on screen — asked every frame
+visible(camera, pins) // what is on screen — called every frame
 place(pins, { w: 320, h: 200 }) // where the next card goes
 frame(pins, { w: 1200, h: 800 }) // the camera that fits everything
 ```
@@ -74,38 +75,38 @@ gap. The function is deterministic and does not modify the pins.
 
 ## Exports
 
-| export                            | is                                              |
-| --------------------------------- | ----------------------------------------------- |
-| `canvasDoc`                       | the components, to load beside your own         |
-| `canvas()`                        | the @yaks/graph plugin                          |
-| `CANVAS`, `CARD`, `PIN`, …        | their names; `PER_CLIENT` is the per-window set |
-| `Card`, `Pin`, `Camera`, `Cursor` | the component shapes                            |
-| `Point`, `Size`, `Rect`           | the geometry's vocabulary                       |
-| `rect`, `bounds`, `overlaps`      | a pin's box, the box around many, do two meet   |
-| `top(pins)`                       | the frontmost stacking order in use             |
-| `world(camera)`                   | the part of the plane a camera can see          |
-| `visible(camera, pins)`           | the pins on screen                              |
-| `frame(pins, size)`               | the camera that fits everything                 |
-| `place(pins, size)`               | where the next card goes                        |
-| `zoomed`, `ZOOM_MIN`, `ZOOM_MAX`  | the one zoom range every camera move shares     |
+| export                            | is                                                    |
+| --------------------------------- | ----------------------------------------------------- |
+| `canvasDoc`                       | the components, to load beside your own               |
+| `canvas()`                        | the @yaks/graph plugin                                |
+| `CANVAS`, `CARD`, `PIN`, …        | their names; `PER_CLIENT` is the per-window set       |
+| `Card`, `Pin`, `Camera`, `Cursor` | the component types                                   |
+| `Point`, `Size`, `Rect`           | the geometry types                                    |
+| `rect`, `bounds`, `overlaps`      | a pin's box, the box around many, whether two overlap |
+| `top(pins)`                       | the frontmost stacking order in use                   |
+| `world(camera)`                   | the part of the plane a camera can see                |
+| `visible(camera, pins)`           | the pins on screen                                    |
+| `frame(pins, size)`               | the camera that fits everything                       |
+| `place(pins, size)`               | where the next card goes                              |
+| `zoomed`, `ZOOM_MIN`, `ZOOM_MAX`  | the one zoom range every camera move shares           |
 
 ## What is deliberately not here
 
-**Rendering.** This says what the pieces are and where they sit; drawing them is
-a client's job, and the two should be replaceable independently.
+**Rendering.** This package records what the pieces are and where they sit;
+drawing them is a client's job, and the two should be replaceable independently.
 
-**A `before` ordering.** `before` names another kind, and a vocabulary that
-pairs these components with its own content component is the one that can say
-which of the two wins. A package cannot order itself against a kind it does not
-ship — it would not load on its own.
+**A `before` ordering.** `before` names another kind, and only a vocabulary that
+combines these components with its own content component can decide which of the
+two wins. A package cannot order itself against a kind it does not ship — it
+would not load on its own.
 
 **Layout algorithms.** `place` computes a default position for a new card. A
 client that knows a drop point should use it.
 
 ## Where it sits
 
-A component domain over [@yaks/graph](https://jsr.io/@yaks/graph), the same
-shape any application's own plugin has — like
+A component package over [@yaks/graph](https://jsr.io/@yaks/graph), built the
+same way any application's own plugin is — like
 [@yaks/member](https://jsr.io/@yaks/member) and
 [@yaks/edge](https://jsr.io/@yaks/edge), it ships components and nothing
 privileged.

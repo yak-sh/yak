@@ -4,8 +4,8 @@ import { sequencing } from './append.ts'
 //
 // It needs nothing from the application — no app to speak for, no roster to
 // consult — because everything it decides is about the batch and the entities
-// the batch names. So the factory takes only the two seams a test wants to
-// hold still: the clock, and the name a conflict record is written under.
+// the batch names. So the factory takes only the two things a test wants to
+// hold still: the clock, and the eid a conflict row is written under.
 //
 // The two hooks are two phases on purpose. `precondition` refuses, inside the
 // transaction, before anything moves. `audit` remembers, outside it, after the
@@ -19,15 +19,15 @@ import { auditing, type AuditOpts } from './audit.ts'
 import { leasing } from './lease.ts'
 import { naming } from './naming.ts'
 
-/** How the plugin's two seams are wired: a clock for both stamps, and the name
- * a conflict record is minted under. */
+/** The plugin's two injection points: a clock for both stamps, and the eid a
+ * conflict row is minted under. */
 export type SessionOpts = AuditOpts
 
 /**
  * The session plugin: the vocabulary ({@link sessionDoc}), a `precondition`
- * hook that refuses a take of a held lock and a native comp naming the wrong
- * kind of entity, and an `audit` hook that records a collision after the
- * rollback.
+ * hook that refuses a take of a held lock and refuses a component of this
+ * package's that names the wrong kind of entity, and an `audit` hook that
+ * records a collision after the rollback.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
@@ -37,7 +37,7 @@ export type SessionOpts = AuditOpts
  * import { toolsDoc } from '@yaks/tools'
  * import { sessionDoc, sessions } from '@yaks/session'
  *
- * // a transcript is made of four packages' words, each said once
+ * // a transcript uses four packages' components, each declared once
  * let vocab = loadVocab([sessionDoc, toolsDoc, contextDoc, modelDoc, mine])
  * // let g = graph({ storage, vocab, plugins: [sessions()] })
  * ```

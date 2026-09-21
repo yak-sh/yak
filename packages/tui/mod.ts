@@ -1,9 +1,9 @@
 /**
  * @yaks/tui renders a Preact tree to a terminal. Preact draws into a fake DOM
  * (`dom.ts`); a BACKEND turns that tree into what the screen shows. The
- * backend that ships is a hand-rolled ANSI painter which repaints only the
- * lines that changed, so a keystroke costs a line — swap it for another
- * renderer without touching a widget.
+ * backend that ships is a hand-written ANSI painter which repaints only the
+ * lines that changed, so a keystroke usually repaints a single line. Swap in
+ * another backend without changing a single widget.
  *
  * ```ts
  * import { h } from 'preact'

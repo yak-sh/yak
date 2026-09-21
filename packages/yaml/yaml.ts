@@ -1,24 +1,24 @@
 // Reading a declaration file. Two calls: YAML as a value, and a markdown
 // file's frontmatter as a bundle with the document under it.
 //
-// JSON needs no second door — every JSON file is a YAML file — so a loader
-// written against `read` keeps its `.json` callers and gains `.yml` for free,
-// which is what makes YAML the warm path rather than a second one.
+// JSON needs no second function — every JSON file is also a YAML file — so a
+// loader written against `read` keeps its `.json` callers and gains `.yml` for
+// free.
 //
-// A refusal names the FILE. A loader is usually reading a dozen of them and
-// the parser only knows the text it was handed, so the name is passed in and
-// spent on the one sentence that has to say which file was wrong.
+// An error names the FILE. A loader is usually reading a dozen of them and the
+// parser only knows the text it was given, so the name is passed in and used in
+// the one message that has to say which file was wrong.
 import { parse } from '@std/yaml'
 import type { Bundle } from '@yaks/graph'
 
-// What a refusal calls the language. A file spelled `.json` is JSON to
-// whoever wrote it, whatever the parser reading it happens to be — being told
-// their JSON is not YAML would send them looking in the wrong place.
+// What an error message calls the language. A file named `.json` is JSON to
+// whoever wrote it, whichever parser happens to read it — being told their JSON
+// is not YAML would send them looking in the wrong place.
 let lang = (file: string) => file.endsWith('.json') ? 'JSON' : 'YAML'
 
 /**
- * YAML — and JSON, which YAML reads — as a value. `file` is what a refusal
- * calls the text.
+ * YAML — and JSON, which the YAML parser also reads — as a value. `file` is the
+ * name an error message uses for the text.
  *
  * ```ts
  * read('doc:\n  title: Lemon cake\n')  // { doc: { title: 'Lemon cake' } }
@@ -33,15 +33,15 @@ export let read = (text: string, file = 'yaml'): unknown => {
   }
 }
 
-// A passage's named holes. The other half of a locale: a declaration file says
-// the words, and the code says the one or two things it could not know — which
-// app, which person, which pages there are today.
+// Named placeholders in a passage of text. The other half of a translation
+// file: the file holds the wording, and the code supplies the one or two values
+// it could not know — which app, which person, which pages exist today.
 let HOLE = /\{\{([\w-]+)\}\}/g
 
 /**
- * `fill('Publish {{app}}', {app: 'recipes'})` — a hole nothing is said for is
- * left standing, so a slot the caller forgot reads as the slot it is rather
- * than as an empty sentence.
+ * `fill('Publish {{app}}', {app: 'recipes'})` — a placeholder with no value
+ * given is left as it is, so a value the caller forgot shows up as the named
+ * placeholder rather than as a gap in the text.
  */
 export let fill = (text: string, slots: Record<string, string> = {}): string =>
   text.replace(HOLE, (had, name) => slots[name] ?? had)
@@ -49,30 +49,32 @@ export let fill = (text: string, slots: Record<string, string> = {}): string =>
 /**
  * What a content file holds: the bundle at the top, and the document under it.
  *
- * `meta` is PARTIAL because two ordinary files have no `entity` in them — one
- * that carries no frontmatter at all (`{}`), and one whose frontmatter names
- * only components, which is a bundle nobody has said the identity of yet.
- * Whether that is allowed is the loader's question, not this door's.
+ * `meta` is PARTIAL because two ordinary kinds of file have no `entity` in
+ * them — one with no frontmatter at all (`{}`), and one whose frontmatter names
+ * only components, which is a bundle whose identity has not been given yet.
+ * Whether that is acceptable is the loader's decision, not this function's.
  */
 export type Front = { meta: Partial<Bundle>; body: string }
 
-// The block, and everything after it. `---` on its own first line opens it and
-// `---` on its own line closes it; anything else is a document that happens to
-// start with a rule.
+// The frontmatter block, and everything after it. `---` on its own first line
+// opens it and `---` on its own line closes it; anything else is a document
+// that happens to start with a horizontal rule.
 let BLOCK = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/
 
 /**
  * A markdown file, split: the frontmatter as a BUNDLE — `{entity: {eid},
- * <comp>: {…}}`, the same wire an apply takes — and the body under it.
+ * <comp>: {…}}`, the same structure `graph.apply()` accepts — and the body
+ * under it.
  *
  * ```ts
  * front('---\ndoc:\n  title: Hi\n---\n\nwords\n')
  * // { meta: { doc: { title: 'Hi' } }, body: 'words\n' }
  * ```
  *
- * A reference in there names an entity by eid or by `$alias`, never by a path,
- * so nothing here resolves anything: what comes back is the bundle as written,
- * and whoever applies it resolves the aliases the way every other apply does.
+ * A reference in that frontmatter names an entity by eid or by `$alias`, never
+ * by a path, so nothing here resolves anything: what is returned is the bundle
+ * as written, and whoever applies it resolves the aliases the way every other
+ * write does.
  */
 export let front = (text: string, file = 'file'): Front => {
   let hit = BLOCK.exec(text)

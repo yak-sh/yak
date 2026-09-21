@@ -1,14 +1,16 @@
 /**
- * What an agent returns to when nothing is asking. A `dream` is a standing
- * intention with a floor under it — do not come back before this — and `recall`
- * is what dreaming consolidates: how many times a memory has surfaced, and
- * when it last did. The `recalled` edge is one surfacing, said as a sentence,
- * and a `meta` memo is said for the dream to find rather than for anyone now.
+ * Background work an agent does when nobody is asking it anything. A `dream`
+ * is a standing intention whose `floor` column is the earliest it may run
+ * again; `recall` is what dreaming consolidates — how many times a memory has
+ * been recalled, and when it last was. A `recalled` edge records one such
+ * recall, and a `meta` component marks text written for a dream to read later
+ * rather than for anyone right now.
  *
- * Beside the words, the one act: a dream whose floor has passed opens a DESK —
- * one transcript, asked in the dream's own words, holding the dream's `claim`
- * while it works. What opens is the host's to name, in the config beside the
- * plugin (`@yaks/dreaming/effects`); when it opens is this package's.
+ * Besides those components, this package does one thing: when a dream's floor
+ * has passed it opens a DESK — one agent session, asked the dream's own body
+ * text, holding the dream's `claim` while it runs. WHAT is opened is named in
+ * the configuration beside the plugin (`@yaks/dreaming/effects`); WHEN it
+ * opens is this package's decision.
  *
  * ```ts
  * import { effects } from '@yaks/effects'

@@ -1,11 +1,11 @@
-// The member words, and only the words: the `vocab` facet a host takes
-// (`@yaks/member/vocab`). It reaches no storage, no SQL and no runtime, so a
-// browser tab loading this vocabulary loads nothing else.
+// The component definitions and nothing else, exported as
+// `@yaks/member/vocab`. It imports no storage, no SQL and no runtime code, so a
+// browser tab that loads this vocabulary loads nothing else with it.
 
 import type { VocabDoc } from '@yaks/vocab'
 import { memberDoc } from './comp.ts'
 
 export { memberDoc }
 
-/** Every document this plugin declares. */
+/** Every vocabulary document this plugin contributes. */
 export let docs: VocabDoc[] = [memberDoc]

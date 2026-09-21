@@ -101,7 +101,8 @@ export let seed = (s: Storage, ...bundles: Bundle[]) => {
   graph({ storage: s, vocab: pages }).apply(bundles, { trusted: true })
 }
 
-/** What a page's lock says right now, or `undefined` when it is free. */
+/** Which session holds a page's lock right now, or `undefined` when it is
+ * free. */
 export let lockOn = (
   s: Storage,
   page: string,

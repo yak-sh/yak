@@ -4,8 +4,8 @@
 // is @yaks/session's document beside @yaks/model's and @yaks/openai's; the
 // daemon is a `created(entry)` effect on @yaks/effects; the model is
 // @yaks/openai over the Codex sign-in or OPENAI_API_KEY; the transcript prints
-// through @yaks/render and @yaks/text; and the verb rides @yaks/cli's plugin
-// seam.
+// through @yaks/render and @yaks/text; and the subcommand is registered through
+// @yaks/cli's plugin interface.
 //
 //   deno task session:spike                    # gpt-6-astra
 //   MODEL=gpt-5.6-sol deno task session:spike 'What time is it?'

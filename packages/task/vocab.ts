@@ -1,10 +1,11 @@
-// The task words, and only the words: the `vocab` facet a host takes
-// (`@yaks/task/vocab`). It reaches no storage, no SQL and no runtime, so a
-// browser tab loading this vocabulary loads nothing else.
+// The task components and nothing that runs: the module a server imports as
+// `@yaks/task/vocab`. It reaches no storage, no SQL and no runtime, so a
+// browser tab that loads this vocabulary loads nothing else.
 //
 // `derived` is here rather than beside the rules because a computed column is
-// part of what a word MEANS — `task.status` is declared, never written, and
-// the SQL that reads it off the marks is the declaration's other half.
+// part of what a component means — `task.status` is declared but never
+// written, and the SQL that computes it from the marks is the other half of
+// that declaration.
 
 import type { VocabDoc } from '@yaks/vocab'
 import type { Derived } from '@yaks/sql'
@@ -17,7 +18,8 @@ export { taskDoc }
 /** Every document this plugin declares. */
 export let docs: VocabDoc[] = [taskDoc]
 
-/** A task's status, read off the default ladder of marks rather than kept. A
- * host that adds a rung — a held lease reading `wip` — says so in the plugin
- * that OWNS the rung (@yaks/session), whose facet composes after this one. */
+/** A task's status, computed from the default ladder of marks rather than
+ * stored. A graph that adds a rung — a held lease reading `wip` — declares it
+ * in the plugin that OWNS the rung (@yaks/session), whose own `vocab` module is
+ * imported after this one. */
 export let derived = (): Derived => ladder(MARKS)

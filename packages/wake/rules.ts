@@ -1,6 +1,7 @@
-// What a batch MEANS about coming back to something later: the `rules` facet a
-// host takes (`@yaks/wake/rules`). It fires no handler — `tick` writes `fired`
-// and advances the wake, and the graph's other rules do the rest.
+// The graph plugins this package contributes: the module a server imports at
+// `@yaks/wake/rules` to get the behaviour a write to the graph gets. It calls
+// no handler — `tick` writes `fired` and advances the wake, and the graph's
+// other rules do the rest.
 
 import type { Plugin } from '@yaks/graph'
 import { wakes } from './plugin.ts'

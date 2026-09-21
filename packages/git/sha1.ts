@@ -1,30 +1,33 @@
-// SHA-1 with its state left open between chunks — the one digest in this
-// package that is not `crypto.subtle`'s.
+// SHA-1 with its state kept between chunks — the one digest in this package
+// that is not `crypto.subtle`'s.
 //
-// A pack ends in the SHA-1 of every byte before it, and a pack is a STREAM:
-// objects arrive one at a time and leave as soon as they are deflated.
-// `crypto.subtle.digest` wants the whole message in one buffer, so naming a
-// pack with it would mean holding the finished pack in memory to write twenty
-// bytes at the end — a clone's worth of bytes, for a trailer. Here the digest
-// is fed as the stream goes by, so a pack of any size costs one 64-byte block.
+// A packfile ends in the SHA-1 of every byte before it, and a packfile is a
+// STREAM: objects arrive one at a time and leave as soon as they are deflated.
+// `crypto.subtle.digest` wants the whole message in one buffer, so computing
+// the trailer with it would mean holding the finished packfile in memory to
+// write twenty bytes at the end — a clone's worth of bytes, for a trailer.
+// Here the digest is fed as the stream goes past, so a packfile of any size
+// costs one 64-byte block.
 //
 // SHA-1 is a NAME here and never a security claim, the same as the object ids
-// in ./oid.ts: it is what the pack format spells, so it is what we write.
+// in ./oid.ts: it is what the packfile format specifies, so it is what we
+// write.
 //
-// The algorithm is FIPS 180-4 §6.1.2 verbatim, in 32-bit integer arithmetic:
-// `| 0` after every addition is what keeps a JavaScript number a machine word.
+// The algorithm is FIPS 180-4 section 6.1.2 verbatim, in 32-bit integer
+// arithmetic: the `| 0` after every addition is what keeps a JavaScript number
+// a machine word.
 
-/** A digest being taken: bytes in, the twenty that name them out. */
+/** A digest in progress: bytes in, the twenty bytes that name them out. */
 export type Sha1 = {
   /** fold another run of bytes in */
   update: (bytes: Uint8Array) => void
-  /** pad, finish, and answer the twenty bytes — once */
+  /** pad, finish, and return the twenty bytes — once */
   digest: () => Uint8Array<ArrayBuffer>
 }
 
 let rotl = (x: number, n: number): number => (x << n) | (x >>> (32 - n))
 
-/** A SHA-1 in progress. */
+/** Start a SHA-1. */
 export let sha1 = (): Sha1 => {
   let h = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0]
   let block = new Uint8Array(64)
@@ -83,7 +86,8 @@ export let sha1 = (): Sha1 => {
   let pad = new Uint8Array(64)
 
   let digest = (): Uint8Array<ArrayBuffer> => {
-    // The length is the message's, so it is read before the padding adds to it.
+    // This is the message's own length, so it is read before the padding adds
+    // to it.
     let bits = len * 8
     one[0] = 0x80
     update(one)

@@ -1,14 +1,15 @@
-// The package as one graph plugin: the components, the canonicalizer, and —
-// when you hand it an effect registry — the sending.
+// The package as one graph plugin: the components, the address canonicalizer,
+// and — when you pass it an effect registry — the sending.
 //
-// The canonicalizer is a `normalize` hook, which is the earliest phase there
-// is: it runs before anything is admitted or written, so an address reaches
-// storage in one spelling and only one. That is the difference between "we
+// The canonicalizer runs in the `normalize` phase, which is the earliest phase
+// there is: before anything is validated or written, so an address reaches
+// storage in one form and only one. That is the difference between "we
 // lowercase addresses somewhere" and "the address book cannot hold two rows
-// for one person" — the rule is at the door rather than at each caller.
+// for one person" — the rule is applied once on the way in rather than by each
+// caller.
 //
-// Naming your domain is what turns it on. Without one, every address is
-// somebody else's namespace and passes through untouched (see ./addr.ts).
+// Naming your domain is what turns it on. Without one, every address belongs to
+// somebody else's domain and passes through untouched (see ./addr.ts).
 
 import type { Bundle, Comp, Plugin } from '@yaks/graph'
 import type { Effects } from '@yaks/effects'
@@ -20,9 +21,10 @@ import { type Post, sending } from './send.ts'
 export type Mailbox = {
   /** your own mail domain — the addresses this graph canonicalizes on write */
   domain?: string
-  /** register `created(mail)` on this registry, so letters actually go. It
-   * needs a WRITE DOOR — `effects(vocab, { write })`, applied trusted — since
-   * that is how the outcome is settled back onto the letter. */
+  /** register `created(mail)` on this registry, so letters actually go. The
+   * registry needs a WRITE FUNCTION — `effects(vocab, { write })`, applied
+   * trusted — since that is how the outcome is written back onto the
+   * letter. */
   effects?: Effects
 } & Partial<Post>
 
@@ -65,12 +67,12 @@ let clean = (fix: (a: string) => string) => (b: Bundle): Bundle => {
  *
  * {@link https://jsr.io/@yaks/doc | @yaks/doc} is composed BESIDE this plugin
  * rather than inside it: a letter's subject and body are `doc{title, body}`, and
- * a vocabulary refuses a component declared twice — so the word keeps one home
- * and an application that already has `doc` is not fought over it.
+ * a vocabulary rejects a component declared twice — so `doc` keeps one home and
+ * an application that already declares it is not fought over it.
  *
- * Pass `effects` and a `sender` together and outbound letters go on their own;
- * pass neither and this is the vocabulary and the canonicalizer, which is all
- * a graph that only RECEIVES mail needs.
+ * Pass `effects` and a `sender` together and outbound letters are sent
+ * automatically; pass neither and this is the vocabulary and the canonicalizer,
+ * which is all a graph that only RECEIVES mail needs.
  */
 export let mailbox = (
   { domain, effects, sender, now, local }: Mailbox = {},

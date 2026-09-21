@@ -1,16 +1,16 @@
-// WHICH text is embedded. Semantic search here is not welded to one "document"
+// WHICH text is embedded. Semantic search here is not tied to one "document"
 // component: a vocabulary declares components, some of their columns hold prose,
-// and any of them can feed a vector. This module is the choice — a `Field` is
-// one `comp.prop` pair, `fields()` reads them off a vocabulary, and a `Pick`
-// narrows that default when an application wants only some of them.
+// and a vector can be made from any of them. This module is that choice — a
+// `Field` is one `comp.prop` pair, `fields()` reads them off a vocabulary, and
+// a `Pick` narrows that default when an application wants only some of them.
 //
 // The difference from a search index: an entity gets ONE vector, not one per
-// component. A vector is a point in meaning-space, and an entity is one thing —
-// so every field it wears is read and joined into a single text, in vocabulary
-// order, before it is embedded. That is also why this rule lives here and not
-// in a shared package with the full-text one: the two make the same CHOICE by
-// the same rule and then do different things with it, and neither should have
-// to depend on the other to search.
+// component. A vector is a point in a space of meanings, and an entity is one
+// thing — so all of its text fields are read and joined into a single string,
+// in vocabulary order, before being embedded. That is also why this rule lives
+// here rather than in a package shared with the full-text one: the two read the
+// vocabulary the same way and then do different things with it, and neither
+// should have to depend on the other in order to search.
 
 import type { Column, Vocab } from '@yaks/vocab'
 
@@ -39,24 +39,24 @@ export let fields = (vocab: Vocab, pick: Pick = textual): Field[] =>
       .map((c) => ({ comp, prop: c.prop }))
   )
 
-// SQLite's trim() strips spaces alone, so the whitespace that makes a text
-// "empty" has to be named. One rule, spelled once: a field's text counts when
-// it holds something other than these.
+// SQLite's trim() strips spaces only, so the whitespace that makes a text
+// "empty" has to be listed. One rule, written once: a field's text counts when
+// it holds something other than these characters.
 let WS = ' \t\n\r\v\f'
 
 /** A statement and the params it binds, in order. */
 export type Stmt = { sql: string; params: (string | number)[] }
 
-/** A name as SQL spells it. */
+/** An identifier, quoted for SQL. */
 export let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
 /**
  * Every embeddable piece of text in the graph, as one row per (entity, field):
  * the owner's integer id, the field's position in the join order, and the text.
  * Blank fields are dropped here, so an entity appears in this result exactly
- * when it has something to embed — which makes it the ONE rule the sweep and
- * the prune both read, and neither can drift from the other. Answers null for
- * a vocabulary with nothing textual in it: there is no statement to write.
+ * when it has something to embed — which makes this the ONE statement both the
+ * sweep and the prune read, so the two cannot disagree. Returns null for a
+ * vocabulary with no text columns at all: there is no statement to write.
  */
 export let pieces = (fields: Field[]): Stmt | null =>
   fields.length

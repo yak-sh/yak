@@ -1,8 +1,8 @@
 /**
- * The text host's content boundary. Every text leaf and link destination loses
- * C0, DEL and C1 bytes before the host supplies formatting. Unlike the older
- * terminal helper, this retains no FTS markers, tabs or literal newlines;
- * structural elements are the only source of output line breaks.
+ * This renderer's content boundary. Every text leaf and link destination loses
+ * its C0, DEL and C1 bytes before any formatting is added. Unlike the older
+ * terminal helper, this keeps no search-highlight markers, tabs or literal
+ * newlines; structural elements are the only source of output line breaks.
  */
 
 // deno-lint-ignore no-control-regex -- the full control class is the boundary

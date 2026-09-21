@@ -10,7 +10,7 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "one git object — its entity id IS its SHA-1 object id, so writing the same object twice writes one row",
+      "description": "one Git object; its entity id is its SHA-1 object id, so writing the same object twice writes one row",
       "properties": {
         "type": {
           "type": "string",
@@ -21,12 +21,12 @@
             "tag"
           ],
           "bare": false,
-          "description": "the word in the object's own header"
+          "description": "the object type, as written in the object's own header"
         },
         "size": {
           "type": "number",
           "bare": false,
-          "description": "the body's length in bytes — the number in that same header"
+          "description": "the body's length in bytes, as written in that same header"
         }
       }
     },
@@ -38,7 +38,7 @@
         "sha": {
           "type": "string",
           "bare": false,
-          "description": "the SHA-256 of the bytes — for a git blob it is the app file's own address, never a re-encoded copy"
+          "description": "the SHA-256 of the bytes; for a Git blob this is the file's own address in the store, not a re-encoded copy"
         }
       }
     },
@@ -46,17 +46,17 @@
       "component": true,
       "type": "object",
       "edge": true,
-      "description": "a tree holds a child under a name — the walk a pack's reachability needs",
+      "description": "a tree holds a child under a name; packing follows these edges to find every reachable object",
       "properties": {
         "name": {
           "type": "string",
           "bare": false,
-          "description": "the name this child answers to in this tree; the same tree is a child of many trees under different names, which is why the name is on the link"
+          "description": "the child's name in this tree; one object can be a child of several trees under different names, so the name belongs to the link"
         },
         "mode": {
           "type": "string",
           "bare": false,
-          "description": "the mode as the tree body spells it: 100644 a file, 40000 a directory"
+          "description": "the mode as the tree body writes it: 100644 for a file, 40000 for a directory"
         }
       }
     },
@@ -64,29 +64,29 @@
       "component": true,
       "type": "object",
       "edge": true,
-      "description": "this commit follows that one — `ord` on the edge carries parent order",
+      "description": "this commit's parent; the edge's `ord` column keeps the parent order",
       "properties": {}
     },
     "compat": {
       "component": true,
       "type": "object",
       "key": true,
-      "description": "git's compat oid: the same object's SHA-256 name, keyed off its SHA-1 one, so either id resolves (git's own hash-function transition, as key rows)"
+      "description": "Git's compat object id: the same object's SHA-256 id, keyed by its SHA-1 id, so a client may ask for either (Git's hash-function transition, stored as key rows)"
     },
     "ref": {
       "component": true,
       "type": "object",
-      "description": "where one branch of one repository stands — one row per repository and branch name, so moving a branch patches the row that was there",
+      "description": "where one branch of one repository points; one row per repository and branch name, so moving a branch updates the row that is already there",
       "properties": {
         "app": {
           "type": "string",
           "ref": "entity",
           "death": "cascade",
-          "description": "the entity the repository belongs to; its branches die with it"
+          "description": "the entity the repository belongs to; deleting it deletes its branches"
         },
         "name": {
           "type": "string",
-          "description": "the branch's full name — `refs/heads/main`, never `main`"
+          "description": "the branch's full name: refs/heads/main, not main"
         },
         "commit": {
           "type": "string",
@@ -96,15 +96,15 @@
         },
         "target": {
           "type": "string",
-          "description": "symbolic target full ref name, absent for direct refs"
+          "description": "for a symbolic ref, the full name it points at; absent for a direct ref"
         },
         "oid": {
           "type": "string",
-          "description": "raw Git object id; annotated tags need not point directly to commits"
+          "description": "the raw Git object id the ref names; an annotated tag need not point directly at a commit"
         },
         "present": {
           "type": "boolean",
-          "description": "false when a previously observed host ref has been deleted"
+          "description": "false once a ref that was observed on this machine has been deleted"
         }
       }
     },
@@ -120,14 +120,14 @@
         "origin": {
           "type": "string",
           "format": "uri",
-          "description": "where it is published — the remote it was cloned from or pushes to"
+          "description": "where it is published: the remote it was cloned from or pushes to"
         }
       }
     },
     "worktree": {
       "component": true,
       "type": "object",
-      "description": "A local checkout. Identity is repository plus canonical checkout root, not branch or HEAD.",
+      "description": "A local checkout. Its identity is the repository plus the canonical checkout root, not the branch or HEAD.",
       "properties": {
         "repository": {
           "type": "string",
@@ -141,28 +141,28 @@
         },
         "gitdir": {
           "type": "string",
-          "description": "per-worktree Git admin directory"
+          "description": "this worktree's own Git administrative directory"
         },
         "head": {
           "type": "string",
-          "description": "HEAD object id; absent for unborn HEAD"
+          "description": "the object id HEAD resolves to; absent when the branch has no commits yet"
         },
         "branch": {
           "type": "string",
-          "description": "shared ref entity HEAD is attached to; absent for detached HEAD",
+          "description": "the shared ref entity HEAD is attached to; absent for a detached HEAD",
           "ref": "entity",
           "death": "keep"
         },
         "managed": {
           "type": "boolean",
-          "description": "created by this integration, never implies automatic cleanup"
+          "description": "created by this package; it never implies automatic cleanup"
         }
       }
     },
     "checkout": {
       "component": true,
       "type": "object",
-      "description": "Durable host checkout creation intent; ready only after Git succeeds. Failed requests retain their error for retry.",
+      "description": "A stored request to create a checkout on this machine; ready only once Git has succeeded. A failed request keeps its error so it can be retried.",
       "properties": {
         "repository": {
           "type": "string",
@@ -186,7 +186,7 @@
         },
         "requested": {
           "type": "string",
-          "description": "original base expression, while base is the pinned commit oid"
+          "description": "the base as the caller wrote it, while base holds the commit id it resolved to"
         }
       }
     },
@@ -210,10 +210,10 @@
         },
         "message": {
           "type": "string",
-          "description": "the whole commit message, not its first line"
+          "description": "the whole commit message, not just its first line"
         }
       },
-      "description": "a landed commit, attached to the work it is about: the sha IS its eid, so recording the same commit twice is one entity"
+      "description": "a commit that landed, attached to the work it is about; the commit sha is the entity id, so recording the same commit twice gives one entity"
     },
     "anchor": {
       "component": true,
@@ -221,11 +221,11 @@
       "properties": {
         "paths": {
           "type": "string",
-          "description": "the paths it speaks about"
+          "description": "the paths it refers to"
         },
         "sha": {
           "type": "string",
-          "description": "the sha it was true at"
+          "description": "the commit sha it was true at"
         },
         "symbol": {
           "type": "string",
@@ -245,16 +245,16 @@
           "description": "last line"
         }
       },
-      "description": "a promise about source: the paths and sha a document was written against, so freshness is re-derived from git rather than stored"
+      "description": "what a document promised about source code: the paths and commit sha it was written against, so whether it is still current is re-read from Git rather than stored"
     },
     "land": {
       "tool": true,
       "title": "Land this branch",
-      "description": "Land the branch the caller is standing on. Fast-forwards it into the base — the branch the shared checkout holds — and pushes if the base has an upstream. If the base moved, rebases onto it and returns WITHOUT merging, printing what it pulled in, so the caller can re-gate and land again; that is a refusal, because nothing landed. Refuses a landing whose files carry content no commit on the branch wrote unless allow-revert names them. Runs no gate and reads no graph: every coordinate comes from git, and the checkout is the one the process running this call stands in.",
+      "description": "Land the branch the caller is standing on. Fast-forwards it into the base — the branch the shared checkout has checked out — and pushes if the base has an upstream. If the base moved, rebases onto it and returns WITHOUT merging, printing what it pulled in so the caller can re-run its tests and land again; that counts as a failure, because nothing landed. Refuses a landing whose files carry content no commit on the branch wrote, unless allow-revert names them. Runs no tests and reads no graph: every coordinate comes from Git, and the checkout is the one the process running this call is in.",
       "input": {
         "allow-revert": {
           "type": "string",
-          "description": "comma-separated files whose rewind is deliberate, landed with a warning"
+          "description": "comma-separated files whose rewind is deliberate; landed with a warning"
         }
       },
       "destructive": true

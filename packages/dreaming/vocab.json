@@ -21,16 +21,16 @@
         "floor": {
           "type": "string",
           "format": "date-time",
-          "description": "the earliest it should come back"
+          "description": "the earliest it may run again"
         }
       },
-      "description": "a standing intention with a floor under it: do not come back before this"
+      "description": "a standing intention, with the earliest time it may run again"
     },
     "meta": {
       "component": true,
       "type": "object",
       "properties": {},
-      "description": "a quiet memo: said in the transcript, never delivered live, harvested by the dream"
+      "description": "a note written in a transcript: never delivered to anyone live, read later by a dream"
     },
     "recall": {
       "component": true,
@@ -39,22 +39,22 @@
         "count": {
           "type": "number",
           "stamped": true,
-          "description": "how many times it has surfaced"
+          "description": "how many times it has been recalled"
         },
         "first_at": {
           "type": "string",
           "format": "date-time",
           "stamped": true,
-          "description": "when it first did"
+          "description": "when it was first recalled"
         },
         "last_at": {
           "type": "string",
           "format": "date-time",
           "stamped": true,
-          "description": "when it last did"
+          "description": "when it was last recalled"
         }
       },
-      "description": "how often something has surfaced, and when it last did"
+      "description": "how many times an entity has been recalled, and when it last was"
     },
     "recalled": {
       "component": true,
@@ -72,7 +72,7 @@
           "format": "date-time"
         }
       },
-      "description": "the relation an edge wears: this surfaced that, then"
+      "description": "an edge relation: this entry recalled that entity, at this time"
     }
   }
 }

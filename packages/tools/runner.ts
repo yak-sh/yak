@@ -1,45 +1,47 @@
-// The RUNNER: the one thing that calls a tool function, and the record it
-// leaves. A tool is a function from BUNDLES to BUNDLES — `(bundles, host) =>
-// bundles` — and nothing about it lives on `call` and `result`. A HOST invokes
-// it directly and gets its bundles back; what this file adds is the
-// TRANSCRIPT, which is why a host typically comes through here: the `call`
-// entity that says what was asked, the `result{call, ms}` that says what came
-// back, and the `execution{state}` that says a run is in flight.
+// The RUNNER: the one place a tool function is called, and the record it
+// leaves behind. A tool is a function `(bundles, ctx) => bundles`, and knows
+// nothing about the `call` and `result` components. A caller can invoke one
+// directly and get its bundles back; what this file adds is the stored record,
+// which is why callers normally go through here: the `call` entity recording
+// what was asked, the `result{call, ms}` recording what came back, and the
+// `execution{state}` recording that a run is in flight.
 //
-// The result entity is a declared RULE's own emit (./vocab.json, @yaks/graph
-// `emitted`), so its id is DERIVED from the firing — `call_ready(<the call>)`
-// — and the same call names the same result entity in this process, another
-// process, or a year later. Answering twice patches one entity, never two.
+// The result entity is emitted by a declared rule (./vocab.json, @yaks/graph
+// `emitted`), so its id is DERIVED from the match — `call_ready(<the call>)` —
+// and the same call names the same result entity in this process, in another
+// process, or a year later. Running a call twice patches one entity, never
+// two.
 //
-// A call somebody ELSE wrote — one scheduled for later, one a crash left
-// behind — is not this file's problem to notice. That is an EFFECT, and the
-// rules here are the patterns to register it on (@yaks/effects `on`):
+// Finding a call another process wrote — one scheduled for later, one a crash
+// left behind — is not this file's job. That is an effect, and the rules here
+// are the patterns to register it on (@yaks/effects `on`):
 //
 //   fx.on('$call .call, !results, !wake', (e) => run.run(e.entity.eid))
 //   fx.on('$call .call, .wake, .fired, !results', (e) => run.run(e.entity.eid))
 //
-// one registration each, nothing special here. `drive()` is the same two
-// queries asked once, which is what a boot sweep is.
+// one registration each, nothing more. `drive()` runs those same two queries
+// once, which is what a boot sweep is.
 //
 // AT MOST ONCE, and how a crash is recovered: `execution{state, by}` on the
-// call is the claim. The runner writes `running` under a `$was` that the column
-// was absent, so a second host loses the race rather than running the tool
-// again; it writes `done` or `failed` when the answer lands. A call left
-// `running` by a process that died has no result, so the same rules still
-// select it — and `reconcile()` at boot re-drives it, claiming over `running`
-// this time. `by` says WHOSE claim it is: a runner re-drives its own and leaves
-// another holder's alone, which is what a transcript imported from another
-// machine needs — every call in it arrives already called. Unless that holder
-// is OVER: a process writes its `exit` row in the last batch it will ever
-// write, so a call it left `running` has nobody coming back to finish it. That
-// claim lapsed, and the next drive takes it the way a re-drive takes one —
-// which is what makes a crash recoverable now that a restarted process is a
-// new entity rather than a name that comes back.
+// call is the claim. The runner writes `running` with a `$was` precondition
+// that the column was absent, so a second server loses the race instead of
+// running the tool twice; it writes `done` or `failed` when the result is
+// applied. A call left `running` by a process that died has no result, so the
+// same rules still select it, and `reconcile()` at boot runs it again,
+// claiming over the stale `running`. `by` records WHOSE claim it is: a runner
+// re-runs its own claims and leaves another process's alone, which is what a
+// transcript imported from another machine needs — every call in it arrives
+// already executed. The exception is a holder that has finished: a process
+// writes its `exit` row in the last transaction it will ever write, so a call
+// it left `running` has nobody coming back to finish it. That claim has
+// lapsed, and the next sweep takes it the way a re-run takes one — which is
+// what makes a crash recoverable now that a restarted process is a new entity
+// rather than a reused name.
 //
-// THE ACTOR IS THE CALLER'S. Whoever wrote the call is who the tool's bundles
-// are signed as, never the process running them, so authorization is decided
-// about the person asking. The runner's own bookkeeping — the result, the
-// execution — is the server's and carries no actor at all.
+// THE IDENTITY IS THE CALLER'S. The bundles a tool returns are stamped with
+// whoever wrote the call, never with the process running it, so authorization
+// is decided about the caller. The runner's own bookkeeping — the result and
+// the execution rows — belongs to the server and carries no identity at all.
 
 import {
   type Actor,
@@ -65,12 +67,13 @@ import { rulesIn } from '@yaks/vocab'
 import { validateToolInput } from '@yaks/vocab/tools'
 import { toolsDoc } from './vocab.ts'
 
-// What a call is doing RIGHT NOW in this process, and what the last few came
-// to — per GRAPH, not per runner. A door that calls a tool and an effect that
-// found the same call are one claimant and one answer between them: the second
-// finds the first's promise instead of racing it, and reads the bundles that
-// were landed for it whichever ran them. The memo is what makes that true for
-// a READING tool, whose answer is never written down.
+// What each call is doing right now in this process, and what the last few
+// returned — keyed per GRAPH, not per runner. When a request handler calls a
+// tool and an effect finds the same call, there is one claimant and one answer
+// between them: the second finds the first's promise instead of racing it, and
+// reads the bundles that were written for it whichever one ran. This memo is
+// what makes that work for a read-only tool, whose answer is never written
+// down.
 let running = new WeakMap<Graph, Map<Eid, Promise<Bundle[]>>>()
 let answers = new WeakMap<Graph, Map<Eid, Bundle[]>>()
 let per = <V>(at: WeakMap<Graph, Map<Eid, V>>, g: Graph): Map<Eid, V> => {
@@ -79,8 +82,9 @@ let per = <V>(at: WeakMap<Graph, Map<Eid, V>>, g: Graph): Map<Eid, V> => {
   return mine
 }
 
-/** A durable claim exists but no answer does. The host must reconcile it —
- * running the tool again could repeat something the world already saw. */
+/** A stored claim exists but no result does. The caller must reconcile it:
+ * running the tool again could repeat an effect the outside world already
+ * saw. */
 export class UnfinishedCall extends Error {
   constructor(public call: Eid) {
     super('Call execution was started without a recorded result: ' + call)
@@ -96,66 +100,72 @@ export class CallError extends Error {
   }
 }
 
-/** The rules this package declares, as the vocabulary says them: the call the
- * runner answers, and the one it leaves alone. */
+/** The two rules this package declares, as written in the vocabulary: the
+ * call that is due now, and the one that is due once its wake has fired. */
 export let RULES: Declared[] = rulesIn(toolsDoc)
   .filter((r) => r.phase == 'effect')
 
-/** The rule that ANSWERS a call — the one whose emit names the result. */
+/** The rule that selects a call due now — the one whose emit names the result
+ * entity. */
 export let READY = 'call_ready'
 
-/** The rule that answers a SCHEDULED call once its wake has fired. */
+/** The rule that selects a deferred call once its wake has fired. */
 export let WOKEN = 'call_woken'
 
-/** The entity a tool is called BY name at: derived, so a graph's tool rows are
- * the same rows every time this runner is built. */
+/** The entity id a call points at for a tool of this name. It is derived from
+ * the name, so a graph's tool rows are the same rows every time a runner is
+ * built. */
 export let toolEid = (name: string): Eid => derivedEid(`tool:${name}`)
 
 /** What a runner is built with. */
 export type Opts = {
   /** what it can run */
   tools: Tool[]
-  /** the graph the TOOLS work on, where that is not the graph the calls are
-   * written to (a door whose ledger is its own) */
+  /** the graph the TOOLS read and write, when that is not the graph the calls
+   * are recorded in (a server that keeps its call records separately) */
   host?: Graph
-  /** unexpected defects, reported and not thrown (the batch has committed) */
+  /** where unexpected defects are reported; they are not thrown, because the
+   * transaction has already committed */
   report?: (err: unknown, call: Bundle) => void
-  /** the clock the `ms` is measured with (default: `performance.now`) */
+  /** the clock `result.ms` is measured with (default: `performance.now`) */
   now?: () => number
-  /** who this runner runs AS: its claims say so (`execution.by`), and a call
-   * somebody else holds is left alone — a transcript imported from elsewhere
-   * arrives already called, held by the process that made the calls, and no
-   * boot pass here re-drives it. A holder wearing `exit` holds nothing: its
-   * calls are free. Unsaid, this runner claims anonymously and takes any call
-   * nobody else holds. */
+  /** which entity this runner runs as: its claims record it in
+   * `execution.by`, and a call held by anyone else is left alone — a
+   * transcript imported from elsewhere arrives already executed, held by the
+   * process that made the calls, and no boot pass here re-runs it. A holder
+   * that has written an `exit` row holds nothing: its calls are free. Omitted,
+   * this runner claims anonymously and takes any call nobody else holds. */
   owner?: Eid
-  /** where the process running these calls stands, for a tool that acts on the
-   * BOX rather than the graph. The host says it; this package reaches no
-   * runtime and never asks one. */
+  /** the working directory the process running these calls is in, for a tool
+   * that acts on the MACHINE rather than the graph. The caller supplies it;
+   * this package touches no runtime API and never looks it up. */
   cwd?: string
 }
 
-/** A live runner: the rules a sweep asks, and the doors a host calls through. */
+/** A live runner: the rules a sweep queries, and the functions a caller
+ * invokes. */
 export type Runner = {
-  /** the rules a scheduled call is found by — what an effect registers on */
+  /** the rules a deferred call is found by — what an effect registers on */
   rules: Ready[]
   /** the tools it runs, named */
   tools: NamedTool[]
-  /** write the `tool` rows the calls point at — once per runner, whoever
-   * asks, so a door may call it on the way into every request */
+  /** write the `tool` rows that calls point at — done once per runner however
+   * many times it is called, so a request handler may call it on the way into
+   * every request */
   ensure: () => Promise<Bundle[]>
-  /** ask a tool: the call bundles in, the answer's bundles out */
+  /** invoke a tool: the call's bundles in, the answer's bundles out */
   call: (change: Change) => Promise<Bundle[]>
   /** run one call that is already in the graph */
   run: (call: Eid, opts?: { redrive?: boolean }) => Promise<Bundle[]>
-  /** every call the rules select, run: one sweep, which is what a boot pass
-   * does with `redrive` for the ones a crash left claimed */
+  /** run every call the rules select: one sweep, which is what a boot pass
+   * does with `redrive` set, for the calls a crash left claimed */
   drive: (opts?: { redrive?: boolean }) => Promise<Bundle[]>
 }
 
-// What a tool's bundles say in words: the prose they carry, or the bundles
-// themselves. It rides on the result entity as `content{body}` so a model, a
-// terminal and a transcript all read the answer the same way.
+// A tool's answer as text: the `content{body}` values its bundles carry, or
+// the bundles themselves as JSON when they carry none. It is copied onto the
+// result entity as `content{body}` so a model, a terminal and a transcript all
+// read the answer the same way.
 export let worded = (answer: Bundle[]): string => {
   let said = answer
     .map((b) => (b.content as Comp | undefined)?.body)
@@ -163,12 +173,12 @@ export let worded = (answer: Bundle[]): string => {
   return said.length ? said.join('\n') : JSON.stringify(answer, null, 2)
 }
 
-// Who wrote the call, as the graph recorded it. A batch's `$actor` is the
-// pipeline's and never a column, so what survives the commit is the stamp the
-// provenance rule wrote — which is the point: the caller is a fact about the
-// call, not a claim the runner has to be told again. Both halves come back:
-// what a tool writes is the caller's, through the same run the call came
-// through.
+// Who wrote the call, as the graph recorded it. A transaction's `$actor` is
+// read by the write pipeline and never stored as a column, so what survives
+// the commit is the stamp the provenance rule wrote — which is the point: the
+// caller is a fact recorded about the call, not something the runner has to be
+// told again. Both halves come back, so what a tool writes is attributed to
+// the caller and to the same run the call arrived through.
 let who = (call: Bundle): Actor | null => {
   let said = (col: 'by' | 'via') =>
     (call.created as Comp | undefined)?.[col] ?? call.$actor?.[col]
@@ -183,19 +193,19 @@ let who = (call: Bundle): Actor | null => {
 }
 
 /**
- * Did this call FAIL? The runner's own word for it — `execution{state}` on the
- * call — and not a guess from the answer's shape: a tool that reads break rows
- * answers entities wearing `error` and `exception`, and a listing of faults is
- * not a fault.
+ * Did this call fail? Read from the runner's own record — `execution{state}`
+ * on the call — rather than guessed from the shape of the answer: a tool that
+ * queries for broken rows returns entities carrying `error` and `exception`,
+ * and reporting faults is not itself a fault.
  */
 export let faulted = (landed: Bundle[]): boolean =>
   landed.some((b) => (b.execution as Comp | undefined)?.state == 'failed')
 
 /**
- * What a call ANSWERED, as a host renders it: the tool's own bundles, with the
- * runner's bookkeeping left out. The result entity carries a copy of the prose
- * so a transcript reads one line per answer; a host showing the answer itself
- * would otherwise show it twice.
+ * What a call answered, for display: the tool's own bundles, with the runner's
+ * bookkeeping filtered out. The result entity carries a copy of the answer's
+ * text so a transcript can show one line per result; a caller rendering the
+ * answer itself would otherwise show it twice.
  */
 export let answerOf = (landed: Bundle[]): Bundle[] =>
   landed.filter((b) => !b.result && !b.execution)
@@ -213,8 +223,8 @@ let parsed = (args: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>
 }
 
-// A tool's arguments, checked: the JSON Schema the declaration carries, or the
-// legacy per-property schemas that parse themselves.
+// A tool's arguments, validated against the JSON Schema on its declaration, or
+// against the legacy per-property schemas that parse themselves.
 let checked = (
   tool: NamedTool,
   args: Record<string, unknown>,
@@ -245,26 +255,26 @@ let checked = (
  * ```ts
  * let r = runner(g, { tools })
  * await r.ensure()
- * // the call is the transcript; the answer is the tool's own bundles
+ * // the call entity is the record; the answer is the tool's own bundles
  * let answer = await r.call([
  *   { entity: { eid: '$c' }, call: { to: toolEid('text_echo'), args: '{}' } },
  * ])
  * ```
  *
- * Nothing watches the graph for calls. A host that wants the scheduled ones
- * too registers the rules as effects — `for (let r of run.rules)
+ * Nothing polls the graph for calls. A server that wants the deferred ones too
+ * registers the rules as effects — `for (let r of run.rules)
  * fx.on(r.plan, (e) => run.run(e.entity.eid))` — and calls `reconcile()` at
- * boot for what a crash left claimed.
+ * boot for whatever a crash left claimed.
  */
 export let runner = (g: Graph, opts: Opts): Runner => {
   let tools = opts.tools.map(namedTool)
   let by = new Map(tools.map((t) => [t.eid ?? toolEid(t.name), t]))
   let now = opts.now ?? (() => performance.now())
   let host = opts.host ?? g
-  // The rules as THIS graph can ask them (@yaks/graph `asked`). A graph that
-  // schedules nothing never loaded the wake words: there `!wake` says nothing
-  // and comes out, and `call_woken`, which requires them, is inert — one rule
-  // text, right in both graphs.
+  // The rules as THIS graph can query them (@yaks/graph `asked`). A graph that
+  // schedules nothing never loaded the wake components: there `!wake` matches
+  // everything and drops out, and `call_woken`, which requires them, never
+  // matches — one rule text, correct in both graphs.
   let plans: Ready[] = ready(RULES)
     .map((p) => ({ ...p, plan: asked(p.plan, g.vocab) }))
     .filter((p): p is Ready => !!p.plan)
@@ -272,21 +282,23 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   let woken = plans.find((p) => p.rule.name == WOKEN)
   let inflight = per(running, g)
   let landings = per(answers, g)
-  // Whose claim a call carries, as this runner reads it. Nobody's and its own
-  // are `free`. Another process's is `theirs` — unless that process wrote its
-  // `exit`, which makes the claim `lapsed`: nothing is coming back to finish
-  // the call, so it is taken the way a re-drive takes one, claiming OVER
-  // `running`. The holder is read WHOLE rather than asked for by `.exit`, so a
-  // graph that tracks no processes simply never finds one — this package names
-  // the row it reads and requires nothing of the vocabulary.
+  // Whose claim a call carries, as this runner reads it. Unclaimed, or claimed
+  // by this runner, is `free`. Another process's claim is `theirs` — unless
+  // that process wrote an `exit` row, which makes the claim `lapsed`: nothing
+  // is coming back to finish the call, so it is taken the way a re-run takes
+  // one, claiming over `running`. The holder entity is fetched whole rather
+  // than queried by `.exit`, so a graph that tracks no processes simply never
+  // finds one — this package reads a component by name and requires nothing of
+  // the vocabulary.
   let whose = async (call: Bundle): Promise<'free' | 'lapsed' | 'theirs'> => {
     let by = (call.execution as Comp | undefined)?.by
     if (by == null || by == opts.owner) return 'free'
     let [holder] = await g.storage.tx((tx) => tx.get([String(by)]))
     return holder?.exit ? 'lapsed' : 'theirs'
   }
-  // The last few answers, by call. Bounded: a memo is a convenience for the
-  // caller that is about to ask, never a cache of the graph.
+  // The last few answers, keyed by call. Bounded on purpose: this memo is a
+  // convenience for the caller that is about to ask, never a cache of the
+  // graph.
   let keep = (id: Eid, bundles: Bundle[]) => {
     landings.set(id, bundles)
     for (let old of [...landings.keys()].slice(0, -256)) landings.delete(old)
@@ -294,11 +306,11 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   }
   let ensured: Promise<Bundle[]> | undefined
 
-  // The answer, read back out of the graph: the result the rule named, and
-  // whatever says it came from this call. What a host sees when another
-  // process ran the tool — a READ's answer was never written, so what comes
-  // back for one is the result alone and the way to see it again is to ask
-  // again.
+  // The answer, read back out of the graph: the result entity the rule named,
+  // plus every entity recording that it came from this call. This is what a
+  // caller sees when another process ran the tool. A read-only tool's answer
+  // was never written, so only the result comes back for one, and the way to
+  // see the answer again is to call it again.
   let recalled = async (id: Eid): Promise<Bundle[]> => {
     let result = await g.read(`.result.call=${id}`)
     if (!result.length) return []
@@ -306,9 +318,9 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     return [...made, ...result]
   }
 
-  // The result entity, as the RULE writes it: one binding of `call_ready`,
-  // emitted. The id is derived from the firing, so it is the same entity
-  // however many times a call is answered.
+  // The result entity, built the way the RULE would write it: one match of
+  // `call_ready`, emitted. Its id is derived from that match, so it is the
+  // same entity however many times a call is run.
   let attached = (id: Eid, ms: number, sleeps = false): Bundle => {
     let rule = sleeps && woken ? woken : answering
     let name = rule.plan.patterns[0].entity!
@@ -325,12 +337,12 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   ): Promise<Bundle[]> => {
     let [call] = await g.storage.tx((tx) => tx.get([id]))
     if (!call?.call) throw new CallError('call', 'Not a call: ' + id)
-    // A RECURRING call is not one invocation: it is the row that keeps asking
-    // for one. Each firing writes its OWN call, derived from the schedule and
-    // the instant it went off, and that one runs — so a result is never
-    // re-run, the transcript says how many times it went, and the schedule
-    // itself stays what it is, a standing ask. A one-shot has nothing to
-    // advance and runs where it stands.
+    // A recurring call is not one invocation: it is the row that keeps asking
+    // for one. Each firing writes its OWN call entity, with an id derived from
+    // the schedule and the instant it fired, and that new call is what runs —
+    // so a finished call is never re-run, the record shows how many times the
+    // schedule fired, and the schedule itself stays a standing request. A
+    // one-shot has nothing to advance and runs in place.
     let every = (call.wake as Comp | undefined)?.every
     let went = (call.fired as Comp | undefined)?.at
     if (every && went) {
@@ -345,16 +357,16 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let held = await recalled(id)
     if (held.length) return held
     // A live holder's claim is not this runner's to take, redrive or not; a
-    // lapsed one is taken here and now, without waiting for a boot pass.
+    // lapsed one is taken here and now, without waiting for a boot sweep.
     let hold = await whose(call)
     if (hold == 'theirs') return []
     let redrive = o.redrive || hold == 'lapsed'
     if (call.execution && !redrive) throw new UnfinishedCall(id)
     let c = call.call as Comp
     let tool = by.get(String(c.to))
-    // The claim. A call this runner has no tool for is left alone: another
-    // runner may own it, and a refusal here would be this one's opinion about
-    // somebody else's work.
+    // The claim. A call naming a tool this runner does not have is left alone:
+    // another runner may have that tool, and failing the call here would be
+    // this runner's verdict on somebody else's work.
     if (!tool) return []
     await g.apply([{
       entity: call.entity,
@@ -368,9 +380,9 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       },
     }])
     let started = now()
-    // What a throw comes to: the fault as its own entity, saying which call it
-    // came from. An expected refusal wears `error{code}`; anything else is a
-    // defect, reported as well as recorded.
+    // What a thrown error becomes: the fault as its own entity, recording
+    // which call it came from. An expected refusal gets `error{code}`;
+    // anything else is a defect, passed to `report` as well as recorded.
     let faulted = (error: unknown): Bundle[] => {
       if (!(error instanceof CallError)) opts.report?.(error, call)
       return [{
@@ -382,11 +394,12 @@ export let runner = (g: Graph, opts: Opts): Runner => {
           : { exception: {} },
       }]
     }
-    // The landing. A READING tool's answer is not a write — its bundles are
-    // entities that already exist, and landing them would patch every row a
-    // query found and move its `updated` stamp — so a read lands its
-    // bookkeeping alone and hands the answer back as the tool said it. A
-    // failure lands either way: an error is a record whatever the tool was.
+    // Writing the answer. A read-only tool's answer is not a write — its
+    // bundles are entities that already exist, and applying them would patch
+    // every row the query found and move its `updated` stamp — so a read
+    // writes only the runner's bookkeeping and returns the answer as the tool
+    // built it. A failure is written either way: an error is worth recording
+    // whatever the tool was.
     let land = async (made: Bundle[], state: string): Promise<Bundle[]> => {
       let keeps = !tool.readOnly || state == 'failed'
       let landed = await g.apply([
@@ -415,9 +428,9 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       }
       return await land(signed(await tool.run([call], ctx), ctx.actor), 'done')
     } catch (error) {
-      // The tool's own throw AND a refusal of what it answered: a batch the
-      // graph would not take is this call's failure, not a call left claimed
-      // with nothing said about it.
+      // This catches both the tool's own throw and a rejection of what it
+      // returned: a transaction the graph refuses is this call's failure,
+      // rather than a call left claimed with nothing recorded about it.
       return await land(faulted(error), 'failed')
     }
   }
@@ -430,9 +443,9 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     return pending
   }
 
-  // The queue: every call either rule selects, asked once. A rule's match IS
-  // the query — its first pattern is the call — so this asks the storage the
-  // same question an effect registered on that pattern would.
+  // The queue: every call either rule selects, queried once. A rule's match IS
+  // the query — its first pattern is the call — so this asks storage the same
+  // question an effect registered on that pattern would.
   let queued = async (): Promise<Bundle[]> => {
     let out = new Map<Eid, Bundle>()
     for (let p of plans) {
@@ -447,8 +460,9 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let out: Bundle[] = []
     for (let call of await queued()) {
       let id = call.entity.eid
-      // Claimed and not this pass's to take: either it is running here (the
-      // promise is the answer) or another process holds it.
+      // Claimed and not this pass's to take: either it is already running in
+      // this process (the in-flight promise is the answer) or another process
+      // holds it.
       if (inflight.has(id)) continue
       let hold = await whose(call)
       if (hold == 'theirs') continue
@@ -477,11 +491,10 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         })),
       )),
     call: async (change) => {
-      // The call is written FIRST, because it is the transcript: what was
-      // asked stands whether or not the answer ever comes. Then the tool is
-      // run — here, by this process, for this caller — unless an effect over
-      // the same commit got there first, in which case its answer is this
-      // caller's answer.
+      // The call is written FIRST, because it is the record: what was asked
+      // stands whether or not an answer ever does. Then the tool runs — here,
+      // in this process, for this caller — unless an effect on the same commit
+      // got there first, in which case its answer is this caller's answer.
       let applied = await g.apply(change)
       let made = applied.find((b) => b.call)
       if (!made) throw new CallError('call', 'a call batch needs a call')
@@ -498,7 +511,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   }
 }
 
-/** What a crash left: every call the rules still select, re-driven once,
- * claim and all. Call it at boot, after the tools are registered. */
+/** Recover what a crash left behind: every call the rules still select, run
+ * once more, stale claim and all. Call it at boot, after the tools are
+ * registered. */
 export let reconcile = (r: Runner): Promise<Bundle[]> =>
   r.drive({ redrive: true })

@@ -6,34 +6,34 @@
       "type": "object",
       "kind": true,
       "prefix": "W",
-      "description": "a promise to come back to something at a time",
-      "$comment": "There is no apply patch: a rule's produce already writes the entity it matched. If a wake needs to patch its target without code, the fix is a rule that names a target.",
+      "description": "a scheduled time to come back to something",
+      "$comment": "A wake carries no patch to apply when it fires: a rule's produce already writes the entity it matched. Patching a wake's target declaratively would need a rule that names that target.",
       "properties": {
         "at": {
           "type": "string",
           "format": "date-time",
-          "description": "when it is next due; absent once a one-shot has fired and a recurrence has ended"
+          "description": "when it is next due; absent once a one-shot has fired, or once a recurrence has ended"
         },
         "target": {
           "type": "string",
           "ref": "entity",
           "death": "cascade",
-          "description": "what the wake is about — the entity carrying it when absent"
+          "description": "what the wake is about; when absent, the entity carrying it"
         },
         "note": {
           "type": "string",
-          "description": "a line for whoever is woken: why you asked to be"
+          "description": "a line for whoever is woken: why the wake was set"
         },
         "every": {
           "type": "string",
-          "description": "how it recurs: a duration (30m, 2h, 1d), five cron fields (0 9 * * 1-5), or @hourly/@daily/@weekly/@monthly; cron may end with an IANA zone (0 9 * * 1-5 America/New_York), otherwise UTC"
+          "description": "how it recurs: a duration (30m, 2h, 1d), five cron fields (0 9 * * 1-5), or @hourly/@daily/@weekly/@monthly; a cron line may end with an IANA time zone (0 9 * * 1-5 America/New_York), otherwise UTC"
         }
       }
     },
     "fired": {
       "component": true,
       "type": "object",
-      "description": "when a wake last went off",
+      "description": "when a wake last fired",
       "properties": {
         "at": {
           "type": "string",

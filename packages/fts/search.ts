@@ -1,15 +1,16 @@
 // Ranked results, with a snippet.
 //
-// The extension (./compile.ts) answers MEMBERSHIP — which entities a search
+// The extension (./compile.ts) decides MEMBERSHIP — which entities a search
 // selects. This module answers the other question a search box asks: of those,
-// which come first, and what did they say? That is FTS5's `bm25` relevance and
-// its `snippet`, which are only readable in a statement that queries the index
-// itself, so this builds that statement.
+// which come first, and what text matched? That is FTS5's `bm25` relevance and
+// its `snippet()`, both of which can only be read in a statement that queries
+// the index itself, so this module builds that statement.
 //
-// `hits()` is the statement, pure: SQL and params a caller runs through
-// anything, sync or async. `find()` runs it through a driver and hands back
-// {@link Hit}s. Ranking is relevance ALONE; blending in recency, popularity or
-// anything else is an application's policy, applied to what comes back.
+// `hits()` only builds it: it returns SQL and params the caller may run through
+// anything, sync or async. `find()` runs it through a driver and returns
+// {@link Hit}s. Ranking is by relevance ALONE; mixing in recency, popularity or
+// anything else is an application's policy, applied to the results it gets
+// back.
 
 import type { Eid } from '@yaks/graph'
 import { type Field, indexes, indexName } from './fields.ts'
@@ -20,22 +21,22 @@ import type { Driver } from './driver.ts'
 export type Hit = {
   // the matched entity
   entity: Eid
-  // the relevance rank — FTS5's bm25, where LOWER is a closer match
+  // the relevance rank — FTS5's bm25, where a LOWER number is a closer match
   rank: number
-  // the matching text with each hit wrapped in OPEN…CLOSE, for display
+  // the matching text with each match wrapped in OPEN…CLOSE, for display
   snippet: string
 }
 
-// A statement and the params it binds, in order — @yaks/sql's compiled shape,
-// so a filter compiled there can be handed straight in as a `screen`.
+// A statement and the params it binds, in order — the shape @yaks/sql compiles
+// to, so a filter compiled there can be passed straight in as a `screen`.
 export type Stmt = { sql: string; params: (string | number)[] }
 
 export type SearchOpts = {
   // how many hits at most (default 20)
   limit?: number
-  // a statement selecting the `eid`s a hit must be among — hand it what
-  // @yaks/sql compiled for the rest of the query line, and the words rank only
-  // what the filters already allow
+  // a statement selecting the `eid`s a hit must be among — pass what @yaks/sql
+  // compiled for the rest of the query, and only rows the filters already allow
+  // are ranked
   screen?: Stmt
   // how many words of context a snippet carries (default 10)
   context?: number
@@ -43,15 +44,16 @@ export type SearchOpts = {
 
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
-// The ranked statement for a search, or null when the text holds no word. The
-// words are ANDed terms (./term.ts) and bm25 puts them in order, so a search
-// reads as a bag of words rather than as one phrase.
+// The ranked statement for a search, or null when the text contains no word.
+// The words are ANDed terms (./term.ts) and bm25 orders the results, so a
+// search behaves as a set of words rather than as one phrase.
 //
-// One arm per index, unioned; the outer statement joins the spine for the eid,
-// drops the graves, and keeps one row per entity. `min(rank)` picks an entity's
-// best-matching index, and the snippet beside it comes from THAT row — SQLite
-// answers a bare column beside a lone `min()` from the row the minimum came
-// from, which is exactly the pairing wanted.
+// One subquery per index, combined with `union all`; the outer statement joins
+// the `entity` table for the eid, excludes deleted entities, and keeps one row
+// per entity. `min(rank)` picks an entity's best-matching index, and the
+// snippet selected alongside it comes from THAT row — SQLite returns a bare
+// column selected next to a single `min()` from the row the minimum came from,
+// which is exactly the pairing wanted here.
 export let hits = (
   fields: Field[],
   text: string,
@@ -72,12 +74,13 @@ export let hits = (
   let screen = opts.screen ? ` and "entity"."eid" in (${opts.screen.sql})` : ''
   if (opts.screen) params.push(...opts.screen.params)
   params.push(opts.limit ?? 20)
-  // MATERIALIZED, and it is not decoration: fts5's `bm25` and `snippet` may
-  // only be read where the index is being MATCHed, and SQLite's flattener will
-  // fold a plain subquery into the join above it — which moves them out of that
-  // context and answers "unable to use function bm25 in the requested context".
-  // Several arms compound into a UNION ALL, which is never flattened, so the
-  // fault only ever showed for a vocabulary with ONE indexed component.
+  // MATERIALIZED, and it is not decoration: FTS5's `bm25` and `snippet` may
+  // only be used in a statement that matches the index, and SQLite's query
+  // flattener would fold a plain subquery into the join above it, moving them
+  // out of that context and raising "unable to use function bm25 in the
+  // requested context". Two or more indexes produce a `union all`, which is
+  // never flattened, so the error only ever appeared for a vocabulary with ONE
+  // indexed component.
   return {
     sql: `with "hit" as materialized (${union})` +
       ` select "entity"."eid" as entity, min("hit"."rank") as rank,` +
@@ -90,9 +93,9 @@ export let hits = (
   }
 }
 
-// The hits for a search, closest first. Answers [] for text with no word in it
-// and for a vocabulary with nothing indexed — a search that cannot be asked
-// finds nothing, rather than everything.
+// The hits for a search, closest first. Returns [] for text containing no word
+// and for a vocabulary with nothing indexed — a search that cannot be run finds
+// nothing, rather than everything.
 export let find = (
   db: Driver,
   fields: Field[],

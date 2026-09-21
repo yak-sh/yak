@@ -1,9 +1,9 @@
 # @yaks/preact
 
-Preact's host for `@yaks/render`. Bind a synchronous bundle store and optional
-subscription into an `Entity` component, then mount it with Preact. This
-fragment assumes a registry from `@yaks/render`, a loaded vocabulary, a bundle
-map and an application subscription function `watch`:
+The Preact rendering backend for `@yaks/render`. Bind a synchronous bundle
+store, and optionally a subscription, into an `Entity` component, then mount it
+with Preact. This fragment assumes a registry from `@yaks/render`, a loaded
+vocabulary, a bundle map and an application subscription function `watch`:
 
 ```ts
 import { entity } from '@yaks/preact'
@@ -31,28 +31,28 @@ callers that already own the subscription. A missing bundle at `Entity`, or an
 unmatched view, renders nothing. Portable renderers remain pure; native
 components own hooks and state.
 
-The host supplies `ctx.render(view, overrides?)` for composing another view of
-the same bundle through the same registry. Overrides merge with the current
-context; native source props are preserved. Portable `onChange` props can carry
-an `Action` object. The host calls its `run(bundle, input)` with a checkbox's
-checked state or another control's value, then sends the resulting patch to
-`ctx.onPatch(patch, bundle)`. The application owns applying that patch. A
-rejected edit sets and reports the control's validity message and calls
-`ctx.onError(error, bundle)` when supplied; a successful edit clears the
-message. The exported `Events` type describes these callbacks. Ordinary event
-functions pass through unchanged.
+This package supplies `ctx.render(view, overrides?)` for composing another view
+of the same bundle through the same registry. Overrides merge with the current
+context; props belonging to a native component are preserved. A portable
+`onChange` prop can carry an `Action` object; this package calls its
+`run(bundle, input)` with a checkbox's checked state, or another control's
+value, and passes the resulting patch to `ctx.onPatch(patch, bundle)`. The
+application owns applying that patch. A rejected edit sets and reports the
+control's validity message and calls `ctx.onError(error, bundle)` when supplied;
+a successful edit clears the message. The exported `Events` type describes these
+callbacks. Ordinary event functions pass through unchanged.
 
 A native registration uses `{view, match, Render}` and can be typed as
-`ComponentRenderer`. The host builds `h(Render, {e: bundle, ...ctx})`, so Preact
-owns its hooks and component identity. `Entity` supports native and portable
-registrations in the same registry. A component change resets its state and runs
-its cleanup through ordinary reconciliation.
+`ComponentRenderer`. This package builds `h(Render, {e: bundle, ...ctx})`, so
+Preact owns its hooks and its component identity. `Entity` supports native and
+portable registrations in the same registry. A component change resets its state
+and runs its cleanup through ordinary reconciliation.
 
 For an application whose entities differ from `Bundle`, register
 `ComponentRenderer<MyEntity>` and call
 `render(registry, bundle, view, vocab, ctx, {e: entity, ...ctx})`. Selection
-reads the bundle; the mounted component receives the original typed entity. The
-host never calls a native `Render` as an ordinary function.
+reads the bundle; the mounted component receives the original typed entity. A
+native `Render` is never called as an ordinary function.
 
 ## Example
 

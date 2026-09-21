@@ -6,24 +6,24 @@
       "type": "object",
       "kind": true,
       "before": ["process"],
-      "description": "desired state: a program that should be running. It rides the same entity its `process` lands on — the service says what is wanted, the process says what is, and `stop` beside it says the wanting is over",
+      "description": "a program that should be running. It is stored on the same entity its `process` component lands on: the service records what is wanted, the process records what is actually running, and a `stop` component beside it means the program is no longer wanted",
       "properties": {
         "command": {
           "type": "string",
-          "description": "the command line to run, argv joined by a space — the supervisor's own copy, kept here rather than read back off the process, because relaunching needs what we said and not what the kernel remembers"
+          "description": "the command line to run, argv joined by spaces — the supervisor's own copy, kept here rather than read back off the running process, because restarting needs the command that was asked for and not what the kernel reports"
         },
         "cwd": {
           "type": "string",
-          "description": "where to run it; absent means the supervisor's own cwd"
+          "description": "the working directory to run it in; absent means the supervisor's own working directory"
         },
         "restart": {
           "type": "string",
           "enum": ["never", "on-failure", "always"],
-          "description": "what to do when it ends, in systemd's three words; absent means never, so an unstated row runs once and stays down"
+          "description": "what to do when it exits, using systemd's three values; absent means never, so a service that does not set it runs once and stays down"
         },
         "attempts": {
           "type": "integer",
-          "description": "how many times the supervisor has respawned it after an ending — the backoff climbs with this number, and a run that outlives the longest backoff starts the tally over"
+          "description": "how many times the supervisor has restarted it after an exit — the backoff grows with this number, and a run that outlives the longest backoff resets the count"
         }
       }
     },
@@ -31,30 +31,30 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "a program running on a host, tracked by pid — whether or not we started it",
+      "description": "a program running on this machine, tracked by pid — whether or not this package started it",
       "properties": {
         "pid": {
           "type": "integer",
-          "description": "the process id, on the host that tracks it — the one durable handle an adopted process has"
+          "description": "the process id on the machine tracking it — the only durable handle an adopted process has"
         },
         "command": {
           "type": "string",
-          "description": "the command line as launched, argv joined by a space; absent when the process was adopted rather than started here"
+          "description": "the command line it was launched with, argv joined by spaces; absent when the process was adopted rather than started here"
         },
         "cwd": {
           "type": "string",
-          "description": "where it was launched; absent for the same reason as command"
+          "description": "the working directory it was launched in; absent for the same reason as command"
         }
       }
     },
     "exit": {
       "component": true,
       "type": "object",
-      "description": "the process is over — never rewritten, and cleared only by the batch that lands the next attempt on a supervised row",
+      "description": "the process has ended — never rewritten, and deleted only by the transaction that records the next attempt on a supervised entity",
       "properties": {
         "code": {
           "type": "integer",
-          "description": "the status it reported; absent when the ending was witnessed but the code was not (a signal took the wrapper, or nobody was watching)"
+          "description": "the exit code it reported; absent when the end of the process was observed but the code was not (a signal killed the wrapper, or nothing was watching)"
         }
       }
     }

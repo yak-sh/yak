@@ -1,4 +1,5 @@
-/** Column actions parse input without touching a store or a host. */
+/** Column actions parse input without touching a store or a rendering
+ * backend. */
 
 import type { Bundle } from '@yaks/match'
 import type { Column, Vocab } from '@yaks/vocab'
@@ -60,7 +61,7 @@ let parse = (input: unknown, c: Column): unknown => {
   }
   if (type == 'ref') return input.trim() || fail(c, 'an entity id')
   if (type == 'time') {
-    // Explicit offsets avoid changing the instant with the host's timezone.
+    // Explicit offsets keep the instant from shifting with the local timezone.
     let text = input.trim()
     let stamp =
       /^\d{4}-\d\d-\d\dT(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d)$/i
@@ -78,7 +79,7 @@ let parse = (input: unknown, c: Column): unknown => {
 
 /**
  * Offer a single-column patch. Construction is inert; run parses, validates
- * and returns only that column. The host decides whether to apply the patch.
+ * and returns only that column. The caller decides whether to apply the patch.
  */
 export let edit = (
   vocab: Vocab,

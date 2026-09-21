@@ -1,5 +1,5 @@
 {
-  "_": "The browser gate: @yaks/page's browser-facing exports must type-check with only the web platform in scope — no Deno namespace, no Node types. Its front door runs an external archiver as a child process, so the entry is ./vocab, the half a browser imports. `deno task check:browser` is the check.",
+  "_": "The browser check: @yaks/page's browser-facing exports must type-check with only the web platform in scope — no Deno namespace, no Node types. The main entry point runs an external archiver as a child process, so only ./vocab is checked here — the part a browser imports. Run `deno task check:browser`.",
   "entries": [
     "./vocab"
   ],

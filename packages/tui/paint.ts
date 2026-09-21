@@ -141,8 +141,9 @@ let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
   let el = n as TElement
   if (el.localName == 'br') return [{ text: '\n', style: st, owner: el }]
   let o = own(el, c.sheet)
-  // An href is content too, and it rides inside an OSC 8 where a single BEL
-  // ends the sequence and lets the rest of the URL run as its own.
+  // An href is content too, and it is emitted inside an OSC 8 sequence, where a
+  // single BEL byte ends the sequence and lets the rest of the URL be
+  // interpreted as terminal input.
   if (el.localName == 'a' && el.attr('href')) {
     o.href = safeHref(el.attr('href')!)
   }
@@ -151,7 +152,7 @@ let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
   return el.childNodes.flatMap((k) => inline(k, s, c))
 }
 
-// The <pre> path's text, sanitized at the same seam — a text node's data is
+// The <pre> path's text, sanitized by the same function — a text node's data is
 // never painted raw, whichever branch reaches it.
 let text = (n: TNode): string =>
   n instanceof TText
@@ -560,7 +561,8 @@ export let ansi = (line: Line): string =>
       : t
   }).join('')
 
-/** The whole screen a tree makes at a given size — the seam the tests read. */
+/** The whole screen a tree produces at a given size — the function the tests
+ * assert against. */
 export let screenful = (
   root: TElement,
   columns: number,

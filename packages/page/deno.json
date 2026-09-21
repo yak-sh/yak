@@ -9,7 +9,7 @@
     "./routes": "./routes.ts"
   },
   "license": "Apache-2.0",
-  "description": "A page on the web as witnessed: its canonical address as its identity, and its bytes frozen to one self-contained document.",
+  "description": "Records a web page as it was seen: its canonical address becomes its entity id, and its bytes are stored as one self-contained document.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "linkedom": "npm:linkedom@^0.18.12"

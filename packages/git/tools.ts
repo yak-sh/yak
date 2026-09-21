@@ -1,20 +1,19 @@
-// What anybody may ask of git: the `tools` facet a host takes
-// (`@yaks/git/tools`) — the runs behind the `tool: true` declarations in
-// ./vocab.json.
+// The implementations behind the `tool: true` declarations in ./vocab.json,
+// exported as `@yaks/git/tools`.
 //
-// `land` is the one, and it is a tool like any other. It acts on the BOX the
-// call runs on rather than on the graph — the checkout standing at `ctx.cwd`,
-// which on a command line is where the person typed, because `yak land`
-// composes the graph and runs the tool in that same process (@yaks/cli
-// local.ts). Nothing here reads or writes a row; the answer is git's own
-// output, as the prose the call carries back.
+// `land` is the only one, and it is an ordinary tool. It acts on the machine
+// the call runs on rather than on the graph: the checkout at `ctx.cwd`, which
+// on a command line is the directory the person ran the command in, because
+// `yak land` builds the graph and calls the tool in that same process
+// (@yaks/cli local.ts). Nothing here reads or writes a row; the result is
+// Git's own output, returned as the text of the call's answer.
 //
-// A DIVERGENCE IS A REFUSAL. Landing answers one of two things (./land.ts): it
-// landed, or the base moved and the branch was rebased and left waiting for a
-// re-gate. The second is not a landing, so it comes back as a `CallError` —
-// git's whole account of it as the message — which the runner records as a
-// failed execution and a command line answers with exit 1. That is the same
-// pair of exit codes `land` has always had.
+// A DIVERGED BASE IS A FAILURE. Landing ends in one of two ways (./land.ts):
+// it landed, or the base moved and the branch was rebased and left waiting for
+// its tests to be re-run. The second is not a landing, so it is thrown as a
+// `CallError` carrying Git's whole account of it as the message, which the
+// tool runner records as a failed call and a command line reports as exit 1.
+// Those are the same two exit codes `land` has always had.
 
 import type { Bundle, ToolCtx } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
@@ -23,7 +22,7 @@ import { land } from './land.ts'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
 
-/** The runs behind the tools ./vocab.json declares. */
+/** The implementations of the tools ./vocab.json declares. */
 export let runs = (): Runs => ({
   land: async (_bundles, ctx: ToolCtx): Promise<Bundle[]> => {
     if (!ctx.cwd) {
@@ -32,8 +31,9 @@ export let runs = (): Runs => ({
         'land acts on a checkout, and this graph runs nowhere in particular',
       )
     }
-    // git's own output, as git wrote it, gathered in the order it came: the
-    // answer a person reads is the account git gave, never a retelling.
+    // Git's output, exactly as Git wrote it, collected in the order it
+    // arrived: what the caller reads is Git's own account, not a summary of
+    // it.
     let said: string[] = []
     let outcome = await land({
       cwd: ctx.cwd,

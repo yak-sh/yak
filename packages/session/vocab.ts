@@ -1,13 +1,14 @@
-// The transcript words, and only the words: the `vocab` facet a host takes
-// (`@yaks/session/vocab`). It reaches no storage, no SQL and no runtime, so a
-// browser tab loading this vocabulary loads nothing else.
+// The transcript's component declarations, and only those: the module exported
+// as `@yaks/session/vocab`. It imports no storage, no SQL and no runtime, so a
+// browser tab that loads this vocabulary loads nothing else.
 //
 // Two computed columns, not one. A transcript's status is read off its newest
 // entry; a TASK's status is read off its marks, and a graph that leases its
-// tasks has a rung @yaks/task cannot know about — a held claim reads `wip`.
-// The rung belongs to whoever owns `claim`, which is this package, so this
-// facet restates `task.status` with the claim in the ladder. A host composing
-// both puts @yaks/session after @yaks/task and gets the wider reading.
+// tasks has a state @yaks/task cannot know about — a held claim reads `wip`.
+// That state belongs to whoever owns `claim`, which is this package, so this
+// module restates `task.status` with the claim included. An application
+// composing both puts @yaks/session after @yaks/task and gets the wider
+// reading.
 
 import type { VocabDoc } from '@yaks/vocab'
 import type { Derived } from '@yaks/sql'

@@ -1,10 +1,10 @@
 /**
  * A portfolio. A `project` is what work is filed UNDER — `filed{project,
- * priority, domain, assignee}` is that filing, separate from being a task, so a
- * microtask can skip it. A `board` is a saved filter over the portfolio, never
- * a stored membership, and the one piece of machinery here refuses a board
- * whose query would quietly match nothing. A `venture` is a business being
- * built, with a phase rather than a status.
+ * priority, domain, assignee}` is that filing, kept separate from being a task
+ * so that a task can have none. A `board` is a saved filter over the portfolio
+ * rather than a stored list of members, and the one piece of machinery here
+ * refuses a board whose query would quietly match nothing. A `venture` is a
+ * business being built, with a phase rather than a status.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'

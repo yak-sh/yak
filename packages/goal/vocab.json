@@ -29,7 +29,7 @@
       "type": "object",
       "relation": "satisfies",
       "properties": {},
-      "description": "the relation an edge wears: doing this served that purpose"
+      "description": "the relation on a link: doing this served that purpose"
     }
   }
 }

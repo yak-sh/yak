@@ -11,7 +11,7 @@
       "type": "object",
       "relation": "about",
       "properties": {},
-      "description": "the relation an edge wears: this is about that"
+      "description": "edge tag: this entity is about that one"
     },
     "archived": {
       "component": true,
@@ -35,7 +35,7 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "the instrument it was written through — the session or client the write came in on"
+          "description": "what the write was made through — the session or client it came in on"
         }
       },
       "description": "Hidden from ordinary listings, without stopping execution or deleting history."
@@ -51,7 +51,7 @@
           "death": "cascade"
         }
       },
-      "description": "words aimed at any entity — the doc beside it says them"
+      "description": "a comment on any entity; the doc component beside it holds the text"
     },
     "created": {
       "component": true,
@@ -112,7 +112,7 @@
       "type": "object",
       "relation": "delegates",
       "properties": {},
-      "description": "the relation an edge wears: this handed that off"
+      "description": "edge tag: this entity handed work off to that one"
     },
     "entity": {
       "component": true,
@@ -129,10 +129,10 @@
           "ref": "archetype",
           "death": "keep",
           "stamped": true,
-          "description": "which set of components it wears — the archetype row, not a kind"
+          "description": "the archetype entity describing this one's set of components, not a type name"
         }
       },
-      "description": "every entity has one: the number this graph minted for it, and the archetype its set of components makes"
+      "description": "every entity has one: the number this graph minted for it, and the archetype its set of components adds up to"
     },
     "favorite": {
       "component": true,
@@ -144,7 +144,7 @@
           "stamped": true
         }
       },
-      "description": "somebody keeps it close"
+      "description": "somebody marked it a favorite"
     },
     "image": {
       "component": true,
@@ -157,7 +157,7 @@
           "type": "number"
         }
       },
-      "description": "the bitmap an artifact is, at the size it is"
+      "description": "this entity is an image, with its pixel dimensions"
     },
     "opened": {
       "component": true,
@@ -236,7 +236,7 @@
       "type": "object",
       "relation": "reads",
       "properties": {},
-      "description": "the relation an edge wears: this reads that"
+      "description": "edge tag: this entity reads that one"
     },
     "redaction": {
       "component": true,
@@ -271,21 +271,21 @@
       "type": "object",
       "relation": "referenced",
       "properties": {},
-      "description": "the relation an edge wears: this refers to that"
+      "description": "edge tag: this entity refers to that one"
     },
     "supersedes": {
       "component": true,
       "type": "object",
       "relation": "supersedes",
       "properties": {},
-      "description": "the relation an edge wears: this replaces that"
+      "description": "edge tag: this entity replaces that one"
     },
     "supervises": {
       "component": true,
       "type": "object",
       "relation": "supervises",
       "properties": {},
-      "description": "the relation an edge wears: this oversees that"
+      "description": "edge tag: this entity oversees that one"
     },
     "updated": {
       "component": true,
@@ -316,21 +316,21 @@
       "type": "object",
       "relation": "wants",
       "properties": {},
-      "description": "the relation an edge wears: this wants that"
+      "description": "edge tag: this entity wants that one"
     },
     "worked": {
       "component": true,
       "type": "object",
       "relation": "worked",
       "properties": {},
-      "description": "the relation an edge wears: this worked on that"
+      "description": "edge tag: this entity worked on that one"
     },
     "comment_new": {
       "tool": true,
       "noun": "comment",
       "verb": "new",
       "title": "Comment on anything",
-      "description": "Say something about an entity: a new entity wearing doc{body} and comment{target}, signed as whoever asked. The target is any entity — a task, a design, a session, another comment.",
+      "description": "Comment on an entity. Writes a new entity carrying doc{body} and comment{target}, signed as whoever called it. The target can be any entity: a task, a design, a session, another comment.",
       "input": {
         "target": {
           "type": "string",

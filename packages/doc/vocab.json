@@ -9,7 +9,7 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "the words a person reads: a title and a body",
+      "description": "the text a person reads: a title and a body",
       "properties": {
         "title": {
           "type": "string",
@@ -20,7 +20,7 @@
           "type": "string",
           "store": "blob",
           "search": true,
-          "description": "the prose, as markdown — content-addressed where @yaks/blob is composed in, plain text everywhere else"
+          "description": "the prose, as markdown — content-addressed when @yaks/blob is composed in, plain text otherwise"
         }
       }
     }

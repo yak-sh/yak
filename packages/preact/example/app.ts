@@ -1,4 +1,5 @@
-// One live document demonstrates the Entity door. Changing the bundle notifies
+// One live document demonstrates the `entity` renderer. Changing the bundle
+// notifies
 // its subscribers; the mounted renderer reads the replacement from the store.
 
 import { h, render } from 'preact'

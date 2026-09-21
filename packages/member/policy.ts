@@ -1,33 +1,37 @@
 // The four questions, and the order they are answered in.
 //
-// Everything here follows from one idea: BELONGING IS NOT ACCESS. A seat on
-// the roster does not, on its own, let you touch anything. So the ladder runs
+// Everything here follows from one idea: MEMBERSHIP IS NOT PERMISSION. A row on
+// the roster does not, on its own, let you touch anything. So permission
+// resolves in this order:
 //
-//   1. nobody at all              → no level; the app's mode is the whole answer
-//   2. the space's owner          → owner on every app in it, never stored
-//   3. a grant naming them        → the level it confers
-//   4. a member with no grant     → no level; the app's mode again
+//   1. nobody at all           → no level; the app's mode is the whole answer
+//   2. the space's owner       → owner on every app in it, never stored
+//   3. a grant naming them     → the level it confers
+//   4. a member with no grant  → no level; the app's mode again
 //
 // Steps 1 and 4 land in the same place, which is the point: a member without a
-// grant reaches an app exactly as far as a stranger with the link does. That
-// is what makes a roster safe to be generous with, and it is why eviction is
-// one row — take the seat away and every implicit ownership goes with it.
+// grant reaches an app exactly as far as a stranger with the link does. That is
+// what makes a roster safe to be generous with, and it is why removing someone
+// is one row — delete the membership and every permission implied by it goes
+// too.
 //
 // A SHARE LINK is the fourth way in. A grant may name a `token` instead of a
-// person; whoever opens that link acts AS the grant, so the actor a door signs
-// the batch with is the grant's own entity. `levelOn` therefore looks at the
-// actor itself before it looks for a grant about the actor.
+// person; whoever opens that link acts AS the grant, so the HTTP layer signs
+// the changes with the grant's own entity id. `levelOn` therefore checks the
+// principal's own entity for a `grant` component before it looks for grants
+// filed about the principal.
 //
-// The two rules themselves are `reads` and `edits` in words.ts — pure, over a
-// mode and a level — and everything here is the ladder that finds the level to
-// ask them about. Said once there, the door, `apply()` and a host that already
-// knows both answers cannot drift apart:
+// The two rules themselves are `reads` and `edits` in words.ts — pure functions
+// of a mode and a level — and everything here resolves the level to call them
+// with. Stated once there, the read check at the HTTP layer, the write check in
+// `apply()`, and a service that already knows both values cannot drift apart:
 //
-//   read   the mode is not `private`, OR the asker holds any level
-//   write  the mode is `open`, OR the asker holds owner or editor
+//   read   the mode is not `private`, OR the principal holds any level
+//   write  the mode is `open`, OR the principal holds owner or editor
 //
-// Every function threads @yaks/graph's sync pass-through: over a synchronous
-// storage (a Map, an embedded database) not one of them returns a promise.
+// Every function here threads @yaks/graph's synchronous pass-through: over a
+// synchronous storage (a Map, an embedded database) none of them returns a
+// promise.
 
 import type { Bundle, Comp, Eid, Storage, Tx } from '@yaks/graph'
 import { detached, then } from '@yaks/graph'
@@ -35,24 +39,24 @@ import { and, eq, or } from '@yaks/query'
 import { ACCESS, GRANT, MEMBER } from './comp.ts'
 import { edits, type Level, level, type Mode, mode, reads } from './words.ts'
 
-/** Who is asking: the entity a door signed the request with, or `null` for
- * nobody — an anonymous visitor with only the link. */
+/** Who is acting: the entity the HTTP layer signed the request with, or `null`
+ * for nobody — an anonymous visitor with only the link. */
 export type Viewer = Eid | null
 
 /** Where the roster and the grants are read from, and which space's owners
  * count. */
 export type Where = {
   /** the space whose owners own every app in it. Omit it and only grants
-   * speak — a graph holding one app and no roster needs no space. */
+   * count — a graph holding one app and no roster needs no space. */
   space?: Eid
 }
 
-/** The questions a door and a guard both ask. Each answers synchronously over
- * a synchronous storage. */
+/** The checks the HTTP layer and the write guard both call. Each returns a
+ * value rather than a promise over a synchronous storage. */
 export type Policy = {
-  /** the app's mode — `public` when it has never said */
+  /** the app's mode — `public` when it has no `access` component */
   modeOf: (app: Eid) => Mode | Promise<Mode>
-  /** what this viewer holds on this app, or `null` for nothing */
+  /** what this principal holds on this app, or `null` for nothing */
   levelOf: (who: Viewer, app: Eid) => Level | null | Promise<Level | null>
   /** may they read it? */
   canRead: (who: Viewer, app: Eid) => boolean | Promise<boolean>
@@ -69,16 +73,18 @@ export let modeOn = (tx: Tx, app: Eid): Mode | Promise<Mode> =>
   then(tx.get([app]), ([b]) => mode(of(b, ACCESS)?.mode))
 
 /**
- * Everything filed ABOUT this person: their seat on a roster, their grants —
- * both are entities whose columns point at them, so the two rungs of the ladder
- * that used to be a read each are one backwards read (@yaks/graph `about`), and
- * none at all when a gather already took it (@yaks/graph `wants`, declared by
+ * Everything filed ABOUT this principal: their membership rows, their grants.
+ * Both are entities with a column pointing at the principal, so the two steps
+ * that would each have been a read are one backwards read (@yaks/graph
+ * `about`), and none at all when the gather already fetched them (@yaks/graph
+ * `wants`, declared by
  * {@link https://jsr.io/@yaks/member/doc/~/members | members}).
  *
- * It reads a person's WHOLE file rather than the one row the rung is about, and
- * the rungs then pick out what they need. That is the trade the gather makes
- * everywhere: a person holds as many of these as they have seats and grants,
- * which is a handful, and a handful in one answer beats two round trips.
+ * It reads a principal's whole file rather than the one row a given step needs,
+ * and the steps then pick out what they want. That is the trade the gather
+ * makes everywhere: a principal has as many of these rows as they have
+ * memberships and grants, which is a handful, and a handful in one response
+ * beats two round trips.
  */
 let filed = (tx: Tx, who: Eid): Bundle[] | Promise<Bundle[]> =>
   tx.about ? tx.about([who], [GRANT, MEMBER]) : tx.read(
@@ -86,9 +92,9 @@ let filed = (tx: Tx, who: Eid): Bundle[] | Promise<Bundle[]> =>
   )
 
 /**
- * What `who` holds on `app`, read through a transaction: the ladder above, in
- * order. Returns `null` when they hold nothing — which is not a refusal, only
- * the answer that the app's mode has the last word.
+ * What `who` holds on `app`, read through a transaction, following the
+ * resolution order above step by step. Returns `null` when they hold nothing —
+ * which is not a refusal, only the answer that the app's mode decides.
  */
 export let levelOn = (
   tx: Tx,
@@ -126,8 +132,8 @@ export let readsOn = (
 ): boolean | Promise<boolean> =>
   then(
     modeOn(tx, app),
-    // Nobody's answer first: a mode that admits nobody in particular admits
-    // everybody, and the ladder is never climbed.
+    // Check the anonymous case first: a mode that admits nobody in particular
+    // admits everybody, and the permission lookup never runs.
     (m) =>
       reads(m, null) || then(levelOn(tx, who, app, where), (l) => reads(m, l)),
   ) as boolean | Promise<boolean>
@@ -146,9 +152,9 @@ export let writesOn = (
   ) as boolean | Promise<boolean>
 
 /**
- * The read-side helper, bound to a storage: what a door consults before it
- * answers a query, since a read never reaches `apply()` and so is never seen
- * by the guard.
+ * The read-side helper, bound to a storage: what the HTTP layer calls before it
+ * answers a query, since a read never reaches `apply()` and so is never seen by
+ * the write guard.
  *
  * ```ts
  * let may = policy(storage, { space: club })

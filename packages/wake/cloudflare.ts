@@ -1,8 +1,8 @@
 /**
- * Cloudflare supplies the heartbeat; the graph holds the schedules. A Cron
- * Trigger calls `scheduled`, while a Durable Object can arm its one alarm for
- * a wake that falls before the next heartbeat. Neither path imports a host
- * global, so Deno can exercise the same driver with a storage stand-in.
+ * Cloudflare decides when to run; the graph holds the schedules. A Cron Trigger
+ * calls `scheduled`, while a Durable Object can set its single alarm for a wake
+ * that falls before the next Cron Trigger. Neither imports a Cloudflare global,
+ * so Deno can exercise the same driver with a stand-in storage.
  * @module
  */
 
@@ -12,20 +12,21 @@ import { type Driver, tick, type Ticked } from './tick.ts'
 /** The instant Cloudflare scheduled, independent of delivery latency. */
 export type Scheduled = { scheduledTime: number }
 
-/** The alarm methods a Durable Object's storage supplies. */
+/** The alarm methods a Durable Object's storage provides. */
 export type Alarm = {
   getAlarm: () => Promise<number | null>
   setAlarm: (at: number) => Promise<void>
 }
 
-// The runtime owns one alarm per object. Calls in the same handler may race,
-// so serialize the read/compare/write for each storage object, even when one
-// failed. A later wake must never overwrite an earlier one just being armed.
+// The runtime gives each object a single alarm. Calls within one handler can
+// race, so the read/compare/write is serialized per storage object, even after
+// one of them failed. A later wake must never overwrite an earlier one that is
+// in the middle of being set.
 let arming = new WeakMap<Alarm, Promise<unknown>>()
 
 /**
- * A Worker's scheduled handler, reduced to the graph write all hosts share.
- * The event's cron string does not select a job: due wake rows do.
+ * A Worker's scheduled handler, reduced to the graph write every runtime
+ * shares. The event's cron string does not select a job: the due wake rows do.
  *
  * ```ts
  * import { scheduled } from '@yaks/wake/cloudflare'
@@ -39,14 +40,15 @@ export let scheduled = (
 ): Promise<Ticked> => tick(graph, event.scheduledTime)
 
 /**
- * Arm a Durable Object for one wake. An earlier alarm is preserved because the
- * object may hold other wakes. Returns whether this wake needs the alarm; an
- * absent or later `at` leaves it alone.
+ * Set a Durable Object's alarm for one wake. An alarm that is already earlier
+ * is kept, because the object may hold other wakes. Returns whether this wake
+ * needs the alarm at all; a wake with no `at`, or a later one, leaves it alone.
  *
- * Call on a wake write. In the object's `alarm()` call `tick(graph)` and arm
- * its next pending wake. `before` is a host that ALSO has a heartbeat saying
- * when that heartbeat is: a wake past it is that beat's to fire rather than
- * this object's. A host whose alarm is its whole clock leaves it out.
+ * Call it when a wake is written. In the object's `alarm()`, call `tick(graph)`
+ * and then set the alarm for its next pending wake. `before` is for an
+ * application that ALSO has a Cron Trigger: pass the time of the next trigger,
+ * and a wake falling after it is left for that trigger to fire rather than this
+ * object. An application whose alarm is its only clock leaves `before` out.
  *
  * ```ts
  * import { arm } from '@yaks/wake/cloudflare'

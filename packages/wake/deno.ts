@@ -1,22 +1,25 @@
 /**
- * A box can sleep until the next wake instead of paying for a fixed heartbeat.
- * The cap lets newly written wakes be noticed without a subscription, and
- * keeps an empty graph and a distant date within setTimeout's range. Stopping
- * aborts only the wait: a graph write already underway finishes its phases.
+ * A long-running process can sleep until the next wake instead of polling at a
+ * fixed rate. The cap lets newly written wakes be noticed without a
+ * subscription, and keeps an empty graph and a far-off date within
+ * `setTimeout`'s range. Stopping aborts only the wait: a graph write already
+ * underway finishes its phases.
  * @module
  */
 
 import { soonest } from './due.ts'
 import { type Driver, tick, type Ticked } from './tick.ts'
 
-/** The loop's lifetime, polling ceiling, and observer of each tick. */
+/** The loop's lifetime, its maximum sleep, and a callback run after each
+ * tick. */
 export type LoopOpts = {
   /** abort to stop the loop and release its timer */
   signal?: AbortSignal
   /** maximum sleep in milliseconds (default one minute); also the retry
-   * interval for refused wakes and the delay while the graph is empty */
+   * interval for wakes whose transaction was rejected, and the delay while the
+   * graph has nothing scheduled */
   cap?: number
-  /** observe fired and refused wakes after each tick */
+  /** called after each tick with the fired and rejected wakes */
   onTick?: (result: Ticked) => void | Promise<void>
 }
 
@@ -33,13 +36,14 @@ let sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
   })
 
 /**
- * Tick immediately, then sleep until the next due instant or the cap. A wake
- * refused on one pass stays due for the next; effects run through the graph.
- * Uses only web timers and AbortSignal, available in Deno and Node alike.
+ * Tick immediately, then sleep until the next due instant or the cap,
+ * whichever is sooner. A wake whose transaction was rejected on one pass stays
+ * due for the next; effects run through the graph. Uses only web timers and
+ * `AbortSignal`, available in Deno and Node alike.
  *
- * The first tick happens whatever the signal says, so a signal that has
- * already aborted is exactly one pass — which is how a process that is only
- * passing through fires what is overdue on its way in.
+ * The first tick happens whatever the signal's state, so one that has already
+ * aborted produces exactly one pass — which is how a short-lived process fires
+ * what is overdue as it starts up.
  *
  * ```ts
  * import { loop } from '@yaks/wake/deno'
@@ -58,9 +62,9 @@ export let loop = async (
   if (!Number.isFinite(cap) || cap <= 0 || cap > 2_147_483_647) {
     throw new RangeError('wake loop cap must be within setTimeout range')
   }
-  // ONE PASS FIRST, always: a signal that is already aborted is a process
-  // passing through — a one-shot command line draining what is overdue on its
-  // way in — and it still owes the graph the tick it came for.
+  // ONE PASS FIRST, always: a signal that is already aborted means a
+  // short-lived process — a one-off command run to fire whatever is overdue —
+  // and it still owes the graph the tick it was started for.
   do {
     let now = Date.now()
     let result = await tick(graph, now)

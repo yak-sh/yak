@@ -35,7 +35,7 @@
           "description": "public: anyone reads. open: anyone writes. private: only members"
         }
       },
-      "description": "one app in a space: its slug, the version serving, and who may open it"
+      "description": "one app in a space: its slug, the version currently served, and who may open it"
     },
     "deploy": {
       "component": true,
@@ -63,7 +63,7 @@
           "type": "string"
         }
       },
-      "description": "one release of an app: the files it shipped and the worker built from them"
+      "description": "one release of an app: the files it shipped, and the worker built from them"
     },
     "hostname": {
       "component": true,
@@ -111,7 +111,7 @@
           "type": "number"
         }
       },
-      "description": "a copy of somebody else’s app, at the version it was taken from"
+      "description": "a copy of somebody else’s app, at the version it was copied from"
     },
     "meter": {
       "component": true,
@@ -221,7 +221,7 @@
           "type": "string"
         }
       },
-      "description": "the app is in the gallery under this name, from this version"
+      "description": "the name and version this app appears under in the gallery"
     },
     "report": {
       "component": true,
@@ -295,7 +295,7 @@
           "death": "detach"
         }
       },
-      "description": "somebody’s corner of the platform, at its own slug"
+      "description": "one customer’s area of the platform, at its own slug"
     }
   }
 }

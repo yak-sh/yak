@@ -1,68 +1,85 @@
 # @yaks/tools
 
-A tool is a function from BUNDLES to BUNDLES. A CALL is the record of having
-asked one. This package runs the function and keeps the record.
+A tool is a function that reads and writes the graph. A call is the stored
+record of having asked for one. This package runs the function and keeps the
+record.
+
+```sh
+deno add jsr:@yaks/tools
+```
 
 ```ts
 let tool = (bundles, ctx) => [{
-  entity: { eid: '$said' },
+  entity: { eid: '$greeting' },
   content: { body: `hello ${ctx.args.name}` },
   output: { source: ctx.call },
 }]
 ```
 
-What it is handed is the call's own bundle and whatever the caller attached to
-it; what it answers is the bundles that ARE the answer — entities it found,
-entities it wants made, prose as `content{body}`. Its arguments ride on the
-context, parsed out of `call.args` and checked against the declaration. It never
-writes: the runner lands what it answered, signed as whoever wrote the call.
+A bundle — the argument type and the return type above — is
+[@yaks/graph](../graph)'s patch for a single entity: an `entity` key holding the
+id, and one key per component holding that component's columns. A tool is handed
+the bundle of the call entity itself, plus any other bundles the caller attached
+to the same transaction. It returns the bundles that make up its answer:
+entities it found, entities it wants written, and text as `content{body}`. Its
+arguments arrive on the second parameter, the context — `ctx.args`, parsed out
+of `call.args` and validated against the tool's declared input schema. A tool
+never writes to the graph itself. The runner applies what the tool returned,
+stamped with the identity of whoever wrote the call.
 
-## Vocabulary
+Throughout this README, "the server" means whichever process opened the graph
+and loaded this package.
+
+## Components
 
 `toolsDoc` declares:
 
-- `tool{name, description}`: a registered tool's graph identity — what a call
-  points at. `toolEid(name)` derives it, so the rows are the same rows every
-  time a host writes them.
-- `call{to, args, id?, source?}`: a tool and its arguments as JSON. `id` is an
-  optional transport correlation id; `source` is optional provenance.
-- `execution{state}`: `running` while the runner holds the call, `done` or
-  `failed` when the answer lands.
-- `result{call, ms}`: what answered a call, and how long it took. It carries a
-  `content{body}` copy of the answer's prose, so a transcript reads one line per
-  answer.
-- `content{body}`, `output{source}`, `error{code}` and `exception`: prose, what
-  produced it, and diagnostics.
+- `tool{name, description}`: a registered tool's identity in the graph — the
+  entity a call points at. `toolEid(name)` derives that id from the name, so
+  every process writes the same row for the same tool.
+- `call{to, args, id?, source?}`: a tool and its arguments, the arguments stored
+  as a JSON string. `id` is an optional correlation id from whatever transport
+  carried the request; `source` optionally records what led to the call.
+- `execution{state}`: `running` while the runner is executing the call, then
+  `done` or `failed` once the result is written.
+- `result{call, ms}`: the record of a finished call and how long it took. It
+  also carries a `content{body}` copy of the answer's text, so a transcript can
+  show one line per result.
+- `content{body}`, `output{source}`, `error{code}` and `exception`: text, what
+  produced that text, and diagnostics.
 
-`callDoc` omits `tool`, and `toolDoc` contains only `tool`, for applications
-that compose existing vocabularies. Import `@yaks/tools/vocab` when only
-declarations are needed; it loads no runner and no JSON Schema validator.
+`callDoc` is the same document without `tool`, and `toolDoc` is `tool` alone,
+for applications that already declare one of the two. Import `@yaks/tools/vocab`
+when you need only the declarations; it pulls in neither the runner nor the JSON
+Schema validator.
 
-## The rules
+## The two rules
 
-Two rules the vocabulary declares, in the ordinary query grammar, name the calls
-that still want running:
+The vocabulary declares two rules, written in the ordinary query grammar, that
+select the calls still waiting to run:
 
 ```
 call_ready  $call .call, !results, !wake;         +result.call=$call
 call_woken  $call .call, .wake, .fired, !results; +result.call=$call
 ```
 
-A call with no result and no wake is due now; one wearing a wake is due once it
-has fired. In a graph that knows no wakes the first clause says nothing and the
-second rule is inert — one text, right in both.
+A call with no result and no `wake` component is due immediately. A call that
+has a `wake` ([@yaks/wake](../wake)) is due once `fired` records that the wake
+went off. In a graph that never loaded the wake components, the `!wake` clause
+matches everything and drops out, and `call_woken`, which requires them, never
+matches — one rule text that is correct in both graphs.
 
-The result entity is the rule's own emit, so its id is DERIVED from the firing:
-answering the same call twice patches one entity instead of making two.
+The result entity is what these rules emit, so its id is derived from the match:
+running the same call twice patches one result entity instead of creating two.
 
-These rules are not machinery this package hides. They are what a host
-REGISTERS, one effect each, when it wants the calls nobody is waiting on:
+The rules are not private machinery. The server registers them, one effect each,
+when it wants to pick up calls nobody is already waiting on:
 
 ```ts
 for (let rule of r.rules) fx.on(rule.plan, (e) => r.run(e.entity.eid))
 ```
 
-## Run it
+## Running a tool
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -82,117 +99,131 @@ let answer = await r.call([{
 }])
 ```
 
-`call()` writes the call — the transcript comes first, because what was asked
-stands whether or not an answer ever does — then runs the function here, for
-this caller, and lands what it answered beside a result. `run(call)` runs one
-that is already in the graph; `drive()` runs every call the rules select, which
-is what a boot sweep is; `answerOf(landed)` is the answer without the runner's
-bookkeeping, `worded(bundles)` is the prose it carries, and `faulted(landed)` is
-whether the CALL failed — not whether the answer mentions a failure.
+`call()` writes the call entity first — the record of what was asked stands
+whether or not a result ever does — and then runs the tool function in this
+process, for this caller, and applies what it returned together with a result
+entity. `run(call)` runs a call that is already in the graph. `drive()` runs
+every call the two rules select, which is what a boot sweep does.
+`answerOf(landed)` is the tool's own bundles with the runner's bookkeeping
+filtered out; `worded(bundles)` is the text they carry; and `faulted(landed)`
+reports whether the CALL failed — not whether the answer happens to mention a
+failure.
 
-## Who a tool writes as
+## Whose name a tool writes in
 
-Whoever wrote the call, read off the call's `created.by` provenance stamp — not
-the process running it. So a tool's writes are decided about the person asking,
-and a ledger's vocabulary has to declare `created` for the actor to reach one.
+The bundles a tool returns are stamped with whoever wrote the call, read from
+the call's `created.by` provenance stamp — not with the process that ran it. So
+authorization is decided about the caller. A graph whose vocabulary does not
+declare `created` records no such stamp, and the tool then runs without an
+identity.
 
-## A check is a verb
+## A check is a tool whose verb is `check`
 
-A tool whose verb is `check` is a CHECK, and that is the whole of what a
-"doctor" is here: not a registry anybody adds a row to, but every tool the
-loaded vocabulary declares with that verb.
+There is no registry of health checks and no package that owns them. A check is
+simply a tool declared with the verb `check`, and the set of checks is whatever
+the loaded vocabulary declares:
 
 ```ts
 import { ailing, checked, checks } from '@yaks/tools'
 
-checks(host.tools) // the doctor: every `*_check` this host composed
+checks(host.tools) // every `*_check` tool this server loaded
 ```
 
-A check belongs to the package whose invariant it checks, which is why there is
-no package for them: compose `@yaks/mail` and a letter that arrived with no
-sender gets noticed, compose `@yaks/sqlite` and the file's own keys do. Drop the
-plugin and the check goes with it, and no list falls out of date.
+A check lives in the package whose invariant it checks. Load
+[@yaks/mail](../mail) and a letter that arrived with no sender gets reported;
+load [@yaks/sqlite](../sqlite) and the database file's own keys do. Remove the
+plugin and its checks go with it, so no list of checks can fall out of date.
 
-`checked(call, about, found)` is what one answers: the prose on `content{body}`,
-`output{source}` naming the call, and `error{code}` carrying the worst level —
-`fail` for a measured violation, `warn` for a leak or a verdict the check could
-not verify. A listing of faults is not a fault, so a check that finds a sick
-graph still SUCCEEDED; `ailing(answer)` is how a caller reads the verdict, the
-way `faulted(landed)` reads whether the call itself failed.
+`checked(call, about, found)` builds what a check returns: the text on
+`content{body}`, `output{source}` naming the call, and `error{code}` carrying
+the worst level found — `fail` for a measured violation, `warn` for a leak or
+for a verdict the check could not establish. Reporting faults is not itself a
+failure, so a check that finds a broken graph still succeeded; `ailing(answer)`
+reads that verdict, the way `faulted(landed)` reads whether the call itself
+failed.
 
-Two rules the fleet doctor this replaces paid for: a check that finds nothing
-still answers (silence is indistinguishable from a check that never ran), and
-one that cannot run says so as a `warn` rather than passing quietly.
+Two rules carried over from the fleet doctor this replaces: a check that finds
+nothing still returns an answer (silence is indistinguishable from a check that
+never ran), and a check that cannot run reports `warn` rather than passing
+quietly.
 
-## At most once, and what a crash leaves
+## At most once, and what a crash leaves behind
 
-`execution{state}` is the claim: `running` under a `$was` that the column was
-absent, so a second host loses the race rather than running the tool twice, and
-`done` or `failed` when the answer lands. A call left `running` by a process
-that died has no result, so the same rule still selects it — `reconcile(runner)`
-at boot re-drives it, claiming over `running` this time. That is the whole
-sweep: one query, the rule's own.
+`execution{state}` is the claim. The runner writes `running` with a precondition
+that the column was previously absent, so a second server loses the race instead
+of running the tool twice, and writes `done` or `failed` when the result is
+applied. A call left `running` by a process that died has no result, so the same
+rules still select it, and `reconcile(runner)` at boot runs it again, this time
+claiming over the stale `running`. That boot sweep is one pass of the rules' own
+queries — there is no separate recovery query.
 
-`execution.by` says whose claim it is, and this runner leaves another holder's
-alone — an imported transcript arrives already called. Unless the holder is
-over: a process writes its `exit` row in the last batch it will ever write, so a
-call it left `running` is nobody's, and any drive takes it. That is why a crash
-is recoverable at all now that a restarted process is a new entity.
+`execution.by` records which process holds the claim, and a runner leaves
+another process's claim alone — a transcript imported from elsewhere arrives
+with every call already executed. The exception is a holder that has finished: a
+process writes its `exit` row in the last transaction it will ever write, so a
+call it left `running` belongs to nobody and any sweep may take it. That is what
+makes a crash recoverable now that a restarted process is a new entity rather
+than a reused name.
 
-There is no exactly-once. A process can fail after an external action succeeded
-and before its result commits; `run()` on a claimed call throws `UnfinishedCall`
-rather than repeating it, and the boot pass gives it one more attempt.
+There is no exactly-once guarantee. A process can fail after a tool's external
+effect succeeded but before its result is committed. `run()` on a call that is
+already claimed throws `UnfinishedCall` rather than repeating it, and the boot
+pass gives it one more attempt.
 
-A tool that throws lands an `error{code}` (a `CallError`, which is an expected
-refusal) or a bare `exception` (a defect, also reported), with the prose as
-`content{body}` and `output{source}` naming the call — and a result beside it,
-so whoever is waiting always hears something.
+A tool that throws produces an `error{code}` bundle (from `CallError`, an
+expected refusal) or a bare `exception` bundle (a defect, which is also passed
+to the runner's `report` callback), with the message as `content{body}` and
+`output{source}` naming the call — plus a result entity, so whoever is waiting
+always gets something back.
 
 ## Scheduling
 
-Importing this package starts no observer and registers no hook. A host that
-wants the calls nobody here is waiting on — one another process wrote, one
-wearing a wake that has now fired — registers the two rules as effects
-(@yaks/effects `on`), one registration each, and that is the whole of the
-asynchronous case. `reconcile(runner)` at boot finishes what a crash left
-claimed, by asking the same queries once.
+Importing this package starts no polling loop and registers no hook. A server
+that wants calls it is not itself awaiting — one another process wrote, or one
+whose wake has now fired — registers the two rules as effects
+([@yaks/effects](../effects) `on`), one registration each. That is the whole of
+the asynchronous case. `reconcile(runner)` at boot finishes what a crash left
+claimed by running the same queries once.
 
-A call wearing `wake{at}` alone is one invocation, waiting: it runs where it
-stands once its `fired` stamp is there. A call wearing `wake{every}` is a
-STANDING ask, and it is never answered itself — each firing writes its own call,
-derived from the schedule and the instant it went off (`call{to, args, source}`,
-the source naming the schedule), and that one runs. So a result is never re-run,
-two firings are two results, and the same instant twice is the same call.
+A call with `wake{at}` is a single invocation, deferred: it runs once its
+`fired` stamp is written. A call with `wake{every}` is a recurring schedule, and
+it is never executed itself. Each firing writes a new call entity, whose id is
+derived from the schedule entity and the instant it fired, carrying
+`call{to, args, source}` with `source` naming the schedule — and that new call
+is what runs. So a completed call is never re-run, two firings produce two
+results, and the same instant twice produces the same call id.
 
-Keep a single scheduling owner per graph. `@yaks/session`'s daemon drives its
-own transcript's calls in order, through `run()`, and registers nothing.
+Keep one scheduling owner per graph. [@yaks/session](../session)'s daemon runs
+its own transcript's calls in order through `run()`, and registers no effects of
+its own.
 
-## What the tool-call log was
+## What replaced the tool-call log
 
-A host used to keep a second table beside the graph — one row per call, with the
-tool's name, who made it, how many milliseconds it took and whether it worked —
-and serve it at `/telemetry`. Every column of it is a row here now, so the log
-is a query and the table is gone (`@yaks/telemetry`, retired):
+The server used to keep a separate table beside the graph — one row per call
+with the tool's name, who called it, how many milliseconds it took and whether
+it worked — served over HTTP at `/telemetry`. Every column of that table is now
+a component in the graph, so the log is a query and the table is gone
+(`@yaks/telemetry`, retired):
 
-| the log asked   | the graph answers                                                                                         |
-| --------------- | --------------------------------------------------------------------------------------------------------- |
-| which tool      | `call.to` → the `tool{name}` it points at                                                                 |
-| who called it   | `created.by` on the call                                                                                  |
-| how long        | `result.ms`                                                                                               |
-| did it work     | `execution.state` — `done` or `failed`                                                                    |
-| what went wrong | the `error{code}` or `exception` whose `output.source` is the call, with the prose on its `content{body}` |
-| when            | `created.at`                                                                                              |
+| the log recorded | where it is now                                                                                             |
+| ---------------- | ----------------------------------------------------------------------------------------------------------- |
+| which tool       | `call.to` → the `tool{name}` it points at                                                                   |
+| who called it    | `created.by` on the call                                                                                    |
+| how long         | `result.ms`                                                                                                 |
+| did it work      | `execution.state` — `done` or `failed`                                                                      |
+| what went wrong  | the `error{code}` or `exception` whose `output.source` is the call, with the message on its `content{body}` |
+| when             | `created.at`                                                                                                |
 
 ```
-.result                       # every call that came to rest, newest first
-.exception                    # only the ones that blew up
+.result                       # every call that finished, newest first
+.exception                    # only the ones that threw
 .call .execution.state=failed # the calls behind them
 ```
 
-So a failure is queryable beside the work it was about, journaled, and pushed to
-whoever is watching — none of which a table off the spine could do. Two things
-the log had do NOT come back, deliberately: it recorded the door a call arrived
-through (`mcp`, `web`, `cli`), which is a column on `call` if anybody wants it
-rather than a second log; and it was written outside the transaction so it
-survived a graph that could not write, which is a property only something
-outside the graph can have.
+A failure is now queryable next to the work it was about, recorded in the
+journal, and pushed to whatever is subscribed — none of which a separate table
+could do. Two properties of the old log were deliberately not carried over. It
+recorded which transport a call arrived over (MCP, HTTP, the CLI), which would
+be a column on `call` if anyone wants it rather than a second log. And it was
+written outside the transaction, so it survived a graph that could not be
+written to — a property only something outside the graph can have.

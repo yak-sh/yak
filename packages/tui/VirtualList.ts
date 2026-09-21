@@ -540,9 +540,9 @@ export let VirtualList = <T extends VirtualItem>(
   id?: string
   grow?: string
 }> => {
-  // A request is repeatable only once the loaded ids change. A host that
-  // answers with the same page must not be asked again, or the list requests
-  // forever and stays pending, dropping every key.
+  // The same range may be requested again only once the loaded ids change. If
+  // the caller returns the same page, it must not be asked again, or the list
+  // requests forever, stays pending, and drops every key.
   let rangeRequest = useRef<string>()
   let rangeIds = useRef<string>()
   let ids = items.map((item) => item.id).join('\n')

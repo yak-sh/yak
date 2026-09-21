@@ -9,9 +9,9 @@
 // The payload's two parts matter. `text` is the body as written; `html` is the
 // same body rendered, because a mail client has no base document — a link that
 // was relative in the graph reaches the reader as a broken address, which is
-// why ./md.ts refuses one. The threading headers carry the bracketed
-// Message-ID; the receipt hands back the unbracketed one the next reply
-// threads on.
+// why ./md.ts rejects one. The threading headers carry the bracketed
+// Message-ID; the receipt returns the unbracketed one the next reply threads
+// on.
 
 import type { Message, Receipt, Sender } from './send.ts'
 
@@ -34,8 +34,8 @@ export type Payload = {
 }
 
 /**
- * A message → the Email Sending payload. Pure, so it is the seam a test
- * asserts on without a network anywhere.
+ * A message → the Email Sending payload. Pure, so a test asserts on it without
+ * a network anywhere.
  */
 export let payload = (m: Message): Payload => ({
   from: { address: m.from, name: m.from.split('@')[0] },
@@ -54,7 +54,8 @@ export let payload = (m: Message): Payload => ({
     : {}),
 })
 
-/** The slice of `fetch` this file uses — the web one, and a Worker's. */
+/** The part of `fetch` this file uses — satisfied by the web `fetch` and by a
+ * Worker's. */
 export type Fetch = (url: string, init: RequestInit) => Promise<Response>
 
 /** What the sender needs to reach the account. */
@@ -63,7 +64,7 @@ export type Account = {
   account: string
   /** an API token that may send mail — never held by this package */
   token: string
-  /** the API root, to aim a test at a stub (default: the API itself) */
+  /** the API root, to point a test at a stub (default: the API itself) */
   base?: string
   /** the fetch to call through (default: the global one) */
   fetch?: Fetch
@@ -88,9 +89,9 @@ let parse = (raw: string): Answer => {
  * // in a Worker: cloudflare({ account: env.CF_ACCOUNT, token: env.CF_EMAIL_TOKEN })
  * ```
  *
- * A failure REJECTS with the status and the first of the body, which is what
- * gets written to the letter as `bounced.reason` — so a bounce says what the
- * API said, not "send failed".
+ * A failure REJECTS with the status and the start of the response body, which
+ * is what gets written to the letter as `bounced.reason` — so a bounce records
+ * what the API reported, not just "send failed".
  */
 export let cloudflare = (
   { account, token, base, fetch: call }: Account,

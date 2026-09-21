@@ -1,11 +1,12 @@
-// What a batch MEANS about a portfolio: the `rules` facet a host takes
-// (`@yaks/project/rules`) — including the guard over a board's saved query,
-// which is why this facet needs the vocabulary the query is written against.
+// The graph plugins this package contributes, exported as
+// `@yaks/project/rules` — the entry point a server imports to install them.
+// They include the check over a board's saved query, which is why this entry
+// point needs the vocabulary that query is written against.
 //
-// The status ladder a board filters on is the one the loaded VOCABULARY
-// declares — each package's `statuses` enum, read as a union — so a host that
-// composes @yaks/session's claim gets `wip` in its board guard by composing
-// it, and a host without leases still knows only the three @yaks/task ships.
+// The statuses a board may filter on are the ones the loaded VOCABULARY
+// declares — each package's `statuses` enum, read as a union — so a server that
+// also loads @yaks/session's claim gets `wip` in the check by loading it, and
+// one without leases knows only the three @yaks/task declares.
 
 import type { Plugin } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'

@@ -22,9 +22,9 @@ import { docDoc } from './comp.ts'
  * let g = graph({ storage, vocab, plugins: [docs()] })
  * ```
  *
- * Compose it once per graph. A vocabulary refuses a component declared twice,
+ * Compose it once per graph. A vocabulary rejects a component declared twice,
  * so a package that needs `doc` — {@link https://jsr.io/@yaks/mail | @yaks/mail}
  * is one — depends on this one and leaves composing it to you, rather than
- * shipping a second copy of the word.
+ * shipping a second copy of the component.
  */
 export let docs = (): Plugin => ({ name: '@yaks/doc', vocab: [docDoc] })

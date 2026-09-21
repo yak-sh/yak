@@ -10,7 +10,7 @@
     "./routes": "./routes.ts"
   },
   "license": "Apache-2.0",
-  "description": "Represents letters and their delivery outcomes as graph components, sends them through an injected sender, and converts arrivals to bundles.",
+  "description": "Represents letters and their delivery outcomes as graph components, sends them through a sender the caller supplies, and converts arrivals to bundles.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

@@ -7,7 +7,7 @@
     "./tools": "./tools.ts"
   },
   "license": "Apache-2.0",
-  "description": "Who is speaking and what they are for \u2014 the people a graph knows, the personas an agent wears, the roles those personas are hired into, and a persona rendered as the one markdown document an agent reads.",
+  "description": "Who is acting and what they are responsible for — the people a graph knows, the personas an agent runs with, the roles those personas are assigned to, and a persona rendered as one markdown document.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

@@ -7,7 +7,7 @@
     "./effects": "./effects.ts"
   },
   "license": "Apache-2.0",
-  "description": "Dreaming: the standing intentions an agent returns to, how often a memory has surfaced, and the desk that opens on a dream that has come back.",
+  "description": "Standing intentions that come due on a schedule, a record of how often each memory has been recalled, and the agent session opened on a dream that is due.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

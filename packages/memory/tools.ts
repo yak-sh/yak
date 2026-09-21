@@ -1,24 +1,23 @@
-// What anybody may ask of a memory: the `tools` facet a host takes
-// (`@yaks/memory/tools`) — the runs behind the `tool: true` declarations in
-// ./vocab.json. Two words, and they are one loop: keep what somebody said, and
-// have it back the next time it matters.
+// What anybody may ask of a memory: the `@yaks/memory/tools` entry point — the
+// implementations behind the two `tool: true` declarations in ./vocab.json.
+// Two tools, and together they are one loop: keep what somebody said, and get
+// it back the next time it matters.
 //
-// THE LOOP IS WHY THE TOKEN RIDES THE READ. A memory is edited by replacing
-// the words in it, and words replaced by somebody who never read the ones
-// there is the lost update — the one failure a fleet of agents writing to one
-// graph produces on its own. So a recall hands each memory back wearing
-// `$was`, the graph's own spelling for "this is what it held when I read it"
-// (@yaks/graph ./guard.ts), and a save that replaces words asks for that token
-// back. A caller that read is a caller that can write; one that did not is
-// refused before it costs anybody the sentence.
+// THE LOOP IS WHY THE READ RETURNS A TOKEN. A memory is edited by replacing the
+// words in it, and words replaced by somebody who never read the ones already
+// there is a lost update — the one failure a fleet of agents writing to one
+// graph produces on its own. So a recall returns each memory with a `$was`
+// field, the graph's own way of recording "this is what it held when I read it"
+// (@yaks/graph ./guard.ts), and a save that replaces words must pass that token
+// back. A caller that read is a caller that may write; one that did not is
+// rejected before it costs anybody the sentence.
 //
-// NOTHING HERE RANKS. `line()` (./recall.ts) says what to ask the store for,
-// and the store answers it: its full-text index over `doc` selects the
-// memories saying the words — every one of them, which is what somebody
-// searching means — and its vectors put them in order where a `near` was named
-// and the host composed @yaks/embedding. A host with neither answers the
-// newest of what the words selected, which is a worse answer and not a broken
-// one.
+// NOTHING HERE RANKS. `line()` (./recall.ts) builds the query string, and the
+// store answers it: its full-text index over `doc` selects the memories
+// containing the words — all of them, which is what somebody searching means —
+// and its vectors order those results where a `near` was named and the server
+// composed @yaks/embedding. A server with neither returns the newest of what
+// the words selected, which is a worse answer and not a broken one.
 
 import {
   addressed,
@@ -32,14 +31,14 @@ import { MEMORY } from './comp.ts'
 import { FEEDBACK, saved } from './save.ts'
 import { type Asked, line } from './recall.ts'
 
-/** How many memories a recall answers when nobody said. */
+/** How many memories a recall returns when the caller gave no limit. */
 export let LIMIT = 8
 
-/** What a save that would clobber is refused with: the way to get the token
- * it is missing, and why it is not in this sentence. */
+/** Why a save that would overwrite unread words is rejected: how to get the
+ * token it is missing, and why that token is not in this message. */
 export let unread = (id: string): string =>
   `saving over ${id} replaces the words it holds, so it needs the words you ` +
-  `started from. Recall it, merge your change into what it says, and pass ` +
+  `started from. Recall it, merge your change into what it holds, and pass ` +
   `the was: token that came back with it. The token is not in this message ` +
   `on purpose: words you have not read are words you would overwrite.`
 
@@ -51,8 +50,8 @@ let comp = (b: Bundle | undefined, name: string): Comp =>
 let ids = (v: unknown): string[] =>
   Array.isArray(v) ? v.map(str).filter(Boolean) : []
 
-// The arguments that name an entity, as eids. A person types `P-19`, never an
-// eid, and one call resolves every id the line carried.
+// The arguments that name an entity, resolved to eids. A person types `P-19`,
+// never an eid, and one call resolves every id the arguments carried.
 let at = async (
   ctx: ToolCtx,
   said: Record<string, string>,
@@ -67,17 +66,18 @@ let at = async (
 let held = async (ctx: ToolCtx, eid: string): Promise<Bundle | undefined> =>
   (await ctx.read(`.eid=${eid}&.${MEMORY}&.doc?`))[0]
 
-/** One memory as it is handed back: whole, wearing the token a save will ask
- * for. Absent words read back as `null`, which is what the guard means by "it
- * held none". */
+/** One memory as it is returned: whole, carrying the token a save will ask
+ * for. Absent words read back as `null`, which is how the precondition check
+ * records "it held none". */
 export let witnessed = (b: Bundle): Bundle => ({
   ...b,
   $was: { doc: { body: token(comp(b, 'doc').body ?? null) } },
 })
 
-/** The runs behind the tools ./vocab.json declares. A factory, as every facet
- * is, though this one needs nothing from the host: what a run reads arrives on
- * the call's own context. */
+/** The implementations of the tools ./vocab.json declares. A factory, like
+ * every other entry point in these packages, though this one needs nothing
+ * from the server: everything a handler reads arrives on the call's own
+ * context. */
 export let runs = (): Runs => ({
   memory_save: async (_bundles, ctx): Promise<Bundle[]> => {
     let named = str(ctx.args.id)
@@ -100,9 +100,9 @@ export let runs = (): Runs => ({
     }
     let was = await held(ctx, eids.id)
     if (!was) throw new Error(`no memory: ${named}`)
-    // The words, and the one guard that matters. A patch that leaves them
-    // alone needs no token; one that replaces words the memory actually holds
-    // needs the ones it held.
+    // The words, and the one precondition that matters. A patch that leaves
+    // them alone needs no token; one that replaces words the memory actually
+    // holds must pass the token for the words it held.
     let doc: Comp = {}
     if (ctx.args.title != null) doc.title = str(ctx.args.title)
     if (ctx.args.said != null) doc.body = str(ctx.args.said)

@@ -6,7 +6,7 @@
     "./vocab": "./vocab.ts"
   },
   "license": "Apache-2.0",
-  "description": "A tmux pane as an entity: what is running in the terminal somebody is watching, and the target tmux answers to.",
+  "description": "A tmux pane as an entity: what is running in the terminal somebody is watching, and the target string tmux accepts.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

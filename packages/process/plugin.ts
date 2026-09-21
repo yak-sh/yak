@@ -1,9 +1,10 @@
 // The package as a graph plugin: the vocabulary, and nothing else.
 //
 // There is no hook here on purpose. Everything this package decides is decided
-// by a host that can see pids — whether a process is alive is not a fact about
-// a batch, and a rule that pretended otherwise would be guessing. The graph
-// holds what was observed; ./run.ts is what observes.
+// by the process that can see pids — whether a process is alive is not a fact
+// about the transaction being written, and a rule that pretended otherwise
+// would be guessing. The graph holds what was observed; ./run.ts is what
+// observes.
 
 import type { Plugin } from '@yaks/graph'
 import { processDoc } from './comp.ts'
@@ -19,8 +20,9 @@ import { processDoc } from './comp.ts'
  * // let g = graph({ storage, vocab, plugins: [processes()] })
  * ```
  *
- * Output rides `content{body}` + `output{source}` from @yaks/session, so a
- * host that streams a process's stdout loads that document too.
+ * Output uses `content{body}` plus `output{source}` from @yaks/session, so a
+ * caller that streams a process's stdout into the graph loads that vocabulary
+ * document too.
  */
 export let processes = (): Plugin => ({
   name: '@yaks/process',

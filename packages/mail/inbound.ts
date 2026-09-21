@@ -9,18 +9,18 @@
 // Two things this deliberately does NOT do:
 //
 //   IT DOES NOT PARSE MIME. The body arrives as a stream of RFC 5322 and
-//   turning that into text is a parser's job, not a mail domain's — so hand
-//   the text in (`postal-mime` is the usual answer in a Worker) and this
-//   composes the entity around it.
+//   turning that into text is a parser's job, not this package's — so pass the
+//   text in (`postal-mime` is the usual choice in a Worker) and this composes
+//   the entity around it.
 //
-//   IT DOES NOT ASK THE GRAPH ANYTHING. It is pure: a message in, bundles out.
-//   Whom the letter is FOR, and which earlier letter it answers, are lookups —
-//   see below — and a pure function is what makes this testable without a
-//   storage adapter anywhere.
+//   IT DOES NOT QUERY THE GRAPH. It is pure: a message in, bundles out. Whom
+//   the letter is FOR, and which earlier letter it answers, are lookups — see
+//   below — and a pure function is what makes this testable without a storage
+//   adapter anywhere.
 //
 // An arrival carries no `deliver`, which is exactly why it can never echo back
 // out: ./send.ts sends the letters that ask to be sent, and an arrival never
-// asks.
+// asks to be sent.
 
 import type { Bundle, Eid } from '@yaks/graph'
 import { DOC } from '@yaks/doc'
@@ -43,7 +43,7 @@ export type Received = {
 export type Arrival = {
   /** the body as text, once something has parsed the MIME */
   text?: string
-  /** the id to mint it under (default: a fresh uuid) */
+  /** the id to record it under (default: a fresh uuid) */
   eid?: Eid
   /** the entity the letter is about — the recipient, a thread, a task */
   target?: Eid
@@ -99,7 +99,7 @@ export let messageId = (m: Received): string =>
   (m.headers.get('message-id') ?? '').replace(/[<>]/g, '').trim()
 
 /**
- * A received message → the bundles that record it: one entity wearing the
+ * A received message → the bundles that record it: one entity carrying the
  * envelope it arrived in (`mail`) and the words it carried
  * ({@link https://jsr.io/@yaks/doc | @yaks/doc}'s `doc{title, body}`).
  *
@@ -110,11 +110,11 @@ export let messageId = (m: Received): string =>
  * // await graph.apply(inbound(message, { text, target: club }))
  * ```
  *
- * Threading is a lookup, so it arrives as an answer rather than a question:
- * read the `in-reply-to` header, find the letter whose `message_id` matches,
- * and pass it as `reply`. Same for `target` when the recipient address names an
- * entity — query `email.address`, and pass what you find. Both lookups are
- * ./arrive.ts, which has a graph to ask.
+ * Threading is a lookup, so the caller passes in the answer rather than the
+ * question: read the `in-reply-to` header, find the letter whose `message_id`
+ * matches, and pass it as `reply`. Same for `target` when the recipient
+ * address names an entity — query `email.address`, and pass what you find.
+ * Both lookups live in ./arrive.ts, which has a graph to query.
  */
 export let inbound = (m: Received, arrival: Arrival = {}): Bundle[] => {
   let at = arrival.at ?? m.headers.get('date') ?? new Date().toISOString()

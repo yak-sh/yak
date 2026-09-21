@@ -1,7 +1,8 @@
-// What a config says TO this plugin, in one place, because all three of its
-// facets read it: `./rules` takes the domain, `./effects` takes the transport,
-// `./routes` takes the door. One options vocabulary, one file — a facet that
-// owned the type would own fields it never reads.
+// What a config passes TO this plugin, in one place, because all three of its
+// entry points read it: `./rules` reads the domain, `./effects` reads the
+// transport, `./routes` reads the HTTP route settings. One options type, one
+// file — putting the type in one of those modules would give it fields it
+// never reads.
 //
 // ```json
 // { "use": "@yaks/mail",
@@ -19,18 +20,18 @@
 
 import type { Eid } from '@yaks/graph'
 
-/** What a config says to @yaks/mail. */
+/** What a config passes to @yaks/mail. */
 export type Options = {
   /** your own mail domain — the addresses this graph canonicalizes on write */
   domain?: string
-  /** whether `domain` is this GRAPH's namespace rather than a mail server's:
-   * a letter to an address there is delivered by writing it, never handed to
-   * the transport. True where the addresses at your domain ARE entities here
-   * (an agent, a project); false where somebody reads them in a mail client. */
+  /** whether `domain` belongs to this GRAPH rather than to a mail server: a
+   * letter to an address there is delivered by writing it, never handed to the
+   * transport. True where the addresses at your domain ARE entities here (an
+   * agent, a project); false where somebody reads them in a mail client. */
   local?: boolean
-  /** the transport outbound letters go through; none, and none go */
+  /** the transport outbound letters go through; with none, none are sent */
   sender?: Transport
-  /** where letters arrive, and who may hand this graph one */
+  /** where letters arrive, and who may post one to this graph */
   door?: Door
 }
 
@@ -43,23 +44,24 @@ export type Transport =
     account: string
     /** an API token that may send mail — `{"env": "…"}` in the config */
     token: string
-    /** the API root, to aim a probe at a stub */
+    /** the API root, to point a test at a stub */
     base?: string
   }
   | {
-    /** the sender that keeps letters in memory: a development box */
+    /** the sender that keeps letters in memory: a development server */
     via: 'stash'
   }
 
-/** The arrival door: where a mail edge posts a letter, and what it must show. */
+/** The arrival endpoint: where a mail edge posts a letter, and what it must
+ * present. */
 export type Door = {
   /** the path it answers on (default `/mail/inbound`) */
   path?: string
-  /** the bearer token a poster must present. Name none and the door is as open
-   * as the `/apply` beside it — right for a box behind a perimeter, wrong for
-   * anything reachable from the internet. */
+  /** the bearer token a caller must present. Set none and the endpoint is as
+   * open as the `/apply` beside it — right for a server behind a perimeter,
+   * wrong for anything reachable from the internet. */
   secret?: string
   /** where a letter addressed to nobody this graph knows lands — the triage
-   * pile. None, and such a letter is recorded aimed at nothing. */
+   * entity. With none, such a letter is recorded with no target. */
   triage?: Eid
 }

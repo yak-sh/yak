@@ -1,25 +1,25 @@
-// The refusal. It is shaped like every other refusal a graph throws — an
-// Error with a name, a message, and the facts as fields — so it reaches a
-// client through @yaks/api's `refusal()` intact, and a caller reads why rather
-// than a translated summary of why.
+// The denial. It is shaped like every other error a graph throws — an Error
+// with a name, a message, and the facts as fields — so it reaches a client
+// through @yaks/api's `refusal()` intact and a caller reads the facts rather
+// than a translated summary of them.
 //
-// What it says is deliberately the same to a stranger and to a member who is
-// merely not allowed: which act, which app, and what would have been enough.
-// What it does NOT say is whether the app exists, or who else may reach it — a
-// private app is its owner's to disclose. A door that would rather tell a
-// stranger nothing at all still may: this carries the facts, and answering
-// with them is the door's choice.
+// What it reports is deliberately the same to a stranger and to a member who is
+// merely not allowed: which act, which app, and which level would have been
+// enough. What it does NOT report is whether the app exists, or who else may
+// reach it — a private app is its owner's to disclose. A caller that would
+// rather tell a stranger nothing at all still can: this carries the facts, and
+// what to put in the response is the caller's decision.
 
 import type { Eid } from '@yaks/graph'
 import type { Level } from './words.ts'
 
-/** An act the actor may not make. The status a door answers with is 403 when
- * somebody is signed in and 401 when nobody is — which the door knows and this
- * error does not, so it carries the facts and leaves the choice there. */
+/** An act the principal is not allowed to perform. The HTTP status is 403 when
+ * somebody is signed in and 401 when nobody is — which the HTTP layer knows and
+ * this error does not, so it carries the facts and leaves that choice there. */
 export class Denied extends Error {
   /**
-   * @param actor who was acting, or `null` for nobody at all
-   * @param app the app whose access said no
+   * @param actor who was acting, or `null` for an anonymous request
+   * @param app the app whose access rules refused it
    * @param need the least level that would have been enough
    * @param act which of the two rules refused it (default: `write`)
    */

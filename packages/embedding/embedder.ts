@@ -1,12 +1,12 @@
-// WHO turns text into a vector, and how a stored vector says which text and
+// WHAT turns text into a vector, and how a stored vector records which text and
 // which model it came from.
 //
 // An `Embedder` is injected — a local model, a hosted API, whatever an
 // application already pays for — because this package has an opinion about
 // storing and searching vectors and none at all about producing them. It names
-// its MODEL beside the function: two vectors are only comparable inside one
-// model's space, so the name rides every stored row, screens a search, and folds
-// into the content hash that decides what needs re-embedding.
+// its MODEL beside the function: two vectors are only comparable within one
+// model's space, so the name is stored on every row, filters every search, and
+// is part of the content hash that decides what needs re-embedding.
 //
 // {@link hashEmbedder} is the one embedder shipped here: no model, no network,
 // the same answer every time. It is what the tests use and what a new
@@ -45,8 +45,8 @@ let fnv = (s: string): number => {
 }
 
 // The words a text is made of, lowercased. Deliberately crude — letters and
-// digits, nothing else — because the point is a stable, language-agnostic split,
-// not a tokenizer.
+// digits, nothing else — because the point is a stable, language-independent
+// split, not a tokenizer.
 let words = (text: string): string[] =>
   text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
 

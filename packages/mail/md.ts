@@ -18,7 +18,7 @@
 //   decodes entities inside an attribute, so `javascript&colon;alert(1)` is a
 //   scheme by the time it parses one and no denylist sees it coming. Only an
 //   absolute http, https, mailto or tel link becomes an anchor; anything else
-//   renders as its own words. Relative links are refused too — a mail client
+//   renders as its own text. Relative links are rejected too — a mail client
 //   has no base document to resolve `/potluck` against, so it would reach the
 //   reader as a broken address rather than a link.
 
@@ -82,7 +82,8 @@ let flat = (line: string): string =>
       : t.text
   ).join('')
 
-// A block is a run of lines between blank ones. Its first line says what it is.
+// A block is a run of lines between blank ones. Its first line determines what
+// kind of block it is.
 let block = (lines: string[]): string => {
   let head = /^(#{1,6})\s+(.*)$/.exec(lines[0])
   if (head) {
@@ -105,7 +106,7 @@ let blocks = (body: string): string[][] =>
 
 /**
  * A markdown body → safe HTML for the message's HTML part. Everything the body
- * wrote is escaped; the only markup in the answer is this file's own.
+ * wrote is escaped; the only markup in the result is this file's own.
  *
  * ```ts
  * import { html } from '@yaks/mail'

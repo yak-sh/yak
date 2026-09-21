@@ -23,12 +23,12 @@ import { then, TOMBSTONE } from '@yaks/graph'
 import { CONFLICT } from './comp.ts'
 import { Bounced } from './bounce.ts'
 
-/** What the audit needs from its host: a clock and a name for the record it
- * writes. */
+/** What the audit needs from the application: a clock, and an id for the row
+ * it writes. */
 export type AuditOpts = {
   /** the moment the record is stamped with (default: now, ISO-8601) */
   now?: () => string
-  /** the id the record is written under (default: `crypto.randomUUID()`) */
+  /** the eid the row is written under (default: `crypto.randomUUID()`) */
   mint?: () => Eid
 }
 

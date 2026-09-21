@@ -1,8 +1,9 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
-// small team's portfolio, written as a vocabulary.
+// small team's portfolio, as a vocabulary.
 //
-// The same team @yaks/task's harness describes, with what its tasks are FILED
-// in: the store is @yaks/ram, so a test composes exactly what a page would.
+// The same team @yaks/task's harness describes, plus what its tasks are FILED
+// in. Storage is @yaks/ram, so a test builds exactly what a browser page
+// would.
 
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import { type Graph, graph, type Storage } from '@yaks/graph'
@@ -23,7 +24,8 @@ let doc = {
       properties: { num: { type: 'number', stamped: true } },
     },
     person: { component: true, type: 'object', kind: true, properties: {} },
-    // A lease, so a test can add the `wip` rung the way an application would.
+    // A lease, so a test can add the `wip` status the way an application
+    // would.
     claim: {
       component: true,
       type: 'object',
@@ -35,8 +37,8 @@ let doc = {
 }
 
 /** The team's vocabulary: the portfolio, the tasks in it, `doc` and edges.
- * The kernel keywords ride along because a task declares `governed` — which is
- * what says a project answers for it. */
+ * The kernel keywords are registered too, because a task declares `governed` —
+ * the keyword meaning a project answers for it. */
 export let team: Vocab = loadVocab(
   [docDoc, edgeDoc, taskDoc, projectDoc, doc],
   [edgeKeywords, kernelKeywords],

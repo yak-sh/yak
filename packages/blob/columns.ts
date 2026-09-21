@@ -1,7 +1,7 @@
 // WHICH columns are content-addressed. The vocabulary carries the `store`
 // keyword; this module is the one place that reads it, so every other module
-// here asks a question ("is this column a body?", "which are they?") instead of
-// rummaging through schemas.
+// here calls a function ("is this column a body?", "which are they?") instead
+// of digging through schemas itself.
 //
 // A column marked `store: "blob"` is an ordinary string column in every other
 // respect — it is declared, validated, queried and written as text. Only where
@@ -19,9 +19,9 @@ export let isBody = (column: Column | undefined): boolean =>
 /**
  * Every content-addressed column in a vocabulary, by component then
  * declaration order. Requires the vocabulary to have been loaded with
- * {@link blobKeywords} — without the registration the loader carries no
- * `store` word and this answers empty, which is the honest reading of a
- * vocabulary that never declared one.
+ * {@link blobKeywords} — without that registration the loader does not carry
+ * the `store` keyword at all, and this returns an empty list, which is the
+ * correct reading of a vocabulary that never declared one.
  */
 export let bodies = (vocab: Vocab): Body[] =>
   vocab.all.flatMap((comp) =>

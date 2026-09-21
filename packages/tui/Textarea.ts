@@ -157,15 +157,17 @@ export let Textarea = (
     /** Controlled editor state; onEdit receives cursor-only changes too. */
     value?: Edit
     onEdit?: (next: Edit) => void
-    /** Let a host reserve shortcuts without changing standalone editor bindings. */
+    /** Lets the surrounding app reserve shortcuts for itself without changing
+     * the editor's own key bindings. */
     passKey?: (key: Key) => boolean
   },
 ): JSX.Element => {
   let [local, set] = useState<Edit>({ text: '', at: 0 })
   let s = value ?? local
-  // One read of stdin can carry several keys, and Preact re-renders after the
-  // whole batch — so the handler edits from this ref rather than from the
-  // state its render closed over, or every key but the last would be lost.
+  // One read of stdin can carry several keys, and Preact re-renders only after
+  // all of them are handled — so the handler edits from this ref rather than
+  // from the state its render closed over, or every key but the last would be
+  // lost.
   let live = useRef(s)
   live.current = s
   let take = (next: Edit) => {

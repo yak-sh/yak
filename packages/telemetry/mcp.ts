@@ -1,10 +1,12 @@
-// An MCP exchange read as a call. A tools/call is the interesting traffic:
-// which tool, whose session. initialize and tools/list are handshake noise and
-// classify to nothing. A reply is an outcome: a protocol error and an isError
-// result are the same disappointment from the caller's seat, so they count the
-// same, and the first text block is the message worth keeping.
+// An MCP request and reply read as a call and its outcome. A `tools/call` is
+// the traffic worth logging: which tool, and whose session. `initialize` and
+// `tools/list` are protocol overhead and classify to nothing. In the reply, a
+// JSON-RPC error and a result marked `isError` are the same failure from the
+// caller's point of view, so they count the same, and the first text block is
+// the message worth keeping.
 
-/** The tool and session a tools/call body names, or null for handshake noise. */
+/** The tool and session named by a `tools/call` request body, or null for a
+ * request that is not one. */
 export let toolCall = (
   body: unknown,
 ): { name: string; session_id: string | null } | null => {
@@ -19,7 +21,7 @@ export let toolCall = (
   }
 }
 
-/** A JSON-RPC reply as ok-or-error. */
+/** A JSON-RPC reply, read as success or failure. */
 export let outcome = (
   reply: unknown,
 ): { ok: boolean; error: string | null } => {

@@ -1,5 +1,6 @@
 import { generatedImages, type Images } from './images.ts'
-// Neutral model items in and out; transport.ts alone owns the Responses wire.
+// Provider-neutral model items in and out; transport.ts alone owns the HTTP
+// calls to the Responses API.
 import {
   type Item,
   type Model,
@@ -173,14 +174,14 @@ export let items = (done: Frame[]): Item[] => {
  * })
  * ```
  *
- * A refusal the API named (a 4xx, a failed response), no credential, and a
- * transport that never connected are all {@link ModelError}s; the daemon
- * records those as errors and goes on. Anything else thrown is a defect.
+ * A refusal the API named (a 4xx, a failed response), a missing credential, and
+ * a connection that was never established are all {@link ModelError}s; the
+ * server records those as errors and carries on. Anything else thrown is a bug.
  *
- * The model stamps `openai{response_id}` on every ask it answers, and answers
- * that id as an anchor only when `store` is on: the Codex backend keeps
- * nothing, so through it a caller replays the conversation and the id is a
- * record, not a handle.
+ * The model writes `openai{response_id}` on every reply it returns, and returns
+ * that id as an anchor only when `store` is on: the Codex backend stores
+ * nothing, so through it a caller replays the conversation and the id is only a
+ * record, not something to continue from.
  */
 export let responses = (opts: Options): Model =>
   Object.assign(ask(opts), {

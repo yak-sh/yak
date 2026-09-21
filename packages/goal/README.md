@@ -3,10 +3,11 @@
 A purpose that is never finished.
 
 - `goal{scope}` — a standing purpose, filed under a project.
-- `satisfies` — the relation an edge wears: this work satisfied that goal.
+- `satisfies` — the relation on a link: this work satisfied that goal.
 
-A goal has no status and is never completed. Ask what satisfied it.
+A goal has no status and is never completed. Query instead for what satisfied
+it.
 
 ## Compatibility
 
-Deno and Node — a JSON document, no runtime calls.
+Deno and Node — a JSON document, with no runtime calls.

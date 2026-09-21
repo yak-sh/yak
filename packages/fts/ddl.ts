@@ -1,48 +1,48 @@
-// The index, and keeping it true.
+// Creating the indexes, and keeping them correct.
 //
-// One FTS5 index per indexed component, named `<comp>_fts`. Each is
-// EXTERNAL-CONTENT (`content='<comp>'`): it stores the inverted index and
-// nothing else, reading the words themselves back out of the component's own
-// table, so the prose is never kept twice. `content_rowid='entity'` lines the
-// index's rowid up with the component's integer owner — which is the entity's
-// spine id — so a match answers with an id the rest of the query already
-// speaks, and no join is needed to get there.
+// One FTS5 index per indexed component, named `<comp>_fts`. Each is an
+// EXTERNAL-CONTENT index (`content='<comp>'`): it stores the inverted index and
+// nothing else, reading the text itself back out of the component's own table,
+// so the prose is never stored twice. `content_rowid='entity'` makes the
+// index's rowid the component's integer owner column — the entity's id in the
+// `entity` table — so a match yields an id the rest of the query already uses,
+// and no join is needed to get there.
 //
-// Three triggers keep it current. The one rule an external-content index
-// imposes: a delete must be handed EXACTLY the values the insert was handed, or
-// the index keeps words for rows that no longer say them. So both sides read
-// the same way — the stored text, or '' for a null — and an update is spelled
-// as the delete then the insert.
+// Three triggers keep each index current. External-content indexes impose one
+// rule: a delete must be given EXACTLY the values the matching insert was
+// given, or the index keeps terms for text that is no longer there. So both
+// sides read the column the same way — the stored text, or '' for a null — and
+// an update is written as a delete followed by an insert.
 //
-// WHEN A COLUMN IS NOT ITS OWN TEXT. @yaks/blob swaps a body for its SHA-256
-// and keeps the prose in a store beside the rows, so a trigger reading the
-// column would index the address and a search would find the body by title
-// alone. A {@link Text} entry says how to resolve one, and it is applied on
-// BOTH sides of the mirror:
+// WHEN A COLUMN DOES NOT HOLD ITS OWN TEXT. @yaks/blob stores a body's SHA-256
+// and keeps the prose in a separate table, so a trigger reading the column
+// would index the hash and a search would only ever find the body by its title.
+// A {@link Text} entry describes how to resolve such a column, and it is
+// applied on both sides:
 //
-//   - the triggers write the resolved words, so every write path indexes prose
-//     — the plugin's, a plain `insert into doc`, a restore;
-//   - the index's content becomes a VIEW that resolves the same way
+//   - the triggers insert the resolved text, so every write path indexes prose
+//     — the plugin's writes, a plain `insert into doc`, a restore;
+//   - the index's content source becomes a VIEW that resolves the same way
 //     (`<comp>_text`), because FTS5 reads the content back for `snippet()` and
-//     for `rebuild`, and both would otherwise answer with the hash.
+//     for `rebuild`, and both would otherwise see the hash.
 //
-// Resolving in a trigger is sound because a blob is immutable and
-// content-addressed: the text an address stands for is the same when the delete
-// side reads it as when the insert side did, which is the whole of what the
-// mirror rule asks. And a body written in the same batch is already there — the
-// bytes go in before the row that names them.
+// Resolving inside a trigger is sound because a blob is immutable and
+// content-addressed: the text a hash stands for is the same when the delete
+// trigger reads it as when the insert trigger did, which is all the rule above
+// requires. And a body written in the same transaction is already stored — the
+// bytes are inserted before the row that references them.
 //
-// `heal()` is the other half. An index that drifts from its table (a trigger
-// that did not run, a file restored around it) answers wrong quietly, so it is
-// checked and rebuilt rather than trusted.
+// `heal()` is the other half. An index that has drifted from its table (a
+// trigger that did not run, a file restored around it) returns wrong results
+// quietly, so it is checked and rebuilt rather than trusted.
 //
-// `adopt()` is for a database that already HAS search objects — built by an
-// earlier version of this package, or by an application's own hand before it
-// used one. It makes what stands equal to what `schema()` says, keeping an
-// index whose columns already match (its words need no re-indexing) and
-// re-cutting one that does not, and it removes any other trigger that writes
-// into an index here: an external-content index has exactly three writers, and
-// a fourth double-counts every row.
+// `adopt()` is for a database that already HAS search objects — created by an
+// earlier version of this package, or by an application before it used one. It
+// makes what is there match what `schema()` returns, keeping an index whose
+// columns already match (its terms need no re-indexing) and re-creating one
+// that does not, and it drops any other trigger that writes into one of these
+// indexes: an external-content index has exactly three writers, and a fourth
+// double-counts every row.
 
 import {
   type Field,
@@ -58,25 +58,27 @@ let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
 let lit = (s: string): string => s.replaceAll("'", "''")
 
-// One component's index and the triggers that follow its table, plus the view
-// the index reads back through when any of its columns resolves.
+// One component's index and the triggers on its table, plus the view the index
+// reads its content back through when any of its columns has to be resolved.
 let index = (comp: string, props: string[], text: Text): string[] => {
   let fts = indexName(comp)
   let cols = props.map(q).join(', ')
-  // How one column reads as text, given SQL naming its stored value. Absent a
-  // resolution the value IS the text, which is every ordinary column.
+  // How one column reads as text, given a SQL expression for its stored value.
+  // With no resolution the stored value IS the text, which is every ordinary
+  // column.
   let read = (prop: string, stored: string) =>
     text[`${comp}.${prop}`]?.(stored) ?? stored
   let resolved = props.filter((p) => text[`${comp}.${p}`])
-  // The values a trigger writes: the column read as text, or '' for a null —
-  // the index never holds a null term, and delete must mirror insert exactly.
+  // The values a trigger inserts: the column read as text, or '' for a null —
+  // the index never holds a null term, and the delete side must mirror the
+  // insert side exactly.
   let side = (s: string) =>
     props.map((p) => `coalesce(${read(p, `${s}.${q(p)}`)}, '')`).join(', ')
-  // What FTS5 reads a column back out of: the table itself, or the view that
-  // resolves it. `<comp>_text` is this package's own name, deliberately not
-  // @yaks/sqlite's `doc_value` — that view is the read source for whole `doc`
-  // rows, and a narrower one standing in its place under `if not exists` would
-  // hide the columns a query needs.
+  // Where FTS5 reads a column back from: the component table itself, or the
+  // view that resolves it. `<comp>_text` is this package's own name,
+  // deliberately not @yaks/sqlite's `doc_value` — that view is the read source
+  // for whole `doc` rows, and a narrower view taking its place under
+  // `if not exists` would hide the columns a query needs.
   let content = resolved.length ? textName(comp) : comp
   return [
     ...(resolved.length
@@ -111,13 +113,14 @@ let index = (comp: string, props: string[], text: Text): string[] => {
   ]
 }
 
-// The whole search schema for a set of fields, as ordered statements: per
-// component, its text view where one is needed, then the index and its three
-// triggers. Run them after the component tables exist — an external-content
-// index names the table it mirrors. `text` says which columns are not their own
-// text (`blobText(vocab)` from @yaks/blob is one); with none, every column
-// indexes as it stands. The shared @yaks/sql Derived registry is also accepted:
-// its `text` expression resolves old/new values without re-reading the owner.
+// The whole search schema for a set of fields, as statements in the order they
+// must run: per component, its text view where one is needed, then the index
+// and its three triggers. Run them after the component tables exist — an
+// external-content index names the table it mirrors. `text` names which columns
+// do not hold their own text (`blobText(vocab)` from @yaks/blob returns such a
+// map); with none, every column is indexed as stored. The shared @yaks/sql
+// `Derived` registry is also accepted: its `text` expression resolves the old
+// and new values without re-reading the owner row.
 export let schema = (fields: Field[], reads: Text | Derived = {}): string[] => {
   let text: Text = {}
   for (let { comp, prop } of fields) {
@@ -133,22 +136,22 @@ export let schema = (fields: Field[], reads: Text | Derived = {}): string[] => {
   return indexes(fields).flatMap(({ comp, props }) => index(comp, props, text))
 }
 
-// Is this index still telling the truth about its table? Two questions, cheap
-// then thorough: does it hold a row per row of the component, and does FTS5's
-// own integrity check pass. Answers the complaint, or undefined for a healthy
-// index.
+// Is this index still consistent with its table? Two checks, the cheap one
+// first: does it hold one row per row of the component table, and does FTS5's
+// own integrity check pass. Returns a description of the problem, or undefined
+// for a healthy index.
 //
-// Membership is read from the index's `_docsize` shadow table, never as
-// `count(*)` over the index itself: an external-content index answers that
-// from the table it mirrors, so it would agree with the table by construction
-// and never notice a row the triggers missed.
+// The row count is read from the index's `_docsize` shadow table, never as
+// `count(*)` over the index itself: for an external-content index SQLite
+// computes that count from the table it mirrors, so it would agree with the
+// table by construction and never notice a row the triggers missed.
 //
-// The count is the boot's question. FTS5's own integrity check reads both
-// shadow tables whole — 0.4 s on a thirty-thousand-row index, seconds on a
-// larger one — for damage no writer of ours can cause, so it is asked by a
-// caller that means it (`deep: true`) and never by the pass a command line
-// runs on its way in. The count is what catches every drift a missed trigger
-// leaves, which is the damage that actually happens.
+// Start-up asks only for the row count. FTS5's own integrity check reads both
+// shadow tables in full — 0.4s on a thirty-thousand-row index, seconds on a
+// larger one — to detect damage no writer of ours can cause, so it runs only
+// when a caller asks for it (`deep: true`), never on the pass a command line
+// makes on its way in. The row count is what catches the drift a missed
+// trigger leaves behind, which is the damage that actually happens.
 let fault = (
   db: Driver,
   comp: string,
@@ -171,15 +174,16 @@ let fault = (
 }
 
 export type HealOpts = {
-  // run FTS5's own integrity check beside the row count (default false) — a
-  // whole-index read, for a maintenance pass rather than a boot
+  // also run FTS5's own integrity check, not just the row count (default
+  // false) — it reads the whole index, so it suits a maintenance pass rather
+  // than start-up
   deep?: boolean
 }
 
-// Check every index and rebuild the ones that drifted; answers the names of the
-// indexes rebuilt (usually none). A rebuild that does not fix the fault throws
-// with BOTH complaints — the first says what was wrong, the second whether the
-// damage is wider than the index.
+// Check every index and rebuild the ones that have drifted; returns the names
+// of the indexes rebuilt (usually none). A rebuild that does not fix the
+// problem throws an error naming BOTH results — the first reports what was
+// wrong, the second whether the damage extends beyond the index.
 export let heal = (
   db: Driver,
   fields: Field[],
@@ -203,8 +207,8 @@ export let heal = (
   return healed
 }
 
-// What `adopt` did, by index name: the indexes it created or re-cut (and so
-// rebuilt from their tables), the triggers it dropped because they were not
+// What `adopt` did, by index name: the indexes it created or re-created (and
+// so rebuilt from their tables), the triggers it dropped because they were not
 // this package's, and the indexes `heal` rebuilt afterwards.
 export type Adopted = {
   recut: string[]
@@ -212,7 +216,8 @@ export type Adopted = {
   healed: string[]
 }
 
-// The columns an index declares, in order, as SQLite knows them; [] for none.
+// The columns an index declares, in order, as SQLite reports them; [] when the
+// index does not exist.
 let declared = (db: Driver, fts: string): string[] => {
   try {
     return db.query(`pragma table_info(${q(fts)})`, []).map((r) =>
@@ -223,8 +228,8 @@ let declared = (db: Driver, fts: string): string[] => {
   }
 }
 
-// What an index reads its words back out of: the `content=` name in its own
-// definition, or undefined for an index that is not there.
+// Where an index reads its content back from: the `content=` name in its own
+// definition, or undefined when the index does not exist.
 let source = (db: Driver, fts: string): string | undefined => {
   let row = db.query(
     `select sql from sqlite_master where type = 'table' and name = ?`,
@@ -233,13 +238,13 @@ let source = (db: Driver, fts: string): string | undefined => {
   return row ? /content='([^']*)'/.exec(String(row.sql ?? ''))?.[1] : undefined
 }
 
-// A view's declaration with its `create view [if not exists]` preamble off.
-// SQLite stores the statement it was handed minus the `if not exists`, so the
-// tail from the name onward is the part two spellings can be compared by.
+// A view's definition with its `create view [if not exists]` preamble removed.
+// SQLite stores the statement it was given minus the `if not exists`, so the
+// part from the name onward is what two definitions can be compared by.
 let body = (sql: string, name: string): string =>
   sql.slice(sql.indexOf(q(name)) + q(name).length).trim()
 
-// The text view as it stands, or undefined when none does.
+// The text view currently in the database, or undefined when there is none.
 let standing = (db: Driver, view: string): string | undefined => {
   let row = db.query(
     `select sql from sqlite_master where type = 'view' and name = ?`,
@@ -248,8 +253,8 @@ let standing = (db: Driver, view: string): string | undefined => {
   return row ? String(row.sql ?? '') : undefined
 }
 
-// The triggers that write into an index, by name, other than the three of
-// this package's own.
+// The names of any triggers that write into an index other than this package's
+// own three.
 let strays = (db: Driver, fts: string): string[] => {
   let ours = new Set(['insert', 'delete', 'update'].map((s) => `${fts}_${s}`))
   let word = new RegExp(`\\b${fts}\\b`)
@@ -261,22 +266,24 @@ let strays = (db: Driver, fts: string): string[] => {
     .map((r) => String(r.name))
 }
 
-// Make a database's search objects equal to what `schema()` says, and true.
+// Make a database's search objects match what `schema()` returns, and be
+// consistent with their tables.
 //
-// Per index: one whose declared columns already match is kept, its words
-// intact; one that is missing or declares other columns is dropped and cut
-// again from the schema, then rebuilt from its table (an external-content
-// index is born empty). Any trigger writing into the index that is not one of
-// the package's three is dropped, and the three are (re)created. A text view
-// holds no rows, so it is re-cut whenever what stands differs from what
-// `schema()` says — but only then: dropping a view is a schema WRITE, and a
-// host that calls `adopt()` at every boot has a right to a boot that writes
-// nothing. Finally `heal` checks membership, so an index kept whole but
-// missing rows — one that predates some of its table — is rebuilt too.
+// For each index: one whose declared columns already match is kept, with its
+// indexed terms intact; one that is missing or declares different columns is
+// dropped, created again from the schema, and rebuilt from its table (a new
+// external-content index starts out empty). Any trigger writing into the index
+// that is not one of this package's three is dropped, and the three are
+// created again. A view holds no rows, so the text view is re-created whenever
+// the one in the database differs from what `schema()` returns — but only
+// then: dropping a view is a schema WRITE, and a process that calls `adopt()`
+// on every start-up should be able to start up without writing anything.
+// Finally `heal` checks the row counts, so an index that was kept but is
+// missing rows — one created after part of its table already existed — is
+// rebuilt too.
 //
-// Everything else runs through `if not exists`/`if exists`, so a second call
-// on the same database changes nothing, touches no byte, and answers empty
-// lists.
+// Everything else runs with `if not exists` / `if exists`, so a second call on
+// the same database changes nothing, writes nothing, and returns empty lists.
 export let adopt = (
   db: Driver,
   fields: Field[],

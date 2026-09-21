@@ -1,6 +1,6 @@
-// The openai words, and only the words: the `vocab` facet a host takes
-// (`@yaks/openai/vocab`). It reaches no storage, no SQL and no runtime, so a
-// browser tab loading this vocabulary loads nothing else.
+// The component declaration, and nothing else: the module a server or a browser
+// page imports at `@yaks/openai/vocab`. It reaches no storage, no SQL and no
+// runtime, so a browser tab loading this vocabulary loads nothing else.
 
 import type { VocabDoc } from '@yaks/vocab'
 import { openaiDoc } from './responses.ts'

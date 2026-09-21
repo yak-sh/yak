@@ -4,13 +4,15 @@
 //   project{}                                   what work is filed under
 //   filed{project, priority, domain, assignee}  the filing itself
 //   board{query}                                a saved filter over it
-//   venture{phase, run_mode, …}                 a business being built
+//   venture{phase, tagline, site}               a business being built
+//   paused{at}                                  work on it is suspended
+//   repo{repository, base_branch, gate, push}   where it lands its source
 //
-// FILING IS SEPARATE FROM BEING A TASK. A task is a task with no `filed` at
-// all — a microtask carries none — and the filing is the optional word that
-// puts one in a portfolio. `filed.project` is `death: detach`: deleting a
-// project frees its tasks rather than deleting them, because they are not
-// ABOUT the project, they were only filed under it.
+// FILING IS SEPARATE FROM BEING A TASK. A task with no `filed` component at all
+// is still a task, and the filing is the optional component that puts one in a
+// portfolio. `filed.project` is declared `death: detach`: deleting a project
+// frees its tasks rather than deleting them, because they are not ABOUT the
+// project, they were only filed under it.
 //
 // A BOARD IS ITS QUERY. `board{query}` holds a filter, and membership is never
 // stored — there is no row saying this task is on that board. So a board is
@@ -19,8 +21,10 @@
 // written a filter for should show, and ./guard.ts refuses the rest.
 //
 // A VENTURE HAS A PHASE, NOT A STATUS. It is never done: it is incubating, or
-// building, or live, or shuttered, and what it was `paused_from` or `hold_from`
-// is kept so resuming needs no memory.
+// building, or live, or shuttered. Suspending work on it is the separate
+// `paused` component, so the phase underneath is untouched and resuming means
+// removing that component — there is no column remembering which phase to put
+// back.
 //
 // The document itself is `./vocab.json` — plain JSON Schema, readable by
 // anything that reads JSON.
@@ -42,7 +46,8 @@ export let VENTURE = 'venture'
 
 /**
  * The portfolio vocabulary, to load beside {@link https://jsr.io/@yaks/task |
- * @yaks/task}'s: `loadVocab([taskDoc, projectDoc, ...mine])`. It says nothing
- * about what a task IS — only what one is filed under and looked at through.
+ * @yaks/task}'s: `loadVocab([taskDoc, projectDoc, ...mine])`. It declares
+ * nothing about what a task IS — only what one is filed under and looked at
+ * through.
  */
 export let projectDoc: VocabDoc = doc as VocabDoc

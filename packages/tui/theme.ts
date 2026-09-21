@@ -1,6 +1,6 @@
 /**
  * The class sheet: what a class name means to the painter. Names follow the
- * same `Block_Element-modifier` spelling the web uses, so one tree can be
+ * same `Block_Element-modifier` convention the web uses, so one tree can be
  * styled by a stylesheet in a browser and by this table in a terminal. The
  * default palette is Everforest; pass your own sheet to the backend to change
  * or extend it — an entry replaces the default of the same name.
@@ -8,7 +8,7 @@
  * @module
  */
 
-/** Everything a class can say about the text under it. */
+/** Everything a class can set on the text under it. */
 export type Style = {
   /** Foreground colour, `#rrggbb`. */
   fg?: string

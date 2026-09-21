@@ -1,19 +1,21 @@
-// Free text on its way in. A log is served to people and this one may be
-// public, so text is cleaned when written, not when read: a fixed set of
-// shapes that carry secrets or defeat cohorting are replaced, then the field is
-// capped. The same normalization strips the variable bits that would otherwise
-// fingerprint two identical crashes apart (see cohort.ts).
+// Free text on its way in. This log is served to people and may be public, so
+// text is cleaned when written rather than when read: a fixed set of patterns
+// that can carry secrets, or that would prevent grouping, is replaced, and then
+// the field is truncated. The same normalization removes the parts that vary
+// and would otherwise give two identical crashes different fingerprints (see
+// cohort.ts).
 
 /** The longest a stored text field can be. */
 export let CAP = 2048
 
-/** Cut a string to {@link CAP}, marking the cut. */
+/** Truncate a string to {@link CAP}, marking where it was cut. */
 export let clip = (s: string): string =>
   s.length > CAP ? s.slice(0, CAP - 1) + '…' : s
 
 /**
- * Strip control bytes, home paths, URLs and high-entropy tokens (uuids, long
- * hex, long opaque runs), then clip. `null` stays `null`.
+ * Strip control bytes, home directory paths, URLs and high-entropy tokens
+ * (UUIDs, long hex strings, long opaque runs), then truncate. `null` stays
+ * `null`.
  */
 export let scrub = (s: string | null | undefined): string | null =>
   s == null ? null : clip(

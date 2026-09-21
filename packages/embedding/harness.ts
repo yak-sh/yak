@@ -60,9 +60,9 @@ export let shop: Vocab = loadVocab(doc)
 /** The deterministic embedder every test here uses. */
 export let embedder = hashEmbedder()
 
-// The spine and the two component tables, hand-written: this package stores
-// vectors beside tables, it does not create them (that is a storage adapter's
-// job).
+// The entity table and the two component tables, written out by hand: this
+// package stores vectors beside those tables, it does not create them (that is
+// a storage adapter's job).
 let TABLES = [
   `create table entity (id integer primary key, eid text not null unique, num integer)`,
   `create table tombstone (entity integer primary key references entity(id), deleted_at text not null)`,

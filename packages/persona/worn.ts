@@ -1,27 +1,28 @@
-// What a persona holds, read out of the graph: the `contains` and `reads`
-// edges off it, resolved to the docs at their far ends, in the order they were
-// authored in. The other half of the act — {@link voice} renders what this
-// gathers, and neither knows how the other does its job.
+// What documents a persona is built from, read out of the graph: the
+// `contains` and `reads` edges leaving it, resolved to the documents at their
+// far ends, in the order they were authored in. {@link voice} renders what
+// this function collects, and neither knows how the other does its job.
 //
-// TWO RELATIONS, BORROWED, NOT COINED. `contains` is @yaks/task's word and
-// `reads` is @yaks/kernel's, and both already say what a tier means: this
-// persona contains that document, this persona reads that one. A relation a
+// TWO RELATIONS, BORROWED RATHER THAN INVENTED. `contains` is @yaks/task's and
+// `reads` is @yaks/kernel's, and both already mean what is needed here: this
+// persona contains that document, this persona reads that one. A relation the
 // composed vocabulary does not declare contributes nothing rather than
-// throwing — a graph with no @yaks/task in it has no `contains`, and a persona
-// there carries nothing, which is a fair reading of that graph and not a
+// throwing — a graph with no @yaks/task in it has no `contains`, so a persona
+// there includes no documents, which is a fair reading of that graph and not a
 // misconfiguration this package is entitled to refuse.
 //
-// It reads the EDGES rather than walking them (@yaks/edge `walk` answers far
-// ends, and a far end has lost its `ord`) — the one fact the authored order
-// depends on.
+// It reads the EDGE entities rather than walking them (@yaks/edge `walk`
+// returns the far ends, and a far end no longer carries the edge's `ord`) —
+// the one column the authored order depends on.
 //
-// A CARRIED PERSONA FOLDS IN: its voice is carried like any other document,
-// and what IT holds joins what this one holds, which is how a base persona
-// reaches every voice worn on top of it without anybody copying its text. A
-// NAMED persona is only named: you said where it is, not that it speaks here.
-// Levels, not recursion, so an embedded store answers the whole gather without
-// a promise and a remote one turns it into exactly one chain (@yaks/edge's
-// `reach` walks the same way).
+// AN INCLUDED PERSONA IS FOLDED IN: its instruction text is included like any
+// other document, and the documents IT links to are added to the ones this
+// persona links to, which is how a base persona reaches every persona built on
+// top of it without anybody copying its text. A persona reached by `reads` is
+// only listed: the edge records where it is, not that its text belongs here.
+// This walks level by level rather than recursing, so an embedded store
+// answers the whole read synchronously and a remote one needs exactly one
+// chain of calls (@yaks/edge's `reach` walks the same way).
 
 import { and, eq, type Input, list, present } from '@yaks/query'
 import {
@@ -38,15 +39,15 @@ import type { Vocab } from '@yaks/vocab'
 import { PERSONA } from './comp.ts'
 import type { Worn } from './voice.ts'
 
-/** The relation whose far end rides in full. */
+/** The relation whose far end is included in full. */
 export let CARRIES = 'contains'
 
-/** The relation whose far end is named and no more. */
+/** The relation whose far end is only listed by id. */
 export let READS = 'reads'
 
-// How deep a persona may be folded into a persona. A base under a base under a
-// base is a graph somebody drew by hand; past this it is a cycle, and a cycle
-// is what the `seen` set already stops.
+// How deep personas may be nested. A base under a base under a base is a graph
+// somebody drew by hand; deeper than this means a cycle, and a cycle is what
+// the `seen` set already stops.
 let DEPTH = 8
 
 let value = (eids: Eid[]): Input => eids.length == 1 ? eids[0] : list(...eids)
@@ -57,8 +58,8 @@ let far = (b: Bundle): Eid => {
 }
 
 // The links of one relation out of a whole level, in the order they were
-// authored: an edge's own `ord` where its author gave it one, then the end it
-// points at, so two unordered siblings never trade places between reads.
+// authored: an edge's own `ord` where its author set one, then the entity it
+// points at, so two unordered siblings never swap places between reads.
 let links = (storage: Storage, from: Eid[], tag: string | undefined) =>
   !tag || !from.length ? [] : then(
     storage.read(and(eq(`${EDGE}.from`, value(from)), present(tag))),
@@ -76,17 +77,19 @@ let links = (storage: Storage, from: Eid[], tag: string | undefined) =>
   )
 
 /**
- * What one persona wears, gathered from a storage. Answers `undefined` where
- * the eid is nothing, or is something that is not a persona — the caller says
- * what to do about that, since a door refuses and a report might not.
+ * The documents one persona is built from, read out of a storage. Returns
+ * `undefined` when the eid does not exist, or is not a persona — what to do
+ * about that is the caller's decision, since a tool call refuses while a
+ * report might not.
  *
  * ```ts
  * let worn = await wear(storage, vocab)('N-1')
  * if (worn) console.log(voice(vocab)(worn))
  * ```
  *
- * Sync in, sync out: over an embedded database this answers immediately, and
- * over a storage that returns promises it answers one.
+ * Synchronous in, synchronous out: over an embedded database this returns a
+ * value directly, and over a storage that returns promises it returns a
+ * promise.
  */
 export let wear = (
   storage: Storage,
@@ -114,15 +117,17 @@ export let wear = (
                   let next: Eid[] = []
                   for (let id of held) {
                     let b = by.get(id)
-                    // `seen` holds the persona itself, so a ring of personas
-                    // never says the voice it started from a second time.
+                    // `seen` holds the persona itself, so a cycle of
+                    // personas never includes the text it started from
+                    // twice.
                     if (!b?.[DOC] || seen.has(id)) {
                       continue
                     }
                     seen.add(id)
                     carries.set(id, b)
-                    // A persona's voice is carried like any other document;
-                    // what IT holds is gathered on the next level.
+                    // An included persona's text is included like any other
+                    // document; the documents IT links to are read on the
+                    // next level.
                     if (b[PERSONA]) {
                       next.push(id)
                     }
@@ -139,9 +144,9 @@ export let wear = (
               )))
         }),
         () => {
-          // Carried wins: a document named somewhere and carried somewhere
-          // else is carried once, and never said twice. The persona itself is
-          // neither — it is the voice the document opens with.
+          // Inclusion wins: a document listed in one place and included in
+          // another is included once, and never appears twice. The persona
+          // itself is neither — its text is what the document opens with.
           for (let id of carries.keys()) {
             names.delete(id)
           }

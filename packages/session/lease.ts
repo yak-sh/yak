@@ -12,20 +12,20 @@
 // THE LOCK. A claim is a LEASE, not a patch. Writing one over another session's
 // fails the whole batch loudly — release, then claim. The same session
 // re-claiming is a no-op refresh, so a worker replaying its own take is
-// idempotent. A RELEASE (`claim: null`) is deliberately unguarded: letting go
-// is how a lock is handed over, and the boot reap frees a dead session's locks
-// without pretending to be that session.
+// idempotent. A RELEASE (`claim: null`) is deliberately unguarded: releasing is
+// how a lock is handed over, and the start-up pass frees a dead session's locks
+// without impersonating that session.
 //
-// The batch is read as a whole, because a batch may take two locks, and the
-// answer has to be about the batch rather than about each bundle in turn.
+// The batch is checked as a whole, because a batch may take two locks, and the
+// verdict has to be about the batch rather than about each bundle in turn.
 
 import type { Bundle, Comp, Eid, Hook } from '@yaks/graph'
 import { then } from '@yaks/graph'
 import { CLAIM } from './comp.ts'
 import { Bounced } from './bounce.ts'
 
-/** What the hook needs from its host: a clock, so a test can stamp a fixed
- * moment and a graph can stamp the moment it committed. */
+/** What the hook needs from the application: a clock, so a test can stamp a
+ * fixed moment and a graph can stamp the moment it committed. */
 export type LeaseOpts = {
   /** the moment a new lock is stamped with (default: now, ISO-8601) */
   now?: () => string
