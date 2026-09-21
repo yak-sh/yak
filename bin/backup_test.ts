@@ -14,7 +14,7 @@ let run = async (cmd: string, args: string[], cwd: string) => {
 }
 
 let fixture = async () => {
-  let dir = await Deno.makeTempDir({ prefix: 'tasks-backup-' })
+  let dir = await Deno.makeTempDir({ prefix: 'yak-backup-' })
   await run('git', ['init', '-q'], dir)
   await Deno.writeTextFile(`${dir}/.gitignore`, '*.db\n*.db-*\n')
   await Deno.mkdir(`${dir}/snap`)
@@ -28,7 +28,7 @@ let fixture = async () => {
     db.exec('insert into entity values (1)')
     return db
   }
-  let db = database('tasks.db')
+  let db = database('yak.db')
   // A searched component, indexed the way @yaks/fts indexes one: an
   // external-content FTS5 mirror plus the trigger that keeps it. Named after
   // no index the script ever hard-coded, because that is the failure — a new
@@ -43,7 +43,7 @@ let fixture = async () => {
     insert into note values (1, 'the words the index holds')`)
   // Previous versions used these public names. Another process may still
   // hold either open; a new backup has no ownership of those files.
-  database('snap/tasks.db')
+  database('snap/yak.db')
   database('snap/.verify.db')
   return {
     dir,
@@ -51,9 +51,9 @@ let fixture = async () => {
     backup: (timeout = '30') =>
       new Deno.Command(script, {
         env: {
-          TASKS_DATA: dir,
-          TASKS_BACKUP_BOUND: '',
-          TASKS_BACKUP_TIMEOUT: timeout,
+          YAK_DATA: dir,
+          YAK_BACKUP_BOUND: '',
+          YAK_BACKUP_TIMEOUT: timeout,
         },
       }).output(),
     close: async () => {
@@ -68,7 +68,7 @@ slow(
   async () => {
     let f = await fixture()
     try {
-      let paths = ['tasks.db', 'snap/tasks.db', 'snap/.verify.db']
+      let paths = ['yak.db', 'snap/yak.db', 'snap/.verify.db']
       let inodes = paths.map((p) => Deno.statSync(`${f.dir}/${p}`).ino)
       let out = await f.backup()
       assert(out.success, decode(out.stderr))
@@ -83,7 +83,7 @@ slow(
       )
       assert(sql.includes('INSERT INTO entity VALUES(1);'), sql)
       let pending = [...Deno.readDirSync(`${f.dir}/.git`)]
-        .filter((e) => e.isDirectory && e.name.startsWith('tasks-backup.'))
+        .filter((e) => e.isDirectory && e.name.startsWith('yak-backup.'))
       assertEquals(pending, [])
     } finally {
       await f.close()
@@ -128,7 +128,7 @@ slow(
   'a backup timing out on the lock cannot remove the active verifier database',
   async () => {
     let f = await fixture()
-    let lock = await Deno.open(`${f.dir}/.git/tasks-backup.lock`, {
+    let lock = await Deno.open(`${f.dir}/.git/yak-backup.lock`, {
       create: true,
       write: true,
     })

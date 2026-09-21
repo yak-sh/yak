@@ -1,5 +1,5 @@
 #!/bin/sh
-# Back up the tasks data dir (~/.tasks or $TASKS_DATA) as a git commit.
+# Back up the yak data dir (~/.yak or $YAK_DATA) as a git commit.
 #
 # The data dir IS a git repo: files (frozen/, images, md) commit as
 # themselves; the LIVE SQLite db never commits — a commit could catch it
@@ -7,7 +7,7 @@
 # then writes that snapshot out as TEXT for history to hold.
 #
 # Restore into a NEW directory with no database or SQLite sidecars, then
-#   cat snap/schema.sql snap/graph.sql.part.* snap/journal.sql.part.* | sqlite3 tasks.db
+#   cat snap/schema.sql snap/graph.sql.part.* snap/journal.sql.part.* | sqlite3 yak.db
 # and start the server. The FTS indexes refill as the rows load — the virtual
 # tables and their sync triggers ride along in schema.sql — and @yaks/fts
 # adopt()/heal() at boot cuts and rebuilds any index the dump predates;
@@ -44,11 +44,11 @@ export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/
 # it makes belongs to that run. Interrupted SQLite files stay together in
 # their private directory; a later run never replaces their main file while
 # an old subprocess or recovery journal may still need it.
-if [ -z "${TASKS_BACKUP_BOUND:-}" ]; then
-  TASKS_BACKUP_BOUND=1 exec timeout -k 30 "${TASKS_BACKUP_TIMEOUT:-900}" "$0" "$@"
+if [ -z "${YAK_BACKUP_BOUND:-}" ]; then
+  YAK_BACKUP_BOUND=1 exec timeout -k 30 "${YAK_BACKUP_TIMEOUT:-900}" "$0" "$@"
 fi
 
-data="${TASKS_DATA:-$HOME/.tasks}"
+data="${YAK_DATA:-$HOME/.yak}"
 cd "$data"
 
 [ -d .git ] || { echo "backup: $data is not a git repo (git init it first)" >&2; exit 1; }
@@ -60,13 +60,13 @@ echo "backup: start $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # while redaction reports, then commit and push one new leak afterward.
 # Wait a minute at most: a lock still held past that is a stuck run, and
 # queueing behind it is how runs stacked up before.
-exec 9>.git/tasks-backup.lock
+exec 9>.git/yak-backup.lock
 flock -w 60 -x 9 || { echo "backup: another backup or redaction holds the lock" >&2; exit 1; }
 
 # Never recycle a database pathname: a previous crash may have left a hot
 # journal, or a reader may still hold the old inode open. Private paths also
 # mean a run that fails to acquire the lock cannot delete another run's DB.
-work=$(mktemp -d .git/tasks-backup.XXXXXXXX)
+work=$(mktemp -d .git/yak-backup.XXXXXXXX)
 snapshot="$work/snapshot.db"
 probe="$work/verify.db"
 cleanup() {
@@ -92,8 +92,8 @@ sq() { sqlite3 -batch -init /dev/null -noheader -list "$@"; }
 # index-vs-table content) and is fast enough for the bound. A non-zero exit here
 # withholds the deadman stamp, so the fleet is paged the next morning, not days
 # later. Run it before PRAGMA optimize, which is the first write to the live db.
-sq tasks.db "PRAGMA quick_check;" | grep -qx ok || {
-  echo "backup: LIVE db failed quick_check — structural corruption on tasks.db" >&2
+sq yak.db "PRAGMA quick_check;" | grep -qx ok || {
+  echo "backup: LIVE db failed quick_check — structural corruption on yak.db" >&2
   exit 1
 }
 
@@ -106,9 +106,9 @@ sq tasks.db "PRAGMA quick_check;" | grep -qx ok || {
 # with size. Safe on live data — it only rewrites the stat table. The
 # long-lived server connection runs this at graceful shutdown too; this hourly
 # run covers ungraceful exits (crash/kill) that never reach the drain.
-sq tasks.db "PRAGMA optimize;"
+sq yak.db "PRAGMA optimize;"
 
-sq tasks.db "VACUUM INTO '$snapshot'"
+sq yak.db "VACUUM INTO '$snapshot'"
 sq "$snapshot" "pragma integrity_check;" | grep -qx ok || {
   echo "backup: snapshot failed integrity_check" >&2
   exit 1
@@ -303,7 +303,7 @@ echo "backup: committed $n entities"
 # packing is repo maintenance, and on this history (5+ GB) a full gc runs past
 # any sane backup timeout: measured, the commit and push finished in under 3
 # minutes and gc then ran 12 more before the 15-minute bound killed it. Pack
-# from the separate weekly cron line (`git -C ~/.tasks gc`), never in-line.
+# from the separate weekly cron line (`git -C ~/.yak gc`), never in-line.
 # A gc killed mid-pack leaves a tmp_pack_* the size of the repo that git never
 # reclaims on its own; drop any older than two hours (a live gc is younger).
 find .git/objects/pack -name 'tmp_pack_*' -mmin +120 -delete 2>/dev/null || true

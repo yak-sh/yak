@@ -43,7 +43,7 @@ type Run = (root: string, args: string[]) => Promise<Output>
 export let withBackupLock = async <T>(root: string, run: () => Promise<T>) => {
   let file: Deno.FsFile | undefined
   try {
-    file = await Deno.open(`${root}/.git/tasks-backup.lock`, {
+    file = await Deno.open(`${root}/.git/yak-backup.lock`, {
       create: true,
       write: true,
     })
