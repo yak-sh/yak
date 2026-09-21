@@ -1,7 +1,7 @@
 // The guide's pages (T-32982). `public/guide.md` stays what it is — the map,
 // covering pretty much everything there is, briefly — and beside it sit the
-// pages that go deep on one subject each, `public/guide/<slug>.md`, offered
-// through the connector as resources of their own. Owner, 2026-09-03: "the
+// pages that go deep on one subject each, `public/guide/<slug>.md`, which the
+// connector also offers as MCP resources of their own. Owner, 2026-09-03: "the
 // guide should still list pretty much everything, but it can be very brief
 // with links to read more details about each feature. like querying, i could
 // imagine a whole doc giving tons of query examples."
@@ -13,20 +13,20 @@
 // two texts serve different moments, and the thing to guard against is not
 // that overlap but two full copies of one explanation drifting apart.
 //
-// A page's uri IS the address that serves it, like the guide's: the files are
-// under `public/`, so the assets binding answers them at yaks.app and nothing
-// routes. What makes the split work is the DESCRIPTION — it is the only thing
-// an agent sees before deciding to read, so each names the words someone with
-// that question would be searching for.
+// A page's uri IS the URL that serves it, like the guide's: the files are
+// under `public/`, so the worker's ASSETS binding serves them at yaks.app and
+// no route of our own is needed. What makes the split work is the DESCRIPTION
+// — it is the only thing an agent sees before deciding to read, so each names
+// the terms someone with that question would be searching for.
 //
 // An agent never has to leave the connector to read any of it (T-34284). The
-// `guide` tool (tools.ts) hands over the same bytes, because a fetch of
-// yaks.app is a thing plenty of agents are not allowed to make — owner,
-// 2026-09-05: "claude often can't fetch https://yaks.app/guide.md maybe cause
-// of default allowlist restrictions. can't we just present that same guide via
-// the mcp server so they don't have to fetch?" The files stay the one source:
-// the tool and the resources both read them off the assets binding, at the
-// very addresses the web serves them from.
+// `guide` tool (tools.ts) returns the same bytes, because plenty of agents are
+// not allowed to fetch yaks.app at all — owner, 2026-09-05: "claude often
+// can't fetch https://yaks.app/guide.md maybe cause of default allowlist
+// restrictions. can't we just present that same guide via the mcp server so
+// they don't have to fetch?" The files stay the one source: the tool and the
+// MCP resources both read them from the ASSETS binding, at the very URLs the
+// web serves them from.
 import { page, pagesOf } from './plugin.ts'
 import { apex, type Host, url } from './host.ts'
 import { PLUGINS } from './plugins.ts'
@@ -47,18 +47,19 @@ export type Page = {
 // a paragraph a page can be written from — because the first ask ("can you
 // make me a recipe box?") is answered before anyone thinks to open a guide,
 // and an agent that has to guess at the data reaches for localStorage.
-// It lives HERE, beside the guide's own pages, because two doors teach it:
-// the connector (mcp.ts) hands it over as the server's instructions, and the
+// It lives HERE, beside the guide's own pages, because two places read it:
+// the connector (mcp.ts) returns it as the MCP server's instructions, and the
 // builder we run ourselves (builder.ts) reads it as its system prompt. The
 // agent somebody brings and the agent we are must be taught one page.
 //
-// It opens with the NAME because this text said the address a dozen times and
-// the name not once, and an agent reading it told its person the place was
-// called "Yaks" (T-34302). The name is said here, in `about` (preauth.ts) and
-// at the top of the guide — the three things read first — and nowhere else.
+// It opens with the NAME because this text used to print the address a dozen
+// times and the name not once, and an agent reading it told its person the
+// place was called "Yaks" (T-34302). The name appears here, in `about`
+// (preauth.ts) and at the top of the guide — the three things read first —
+// and nowhere else.
 export let instructions = (env: Host = {}) =>
   `This is yaks.app — call it that, the way its address is
-spelled: lowercase, with the .app, and never any shortening of it. When the
+written: lowercase, with the .app, and never any shortening of it. When the
 person asks you to make something — an app, a page, a tool,
 somewhere to keep something — make it here, and give them the link. It lives
 at their own address, opens on their phone, and keeps its data; a file on
@@ -77,25 +78,25 @@ An app is an index.html and whatever files sit beside it, served live at
    place of content — and the app has an icon when it is kept on a phone's
    home screen.
 3. app_deploy — mark the release. The files are already live; this is the
-   version an error will name. It also plants any components the app declares
-   in a vocab.json beside index.html — {"$defs": {"recipe": {"properties":
-   {"serves": {"type": "number"}}}}} and the app has a recipe of its own,
-   filterable like doc, and two commands of its own, add_recipe and
-   find_recipe, so any agent finds the app later.
+   version an error will name. It also registers any components the app
+   declares in a vocab.json beside index.html — {"$defs": {"recipe":
+   {"properties": {"serves": {"type": "number"}}}}} gives the app a recipe
+   component of its own, filterable like doc, and two commands of its own,
+   add_recipe and find_recipe, so any agent finds the app later.
 4. Give the person the URL.
 
 app_list is what they already have — every app, its address and what is
 broken in it.
 
 An app is readable by anyone with the link and writable by its members. When
-it is for other people too, say so: app_new (or app_set) takes access 'open',
+it is for other people too, say so: app_new (or app_set) accepts access 'open',
 where anyone with the link can vote, add a line or sign up without signing in,
 and 'private', where only members see it at all; member_add invites someone by
 email address — name the app and that one app is all they get, its page and its
 data and nothing else in the space, which is how a player joins one game.
-Leave the app out and they are seated on the space, which reaches every app in
-it. Either way the invitation is mailed to them with the link, and they sign in
-there with that address and land back on the page they were on.
+Leave the app out and they are added to the space itself, which reaches every
+app in it. Either way the invitation is mailed to them with the link, and they
+sign in there with that address and land back on the page they were on.
 
 Its data belongs in the app's own store, not localStorage — so it is the same
 on their phone and their laptop, and so you can read and repair it yourself.
@@ -106,53 +107,57 @@ The page gets it in one line, from the app's own address:
   await apply({ entity: { eid: '$r' },
                 doc: { title: 'Lemon cake', body: '3 lemons...' } })
   let all = await query('.doc!')       // everything, oldest first
-  let some = await search('lemon')     // the words, ranked
+  let some = await search('lemon')     // full-text search, ranked
   subscribe('.doc!', draw)             // and again whenever it changes,
                                        // including on their other device
 
-An entity is {entity: {eid}, ...components}: '$name' mints a new one (the
-answer is one bundle per entity, carrying the eid it picked and the '$alias'
-you asked under), and a filter line reads them back. A row carries
+An entity is {entity: {eid}, ...components}: '$name' creates a new one (the
+reply is one bundle per entity — an object holding that entity's id and its
+components — carrying the eid the server picked and the '$alias' you asked
+under), and a filter string reads them back. A row carries
 only the components its filter NAMES — presence filters end at ! and join
 with &, and '?' asks for one without filtering on it — so query('.recipe!')
-answers recipes with no titles and query('.recipe!&.doc?') answers both. Ask
+returns recipes with no titles and query('.recipe!&.doc?') returns both. Ask
 for what the page will draw. Call guide for the map of all of this, and guide
-with a page for one subject — querying, components, files, commands of your
-own, code of your own — so read the one the work calls for rather than
+with a page name for one subject — querying, components, files, commands of
+your own, code of your own — so read the one the work calls for rather than
 guessing.
-It is a tool here, so nothing has to be fetched off the web; the same words
-are at ${url(env, '/guide.md')} for a person. graph_apply, graph_query and
-search are the same store from here, for seeding and fixing.
+It is a tool here, so nothing has to be fetched off the web; the same text
+is at ${url(env, '/guide.md')} for a person. graph_apply, graph_query and
+search reach that same store from here, for seeding and fixing.
 
 An app can come with DATA: a seed.json beside index.html — a list of the same
-bundles apply takes, or a seed/ folder of *.json files when there is a lot of
+bundles apply accepts, or a seed/ folder of *.json files when there is a lot of
 it — is written into the app's store by the first app_deploy, once, and again
 into the copy an app_install makes, so an app opens furnished rather than blank.
 Call guide with page store for the whole thing.
 
 Call about at the start of a conversation: it names the tools this connector
-has right now and the version of that list, so a list your host cached under
-an older release is caught before you try to use it. The list is the same for
-everybody and moves only when this platform is released — what an app of the
-person's own can do is a COMMAND, which commands says and command runs.
+has right now and the version of that list, so a tool list your MCP client
+cached from an older release is caught before you try to use it. The list is
+the same for everybody and changes only when this platform is released — what
+an app of the person's own can do is a COMMAND, which the commands tool lists
+and the command tool runs.
 
 Never guess at a component's columns: graph_apply's own input schema is the
 vocabulary you can reach — every component, every column, every type. And
-graph_schema says what the words MEAN: bare, the index of every one of them;
-graph_schema({component: 'mail'}) for that word whole — each column's type and
-meaning, what points at it, a bundle that writes it, the guide page for it;
-graph_schema({kind: 'mail'}) for what an entity of that kind is made of.
+graph_schema explains what each component MEANS: called bare, an index of
+every one of them; graph_schema({component: 'mail'}) for that one component in
+full — each column's type and meaning, what points at it, a bundle that writes
+it, the guide page for it; graph_schema({kind: 'mail'}) for what an entity of
+that kind is made of.
 
 An eid is the same thing in every app. Two apps can write about one entity —
 a reading list app saves the book, a lending app saves the loan — and each
 component lives with the app that declares it, so nothing is copied and
 nothing is synced. graph_query reads every app you can reach at once and
-answers one bundle per entity: '.book!&.loan?' is every book wearing its loan
+returns one bundle per entity: '.book!&.loan?' is every book with its loan
 where it has one, and '.loan?' asks for a component without filtering on it.
 graph_apply writes each component to the app that declares it, and where a
-brand-new entity wears only shared words — a doc and nothing else — say which
-app on the bundle: {"entity": {"eid": "$r"}, "$app": "recipes", "doc": {...}}.
-To read ONE app rather than all of them, ride '.in=recipes' on the query line
+brand-new entity carries only shared components — a doc and nothing else —
+name the app on the bundle: {"entity": {"eid": "$r"}, "$app": "recipes",
+"doc": {...}}.
+To read ONE app rather than all of them, add '.in=recipes' to the query string
 ('.in=<space>/<app>' where a slug means two things).
 A page reads a sibling app the same way, with store('/lending/api/') from
 './api/client.js'.
@@ -160,10 +165,10 @@ A page reads a sibling app the same way, with store('/lending/api/') from
 An app can carry its OWN commands: a tools.json beside index.html declares
 them — a name, a sentence, an input, and an apply or query template over the
 app's store — and after app_deploy anyone who can reach the app runs them with
-the command tool, and reads what there is with commands. They are commands
-rather than tools of this list because this list never moves: a directory
-snapshots it when a connector is submitted and serves that snapshot forever.
-Call guide with page tools for the shape.
+the command tool, and lists what there is with commands. They are commands
+rather than entries in this connector's tool list because that list never
+changes: a directory snapshots it when a connector is submitted and serves
+that snapshot forever. Call guide with page tools for the shape.
 
 An app can keep NOTES about itself: a NOTES.md beside its index.html, up to
 4 KB, holding whatever the person wants written down about how that app is
@@ -178,19 +183,19 @@ a paraphrase can only lose what they said, and nobody afterwards can get it
 back, including you next time. Save it with only the context needed to
 understand it — one line saying what was being talked about — and nothing you
 concluded from it. It is kept for the whole space, and the newest few are
-handed to every agent that connects here; memory_recall finds the rest by what
+given to every agent that connects here; memory_recall finds the rest by what
 they are about, so ask it before you build or change an app rather than making
 them say a thing they have already said. A NOTES.md is about one app; a memory
 is the person's own sentence, kept for the whole space. Call guide with page
 memory.
 
-An app can carry its own CODE too: a worker.js beside index.html answers
-every request that is not /api/ before the files do, and whatever it answers
-404 falls through to them, so it owns the routes it names and nothing else.
-It reads the app's store as the person looking (env.STORE), its files
-(env.FILES), and any key you set with app_secret_set as env.NAME — which is
-what a page must not hold and nothing can read back. Call guide with page code
-for a whole one.
+An app can carry its own CODE too: a worker.js beside index.html handles
+every request that is not under /api/ before the files do, and any request it
+answers with 404 falls through to them, so it owns the routes it names and
+nothing else. It reads the app's store as the person viewing it (env.STORE),
+its files (env.FILES), and any key you set with app_secret_set as env.NAME —
+which is what a page must not hold and nothing can read back. Call guide with
+page code for a whole one.
 
 An app may carry wrangler.jsonc or wrangler.json beside worker.js. Its supported
 keys are main (the app-relative server source path, worker.js by default;
@@ -222,22 +227,23 @@ Asked to save things from OTHER sites — a recipe, a listing, an article —
 give the app a /clip route on its worker.js: it fetches the address, reads
 what the page says about itself (JSON-LD first, then og: meta tags, then the
 title), and applies one bundle with a source component of its own. The person
-starts it with a bookmarklet the app hands them, because an app's write doors
-take same-origin requests only, so a script on somebody else's page cannot
-write here. Call guide with page clipping for the whole thing
+starts it with a bookmarklet the app hands them, because an app's write
+endpoints accept same-origin requests only, so a script on somebody else's
+page cannot write here. Call guide with page clipping for the whole thing
 (${url(env, '/guide/clipping.md')}).
 
-Anything that should happen LATER is a row, not a cron: put wake {at, every,
-note} on the entity it is about — the reminder, the lease that lapses, the
-digest nobody has sent — and that app's store comes back at that moment,
-stamping fired {at} on the row and moving wake.at to the next occurrence or
-clearing it. What the firing MEANS is a rule the app declares in its
-vocab.json, with no code to deploy: {"rule": true, "match": ".plant, .wake,
+Anything that should happen LATER is a row in the store, not a cron job: put
+wake {at, every, note} on the entity it is about — the reminder, the lease
+that lapses, the digest nobody has sent — and that app's store wakes at that
+moment, writing fired {at} on the row and moving wake.at to the next
+occurrence or clearing it. What the firing MEANS is a rule the app declares in
+its vocab.json, with no code to deploy: {"rule": true, "match": ".plant, .wake,
 .fired, +!watered, +watered.by=wake"} — a +comp clause writes that component,
-+!comp gates on its absence so the rule fires once, and the whole of it runs
-inside the transaction the firing is part of. every takes a duration (30m, 1d), five cron
-fields (0 9 * * 1-5) or @hourly/@daily/@weekly/@monthly, with an optional IANA
-zone at the end of a cron line; wake {at: null} pauses without forgetting the
++!comp requires that component to be absent so the rule fires once, and the
+whole rule runs inside the transaction the firing is part of. every accepts a
+duration (30m, 1d), five cron fields (0 9 * * 1-5) or
+@hourly/@daily/@weekly/@monthly, with an optional IANA zone at the end of a
+cron line; wake {at: null} pauses without forgetting the
 schedule. Call guide with page wakes for the whole thing (${
     url(env, '/guide/wakes.md')
   }).
@@ -247,9 +253,9 @@ the space's router as well as its homepage: served AT <space>.${apex(env)}/, and
 asked for every path no other app's slug claims, its worker first and its files
 behind it. app_set(app, home: true, first: ['/recipes/*']) opts it into paths
 another app owns, before that app sees them — only a front page routes, so an
-app that is not one is refused; the platform keeps /login, /connect, /mcp and
-every /api/ door, so a glob naming one is refused too. Deleting the front page
-puts the space back to its default page. A front-page worker that throws or
+app that is not one is refused; the platform reserves /login, /connect, /mcp and
+every path under /api/, so a glob naming one is refused too. Deleting the front
+page puts the space back to its default page. A front-page worker that throws or
 answers 404 is skipped and the request routes as if it were not there, and it
 acts as the visitor, never as the app it routes to. Call guide with page home
 for the whole thing (${url(env, '/guide/home.md')}).
@@ -257,45 +263,46 @@ for the whole thing (${url(env, '/guide/home.md')}).
 Every app has a MAILBOX, at ${mailFrom('<space>', '<app>', env)} — ${
     mailFrom('<space>', null, env)
   } for the
-space's front page. Both directions are the store. Sending is one batch: the
-recipient as an entity wearing email {address}, the letter as doc {title, body}
-(markdown) and mail {}, and the ask, deliver {to}, naming that recipient. The
-from address is the app's own, stamped over whatever you wrote; asking to send
-takes a member who may write, even in an open app. What became of it lands back
-on the letter as delivered {at, via} or bounced {at, reason}. A letter written
-TO the address lands in that app's store the same shape — doc for the subject
-and words, mail {from, to, at, message_id, verified} for the envelope — and a
-page subscribed to it sees it arrive. A letter is a row in the store like any
-other, and its from address is a value on that row. Mail is metered both
-ways against the space's plan, and mail at the person's own domain is not
-offered. mail_list and mail_send are that mailbox said as two tools; mail asked
-about with NO app named — "check my email" — is the person's own mailbox, which
-whatever mail tool they have connected answers and this is not, and naming an
-app or its address is what makes it this. Call guide with page mail for the
-whole thing (${url(env, '/guide/mail.md')}).
+space's front page. Mail in both directions lives in the store. Sending is one
+apply call — a list of changes written in one transaction: the recipient as an
+entity with email {address}, the letter as doc {title, body}
+(markdown) and mail {}, and the request to send it, deliver {to}, naming that
+recipient. The from address is the app's own, stamped over whatever you wrote;
+sending requires a member who may write, even in an open app. What became of it
+lands back on the letter as delivered {at, via} or bounced {at, reason}. A
+letter written TO the address lands in that app's store in the same shape — doc
+for the subject and body, mail {from, to, at, message_id, verified} for the
+envelope — and a page subscribed to it sees it arrive. A letter is a row in the
+store like any other, and its from address is a value on that row. Mail is
+metered both ways against the space's plan, and mail at the person's own domain
+is not offered. mail_list and mail_send are that mailbox as two tools; mail
+asked about with NO app named — "check my email" — is the person's own mailbox,
+which whatever mail tool they have connected answers and this one does not, and
+naming an app or its address is what makes it this one. Call guide with page
+mail for the whole thing (${url(env, '/guide/mail.md')}).
 
 A STORE on Plus can take payments without keys or code. The seller connects
 a Stripe account of their own to their SPACE once (space_sell, or the button on
 their space page), and after that any app in it posts a cart to
 ./api/pay/checkout — items: [{product: eid, qty, options}] — and is answered
-{url}, the Stripe payment page to send the buyer to. The door reads price_cents
-and the title off each product row in the app's own store, so a page never
-posts a price: a price that travels is a price the buyer can edit. When the
-money moves an order {session, account, items, total_cents, fee_cents, email,
-status} row lands in that app's store — order is the platform's own word, so no
-vocab.json declares it — and the buyer gets a confirmation from the app's own
-address. The charge is on the seller's account and the money is theirs, less a
-small platform fee; no card number ever reaches this platform or your app, and
-refunds are made in their own Stripe dashboard. Call guide with page selling
-for the whole thing (${url(env, '/guide/selling.md')}).
+{url}, the Stripe payment page to send the buyer to. That endpoint reads
+price_cents and the title off each product row in the app's own store, so a page
+never posts a price: a price that travels is a price the buyer can edit. When
+the money moves an order {session, account, items, total_cents, fee_cents,
+email, status} row lands in that app's store — order is a component the platform
+declares, so no vocab.json declares it — and the buyer gets a confirmation from
+the app's own address. The charge is on the seller's account and the money is
+theirs, less a small platform fee; no card number ever reaches this platform or
+your app, and refunds are made in their own Stripe dashboard. Call guide with
+page selling for the whole thing (${url(env, '/guide/selling.md')}).
 
 An app is a plugin. app_publish offers one to every other space here by
-name, and app_published lists what is on offer; app_install takes one into
+name, and app_published lists what is on offer; app_install copies one into
 the person's own space, where it is an ordinary app of theirs — its own
 address, its own store, their data from the first byte, nothing shared but
-the code — pinned to the version it took until app_update moves it, which
-keeps everything they saved. Look before you build something somebody has
-already made.
+the code — pinned to the version it was installed at until app_update moves
+it, which keeps everything they saved. Look before you build something
+somebody has already made.
 
 Whatever breaks — a page's own error, a refused write, a request that failed
 — arrives at the end of a later reply, once. Fix what you see. And when a
@@ -330,12 +337,13 @@ you tried, once, and it reaches the people who run yaks.app by mail.`
 export let INSTRUCTIONS = instructions()
 
 /**
- * The way back out of a delete in this store, ending `graph_apply`'s
+ * The way back out of a delete in this store, appended to `graph_apply`'s
  * description (@yaks/mcp `CoreOpts.undo`, T-34509).
  *
- * The generic tier cannot know it — a graph is a graph — and it is exactly what
- * an agent wants to know at the moment it is deciding whether to dare, which is
- * the moment it is reading that tool and not this guide.
+ * The shared graph tools in @yaks/mcp cannot know it — a graph is a graph —
+ * and it is exactly what an agent wants to know at the moment it is deciding
+ * whether to dare, which is the moment it is reading that tool's description
+ * and not this guide.
  */
 export let UNDO =
   'Nothing deleted here is lost by a simple mistake. The way back: ' +
@@ -350,11 +358,11 @@ export let uriOf = (slug: string, env: Host = {}) =>
   url(env, `/guide/${slug}.md`)
 
 // The platform's own pages, in the order an agent is offered them. A page
-// says its own title, brief and description in its frontmatter now (M-34605,
-// plugin.ts `page`); what stays here is WHICH pages there are and in what
-// order, because that is a decision, and a file dropped into the directory is
-// not one. The list an agent is offered is these plus every plugin's —
-// `PAGES`, at the foot of this list.
+// declares its own title, brief and description in its frontmatter now
+// (M-34605, plugin.ts `page`); what stays here is WHICH pages there are and in
+// what order, because that is a decision, and a file dropped into the
+// directory is not one. The list an agent is offered is these plus every
+// plugin's — `PAGES`, at the foot of this list.
 let OURS: Page[] = [
   'store',
   'querying',
@@ -376,13 +384,14 @@ let OURS: Page[] = [
 
 /** Every guide page: the platform's own, then each plugin's in PLUGINS order
  * (plugin.ts `pages`). The file a page names is still under `public/guide/`
- * whoever registered it — a plugin brings the ROW, not the bytes. */
+ * whoever registered it — a plugin contributes the Page entry, not the file
+ * itself. */
 export let PAGES: Page[] = [...OURS, ...pagesOf(PLUGINS)]
 
-// Which page covers a WORD, for the schema door (@yaks/mcp `graph_schema`,
-// T-34156): an agent reading what `mail` is should be told where the whole of
-// sending a letter is written down. Only the words a page actually goes deep
-// on are listed — the rest are answered by the schema alone, which is the
+// Which page covers a COMPONENT, for `graph_schema` (@yaks/mcp, T-34156): an
+// agent reading what `mail` is should be told where the whole of sending a
+// letter is written down. Only the components a page actually goes deep on
+// are listed — the rest are answered by the schema alone, which is the
 // truthful answer when no page says more than the vocabulary does.
 let COVERS: Record<string, string[]> = {
   mail: ['mail', 'email', 'deliver', 'delivered', 'bounced'],

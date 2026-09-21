@@ -687,10 +687,11 @@ export let transport = (options: ResponseOptions): {
 
   // A connectivity probe distinct from "credentials exist": reach the serving
   // endpoint and report whether the transport got there at all. Any HTTP answer
-  // — even 401 or 5xx — proves the bus is up; only a network failure or a bounded
-  // timeout (the silent hang `run` guards mid-stream) reads as unreachable. A
-  // readiness gate pairs this with the account's signed-in state so a box whose
-  // bus is down or wedged drops out of the dispatch rotation (T-24135).
+  // — even 401 or 5xx — proves the endpoint is reachable; only a network failure
+  // or a bounded timeout (the silent hang `run` guards mid-stream) reads as
+  // unreachable. A readiness gate pairs this with the account's signed-in state,
+  // so a machine that cannot reach the provider drops out of the dispatch
+  // rotation (T-24135).
   let reach = async (): Promise<boolean> => {
     let auth: TransportCredential
     try {

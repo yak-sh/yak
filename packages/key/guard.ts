@@ -56,7 +56,7 @@ export let stated = (vocab: Vocab): Hook => {
       }
       if (!tagOf(b, tags)) {
         throw new Refused(
-          `key ${eid} says no kind — a key wears a kind tag beside ` +
+          `key ${eid} declares no kind — a key carries a kind tag beside ` +
             `key{of, value}${
               known.length ? ` (this vocabulary knows ${known.join(', ')})` : ''
             }`,

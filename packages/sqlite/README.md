@@ -158,7 +158,7 @@ returns a `Store` — @yaks/graph's `Storage`, implemented synchronously:
   driver holding a FILE, keeps the statistics the query planner reads the schema
   with (`PRAGMA optimize`, bounded by `analysis_limit`). A component table
   carries no secondary index, so a store with no `sqlite_stat1` is one the
-  planner sizes by its built-in million-row guess, and "the entities wearing
+  planner sizes by its built-in million-row guess, and "the entities that carry
   `call`" is planned as a walk of the whole spine.
 - `read(query, opts?): Bundle[]` — a query → matching entities as bundles.
 - `rows(query, opts?): Row[]` — a query → the compiled statement's raw rows (for

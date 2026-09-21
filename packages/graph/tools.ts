@@ -238,9 +238,9 @@ export let runs = (seams: Seams = {}): Runs => {
 }
 
 /**
- * The generic tier, declared and run: ./vocab.json's entries wearing
- * {@link runs}. A graph with no ranked search has no `search` tool at all —
- * the declaration is left unread rather than listed unable to answer.
+ * The generic tier, declared and implemented: ./vocab.json's entries paired
+ * with {@link runs}. A graph with no ranked search has no `search` tool at
+ * all — the declaration is left unread rather than listed unable to run.
  *
  * The declarations are READ rather than checked ({@link toolsSaid}), because
  * they are this package's own and its tests check them against the

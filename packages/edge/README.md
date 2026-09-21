@@ -80,7 +80,7 @@ reader never finds a link with one end missing.
 An edge component with no relation component beside it is rejected:
 
 ```
-Refused: edge d91e2b12-… states no relation — an edge wears a relation tag
+Refused: edge d91e2b12-… declares no relation — an edge carries a relation tag
          beside edge{from, to} (this vocabulary knows cites, linked)
 ```
 

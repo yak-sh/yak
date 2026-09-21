@@ -364,7 +364,7 @@ export let SAMPLE = 400
  * Every component table is keyed `entity integer primary key` and carries no
  * secondary index, so without `sqlite_stat1` SQLite has nothing to size one by
  * and falls back to its built-in guess of about a million rows for all of them.
- * A query that says "the entities wearing `call`" is then planned as a walk of
+ * A query for "the entities that carry `call`" is then planned as a walk of
  * the whole spine probing `call` per row, instead of a scan of the fifty
  * thousand `call` rows — which is how opening an imported graph came to read
  * the archive end to end six times before answering (T-37734).

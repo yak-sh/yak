@@ -100,7 +100,8 @@ export let runs = (
   },
 
   archetype_check: (_bundles, ctx) => {
-    let about = 'every archetype pointer matches the components its owner wears'
+    let about =
+      'every archetype pointer matches the components its owner carries'
     // An application that never composed @yaks/archetype has no such table and
     // no pointers to disagree with anything. Reporting that beats an audit that
     // reads every entity as drifted because nothing ever classified one.

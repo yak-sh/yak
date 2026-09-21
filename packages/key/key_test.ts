@@ -82,7 +82,7 @@ Deno.test('a key with no kind, no value or no `of` is refused by name', () => {
         pinned: {},
       }])),
     Error,
-    'says no kind',
+    'declares no kind',
   )
 })
 

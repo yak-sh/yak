@@ -90,7 +90,7 @@ Deno.test('an edge with no relation is refused, and says so', () => {
     }]))
   )
   assert(
-    (e as Error).message.includes('states no relation'),
+    (e as Error).message.includes('declares no relation'),
     (e as Error).message,
   )
   // and it names the relations this vocabulary does declare

@@ -25,7 +25,7 @@ let doc: VocabDoc = {
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
-    // A named thing: everything in the box has one.
+    // A named thing: everything in this fixture vocabulary has one.
     doc: {
       component: true,
       type: 'object',

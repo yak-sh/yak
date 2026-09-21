@@ -335,11 +335,11 @@ the arguments — is passed in the tool context instead.
 ### Health checks are just tools named `check`
 
 A health check is a tool whose verb is `check`. That is the entire mechanism:
-there is no doctor package and no registry. Running "the doctor" means running
-every tool the loaded vocabulary declares with that verb (`checks(host.tools)`,
-@yaks/tools), so a program that loads a plugin gets that plugin's invariants
-checked, one that drops the plugin drops them too, and no hand-maintained list
-can go out of date.
+there is no health-check package and no registry. Running the health checks
+means running every tool the loaded vocabulary declares with that verb
+(`checks(host.tools)`, @yaks/tools), so a program that loads a plugin gets that
+plugin's invariants checked, one that drops the plugin drops them too, and no
+hand-maintained list can go out of date.
 
 A check belongs to the package whose invariant it is — `@yaks/mail` checks for a
 letter that arrived with no sender, `@yaks/session` for a lock whose holder has

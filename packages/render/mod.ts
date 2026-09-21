@@ -244,7 +244,8 @@ export let applicable = <R extends Registration>(
 
 /**
  * All matching contributions, preserving duplicates and registration order.
- * Static offerings are keyed by worn component; dynamic contributors receive
+ * Static offerings are keyed by the component an entity carries; dynamic
+ * contributors receive
  * the source supplied by the caller, while their queries read the bundle.
  * Conditions use the supplied vocabulary or define's default; run is never called.
  */

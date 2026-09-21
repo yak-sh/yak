@@ -3,8 +3,8 @@
 One entity per set of component **tables**, shared by every entity stored in
 that set of tables. Its eid is
 `derivedEid('archetype|' + canonicalNames.join(','))`: the shared graph
-derivation (SHA-256 worn as a version-8 UUID), with names sorted bytewise by
-UTF-8. This is disjoint from blobs' full SHA-256 hex addresses;
+derivation (a SHA-256 encoded as a version-8 UUID), with names sorted bytewise
+by UTF-8. This is disjoint from blobs' full SHA-256 hex addresses;
 `archetype.tables` stores the sorted list as a JSON string, the vocabulary's
 scalar JSON representation. Empty sets are valid. Duplicates collapse. Names
 containing `,`, `|` or NUL are rejected rather than producing ambiguous hashes.

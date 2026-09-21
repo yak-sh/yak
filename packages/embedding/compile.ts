@@ -67,7 +67,7 @@ export type SemanticOpts = {
 export type Semantic = Extension & {
   /** the neighbourhood the compiled `.near` selected, most similar first */
   neighbours: () => Near[]
-  /** those bundles, nearest first, each wearing the query-only `rank` comp */
+  /** those bundles, nearest first, each carrying the query-only `rank` comp */
   rank: (bundles: Bundle[]) => Bundle[]
 }
 

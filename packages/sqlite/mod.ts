@@ -258,7 +258,7 @@ export let storage = (
       }
       // And the SIZES those tables are read with (ddl.ts `analyzed`). An index
       // the planner cannot size is half an index: it costs a scan of the whole
-      // spine to find the fifty thousand rows wearing a component. Last,
+      // spine to find the fifty thousand rows that carry a component. Last,
       // because it measures what the statements above just raised.
       analyzed(driver)
     },

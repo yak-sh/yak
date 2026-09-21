@@ -57,7 +57,7 @@ export let stated = (vocab: Vocab): Hook => {
       }
       if (!tagOf(b, tags)) {
         throw new Refused(
-          `edge ${eid} states no relation — an edge wears a relation tag ` +
+          `edge ${eid} declares no relation — an edge carries a relation tag ` +
             `beside edge{from, to}${
               known.length ? ` (this vocabulary knows ${known.join(', ')})` : ''
             }`,
