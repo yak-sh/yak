@@ -207,6 +207,14 @@ let byBirth = (a: Bundle, b: Bundle) =>
     String((b.created as Comp)?.at ?? ''),
   )
 
+/** How many transcripts — and how many tasks — the panels list. Naming a
+ * transcript costs a read of its first line and mirroring one costs its whole
+ * bundle, so the lists are the RECENT ones: a graph holding years of archive
+ * (the fleet's 5,463 transcripts and 5,806 tasks landed in this one) would
+ * otherwise be mirrored end to end on every refresh, and the panels time out
+ * and paint nothing at all. A week of work is well inside this. */
+export let LISTED = 200
+
 /**
  * Start the harness: open the graph, seed what serves it, and put the daemon
  * on its entries.
@@ -435,24 +443,24 @@ export let agent = (opts: Opts = {}): Agent => {
         $actor: through(session),
       }])
     },
-    sessions: async () => {
-      return Promise.all(
-        (await h.g.read('.session')).toSorted(byBirth).map(async (b) => {
-          return {
+    sessions: async () =>
+      Promise.all(
+        (await h.g.read('.session')).toSorted(byBirth).slice(-LISTED).map(
+          async (b) => ({
             ...b,
             session: {
               ...b.session as Comp,
               title: await sessionTitle(h.g, b),
             },
-          }
-        }),
-      )
-    },
+          }),
+        ),
+      ),
     runtime: (session) => runtimeRows(h.g, session),
     control: (session, action) => runtimeAction(a, session, action),
     children: (session) => children(h.g, session),
     tasks: async () =>
-      (await h.g.read('.task.status=open,wip')).toSorted(byBirth),
+      (await h.g.read('.task.status=open,wip')).toSorted(byBirth)
+        .slice(-LISTED),
     entrySource: (session, eid, request) =>
       entrySource(h.g, session, eid, request),
     transcript: entries,

@@ -79,6 +79,26 @@ Deno.test('a session lists with its derived status, and renders as a line', asyn
   await a.close()
 })
 
+Deno.test('the picker lists the recent transcripts, not the whole archive', async () => {
+  // Naming a transcript costs a read of its first line, so a graph holding
+  // years of them (the fleet's 5,463 landed in the harness's own) must not be
+  // titled end to end on every refresh.
+  let a = started()
+  let h = a.h
+  let many = Array.from({ length: 205 }, (_, i) => ({
+    entity: { eid: `s${i}` },
+    session: { id: `s${i}` },
+    created: { at: `2026-01-01T00:${String(i).padStart(2, '0')}:00.000Z` },
+  }))
+  await h.g.apply(many, { trusted: true })
+  let rows = await a.sessions()
+  assertEquals(rows.length, 200)
+  // The newest end of the list, and the oldest are the ones left out.
+  assert(rows.some((b) => b.entity.eid == 's204'))
+  assert(!rows.some((b) => b.entity.eid == 's0'))
+  await a.close()
+})
+
 Deno.test('the agent reads bare and filed open work, including claims and blocked facets', async () => {
   let a = started()
   await a.h.g.apply([
