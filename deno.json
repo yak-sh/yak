@@ -78,7 +78,7 @@
     "test:workerd": "deno run -A bin/suite-time.ts test:workerd deno task test:workerd:run",
     "test:workers": "deno run -A bin/scratch.ts deno test -A workers/yak/ workers/yak-tail/",
     "gate": "deno task check && deno task test && deno task test:workerd",
-    "dev": "deno run -A --unstable-net --unstable-worker-options packages/cli/yak.ts serve --config etc/yak.json",
+    "dev": "deno run -A --unstable-net --unstable-worker-options packages/cli/yak.ts serve --config $HOME/.yak/yak.json",
     "dev:yak": "deno run --allow-read --allow-write --allow-run=npm,npx,pgrep,kill workers/yak/wrangler.ts dev",
     "dev:yak-staging": "deno run --allow-read --allow-write --allow-run=npm,npx,pgrep,kill workers/yak/wrangler.ts dev --env staging",
     "deploy:yak": "deno run --allow-read --allow-write --allow-run=npm,npx,git,pgrep,kill workers/yak/wrangler.ts deploy",
