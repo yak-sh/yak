@@ -98,10 +98,10 @@ export let get = (
     if (!owners.length) continue
     params = [JSON.stringify(owners)]
     // A wide vocabulary is usually sparse. Ask which tables have rows in
-    // this set before projecting their columns; empty facets need no joins
-    // or driver round trip. Short-circuit globally empty tables before walking
-    // the owners: otherwise each empty facet costs 4096 fruitless index probes
-    // per chunk in a wide read. This is a live existence check, not a cached
+    // this set before projecting their columns; an empty component table needs
+    // no join and no driver round trip. Short-circuit globally empty tables
+    // before walking the owners: otherwise each empty component table costs
+    // 4096 fruitless index probes per chunk in a wide read. This is a live existence check, not a cached
     // census that could miss a newly populated table on this or another handle.
     // One owner already costs only one lookup; it needs no extra table probe.
     // Every membership probe uses the same bound owner set.

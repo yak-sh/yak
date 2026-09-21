@@ -1,26 +1,27 @@
-// One command line, run. `cli(commands, opts)` is the whole seam: hand it the
-// commands and it reads the line — the word, either order of a two-word tool,
-// the arguments through that tool's own input schema — runs the one it found,
-// and answers the exit code.
+// One command line, run. `cli(commands, opts)` is the whole interface: hand
+// it the commands and it reads the command line — the subcommand, either order
+// of a two-word tool, the arguments through that tool's own input schema —
+// runs the one it found, and returns the exit code.
 //
 // A command is a @yaks/graph `Tool` declaration and nothing else. There is no
-// registration shape between a tool and the line that runs it: a program that
-// wants more words passes more commands, and the FIRST to name a word wins, so
-// the order of the list IS the precedence.
+// registration format between a tool and the command line that runs it: a
+// program that wants more subcommands passes more commands, and the FIRST to
+// claim a name wins, so the order of the list IS the precedence.
 //
-// WHERE A LINE RUNS what it was asked is {@link aimed}: the graph a config
-// FILE names, opened in this process, or a door to talk to over `/mcp`. The
-// file is the ordinary case — a graph this box can open needs nobody listening
-// — and a door is for a graph it cannot open.
+// WHERE A COMMAND RUNS is {@link aimed}: the graph a config FILE names, opened
+// in this process, or an MCP server to call over `/mcp`. The file is the
+// ordinary case — a graph this machine can open needs nothing listening — and
+// an MCP server is for a graph it cannot open.
 //
-// Two things cost more than a list does, and both are opts rather than
-// commands. `more` is a table that has to be gathered — the tools of the graph
-// this line opens, or a server's `tools/list` — asked only when the commands
-// in hand did not name the word, so `yak login` still works with no graph in
-// sight, and drawn into the page as a reason when it cannot be had. `stray` is
-// the other half: a first word nobody named. `yak recipes add_recipe` is an
-// app and its command, and only something that knows about apps can say so, so
-// it is asked last and only when nothing matched.
+// Two things cost more to gather than a list does, and both are opts rather
+// than commands. `more` is a list that has to be fetched — the tools of the
+// graph this command opens, or an MCP server's `tools/list` — asked for only
+// when the commands already in hand did not match the first word, so
+// `yak login` still works with no graph in sight, and printed on the usage
+// page as a reason when it cannot be had. `stray` is the other half: a first
+// word nothing claimed. `yak recipes add_recipe` is an app and one of its
+// commands, and only something that knows about apps can recognize that, so it
+// is asked last and only when nothing else matched.
 
 import type { Tool, ToolId } from '@yaks/graph'
 import { argsFor, type Grammar, type Reads, Usage } from './args.ts'
@@ -30,14 +31,14 @@ import { doorUrl, type Rpc, rpc, timed } from './rpc.ts'
 import { configPath } from './config.ts'
 import { tokenFor } from './store.ts'
 
-/** What a command is handed: where the line runs, where to print, and the
- * line's globals. */
+/** What a command is handed: where it runs, where to print, and the global
+ * flags. */
 export type Ctx = {
-  /** The door this line talks to, where it talks to one — and the name a
-   * bearer is kept under either way. */
+  /** The MCP server this command talks to, where it talks to one — and the
+   * name its bearer token is stored under either way. */
   host: string
-  /** The config naming the graph this line OPENS, in this process. Absent
-   * where the line named a door instead ({@link aimed}). */
+  /** The config file naming the graph this command OPENS, in this process.
+   * Absent where the command named an MCP server instead ({@link aimed}). */
   config?: string
   json: boolean
   help: boolean
@@ -45,24 +46,25 @@ export type Ctx = {
   reads: Reads
   out: (line: string) => void
   note: (line: string) => void
-  /** Every command this run can reach, the ones that cost a composition or a
-   * round trip included. Asked once; a table that cannot be had is absent. */
+  /** Every command this run can reach, including the ones that cost a
+   * composition or a round trip. Gathered once; a list that cannot be fetched
+   * is left out. */
   all: () => Promise<Command[]>
-  /** The usage page — every tool one line each, and why a table is missing. */
+  /** The usage page — every tool one line each, and why a list is missing. */
   page: () => Promise<string>
 }
 
 /**
- * One command this line can run: a tool's DECLARATION — its name, its schema,
- * how the line spells it — with a run of its own.
+ * One command this program can run: a tool's DECLARATION — its name, its
+ * schema, how it is written on a command line — with a run of its own.
  *
  * A graph tool is `(bundles, ctx) => bundles` and only @yaks/tools' runner
- * calls one. A command is the other end: it takes the arguments a line parsed
- * into, prints, and answers an exit code. Same declaration, so a command is
- * listed, completed and helped from the one schema; different run, because a
- * command line is not a call. `yak <tool>` is a command wrapping a call —
- * local.ts writes one against the graph this line opened, platform.ts sends
- * one to the door it named.
+ * calls one. A command is the other end: it takes the arguments parsed off the
+ * command line, prints, and returns an exit code. The same declaration, so a
+ * command is listed, helped and tab-completed from the one schema; a different
+ * run, because a command line is not a tool call. `yak <tool>` is a command
+ * wrapping a call — local.ts writes one against the graph this command opened,
+ * platform.ts sends one to the MCP server it named.
  */
 export type Command = Omit<Tool<Ctx, number>, 'run'> & {
   run: (
@@ -81,33 +83,36 @@ export type Opts = {
   about?: string
   /** The notes it closes with. */
   notes?: string
-  /** The door a line talks to where it names neither a config nor a host. */
+  /** The MCP server a command talks to where it names neither a config nor a
+   * host. */
   host?: string
-  /** A table that costs a composition or a round trip. */
+  /** More commands, where gathering them costs a composition or a round
+   * trip. */
   more?: (c: Ctx) => Command[] | Promise<Command[]>
-  /** A tool for a first word nobody named. */
+  /** A command for a first word nothing else claimed. */
   stray?: (
     word: string,
     args: string[],
     c: Ctx,
   ) => Command | undefined | Promise<Command | undefined>
-  /** The door, where a program has one of its own — a test hands over a
-   * function that records what it was asked. */
+  /** How a JSON-RPC request is sent, where a program has a caller of its own
+   * — a test passes a function that records what it was asked. */
   ask?: Rpc
-  /** Where a value that is `@path` or `-` comes from. */
+  /** Where a value written `@path` or `-` is read from. */
   reads?: Reads
   out?: (line: string) => void
   note?: (line: string) => void
 }
 
 /**
- * The tools, refused where two of them answer to one line. A two-word tool is
- * reachable in EITHER order, so `session list` and `list session` are the same
- * tool and a second tool spelling either pair is a line that means two things.
+ * The tools, refused where two of them answer to one command line. A two-word
+ * tool is reachable in EITHER order, so `session list` and `list session` are
+ * the same tool, and a second tool using either pair is a command line that
+ * means two things.
  *
  * `cli` does NOT apply this to the whole list, because shadowing is the point
- * of the order: a box that carries its own `login` means it. A contributor
- * runs it over its OWN table, where two words the same is a mistake.
+ * of the order: a program that carries its own `login` means it. A contributor
+ * runs this over its OWN list, where two tools of one name are a mistake.
  */
 export let unique = <T extends ToolId>(tools: readonly T[]): readonly T[] => {
   let said = new Set<string>()
@@ -125,8 +130,8 @@ export let unique = <T extends ToolId>(tools: readonly T[]): readonly T[] => {
 }
 
 /**
- * The tool a line names, and the words left for its schema. A two-word tool
- * takes the word after it in either order; a one-word tool takes none.
+ * The tool a command line names, and the words left for its schema. A two-word
+ * tool takes the word after it in either order; a one-word tool takes none.
  *
  * ```ts
  * commandFor([{noun: 'session', verb: 'list', description: '', run: () => 0}],
@@ -148,22 +153,23 @@ export let commandFor = <T extends ToolId>(
   }
 }
 
-// One column across the page, so it reads as one page. Capped: a long sketch
-// pushes its own line out rather than every other line.
+// One column across the page, so it reads as one page. Capped: a long
+// argument sketch pushes its own line out rather than every other line.
 let WIDE = 30
 
-/** One tool per listed word, in the order they were given: where two answer to
- * one line, the first said it. */
+/** One tool per listed name, in the order they were given: where two answer
+ * to one command line, the first one wins. */
 let once = <T extends Grammar>(tools: readonly T[]): T[] => {
   let seen = new Set<string>()
   return tools.filter((t) => !seen.has(commandOf(t)) && seen.add(commandOf(t)))
 }
 
 /**
- * The tools under the NOUN each is typed with: `graph` holds `apply`, `query`
- * and the rest, and a tool that said one word alone — or none — stands under
- * `''`, which is the page's own first block. Nouns come in the order they were
- * first named, so the order of the list is still the order of the page.
+ * The tools grouped under the NOUN each is typed with: `graph` holds `apply`,
+ * `query` and the rest, and a tool that declared one word alone — or none — is
+ * grouped under `''`, which is the page's own first block. Nouns come in the
+ * order they were first named, so the order of the list is still the order of
+ * the page.
  *
  * ```ts
  * nouns([{ noun: 'graph', verb: 'apply', description: '', run: () => 0 }])
@@ -210,7 +216,7 @@ let column = (groups: [string, Listed[]][]): number =>
     ),
   )
 
-/** Every tool, one line each, its verbs gathered under their noun. */
+/** Every tool, one line each, its verbs grouped under their noun. */
 export let usage = (
   tools: readonly Listed[],
   opts: Opts = {},
@@ -236,9 +242,10 @@ export let nounUsage = (
   return block(said[0], said[1], column([said])).slice(1).join('\n')
 }
 
-/** The flags a program keeps for itself, lifted off the line before a command
- * ever sees it. `host` and `config` are what the LINE said and nothing else —
- * where it runs when it says neither is {@link aimed}'s answer. */
+/** The flags a program keeps for itself, lifted off the command line before a
+ * command ever sees it. `host` and `config` are what the COMMAND LINE gave and
+ * nothing else — where a command runs when it gives neither is
+ * {@link aimed}'s answer. */
 export let globals = (
   argv: readonly string[],
 ): {
@@ -272,19 +279,19 @@ export let globals = (
 }
 
 /**
- * Where this line runs what it was asked: the graph a config FILE names, which
- * it OPENS in this process, or a door it talks to over `/mcp`.
+ * Where this command runs what it was asked: the graph a config FILE names,
+ * which it OPENS in this process, or an MCP server it calls over `/mcp`.
  *
  * A CONFIG NAMES A GRAPH. `yak --config yak.json task list` reads that file,
  * composes its plugins over the SQLite file it names, runs the tool here and
- * exits — no server, and nothing to wait for. `--host` is for a graph this box
- * cannot open as a file; said together the two name two places, which is a
- * line that means two things.
+ * exits — no server, and nothing to wait for. `--host` is for a graph this
+ * machine cannot open as a file; given together the two name two places, which
+ * is a command line that means two things.
  *
  * In order: `--config`, `--host`, `$YAKS_HOST`, `$YAK_CONFIG`, the config this
- * box keeps for its own graph (`~/.yak/yak.json`), and the platform this
- * program came with. A door comes back either way, because it is also the name
- * a bearer is kept under.
+ * machine keeps for its own graph (`~/.yak/yak.json`), and the platform this
+ * program came with. A host name comes back either way, because it is also the
+ * name a bearer token is stored under.
  *
  * ```ts
  * aimed({ host: 'yaks.app' }) // { host: 'yaks.app' }
@@ -305,14 +312,15 @@ export let aimed = (
 }
 
 /**
- * The run this command line is part of, as the environment names it: a
- * harness sets it, every shell and hook under that harness inherits it, and a
- * write made from any of them carries the transcript that made it without
- * anybody passing a flag. It rides to the door on `x-via`, which resolves it
- * to the session and signs what the line writes (@yaks/session/routes).
+ * The run this command line is part of, as the environment names it: a harness
+ * sets it, every shell and hook under that harness inherits it, and a write
+ * made from any of them carries the transcript that produced it without
+ * anybody passing a flag. It is sent in the `x-via` header, which the server
+ * resolves to the session, and what the command writes is signed with it
+ * (@yaks/session/routes).
  *
- * The spellings are the harnesses' own, read most specific first: a subagent's
- * own id before the tree it was spawned from.
+ * The variable names are the harnesses' own, read most specific first: a
+ * subagent's own id before the tree it was spawned from.
  */
 export let via = (
   env: (name: string) => string | undefined = (n) => Deno.env.get(n),
@@ -326,8 +334,8 @@ let disk: Reads = {
 }
 
 /**
- * Run one command line. Answers the exit code a script reads: 0 said, 1 the
- * tool or the door refused, 2 the line was wrong.
+ * Run one command line. Returns the exit code a script reads: 0 succeeded, 1
+ * the tool or the server refused, 2 the command line was wrong.
  */
 export let cli = async (
   tools: readonly Command[],
@@ -338,11 +346,13 @@ export let cli = async (
   let said = globals(opts.argv ?? Deno.args)
   let { json, help, timing, rest } = said
   try {
-    // Where this line runs: a file it opens, or a door it talks to. A line
-    // naming both is refused here, like any other line that means two things.
+    // Where this command runs: a file it opens, or an MCP server it calls. A
+    // command line naming both is refused here, like any other that means two
+    // things.
     let { config, host } = aimed(said, opts.host ?? 'yaks.app')
-    // A table that cannot be had is a reason on the page, not a page nobody
-    // gets: `yak` with no argument is what a person types when nothing works.
+    // A list that cannot be fetched is a reason printed on the page, not a
+    // page nobody gets: `yak` with no argument is what a person types when
+    // nothing works.
     let extra: Command[] | undefined
     let why: string | undefined
     let fetched = async (): Promise<Command[]> => {
@@ -386,8 +396,8 @@ export let cli = async (
       })()
     if (!found) {
       // A NOUN on its own is a question, not a mistake: `yak graph` (and
-      // `yak graph --help`, which is the same line with the flag lifted off)
-      // asks what that word can do, and the answer is its verbs.
+      // `yak graph --help`, which is the same command line with the flag
+      // lifted off) asks what that word can do, and the answer is its verbs.
       let page = nounUsage(await c.all(), rest[0])
       if (page) {
         out(page)
@@ -413,10 +423,11 @@ export let cli = async (
   }
 }
 
-/** The `help` tool every program here carries: the page, or one word's own. */
+/** The `help` command every program here carries: the whole usage page, or
+ * one subcommand's own. */
 export let helpTool = (opts: Opts = {}): Command => ({
   name: 'help',
-  description: 'every word, one line each — or one word’s own page',
+  description: 'every command, one line each — or one command’s own page',
   inputSchema: {
     type: 'object',
     additionalProperties: false,

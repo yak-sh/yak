@@ -41,8 +41,8 @@ import { detail, type Guide, index, ofKind } from './words.ts'
 
 /** The implementations a set of declarations needs. Keyed by the declaration's
  * own `name`, or by the name derived from its noun and verb for a module that
- * keys them that way — `noun_verb` for a pair, the single word for a tool that
- * declared only one. */
+ * keys them that way — `noun_verb` for a tool that declared both, and the one
+ * word itself for a tool that declared only a noun or only a verb. */
 export type Runs<C = ToolCtx, R = Bundle[]> = Record<string, Tool<C, R>['run']>
 
 export let loadTools = <C = ToolCtx, R = Bundle[]>(
@@ -63,30 +63,33 @@ export let loadTools = <C = ToolCtx, R = Bundle[]>(
   })
 
 /**
- * Ranked full-text search, when the host has it. Compose
- * {@link https://jsr.io/@yaks/fts | @yaks/fts} into your storage and a bare
- * word already filters inside `graph_query`; pass this and the ranked door gets
- * a tool of its own.
+ * Ranked full-text search, where the program that opened the graph has it.
+ * Compose {@link https://jsr.io/@yaks/fts | @yaks/fts} into your storage and a
+ * bare word in a query already filters inside `graph_query`; pass this as well
+ * and ranked search gets a tool of its own.
  */
 export type Search = (
   words: string,
   opts?: { limit?: number },
 ) => Bundle[] | Promise<Bundle[]>
 
-/** The seams the generic tier's runs need from a host: the ranked search it
- * may not have, and where a component is documented at length. */
+/** What the generic tier's implementations need from the program that opened
+ * the graph: the ranked search it may not have, and where a component is
+ * documented at length. */
 export type Seams = {
-  /** the ranked search seam; without it there is no `search` run, and the
-   * declaration is not listed either (@yaks/mcp `core`) */
+  /** the ranked search function; without it there is no `search`
+   * implementation, and the declaration is not listed either (@yaks/mcp
+   * `core`) */
   search?: Search
-  /** where a component is written about at length, when this host has such a
-   * page — `graph_schema` hands the address over beside the columns */
+  /** where a component is documented at length, when this program has such a
+   * page — `graph_schema` returns the address beside the columns */
   guide?: Guide
 }
 
-// An answer that is not entities, as the one entity it CAN be: prose (here,
-// JSON) that says it came from this call. The schema is the only such answer
-// in this tier — a vocabulary is not rows in the store it describes.
+// A result that is not entities, returned as the one entity it CAN be: text
+// (here, JSON) that records which call produced it. The schema is the only
+// such result in this tier — a vocabulary is not rows in the store it
+// describes.
 let told = (ctx: ToolCtx, value: unknown): Bundle[] => [{
   entity: { eid: '$said' },
   content: { body: JSON.stringify(value, null, 2) },
@@ -99,7 +102,8 @@ let num = (v: unknown): number | undefined =>
 let strings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x) => typeof x == 'string') : []
 
-// A batch, checked at the door. The input SCHEMA is the vocabulary itself
+// The bundles `graph_apply` was handed, checked before anything is applied.
+// The input SCHEMA is the vocabulary itself
 // (@yaks/mcp `bundleSchema` at `write`), so a client knows every component,
 // every writable column and every type before it writes one — this is the
 // check the schema cannot make, the identity every bundle must carry.
@@ -126,7 +130,7 @@ let gather = async (
   backrefs: boolean,
 ): Promise<Bundle[]> => {
   // What the caller typed, as the eids it names: an id that is an entity is
-  // itself, and anything else is whatever a plugin says it addresses — a name,
+  // itself, and anything else is whatever a plugin declares it addresses — a name,
   // where @yaks/alias is composed in. Nothing composed, nothing to resolve.
   let at = await ctx.graph.address(said)
   let ids = said.map((id) => at.get(id) ?? id)
@@ -144,15 +148,15 @@ let gather = async (
 }
 
 /**
- * The runs behind ./vocab.json — the generic tier, every one of them speaking
- * bundles in and out. `search` is here only where the host has the seam for
- * it, which is what leaves the word unlisted rather than listed and unable to
- * answer.
+ * The implementations behind ./vocab.json — the generic tier, every one of
+ * them taking bundles in and returning bundles out. `search` appears only
+ * where the caller passed a search function, which leaves the tool unlisted
+ * rather than listed and unable to run.
  *
- * There is no sugar here for any particular domain — no `book_shelve`, no
- * `task_done`. A bundle already says everything such a tool would say, and an
- * agent that knows the bundle wire can write anything the vocabulary declares
- * without a tool per component. Sugar belongs in a plugin, which contributes
+ * There is no shorthand here for any particular domain — no `book_shelve`, no
+ * `task_done`. A bundle already carries everything such a tool would carry,
+ * and an agent that knows the bundle format can write anything the vocabulary
+ * declares without a tool per component. Sugar belongs in a plugin, which contributes
  * its tools the same way it contributes components ({@link Tool}).
  */
 export let runs = (seams: Seams = {}): Runs => {
@@ -165,9 +169,9 @@ export let runs = (seams: Seams = {}): Runs => {
     // A DRY RUN is the exception, and it has to be: bundles answered here are
     // landed, so a rehearsal that answered them would be the write it was
     // rehearsing. So the check is made HERE — `apply({check})` runs every phase
-    // and rolls the transaction back — and what it would have landed is said as
-    // prose, the way every other question about a graph is answered in this
-    // tier.
+    // and rolls the transaction back — and what it would have committed is
+    // returned as text, the way every other question about a graph is answered
+    // in this tier.
     graph_apply: async (_, ctx) => {
       let change = batch(ctx.args.change)
       if (ctx.args.check !== true) return change
@@ -241,8 +245,9 @@ export let runs = (seams: Seams = {}): Runs => {
  * The declarations are READ rather than checked ({@link toolsSaid}), because
  * they are this package's own and its tests check them against the
  * meta-schema; the check is an ajv compile, and a Cloudflare Worker forbids
- * building a function from a string. A transport says the arguments in its own
- * dialect (@yaks/mcp `core`, which is also what shapes the tier for a host).
+ * building a function from a string. Each transport restates the arguments in
+ * the form it accepts (@yaks/mcp `core`, which is also what shapes this tier
+ * for one server).
  */
 export let tier = (seams: Seams = {}): NamedTool[] => {
   let doing = runs(seams)

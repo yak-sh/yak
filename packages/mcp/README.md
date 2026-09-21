@@ -1,11 +1,11 @@
 # @yaks/mcp
 
 The [Model Context Protocol](https://modelcontextprotocol.io) server for a
-[@yaks/graph](https://jsr.io/@yaks/graph), as a plain request handler that runs
-in any JavaScript environment.
+[@yaks/graph](https://jsr.io/@yaks/graph), written as a plain request handler
+that runs in any JavaScript runtime.
 
 Point it at a graph and an agent can read and write it — over Streamable HTTP
-beside your other routes, or over stdio for a local one.
+beside your other routes, or over stdio for a server the agent launches itself.
 
 ## Install
 
@@ -21,47 +21,46 @@ import { mcp } from '@yaks/mcp'
 
 let handler = mcp({ graph, authenticate })
 
-Deno.serve((request) => handler(request)) // …or any fetch-style host
+Deno.serve((request) => handler(request)) // …or any fetch-style runtime
 ```
 
-The handler answers **every** request it is given, so mount it wherever you like
-— beside [@yaks/api](https://jsr.io/@yaks/api)'s routes, say:
+The handler answers **every** request it is given, so mount it on whatever path
+you like — beside [@yaks/api](https://jsr.io/@yaks/api)'s routes, say:
 
 ```ts
-let graphDoor = api({ graph, authenticate })
-let agentDoor = mcp({ graph, authenticate })
+let http = api({ graph, authenticate })
+let agents = mcp({ graph, authenticate })
 
 Deno.serve((request) =>
-  new URL(request.url).pathname == '/mcp'
-    ? agentDoor(request)
-    : graphDoor(request)
+  new URL(request.url).pathname == '/mcp' ? agents(request) : http(request)
 )
 ```
 
-These setup fragments assume a graph instance and an application-defined
-`authenticate` callback. The data examples use a bookshop: books with a price
-and a status, reviews about them, and members who buy them.
+These fragments assume a graph and an `authenticate` callback your application
+supplies. The data examples use a bookshop: books with a price and a status,
+reviews about them, and members who buy them.
 
-## Graph tools
+## The five graph tools
 
-Tools operate on bundles: objects containing `entity: {eid}` and component
-objects. The graph vocabulary defines accepted components, columns and types.
-There is no separate tool for each application component.
+Every tool here accepts and returns bundles: objects made of `entity: {eid}` and
+component objects. The graph's vocabulary decides which components, columns and
+types are accepted. There is no separate tool per application component.
 
-The five are declared in [@yaks/graph](https://jsr.io/@yaks/graph)'s own
+All five are declared in [@yaks/graph](https://jsr.io/@yaks/graph)'s own
 `vocab.json` — `graph apply`, `graph query`, `graph show`, `graph schema` and
-`search`, two words on a command line and `graph_apply` on the wire — and `core`
-here is the runs behind them, shaped for one host: the vocabulary fills in the
-bundles `graph_apply` takes, `readOnly` drops the write, `scope` adds a host's
-own arguments to every read.
+`search`, written as two words on a command line and as `graph_apply` and the
+rest when a client lists them — and implemented in `@yaks/graph/tools`. `core`
+here shapes them for one server: the vocabulary fills in which bundles
+`graph_apply` accepts, `readOnly` leaves the write tool unlisted, and `scope`
+adds a server's own arguments to every read.
 
-| tool           | what it does                                                 |
-| -------------- | ------------------------------------------------------------ |
-| `graph_apply`  | bundles in, the batch as applied out — one bundle per entity |
-| `graph_query`  | a query line in, bundles out                                 |
-| `graph_show`   | entities whole, with what points at them, as bundles         |
-| `graph_schema` | component index or detailed component schema                 |
-| `search`       | ranked text results — requires a `search` callback           |
+| tool           | what it does                                                       |
+| -------------- | ------------------------------------------------------------------ |
+| `graph_apply`  | bundles in, the transaction as applied out — one bundle per entity |
+| `graph_query`  | a query string in, bundles out                                     |
+| `graph_show`   | whole entities, with everything that references them, as bundles   |
+| `graph_schema` | the component index, or one component's full schema                |
+| `search`       | ranked text results — needs a `search` callback                    |
 
 ```jsonc
 // graph_apply
@@ -78,44 +77,46 @@ own arguments to every read.
 { "ids": ["b1"] }
 // → { bundles: [the book, and each review of it] }
 
-// graph_schema — bare, one word, or a kind
+// graph_schema — no argument, one component, or a kind
 {}                      // the index: every component, its line, its columns
-{ "component": "book" } // that one whole: types, meaning, references, example
+{ "component": "book" } // that one in full: types, meaning, references, example
 { "kind": "book" }      // what an entity of that kind is made of
 ```
 
-`graph_show` answers `{bundles}` only. References remain in the bundles’ own
-columns; edge entities are ordinary bundles, not a separate list. Set
-`backrefs: false` to return only the named entities.
+`graph_show` returns `{bundles}` and nothing else. References stay in the
+bundles’ own columns; edge entities are ordinary bundles, not a separate list.
+Set `backrefs: false` to return only the entities named.
 
-`graph_query` takes the query line [@yaks/query](https://jsr.io/@yaks/query)
-owns, and an optional `filters` list joined onto it with `&` — dot-param sugar,
-one thin layer over the same grammar, not a second one.
+`graph_query` takes the query string [@yaks/query](https://jsr.io/@yaks/query)
+defines, plus an optional `filters` array joined onto it with `&` — one thin
+layer over the same grammar, not a second grammar.
 
-An agent that has never seen your vocabulary calls `graph_schema` first. Bare,
-it answers the INDEX — every component, the line its schema says about it, and
-its column names — small enough to read whole. Named, it answers that component
-in full: each column's type and meaning, what is server-owned or unique or kept
-as bytes, what points at it and what it points at, a bundle that writes it, and
-the page your host documents it on (`guide`). It rarely has to ask at all:
-`graph_apply`'s own input schema is that vocabulary, typed, so the write
-interface teaches itself.
+An agent that has never seen your vocabulary calls `graph_schema` first. With no
+argument it returns the INDEX — every component, the one-line description its
+schema gives it, and its column names — small enough to read whole. Given a
+component name it returns that component in full: each column's type and
+description, which columns are server-owned or unique or stored as bytes, what
+references it and what it references, an example bundle that writes it, and the
+page your application documents it on (`guide`). It rarely has to ask at all:
+`graph_apply`'s own input schema is derived from that vocabulary, fully typed,
+so the write tool teaches itself.
 
-## What a call answers
+## What a call returns
 
-A reply says the answer twice: the prose its bundles carry as its text, and the
-bundles themselves as `structuredContent` under `result`. Nothing declares an
-output schema — what a bundle IS your vocabulary already says, and a second
+A reply carries the result twice: the text its bundles hold, and the bundles
+themselves as `structuredContent` under `result`. No tool declares an output
+schema — the vocabulary already describes what a bundle is, and a second
 description of it is context an agent pays for before it has asked anything.
 
-An answer that is not entities is the one entity it can be: prose, as
-`content{body}`, saying which call produced it (`output{source}`). That is how
-`graph_schema` answers — a vocabulary is not rows in the store it describes.
+A result that is not entities comes back as the one entity it can be: text, as
+`content{body}`, recording which call produced it (`output{source}`). That is
+how `graph_schema` returns its answer — a vocabulary is not rows in the store it
+describes.
 
-The write door is the one place a schema is published, and it is derived from
-your vocabulary, so a component you add appears in it with nobody editing
-anything. The derivation is exported, so you can build the same schema for your
-own handler:
+`graph_apply`'s input is the one schema this server publishes, and it is derived
+from your vocabulary, so a component you add appears in it with nobody editing
+anything. The derivation is exported, so you can build the same schema for a
+handler of your own:
 
 ```ts
 import { bundleSchema } from '@yaks/mcp'
@@ -125,23 +126,23 @@ let bundle = bundleSchema(shop, { depth: 'full' })
 
 ## The schema describes, the server decides
 
-A client lists the tools once, at `initialize`, and holds that list — with the
-schemas in it — for the whole conversation. Your vocabulary keeps growing under
-it. So the write schema is **open**: every declared column is typed, named and
-described, and an undeclared one is not refused there. A closed schema would
-have a client's stale copy refuse a column that now exists, in the client, where
-no server can explain it.
+A client lists the tools once, at `initialize`, and holds that list — schemas
+included — for the whole conversation, while your vocabulary keeps growing
+underneath it. So the write schema is **open**: every declared column is typed,
+named and described, and an undeclared one is not refused there. A closed schema
+would have a client's stale copy refuse a column that now exists, inside the
+client, where no server can explain it.
 
 Admission is the authority. A column nobody declared is refused by
 [@yaks/graph](https://jsr.io/@yaks/graph), naming the column, naming the columns
-the component does declare, and pointing at `graph_schema` — which answers what
-this graph knows _right now_.
+the component does declare, and pointing at `graph_schema` — which reports what
+this graph declares _right now_.
 
 ## A tool list goes stale
 
 The other half of the same problem: a tool a release added is one the agent
-cannot see, and a tool that went is one it calls into a refusal.
-`notifications/tools/list_changed` is the protocol's answer, and a host that
+cannot see, and a tool that was removed is one it calls into a refusal.
+`notifications/tools/list_changed` is the protocol's answer, and a server that
 holds a stream should send it. But a client without one hears nothing, so say it
 again where the agent is certainly reading — on the next result:
 
@@ -153,25 +154,27 @@ let version = rosterVersion(roster(opts), release) // name the list you serve
 mcp({ ...opts, roster: (names) => rosterLine(cached[session], names) })
 ```
 
-`roster` is the names this server lists; `rosterVersion` hashes them with your
-release id, so it moves when either does; `rosterLine` is the sentence:
+`roster` is the tool names this server lists; `rosterVersion` hashes them
+together with your release id, so it changes when either does; `rosterLine`
+writes the notice:
 
 > The tool list changed since you connected (new: mail_list, mail_send; gone:
 > vocab). Reconnect to see them, or ask `about`.
 
-Its result is included as a trailing content block, so a JSON answer stays JSON.
-Say it once per changed set — record the new roster when you say it.
+It is returned as a trailing content block, so a JSON result stays JSON. Send it
+once per changed set — record the new roster when you send it.
 
 **New capability = new component, not a new tool.** The generic tier already
 writes anything your vocabulary declares, and a component appears in
-`graph_schema` and in the write schema by itself. A tool per feature is a roster
-that moves under every client you have.
+`graph_schema` and in the write schema by itself. A tool per feature is a tool
+list that changes under every client you have.
 
 ## Authentication and write attribution
 
-A bundle can say anything, including whose name is on it. So a server is built
-per request around the identity your `authenticate` returned, and every batch a
-tool applies is signed with that — never with what the client sent:
+A bundle can claim anything, including whose name is on it. So a server is built
+per request around the identity your `authenticate` returned, and every
+transaction a tool applies is signed with that identity — never with what the
+client sent:
 
 ```ts
 let authenticate = (request: Request) => {
@@ -180,10 +183,10 @@ let authenticate = (request: Request) => {
 }
 ```
 
-Return `null` and writes land unattributed; throw `Unauthorized` and the request
-is answered with a 401. It is the same `Authenticate` interface
-[@yaks/api](https://jsr.io/@yaks/api) takes, and the same signing, so both
-interfaces onto one graph agree about who is writing.
+Return `null` and writes are stored unattributed; throw `Unauthorized` and the
+request is answered with a 401. It is the same `Authenticate` interface
+[@yaks/api](https://jsr.io/@yaks/api) takes, and the same signing, so both ways
+into one graph agree about who is writing.
 
 Nothing else about a call is trusted either: which columns a caller may write,
 whether a precondition still holds, and what a delete takes with it are all
@@ -191,8 +194,9 @@ whether a precondition still holds, and what a delete takes with it are all
 
 For a public read-only endpoint, set `readOnly`: `graph_apply` is then not a
 tool that refuses, it is a tool that is not listed. Where such an endpoint
-serves a graph it picks per call — one tenant, one app, one shelf — `scope` says
-what to name it by, and every read carries those arguments beside its own:
+serves a graph it picks per request — one tenant, one app, one shelf — `scope`
+declares what to name that graph by, and every read tool accepts those arguments
+beside its own:
 
 ```ts
 let handler = mcp({
@@ -202,13 +206,14 @@ let handler = mcp({
 })
 ```
 
-The tools ignore them: the interface read them off the call and built the graph
-they name before the server saw the request. They are declared so a client knows
-to say them.
+The tools ignore them: the surrounding program read them off the request and
+built the graph they name before this server saw it. They are declared so that a
+client knows to send them.
 
 ## Plugins bring tools
 
-A plugin contributes tools the same way it contributes components and hooks:
+A [@yaks/graph](https://jsr.io/@yaks/graph) plugin contributes tools the same
+way it contributes components and hooks:
 
 ```ts
 let shelf = {
@@ -230,20 +235,20 @@ graph.use(shelf)
 They are listed beside the generic tier, with the same signing and the same
 reply shape. A tool is a function from BUNDLES to BUNDLES: it is handed the
 call's own bundle and a `ToolCtx` — the graph to READ, who is asking, the
-arguments the client sent (already checked against its `input`), and the call
+arguments the client sent (already validated against its `input`), and the call
 being answered. Schemas are [Zod](https://zod.dev), because the MCP SDK takes
 Zod.
 
-A tool never writes. The bundles it answers ARE the write, landed by
-@yaks/tools' runner signed as the CALLER, in one batch beside the
-`result{call, ms}` entity that answers the call. Words a person reads are a
-bundle like any other — `content{body}` — never a channel beside them.
+A tool never writes. The bundles it returns ARE the write: @yaks/tools' runner
+applies them signed as the CALLER, in one transaction beside the
+`result{call, ms}` entity that records the call. Text a person reads is a bundle
+like any other — `content{body}` — never a separate channel beside it.
 
-`tools/call` calls the function, here, for this request. What it records as it
-goes is the TRANSCRIPT: a `call{to, args}` entity before, signed as whoever is
-asking, and the result after. A door whose graph should not carry that — a
-connector over somebody else's store — passes a `calls` graph of its own and the
-tools still work on `graph`.
+`tools/call` runs the function, here, for this request. What it records as it
+goes is the TRANSCRIPT: a `call{to, args}` entity written before the function
+runs, signed as whoever is asking, and the result after. A server whose graph
+should not hold that — a connector over somebody else's store — passes a `calls`
+graph of its own, and the tools still read and write `graph`.
 
 A tool that carries `meta` has it handed to the client verbatim as `_meta`:
 
@@ -260,13 +265,14 @@ A tool that carries `meta` has it handed to the client verbatim as `_meta`:
 }
 ```
 
-Its words are the reply's text; the bundle that carried them is its structure.
+Its text is the reply's text; the bundle that carried it is the reply's
+structure.
 
-## When a host serves more than tools
+## When a server offers more than tools
 
-`extend` is handed the SDK's own server once the tools are on it, so resources,
-prompts and a capability of your own go on the **same** server rather than
-beside it:
+`extend` is handed the SDK's own server object once the tools are registered on
+it, so resources, prompts and a capability of your own are registered on the
+**same** server rather than on a second one beside it:
 
 ```ts
 mcp({
@@ -282,7 +288,7 @@ mcp({
 
 A bad argument or a rejected write comes back as the tool's own error text with
 `isError` set — something the agent reads and corrects, not a broken connection.
-Only the transport itself refuses in HTTP: `405` for anything but a `POST`
+Only the transport itself refuses in HTTP: `405` for any method but `POST`
 (there is no SSE stream), `400` for a body that is not one JSON-RPC request,
 `401` from your `authenticate`, and `202` for a notification.
 
@@ -298,13 +304,35 @@ await stdio({ graph, actor: { by: 'm1' } })
 ```
 
 It lives in its own module because it is the one part that is not portable — it
-reads the process's own streams — so importing `@yaks/mcp` never drags a runtime
-in with it.
+reads the process's own streams — so importing `@yaks/mcp` never pulls a runtime
+dependency in with it.
+
+## JSON Schema tool declarations
+
+A tool may supply `noun`/`verb` and a complete `inputSchema` instead of a name
+and a per-argument Zod `input` object. The server derives the MCP tool name from
+the noun and verb — `session_list` from a pair, and the single word itself from
+a tool that declared a noun or a verb alone — advertises the original JSON
+Schema, and validates arguments through `@yaks/vocab/tools` before calling the
+same `run` function. Tools written the older way keep their Zod validation.
+Security callbacks are given normalized names in either case.
+
+The MCP SDK's high-level registration currently accepts Zod rather than raw JSON
+Schema. For a registry holding both kinds, this adapter builds its own
+`tools/list` reply and validates the JSON Schema declarations with the shared
+validator. That reply describes the server's initial, fixed registry: adding,
+disabling or modifying SDK tools after the server is built is not supported
+while JSON Schema tools are present. That is a deliberate limitation of this
+adapter, not a second schema compiler.
+
+There is no output declaration: a tool returns bundles, and a failed call is
+marked with `isError` and carries an `error` or `exception` bundle describing
+what happened.
 
 ## Compatibility
 
 **Deno, Node, Bun, and Cloudflare Workers** for `@yaks/mcp`; `@yaks/mcp/stdio`
-needs a process, so Deno, Node and Bun. The HTTP interface is stateless — one
+needs a process, so Deno, Node and Bun. The HTTP transport is stateless — one
 JSON-RPC request in, one reply out — so a restart strands nobody and two
 isolates need to agree about nothing. Its dependencies are the sibling packages
 `@yaks/graph`, `@yaks/api` and `@yaks/vocab`, plus `@modelcontextprotocol/sdk`
@@ -312,41 +340,14 @@ and `zod`.
 
 ## The family
 
-[@yaks/graph](https://jsr.io/@yaks/graph) owns the bundle wire and `apply()`;
+[@yaks/graph](https://jsr.io/@yaks/graph) owns the bundle format and `apply()`;
 [@yaks/vocab](https://jsr.io/@yaks/vocab) describes the components;
-[@yaks/query](https://jsr.io/@yaks/query) parses the query line;
-[@yaks/api](https://jsr.io/@yaks/api) is the interface for browsers and other
-programs, and this is the interface for agents. Compose
+[@yaks/query](https://jsr.io/@yaks/query) parses the query string;
+[@yaks/api](https://jsr.io/@yaks/api) serves browsers and other programs over
+HTTP, and this package serves agents. Compose
 [@yaks/fts](https://jsr.io/@yaks/fts) into your storage and a bare word filters
 inside `graph_query` too.
 
 ## License
 
 Apache-2.0
-
-### JSON Schema tool input
-
-Tools may supply `noun`/`verb` and a complete `inputSchema` rather than a legacy
-name and per-argument Zod `input` bag. The server derives the MCP name from the
-words — `session_list` from a pair, and the single word itself from a tool that
-said a noun or a verb alone — advertises the original JSON Schema, and validates
-arguments through `@yaks/vocab/tools` before calling the same `run` handler.
-Legacy tools retain their Zod validation. Security callbacks receive normalized
-names in either case.
-
-The MCP SDK's high-level registration currently accepts Zod rather than raw JSON
-Schema. For a mixed registry this adapter provides its own tools/list projection
-and uses shared JSON Schema validation for the new declarations. This projection
-describes the server's initial static registry; dynamically adding, disabling,
-or modifying SDK tools after construction is not supported when JSON Schema
-tools are present. This is an explicit adapter limitation, not a second schema
-compiler.
-
-### JSON Schema arguments
-
-Custom tools may declare `inputSchema` as a JSON Schema object instead of the
-Zod `input` bag. The runner checks a call's arguments against it before the tool
-runs, and the declaration reaches `tools/list` unchanged.
-
-There is no output declaration: a tool answers bundles, and a failed call says
-so with `isError` and an `error`/`exception` bundle carrying what happened.

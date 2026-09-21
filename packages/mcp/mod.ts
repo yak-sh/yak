@@ -97,7 +97,8 @@ export {
   type Depth,
   schemaSchema,
 } from './schema.ts'
-// The vocabulary said in words is @yaks/graph's — `graph_schema` answers out
-// of there — and a host that sets `guide` says its type from the same place.
+// The vocabulary described as plain data belongs to @yaks/graph —
+// `graph_schema` builds its result there — and a server that passes `guide`
+// imports its type from the same place.
 export type { Guide } from '@yaks/graph'
 export type { Handler } from '@yaks/api'

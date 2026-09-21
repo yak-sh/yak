@@ -1,31 +1,31 @@
-// The vocabulary, said in words. `graph_schema` answers out of here: the
-// INDEX, when nobody named anything — every component, its one line, its
-// column names — and one component IN FULL when somebody did: what each column
-// is, what the vocabulary says it means, what is server-owned or unique or
-// kept as bytes, what points at it and what it points at, and a bundle that
-// writes it.
+// The vocabulary, described as plain data. `graph_schema` returns what this
+// file builds: the INDEX when the call named no component — every component,
+// its one-line description, its column names — and one component IN FULL when
+// it named one: what each column is, the description the vocabulary gives it,
+// which columns are server-owned or unique or stored as bytes, what references
+// it and what it references, and an example bundle that writes it.
 //
 // Jeff, 2026-09-05: "can we otherwise add some vocab tools? for getting
 // specific parts and also the full thing probably? should come with docs, i
-// expect, to explain the meaning". So the answer is not the loaded documents
-// handed over whole — that is a wall of JSON Schema an agent pays for in full
-// to learn one word. It is the index, small enough to read, and then the word
-// asked for.
+// expect, to explain the meaning". So the result is not the loaded schema
+// documents handed over whole — that is a wall of JSON Schema an agent pays
+// for in full to learn one component. It is the index, small enough to read,
+// and then the component asked for.
 //
 // Everything here is DERIVED: nothing is written down twice. A description is
-// the one the vocab.json carries, and a column with none is answered without
-// one rather than with a sentence somebody invented here.
+// the one the vocab.json carries, and a column that has none is returned
+// without one rather than with a sentence invented here.
 
 import type { Column, Vocab } from '@yaks/vocab'
 
-/** Where a component is documented at length, when its host has such a page —
- * `mail` → the guide's mail page. The vocabulary knows nothing about a guide,
- * so the host that has one says so. */
+/** Where a component is documented at length, when the program that opened
+ * the graph has such a page — `mail` → the guide's mail page. The vocabulary
+ * knows nothing about a guide, so that program supplies this function. */
 export type Guide = (comp: string) => string | undefined
 
-/** One column, said: its type in a word, whatever the vocabulary says it
- * means, its closed set or the kind it points at, and what else is true of
- * it. */
+/** One column, described: its type in one word, whatever description the
+ * vocabulary gives it, its allowed values or the component it references, and
+ * what else is true of it. */
 export type Col = {
   prop: string
   type: string
@@ -35,8 +35,8 @@ export type Col = {
   notes?: string[]
 }
 
-/** One component, said. The index answers the first three fields; asking for
- * the component fills the rest in and spells each column out. */
+/** One component, described. The index fills in the first three fields;
+ * asking for the component fills the rest in and describes each column. */
 export type Word = {
   name: string
   description?: string
@@ -51,11 +51,12 @@ export type Word = {
   guide?: string
 }
 
-/** What `graph_schema` answers, in any of its three sizes. */
+/** What `graph_schema` returns, in any of its three sizes. */
 export type Said = { comps: Word[]; kinds?: string[]; kind?: string }
 
-// What death means for the entity holding the reference, said the way the
-// person reading it would ask: what happens to my row when that one dies.
+// What deleting the referenced entity means for the entity holding the
+// reference, phrased the way the reader would ask it: what happens to my row
+// when that one is deleted.
 let DEATH: Record<string, string> = {
   cascade: 'this entity dies with it',
   detach: 'this column is cleared',
@@ -63,12 +64,14 @@ let DEATH: Record<string, string> = {
   keep: 'the reference stands as history',
 }
 
-// A column's type in one word, and its closed set or target beside it.
+// A column's type in one word: `enum` for a closed set of values, `ref` for a
+// reference, otherwise the scalar type the vocabulary declares.
 let typeOf = (col: Column): string =>
   col.category == 'enum' ? 'enum' : col.category == 'ref' ? 'ref' : col.scalar!
 
 // What is true of a column beyond its type: who may write it, whether it is
-// stored at all, what it promises, and what its death means.
+// stored at all, whether its value must be unique, and what deleting the
+// entity it references does to this row.
 let notesOf = (vocab: Vocab, col: Column): string[] => {
   let notes: string[] = []
   if (col.stamped) notes.push('server-owned: readable, never written here')
@@ -106,8 +109,8 @@ let sample = (col: Column): unknown =>
     ? '{}'
     : 'text'
 
-/** One component as the index says it: the line an agent reads to decide
- * whether to ask for the whole of it. */
+/** One component as the index lists it: the one-line summary an agent reads
+ * to decide whether to ask for the whole of it. */
 export let summary = (vocab: Vocab, name: string): Word => {
   let info = vocab.comp(name)!
   return {
@@ -118,9 +121,10 @@ export let summary = (vocab: Vocab, name: string): Word => {
   }
 }
 
-/** One component in full: every column with its type, its meaning and what is
- * true of it, the references either way, a bundle that writes it, and the page
- * that covers it where the host has one. */
+/** One component in full: every column with its type, its description and
+ * what is true of it, the references in both directions, an example bundle
+ * that writes it, and the documentation page covering it where the program
+ * that opened the graph supplies one. */
 export let detail = (vocab: Vocab, name: string, guide?: Guide): Word => {
   let info = vocab.comp(name)!
   let cols = vocab.columns(name).map((prop) => vocab.column(name, prop)!)
@@ -139,9 +143,9 @@ export let detail = (vocab: Vocab, name: string, guide?: Guide): Word => {
       ...(col.ref ? { ref: col.ref } : {}),
       ...(notesOf(vocab, col).length ? { notes: notesOf(vocab, col) } : {}),
     })),
-    // A kind sorts BEFORE the words it is usually worn with: an entity wearing
-    // `mail` and `doc` reads as mail, which is the same thing as saying a
-    // letter is a mail wearing a doc.
+    // A kind sorts BEFORE the components it is usually stored with: an entity
+    // carrying both `mail` and `doc` displays as mail, which is the same fact
+    // as saying a letter is a `mail` that also has a `doc`.
     ...(info.kind && info.before.length ? { worn_with: info.before } : {}),
     references: {
       out: out.map((c) => ({ prop: c.prop, to: c.ref! })),
@@ -164,9 +168,10 @@ export let index = (vocab: Vocab): Said => ({
   kinds: vocab.kinds,
 })
 
-/** What an entity of one KIND is made of: the component that names it, whole,
- * and a line each for the words it is worn with — a letter is a `mail` wearing
- * a `doc`, which is the same fact as `mail` sorting before `doc`. */
+/** What an entity of one KIND is made of: the component that names the kind,
+ * in full, and a line each for the components it is usually stored with — a
+ * letter is a `mail` that also has a `doc`, which is the same fact as `mail`
+ * sorting before `doc`. */
 export let ofKind = (vocab: Vocab, kind: string, guide?: Guide): Said => ({
   kind,
   comps: [

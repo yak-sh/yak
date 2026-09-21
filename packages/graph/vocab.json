@@ -9,7 +9,7 @@
       "noun": "graph",
       "verb": "apply",
       "title": "Apply a batch",
-      "description": "Apply entity bundles to this store: create, patch or delete entities and their components, atomically. A batch is an array of BUNDLES — {entity: {eid}, <component>: {<columns>}}, the same shape a client's apply() takes: an omitted column is untouched, a null column is cleared, a null component is dropped, and $delete: true kills the entity. Mint an id yourself, or write '$name' as the eid and read back what the graph named it. Where this store keeps names, alias: {name: '<your name>'} beside a '$name' eid makes the write IDEMPOTENT — the same name written again patches the entity that already holds it instead of making a second one, and a name stands wherever an eid does. A read-modify-write says what it was based on: $was names, per component and column, the SHA-256 of the value you READ (null for \"it held none\"), and the batch is refused WHOLE — naming the column and what it holds now — if it has moved since. That is compare-and-set: two callers spending the same balance or claiming the same reward, and only one of them lands. The answer is the batch AS APPLIED, one bundle per entity: {entity: {eid, num}}, every component as written, the stamps the graph made (created, updated), and the '$alias' you named it by. Anything that died — what you deleted, and whatever fell with it — answers as {entity, tombstone: {}} and nothing else. This tool's own input schema is the vocabulary — every component, every column and every type — and graph_schema says the same thing at length. The schema describes and the server decides: it is open, so a word learned since you connected still reaches the graph, and a column nobody declared is refused here with the ones that are. check: true REHEARSES the batch instead of keeping it: every check this tool makes is made, and then the whole thing is rolled back, so the answer is what WOULD land — every '$name' resolved to the id it would be given — or the refusal, said the same way it would be said for real. That is how a plan of several entities and the links between them is proven before any of it is written.",
+      "description": "Apply entity bundles to this store: create, patch or delete entities and their components, atomically. The change you pass is an array of BUNDLES — {entity: {eid}, <component>: {<columns>}}, the same shape a client's apply() takes: an omitted column is untouched, a null column is cleared, a null component is dropped, and $delete: true kills the entity. Mint an id yourself, or write '$name' as the eid and read back what the graph named it. Where this store keeps names, alias: {name: '<your name>'} beside a '$name' eid makes the write IDEMPOTENT — the same name written again patches the entity that already holds it instead of making a second one, and a name stands wherever an eid does. A read-modify-write states what it was based on: $was names, per component and column, the SHA-256 of the value you READ (null for \"it held none\"), and the write is refused WHOLE — naming the column and what it holds now — if it has moved since. That is compare-and-set: two callers spending the same balance or claiming the same reward, and only one of them lands. The result is the transaction AS APPLIED, one bundle per entity: {entity: {eid, num}}, every component as written, the stamps the graph made (created, updated), and the '$alias' you named it by. Anything that died — what you deleted, and whatever fell with it — answers as {entity, tombstone: {}} and nothing else. This tool's own input schema is the vocabulary — every component, every column and every type — and graph_schema reports the same thing at length. The schema describes and the server decides: it is open, so a component or column declared since you connected still reaches the graph, and a column nobody declared is refused here alongside the ones that are. check: true REHEARSES the write instead of keeping it: every check this tool makes is made, and then the whole thing is rolled back, so the answer is what WOULD land — every '$name' resolved to the id it would be given — or the refusal, worded exactly as it would be for a write that was kept. That is how a plan of several entities and the links between them is proven before any of it is written.",
       "input": {
         "change": {
           "type": "array",
@@ -33,7 +33,7 @@
       "noun": "graph",
       "verb": "query",
       "title": "Read a query",
-      "description": "Find entities in this store by filtering their components and columns, answered as whole bundles. A query LINE selects them: '.status=shelved&.price<20' — dot-params joined with &, with lists (a,b), ranges (1..9), !=, ~=, comparisons, '.prop!' for present and '.prop=' for absent. Directives ride the same line: .order=, .limit=, .refs=<id> for everything pointing at an entity. filters, if you pass any, are joined onto q with &.",
+      "description": "Find entities in this store by filtering their components and columns, answered as whole bundles. A query STRING selects them: '.status=shelved&.price<20' — dot-params joined with &, with lists (a,b), ranges (1..9), !=, ~=, comparisons, '.prop!' for present and '.prop=' for absent. Directives go in the same string: .order=, .limit=, .refs=<id> for everything pointing at an entity. filters, if you pass any, are joined onto q with &.",
       "input": {
         "q": {
           "type": "string",
@@ -97,7 +97,7 @@
       "noun": "graph",
       "verb": "schema",
       "title": "The schema",
-      "description": "Read this store's vocabulary — every component, its columns and their types — in three sizes. Bare: the INDEX — every component, what it means in a line, and its column names. With component (one name or several): that component in full — each column's type and meaning, what is server-owned or unique, what points at it and what it points at, and a bundle that writes it. With kind: what an entity of that kind is made of. Read the index first and ask for the word you are about to write.",
+      "description": "Read this store's vocabulary — every component, its columns and their types — in three sizes. Bare: the INDEX — every component, what it means in a line, and its column names. With component (one name or several): that component in full — each column's type and meaning, what is server-owned or unique, what points at it and what it points at, and a bundle that writes it. With kind: what an entity of that kind is made of. Read the index first, then ask for the component you are about to write.",
       "input": {
         "component": {
           "anyOf": [
@@ -115,7 +115,7 @@
         },
         "kind": {
           "type": "string",
-          "description": "a display kind, answered as the words an entity of it wears"
+          "description": "a display kind, answered as the components an entity of that kind carries"
         }
       },
       "options": {

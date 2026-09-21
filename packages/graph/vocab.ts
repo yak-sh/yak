@@ -1,13 +1,15 @@
-// The words the GENERIC TIER is called by: the `vocab` facet of this package
+// The GENERIC TIER's own declarations: the `./vocab` subpath of this package
 // (`@yaks/graph/vocab`) — the five tools every graph answers, declared in
-// ./vocab.json and run from @yaks/mcp `core`.
+// ./vocab.json and implemented in ./tools.ts, which @yaks/mcp `core` shapes
+// for one server.
 //
-// They are words like any other package's: `graph apply`, `graph query`,
-// `graph show`, `graph schema` and `search`, spelled `graph_apply` and the
-// rest on a transport with one flat name. Declaring them here rather than
-// writing them into a listing is what makes a line and a tool list the same
-// sentence — and it is this package's to declare, because what they do is the
-// graph itself, not whatever door happened to carry them.
+// They are declared the same way any other package declares its tools:
+// `graph apply`, `graph query`, `graph show`, `graph schema` and `search`,
+// written `graph_apply` and the rest on a transport that gives a tool one flat
+// name. Declaring them here rather than writing them into each listing is what
+// makes the command line and an MCP tool list describe the same tools — and
+// they belong to this package, because what they do is the graph itself, not
+// whatever transport carried the call.
 //
 // No COMPONENT is declared here: the tier describes a store, it does not add
 // anything to one.
