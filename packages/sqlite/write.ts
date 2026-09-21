@@ -106,8 +106,9 @@ export let buried = (driver: Driver, eids: string[]): Set<string> =>
  * statement runs in, so it is exact under a concurrent writer — and RETURNING
  * hands it straight back. `do nothing` on an eid that already has an identity,
  * so minting twice is not an error; RETURNING then emits NO row, which is also
- * the answer to "was this one new". `number = false` leaves a NULL number for
- * a host that allocates human numbers later, or not at all.
+ * the answer to "was this one new". A number is OPT-IN: unsaid, the spine is
+ * minted with a NULL number, which is what a store whose entities nobody ever
+ * types the number of wants. `number = true` puts it on the human line.
  *
  * `number` may also be a NUMBER, and then it is the one the entity takes: a
  * store seeded from another store's export adopts the numbers that export
@@ -115,7 +116,7 @@ export let buried = (driver: Driver, eids: string[]): Set<string> =>
  * everywhere. The sequence follows — `entity_number_insert` raises its high
  * water mark — so the next minted number is still past every stated one.
  */
-export let mintSql = (eid: string, number: boolean | number = true): Sql => ({
+export let mintSql = (eid: string, number: boolean | number = false): Sql => ({
   sql: `insert into entity (eid, num)
           values (?, ${
     typeof number == 'number'
@@ -304,7 +305,7 @@ export let patch = (
   driver: Driver,
   vocab: Vocab,
   bundles: Bundle[],
-  number: boolean | { except: readonly string[] } = true,
+  number: boolean | { except: readonly string[] } = false,
   adopt = false,
 ): Entity[] => {
   let known = spines(driver, [...new Set(touched(vocab, bundles))])

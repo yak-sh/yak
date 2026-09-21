@@ -103,7 +103,7 @@ export let box: Vocab = loadVocab(doc)
 /** A graph over a fresh map. `adopt` is what a CLIENT store needs: the numbers
  * come from the server, not from this map. */
 export let boxGraph = (adopt = false): Graph =>
-  graph({ storage: ram(box, { adopt }), vocab: box })
+  graph({ storage: ram(box, { adopt, number: true }), vocab: box })
 
 /** A stand-in socket, driven by hand: it records what this side sent, and
  * `emit` plays the events a real one would fire. It starts CONNECTING, so a

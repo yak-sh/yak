@@ -36,7 +36,10 @@ export type RamOpts = {
    * answered with is being told the identity, not asking for one. Off by
    * default: a store nobody mirrors owns its own numbering. */
   adopt?: boolean
-  /** Facets whose entities do not receive human numbers. */
+  /** Put new entities on the human number line. OPT-IN, the same word
+   * @yaks/sqlite says it with: unsaid, an entity is its eid and nothing else.
+   * `{ except: [comp, …] }` turns them on while keeping a component's
+   * entities off the line. */
   number?: boolean | { except: readonly string[] }
 }
 
@@ -195,9 +198,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         }
         : {
           eid,
-          ...base.number === false || excluded.has(eid)
-            ? {}
-            : { num: numberFor(num) },
+          ...!base.number || excluded.has(eid) ? {} : { num: numberFor(num) },
         }
       rows.set(eid, { entity, comps: {} })
       if (!reserved) born.push(entity)

@@ -18,7 +18,8 @@ let vocab = loadVocab([...shop.docs, archetypeDoc, {
 }])
 Deno.test('archetype query golden: presence/kind, value joins, boolean, paths, reverse and aggregates', () => {
   let driver = mem()
-  let s = storage(driver, vocab)
+  // Numbered: the golden reads the order a numbered store hands rows back in.
+  let s = storage(driver, vocab, { number: true })
   s.install()
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
   g.apply([

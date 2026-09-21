@@ -155,10 +155,17 @@ let deadly = (v: Vocab): Set<string> =>
       .flatMap((word) => v.deaths(word).map(([comp]) => comp)),
   )
 
+/** What a D1 store is bound with: @yaks/sql's read options, plus whether new
+ * spines go on the human number line. A number is OPT-IN, the same word
+ * @yaks/sqlite says it with: unsaid, an entity is its eid and nothing else. */
+export type Opts = BindOpts & {
+  number?: boolean | { except: readonly string[] }
+}
+
 export let storage = <S extends Stmt<S>>(
   db: D1Like<S>,
   vocab: Vocab,
-  base: BindOpts = {},
+  base: Opts = {},
 ): Store => {
   let bears = deadly(vocab)
   // `bind` at the door, so a statement may be built in the plain SQLite values
@@ -266,11 +273,11 @@ export let storage = <S extends Stmt<S>>(
     // transaction, and the statement returns it. So the entity handed out here
     // wears no `num` yet — `flush` fills it into this very object, before the
     // transaction settles and before anything outside can read it.
-    let birth = (eid: Eid, born: Entity[]): void => {
+    let birth = (eid: Eid, born: Entity[], numbered: boolean): void => {
       if (known.get(eid)) return
       let entity: Entity = { eid }
       births.push({ at: pending.length, entity })
-      pending.push(mintSql(eid))
+      pending.push(mintSql(eid, numbered))
       known.set(eid, { dead: false })
       dirty.set(eid, { entity })
       born.push(entity)
@@ -380,11 +387,23 @@ export let storage = <S extends Stmt<S>>(
         moved ||= bs.some((b) => comps(b).some(([name]) => bears.has(name)))
         await learn(touched(vocab, bs))
         let born: Entity[] = []
+        // Which of these entities the host keeps off the human line: one
+        // wearing an excepted component, in this batch or already in the
+        // store. What the store knows is already learned, above.
+        let excluded = new Set<Eid>()
+        if (typeof base.number == 'object') {
+          for (let name of base.number.except) {
+            for (let b of bs) if (b[name] != null) excluded.add(b.entity.eid)
+            for (let [eid, b] of held) if (b[name] != null) excluded.add(eid)
+          }
+        }
         // `touched` puts the bundle's own eid first, then what it points at, so
         // numbers land in the same first-touch order every adapter uses.
         for (let b of bs) {
           if (buried(b.entity.eid)) continue
-          for (let e of touched(vocab, [b])) birth(e, born)
+          for (let e of touched(vocab, [b])) {
+            birth(e, born, !!base.number && !excluded.has(e))
+          }
         }
         for (let b of bs) {
           let eid = b.entity.eid

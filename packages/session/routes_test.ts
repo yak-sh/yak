@@ -24,7 +24,7 @@ let spine: VocabDoc = {
 let vocab = loadVocab([sessionDoc, spine], [idKeywords])
 
 let host = () => {
-  let s = ram(vocab)
+  let s = ram(vocab, { number: true })
   let g = graph({ storage: s, vocab, plugins: [ids(vocab)] })
   g.apply([{ entity: { eid: 's1' }, session: { id: 'abc', actor: 'p1' } }], {
     trusted: true,

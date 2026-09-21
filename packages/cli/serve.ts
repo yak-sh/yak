@@ -495,7 +495,7 @@ export let compose = async (
     store = storage(sql, vocab, {
       derived,
       extend: text.length ? [...extend, search(text)] : extend,
-      number: config.numbers ?? true,
+      number: config.numbers ?? false,
       adopt: config.adopt ?? false,
     })
     store.install()

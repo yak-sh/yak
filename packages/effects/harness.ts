@@ -72,4 +72,4 @@ export let durableBlog: Vocab = loadVocab([doc, effectDoc])
 export let blogGraph = (
   plugins: Options['plugins'] = [],
   vocab: Vocab = blog,
-): Graph => graph({ storage: ram(vocab), vocab, plugins })
+): Graph => graph({ storage: ram(vocab, { number: true }), vocab, plugins })

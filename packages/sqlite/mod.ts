@@ -173,8 +173,10 @@ export type Store = {
  */
 export type Opts = BindOpts & {
   text?: Text
-  /** Mint unnumbered spines when false; the host may number them after their
-   * components land. Identity and birth reporting still belong to storage. */
+  /** Put new spines on the human number line. OPT-IN: unsaid, an entity is
+   * its eid and nothing else, which is what a store whose entities nobody
+   * ever types the number of wants. Identity and birth reporting still belong
+   * to storage either way. */
   number?: boolean | { except: readonly string[] }
   /** Adopt the `num` a patch's identity carries instead of minting one — a
    * stated number for the entity to take, an explicit `null` for one that is

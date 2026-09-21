@@ -43,7 +43,7 @@ export let team: Vocab = loadVocab(
 )
 
 /** A fresh in-memory storage over that vocabulary. */
-export let store = (): Storage => ram(team)
+export let store = (): Storage => ram(team, { number: true })
 
 /** A graph over a fresh store, with the edge, task and portfolio plugins. */
 export let teamGraph = (

@@ -77,7 +77,7 @@ export let ids = {
 /** A store holding two people, two runs and two pages, with nothing locked
  * yet. */
 export let store = (): Storage => {
-  let s = ram(pages)
+  let s = ram(pages, { number: true })
   let { ada, bo, run1, run2, p1, p2 } = ids
   graph({ storage: s, vocab: pages }).apply([
     { entity: { eid: ada }, person: { name: 'Ada' } },

@@ -41,7 +41,7 @@ let host = () => {
   )
   let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
   let g: Graph = graph({
-    storage: ram(vocab),
+    storage: ram(vocab, { number: true }),
     vocab,
     plugins: [ids(vocab), sessions(), processes(), fx],
   })

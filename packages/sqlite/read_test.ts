@@ -227,7 +227,7 @@ Deno.test("a driver that declares no compound width is probed within workerd's",
       ),
     },
   })
-  let s = storage(driver, vocab)
+  let s = storage(driver, vocab, { number: true })
   s.install()
   seed(s, [
     {

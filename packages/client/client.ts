@@ -168,7 +168,7 @@ export let client = (
   opts: ClientOpts = {},
 ): Client => {
   // `adopt`: the numbers come from the server, not from this map.
-  let store = ram(vocab, { adopt: true })
+  let store = ram(vocab, { adopt: true, number: true })
   let g = graph({
     storage: store,
     vocab,

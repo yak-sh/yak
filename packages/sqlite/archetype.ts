@@ -140,7 +140,7 @@ let minter = (
  * vocab. Retires missing-table descriptors forever; reclassifies their owners,
  * plus null assignments, in table-sized scans. No per-owner component census.
  */
-export function backfill(driver: Driver, number = true): Backfill {
+export function backfill(driver: Driver, number = false): Backfill {
   let run: Run = (sql, params = []) => driver.query(sql, params)
   let counts: Backfill = { entities: 0, archetypes: 0, retired: 0 }
   return unit(driver, () => {
@@ -299,7 +299,7 @@ export function drift(driver: Driver, sample = 12): Drift {
 export function reclassify(
   driver: Driver,
   eids: string[],
-  number = true,
+  number = false,
 ): Bundle[] {
   if (!eids.length) return []
   let run: Run = (sql, params = []) => driver.query(sql, params)

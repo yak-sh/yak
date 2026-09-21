@@ -13,5 +13,5 @@ import { shop, store } from '../sqlite/harness.ts'
 import { ram } from './mod.ts'
 
 Deno.test('a ram graph and a sqlite graph agree, batch for batch', () => {
-  parity(rig(ram(shop)), rig(store()))
+  parity(rig(ram(shop, { number: true })), rig(store()))
 })

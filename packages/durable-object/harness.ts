@@ -223,9 +223,10 @@ export let durable = (): DurableStorage & {
   }
 }
 
-/** A ready store over that stand-in, schema installed. */
+/** A ready store over that stand-in, schema installed. The shop numbers: its
+ * entities are things a person points at by number. */
 export let store = (vocab: Vocab = shop): Store => {
-  let s = storage(durable(), vocab)
+  let s = storage(durable(), vocab, { number: true })
   s.install()
   return s
 }

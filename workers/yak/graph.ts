@@ -539,6 +539,9 @@ export class Store {
     // whatever of its words it wants found. sqlite owns no index.
     let searchable = fields(vocab)
     let store = storage(ctx.storage, vocab, {
+      // A space's entities are things a person points at by number (`T-12`),
+      // so this host opts into the human line.
+      number: true,
       extend: [search(searchable)],
       derived: { ...blobRead(vocab), ...(own ? {} : appDerived()) },
       // A body is stored as its address (@yaks/blob `store: "blob"`), so the

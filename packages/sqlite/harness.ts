@@ -119,8 +119,10 @@ let doc: VocabDoc = {
 export let shop: Vocab = loadVocab(doc)
 
 // A ready store over a fresh in-memory database with the schema installed.
+// The shop numbers: its entities are things a person points at by number, so
+// the tests over it see the human line a host opts into.
 export let store = (): Store => {
-  let s = storage(mem(), shop)
+  let s = storage(mem(), shop, { number: true })
   s.install()
   return s
 }

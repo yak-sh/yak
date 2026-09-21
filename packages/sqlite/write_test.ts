@@ -228,7 +228,7 @@ Deno.test('number:false reports explicit unnumbered births without consuming num
     s.tx((tx) => tx.patch([{ entity: { eid: 'p' }, product: { price: 3 } }])),
     [],
   )
-  let numbered = storage(driver, shop)
+  let numbered = storage(driver, shop, { number: true })
   assertEquals(
     numbered.tx((tx) => tx.patch([{ entity: { eid: 'n' }, doc: {} }])),
     [{ eid: 'n', num: 1 }],

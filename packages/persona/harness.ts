@@ -51,7 +51,7 @@ export let thin: Vocab = loadVocab(
 
 /** A graph over a fresh in-memory store. */
 export let world = (vocab: Vocab = said): Graph =>
-  graph({ storage: ram(vocab), vocab })
+  graph({ storage: ram(vocab, { number: true }), vocab })
 
 /** The storage a graph is keeping its entities in. */
 export let held = (g: Graph): Storage => g.storage

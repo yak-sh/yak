@@ -81,7 +81,8 @@ let doc: VocabDoc = {
 export let shop: Vocab = loadVocab([doc, toolsDoc])
 
 /** A graph over a fresh in-memory store. */
-export let shopGraph = (): Graph => graph({ storage: ram(shop), vocab: shop })
+export let shopGraph = (): Graph =>
+  graph({ storage: ram(shop, { number: true }), vocab: shop })
 
 /** An MCP client talking to a server over this graph, in one process. */
 export let connect = async (

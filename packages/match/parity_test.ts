@@ -42,7 +42,7 @@ let loaded = (
       exec: (q) => db.exec(q),
     },
     v,
-    { now: NOW, derived, extend: [...extend, search(text)] },
+    { now: NOW, number: true, derived, extend: [...extend, search(text)] },
   )
   s.install()
   for (let stmt of ftsSchema(text)) db.exec(stmt)

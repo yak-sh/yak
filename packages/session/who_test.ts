@@ -26,7 +26,7 @@ let vocab = loadVocab([sessionDoc, spine], [idKeywords])
 // Two runs: one the graph numbered (so a person can say `S-1`), one a harness
 // named and nothing else knows about.
 let store = () => {
-  let s = ram(vocab)
+  let s = ram(vocab, { number: true })
   let g = graph({ storage: s, vocab, plugins: [ids(vocab)] })
   g.apply([
     { entity: { eid: 's1' }, session: { id: 'abc', actor: 'p1' } },

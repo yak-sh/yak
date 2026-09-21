@@ -38,10 +38,12 @@ export type Config = {
    * minted (a uuid, a content hash) names something somebody else made, and
    * is signed with as it stands — a box that writes as a person. */
   actor?: string
-  /** whether the store mints human numbers beside eids (default true), and
-   * for which entities. `{ except: [comp, …] }` keeps a component's entities
-   * off the human number line — what a host composing @yaks/archetype wants,
-   * since a descriptor is bookkeeping and nobody ever types its number. */
+  /** whether the store mints human numbers beside eids. OPT-IN: unsaid, no
+   * entity gets one, because a number is for a person to type and most hosts
+   * have nobody typing. `{ except: [comp, …] }` turns them on while keeping a
+   * component's entities off the line — what a host composing @yaks/archetype
+   * wants, since a descriptor is bookkeeping and nobody ever types its
+   * number. */
   numbers?: boolean | { except: string[] }
   /** adopt the `num` a batch's identity carries instead of minting one — what
    * a store seeded from another store's export needs, and never what a host

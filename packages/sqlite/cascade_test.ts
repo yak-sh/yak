@@ -98,7 +98,9 @@ let wide: Vocab = loadVocab({
 let AT = '2026-03-01T00:00:00.000Z'
 
 let db = (v: Vocab = words): Store => {
-  let s = storage(mem(), v)
+  // Numbered on both sides: the casualties come back in identity order, and
+  // the two adapters must agree on what that order is.
+  let s = storage(mem(), v, { number: true })
   s.install()
   return s
 }
@@ -112,7 +114,7 @@ let both = (seed: Change, kill: Change, v: Vocab = words): Bundle[] => {
     return g.apply(kill, { now: AT }) as Bundle[]
   }
   let sql = run(graph({ storage: db(v), vocab: v }))
-  assertEquals(sql, run(graph({ storage: ram(v), vocab: v })))
+  assertEquals(sql, run(graph({ storage: ram(v, { number: true }), vocab: v })))
   return sql
 }
 

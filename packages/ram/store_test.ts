@@ -9,7 +9,11 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Storage } from '@yaks/graph'
 import { shop } from '../sqlite/harness.ts'
-import { ram, type Store } from './mod.ts'
+import { ram, type RamOpts, type Store } from './mod.ts'
+
+// The shop numbers: its entities are things a person points at by number, and
+// the sqlite store these are held against is opened the same way.
+let shopRam = (opts: RamOpts = {}) => ram(shop, { number: true, ...opts })
 
 let put = (s: Store, ...bundles: Bundle[]) => s.tx((tx) => tx.patch(bundles))
 let at = (s: Store, eid: string) => s.tx((tx) => tx.get([eid]))[0]
@@ -17,7 +21,7 @@ let comp = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? {}) as Record<string, unknown>
 
 Deno.test('a patch mints identity in first-touch order and says what it minted', () => {
-  let s = ram(shop)
+  let s = shopRam()
   let born = put(
     s,
     { entity: { eid: 'p1' }, doc: { title: 'Mug' } },
@@ -29,7 +33,7 @@ Deno.test('a patch mints identity in first-touch order and says what it minted',
 })
 
 Deno.test('a patch touches only the columns it names; null clears one', () => {
-  let s = ram(shop)
+  let s = shopRam()
   put(s, { entity: { eid: 'p1' }, product: { price: 12, status: 'live' } })
   put(s, { entity: { eid: 'p1' }, product: { price: 9 } })
   assertEquals(comp(at(s, 'p1'), 'product'), { price: 9, status: 'live' })
@@ -38,7 +42,7 @@ Deno.test('a patch touches only the columns it names; null clears one', () => {
 })
 
 Deno.test('a null component drops it, the entity survives', () => {
-  let s = ram(shop)
+  let s = shopRam()
   put(s, {
     entity: { eid: 'p1' },
     doc: { title: 'Mug' },
@@ -50,7 +54,7 @@ Deno.test('a null component drops it, the entity survives', () => {
 })
 
 Deno.test('a reference names an entity the batch mints, in any order', () => {
-  let s = ram(shop)
+  let s = shopRam()
   let born = put(s, {
     entity: { eid: 'r1' },
     review: { stars: 5, product: 'p1' },
@@ -60,7 +64,7 @@ Deno.test('a reference names an entity the batch mints, in any order', () => {
 })
 
 Deno.test('a removed entity is tombstoned, and takes no patch after', () => {
-  let s = ram(shop)
+  let s = shopRam()
   put(s, { entity: { eid: 'p1' }, doc: { title: 'Mug' } })
   s.tx((tx) => tx.remove([{ eid: 'p1' }]))
   assertEquals(at(s, 'p1'), { entity: { eid: 'p1', num: 1 }, tombstone: {} })
@@ -75,7 +79,7 @@ Deno.test('a removed entity is tombstoned, and takes no patch after', () => {
 })
 
 Deno.test('a read is the query grammar, answered from the map', () => {
-  let s = ram(shop)
+  let s = shopRam()
   put(
     s,
     { entity: { eid: 'p1' }, doc: { title: 'Mug' }, product: { price: 12 } },
@@ -92,7 +96,7 @@ Deno.test('a read is the query grammar, answered from the map', () => {
 })
 
 Deno.test('a throwing transaction leaves the map exactly as it was', () => {
-  let s = ram(shop)
+  let s = shopRam()
   put(s, { entity: { eid: 'p1' }, product: { price: 12 } })
   let before = s.read('')
   assertThrows(() =>
@@ -114,7 +118,7 @@ Deno.test('a throwing transaction leaves the map exactly as it was', () => {
 })
 
 Deno.test('a nested transaction rolls back to where it opened', () => {
-  let s = ram(shop)
+  let s = shopRam()
   s.tx((tx) => {
     tx.patch([{ entity: { eid: 'p1' }, doc: { title: 'Mug' } }])
     assertThrows(() =>
@@ -130,7 +134,7 @@ Deno.test('a nested transaction rolls back to where it opened', () => {
 })
 
 Deno.test('an outer rollback undoes what an inner transaction committed', () => {
-  let s = ram(shop)
+  let s = shopRam()
   assertThrows(() =>
     s.tx(() => {
       s.tx((inner) => inner.patch([{ entity: { eid: 'p1' }, doc: {} }]))
@@ -141,7 +145,7 @@ Deno.test('an outer rollback undoes what an inner transaction committed', () => 
 })
 
 Deno.test('a mirror adopts the number it is told, and corrects the one it guessed', () => {
-  let s = ram(shop, { adopt: true })
+  let s = shopRam({ adopt: true })
   put(s, { entity: { eid: 'p1' }, doc: { title: 'Mug' } })
   assertEquals(at(s, 'p1').entity.num, 1) // its own guess, in the meantime
   put(s, { entity: { eid: 'p1', num: 7 }, doc: { title: 'Mug' } })
@@ -152,20 +156,20 @@ Deno.test('a mirror adopts the number it is told, and corrects the one it guesse
 })
 
 Deno.test('a store nobody mirrors keeps its own numbering', () => {
-  let s = ram(shop)
+  let s = shopRam()
   put(s, { entity: { eid: 'p1', num: 7 }, doc: { title: 'Mug' } })
   assertEquals(at(s, 'p1').entity.num, 1)
 })
 
 Deno.test('a map has no schema: ddl is empty and install does nothing', () => {
   // and a Store is a Storage — the seam @yaks/graph applies changes through
-  let s: Storage = ram(shop)
+  let s: Storage = shopRam()
   assertEquals(s.ddl(), [])
   assertEquals(s.install(), undefined)
 })
 
 Deno.test('a mirror adopts an explicit unnumbered spine and corrects optimistic numbers', () => {
-  let s = ram(shop, { adopt: true })
+  let s = shopRam({ adopt: true })
   put(s, { entity: { eid: 'blob', num: null }, doc: {} })
   assertEquals(at(s, 'blob').entity, { eid: 'blob', num: null })
   put(s, { entity: { eid: 'optimistic' }, doc: {} })
@@ -176,7 +180,7 @@ Deno.test('a mirror adopts an explicit unnumbered spine and corrects optimistic 
 })
 
 Deno.test('physical eviction reserves identity and rolls back with nested transactions', () => {
-  let s = ram(shop, { adopt: true })
+  let s = shopRam({ adopt: true })
   put(s, { entity: { eid: 'p1', num: 90 }, doc: { title: 'payload' } })
   assertThrows(() =>
     s.tx((tx) => {
@@ -214,7 +218,7 @@ Deno.test('physical eviction reserves identity and rolls back with nested transa
 })
 
 Deno.test('a real delete after payload eviction still makes death permanent', () => {
-  let s = ram(shop)
+  let s = shopRam()
   put(s, { entity: { eid: 'p1' }, doc: { title: 'live' } })
   s.tx((tx) => tx.evict(['p1']))
   s.tx((tx) => tx.remove([{ eid: 'p1' }]))

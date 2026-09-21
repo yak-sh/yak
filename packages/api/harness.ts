@@ -96,10 +96,15 @@ export let shop: Vocab = loadVocab(doc)
 export let shopGraph = (): Graph => {
   let db = new Database(':memory:')
   db.exec('pragma foreign_keys = on')
-  let store = storage({
-    query: (sql, params) => db.prepare(sql).all(...params),
-    exec: (sql) => db.exec(sql),
-  }, shop)
+  // The shop numbers: a book is a thing a person points at by number.
+  let store = storage(
+    {
+      query: (sql, params) => db.prepare(sql).all(...params),
+      exec: (sql) => db.exec(sql),
+    },
+    shop,
+    { number: true },
+  )
   store.install()
   return graph({ storage: store, vocab: shop })
 }

@@ -135,7 +135,8 @@ export let d1 = (): D1Like<Prepared> => {
 
 /** A ready store over that stand-in, schema installed. */
 export let store = async (vocab: Vocab = shop): Promise<Store> => {
-  let s = storage(d1(), vocab)
+  // The shop numbers: its entities are things a person points at by number.
+  let s = storage(d1(), vocab, { number: true })
   await s.install()
   return s
 }

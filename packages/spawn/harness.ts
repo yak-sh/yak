@@ -24,7 +24,7 @@ export let host: Vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, processDoc])
 export let tracked = (): { g: Graph; fx: ReturnType<typeof effects> } => {
   let fx = effects(host, { write: (b) => g.apply(b, { trusted: true }) })
   let g = graph({
-    storage: ram(host),
+    storage: ram(host, { number: true }),
     vocab: host,
     plugins: [sessions(), processes(), fx],
   })
