@@ -70,14 +70,15 @@ statement over the arms `hits()` builds.
   rather than hashes. **`heal(db, fields, {deep})`** checks each index against
   its table — membership from the index's own `_docsize` shadow, since counting
   an external-content index only re-reads its table — and rebuilds one that
-  drifted; `deep: false` skips FTS5's whole-index integrity check for a boot
-  that cannot spare the seconds. **`adopt(db, fields, text?)`** takes a database
-  that already has search objects, cut by hand or by an earlier version, and
-  makes them equal to what `schema` says: an index whose columns match is kept
-  with its words, one that differs is re-cut and rebuilt, any trigger writing
-  into an index that is not one of the package's three is dropped (an
-  external-content index has exactly three writers; a fourth double-counts), and
-  `heal` runs last. A second call changes nothing.
+  drifted; `deep: true` adds FTS5's whole-index integrity check, which reads
+  both shadow tables whole and belongs to a maintenance pass rather than to a
+  boot. **`adopt(db, fields, text?)`** takes a database that already has search
+  objects, cut by hand or by an earlier version, and makes them equal to what
+  `schema` says: an index whose columns match is kept with its words, one that
+  differs is re-cut and rebuilt, any trigger writing into an index that is not
+  one of the package's three is dropped (an external-content index has exactly
+  three writers; a fourth double-counts), and `heal` runs last. A second call
+  changes nothing.
 - **`search(fields)`** is the [@yaks/sql](https://jsr.io/@yaks/sql) extension:
   it claims the `text` clause and compiles it to a `match` over every index.
   Every word is spelled as a quoted term, so match syntax in a search box is

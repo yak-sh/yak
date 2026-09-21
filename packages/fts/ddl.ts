@@ -143,9 +143,12 @@ export let schema = (fields: Field[], reads: Text | Derived = {}): string[] => {
 // from the table it mirrors, so it would agree with the table by construction
 // and never notice a row the triggers missed.
 //
-// The integrity check reads both shadow tables whole, which on a large index is
-// seconds of boot for damage no trigger causes; `deep: false` skips it and
-// keeps the count, which is what catches every drift a missed trigger leaves.
+// The count is the boot's question. FTS5's own integrity check reads both
+// shadow tables whole — 0.4 s on a thirty-thousand-row index, seconds on a
+// larger one — for damage no writer of ours can cause, so it is asked by a
+// caller that means it (`deep: true`) and never by the pass a command line
+// runs on its way in. The count is what catches every drift a missed trigger
+// leaves, which is the damage that actually happens.
 let fault = (
   db: Driver,
   comp: string,
@@ -168,7 +171,8 @@ let fault = (
 }
 
 export type HealOpts = {
-  // run FTS5's own integrity check beside the row count (default true)
+  // run FTS5's own integrity check beside the row count (default false) — a
+  // whole-index read, for a maintenance pass rather than a boot
   deep?: boolean
 }
 
@@ -181,7 +185,7 @@ export let heal = (
   fields: Field[],
   opts: HealOpts = {},
 ): string[] => {
-  let deep = opts.deep ?? true
+  let deep = opts.deep ?? false
   let healed: string[] = []
   for (let { comp } of indexes(fields)) {
     let before = fault(db, comp, deep)

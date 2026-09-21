@@ -4,9 +4,10 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
-import { compile } from '@yaks/sql'
+import { compile, STOCK } from '@yaks/sql'
 import memberDoc from '../member/vocab.json' with { type: 'json' }
 import { schema } from './ddl.ts'
+import { Database } from './db.ts'
 import { storage } from './mod.ts'
 import type { Driver } from './driver.ts'
 import { mem, shop } from './harness.ts'
@@ -396,4 +397,44 @@ Deno.test('a death word that moved rebuilds its table without the key', () => {
   // and the maker can go without taking the record of it
   d.exec(`delete from entity where id = 1`)
   assertEquals(d.query(`select maker from product`, []), [{ maker: 1 }])
+})
+
+Deno.test('a store over a file installs the sizes its planner reads it by', () => {
+  let path = Deno.makeTempFileSync({ suffix: '.sqlite' })
+  let db = new Database(path)
+  let d: Driver = {
+    query: (sql, params) => db.prepare(sql).all(...params),
+    exec: (sql) => db.exec(sql),
+    file: true,
+    arms: STOCK,
+  }
+  try {
+    storage(d, shop).install()
+    d.exec(`insert into entity (id, eid) values (1, 'a'), (2, 'b'), (3, 'c')`)
+    d.exec(`insert into product (entity, sku) values (1, 'x')`)
+    // A second install is what a later boot runs: the sizes are recorded
+    // there, so a query over `product` is planned as the one row it is rather
+    // than as a walk of the spine.
+    storage(d, shop).install()
+    // The first word of a `stat` is the table's row count, whether the row is
+    // an index's or the table's own.
+    let rows = (t: string) =>
+      String(
+        d.query(`select stat from sqlite_stat1 where tbl = ?`, [t])[0]?.stat,
+      )
+        .split(' ')[0]
+    assertEquals(rows('entity'), '3')
+    assertEquals(rows('product'), '1')
+  } finally {
+    db.close()
+    Deno.removeSync(path)
+  }
+})
+
+Deno.test('a store that is not a file is left unmeasured', () => {
+  let said: string[] = []
+  let d = mem()
+  storage({ ...d, exec: (sql) => (said.push(sql), d.exec(sql)) }, shop)
+    .install()
+  assertEquals(said.filter((s) => s.startsWith('pragma')), [])
 })

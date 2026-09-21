@@ -153,7 +153,12 @@ returns a `Store` — @yaks/graph's `Storage`, answered synchronously:
 
 - `ddl(): string[]` — the schema statements the vocabulary implies.
 - `install(): void` — run them (create-if-not-exists, so it is idempotent); it
-  also mints the store's epoch (see the key/value section below).
+  also mints the store's epoch (see the key/value section below) and, over a
+  driver holding a FILE, keeps the statistics the query planner reads the schema
+  with (`PRAGMA optimize`, bounded by `analysis_limit`). A component table
+  carries no secondary index, so a store with no `sqlite_stat1` is one the
+  planner sizes by its built-in million-row guess, and "the entities wearing
+  `call`" is planned as a walk of the whole spine.
 - `read(query, opts?): Bundle[]` — a query → matching entities as bundles.
 - `rows(query, opts?): Row[]` — a query → the compiled statement's raw rows (for
   counts, tallies, and field projections).

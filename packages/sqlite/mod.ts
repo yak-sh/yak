@@ -51,7 +51,15 @@ import type {
 } from '@yaks/graph'
 import type { Driver, Row } from './driver.ts'
 import type { Query } from './read.ts'
-import { grown, indexed, refit, schema, tabled, type Text } from './ddl.ts'
+import {
+  analyzed,
+  grown,
+  indexed,
+  refit,
+  schema,
+  tabled,
+  type Text,
+} from './ddl.ts'
 import { epoch } from './meta.ts'
 import { doom, read, rows } from './read.ts'
 import { keyed } from './keyed.ts'
@@ -67,6 +75,7 @@ export { GONE, OVER, type Overlay, overlay } from './overlay.ts'
 export { bindings, matched, prefixed, statement } from './rules.ts'
 export * from './bundle.ts'
 export {
+  analyzed,
   grown,
   indexed,
   META,
@@ -244,6 +253,11 @@ export let storage = (
             : base.number,
         )
       }
+      // And the SIZES those tables are read with (ddl.ts `analyzed`). An index
+      // the planner cannot size is half an index: it costs a scan of the whole
+      // spine to find the fifty thousand rows wearing a component. Last,
+      // because it measures what the statements above just raised.
+      analyzed(driver)
     },
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
     rows: (query, opts) => rows(driver, vocab, query, { ...base, ...opts }),

@@ -342,3 +342,40 @@ export let grown = (driver: Driver, vocab: Vocab): string[] => [
         .map((c) => `alter table ${q(comp)} add column ${grownDdl(c)}`)
     }),
 ]
+
+/**
+ * How many rows of each index ANALYZE samples. Bounded, because the numbers the
+ * planner needs are ORDERS OF MAGNITUDE — `call` holds fifty thousand rows and
+ * `entity` a million — and a sample of four hundred says that as well as a
+ * whole scan does. On a 1 GB graph the bounded pass costs ~110 ms where the
+ * unbounded one costs 5.4 s.
+ */
+export let SAMPLE = 400
+
+/**
+ * Keep the statistics the query planner reads this schema with.
+ *
+ * Every component table is keyed `entity integer primary key` and carries no
+ * secondary index, so without `sqlite_stat1` SQLite has nothing to size one by
+ * and falls back to its built-in guess of about a million rows for all of them.
+ * A query that says "the entities wearing `call`" is then planned as a walk of
+ * the whole spine probing `call` per row, instead of a scan of the fifty
+ * thousand `call` rows — which is how opening an imported graph came to read
+ * the archive end to end six times before answering (T-37734).
+ *
+ * `PRAGMA optimize` is what SQLite offers for exactly this: it re-analyzes a
+ * table whose size has drifted from what was recorded and does nothing at all
+ * otherwise, so this runs on every install and writes only when the numbers
+ * have moved. The mask asks after every table rather than only the ones this
+ * connection has already read — at install it has read none — and an older
+ * SQLite that does not know that bit ignores it.
+ *
+ * Only for a driver over a FILE: an engine that hands out storage rather than a
+ * database (a Durable Object's SQLite) refuses the pragma, and a scratch
+ * in-memory store is gone before a plan could be worth improving.
+ */
+export let analyzed = (driver: Driver): void => {
+  if (!driver.file) return
+  driver.exec(`pragma analysis_limit = ${SAMPLE}`)
+  driver.exec('pragma optimize = 0x10002')
+}
