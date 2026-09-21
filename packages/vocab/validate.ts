@@ -1,15 +1,16 @@
-// Validating a vocab DOCUMENT — ordinary well-formedness, the checks a store
-// runs over a hand-written app manifest, said over JSON Schema instead. Three
-// refusals, each naming the file and the fix, because the agent reading it has
-// no other source:
+// Validating a vocabulary DOCUMENT — ordinary well-formedness, the checks a
+// store runs over a hand-written app manifest, expressed over JSON Schema.
+// Three kinds of error, each naming the offending entry and the fix, because
+// the agent reading it has no other source:
 //   storable  the shape a table can lower — a top-level object of scalar / ref /
 //             enum columns, no nesting, no arrays, no recursive $ref
-//   reserved  a name the base vocabulary already owns is refused
-//   grow      evolution is ADDITIVE forever — never drop or retype a column, the
-//             rows are already written under the old word
+//   reserved  a name the base vocabulary already owns is rejected
+//   grow      evolution is ADDITIVE forever — never drop or retype a column,
+//             the rows are already written under the old type
 //
-// This is not a new security story: a hosted store lowers only its own words,
-// and these refusals are what a person's agent reads when a deploy is rejected.
+// This is not a new security story: a hosted store only creates tables for
+// components it declares, and these errors are what a person's agent reads
+// when a deploy is rejected.
 
 import type { Composite, PropSchema, VocabDoc } from './types.ts'
 import { composite, type Vocab } from './vocab.ts'
@@ -56,7 +57,7 @@ let storableProp = (
 
 // The composite index lists a component declares, both keywords together. An
 // index over a column the component never declares would emit DDL no table can
-// take, so the names are checked here where a refusal can still teach.
+// take, so the names are checked here where an error can still teach.
 let composites = (s: PropSchema): { cols: string[]; present?: string[] }[] =>
   [s.unique, s.index].flatMap((v) =>
     Array.isArray(v) ? (v as Composite[]).map(composite) : []
@@ -79,11 +80,12 @@ let storableDefault = (comp: string, prop: string, s: PropSchema): string[] => {
   ]
 }
 
-// `search` says this column's words are indexed (@yaks/fts cuts the index from
-// the declaration). Only PROSE has words: a number, a stamp, a reference and a
-// closed set are matched by their value rather than read, and a computed column
-// has no row to index — so the keyword is refused anywhere but a stored text
-// column, where it would otherwise name an index over nothing.
+// `search` declares that this column is full-text indexed (@yaks/fts builds
+// the index from the declaration). Only PROSE has words to index: a number, a
+// stamp, a reference and a closed set are matched by their value rather than
+// read, and a computed column has no stored value to index — so the keyword is
+// rejected anywhere but a stored text column, where it would otherwise declare
+// an index over nothing.
 let WORDLESS = ['date-time', 'uri', 'query', 'json']
 let searched = (comp: string, prop: string, s: PropSchema): string[] =>
   s.search !== true ||
@@ -95,12 +97,12 @@ let searched = (comp: string, prop: string, s: PropSchema): string[] =>
       `${comp}.${prop} is searched but holds no prose — "search": true is for a stored text column`,
     ]
 
-// A component wearing the whole provenance triple is a MARK — `completed`,
-// `archived`, `created` — and a mark is SIGNED, never stated: the graph fills
-// all three from the batch's clock and actor (@yaks/graph stamp.ts), so a
-// wire-writable one is a column anyone may forge and nothing will correct.
-// TWO of the three is somebody's own vocabulary — a letter's `at` and the
-// address it went `via` — and says nothing about this.
+// A component carrying the whole provenance triple is a MARK — `completed`,
+// `archived`, `created` — and the server writes a mark, never a client: the
+// graph fills all three from the batch's clock and actor (@yaks/graph
+// stamp.ts), so a client-writable one is a column anyone may forge and nothing
+// will correct. TWO of the three is somebody's own vocabulary — a letter's `at`
+// and the address it went `via` — and means nothing here.
 let PROVENANCE = ['at', 'by', 'via']
 let signed = (comp: string, s: PropSchema): string[] => {
   let props = s.properties ?? {}
@@ -110,11 +112,11 @@ let signed = (comp: string, s: PropSchema): string[] => {
   )
 }
 
-// What a component says about its own state, checked as a PAIR. Each word is
-// legal on its own — the meta-schema already refuses a misspelling — but one
-// combination is a contradiction: a relay does not own durable data, so a
-// component cannot ask the server to forward a value without keeping it AND to
-// keep it forever.
+// What a component declares about its own state, checked as a PAIR. Each
+// keyword is legal on its own — the meta-schema already rejects an unknown
+// value — but one combination is a contradiction: a relay does not own durable
+// data, so a component cannot ask the server both to forward a value without
+// storing it AND to keep it forever.
 let lived = (comp: string, s: PropSchema): string[] => {
   let errs: string[] = []
   if (s.sync != null && !SYNC.includes(s.sync as Sync)) {
@@ -135,8 +137,8 @@ let lived = (comp: string, s: PropSchema): string[] => {
   return errs
 }
 
-// The columns an identity is spelled across, both spellings together — the
-// component's list, or the columns that flagged themselves.
+// The columns an identity spans, both forms together — the component's list,
+// or the columns that flagged themselves.
 let identified = (s: PropSchema): string[] =>
   Array.isArray(s.identity) ? s.identity : Object.entries(s.properties ?? {})
     .filter(([, c]) => object(c) && c.identity === true)
@@ -147,11 +149,11 @@ let identified = (s: PropSchema): string[] =>
 export let storable = (doc: VocabDoc): string[] => {
   let errs: string[] = []
   for (let [comp, schema] of Object.entries(doc.$defs ?? {})) {
-    // What a $defs entry IS is its own to say (vocab.ts `loadVocab`): a tool
-    // declaration is checked as a tool, an ordinary subschema is checked as
-    // nothing, and only a marked component is checked as a table. An entry
-    // with columns and no marker is the forgotten marker, said once here so a
-    // deploy refuses where it can still teach.
+    // Each $defs entry declares what it is (vocab.ts `loadVocab`): a tool
+    // declaration is checked as a tool, an ordinary subschema is not checked at
+    // all, and only a marked component is checked as a table. An entry with
+    // columns and no marker is a forgotten marker, reported here so a deploy
+    // fails where the message can still teach.
     if (!object(schema) || schema.tool === true || schema.rule === true) {
       continue
     }
@@ -216,8 +218,8 @@ export let storable = (doc: VocabDoc): string[] => {
   return errs
 }
 
-// Names the base vocabulary already owns are refused — a word means the same
-// thing in every store, so an app cannot redeclare one.
+// Names the base vocabulary already owns are rejected — a component name means
+// the same thing in every store, so an app cannot redeclare one.
 export let reserved = (doc: VocabDoc, base: Iterable<string>): string[] => {
   let taken = new Set(base)
   return Object.keys(doc.$defs ?? {})
@@ -229,15 +231,15 @@ export let reserved = (doc: VocabDoc, base: Iterable<string>): string[] => {
 
 // A column's storage identity: what a retype would change under it. Enum values
 // may GROW (widening a closed set is additive); category, scalar and ref kind
-// may not move, because the rows were written under the old word.
+// may not move, because the rows were written under the old type.
 let identity = (v: Vocab, comp: string, prop: string): string => {
   let c = v.column(comp, prop)!
   return `${c.category}:${c.scalar ?? ''}:${c.ref ?? ''}`
 }
 
-// Additive evolution: `was` → `next`. A column that changed its storage identity
-// is refused; a column `next` stopped naming is refused (its rows are still
-// there); everything genuinely new is reported in `added`.
+// Additive evolution: `was` → `next`. A column that changed its storage
+// identity is rejected; a column `next` no longer declares is rejected (its
+// rows are still there); everything genuinely new is reported in `added`.
 export let grow = (
   was: Vocab,
   next: Vocab,

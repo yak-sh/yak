@@ -1,18 +1,19 @@
-// The `relation` keyword, interpreted: which components tag an edge, and what
-// each of them is called.
+// The `relation` keyword, interpreted: which components name a relation, and
+// what each of them is called.
 //
-// A relation is not a fixed list this package ships. An application declares as
-// many as it has — a blog's `links`, a bookstore's `cites`, a task board's
-// `requires` — and each is an ordinary component that says `relation` about
-// itself. Everything here reads that declaration off a loaded vocabulary;
-// nothing is hardcoded, so adding a relation is one component, not an edit
-// here.
+// The set of relations is not a fixed list this package ships. An application
+// declares as many as it has — a blog's `links`, a bookstore's `cites`, a task
+// board's `requires` — and each is an ordinary component declaring `relation`
+// about itself. Everything here reads that declaration off a loaded vocabulary;
+// nothing is hardcoded, so adding a relation means adding one component, not
+// editing this file.
 //
-// A relation has two spellings, and they may differ. The TAG is the component
-// an edge entity wears (`references`); the NAME is what a query says
-// (`referenced`). Declaring `relation: true` makes them the same word, which is
-// the common case; declaring a string names the reading. The tag is what the
-// edge's id is derived from, so the two maps below are not interchangeable.
+// A relation has two names, and they may differ. The COMPONENT NAME is the
+// component stored on the link entity (`references`); the QUERY NAME is what a
+// query uses (`referenced`). Declaring `relation: true` makes them identical,
+// which is the common case; declaring a string gives the query name. The link's
+// id is derived from the component name, so the two maps below are not
+// interchangeable.
 
 import type { Vocab } from '@yaks/vocab'
 
@@ -20,7 +21,7 @@ import type { Vocab } from '@yaks/vocab'
 export let EDGE = 'edge'
 
 /**
- * Every relation the vocabulary declares, as NAME → tag component:
+ * Every relation the vocabulary declares, as QUERY NAME → component name:
  * `{ cites: 'cites', referenced: 'references' }`. Reads the `relation` keyword,
  * so the vocabulary must have been loaded with `edgeKeywords` registered — an
  * unregistered keyword is invisible to the loader.
@@ -28,10 +29,10 @@ export let EDGE = 'edge'
 export let relations = (v: Vocab): Record<string, string> => {
   let out: Record<string, string> = {}
   for (let tag of v.all) {
-    // `edge` is the spelling — a tag says the name of the carrier it rides, so
-    // one rule reads every carrier (@yaks/key's tags say `key`). `relation` is
-    // the older word for the same slot and still means it; old spellings never
-    // die.
+    // `edge` is the keyword's current name: a component declares the name of
+    // the component it is stored beside, so one rule covers them all
+    // (@yaks/key's components declare `key`). `relation` is the older name for
+    // the same keyword and still works.
     let kw = v.comp(tag)?.keywords
     let said = kw?.edge ?? kw?.relation
     if (said === true) out[tag] = tag
@@ -41,9 +42,9 @@ export let relations = (v: Vocab): Record<string, string> => {
 }
 
 /**
- * The same declarations the other way round, as tag component → NAME. This is
- * what reads an edge BACK: a bundle wearing `references` states a `referenced`
- * link.
+ * The same declarations the other way round, as component name → QUERY NAME.
+ * This is what reads a stored link back: a bundle carrying `references` is a
+ * `referenced` link.
  */
 export let names = (v: Vocab): Record<string, string> => {
   let out: Record<string, string> = {}

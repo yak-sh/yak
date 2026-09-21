@@ -4,9 +4,10 @@ let quote = (name: string) => `"${name.replaceAll('"', '""')}"`
 
 /**
  * Component TABLES actually in the file, irrespective of the loaded vocabulary.
- * Virtual/FTS shadow tables and infrastructure are not entity facets. A facet
- * has an integer entity primary key. Tombstone and archetype ARE facets (the
- * latter's own archetype is the one-element fixed point).
+ * Virtual/FTS shadow tables and infrastructure are not component tables. A
+ * component table has an integer entity primary key. Tombstone and archetype
+ * ARE component tables (the latter's own archetype is the one-element fixed
+ * point).
  */
 export function componentTables(driver: Driver): string[] {
   let ordinary = new Set(

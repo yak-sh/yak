@@ -1,6 +1,9 @@
-// Prefix-sensitive policy: $was still reads FOUND, but these guards read what
-// earlier operations wrote. Use the same mutate/cascade primitives once per
-// operation, in the enclosing transaction; a late refusal rolls it all back.
+// Writing one operation at a time, for a plugin whose checks depend on what
+// earlier operations in the same change wrote. `$was` still compares against
+// the state before the change; these `beforeWrite` hooks see everything
+// written before them. It reuses the same mutate and cascade functions, once
+// per operation, inside the enclosing transaction — so a refusal at the end
+// rolls back everything that came before it.
 import type { Bundle } from './bundle.ts'
 import { dead } from './bundle.ts'
 import type { WriteHook } from './plugin.ts'
@@ -44,8 +47,10 @@ export let ordered = (
                   for (let eid of step.touched) {
                     st.touched.add(eid)
                   }
-                  // Cascades write outside the gathered view. Re-read after death
-                  // so the next check sees releases, detached refs and casualties.
+                  // A cascade writes rows the gather never read. Clear the
+                  // snapshot after a delete, so the next check sees the
+                  // released rows, the cleared references, and the entities
+                  // the cascade deleted.
                   if (step.killed.length) {
                     snap.got.clear()
                     snap.only?.clear()

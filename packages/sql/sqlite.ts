@@ -1,63 +1,67 @@
-// The SQLite dialect: the one place that knows how the storage layout this
-// dialect targets is LAID OUT in SQLite and how a value LOWERS to a comparison
-// there. Everything above it
-// (the binder, the IR) speaks logical (comp, prop) and an algebraic condition
-// tree; this module turns those into the table names, join keys and column
-// expressions the store actually has, and into the `cast`/`instr`/`between`
-// comparisons whose semantics match the JS matcher exactly.
+// The SQLite dialect: the one place that knows how the data is laid out in
+// SQLite, and how a value lowers to a comparison there. Everything above it
+// (the binder, the relational representation) works in terms of a component and
+// a column plus a condition tree; this module turns those into the table names,
+// join keys and column expressions the database actually has, and into the
+// `cast`/`instr`/`between` comparisons whose semantics match the JavaScript
+// matcher exactly.
 //
-// A second backend (D1 is byte-for-byte this; a Postgres port is not) is
-// another object of this shape. The IR does not change — only these lowerings.
+// A second backend (D1 is byte for byte this one; a Postgres port would not be)
+// is another object of this shape. The representation does not change — only
+// these lowerings.
 //
-// The layout, in one paragraph: every component is a TABLE named for it, keyed
-// by an integer `entity` owner column that points at the spine `entity(id)`;
-// a reference column stores the
-// referent's integer id, so reading it back as an eid is a correlated spine
-// lookup, and comparing an eid to it is an integer compare after one spine
-// lookup of the operand. A tombstoned entity keeps its spine row (its int id
-// can never recycle) but is DEAD, so every membership excludes the graves.
+// The layout, in one paragraph: every component has a TABLE named for it, keyed
+// by an integer `entity` column pointing at `entity(id)`. A reference column
+// stores the referent's integer id, so reading it back as an eid is a
+// correlated lookup in the entity table, and comparing an eid to it is an
+// integer comparison after one lookup of the operand. A deleted entity keeps
+// its row in the entity table, because its integer id must never be reused, but
+// it is listed in the `tombstone` table, so every query excludes it.
 
 import type { Column, Scalar, Vocab } from '@yaks/vocab'
 import { type Span as QSpan, timeSpan } from '@yaks/query'
 import type { Frag } from './ir.ts'
 
-// The tag a value coerces against — the vocab column category flattened to the
-// word the lowering switches on.
+// The type a value is coerced to before comparison — the vocabulary's column
+// category flattened to the one name the lowerings switch on.
 export type Tag = Scalar | 'enum' | 'eid'
 export let tagOf = (c: Column): Tag =>
   c.category == 'ref' ? 'eid' : c.category == 'enum' ? 'enum' : c.scalar!
 
 // What the binder asks a dialect for. Everything is a pure function of the
-// logical schema; nothing reads a global.
+// schema; nothing here reads global state.
 export type Dialect = {
   name: string
-  // A membership statement selects the spine and answers with one `eid` column.
+  // A query selects from the entity table and returns one `eid` column.
   spine: string
   membership: string
-  // The tombstone guard every membership ANDs in.
+  // The condition excluding deleted entities, ANDed into every query.
   live: () => Frag
   // The join source for a component and the ON key.
   table: (comp: string) => string
   // The bare table expression for a component, with no alias — what a
-  // correlated subquery names. A dialect that reads a component from
-  // somewhere else (@yaks/sqlite's batch overlay) says so here, and every
-  // subquery in the binder follows it.
+  // correlated subquery refers to. A dialect that reads a component from
+  // somewhere else (the CTEs @yaks/sqlite overlays a pending transaction with)
+  // declares that here, and every subquery in the binder follows it.
   source?: (comp: string) => string
   ownerKey: (base: string) => string
   joinOn: (comp: string, base: string) => string
-  // A column read expression. Refs project to an eid; `eid` reads the owner key;
-  // `entity` reads the spine directly. `null` if the column is not in the schema.
+  // A column read expression. A reference column is projected to an eid; `eid`
+  // reads the owner column; a column of `entity` is read from the entity table
+  // directly. `null` if the column is not in the schema.
   col: (comp: string, prop: string, v: Vocab) => string | null
-  // The stored reference key, before projecting it to an eid. Equality can
-  // look up the operand once and compare this indexed integer column.
+  // The stored reference column, before it is projected to an eid. An equality
+  // test can look the operand up once and then compare this indexed integer
+  // column.
   refCol?: (comp: string, prop: string) => string
   presence: (comp: string) => Frag
-  // The owner's archetype key; omitted by layouts without archetypes. An
-  // explicit owner is a correlated child/target, not the selected spine row.
+  // The owner's archetype column; omitted by layouts that have no archetypes.
+  // Passing an owner explicitly means a correlated child or dereference target
+  // rather than the row being selected.
   archetype?: (owner?: string) => string
-  // Value lowerings. Each returns a Frag or null when it cannot be expressed
-  // with the matcher's exact semantics (the caller then declines the whole
-  // compile — exactness or nothing).
+  // Value lowerings. Each returns a fragment, or null when it cannot be
+  // expressed with exactly the semantics the JavaScript matcher has (the caller
+  // then declines the whole compilation — exact or nothing).
   eq: (colExpr: string, value: string, tag: Tag) => Frag | null
   ne: (colExpr: string, value: string, tag: Tag) => Frag | null
   cmp: (colExpr: string, op: string, value: string, tag: Tag) => Frag | null
@@ -74,9 +78,10 @@ let table = (comp: string): string => q(comp)
 let ownerKey = (base: string): string =>
   base == 'entity' ? '"entity"."id"' : `"${base}"."entity"`
 
-// A column read, quoted. `eid` of a component is its integer owner column; a
-// reference column is an int id projected to the referent's eid through a
-// correlated spine lookup so every predicate compares eids to eids.
+// A column read, quoted. The `eid` of a component is its integer owner column;
+// a reference column holds an integer id, projected to the referent's eid
+// through a correlated lookup in the entity table, so that every predicate
+// compares eids with eids.
 let col = (comp: string, prop: string, v: Vocab): string | null => {
   if (comp == 'entity' && v.column(comp, prop)?.category != 'ref') {
     return `"entity"."${prop}"`
@@ -90,11 +95,12 @@ let col = (comp: string, prop: string, v: Vocab): string | null => {
 }
 
 /**
- * Reference equality, reading the SPINE from `from`. A reference column stores
- * an integer id, so an eid compares by looking that id up — and where the
- * spine is read from is the dialect's business, not this lowering's: a batch
- * overlay (@yaks/sqlite `prefixed`) hands its own and the comparison finds
- * entities the batch has not written yet.
+ * Reference equality, reading the entity table from `from`. A reference column
+ * stores an integer id, so comparing it to an eid means looking that eid up —
+ * and where the entity table is read from is the dialect's business, not this
+ * lowering's: @yaks/sqlite's `prefixed` passes the CTE that overlays a pending
+ * transaction, so the comparison also finds entities that transaction has not
+ * committed yet.
  */
 export let refEqAt = (from: string): Dialect['refEq'] => (c, eids, negate) => {
   let hit = `(${
@@ -111,9 +117,10 @@ let asText = (c: string) => `cast(${c} as text)`
 let numeric = (s: string) => /^-?\d+(\.\d+)?$/.test(s)
 let NUMERIC_TAGS: Tag[] = ['number', 'priority', 'bool']
 
-// A time column holds one spelling (an ISO stamp), over which lexical order is
-// chronological. Bounding a comparison to the band a canonical stamp lives in
-// excludes stored non-stamps the JS matcher's Date.parse would drop as NaN.
+// A time column holds one format (an ISO timestamp), for which lexical order is
+// chronological. Restricting a comparison to the range a canonical timestamp
+// falls in excludes stored values that are not timestamps, which the JavaScript
+// matcher's Date.parse would drop as NaN.
 let LO = '0000-01-01T00:00:00.000Z'
 let HI = '9999-12-31T23:59:59.999Z'
 let stampish = (c: string, s: Frag): Frag => ({
@@ -121,8 +128,8 @@ let stampish = (c: string, s: Frag): Frag => ({
   params: [LO, HI, ...s.params],
 })
 
-// Numeric comparison only where the whole column agrees: a numeric column
-// against a numeric operand. Anything else is refused rather than guessed.
+// A numeric comparison only where both sides are numeric: a numeric column
+// against a numeric operand. Anything else is refused rather than guessed at.
 let cmp = (
   c: string,
   op: string,
@@ -142,9 +149,10 @@ let cmp = (
     : { sql: `${asText(c)} ${op} ?`, params: [value] }
 }
 
-// eq: '' is absent-or-empty; 'x..y' / 'x...y' a range; 'a,b' any-of; else a
-// match. On a numeric column the operand must survive a round trip through JS
-// number formatting, or the honest compilation is a constant false.
+// eq: '' means absent or empty; 'x..y' / 'x...y' is a range; 'a,b' is any-of;
+// anything else is an equality test. On a numeric column the operand must
+// survive a round trip through JavaScript number formatting, or the only
+// correct compilation is a constant false.
 let eq = (c: string, value: string, tag: Tag): Frag | null => {
   if (value == '') {
     return { sql: `(${c} is null or ${asText(c)} = '')`, params: [] }
@@ -177,17 +185,19 @@ let eq = (c: string, value: string, tag: Tag): Frag | null => {
 }
 
 // != is `not eq`, and eq(null, …) is FALSE — but SQL's `not (null = ?)` is
-// NULL, which drops the rows whose component is absent. coalesce restores them.
+// NULL, which drops the rows whose component is absent. coalesce brings them
+// back.
 let ne = (c: string, value: string, tag: Tag): Frag | null => {
   let inner = eq(c, value, tag)
   return inner &&
     { sql: `(coalesce(${inner.sql}, 0) = 0)`, params: inner.params }
 }
 
-// ~= is String(v).toLowerCase().includes(needle). instr() so a wildcard needs
-// no escaping; coalesce so a missing column reads as ''. A non-ASCII needle
-// declines — SQLite's lower() is ASCII-only while JS's is Unicode, so the two
-// case foldings are not the same one and an almost-right answer is refused.
+// ~= is String(v).toLowerCase().includes(needle). instr() is used so that a
+// wildcard character needs no escaping, and coalesce so that a missing column
+// reads as ''. A non-ASCII search string declines — SQLite's lower() is
+// ASCII-only while JavaScript's is Unicode, so the two case foldings are not
+// the same, and an almost-right answer is refused.
 let ascii = (s: string) => [...s].every((ch) => ch.charCodeAt(0) < 128)
 let contains = (c: string, value: string): Frag | null =>
   !ascii(value)
@@ -199,12 +209,13 @@ let contains = (c: string, value: string): Frag | null =>
       params: [value],
     }
 
-// ---- time spans (a phrase names a range; the op picks its edge) ----
-// The band, and the edges: a span whose end is its start is an INSTANT, where
-// the `= start` arm carries the whole answer.
+// ---- time spans (a phrase names a range; the operator picks which end) ----
+// The span, and its ends: a span whose end equals its start is an instant, and
+// then the `= start` branch is the whole answer.
 type Span = { start: number; end: number }
-// The span recognizer is @yaks/query's, narrowed to the {start,end} this file
-// reads; the binder passes `now` so a phrase is placed at one fixed moment.
+// The span parser is @yaks/query's, narrowed to the {start,end} this file
+// reads; the binder passes `now` so that a phrase resolves against one fixed
+// moment.
 let spanFn = (s: string, now: number): Span | null => {
   let sp: QSpan | null = timeSpan(s, now)
   return sp ? { start: sp.start, end: sp.end } : null
@@ -262,11 +273,11 @@ export let sqlite: Dialect = {
   cmp,
   contains,
   time: (c, op, value, now) => {
-    // A comma list of phrases is
-    // any-of under `=` (none-of under `!`); anything else re-reads the whole
-    // value as one phrase; a value that is no phrase declines (the scalar road
-    // takes it). `op` is the operator spelling: '' equals, '!' not-equals, else
-    // a comparison. The span recognizer is @yaks/query's, placed at `now`.
+    // A comma-separated list of phrases is any-of under `=`, and none-of
+    // under `!`; anything else is re-read as a single phrase; a value that is
+    // not a phrase at all declines, and the ordinary scalar path handles it.
+    // `op` is the operator: '' for equals, '!' for not-equals, otherwise a
+    // comparison. The span parser is @yaks/query's, resolved against `now`.
     let phrase = (s: string): Span | null => spanFn(s, now)
     let spans = value.split(',').map(phrase)
     if (spans.every((s) => s) && (op == '' || op == '!')) {

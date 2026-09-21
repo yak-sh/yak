@@ -1,7 +1,8 @@
-// What a batch MEANS about a link: the `rules` facet a host takes
-// (`@yaks/edge/rules`). An edge's eid is derived from the sentence it states,
-// so stating one twice writes one row and unlinking is a tombstone of that
-// eid — which is a rule about a batch, not a word in a vocabulary.
+// The graph plugins this package contributes: the module a server imports at
+// `@yaks/edge/rules` to get the behaviour a write to the graph gets. A link's
+// eid is derived from its endpoints and relation, so writing the same link
+// twice writes one row and removing it clears the components of that same
+// entity — behaviour applied at write time, not a component declaration.
 
 import type { Plugin } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'

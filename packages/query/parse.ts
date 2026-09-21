@@ -1,22 +1,23 @@
-// The generic parser: a yaks query STRING to the AST. It knows the format —
-// the sigils that mark a component word, the operators, the bracket a path may
-// wear, list/range value forms, the reserved directives, how `&`, whitespace
-// and quotes separate tokens — and nothing about any schema. Where a meaning needs
-// the vocabulary (which component a bare `.status` routes to, whether a scalar
-// is a time phrase or a plain word, whether `.comments` names a reverse
-// association), the parser keeps the raw tokens and leaves the reading to a
-// downstream compiler. See README for the full handoff.
+// The parser: a yaks query STRING to the AST. It knows the format — the prefix
+// characters on a component name, the operators, the bracket a path may carry,
+// the list and range forms of a value, the reserved directives, and how `&`,
+// whitespace and quotes separate tokens — and nothing about any schema. Where a
+// meaning needs the vocabulary (which component a bare `.status` belongs to,
+// whether a scalar is a time phrase or a plain word, whether `.comments` names
+// a reverse association), the parser keeps the raw tokens and leaves the
+// reading to a compiler that has a schema. See README for the full division.
 //
-// A token is one of three things BY ITS OWN SHAPE, so nothing is ever read by
-// trying and failing: a component clause (it wears a sigil, or it carries an
-// operator), a quoted text term, or a bare word, which is a text term. A
-// malformed clause — a directive with the wrong operand, two presence filters
-// mashed together, a qualifier the clause does not take — throws where it is
-// read; it never falls back to text.
+// A token is one of three things BY HOW IT IS WRITTEN, so nothing is ever
+// parsed by trying one reading and falling back to another: a clause on a
+// component (it starts with a prefix character, or it contains an operator), a
+// quoted text term, or a bare word, which is a text term. A malformed clause —
+// a directive with the wrong operand, two presence filters run together, a
+// qualifier the clause does not take — throws where it is read; it never falls
+// back to text.
 //
 // A clause is `path [qualifiers]? operator value`. The bracket binds to the
 // PATH and is read before any operator, so `.requires[<=3]->T-42` is the path
-// `requires` qualified by a cap, then the walk operator; a bracket after the
+// `requires` with a depth cap, then the walk operator; a bracket after the
 // operator is part of the value.
 //
 // The mirror of the builders in ast.ts: `parse('.a=1 .b=2')` deep-equals
@@ -46,8 +47,8 @@ let stripQuotes = (v: string): string => {
   return m ? m[2].replace(/\\(.)/gs, '$1') : v
 }
 
-// A split on `sep` that leaves quoted runs whole — and, when asked, a path's
-// bracket, whose commas are its own arguments.
+// A split on `sep` that leaves quoted runs whole — and, when asked, leaves a
+// path's bracket whole too, since its commas separate its own arguments.
 let splitOutside = (s: string, sep: string, brackets = false): string[] => {
   let out: string[] = []
   let cur = ''
@@ -80,9 +81,9 @@ let splitOutside = (s: string, sep: string, brackets = false): string[] => {
 let LIST = 'a list has no spaces and no empty member (.status=open,wip); ' +
   'quote a value with spaces (.status="open wip")'
 
-// One atom: a range (`x..y`, or `x...y` for an exclusive end) or a scalar. The
-// range split is generic — the current matcher applies `..` to every column, so
-// recognizing it here needs no type.
+// One atom: a range (`x..y`, or `x...y` for an exclusive end) or a scalar.
+// Recognizing a range needs no type, because the current matcher applies `..`
+// to every column.
 let atom = (raw: string): Value => {
   let m = raw.match(/^(.*?)\.\.(\.?)(.*)$/s)
   if (!m) return scalar(raw)
@@ -90,9 +91,10 @@ let atom = (raw: string): Value => {
   return { kind: 'range', lo: scalar(lo), hi: scalar(hi), exclusiveEnd: !!excl }
 }
 
-// A whole value: a comma list is any-of; a lone part is its atom. A member is
-// never empty — `open,,wip` and a trailing comma are refused, not smoothed —
-// and a member holding a space was quoted, so the quotes come off here.
+// A whole value: a comma-separated list means any-of; a single part is its
+// atom. A member is never empty — `open,,wip` and a trailing comma are refused
+// rather than repaired — and a member containing a space was quoted, so the
+// quotes come off here.
 let value = (raw: string): Value => {
   let items = splitOutside(raw, ',')
   if (items.length == 1) return atom(raw)
@@ -100,26 +102,28 @@ let value = (raw: string): Value => {
   return { kind: 'list', items: items.map((s) => atom(stripQuotes(s))) }
 }
 
-// ---- component words ----
+// ---- component names ----
 
-// The shape a component clause names: dotted segments of letters, a hyphen
-// only between letters — so `.requires->x` ends its word before the arrow. A
-// token that is not this shape is a value or a word, never a path.
+// The shape of a path in a component clause: dotted segments of letters, with a
+// hyphen only between letters — so `.requires->x` ends its path before the
+// arrow. A token not of this shape is a value or a text term, never a path.
 let SEG = '[A-Za-z_]+(?:-[A-Za-z_]+)*'
 let WORD = `${SEG}(?:\\.${SEG})*`
 // A bare path so far — where a `[` opens a bracket rather than joining a value.
 let PATH = new RegExp(`^\\.?${WORD}$`)
-// A prefix SIGIL and the word it marks. `.` is the neutral one and stays
-// accepted before any other, so `+!created` and `+!.created` say the same thing.
-// `?comp` is the prefix mirror of `!comp`: optional (selected when present,
-// never filtered on) beside missing. `-comp` is the mirror of `+comp` in the
-// other direction: `+` says a component arrives, `-` says one went — so a
-// leading minus marks a word here and a bare `-word` is no longer a text term.
+// A prefix character and the component name it marks. `.` carries no meaning of
+// its own and is still accepted after any of the others, so `+!created` and
+// `+!.created` are the same clause. `?comp` is the prefix mirror of `!comp`:
+// optional (selected when present, never filtered on) against absent. `-comp`
+// is the opposite of `+comp`: `+` means a component is added, `-` means one was
+// removed — which is why a leading minus marks a component name here, and a
+// bare `-word` is no longer a text term.
 let SIGIL = new RegExp(`^(\\+!|[-!+*#$?])\\.?(${WORD})$`)
-// A component word alone, dot-marked: present. The dot is what tells `.env`
-// (this entity wears `env`) from `env` (the word, searched for).
+// A component name alone, with the leading dot: present. The dot is what tells
+// `.env` (this entity has the component `env`) from `env` (a word to search
+// for).
 let PLAIN = new RegExp(`^\\.(${WORD})$`)
-// The head of a clause: its path and the bracket it may wear.
+// The head of a clause: its path and the bracket it may carry.
 let HEAD = new RegExp(`^\\.?(${WORD})(?:\\[([^\\]]*)\\])?`)
 // The operators, longest first so `!=` is not read as `!`, `<-` not as `<`.
 let OPS = /^(!=|~=|<=|>=|->|<-|<|>|=|!|\?)/
@@ -127,7 +131,7 @@ let OPS = /^(!=|~=|<=|>=|->|<-|<|>|=|!|\?)/
 // ---- qualifiers ----
 
 // One argument of a bracket: `<=3` (an operator and a value), `key=v`, or a
-// bare `word`. Which of these a clause accepts is the clause's own business.
+// bare word. Which of these it accepts is up to the clause.
 let QUAL = new RegExp(`^(${WORD})?(!=|<=|>=|<|>|=)(.*)$`, 's')
 let qualifiers = (inside: string): Qual[] =>
   splitOutside(inside, ',').map((raw) => {
@@ -139,14 +143,14 @@ let qualifiers = (inside: string): Qual[] =>
     return { ...(key ? { key } : {}), op, value: stripQuotes(v.trim()) }
   })
 
-// A clause that takes no qualifier says so by name — a bracket it does not read
-// is never dropped, because the caller meant something by it.
+// A clause that takes no qualifier refuses one by name — a bracket it does not
+// read is never dropped, because the caller meant something by it.
 let refuse = (word: string, quals: Qual[], raw: string | undefined) => {
   if (quals.length) throw new Error(`.${word} takes no qualifier: [${raw}]`)
 }
 
-// The walk's one qualifier: its depth cap, `<=N`, at least one hop. With no
-// bracket this helper is not called: only explicit caps bring depth back.
+// The walk's one qualifier: its depth cap, `<=N`, of at least one hop. With no
+// bracket this helper is not called: only an explicit cap sets a depth.
 let cap = (word: string, quals: Qual[]): number => {
   if (!quals.length) return WALK_DEPTH
   let [q, ...more] = quals
@@ -162,31 +166,33 @@ let cap = (word: string, quals: Qual[]): number => {
 
 let path = (raw: string): string[] => raw.split('.')
 
-// The reserved words whose whole meaning is presence, so the dot-marked
-// spelling says the same thing as the older bang (`.count` = `.count!`).
+// The reserved names whose whole meaning is presence, so the dotted form means
+// the same as the older `!` form (`.count` = `.count!`).
 let PRESENCE: Record<string, Clause> = {
   count: { kind: 'count' },
   edges: { kind: 'edges', peers: [] },
   refs: { kind: 'refs', op: '!', value: '' },
 }
 
-// The entity a cursor names, read off its number or its human id (the number
-// wearing a display prefix); `undefined` for anything else, so a door refuses a
-// guessed bound rather than restarting from the front. `.after=` and a door's
-// `after=` rider read the same spelling through this one function.
+// The entity a cursor names, read from its number or its human id (the same
+// number with a display prefix); `undefined` for anything else, so a caller
+// refuses a cursor it cannot read rather than silently restarting from the
+// front. `.after=` and an HTTP endpoint's own `after=` parameter are read by
+// this one function.
 export let cursor = (val: string): number | undefined => {
   let m = val.match(/^(?:[A-Za-z]+-)?(\d+)$/)
   return m ? Number(m[1]) : undefined
 }
 
-// A component word wearing a sigil, or null when the token wears none. `!comp`
-// and `.comp` are ordinary predicates — absence and presence are questions any
-// evaluator answers from data — and the rest are words only a batch or a rule
-// can mean. `-comp` is the newest of them: absence is a question about a row,
-// a REMOVAL is a question about a batch, and no amount of reading the file
-// tells them apart.
+// A component name with a prefix character, or null when the token has none.
+// `!comp` and `.comp` are ordinary predicates — absence and presence are
+// questions any evaluator answers from stored data — and the rest mean
+// something only a write or a rule engine can act on. `-comp` is the newest of
+// them: absence is a question about a row, a REMOVAL is a question about the
+// write that took it away, and no amount of reading the stored rows tells them
+// apart.
 let sigil = (token: string): Clause[] | null => {
-  // An eid fragment is a singleton resource too; unlike a component word it
+  // An eid fragment is a singleton resource too; unlike a component name it
   // may contain (or consist entirely of) digits. The store resolves it.
   if (/^#[0-9a-f]{6,64}$/i.test(token)) {
     return [{ kind: 'resource', comp: token.slice(1) }]
@@ -217,9 +223,9 @@ let pres = (word: string): Clause => ({
   value: null,
 })
 
-// `.edges[referenced,entry.session]!` — one stored edge type, optional endpoint
-// reference: two bare qualifiers, read through the same bracket as everything
-// else. `.edges!` alone is the rider with nothing selected.
+// `.edges[referenced,entry.session]!` — one stored edge type and an optional
+// endpoint reference: two bare qualifiers, read through the same bracket as
+// everything else. `.edges!` alone carries edges back with nothing selected.
 let edgeSelect = (quals: Qual[]): Clause => {
   let [type, via, ...more] = quals
   if (!type || more.length || quals.some((q) => q.op || q.key)) {
@@ -235,12 +241,12 @@ let edgeSelect = (quals: Qual[]): Clause => {
   }
 }
 
-// One TOKEN to the clauses it contributes, or null when its shape is no clause
-// at all (a bare word) — a text term to whoever called. A directive is one
+// One TOKEN to the clauses it contributes, or null when it is not a clause at
+// all (a bare word) — which the caller reads as a text term. A directive is one
 // clause; an ordinary predicate is one clause too.
 export let parseDot = (token: string): Clause[] | null => {
-  // A bang before a child path negates the reverse existential, not its leaf.
-  // Whether the leading word names an association remains a binding question.
+  // A `!` before a child path negates the reverse existential, not its leaf.
+  // Whether the leading name is an association is still for the binder to say.
   let reverse = token.match(/^\.?([A-Za-z_]+(?:\.[A-Za-z_]+)*)!\.(.+)$/s)
   if (reverse) {
     let inner = parseDot(`.${reverse[2]}`)
@@ -266,17 +272,17 @@ export let parseDot = (token: string): Clause[] | null => {
   }
   let marked = sigil(token)
   if (marked) return marked
-  // `$x=5` — a variable and what binds it. A query that is nothing but these
-  // is a BINDINGS query, which is what a template invocation's arguments are
-  // (`+foo.bar=$x` merged with `$x=5`).
+  // `$x=5` — a variable and the value bound to it. A query consisting of
+  // nothing but these is a set of bindings, which is what the arguments to a
+  // template invocation are (`+foo.bar=$x` merged with `$x=5`).
   let bound = token.match(new RegExp(`^\\$(${SEG})=(.*)$`, 's'))
   if (bound) {
     return [{ kind: 'var', name: bound[1], value: value(bound[2]) }]
   }
-  // A sigil marks a whole word (`+doc`), and it marks a PATH that carries an
-  // operator just the same (`+doc.title=$x`): the sigil says the component is
-  // written, and the column beside it says which part. The gate is left out —
-  // an absence has no value to write.
+  // A prefix character marks a whole component name (`+doc`), and it marks a
+  // PATH carrying an operator just the same (`+doc.title=$x`): the prefix means
+  // the component is written, and the column beside it names which part of it.
+  // The gate is left out — an absence has no value to write.
   let written = token.match(/^([+*])(\.?[A-Za-z_].*)$/s)
   if (written) {
     let [, mark, rest] = written
@@ -295,14 +301,14 @@ export let parseDot = (token: string): Clause[] | null => {
         : { kind: 'mutable', comp, prop, value: c.value },
     ]
   }
-  // A bracket rides a path, and a sigil marks a whole word: `?doc[x]` is a
-  // broken clause, never a search term.
+  // A bracket belongs to a path, and a prefix character marks a whole component
+  // name: `?doc[x]` is a broken clause, never a search term.
   if (/^(\+!|[!+*#$?])\.?[A-Za-z_][^\s]*\[/.test(token)) {
     throw new Error(`not a clause: ${token}`)
   }
   // The `.` prefix is accepted everywhere and required nowhere: it keeps a URL
-  // query string's filters apart from its `page` and `per`, and a rule that
-  // never travels in a URL may drop it.
+  // query string's filters apart from its `page` and `per` parameters, and a
+  // rule that never appears in a URL can leave it off.
   let h = token.match(HEAD)
   if (!h) return null
   let [head, pathStr, bracket] = h
@@ -312,7 +318,8 @@ export let parseDot = (token: string): Clause[] | null => {
   let segs = pathStr.split('.')
 
   if (!rest) {
-    // Dot-marked, opless: presence — `.edges[cites]` being the rider's select.
+    // A leading dot and no operator: presence — `.edges[cites]` selecting one
+    // edge type is the exception.
     if (!dotted && bracket == null) return null
     if (pathStr == 'edges' && quals.length) return [edgeSelect(quals)]
     refuse(pathStr, quals, bracket)
@@ -363,19 +370,20 @@ export let parseDot = (token: string): Clause[] | null => {
       '.refs takes an id (.refs=T-3), presence (.refs) or absence (!refs)',
     )
   }
-  // `.count!` — the selection's size, naming no column, so presence is its only
-  // spelling.
+  // `.count!` — how many rows match. It names no column, so presence is the
+  // only form it has.
   if (pathStr == 'count' && op == '!') return [{ kind: 'count' }]
   // `.distinct=col` / `.tally=col` — an aggregate over one column. The column
-  // stays raw segments; whether it is one column or an illegal path is schema.
+  // stays raw segments; whether it is a single column or an invalid path is
+  // schema.
   if (pathStr == 'distinct' || pathStr == 'tally') {
     if (op != '=' || !val) {
       throw new Error(`.${pathStr} names a column: .${pathStr}=domain`)
     }
     return [{ kind: pathStr, path: path(val) }]
   }
-  // `.fields=pin.x,pin.z~` — the projection; a trailing `~` mutes a column's
-  // wake. Each column stays raw segments.
+  // `.fields=pin.x,pin.z~` — the projection; a trailing `~` keeps a column from
+  // waking a subscription. Each column stays raw segments.
   if (pathStr == 'fields') {
     if (op != '=' || !val) {
       throw new Error('.fields names columns: .fields=pin.x,pin.y')
@@ -386,19 +394,20 @@ export let parseDot = (token: string): Clause[] | null => {
     })
     return [{ kind: 'fields', fields }]
   }
-  // `.limit=200` — the window's bound. A bound that is a guess is worse than
-  // none, so a non-integer is refused, not dropped.
+  // `.limit=200` — how many rows at most. A bound that was guessed is worse
+  // than none, so a non-integer is refused rather than dropped.
   if (pathStr == 'limit') {
     if (op != '=' || !/^\d+$/.test(val)) {
       throw new Error('.limit takes a whole number: .limit=200')
     }
     return [{ kind: 'limit', n: Number(val) }]
   }
-  // `.after=13882` / `.after=T-13882` — the window's cursor. It names an ENTITY
-  // by its spine number, never a position or an order key: an evaluator derives
-  // where that entity sits in whatever order the query asked for, so one cursor
-  // spelling serves every ordering. A human id is that number wearing a display
-  // prefix, so it is read here without a store: inputs accept human ids.
+  // `.after=13882` / `.after=T-13882` — the paging cursor. It names an ENTITY
+  // by its spine number, never a position or an order key: an evaluator works
+  // out where that entity sits in whatever order the query asked for, so this
+  // one form pages every ordering. A human id is that same number with a
+  // display prefix, so it is read here without consulting the store: inputs
+  // accept human ids.
   if (pathStr == 'after') {
     let n = op == '=' ? cursor(val) : undefined
     if (n == null) {
@@ -406,7 +415,8 @@ export let parseDot = (token: string): Clause[] | null => {
     }
     return [{ kind: 'after', n }]
   }
-  // `.edges!` / `.edges.peers=status,title` — the rider.
+  // `.edges!` / `.edges.peers=status,title` — carry edges back with the
+  // answer.
   if (segs[0] == 'edges') {
     if (segs.length == 1 && op == '!' && !val) {
       return [{ kind: 'edges', peers: [] }]
@@ -426,8 +436,8 @@ export let parseDot = (token: string): Clause[] | null => {
     )
   }
 
-  // A mid-path bang was parsed above as a reverse child test. Any other
-  // operand on a presence filter is malformed.
+  // A `!` in the middle of a path was parsed above as a reverse child test. Any
+  // other operand on a presence filter is malformed.
   if (op == '!' && val) {
     throw new Error(
       `presence filters end at !: .${pathStr}!` +
@@ -437,9 +447,9 @@ export let parseDot = (token: string): Clause[] | null => {
     )
   }
 
-  // An ordinary predicate. Presence (`!`) and want (`?`) carry no value;
-  // contains (`~=`) is deliberately literal, so its value is one raw scalar;
-  // every other form parses list/range structure.
+  // An ordinary predicate. Presence (`!`) and the projection request (`?`)
+  // carry no value; contains (`~=`) is deliberately literal, so its value is
+  // one raw scalar; every other form parses list and range structure.
   if (op == '?' && val) throw new Error(`a request ends at ?: .${pathStr}?`)
   if (op == '!' || op == '?') {
     return [{ kind: 'pred', path: segs, op, value: null }]
@@ -452,10 +462,10 @@ export let parseDot = (token: string): Clause[] | null => {
 
 // The token split: whitespace and `&` both end a token; a quoted run is one
 // token even across them, and so is a bracket on a path. A quote OPENS only at
-// a token's start or right after an operator, so an apostrophe inside a word
-// (`jeff's`) stays a letter; a bracket opens only after a bare path, so one
-// inside a value is a character of the value. An unclosed quote or bracket is
-// refused: the rest of the line was not what the caller meant.
+// a token's start or immediately after an operator, so an apostrophe inside a
+// word (`jeff's`) stays a letter; a bracket opens only after a bare path, so
+// one inside a value is just a character of the value. An unclosed quote or
+// bracket is refused: the rest of the query was not what the caller meant.
 // A `(` opening a token starts a GROUP: everything to its matching `)` is one
 // token, parsed on its own (parse below), so `|` and `&` inside it bind there.
 // A `|` outside quotes, brackets and groups is its own token, the OR separator.
@@ -504,7 +514,7 @@ let tokens = (q: string): string[] => {
   return out
 }
 
-/** What a parse may say about the query it is reading. */
+/** How `parse` should read the query it is given. */
 export type ParseOpts = {
   /** whether a bare word is a full-text term (default true). A rule, or a saved
    * filter that must not quietly change meaning, passes `false`: a stray word
@@ -518,12 +528,12 @@ let VALUED = new RegExp(
   `^\\.?${WORD}(?:\\[[^\\]]*\\])?(?:!=|~=|<=|>=|->|<-|<|>|=)`,
 )
 
-// The clause parts of one token. `,` between clauses is an optional separator;
-// `,` inside a value is any-of, and POSITION is what tells them apart: commas
-// separate until a clause takes an operator, and from there the rest of the
-// token is that clause's value (`.entity,+!created` is two clauses, `.p=a,b` is
-// one). A comma inside a path's bracket is the bracket's own. A comma that
-// touches a value's edge with a bare word on the other side (`.p=a, b`,
+// The clause parts of one token. A `,` between clauses is an optional
+// separator; a `,` inside a value means any-of, and POSITION is what tells them
+// apart: commas separate until a clause takes an operator, and from there the
+// rest of the token is that clause's value (`.entity,+!created` is two clauses,
+// `.p=a,b` is one). A comma inside a path's bracket belongs to the bracket. A
+// comma at the edge of a value with a bare word on the other side (`.p=a, b`,
 // `.p=a ,b`) or nothing (`.p=a,`) is neither: it is a list broken by a space,
 // and is refused. With a clause on the other side (`.p=a, .q=b`,
 // `trashed.at=, #Actor`) it is the optional separator it looks like.
@@ -549,8 +559,8 @@ let parts = (tok: string, prev?: string, next?: string): string[] => {
   return out.filter(Boolean)
 }
 
-// One token to its clauses. A bare word is ONE thing, a text term; the
-// component it might name is the dot-marked spelling (`.entity`).
+// One token to its clauses. A bare word is only ever a text term; to name the
+// component instead, write the leading dot (`.entity`).
 let read = (tok: string, opts: ParseOpts): Clause[] => {
   if (tok == '*') return [every()]
   if (tok.startsWith('(')) return parse(tok.slice(1, -1), opts).clauses
@@ -566,25 +576,28 @@ let read = (tok: string, opts: ParseOpts): Clause[] => {
   return [text(stripQuotes(tok))]
 }
 
-/**
- * A query string to its AST. Whitespace and `&` both separate, every term
- * stands alone, and a value holding a space is quoted (`.title~="two words"`);
- * unquoted, `.title~=two words` is the filter `two` and the search term
- * `words`. Filters and text terms mix the way a search box does. A comma
- * between clauses is accepted and means nothing; inside a value it is any-of.
- *
- * A LONE `*` is the widest projection, not a word: it asks for every component
- * of every row selected. Only the whole token means it — a trailing `*` on a
- * word (`lemo*`) is still the full-text prefix term it always was.
- *
- * The empty query selects NOTHING: an empty string, or one with no clauses,
- * yields a lone `never`, so a blank board query does not stage the whole graph.
- */
 let clauses = (toks: string[], opts: ParseOpts): Clause[] =>
   toks.flatMap((tok, i) =>
     parts(tok, toks[i - 1], toks[i + 1]).flatMap((p) => read(p, opts))
   )
 
+/**
+ * A query string to its AST. Whitespace and `&` both separate terms, every term
+ * stands on its own, and a value containing a space is quoted
+ * (`.title~="two words"`); unquoted, `.title~=two words` is the filter `two`
+ * plus the search term `words`. Filters and text terms mix the way they do in a
+ * search box. A comma between clauses is accepted and means nothing; inside a
+ * value it means any-of.
+ *
+ * A `*` on its own is the widest projection, not a term: it asks for every
+ * component of every row selected. Only the whole token means that — a trailing
+ * `*` on a word (`lemo*`) is still the full-text prefix term it has always
+ * been.
+ *
+ * The empty query selects NOTHING: an empty string, or one with no clauses,
+ * returns a single `never`, so a blank saved query does not load the whole
+ * graph.
+ */
 export let parse = (q: string, opts: ParseOpts = {}): And => {
   // `|` is OR and binds LOOSER than the AND of adjacent terms: `.a=1 .b=2|.c=3`
   // is (a and b) or c. A parenthesised group is one term, so `.a=1 (.b=2|.c=3)`

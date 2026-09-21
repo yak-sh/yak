@@ -69,7 +69,8 @@ function snapshot(driver: Driver): ArchetypeSet | undefined {
 
 /**
  * A lazy, single-plan catalog snapshot. Value-only queries do not need it;
- * the first facet/kind predicate loads it and all others share that snapshot.
+ * the first component-presence or kind predicate loads it and all others share
+ * that snapshot.
  * Create one per compile, not once per connection. Compile and execute inside
  * the same transaction, so another writer cannot change the catalog between.
  */

@@ -1,10 +1,11 @@
-// The package as a graph plugin: the `edge` component, the id an edge derives
-// from its own sentence, and the refusal that keeps half-sentences out.
+// The package as a graph plugin: the `edge` component, the id a link derives
+// from its own endpoints and relation, and the check that keeps incomplete
+// links out.
 //
-// It takes the loaded vocabulary because the relations are the APPLICATION's,
-// not this package's: which components tag an edge is something only a loaded
-// vocabulary knows. So a graph is built in two steps — load the documents,
-// then hand the same vocabulary to the plugin.
+// It is given the loaded vocabulary because the relations belong to the
+// APPLICATION, not to this package: which components name a relation is
+// something only a loaded vocabulary knows. So a graph is built in two steps —
+// load the documents, then pass that same vocabulary to the plugin.
 
 import type { Plugin } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
@@ -25,9 +26,10 @@ import { edgeDoc } from './comp.ts'
  * // let g = graph({ storage, vocab, plugins: [edges(vocab)] })
  * ```
  *
- * It contributes {@link edgeDoc}, derives an edge's id from the sentence it
- * states (so a `$alias`ed link lands on the same entity every time it is
- * stated), and refuses at `mint` any edge missing an end or a relation.
+ * It contributes {@link edgeDoc}, derives a link's id from its endpoints and
+ * relation (so a link written under a `$alias` lands on the same entity every
+ * time), and rejects in the `mint` phase any edge missing an endpoint or a
+ * relation.
  */
 export let edges = (vocab: Vocab): Plugin => ({
   name: '@yaks/edge',

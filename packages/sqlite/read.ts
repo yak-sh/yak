@@ -5,10 +5,10 @@
 // that selects the matching entities' ids. This file runs that statement, then
 // gathers each matched entity's components into a bundle.
 //
-// `rows()` is the raw seam: it returns the compiled statement's rows verbatim,
+// `rows()` is the raw form: it returns the compiled statement's rows verbatim,
 // which is what aggregate and projection queries (a count, a tally, a field
-// list) want. `read()` is the whole-entity seam built on it: it takes the ids
-// `rows()` yields and reads back every component each entity wears.
+// list) want. `read()` is the whole-entity form built on it: it takes the ids
+// `rows()` returns and reads back every component each entity has.
 
 import { type And, parse } from '@yaks/query'
 import type { Column, Vocab } from '@yaks/vocab'
@@ -35,8 +35,9 @@ export type Query = string | And
 
 let ast = (q: Query): And => typeof q == 'string' ? parse(q) : q
 
-// The raw compiled rows for a query — a membership answers `{ eid }` per match,
-// an aggregate answers its value/count shape. The values ride as bound params.
+// The raw compiled rows for a query — a membership query returns `{ eid }` per
+// match, an aggregate returns its value/count shape. The values are bound as
+// parameters.
 export let rows = (
   driver: Driver,
   vocab: Vocab,
@@ -61,7 +62,7 @@ export let rows = (
 // without a registration there is nothing to select — but with one it is a
 // column like any other, and leaving it out of the bundle while the FILTER
 // resolves it would make `.task.status=open` select rows whose `status` the
-// answer does not carry.
+// result does not carry.
 let read1 = (v: Vocab, comp: string, derived: Derived): Column[] =>
   v.columns(comp).map((p) => v.column(comp, p)!)
     .filter((c) => !c.computed || derived[`${comp}.${c.prop}`])
@@ -74,7 +75,7 @@ let read1 = (v: Vocab, comp: string, derived: Derived): Column[] =>
 // expression instead — the same `derived` registry @yaks/sql consults when it
 // compiles a query (see @yaks/sql/derived.ts). That is what keeps the two
 // readers agreeing: a value the filter resolves one way cannot come back
-// gathered another. It is also the seam a content-addressed column lands on —
+// gathered another. It is also where a content-addressed column is resolved —
 // @yaks/blob registers one override per body column, and the gather returns the
 // text rather than the address the row holds.
 //
@@ -163,8 +164,9 @@ export let setSql = (
 
 /**
  * Identity, not search: these entities as they stand, whole. A tombstoned one
- * comes back wearing `tombstone` (it is still an identity, just a dead one);
- * an eid no entity wears is simply absent. This is the read `apply()` uses for
+ * comes back carrying `tombstone` (it is still an identity, just a deleted
+ * one); an eid no entity has is simply absent. This is the read `apply()` uses
+ * for
  * its precondition guard, where a query would be the wrong question.
  */
 export let get = (
@@ -238,9 +240,11 @@ export let get = (
     // Compatibility only: non-opt-in stores and raw, not-yet-backfilled rows
     // have no descriptor. A wide vocabulary is usually sparse. Ask which tables
     // have rows in
-    // this set before projecting their columns; empty facets need no joins
+    // this set before projecting their columns; empty component tables need no
+    // joins
     // or driver round trip. Short-circuit globally empty tables before walking
-    // the owners: otherwise each empty facet costs 4096 fruitless index probes
+    // the owners: otherwise each empty component table costs 4096 fruitless
+    // index probes
     // per chunk in a wide read. This is a live existence check, not a cached
     // census that could miss a newly populated table on this or another handle.
     // One owner already costs only one lookup; it needs no extra table probe.
@@ -296,19 +300,19 @@ export let get = (
 }
 
 /**
- * The death cascade's whole question, answered by statement rather than walked:
+ * The whole death cascade, computed by one statement rather than walked:
  * everything that dies with these entities, and every soft reference that has
  * to let go of them (@yaks/sql's `doomSql`/`looseSql`). @yaks/graph would
  * otherwise read once per rung of the chain — free here, a round trip each over
  * a network — and that walk is what an adapter unable to compile this still
  * gets.
  *
- * A vocabulary too wide to say in one statement (@yaks/sql `narrow`) is asked
- * in ROUNDS: each statement is transitive within its own tables, so the answer
+ * A vocabulary too wide for one statement (@yaks/sql `narrow`) is queried in
+ * ROUNDS: each statement is transitive within its own tables, so the result
  * is complete when a round turns up nothing the last one had not.
  *
  * Asked INSIDE the transaction, after the batch's patches have gone in, which
- * is what makes the answer the one the cascade wants: who points at the dying
+ * is what makes the result the one the cascade wants: who points at the dying
  * as the batch LEAVES the graph.
  */
 export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
@@ -349,7 +353,7 @@ export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
 }
 
 // The matched entities as whole bundles. Built for a membership query — one
-// that answers a set of entities; an aggregate query wants `rows()` instead.
+// that returns a set of entities; an aggregate query wants `rows()` instead.
 export let read = (
   driver: Driver,
   vocab: Vocab,

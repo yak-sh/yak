@@ -1,6 +1,6 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // blog, written as a vocabulary, over @yaks/ram. Posts that get published,
-// subscribers who get notified, and comments that exist ABOUT a post — so a
+// subscribers who get notified, and comments that point at a post — so a
 // deleted post takes its comments with it and the cascade's casualties are
 // something the tests can watch.
 
@@ -44,7 +44,7 @@ let doc: VocabDoc = {
       properties: { email: { type: 'string' } },
     },
     // The provenance @yaks/graph stamps, so the tests see the components a
-    // batch grows on its own beside the ones it was given.
+    // batch gains on its own beside the ones it was given.
     created: {
       component: true,
       type: 'object',

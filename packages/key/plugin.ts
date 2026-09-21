@@ -1,11 +1,11 @@
 // The package as a graph plugin: the `key` component, the id a key derives from
-// its own pair, the refusal that keeps half-sentences out, and the dedupe that
-// makes stating a value twice land on one entity.
+// its own kind and value, the refusal that keeps incomplete keys out, and the
+// resolution that makes claiming a value twice land on one entity.
 //
-// It takes the loaded vocabulary because the kinds are the APPLICATION's, not
-// this package's: which components tag a key is something only a loaded
-// vocabulary knows. So a graph is built in two steps — load the documents, then
-// hand the same vocabulary to the plugin.
+// It takes the loaded vocabulary as an argument because the kinds are the
+// APPLICATION's, not this package's: which components tag a key is something
+// only a loaded vocabulary knows. So a graph is built in two steps — load the
+// documents, then pass the same vocabulary to the plugin.
 
 import type { Hook, Plugin } from '@yaks/graph'
 import { then } from '@yaks/graph'
@@ -16,8 +16,8 @@ import { stated } from './guard.ts'
 import { retired, settled } from './resolve.ts'
 import { keyDoc } from './comp.ts'
 
-// The mint phase: refuse half a sentence first, so the dedupe below only ever
-// reads whole ones.
+// The mint phase: refuse incomplete keys first, so the resolution below only
+// ever reads complete ones.
 let minting = (vocab: Vocab): Hook => {
   let whole = stated(vocab)
   let once = settled(vocab)
@@ -37,10 +37,10 @@ let minting = (vocab: Vocab): Hook => {
  * ```
  *
  * It contributes {@link keyDoc}, derives a key's id from the kind and value it
- * states (so a `$alias`ed value lands on the same entity every time it is
- * stated), refuses at `mint` any key missing its kind, its value or its `of`,
- * and resolves a batch that claims a value somebody already holds onto that
- * holder.
+ * holds (so a value written under a `$alias` lands on the same entity every
+ * time it is claimed), refuses at `mint` any key missing its kind, its value or
+ * its `of`, and resolves a write claiming a value somebody already holds onto
+ * that holder.
  */
 export let keys = (vocab: Vocab): Plugin => ({
   name: '@yaks/key',

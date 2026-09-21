@@ -1,18 +1,18 @@
-// The format, taught once. The operator and directive TABLES are the source a
-// reader derives from — a help page prints them, a completion list offers
-// them — and FORMAT is the prose a door hands to whoever asked, composed from
-// those tables so the teaching cannot drift from what parse.ts reads. It
-// knows the format and nothing about any schema: which columns are times,
-// which words are kinds, and how an id resolves are a downstream door's to
-// say beside it.
+// The query format, described once. OPERATORS and DIRECTIVES are the tables
+// everything else is built from — a help page prints them, a tab-completion
+// list offers them — and FORMAT is the prose a CLI or an MCP server returns
+// when asked how a query is written, composed from those same tables so the two
+// cannot disagree. None of it knows a schema: which columns hold times, which
+// names are kinds, and how an id resolves are for a schema-aware caller to
+// describe alongside.
 
-// One spelling the format reads: how it is written, the one word it means, and
-// what it does.
+// One piece of the format: how it is written, the single word for what it is,
+// and what it does.
 export type Taught = { spell: string; word: string; means: string }
 
-// The predicate operators, in the order a hand learns them. The word is the
-// time reading (a phrase names a range, the op picks its edge), which reads
-// fine for scalars too.
+// The predicate operators, in the order someone learns them. The word is the
+// reading for a time column (a phrase names a range, and the operator picks
+// which edge of it), which reads sensibly for ordinary values too.
 export let OPERATORS: Taught[] = [
   {
     spell: '=',
@@ -43,8 +43,8 @@ export let OPERATORS: Taught[] = [
   },
 ]
 
-// The reserved words that ride a clause list and rank, project, aggregate or
-// bound rather than filter.
+// The reserved names that sit in a clause list and rank, project, aggregate or
+// bound the answer rather than filter it.
 export let DIRECTIVES: Taught[] = [
   { spell: '.order=', word: 'rank', means: 'the order the answer comes in' },
   { spell: '.near=', word: 'rank', means: 'the entity whose likeness ranks' },
@@ -86,8 +86,9 @@ export let DIRECTIVES: Taught[] = [
 
 let row = (t: Taught) => `'${t.spell}' ${t.word}: ${t.means}`
 
-// What a door prints when asked how a query is written. Every fact here is one
-// the parser enforces; a door that knows a schema says its own facts after it.
+// What a CLI or an MCP server prints when asked how a query is written. Every
+// statement here is one the parser enforces; a caller that knows a schema adds
+// its own after it.
 export let FORMAT = `Filters are dot-params: '.prop=value'. Operators — ${
   OPERATORS.map(row).join('; ')
 }.

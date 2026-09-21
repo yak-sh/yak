@@ -1,14 +1,14 @@
 // A key's identity: the kind and the value.
 //
-// A key entity is CONTENT-ADDRESSED, the way an edge is named by the sentence
-// it states and a blob by the hash of its bytes. Its content is the pair —
-// kind, value — so two writers who state the same value land on one
-// entity, a writer who wants to retire it names it without a lookup, and the
-// uniqueness of a value within its kind is a fact about ids rather than a
-// constraint somebody has to remember to declare.
+// A key entity is CONTENT-ADDRESSED, the way an edge's id is derived from the
+// two entities it links and a blob's from the hash of its bytes. Here the
+// content is the pair — kind, value — so two writers giving the same value land
+// on one entity, a writer retiring a value can name its entity without a
+// lookup, and the uniqueness of a value within its kind is a fact about ids
+// rather than a constraint somebody has to remember to declare.
 //
-// This is THE derivation. Every door computes it here, because an id computed
-// two ways is two ids.
+// This function is the only place the derivation is written, because an id
+// computed two ways is two ids.
 
 import {
   type Bundle,
@@ -21,21 +21,21 @@ import {
 import { VALUE } from './comp.ts'
 
 /**
- * The eid a value lands on: `sha256("<kind>|<value>")` worn as a UUID
- * (@yaks/graph `derivedEid` — the one derivation everything content-addressed
- * shares, so an id computed here and an id computed there are one id).
+ * The eid a value lands on: `sha256("<kind>|<value>")` formatted as a UUID
+ * (@yaks/graph `derivedEid` — the one derivation every content-addressed
+ * component shares, so an id computed here and an id computed elsewhere are the
+ * same id).
  *
- * `kind` is the TAG component the key wears, not the name a query says it
- * by: the entity is named by what it carries.
+ * `kind` is the TAG component the key carries, not the name a query uses for
+ * it: the id is derived from what the entity carries.
  */
 export let keyEid = (kind: string, value: string): Eid =>
   derivedEid(`${kind}|${value}`)
 
 /**
- * The kind tag a bundle wears, or nothing when it wears none. `tags` is
- * the vocabulary's tag → name map ({@link names}); only a declared kind
- * counts, so an ordinary component riding beside the key is not mistaken for
- * one.
+ * The kind tag a bundle carries, or nothing when it carries none. `tags` is the
+ * vocabulary's tag → name map ({@link names}); only a declared kind counts, so
+ * an ordinary component stored beside the key is not mistaken for one.
  */
 export let tagOf = (
   bundle: Bundle,
@@ -44,14 +44,14 @@ export let tagOf = (
   comps(bundle).find(([name, comp]) => comp && tags[name])?.[0]
 
 /**
- * How the `key` component names its own entity — the {@link Derive} a graph
- * consults when a key bundle arrives under a `$alias`, so the batch that states
- * a value also learns the id it landed on.
+ * How the `key` component derives its own entity's id — the {@link Derive} a
+ * graph calls when a key bundle arrives under a `$alias`, so the write that
+ * claims a value also learns the id it landed on.
  *
- * A key missing its kind or its value derives nothing (it answers `''`)
- * and the entity takes an ordinary minted id, at which point the {@link stated}
- * hook refuses the batch and says which part was missing — a much better error
- * than a key quietly named after half of itself.
+ * A key missing its kind or its value derives nothing (it returns `''`) and the
+ * entity takes an ordinary minted id, at which point the {@link stated} hook
+ * refuses the write and reports which part was missing — a much better error
+ * than a key whose id was derived from half of itself.
  */
 export let derive =
   (tags: Record<string, string>): Derive => (comp: Comp, bundle: Bundle) => {

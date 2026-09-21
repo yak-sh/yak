@@ -17,8 +17,9 @@ type Run = (
 /** Counts from a boot: existing assignments stay untouched on a repeated run. */
 export type Backfill = { entities: number; archetypes: number; retired: number }
 
-// The facet tables of a file change only with its schema, so one pragma
-// vouches for the cached list instead of a table_info per table per call.
+// The component tables of a file change only with its schema, so one
+// `pragma schema_version` validates the cached list instead of a table_info per
+// table per call.
 let facetsHeld = new WeakMap<Driver, { version: number; tables: string[] }>()
 let facets = (driver: Driver): string[] => {
   let version = Number(
@@ -50,8 +51,8 @@ let presence = (
 }
 
 // Descriptor minting shared by boot and live reclassification. A descriptor is
-// found by eid first; a bare spine that already wears facets is refused rather
-// than stolen. Meta (the set {archetype}) is its own fixed point.
+// found by eid first; a bare spine that already has component rows is rejected
+// rather than reused. The descriptor set {archetype} is its own fixed point.
 let minter = (
   run: Run,
   driver: Driver,
@@ -170,7 +171,8 @@ export function backfill(driver: Driver, number = false): Backfill {
         // A legacy blob could have been added AFTER this descriptor was born.
         // Renaming that shared spine would steal the blob's content address.
         // References to a mixed entity are ambiguous: refuse rather than guess
-        // which ones belong to the descriptor. Ordinary descriptors only wear
+        // which ones belong to the descriptor. Ordinary descriptors only
+        // carry
         // archetype and (optionally) retired.
         if (
           tables.some((t) =>
@@ -236,16 +238,16 @@ export type Drift = { checked: number; drifted: number; sample: string[] }
 
 // Owners are audited a window of ids at a time, so a half-million-entity file
 // costs one window of JS rather than the whole file: each window is a slice of
-// the same scan, taken through the integer primary key every facet table wears.
+// the same scan, through the integer primary key every component table has.
 let WINDOW = 20_000
 
 /**
  * The audit half of `reclassify`, and it writes nothing. A row written past
  * the graph must NAME its owners; a writer that forgets leaves a pointer that
- * no longer describes its entity, and both the read door and the query planner
+ * no longer describes its entity, and both the read path and the query planner
  * trust that pointer — nothing else notices. So this reads presence for EVERY
- * owner, by the same rule and the same facet list classification uses, and
- * answers where the two disagree. Descriptors are their own fixed point and
+ * owner, by the same rule and the same component list classification uses, and
+ * reports where the two disagree. Descriptors are their own fixed point and
  * are left out, exactly as `reclassify` leaves them out.
  */
 export function drift(driver: Driver, sample = 12): Drift {
@@ -291,10 +293,10 @@ export function drift(driver: Driver, sample = 12): Drift {
 
 /**
  * Classify the named entities from their physical presence, now, inside the
- * caller's transaction. For rows a host wrote past the graph (raw SQL into a
- * facet table): no queue, no triggers, the same presence rule as boot. Returns
- * the pointers that moved and any descriptor minted, as bundles a host can
- * echo. Descriptors and unknown eids are left alone.
+ * caller's transaction. For rows an application wrote past the graph (raw SQL
+ * into a component table): no queue, no triggers, the same presence rule as
+ * boot. Returns the pointers that moved and any descriptor minted, as bundles
+ * an application can broadcast. Descriptors and unknown eids are left alone.
  */
 export function reclassify(
   driver: Driver,

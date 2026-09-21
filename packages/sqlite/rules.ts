@@ -1,40 +1,41 @@
-// A rule's match, as ONE statement. @yaks/graph reads a rule's source into a
+// A rule's match, as ONE statement. @yaks/graph parses a rule's source into a
 // plan (its join.ts: patterns, gates, variables); this lowers that plan to SQL
 // through @yaks/sql's ordinary path-to-join binding, so a rule is compiled by
 // the same compiler as every other query and there is no second evaluator to
-// keep honest.
+// keep in step.
 //
-// The trick that makes several entities fit in one SELECT is the DIALECT. A
-// dialect names every table, alias, join key and column expression, and
-// @yaks/sql takes one as an option — so each pattern is bound through a
-// dialect whose names carry that pattern's prefix (`p0_doc`, `p1_entity`), and
-// the resulting relations can simply be put side by side: their FROMs cross,
-// their joins gather, their conditions AND. One statement, no candidate sets,
-// nothing gathered per rule by the host.
+// What makes several entities fit in one SELECT is the DIALECT. A dialect names
+// every table, alias, join key and column expression, and @yaks/sql takes one
+// as an option — so each pattern is bound through a dialect whose names carry
+// that pattern's prefix (`p0_doc`, `p1_entity`), and the resulting relations
+// can simply be put side by side: their FROMs cross, their joins gather, their
+// conditions AND. One statement, no candidate sets, nothing gathered per rule
+// by the caller.
 //
-// A GATE is what the design says it is: a LEFT JOIN whose owner column IS
-// NULL. It gets an alias of its own (`p0_gate_result`) because a gate is an
-// absence — the query never reads its columns, and a separate alias cannot
-// collide with a join the filter already made for the same component.
+// A GATE lowers to a LEFT JOIN whose owner column IS NULL. It gets an alias of
+// its own (`p0_gate_result`) because a gate is an absence — the query never
+// reads its columns, and a separate alias cannot collide with a join the filter
+// already made for the same component.
 //
 // A VARIABLE is a slot. `$call` alone is the pattern's entity (its integer
 // spine id); `$call` as a value is that column. Two slots sharing a name are
 // equated, which IS the join, and an id compares to an id — a reference column
 // stores the target's integer id, so joining a reference to an entity is an
 // integer compare, never an eid round trip. Mixing an id slot with a value
-// slot is refused rather than coerced.
+// slot is rejected rather than coerced.
 //
 // Run it against a batch OVERLAY (./overlay.ts) and the same statement reads
 // the graph with the batch in it. That is the whole of "rules run before
-// persistence": no flag, no second path, a different set of tables underneath
-// — the overlay is a `with` prefix of CTEs and the dialect simply points each
-// covered component's name at its CTE, so what changes is a name.
+// persistence": no flag, no second code path, a different set of tables
+// underneath — the overlay is a `with` prefix of CTEs and the dialect simply
+// points each covered component's name at its CTE, so what changes is a name.
 //
-// One clause cannot be said that way, because it is not about a row at all:
-// `-comp` asks what the batch REMOVED, and a removed row is indistinguishable
-// from a row that was never there. So the overlay keeps a list of what it
-// took and this file contributes the one lowering that reads it — an
-// @yaks/sql extension, the same seam text and vectors come in through.
+// One clause cannot be expressed that way, because it is not about a row at
+// all: `-comp` asks what the batch REMOVED, and a removed row is
+// indistinguishable from a row that was never there. So the overlay keeps a
+// list of what it removed and this file contributes the one lowering that reads
+// it — an @yaks/sql extension, the same mechanism text search and vectors are
+// added through.
 
 import type { Vocab } from '@yaks/vocab'
 import type { Binding, Bundle, Match } from '@yaks/graph'
@@ -66,7 +67,7 @@ let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
  * common. The value lowerings are untouched — what a comparison MEANS is not
  * a matter of what a table is called.
  *
- * `at` says where a component is READ from, and defaults to the component's
+ * `at` decides where a component is READ from, and defaults to the component's
  * own table. An overlay passes its own, and every table name in the statement
  * becomes that component's CTE without another line changing.
  */
@@ -93,7 +94,7 @@ export let prefixed = (pre: string, at: At = q): Dialect => {
       sql: `${q(pre + comp)}."entity" is not null`,
       params: [],
     }),
-    // No archetype key: the batch overlay mints entities that wear no
+    // No archetype key: the batch overlay mints entities that have no
     // archetype yet, and a plan that matched on one would not see them.
     archetype: undefined,
     col: (comp, prop, v) => {
@@ -128,10 +129,11 @@ export type On = { at?: At; gone?: Gone; touched?: number[] }
 export type Gone = (comp: string) => string | null
 
 // The deletion clause, lowered. `-comp` is the one question a committed row
-// cannot answer — the row is gone, and gone reads exactly like never-there —
-// so it is answered from the overlay's own list of what the batch took. With
-// no overlay under the statement nothing was removed, and the clause is false:
-// a match asked of the file outright is about what IS, never about what went.
+// cannot answer — the row is gone, and that reads exactly like never-there — so
+// it is answered from the overlay's own list of what the batch removed. With no
+// overlay under the statement nothing was removed, and the clause is false: a
+// match run against the committed rows alone is about what IS stored, never
+// about what was removed.
 let removals = (gone: Gone): Extension => ({
   name: 'gone',
   compile: {
@@ -194,9 +196,9 @@ export let statement = (
     let pre = `p${i}_`
     let d = prefixed(pre, at)
     // A bound column has to be joined, and a bind implies the component is
-    // there — so the presence says it, and @yaks/sql makes the join it always
-    // would. A component the filter already named is joined once: the binder
-    // keeps its tables in a set.
+    // there — so a presence clause is added, and @yaks/sql makes the join it
+    // always would. A component the filter already named is joined once: the
+    // binder keeps its tables in a set.
     let needs = p.binds.map((b) => vocab.aim(b.path.join('.'))).flat()
     let filter = {
       ...p.filter,
@@ -253,11 +255,11 @@ export let statement = (
     }
   })
 
-  // The ANCHOR. A rule is about a batch, not about the file: without this the
-  // same statement asks the whole graph, and a rule with a standing gate would
-  // fire on every entity that ever failed to satisfy it. So at least one of
-  // its patterns must bind an entity the batch wrote — the same thing the
-  // coded effect rules have always required, said in SQL.
+  // The ANCHOR. A rule is about a batch, not about the whole database: without
+  // this the same statement queries the whole graph, and a rule with a standing
+  // gate would fire on every entity that ever failed to satisfy it. So at least
+  // one of its patterns must bind an entity the batch wrote — the same thing
+  // the hand-written effect rules have always required, expressed in SQL.
   if (touched) {
     let ids = touched.map(() => '?').join(', ')
     conds.push(
@@ -272,7 +274,7 @@ export let statement = (
 
   // The join proper: every slot of a variable is the same value. An id and a
   // value are not comparable — a reference stores an integer, a scalar stores
-  // itself — so that is a mistake to say out loud.
+  // itself — so mixing them throws rather than compiling.
   for (let [name, held] of slots) {
     let kinds = new Set(held.map((s) => s.kind))
     if (kinds.size > 1) {
@@ -296,8 +298,8 @@ export let statement = (
 
 /**
  * Run a compiled match and read its rows back as bindings. The statement is
- * the one above; what makes it answer about a BATCH is the overlay standing
- * under it (./overlay.ts), not anything here.
+ * the one above; what makes it report on a BATCH is the overlay under it
+ * (./overlay.ts), not anything here.
  */
 export let matched = (
   driver: Driver,
@@ -320,13 +322,13 @@ export let matched = (
 }
 
 /**
- * The storage's DECLARED-RULE door (@yaks/graph `Tx.bindings`): answer every
- * match against this graph with `batch` folded in.
+ * How declared rules are evaluated (@yaks/graph `Tx.bindings`): run every match
+ * against this graph with `batch` folded in.
  *
  * One overlay for the whole set — `covers` is what the rules read — and then
- * one statement per match under it. The overlay is a `with` prefix, so it
- * costs nothing to leave standing and nothing to take down: every statement
- * here simply carries it.
+ * one statement per match under it. The overlay is a `with` prefix, so it costs
+ * nothing to build and nothing to tear down: every statement here simply
+ * carries it.
  */
 export let bindings = (
   driver: Driver,

@@ -1,21 +1,21 @@
 /**
  * @yaks/graph — the entity/component graph core: the data model every yaks
- * package shares, the wire that carries writes, and the phased, pluggable
- * `apply()` that commits them.
+ * package shares, the write format that carries changes, and the phased,
+ * pluggable `apply()` that commits them.
  *
  * ## The model
- * Everything is an ENTITY, identified by an {@link Entity} — a client-minted
- * `eid`, plus the `num` storage mints on first touch. An entity carries
- * COMPONENTS: a named bag of columns, one per component it wears. An entity
- * has no type of its own; it IS whatever components it carries. A book is a
- * `doc` plus a `book`; a review is a `doc` plus a `review`. Adding a component
- * adds a facet.
+ * Everything is an ENTITY, identified by an {@link Entity} — an `eid` the
+ * client generates, plus the `num` storage assigns the first time the entity is
+ * written. An entity has COMPONENTS: a named object of columns, one per
+ * component. An entity has no type of its own; it IS whatever components it
+ * has. A book is a `doc` plus a `book`; a review is a `doc` plus a `review`.
+ * Adding a component adds an aspect to the entity, not a subtype.
  *
- * ## The wire
- * A {@link Bundle} is one entity plus components. The identity rides IN the
- * bundle, under the `entity` key. A write is a PATCH — an omitted column is
- * untouched, a `null` column is cleared, a `null` component is dropped — and a
- * {@link Change} is a flat array of bundles applied atomically.
+ * ## The write format
+ * A {@link Bundle} is one entity plus its components. The identity is part of
+ * the bundle, under the `entity` key. A write is a PATCH — an omitted column is
+ * left alone, a `null` column is cleared, a `null` component is removed — and a
+ * {@link Change} is a flat array of bundles applied in one transaction.
  *
  * ```ts
  * import { graph } from '@yaks/graph'
@@ -26,34 +26,36 @@
  * // ])
  * ```
  *
- * Reserved keys ride beside the components as components of their own, read by
- * `apply()` rather than written as columns: `$delete` (delete the entity, also
- * spelled as a `tombstone` component), `$was` (a per-column precondition — see
- * {@link Was}), and `$actor` (who is writing — see {@link Actor}). They are the
- * PIPELINE's, and the pipeline is where they stop: the answer is the batch as
- * applied, {@link composed} one bundle per entity, carrying the components,
- * the stamps, the minted `num` and the `$alias` it was named by — and no other
+ * A few reserved keys sit beside the components and look like components, but
+ * `apply()` acts on them rather than storing them as columns: `$delete` (delete
+ * the entity, which can also be written as a `tombstone` component), `$was` (a
+ * per-column precondition — see {@link Was}), and `$actor` (who is writing —
+ * see {@link Actor}). They belong to the write pipeline and stop there: what
+ * `apply()` returns is the transaction as applied, {@link composed} into one
+ * bundle per entity, carrying the components, the columns the server set, the
+ * assigned `num` and the `$alias` the caller referred to it by — and no other
  * `$` key.
  *
  * ## Apply is pluggable, in fixed phases
  * A change runs through an ordered list of {@link Phase}s — normalize, admit,
  * precondition, mutate, cascade, stamp, journal, commit, effect, audit. The
- * order is load-bearing, so a {@link Plugin} registers a {@link Hook} against
- * a NAMED phase; the hook takes the batch and returns the batch the next phase
- * sees, which is how a hook rewrites, adds, or (by throwing) refuses. Every
- * registry is per graph instance.
+ * order matters, so a {@link Plugin} registers a {@link Hook} against a NAMED
+ * phase; the hook takes the list of changes and returns the list the next phase
+ * sees, which is how a hook rewrites it, adds to it, or (by throwing) refuses
+ * it. Every registry is per graph instance.
  *
- * A plugin may say the same thing as DATA: a {@link Rule} is a query over one
- * bundle in the batch plus what comes out (`produce` a template, `run` a
- * function), and the query's sigils are the rule — `+comp` ensures, `+!comp`
- * gates so it fires once, `*comp` declares its write set. A phase runs its
- * rules as one tick, all judged before any of them writes; the core's own
- * `created`/`updated` stamps are two such rules.
+ * A plugin can express the same thing as DATA: a {@link Rule} is a query over
+ * one bundle in the transaction plus what it produces (`produce` a template, or
+ * `run` a function), and the sigils in the query are what make it a rule —
+ * `+comp` ensures the component exists, `+!comp` also requires that it did not
+ * already, so the rule fires once, and `*comp` declares what the rule writes. A
+ * phase evaluates all of its rules against the same state before any of them
+ * writes; the core's own `created`/`updated` stamps are two such rules.
  *
  * A plugin also declares what its hooks are going to READ — `wants(bundles)`,
- * as {@link Ask}s — and `apply()` answers every plugin's asks and its own in
- * ONE gather when the transaction opens, so the phases before the patches read
- * from memory rather than a round trip each (see ./gather.ts).
+ * returning {@link Ask}s — and `apply()` satisfies every plugin's asks and its
+ * own in ONE read when the transaction opens, so the phases that run before the
+ * write read from memory instead of making a round trip each (see ./gather.ts).
  *
  * This package ships ZERO components — a vocabulary is described with
  * {@link https://jsr.io/@yaks/vocab | @yaks/vocab} and contributed by plugins

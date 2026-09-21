@@ -11,15 +11,16 @@ export type Policy = {
   sweep?: { pending: string }
   /** What this observer does, available from registry introspection. */
   doc?: string
-  /** The most attempts a run of this handler gets before it rests `failed`,
-   * where the durable tier is keeping a ledger (default `TRIES`). Said HERE,
-   * beside the handler, because how often a thing may be tried is a property
-   * of the thing — never of the one call that happens to be failing. */
+  /** The most attempts a run of this handler gets before it is left `failed`,
+   * where the durable tier is keeping a ledger (default `TRIES`). Declared
+   * HERE, beside the handler, because how often a thing may be retried is a
+   * property of the thing — never of the one call that happens to be
+   * failing. */
   tries?: number
   /** `false` where running this handler twice is not the same as running it
-   * once. A run whose lease lapsed mid-flight may already have reached the
-   * world, so it is not tried again; only a failure it REPORTED, which it did
-   * before any side effect, is. Default `true`. */
+   * once. A run whose lease expired mid-flight may already have reached an
+   * external system, so it is not tried again; only a failure it REPORTED,
+   * which it did before any side effect, is. Default `true`. */
   idempotent?: boolean
   /** Additional reads to gather for this observer in graph-plugin mode. */
   wants?: Plugin['wants']
@@ -35,9 +36,10 @@ export type Registration = Policy & {
   removed?: Handler
 }
 
-/** A registration said where it belongs — beside the component it watches.
- * A plugin hands a host a flat list of these, and the host registers each one
- * on its own registry; nobody passes a component name twice. */
+/** A registration written where it belongs — beside the component it watches.
+ * A plugin exports a flat list of these, and the process that opened the graph
+ * registers each one on its own registry; nobody passes a component name
+ * twice. */
 export type Watch = Registration & { comp: string }
 
 /** Selection and telemetry for one consumer of an external journal. */

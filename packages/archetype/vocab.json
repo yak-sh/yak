@@ -18,7 +18,7 @@
     "retired": {
       "component": true,
       "type": "object",
-      "description": "This archetype names a table no longer in the file. Kept forever, never tombstoned."
+      "description": "This archetype names a table that is no longer in the database file. Kept forever, never deleted."
     }
   }
 }

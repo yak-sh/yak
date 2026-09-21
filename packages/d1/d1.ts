@@ -6,9 +6,9 @@
 //
 // Two facts about D1 shape everything above this file:
 //
-//   IT IS ASYNC. There is no synchronous door. Every read is a round trip, so
-//   the adapter gathers what it can into one `batch()` rather than issuing a
-//   statement per question.
+//   IT IS ASYNC. There is no synchronous API. Every read is a round trip, so
+//   the adapter collects what it can into one `batch()` rather than issuing one
+//   statement at a time.
 //
 //   A BATCH IS THE ONLY TRANSACTION. `begin`, `savepoint` and their friends are
 //   not statements you may send; `batch()` runs its list sequentially inside one
@@ -16,11 +16,12 @@
 //   There is no interactive transaction — nothing holds a lock open while your
 //   code decides what to write next. ./store.ts is built around that.
 
-/** A value D1 binds: its documented type table, and nothing else. A boolean
- * rides as the 0/1 an integer column holds; bytes ride as an ArrayBuffer. */
+/** A value D1 binds: its documented type table, and nothing else. A boolean is
+ * bound as the 0/1 an integer column holds; bytes are bound as an
+ * ArrayBuffer. */
 export type D1Value = ArrayBuffer | string | number | boolean | null
 
-/** One row: a bag of column values keyed by name. */
+/** One row: its column values, keyed by column name. */
 export type Row = Record<string, unknown>
 
 /** What a run hands back — the rows it selected. */

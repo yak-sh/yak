@@ -1,16 +1,16 @@
 // The derived-column hook. Some columns are declared in a vocabulary but never
-// STORED — a vocab marks them `computed: true` — because their value is
-// computed downstream from other rows. `@yaks/sql` cannot know those formulas
-// (they belong to the application, not the schema), so it takes them from the
-// caller: a `Derived` map from `comp.prop` to the SQL expression that reads the
-// value. This is what lets a computed column compile through the index instead
-// of falling to a JS scan of every row.
+// STORED — a vocabulary marks them `computed: true` — because their value is
+// computed from other rows by the application. @yaks/sql cannot know those
+// formulas (they belong to the application, not to the schema), so the caller
+// passes them in: a `Derived` map from `comp.prop` to the SQL expression that
+// reads the value. This is what lets a computed column be filtered in SQL,
+// through an index, instead of scanning every row in JavaScript.
 //
-// A `Derived` entry also serves as a plain READ OVERRIDE for a STORED column
-// whose read differs from its storage — e.g. a column that falls back to
-// another when it was never written. The binder consults this map before the
-// ordinary column lowering, so an override wins whether or not the column is
-// `computed: true`.
+// A `Derived` entry also works as a plain READ OVERRIDE for a STORED column
+// that is read differently from how it is stored — for instance a column that
+// falls back to another one when it was never written. The binder consults this
+// map before the ordinary column lowering, so an override wins whether or not
+// the column is `computed: true`.
 //
 // Example — a computed `order.total`, summed from the order's line items:
 //
@@ -25,30 +25,33 @@
 
 import type { Tag } from './sqlite.ts'
 
-// One derived column. `expr(owner)` builds the read expression given the SQL
-// that names THIS entity's integer owner id (the top-level owner, or a path's
-// target int); `tag` is how a value coerces against it; `values` optionally
-// carries the enum members; `deps` names extra component tables the expression
-// reads and the binder must therefore LEFT JOIN.
+// One derived column. `expr(owner)` builds the read expression, given the SQL
+// that names THIS entity's integer id (the row being selected, or the integer
+// id a path dereferenced to); `tag` is the type a value is coerced to before it
+// is compared; `values` optionally lists the enum members; `deps` names extra
+// component tables the expression reads, which the binder must therefore LEFT
+// JOIN.
 export type DerivedCol = {
   tag: Tag
   values?: string[]
   deps?: string[]
   expr: (owner: string) => string
-  // A swapped stored value resolved without looking up its owner. FTS triggers
-  // must read old/new values (the owner may already be changed or deleted),
-  // so an owner-based expression alone cannot safely maintain their index.
+  // Reads a value that is being replaced, without looking up the owner row.
+  // Full-text-search triggers have to read the old and new values, and by then
+  // the owner row may already have changed or been deleted, so an expression
+  // that starts from the owner cannot safely maintain their index.
   text?: (stored: string) => string
-  // Whether the component must be WORN for this expression to answer. A
-  // qualified path names its component as much as its column, so by default
-  // the binder reads this column as NULL for a row without it — the way every
-  // stored column reads through the left join. `false` says this read answers
-  // for such a row too: `updated.at` coalescing to `created.at`, because being
-  // made is the last time an untouched row changed. Default true.
+  // Whether the entity must HAVE the component for this expression to return a
+  // value. A qualified path names its component as much as its column, so by
+  // default the binder reads this column as NULL for an entity without the
+  // component — the same answer every stored column gives through its LEFT
+  // JOIN. `false` means this expression returns a value for such an entity as
+  // well: `updated.at` falling back to `created.at`, because being created is
+  // the last time an untouched row changed. Defaults to true.
   worn?: boolean
 }
 
-// The registry a caller supplies to `compile`, keyed `comp.prop`. `compile`
-// takes no derived columns by default; an application with computed columns
-// passes its own registrations in.
+// The registry a caller passes to `compile`, keyed by `comp.prop`. `compile`
+// has no derived columns by default; an application with computed columns
+// passes its own in.
 export type Derived = Record<string, DerivedCol>

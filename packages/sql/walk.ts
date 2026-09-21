@@ -1,17 +1,18 @@
-// The transitive walk compiled: `.requires[<=3]->T-42` is one recursive CTE,
-// seeded at the target and stepped backward along the arrow, so every step is
-// a seek on the STEP relation's own endpoint column rather than a scan. The
-// default UNION dedupes on id alone: cycles terminate and DAG merges never
-// re-expand a node at different depths. The outer LIMIT stops the FIFO queue
-// at the nearest WALK_LIMIT non-seed nodes. Only an explicit cap adds depth;
-// its arithmetic bounds the recursion.
+// The transitive walk compiled: `.requires[<=3]->T-42` becomes one recursive
+// CTE, seeded at the target entity and stepped backward along the reference, so
+// every step is an index seek on the step relation's own endpoint column rather
+// than a scan. The default UNION deduplicates on id alone, so cycles terminate
+// and a node reachable by two paths of different lengths is never expanded
+// twice. The outer LIMIT stops the queue at the nearest WALK_LIMIT nodes,
+// excluding the seed. Only an explicit depth cap in the query adds a depth
+// column; its arithmetic then bounds the recursion.
 //
-// What differs between the two walk shapes is only the STEP: the relation of
-// `"from"`/`"to"` integer-id pairs one hop follows. An edge-typed walk's step
-// is the edge table narrowed to one tag (@yaks/edge supplies it through the
-// extension seam); a column walk's step is a component's own reference column
-// beside its owner (bind.ts supplies it). Both land here, so the CTE is written
-// once.
+// The only difference between the two kinds of walk is the STEP: the relation
+// of `"from"`/`"to"` integer id pairs that one hop follows. For an edge-typed
+// walk the step is the edge table narrowed to one edge type, which @yaks/edge
+// supplies as an extension; for a column walk it is a component's reference
+// column beside its owner column, which bind.ts supplies. Both end up here, so
+// the CTE is written once.
 //
 //   ->  the candidate REACHES the target: seed the target, follow `to` → `from`
 //   <-  the target reaches the candidate: seed the target, follow `from` → `to`
@@ -20,8 +21,9 @@ import { type Walk, WALK_LIMIT } from '@yaks/query'
 import { type Cond, type Frag, raw } from './ir.ts'
 import { identity } from './ident.ts'
 
-// The seed: the target's spine row, named by eid or by human id (`T-42` is the
-// entity numbered 42 — @yaks/id), so one spelling serves both.
+// The seed: the target's row in the entity table, named by eid or by a
+// human-readable id (`T-42` is the entity numbered 42 — @yaks/id), so one
+// syntax serves both.
 let seed = (target: string): Frag => {
   let id = identity('eid', target)
   if (!id) return { sql: 'eid = ?', params: [target] }
@@ -33,10 +35,11 @@ let seed = (target: string): Frag => {
 }
 
 /**
- * The closure as a one-column (`id`) relation. Storage readers that need the
- * reached ids and membership predicates share this statement, including seed
- * resolution, cycle handling, explicit hop caps and the default row valve.
- * `step` projects `"from"`/`"to"` integer owner ids.
+ * The set of reachable entities as a relation of one `id` column. Callers that
+ * need the reached ids and callers that need a membership condition share this
+ * one statement, including how the seed is resolved, how cycles are handled,
+ * the explicit hop cap and the default row limit. `step` must project
+ * `"from"`/`"to"` integer owner ids.
  */
 export let walkRows = (c: Walk, step: string): Frag => {
   let [here, there] = c.dir == '->' ? ['to', 'from'] : ['from', 'to']
@@ -60,8 +63,8 @@ export let walkRows = (c: Walk, step: string): Frag => {
 }
 
 /**
- * The membership condition a walk compiles to: `owner in (<closure>)`, where
- * `owner` names the candidate row's integer id.
+ * The membership condition a walk compiles to: `owner in (<reachable ids>)`,
+ * where `owner` is the SQL naming the candidate row's integer id.
  */
 export let walkSql = (owner: string, c: Walk, step: string): Cond => {
   let rows = walkRows(c, step)

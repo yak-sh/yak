@@ -1,23 +1,23 @@
-// What an agent may ASK for here: the `tools` facet a host takes
-// (`@yaks/effects/tools`) — the run behind the `effect_check` declaration in
-// ./vocab.json. One tool, and it is a CHECK: a tool whose verb is `check`,
-// which is the whole of what a "doctor" is (@yaks/tools ./check.ts).
+// The tool an agent can call here: the module exported as
+// `@yaks/effects/tools`, holding the implementation behind the `effect_check`
+// declaration in ./vocab.json. One tool, and it is a CHECK — a tool whose verb
+// is `check`, which is all a "doctor" command is (@yaks/tools ./check.ts).
 //
-// The ledger is written for exactly this. ./durable.ts tries a run that did
-// not land again, backing off between attempts, and when its last one is
+// The ledger is written for exactly this. ./durable.ts retries a run that did
+// not complete, backing off between attempts, and when its last attempt is
 // spent marks the row `failed` with the error beside it and LEAVES IT FOR A
-// HUMAN. Nothing in that sentence tells the human. This does.
+// HUMAN. Nothing in that sequence tells the human. This does.
 //
 // The other half is a row that never got that far: `pending` is written before
 // the handler runs and marked after, so a row that has been waiting since long
 // before it came due means nobody is running effects at all — the registry's
-// process died, or a host was composed with a ledger and no sweep. That
-// failure is silent from every other angle: the writes commit, the graph looks
-// normal, the mail just never leaves.
+// process died, or the application was built with a ledger and no sweep. That
+// failure is invisible from every other angle: the writes commit, the graph
+// looks normal, the mail just never goes out.
 //
 // A graph with no `effect` component keeps no ledger, which is a legitimate
-// composition (at-most-once in memory, nothing written down) and not a fault —
-// the check says so and finds nothing.
+// configuration (at-most-once in memory, nothing written down) and not a fault
+// — the check reports that and finds nothing.
 
 import { and, eq } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -27,7 +27,7 @@ import { checked, type Finding } from '@yaks/tools'
 import type { Vocab } from '@yaks/vocab'
 import { EFFECT } from './durable.ts'
 
-/** What a config says to `@yaks/effects`'s check. */
+/** What configuration this package's check accepts. */
 export type Options = {
   /** how long a run may sit pending PAST ITS DUE INSTANT before that means
    * nothing is dispatching, in minutes (default 10) */
@@ -49,7 +49,7 @@ let some = (rows: Bundle[], id: (b: Bundle) => string, sample: number) => {
   return `${shown}${rest > 0 ? `, and ${rest} more` : ''}`
 }
 
-/** The run behind the tool ./vocab.json declares. */
+/** The implementation behind the tool ./vocab.json declares. */
 export let runs = (
   host: { vocab: Vocab },
   options: Options = {},
@@ -58,7 +58,8 @@ export let runs = (
     let about = 'every effect run reached an end somebody would hear about'
     if (!host.vocab.comp(EFFECT)) {
       // Not a fault: an application that wants at-most-once in memory loads no
-      // `effect` component, so there is nothing written down to be behind on.
+      // `effect` component, so there is nothing written down to fall behind
+      // on.
       return checked(ctx.call, about, [])
     }
     let id = human(host.vocab)
@@ -68,8 +69,8 @@ export let runs = (
     let stuck = (await ctx.read(and(eq(`${EFFECT}.state`, 'pending'))))
       .filter((b) => {
         // Since WHEN it has been waiting: a failure that reported is owed its
-        // run at `next`, not at the instant the run was first written down —
-        // a backoff is not a symptom.
+        // next run at `next`, not at the instant the run was first written
+        // down — a backoff is not a symptom.
         let row = comp(b)
         let at = Date.parse(String(row?.next ?? row?.at ?? ''))
         return !isNaN(at) && at < cutoff

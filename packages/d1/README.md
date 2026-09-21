@@ -118,21 +118,21 @@ A transaction here is **deferred-write**:
 
 Every statement is written to be self-sufficient so that it can wait: an owner
 id is a subquery (`select id from entity where eid = ?`) rather than a value
-looked up first, so a batch that mints an entity and then points at it resolves
-inside the batch, in order, with no round trip. Those statements are
+looked up first, so a batch that creates an entity and then points at it
+resolves inside the batch, in order, with no round trip. Those statements are
 [@yaks/sqlite](https://jsr.io/@yaks/sqlite)'s — one write path, run one at a
 time over an embedded engine and gathered into a batch here — so a patch cannot
 mean one thing in one store and something else in another.
 
-**Read-your-own-writes** is answered from an overlay, not from the database.
-`apply()` needs it — the death cascade asks who points at a dying entity _after_
-the batch's own patches have gone in — so every entity the transaction has
-written is kept in memory as it will be once the batch lands, and a read inside
-the transaction is the committed answer with those entities replaced by their
-pending state, re-judged with [@yaks/match](https://jsr.io/@yaks/match) (the
-same query grammar the database answers). A transaction that has not written
-anything yet never routes a query through the overlay, and reads exactly as the
-database does.
+**Read-your-own-writes** is served from an in-memory overlay, not from the
+database. `apply()` needs it — the cascading delete has to find who points at a
+deleted entity _after_ the batch's own patches have been applied — so every
+entity the transaction has written is held in memory in the state it will have
+once the batch commits, and a read inside the transaction returns the committed
+result with those entities replaced by their pending state, re-evaluated with
+[@yaks/match](https://jsr.io/@yaks/match) (the same query grammar the database
+implements). A transaction that has not written anything yet never routes a
+query through the overlay, and reads exactly as the database does.
 
 ### What is not promised
 
@@ -141,22 +141,22 @@ database does.
   read and the flush another writer may move what was read. This is
   read-committed with an atomic write batch.
 - **`$was` is exact against your own concurrency, best-effort against a
-  simultaneous writer.** The precondition guard reads the current value and
-  refuses the batch if it moved — which catches every stale write it can see —
+  simultaneous writer.** The precondition check reads the current value and
+  rejects the batch if it changed — which catches every stale write it can see —
   but the window between that read and the flush is not locked, so a writer who
   commits inside that window is not detected. Over @yaks/sqlite the same guard
   is exact. If a lost update is unacceptable for a given column, D1 is the wrong
   store for it.
-- **A minted `num` is not known until the batch lands.** SQLite picks it when
-  the insert runs — inside the batch's own transaction, so it is exact under a
-  concurrent writer, and nothing has to read a high-water mark first. `patch`
-  reports each minted entity without a number and the flush fills it in from
-  that insert's `returning`, before `tx()` settles.
+- **A new entity's `num` is not known until the batch commits.** SQLite assigns
+  it when the insert runs — inside the batch's own transaction, so it is exact
+  under a concurrent writer, and nothing has to read a high-water mark first.
+  `patch` returns each newly created entity without a number, and the flush
+  fills it in from that insert's `returning`, before `tx()` resolves.
 - **A nested `tx()` is a separate batch.** D1 has no savepoints. Nothing in
   `apply()` nests one.
 
-The failure D1 cannot prevent is a lost update nobody noticed. The failure it
-_does_ prevent — a half-written batch — is prevented completely.
+The failure D1 cannot prevent is a lost update that nothing detects. The failure
+it _does_ prevent — a half-written batch — it prevents completely.
 
 ### Ordering within a transaction
 
@@ -177,25 +177,25 @@ One of three interchangeable adapters behind the same `Storage` interface:
   reference every adapter is held to.
 
 The schema is @yaks/sqlite's: D1 _is_ SQLite, so the DDL a vocabulary implies is
-derived in one place and this package runs it. The per-component gather is
-shared the same way, so a column the filter resolves one way cannot come back
-gathered another — and so is the write path, statement for statement. What this
-package owns is the round-trip shape — a whole bundle, however many components,
-is gathered in one `batch()` rather than one statement at a time — and the
-transaction above.
+derived in one place and this package runs it. The per-component read is shared
+the same way, so a column the filter resolves one way cannot be read back
+differently — and so is the write path, statement for statement. What this
+package owns is the number of round trips — a whole bundle, however many
+components, is read in one `batch()` rather than one statement at a time — and
+the transaction described above.
 
 ## Types
 
-Shipped source names only the Workers runtime API and standard web APIs; the D1
-surface is declared structurally (`D1Like`, `Stmt`) so nothing here depends on
-Cloudflare at runtime. `conform.ts` checks those declarations against
+The published source uses only the Workers runtime API and standard web APIs;
+the D1 interface is declared structurally (`D1Like`, `Stmt`) so nothing here
+depends on Cloudflare at runtime. `conform.ts` checks those declarations against
 `@cloudflare/workers-types` itself, under its own `deno check` (the runtime's
 types are globals, so one file includes them and the rest of the repo does not).
 
 A prepared statement is a **type parameter** rather than a narrowed slice,
 because it is both what `prepare` returns and what `batch` takes — a slice would
 have to be a supertype and a subtype of `D1PreparedStatement` at once. The
-adapter treats a statement as opaque: it binds values, runs it, or hands it
+adapter treats a statement as opaque: it binds values, runs it, or passes it
 back.
 
 ## Compatibility
@@ -209,5 +209,5 @@ binding is structural, on **Deno** and **Node** against any object with the same
 D1's own type table, applied at the edge: `null`, numbers, strings and booleans
 bind as they are (a boolean stores as 0/1); a `bigint` becomes a number, which
 D1 requires; a `Uint8Array` becomes the `ArrayBuffer` it is a window onto. On
-the way back, a BLOB — which D1 hands over as an array of byte values — becomes
-bytes again, so a caller never learns which database answered.
+the way back, a BLOB — which D1 returns as an array of byte values — becomes
+bytes again, so a caller cannot tell which database served the read.

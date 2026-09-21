@@ -1,31 +1,34 @@
-// The door an effect writes back through, and the thing that stops it looping.
+// How an effect writes back, and what stops it looping.
 //
 // A handler that only READS is served by the detached transaction it already
-// holds. A handler that WRITES is a different animal: `tx.patch` puts rows
-// straight into storage, under the whole pipeline — no admission, no stamps,
-// no journal row, no subscriber told, and no other effect ever hearing about
-// it. The outcome of a letter became a row a page found on its next query
-// instead of a frame it was handed (T-34044). So an effect's write is a NEW
-// BATCH through the graph's own `apply()`, after the commit that woke it.
+// holds. A handler that WRITES is a different matter: `tx.patch` puts rows
+// straight into storage, underneath the whole pipeline — no admission, no
+// stamped columns, no journal row, no subscriber notified, and no other effect
+// ever hearing about it. That is how the outcome of a letter became a row a
+// page only found on its next query, instead of an update it was pushed
+// (T-34044). So an effect's write is a NEW BATCH — a list of changes applied in
+// one transaction — through the graph's own `apply()`, after the commit that
+// triggered the handler.
 //
-// That is a loop waiting to happen, and it is stopped HERE rather than by a
-// rule in every handler. Each batch carries how deep in effect-written
-// GENERATIONS it is, under `$effect`: a `$`-key, so it is `apply()`'s pipeline
-// and never a column — the same trick `$before` uses to carry a reading from
-// one phase to a later one. The registry wakes nobody for a batch past the
-// depth it allows, so an effect that writes what it watches runs a bounded
-// number of times and stops, whatever it writes and however it is registered.
+// That invites a loop, and the loop is stopped HERE rather than by a rule in
+// every handler. Each batch records how many effect-written GENERATIONS deep it
+// is, under `$effect`: a `$`-prefixed key, so it belongs to `apply()`'s
+// pipeline and is never a column — the same mechanism `$before` uses to carry a
+// reading from one phase to a later one. The registry triggers nothing for a
+// batch past the depth it allows, so an effect that writes the component it
+// watches runs a bounded number of times and stops, whatever it writes and
+// however it is registered.
 
 import type { Bundle } from '@yaks/graph'
 
 /**
  * A write from inside an effect: one new batch through the graph's own
- * `apply()`, post-commit, answering with the batch as applied.
+ * `apply()`, post-commit, returning the batch as applied.
  *
- * The host supplies it ({@link Opts.write}), because only the host knows which
+ * The application supplies it ({@link Opts.write}), because only it knows which
  * graph and in whose name. It writes as the KERNEL — the server itself, not the
- * client whose batch woke the effect — so it must be applied `trusted`: an
- * outcome an effect stamps (`delivered`, `bounced`) is a server-owned column,
+ * client whose batch triggered the effect — so it must be applied `trusted`: an
+ * outcome an effect records (`delivered`, `bounced`) is a server-owned column,
  * and an untrusted apply would drop exactly the columns the effect exists to
  * write.
  *
@@ -40,8 +43,8 @@ export type Write = (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
  * it. */
 export let ORIGIN = '$effect'
 
-/** How deep in effect-written batches this one is: `0` for a batch that
- * arrived at a door, `1` for an effect's own write, one more for each write an
+/** How deep in effect-written batches this one is: `0` for a batch that came
+ * from a client, `1` for an effect's own write, one more for each write an
  * effect makes about that one. */
 export let generation = (bundles: Bundle[]): number =>
   Number(bundles.find((b) => b[ORIGIN] != null)?.[ORIGIN] ?? 0)

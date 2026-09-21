@@ -1,7 +1,7 @@
-// The batch as a WORLD. A rule is a query, and a query reads tables — so for a
-// rule to be judged against a batch that has not been written yet, the batch
-// has to BE a table. This file makes it one: a `with` prefix of common table
-// expressions, one per component the batch moved, each saying
+// The batch as a set of tables. A rule is a query, and a query reads tables —
+// so for a rule to be evaluated against a batch that has not been written yet,
+// the batch has to BE a table. This file makes it one: a `with` prefix of common
+// table expressions, one per component the batch moved, each selecting
 //
 //   the committed rows the batch did not touch    +    the batch's own rows
 //
@@ -9,12 +9,12 @@
 // is created, nothing is dropped, and nothing outside the statement can see
 // it: the overlay is part of the query, not a state the database is left in.
 //
-// It was temp tables shadowing the real ones once, which was neater to read
-// and wrong in the one place it had to work: a Durable Object's SQLite refuses
+// This used to be temp tables shadowing the real ones, which was neater to read
+// and wrong in the one place it had to work: a Durable Object's SQLite rejects
 // a temp object outright (`not authorized: SQLITE_AUTH`), and a rule that only
 // runs on a server is not the rule this graph wanted. A CTE runs everywhere
-// SQL does, and it took the shadowing hazard with it — while a temp table
-// stood, an unqualified INSERT would have landed in it.
+// SQL does, and it removed the shadowing hazard along with it — while a temp
+// table stood, an unqualified INSERT would have landed in it.
 //
 // A patch is a PATCH, so a touched row is the committed row with the patch
 // folded in — merged here, once, rather than by every rule. A `comp: null`
@@ -22,15 +22,15 @@
 // no row of its own. A deleted entity leaves the spine the same way, so every
 // membership loses it.
 //
-// What DROPPED is a second reading of the same batch, and it needs its own
-// table: once a row is out of the overlay, "it is not there" and "the batch
-// took it" are the same silence, and `-comp` (@yaks/query) asks the second.
-// So each dropped component gets a list of the entities it left — the only
-// question here that a committed table can never answer, since the answer is
-// exactly what is no longer in one. A tombstoned entity's own components are
-// NOT enumerated: nothing matches a dead entity anyway (every statement here
-// is `live()`-guarded), and what a bare tombstone carried is known to whoever
-// read it before the batch, not to the batch.
+// What the batch DROPPED is a second reading of the same batch, and it needs
+// its own table: once a row is out of the overlay, "it is not there" and "the
+// batch removed it" look identical, and `-comp` (@yaks/query) asks the second.
+// So each dropped component gets a list of the entities it was removed from —
+// the only question here a committed table can never answer, since the answer
+// is exactly what is no longer in one. A tombstoned entity's own components are
+// NOT enumerated: nothing matches a deleted entity anyway (every statement here
+// is `live()`-guarded), and which components a bare tombstone carried is known
+// to whoever read it before the batch, not to the batch.
 //
 // The SPINE is overlaid too, because a batch mints entities that have no
 // integer id yet. They get a NEGATIVE one here — the id space storage hands
@@ -40,13 +40,13 @@
 //
 // COST is a property of the batch, never of the database: the CTE names the
 // committed table for everything it did not touch, so nothing is copied. Two
-// statements and a handful of binds, whatever is already in the file. See
-// overlay_test.ts, which measures it.
+// statements and a handful of bound parameters, whatever is already in the
+// file. See overlay_test.ts, which measures it.
 //
-// The client seam, unbuilt on purpose: this shape is a query, so a browser
-// that keeps its cache as tables could run the same compiled rule against the
-// same overlay. Nothing here assumes a server — but nothing here builds that
-// either.
+// A possible client-side extension, unbuilt on purpose: this is all just a
+// query, so a browser that keeps its cache as tables could run the same
+// compiled rule against the same overlay. Nothing here assumes a server — but
+// nothing here builds that either.
 
 import type { Vocab } from '@yaks/vocab'
 import { type Bundle, comps, dead, type Eid } from '@yaks/graph'
@@ -58,16 +58,16 @@ export let OVER = '_over_'
 export let GONE = '_gone_'
 
 /**
- * A batch, readable. `with` is the prefix a statement carries, `params` the
- * binds it consumes FIRST, and `at` names the source each component reads
- * from — the overlay's where there is one, the committed table where the
- * batch said nothing.
+ * A batch, made readable. `with` is the prefix a statement carries, `params`
+ * the parameters it binds FIRST, and `at` names the source each component reads
+ * from — the overlay's where there is one, the committed table where the batch
+ * touched nothing.
  */
 export type Overlay = {
   /** the `with` prefix, ready to put in front of a select (`''` when the
    * batch moved nothing the caller asked about) */
   with: string
-  /** the binds the prefix consumes, before the statement's own */
+  /** the parameters the prefix binds, before the statement's own */
   params: Param[]
   /** the source a component reads from, quoted and ready to alias */
   at: (comp: string) => string
@@ -144,7 +144,7 @@ export let overlay = (
 ): Overlay => {
   let wanted = only && new Set(only)
   // Which components the batch moved. A component nobody touched needs no
-  // overlay: the committed table is already the answer.
+  // overlay: the committed table is already the whole result.
   let touched = new Map<string, Map<Eid, Record<string, unknown> | null>>()
   let dropped = new Map<string, Set<Eid>>()
   let killed = new Set<Eid>()

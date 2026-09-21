@@ -1,6 +1,6 @@
-// The key words, and only the words: the `vocab` facet a host takes
-// (`@yaks/key/vocab`). It reaches no storage, no SQL and no runtime, so a
-// browser tab loading this vocabulary loads nothing else.
+// The `key` component declaration and nothing else, exported as
+// `@yaks/key/vocab`. It imports no storage, no SQL and no runtime API, so a
+// browser tab loading this vocabulary loads nothing else with it.
 
 import type { Keywords, VocabDoc } from '@yaks/vocab'
 import { keyDoc } from './comp.ts'

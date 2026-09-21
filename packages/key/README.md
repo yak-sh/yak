@@ -1,8 +1,9 @@
 # @yaks/key
 
-Unique typed values that identify graph entities. Key entities contain
-`key{of, value}` and a type tag; plugins validate claims and resolve repeated
-imports to existing owners.
+Unique typed values that identify entities — an ISBN, an email address, a short
+name. Each value is stored as its own entity rather than as a column on the
+thing it identifies, and its id is derived from the value, so a value is unique
+within its kind by construction.
 
 ## Install
 
@@ -13,11 +14,12 @@ deno add jsr:@yaks/key
 
 ## The idea
 
-A key is an entity containing `key{of, value}` and an application-defined tag
-such as `isbn`. Its identity is derived from the tag and value. Repeating the
-same claim addresses the same key entity, while `of` identifies its owner. One
-owner can therefore have several keys. This follows the same tagged-relationship
-pattern used by [@yaks/edge](../edge/README.md).
+A key is an entity carrying the `key{of, value}` component plus a second
+component that tags which kind of value it is — `isbn`, `email`, `alias`. The
+kinds are the application's to declare; this package ships the carrier and none
+of them. `of` points at the entity the value identifies, so one entity can have
+as many keys as you write. It is the same tagged-component pattern
+[@yaks/edge](../edge/README.md) uses for links.
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -49,32 +51,34 @@ That writes one entity:
 
 ## Four things follow
 
-- **A key is named by what it says.** `keyEid(kind, value)` is
-  `sha256("<kind>|<value>")` worn as a UUID, so a value is unique within its
-  kind by construction — no index to declare, no race to lose — and reading one
-  back is a `get`, not a query.
-- **A key lives only while what it names does.** `of` is a reference with
-  `death: release`: the row goes when the entity dies and the value is free
-  again. (A cascade would tombstone an id derived from the value, and the value
-  could never be used again.)
-- **Incomplete keys are rejected:** a key with no kind, no value or no `of`
-  never reaches storage.
-- **Stating a held value lands on its holder.** A batch that mints an entity
-  under a `$alias` and claims a value somebody already holds patches that entity
-  instead of writing a second one — which is what makes a seed, a chunked
-  import, and a page that saves itself every time it opens all idempotent. A
-  caller who wrote an id down is refused instead, with the holder named.
+- **A key's id is derived from the value.** `keyEid(kind, value)` returns
+  `sha256("<kind>|<value>")` formatted as a UUID, so a value is unique within
+  its kind with no index to declare and no race to lose, and reading one back is
+  a `get` rather than a query.
+- **A key lives only as long as what it identifies.** `of` is a reference
+  declared `death: release`: the row goes when that entity is deleted, and the
+  value is free again. A cascade would instead tombstone an id derived from the
+  value, and the value could never be used again.
+- **Incomplete keys are refused:** a key with no kind, no value or no `of` never
+  reaches storage.
+- **Claiming a value somebody already holds lands on the holder.** When a write
+  mints an entity under a `$alias` and gives it a value another entity already
+  holds, the write patches that existing entity instead of creating a second one
+  — which is what makes a seed, a chunked import, and a page that saves itself
+  every time it opens idempotent. A caller who wrote an id down rather than
+  using an alias is refused instead, with the holder named.
 
 ## The vocabulary
 
-| component        | what it says                                     |
+| component        | meaning                                          |
 | ---------------- | ------------------------------------------------ |
-| `key{of, value}` | this entity answers to this value                |
-| your tag         | which kind of value it is (`key: true` declares) |
+| `key{of, value}` | this entity identifies `of` by `value`           |
+| your tag         | which kind of value it is (declared `key: true`) |
 
-A tag declares the component it qualifies: `key: true` marks a key tag and
-`edge: true` marks an edge tag. A string value names its query relationship, for
-example `key: 'mailbox'` on an `email` component.
+A tag component declares which carrier it belongs to: `key: true` marks a key
+tag, `edge: true` marks an edge tag. Declaring a string instead names the kind
+something other than the component — `key: 'mailbox'` on an `email` component
+means the component written is `email` and the kind queries name is `mailbox`.
 
 ## Retiring a value
 
@@ -83,11 +87,13 @@ import { unkeyed } from '@yaks/key'
 g.apply([unkeyed('isbn', '9780441013593')])
 ```
 
-The operation removes the components but retains the identity. The value can
-then be claimed by the same owner or a different owner.
+That removes both components and leaves the entity itself in place, carrying
+nothing. The value can then be claimed again, by the same entity or another one.
+Deleting the key entity instead would tombstone an id derived from the value,
+and no one could ever use that value again.
 
 ## Composed with
 
 [@yaks/alias](https://jsr.io/@yaks/alias) is the kind of key that is a **name**:
-the word a person or an agent types instead of an id, resolved wherever an eid
-goes.
+the word a person or an agent types instead of an id, resolved anywhere an eid
+is accepted.

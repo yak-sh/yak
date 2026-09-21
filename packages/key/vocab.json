@@ -9,19 +9,19 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "a value an entity answers to — which kind of value it is is a tag component riding beside it",
+      "description": "a value that identifies an entity; a second component beside it tags which kind of value it is",
       "properties": {
         "of": {
           "type": "string",
           "ref": "entity",
           "death": "release",
           "bare": false,
-          "description": "the entity the value names — the row goes when that entity dies, and the value is free again"
+          "description": "the entity the value identifies; the row is removed when that entity is deleted, which frees the value"
         },
         "value": {
           "type": "string",
           "bare": false,
-          "description": "the value itself — unique within its kind, since the key's own id is derived from the two"
+          "description": "the value itself; unique within its kind, because the key's own id is derived from the kind and the value"
         }
       }
     }

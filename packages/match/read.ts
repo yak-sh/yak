@@ -1,16 +1,18 @@
-// Reading a bundle: which components an entity wears, what one column holds,
-// and how to find another entity from a reference.
+// Reading a bundle: which components an entity has, what one column holds, and
+// how to find another entity from a reference.
 //
 // A bundle is the whole entity — its identity under `entity`, every component
-// it wears under that component's name. Storage keeps the same facts as one row
-// per component table, so the two disagree in exactly two places, and both are
-// smoothed here: a boolean is held as 0/1 (the way an integer column stores it),
-// and a missing column and a missing component both read as `null`.
+// under that component's name. Storage keeps the same facts as one row per
+// component table, so the two representations differ in exactly two places, and
+// both are smoothed over here: a boolean is read as 0/1 (the way an integer
+// column stores it), and a missing column and a missing component both read as
+// `null`.
 //
 // A question about ANOTHER entity — a reference followed to its target, the
 // backlinks of an id, the children pointing at a row — is answered from the
-// bundle set the caller handed in. That set is the whole world for one run: an
-// entity outside it does not exist, the same way a row outside a table does not.
+// array of bundles the caller handed in. That array is all the data one run can
+// see: an entity outside it does not exist, the same way a row outside a table
+// does not.
 
 import { type Tag, tagOf } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
@@ -24,15 +26,15 @@ export type Eid = string
  *
  * It is the STRUCTURAL shape a matcher needs, and deliberately not an import of
  * {@link https://jsr.io/@yaks/graph | @yaks/graph}'s `Bundle` — which is one of
- * these, and passes wherever this is asked for. A graph compiles its RULES with
- * this matcher, so the dependency between the two has to run one way, and this
- * is the leaf end of it.
+ * these, and passes wherever this type is asked for. @yaks/graph imports this
+ * package to compile its RULES, so the dependency between the two has to run
+ * one direction, and this is the leaf end of it.
  */
 export type Bundle = {
   /** the identity component: the entity this bundle is about */
   entity: { eid: Eid; num?: number | null }
-  /** a component's columns, `null` where it is being dropped, or a piece of
-   * the wire's own sugar */
+  /** a component's columns, `null` where the component is being deleted, or one
+   * of the `$`-prefixed markers a client may include alongside them */
   [comp: string]:
     | Record<string, unknown>
     | null
@@ -41,15 +43,15 @@ export type Bundle = {
     | undefined
 }
 
-/** The bundle set one run is answered from, with its entities addressable. */
+/** The bundles one run is answered from, indexed by entity id. */
 export type Index = {
   /** every bundle, in the order given */
   list: readonly Bundle[]
-  /** the bundle wearing an id, or `undefined` when the set holds no such entity */
+  /** the bundle with that id, or `undefined` when there is no such entity */
   of: (eid: Eid) => Bundle | undefined
 }
 
-/** Index a bundle set by entity id. The given order is kept. */
+/** Index an array of bundles by entity id. The given order is kept. */
 export let index = (bundles: readonly Bundle[]): Index => {
   let by = new Map<Eid, Bundle>()
   for (let b of bundles) by.set(b.entity.eid, b)
@@ -57,8 +59,8 @@ export let index = (bundles: readonly Bundle[]): Index => {
 }
 
 /**
- * One component of a bundle, or `undefined` when the entity does not wear it.
- * The identity (`entity`) and the `$`-prefixed wire sugar are not components.
+ * One component of a bundle, or `undefined` when the entity does not have it.
+ * The identity (`entity`) and the `$`-prefixed markers are not components.
  */
 export let comp = (
   b: Bundle,
@@ -71,15 +73,15 @@ export let comp = (
 }
 
 /**
- * Does the entity wear this component? The spine (`entity`) is worn by every
- * entity there is, so it always answers true.
+ * Does the entity have this component? The identity component (`entity`) is on
+ * every entity there is, so it always returns true.
  */
 export let wears = (b: Bundle, name: string): boolean =>
   name == 'entity' || comp(b, name) != null
 
 /**
- * Is this entity alive? A deleted entity is tombstoned rather than forgotten,
- * and every selection excludes the graves.
+ * Is this entity still present? A deleted entity keeps a `tombstone` component
+ * rather than disappearing, and every selection leaves tombstoned entities out.
  */
 export let live = (b: Bundle): boolean => !b.$delete && !wears(b, 'tombstone')
 
@@ -87,24 +89,26 @@ export let live = (b: Bundle): boolean => !b.$delete && !wears(b, 'tombstone')
 let held = (v: unknown): unknown =>
   typeof v == 'boolean' ? Number(v) : v ?? null
 
-/** One column's read out of a bundle, and how a value types against it. */
+/** How to read one column out of a bundle, and which type a value compares
+ * against it as. */
 export type Read = { read: (b: Bundle) => unknown; tag: Tag }
 
 /**
- * The computed-column registry, keyed `comp.prop`: the rule that READS a column
- * the vocabulary declares but never stores (`computed: true`). It is the
- * in-memory twin of {@link https://jsr.io/@yaks/sql/doc/~/Derived | @yaks/sql}'s
- * `derived` hook — the formula belongs to the application, not the schema, so
- * both compilers take it from the caller and one rule answers on both sides.
- * A registration also serves as a plain READ OVERRIDE for a stored column, the
- * way a derived entry does.
+ * The computed-column registry, keyed `comp.prop`: the function that READS a
+ * column the vocabulary declares but never stores (`computed: true`). It is the
+ * in-memory equivalent of
+ * {@link https://jsr.io/@yaks/sql/doc/~/Derived | @yaks/sql}'s `derived` hook —
+ * the formula belongs to the application rather than the schema, so both
+ * compilers take it from the caller and one rule serves both sides. A
+ * registration also works as a plain READ OVERRIDE for a stored column, the way
+ * a `derived` entry does.
  */
 export type Computed = Record<string, (b: Bundle) => unknown>
 
 /**
  * How to read `comp.prop` off an entity, or `null` when there is nothing to
  * read: a column the vocabulary does not declare, or a computed one no rule was
- * registered for. The caller reports that as a decline.
+ * registered for. The caller turns that into an `Unsupported` refusal.
  */
 export let column = (
   v: Vocab,
@@ -123,9 +127,9 @@ export let column = (
   }
   let col = v.column(name, prop)
   if (!col) return null
-  // The registered rule wins, computed column or not — the same order the SQL
-  // binder consults its `derived` map in. The TYPE stays the vocabulary's: it
-  // declares the column, the caller only says how to read it.
+  // A registered rule wins, computed column or not — the same order the SQL
+  // binder consults its `derived` map in. The TYPE stays the vocabulary's: the
+  // vocabulary declares the column, the caller only supplies the read.
   let own = computed[`${name}.${prop}`]
   if (own) return { read: (b) => held(own(b)), tag: tagOf(col) }
   if (col.computed) return null

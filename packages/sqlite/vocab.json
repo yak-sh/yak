@@ -9,7 +9,7 @@
       "noun": "storage",
       "verb": "check",
       "title": "Check the file",
-      "description": "The file holds no orphaned component row and no reference to an entity that is not there. Both are invisible to every query — a read starts from the spine — so this asks the connection: whether foreign keys are being enforced, which rows violate one, and what SQLite's own integrity check says.",
+      "description": "Check that the file holds no orphaned component row and no reference to an entity that is not there. Both are invisible to every query — a read starts from the spine — so this asks the connection directly: whether foreign keys are being enforced, which rows violate one, and what SQLite's own integrity check reports.",
       "input": {},
       "readOnly": true
     },
@@ -18,7 +18,7 @@
       "noun": "archetype",
       "verb": "check",
       "title": "Check the archetype pointers",
-      "description": "Every archetype pointer matches the components its owner actually wears. A writer that lands rows past the graph without naming the owners it touched leaves a pointer the read door and the query planner both believe.",
+      "description": "Check that every archetype pointer matches the components its owner actually has. A writer that inserts rows past the graph without naming the owners it touched leaves a stale pointer that both the read path and the query planner trust.",
       "input": {},
       "readOnly": true
     }

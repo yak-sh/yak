@@ -1,28 +1,31 @@
-// Which component a bare column MEANS, read off the line it sits on.
+// Which component a bare column name means, decided from the rest of the
+// query it appears in.
 //
-// A word several components declare — `status`, on a graph that keeps both
-// tasks and transcripts — is ambiguous to the VOCABULARY, which sees one word
-// at a time and rightly refuses (@yaks/vocab's `Ambiguous`, which names the
-// choices). It is rarely ambiguous to the LINE: `.task&.status=open` has
-// already said what it is about, and so has `.task.project=P-19 .status=open`.
-// So the vocabulary states the choices and this decides between them, from the
-// only thing that knows: the rest of the sentence.
+// A column name several components declare — `status`, on a graph holding both
+// tasks and transcripts — is ambiguous to the VOCABULARY, which sees one name
+// at a time and rightly refuses (@yaks/vocab's `Ambiguous`, whose message
+// lists the candidates). It is rarely ambiguous within the QUERY:
+// `.task&.status=open` has already said what it is about, and so has
+// `.task.project=P-19 .status=open`. So the vocabulary lists the candidates
+// and this file chooses between them, using the only thing that knows: the
+// rest of the query.
 //
-// The rule, in one line: a bare column resolves to the comp the line already
-// SELECTS, when exactly one of the candidates is selected. Nothing on the line
-// picking one leaves the word alone, and the refusal reaches the caller with
-// its choices — a guess between `task` and `session` is worse than a question.
+// The rule: a bare column resolves to the component the query already SELECTS,
+// when exactly one of the candidates is selected. If nothing in the query
+// picks one, the column is left alone and the vocabulary's refusal reaches the
+// caller with its list of candidates — guessing between `task` and `session`
+// is worse than asking.
 //
-// What SELECTS a comp is a word that names it outright: a facet (`.task`), and
-// a qualified path's head (`.task.project`, `.tally=task.status`). A bare
-// column never selects — it is the thing being resolved — and neither does a
-// dereference through a reference column, which is about the entity at the far
-// end rather than this one.
+// What SELECTS a component is anything that names it outright: a bare
+// component (`.task`), or the head of a qualified path (`.task.project`,
+// `.tally=task.status`). A bare column never selects — it is the thing being
+// resolved — and neither does a dereference through a reference column, which
+// is about the entity at the other end rather than this one.
 //
-// Scope follows the shape of the query. Conjoined clauses describe ONE row, so
-// every sibling of an `and` contributes; the arms of an `or` do not describe
-// the same row, so an arm sees its own words and whatever encloses it, never
-// its neighbour's.
+// Scope follows the shape of the query. Conjoined clauses all describe ONE
+// row, so every sibling of an `and` contributes; the branches of an `or` do
+// not describe the same row, so a branch sees its own clauses and whatever
+// encloses it, never its sibling branch's.
 
 import {
   type Clause,
@@ -33,23 +36,23 @@ import {
 import { Ambiguous, type Vocab } from '@yaks/vocab'
 import type { Query } from './storage.ts'
 
-/** Whether a predicate's single segment is the bare presence form — the one
- * place a lone word names a component rather than a column. */
+/** Whether a predicate's single segment is the "component is present" form —
+ * the one place a lone name means a component rather than a column. */
 let facet = (c: Clause & { kind: 'pred' }): boolean =>
   !!c.facet || (c.op == '!' && c.path.length == 1 && !c.value)
 
-/** The component a path NAMES outright, or nothing. A qualified path says it
- * in its head; a facet says it in its only segment. */
+/** The component a path NAMES outright, or nothing. A qualified path names it
+ * in its first segment; a presence test names it in its only segment. */
 let named = (v: Vocab, path: string[], bare: boolean): string | undefined => {
   let head = path[0]
   if (!head || !v.comp(head)) return undefined
   return path.length > 1 || bare ? head : undefined
 }
 
-/** Every component one clause names FOR CERTAIN, gathered into `out`. A
- * conjunction's clauses all hold, so all of them count; an alternative's arms
- * are exactly what is not certain, so none of them does — an arm's own words
- * reach it when that arm is read. */
+/** Every component one clause names FOR CERTAIN, collected into `out`. A
+ * conjunction's clauses all hold, so all of them count; a disjunction's
+ * branches are exactly what is not certain, so none of them counts — a
+ * branch's own clauses are added when that branch is processed. */
 let selects = (v: Vocab, c: Clause, out: Set<string>): void => {
   if (c.kind == 'and') {
     for (let k of c.clauses) selects(v, k, out)
@@ -68,15 +71,16 @@ let selects = (v: Vocab, c: Clause, out: Set<string>): void => {
   }
 }
 
-/** The comps a whole clause list selects — the scope its bare columns read. */
+/** The components a whole clause list selects — the scope its bare columns
+ * resolve against. */
 let scope = (v: Vocab, clauses: Clause[]): Set<string> => {
   let out = new Set<string>()
   for (let c of clauses) selects(v, c, out)
   return out
 }
 
-/** One bare column, qualified by the scope, or left as it is. A word the
- * vocabulary routes on its own never reaches the scope at all. */
+/** One bare column, qualified by the scope, or left as it is. A column name
+ * the vocabulary can resolve on its own never consults the scope at all. */
 let resolve = (
   v: Vocab,
   path: string[],
@@ -100,8 +104,8 @@ let selected = (v: Vocab, f: FieldSel, within: Set<string>): FieldSel => {
 }
 
 /** `.order=status` and `.order=-status` name a column the same way, so the
- * sign comes off and goes back on. A ranking (`.order=similar`) names no
- * column and routes to nothing, so it is left alone. */
+ * leading `-` is stripped and put back. A ranking (`.order=similar`) names no
+ * column and resolves to nothing, so it is left alone. */
 let ordered = (v: Vocab, value: string, within: Set<string>): string => {
   let desc = value.startsWith('-')
   let field = desc ? value.slice(1) : value
@@ -109,20 +113,21 @@ let ordered = (v: Vocab, value: string, within: Set<string>): string => {
   return path.length == 1 ? value : `${desc ? '-' : ''}${path.join('.')}`
 }
 
-/** A clause list read against one scope, unchanged when none of it moved. */
+/** Map every clause in a list, returning the original array when none of them
+ * changed. */
 let all = (cs: Clause[], each: (c: Clause) => Clause): Clause[] => {
   let out = cs.map(each)
   return out.some((c, i) => c != cs[i]) ? out : cs
 }
 
-/** One clause with every bare column it holds read against `within` — the
- * scope it inherits, widened by whatever its own conjunction says. The clause
- * itself comes back when nothing in it moved, so an untouched line stays the
- * string the caller wrote. */
+/** One clause with every bare column in it resolved against `within` — the
+ * scope it inherits, widened by whatever its own conjunction names. The
+ * original clause is returned when nothing in it changed, so an unaffected
+ * query stays the exact string the caller wrote. */
 let read = (v: Vocab, c: Clause, within: Set<string>): Clause => {
   // Conjoined clauses describe ONE row, so every sibling contributes to the
-  // scope; an alternative's arms describe different rows, so each reads with
-  // its own words alone.
+  // scope; a disjunction's branches describe different rows, so each branch
+  // resolves against its own clauses alone.
   if (c.kind == 'and') {
     let inner = new Set([...within, ...scope(v, c.clauses)])
     let clauses = all(c.clauses, (k) => read(v, k, inner))
@@ -157,12 +162,12 @@ let read = (v: Vocab, c: Clause, within: Set<string>): Clause => {
 }
 
 /**
- * The read door's half of routing: a query line in, the same line with every
- * bare column read as the comp the line already selects.
+ * The read side of column resolution: a query in, the same query with every
+ * bare column resolved to the component the query already selects.
  *
- * The line comes back UNTOUCHED when nothing moved, so a line of qualified
- * paths costs one traversal and the text a caller handed in is what the store
- * still sees.
+ * The query comes back UNCHANGED when nothing was resolved, so a query written
+ * with qualified paths costs one traversal, and the exact text the caller
+ * passed is what storage still sees.
  *
  * ```ts
  * // let mean = meaning(vocab)

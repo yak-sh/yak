@@ -1,37 +1,38 @@
-// The `by_name` keyword, interpreted: which components answer to a name, which
-// column that name lives in, and the entity a typed name reaches.
+// The `by_name` keyword, interpreted: which components are addressable by name,
+// which column holds that name, and which entity a typed name refers to.
 //
-// Not every entity has a name. An author is reached as `Ursula Le Guin`; a
-// review is not reached by the sentence it opens with, even though it has a
-// title too — a title deep in a store's prose matches by coincidence, and there
-// is always one. So a component says so: `by_name`. Everything here reads that
-// declaration off a loaded vocabulary; nothing is hardcoded.
+// Not every entity has a name. An author is found by typing `Ursula Le Guin`; a
+// review is not found by the sentence it opens with, even though it has a title
+// too — a title buried in a store's prose matches by coincidence, and there is
+// always one such title. So a component declares it: `by_name`. Everything here
+// reads that declaration off a loaded vocabulary; nothing is hardcoded.
 
 import type { Hop, Vocab } from '@yaks/vocab'
 import { CLOSE, nearest } from './match.ts'
 
 /** An entity as this package reads it: component name → that component's
- * columns. Extra fields ride along untouched, so a caller's own row type works
- * as long as its components sit under `comps`. */
+ * columns. Any other fields are left untouched, so a caller's own row type
+ * works as long as its components are under `comps`. */
 export type Comps = Record<string, Record<string, unknown> | undefined>
 
 /** The shape a candidate must have to be resolved: the components it carries. */
 export type Carried = { comps: Comps }
 
-/** How names are read: `prop` is the default name column's bare spelling, routed
- * through the vocabulary (`title` → `doc.title` in most vocabularies), and
- * `close` is the match floor — 1 accepts exact names only. */
+/** How names are read: `prop` is the default name column, given unqualified and
+ * resolved through the vocabulary (`title` → `doc.title` in most
+ * vocabularies), and `close` is the match threshold — 1 accepts exact names
+ * only. */
 export type Opts = { prop?: string; close?: number }
 
-// A component's declaration → the column its name lives in. `true` takes the
-// vocabulary's default name column; a string names one instead. Anything else
+// A component's declaration → the column its name is held in. `true` uses the
+// vocabulary's default name column; a string names another. Anything else
 // (absent, false) means this component's entities have no name.
 let column = (v: Vocab, said: unknown, prop: string): Hop | undefined => {
   if (said !== true && typeof said != 'string') return undefined
   let bare = said === true ? prop : said
-  // route() throws on a word the vocabulary does not own — the caller asked for
-  // names by a column that isn't there, and a silent empty answer would read as
-  // "nothing is named".
+  // route() throws for a column the vocabulary does not declare — the caller
+  // asked for names from a column that is not there, and returning nothing
+  // would instead read as "no component is addressable by name".
   return v.route(bare)
 }
 
@@ -52,10 +53,10 @@ export let named = (v: Vocab, opts: Opts = {}): Record<string, Hop> => {
 
 /**
  * An entity's name, or nothing when it has none. Config-first over a loaded
- * vocabulary: `let name = nameOf(v)`, then `name(author)`. An entity is named
- * when it carries a `by_name` component and the column that component points at
- * holds a string — so the same `doc.title` is a NAME on an author and just text
- * on a review.
+ * vocabulary: `let name = nameOf(v)`, then `name(author)`. An entity has a name
+ * when it carries a component declared `by_name` and the column that
+ * declaration points at holds a string — so the same `doc.title` is a NAME on
+ * an author and merely text on a review.
  */
 export let nameOf = (
   v: Vocab,
@@ -73,13 +74,13 @@ export let nameOf = (
 }
 
 /**
- * The entity a typed name reaches, or nothing when none is close enough.
+ * The entity a typed name refers to, or nothing when none is close enough.
  * Config-first: `let byName = resolve(v)`, then `byName('le guin', authors)`.
  *
- * An exact name always wins. Failing that the closest name above the match
- * floor wins, because nobody types a name the way it is stored — pass
- * `{ close: 1 }` for exact names only. Candidates without a name sit out, so a
- * store's prose can never be reached by a word inside it.
+ * An exact name always wins. Failing that, the closest name above the match
+ * threshold wins, because nobody types a name exactly as it is stored — pass
+ * `{ close: 1 }` for exact names only. Candidates with no name are skipped, so
+ * a store's prose can never be matched by a word inside it.
  */
 export let resolve = (
   v: Vocab,

@@ -1,16 +1,16 @@
-// Walking a batch in either direction. A recorded batch carries both sides of
-// every movement, so replaying it forward rebuilds the write that happened and
-// replaying it backward builds the write that reverses it — one function, one
-// argument apart.
+// Walking a recorded transaction in either direction. A recorded transaction
+// carries both sides of every movement, so replaying it forward rebuilds the
+// write that happened and replaying it backward builds the write that reverses
+// it — one function, one argument apart.
 //
-// Forward is what a server recasts to its subscribers: the batch as committed,
-// as bundles, without asking storage anything. Backward is undo, and undo is
-// an ordinary write — it goes through `apply()` like any other, so it is
-// admitted, guarded, stamped, and journaled in its turn. Undoing an undo is a
-// redo, for free.
+// Forward is what a server pushes to its subscribers: the transaction as
+// committed, as bundles, without reading storage at all. Backward is undo, and
+// undo is an ordinary write — it goes through `apply()` like any other, so it
+// is admitted, guarded, stamped, and journaled in its turn. Undoing an undo is
+// a redo, for free.
 //
-// The one thing that cannot be walked backward is a death. A deleted entity is
-// tombstoned, never erased, and its id can never be reused — so an undo that
+// The one thing that cannot be walked backward is a deletion. A deleted entity
+// is tombstoned, never erased, and its id can never be reused — so an undo that
 // would resurrect one is refused rather than half-applied.
 
 import type { Actor, Bundle, Change, Comp, Eid, Graph, Was } from '@yaks/graph'
@@ -18,11 +18,12 @@ import { token, TOMBSTONE } from '@yaks/graph'
 import type { Batch } from './batch.ts'
 import type { Log } from './log.ts'
 
-/** A refused undo: the batch deleted an entity, and death is final. */
+/** A refused undo: the transaction deleted an entity, and a deletion is
+ * final. */
 export class Final extends Error {
   /**
-   * @param eid the entity the batch deleted
-   * @param seq the batch it was deleted in
+   * @param eid the entity the transaction deleted
+   * @param seq the transaction it was deleted in
    */
   constructor(public eid: Eid, public seq: number) {
     super(`${eid} was deleted in batch #${seq} — a death cannot be undone`)
@@ -30,17 +31,18 @@ export class Final extends Error {
   }
 }
 
-// One side of a batch, as a change. The deltas are replayed in order onto a
-// component table per entity, which is what makes a batch that touched the
-// same component twice come out as one bundle holding where it ended up.
+// One side of a recorded transaction, as a change. The deltas are replayed in
+// order onto a per-entity table of components, which is what makes a
+// transaction that touched the same component twice come out as one bundle
+// holding where that component ended up.
 let side = (batch: Batch, want: 'before' | 'after', guard = false): Change => {
   let order: Eid[] = []
   let held = new Map<Eid, Map<string, Comp | null>>()
   let died = new Set<Eid>()
-  // What the batch LEFT in each column, hashed: the guard an undo carries so a
-  // column somebody else has moved since refuses the whole reversal rather
-  // than quietly clobbering it. Only the backward side wants one — replaying
-  // forward is a recast, not a write.
+  // What the transaction LEFT in each column, hashed: the precondition an undo
+  // carries, so that a column somebody else has changed since refuses the whole
+  // reversal rather than quietly overwriting it. Only the backward side needs
+  // one — replaying forward is a push to subscribers, not a write.
   let was = new Map<Eid, Was>()
   let guarded = (eid: Eid, comp: string, column: string, after: unknown) => {
     let w = was.get(eid)
@@ -83,12 +85,12 @@ let side = (batch: Batch, want: 'before' | 'after', guard = false): Change => {
     let moved = false
     for (let [comp, value] of held.get(eid)!) {
       moved = true
-      // The spine is the bundle's own IDENTITY, not a component beside it: a
-      // recorded patch to `entity` merges into the key that says who this
-      // bundle is about, and never lands on top of the eid. A graph this
-      // package journals never records one (the hook skips the spine), but a
-      // log imported from elsewhere holds them, and a bundle with no eid is
-      // not a bundle.
+      // The entity row is the bundle's own IDENTITY, not a component beside
+      // it: a recorded patch to `entity` merges into the key naming which
+      // entity this bundle is about, and never lands on top of the eid. A
+      // graph this package journals never records one (the hook skips the
+      // entity row), but a log imported from elsewhere can hold them, and a
+      // bundle with no eid is not a bundle.
       if (comp == 'entity') {
         if (value) b.entity = { ...b.entity, ...value }
         continue
@@ -112,42 +114,45 @@ let side = (batch: Batch, want: 'before' | 'after', guard = false): Change => {
 }
 
 /**
- * The batch as committed, rebuilt from its deltas — the bundles a server casts
- * to its subscribers when it reads the feed, with no read of storage at all.
- * It carries what MOVED, so the provenance the batch row already holds (who,
- * when) is not repeated in it.
+ * The transaction as committed, rebuilt from its deltas — the bundles a server
+ * pushes to its subscribers when it reads the feed, with no read of storage at
+ * all. They carry what MOVED, so who wrote it and when, which the `journal_tx`
+ * row already holds, are not repeated in them.
  */
 export let applied = (batch: Batch): Change => side(batch, 'after')
 
 /** How an undo is built. */
 export type UndoneOpts = {
-  /** carry a `$was` guard on every restored column, hashed from the value the
-   * batch left there, so a column that moved since refuses the reversal */
+  /** carry a `$was` precondition on every restored column, hashed from the
+   * value the transaction left there, so that a column changed since refuses
+   * the reversal */
   guard?: boolean
 }
 
 /**
- * The change that reverses a batch: every column back to the value it held,
- * every component that went restored whole, every component that appeared
- * dropped. Throws {@link Final} if the batch deleted an entity.
+ * The change that reverses a transaction: every column back to the value it
+ * held, every component that went restored with the columns it had, every
+ * component that appeared removed. Throws {@link Final} if the transaction
+ * deleted an entity.
  */
 export let undone = (batch: Batch, opts: UndoneOpts = {}): Change =>
   side(batch, 'before', opts.guard)
 
 /**
- * Undo a committed batch by its `seq`: read it back out of the log, build the
- * inverse from what was written down, and apply it through the graph — so the
- * undo is admitted, stamped and journaled like any other write.
+ * Undo a committed transaction by its `seq`: read it back out of the log, build
+ * the inverse from what was written down, and apply it through the graph — so
+ * the undo is admitted, stamped and journaled like any other write.
  *
  * ```ts
  * undo(g, j)(7, { by: 'ada' })
  * ```
  *
- * Throws {@link Final} if the batch deleted an entity, and a plain `Error` if
- * no batch has that seq. The inverse is applied as trusted, since restoring a
- * column the server owns is the graph's own reconstruction, not a client's
- * write. Every restored column carries a `$was` guard, so a column somebody
- * else has moved since refuses the whole reversal rather than clobbering it.
+ * Throws {@link Final} if the transaction deleted an entity, and a plain
+ * `Error` if no transaction has that seq. The inverse is applied as trusted,
+ * since restoring a column the server owns is the graph's own reconstruction
+ * rather than a client's write. Every restored column carries a `$was`
+ * precondition, so a column somebody else has changed since refuses the whole
+ * reversal instead of being overwritten.
  */
 export let undo =
   (g: Graph, j: Log) =>

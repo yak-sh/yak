@@ -1,9 +1,10 @@
-// SHA-256, in about sixty lines, because the precondition guard has to be
-// SYNCHRONOUS. The platform's own digest (`crypto.subtle.digest`) is
-// promise-only, and hashing through it would make every guarded write async —
+// SHA-256, in about sixty lines, because the precondition check has to be
+// SYNCHRONOUS. The platform's own digest (`crypto.subtle.digest`) returns a
+// promise, and hashing through it would make every guarded write async —
 // including one over an embedded database that is otherwise synchronous end to
-// end (see ./pipe.ts). A guard is a handful of small strings per batch, so the
-// cost of hashing them here is nothing next to losing sync pass-through.
+// end (see ./pipe.ts). A precondition hashes a handful of small strings per
+// change, so the cost of hashing them here is nothing next to making the whole
+// pipeline asynchronous.
 //
 // This is FIPS 180-4 SHA-256 over the UTF-8 bytes of a string, hex-encoded —
 // the same digest `crypto.subtle.digest('SHA-256', …)` produces, and the same
@@ -98,9 +99,9 @@ let padded = (bytes: Uint8Array): Uint8Array => {
 let encoder = new TextEncoder()
 
 /**
- * The SHA-256 of a string's UTF-8 bytes, lowercase hex. Synchronous by design
- * — the `$was` precondition hashes with it inside a transaction that may not
- * become a promise.
+ * The SHA-256 of a string's UTF-8 bytes, as lowercase hex. Synchronous by
+ * design — the `$was` precondition hashes with it inside a transaction that
+ * must not be forced to become a promise.
  */
 export let sha256 = (input: string): string => {
   let msg = padded(encoder.encode(input))

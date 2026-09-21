@@ -1,19 +1,20 @@
-// The refusal: half a sentence is not an edge.
+// The rejection: an incomplete link is not a link.
 //
-// A link is three things — an end, a relation, an end — and any two of them
-// mean nothing. A bundle that states an edge without its relation would land as
-// a row nothing can read; one missing an end would point at nowhere. Both are
-// caught here, at the `mint` phase, which runs after the graph has named every
-// `$alias` — so the refusal can say which entity it is talking about, and an
-// end written as an alias is already the id it resolved to.
+// A link is three things — an endpoint, a relation, an endpoint — and any two
+// of them mean nothing. A bundle holding an edge component with no relation
+// beside it would be stored as a row nothing can interpret; one missing an
+// endpoint would point nowhere. Both are caught here, in the `mint` phase,
+// which runs after the graph has resolved every `$alias` — so the error can
+// name the entity it is about, and an endpoint written as an alias is already
+// the id it resolved to.
 //
-// A bundle that names NEITHER end is a patch of a link that already exists
-// (setting `ord`, say) and is left alone: it states nothing, so it cannot state
-// half of something.
+// A bundle naming NEITHER endpoint is a patch of a link that already exists
+// (setting `ord`, say) and is left alone: it does not create a link, so it
+// cannot create half of one.
 //
-// The whole batch is read before any check, because one entity may arrive as
-// several bundles — the edge in one, its relation tag in another — and they are
-// one sentence.
+// Every bundle in the write is read before any check, because one entity may
+// arrive as several bundles — the edge component in one, its relation component
+// in another — and together they are one link.
 
 import type { Bundle, Comp, Eid, Hook } from '@yaks/graph'
 import { comps, Refused } from '@yaks/graph'
@@ -21,8 +22,8 @@ import type { Vocab } from '@yaks/vocab'
 import { EDGE, names } from './relations.ts'
 import { tagOf } from './eid.ts'
 
-// Every bundle in the batch folded per entity, so a sentence spread over
-// several of them is checked as the one thing it is.
+// Every bundle in the write merged per entity, so a link spread over several
+// of them is checked as the one link it is.
 let gathered = (bundles: Bundle[]): Map<Eid, Bundle> => {
   let out = new Map<Eid, Bundle>()
   for (let b of bundles) {
@@ -37,7 +38,7 @@ let gathered = (bundles: Bundle[]): Map<Eid, Bundle> => {
 }
 
 /**
- * The `mint` hook that refuses an incomplete sentence, naming what is missing.
+ * The `mint` hook that rejects an incomplete link, naming what is missing.
  * Registered by the {@link plugin}; exported on its own for a graph that wants
  * the check without the rest.
  */
@@ -47,7 +48,7 @@ export let stated = (vocab: Vocab): Hook => {
   return (bundles) => {
     for (let [eid, b] of gathered(bundles)) {
       let edge = b[EDGE] as Record<string, unknown> | null | undefined
-      // nothing stated (a patch, or a bundle about something else entirely)
+      // no link created here (a patch, or a bundle about something else)
       if (!edge || (edge.from == null && edge.to == null)) continue
       for (let end of ['from', 'to']) {
         if (edge[end] == null) {

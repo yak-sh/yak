@@ -1,7 +1,7 @@
 {
   "name": "@yaks/id",
   "version": "0.1.0",
-  "description": "Mints entity UUIDs and formats and parses human-readable ids using vocabulary-declared prefixes and storage-assigned numbers.",
+  "description": "Generates entity UUIDs, and formats and parses human-readable ids from vocabulary-declared prefixes and storage-assigned numbers.",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
   "imports": {

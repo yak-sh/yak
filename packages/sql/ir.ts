@@ -1,35 +1,38 @@
-// The relational IR: a SELECT as a VALUE, sitting between the binder (which
-// routes an @yaks/query AST through an @yaks/vocab schema) and the SQL text a
-// dialect renders. It is Arel-shaped and deliberately borrows Arel's words —
-// project, join, where, group, order, take, distinct — because anyone who has
-// used Arel or ActiveRecord already knows what they do.
+// The relational representation: a SELECT statement held as a VALUE, sitting
+// between the binder (which routes an @yaks/query AST through an @yaks/vocab
+// schema) and the SQL text a dialect renders. It is shaped like Arel and
+// deliberately borrows Arel's names — project, join, where, group, order, take,
+// distinct — because anyone who has used Arel or ActiveRecord already knows
+// what they do.
 //
-// The IR is DIALECT-AGNOSTIC by design: a relation carries its projection,
-// joins, a boolean CONDITION TREE, grouping, ordering and bound as plain data,
-// and `render` is the one place that turns that data into a SQL string plus
-// bound params. A new backend (D1, Postgres) is another renderer over the same
-// value — the structure never changes, only the lowering of leaf column
-// expressions (a dialect's Layout, see ./sqlite.ts) and, for a non-`?`
-// placeholder dialect, a renumber of the params it emits.
+// It is BACKEND-INDEPENDENT by design: a relation carries its projected
+// columns, its joins, a boolean CONDITION TREE, grouping, ordering and row
+// limit as plain data, and `render` is the one place that turns that data into
+// a SQL string plus the parameters to bind. A new backend (D1, Postgres) is
+// another renderer over the same value — the structure never changes, only how
+// leaf column expressions are lowered (a dialect's layout, see ./sqlite.ts)
+// and, for a backend whose placeholders are not `?`, a renumbering of the
+// parameters it emits.
 //
-// The SHAPE is functional, not Arel's mutable manager: a relation is a
-// plain object built up field by field, and a condition is a small algebraic
-// tree — and/or/not/raw/lit — whose leaves (raw) are Frags a dialect already
-// lowered. Keeping AND/OR/NOT explicit rather than pre-joined text lets a
-// renderer choose how to spell them and a pass look into them before rendering.
+// The SHAPE is functional, not Arel's mutable manager object: a relation is a
+// plain object built up field by field, and a condition is a small tree —
+// and/or/not/raw/lit — whose leaves (raw) are fragments a dialect has already
+// lowered. Keeping AND/OR/NOT explicit rather than joining them into text early
+// lets a renderer choose how to write them, and lets a later pass look inside
+// them before rendering.
 
-// A bound value. The filter grammar has no literal but text and numbers, so
-// saying that here keeps every caller off a cast.
+// A value to bind. The filter grammar has no literals but text and numbers, so
+// stating that here keeps every caller from having to cast.
 export type Bind = string | number
 
-// A piece of SQL and the binds it consumes, in order. A lowered leaf condition,
-// a rendered statement, and a column expression are all this one shape.
+// A piece of SQL and the parameters it consumes, in order. A lowered leaf
+// condition, a rendered statement, and a column expression all have this shape.
 export type Frag = { sql: string; params: Bind[] }
 
-// A boolean condition as an algebraic tree. `raw` is the leaf a dialect lowers
-// (a comparison, a presence test, a correlated EXISTS); the composers stay
-// dialect-free so a renderer owns how AND/OR/NOT are spelled and a rewrite pass
-// can look inside.
+// A boolean condition as a tree. `raw` is the leaf a dialect lowers (a
+// comparison, a presence test, a correlated EXISTS); the combinators stay
+// backend-independent, so a renderer decides how AND/OR/NOT are written and a
+// rewrite pass can look inside them.
 export type Cond =
   | { t: 'lit'; v: boolean }
   | { t: 'raw'; frag: Frag }
@@ -42,9 +45,10 @@ export let FALSE: Cond = { t: 'lit', v: false }
 export let raw = (frag: Frag): Cond => ({ t: 'raw', frag })
 export let not = (c: Cond): Cond => ({ t: 'not', c })
 
-// AND/OR that fold their identity away: an empty AND is TRUE, an empty OR is
-// FALSE, and a single child collapses — so a binder composes without special-
-// casing the zero/one clause count, and a FALSE short-circuits an AND.
+// AND/OR that fold their identity value away: an empty AND is TRUE, an empty OR
+// is FALSE, and a single child collapses to itself — so the binder can combine
+// conditions without special-casing zero or one of them, and a FALSE
+// short-circuits an AND.
 export let and = (...parts: Cond[]): Cond => {
   if (parts.some((c) => c.t == 'lit' && !c.v)) return FALSE
   let kept = parts.filter((c) => !(c.t == 'lit' && c.v))
@@ -64,15 +68,16 @@ export let or = (...parts: Cond[]): Cond => {
     : { t: 'or', parts: kept }
 }
 
-// One joined table: the source as it appears after `join` (a component's
-// storage table) and the whole ON expression. Every join this layer makes is a
-// LEFT join — a component table is joined to read a column that may be absent,
-// and "the column is absent" must be the same NULL as "the component is absent".
+// One joined table: the source as it appears after `join` (a component's own
+// table) and the whole ON expression. Every join made here is a LEFT JOIN — a
+// component table is joined to read a column that may be absent, and "the
+// column is NULL" must be the same answer as "the component is absent".
 export type Join = { source: string; on: string }
 
-// A relation. `from` is the source after FROM; `cols` are whole projected
+// A relation. `from` is the source after FROM; `cols` are the whole projected
 // expressions; `where` is the condition tree; the rest are the optional
-// grouping, ordering and row bound (a bind, never an inlined literal).
+// grouping, ordering and row limit (a bound parameter, never a literal written
+// into the SQL).
 export type Rel = {
   from: string
   cols: string[]
@@ -96,10 +101,10 @@ export let rel = (from: string, over: Partial<Rel> = {}): Rel => ({
   ...over,
 })
 
-// The condition tree rendered. Standard SQL boolean spelling, `?` placeholders
-// (SQLite's; a Postgres dialect renumbers on the way out). A `raw` leaf hands
-// its Frag straight through; the composers parenthesise so precedence is never
-// left to the reader.
+// The condition tree rendered. Standard SQL boolean operators and `?`
+// placeholders (SQLite's; a Postgres dialect renumbers them on the way out). A
+// `raw` leaf passes its fragment straight through; the combinators parenthesise
+// so precedence is never left to the reader.
 export let renderCond = (c: Cond): Frag => {
   if (c.t == 'lit') return { sql: c.v ? '1' : '0', params: [] }
   if (c.t == 'raw') return c.frag
@@ -115,13 +120,13 @@ export let renderCond = (c: Cond): Frag => {
   }
 }
 
-// The joined tables as they are spelled after FROM.
+// The joined tables, written out as they appear after FROM.
 export let joined = (joins: Join[]): string =>
   joins.map((j) => ` left join ${j.source} on ${j.on}`).join('')
 
-// The relation as one statement. Params come out in the order SQLite binds
-// them: the WHERE conditions in tree order, then the bound. A relation with no
-// projection selects `*`; with no condition renders `where 1`.
+// The relation as one statement. Parameters come out in the order SQLite binds
+// them: the WHERE conditions in tree order, then the LIMIT. A relation with no
+// projected columns selects `*`; one with no condition renders `where 1`.
 export let render = (r: Rel): Frag => {
   let where = renderCond(r.where)
   return {

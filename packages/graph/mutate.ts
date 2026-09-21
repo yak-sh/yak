@@ -1,13 +1,13 @@
-// The mutate phase: the patches go in. Everything interesting has already been
-// decided — admission narrowed the batch to what this vocabulary knows,
-// preconditions have held — so what is left is to hand the live bundles to the
-// transaction and note what it minted.
+// The mutate phase: the patches are written. Everything interesting has
+// already been decided — admission narrowed the change to what this vocabulary
+// declares, and the preconditions held — so what is left is to hand the live
+// bundles to the transaction and record the ids storage assigned.
 //
-// The one rule this phase owns is that DEATH IS FINAL. A deleted entity is
+// The one rule this phase owns is that A DELETE IS FINAL. A deleted entity is
 // tombstoned, never erased: its identity row is kept forever so the id can
 // never be reused, and a patch for it — arriving late, replayed from a queue,
-// or sitting later in this very batch — is void. An edit racing a delete loses
-// deterministically, and nothing can bring an eid back.
+// or sitting later in this very change — is discarded. An edit racing a delete
+// loses deterministically, and nothing can bring an eid back.
 
 import type { Bundle } from './bundle.ts'
 import { comps, dead } from './bundle.ts'
@@ -16,9 +16,10 @@ import type { State } from './state.ts'
 import { then } from './pipe.ts'
 
 /**
- * The mutate phase: patch the batch's live bundles in, drop the ones aimed at
- * a dead entity, and record what died and what was born. Delete bundles stay
- * in the batch — the cascade phase is what acts on them.
+ * The mutate phase: write the change's live bundles, drop the ones aimed at an
+ * already-deleted entity, and record which entities were deleted and which
+ * were created. Delete bundles stay in the change — the cascade phase is what
+ * acts on them.
  */
 export let mutate = (
   bundles: Bundle[],
@@ -27,14 +28,15 @@ export let mutate = (
 ): Bundle[] | Promise<Bundle[]> => {
   let eids = [...new Set(bundles.map((b) => b.entity.eid))]
   return then(tx.get(eids), (found) => {
-    // Already in the grave before this batch began.
+    // Already deleted before this change began.
     let gone = new Set(
       found.filter((b) => dead(b)).map((b) => b.entity.eid),
     )
     let live: Bundle[] = []
     let kept = bundles.filter((b) => {
       let eid = b.entity.eid
-      if (gone.has(eid)) return false // a tombstone takes no patch, ever
+      // A tombstoned entity accepts no patch, ever.
+      if (gone.has(eid)) return false
       if (dead(b)) {
         gone.add(eid)
         if (!st.killed.includes(eid)) st.killed.push(eid)

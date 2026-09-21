@@ -1,8 +1,9 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // blog, written as a vocabulary. Posts, and two relations between them: a post
 // CITES another, and a post LINKS to another. `cites` is declared the plain way
-// (the component's own name is the relation); `links` is declared as `linked`,
-// so the tests also cover a vocabulary whose tag and its reading differ.
+// (the component's own name is the relation name); `links` is declared as
+// `linked`, so the tests also cover a vocabulary whose component name and query
+// name differ.
 //
 // The store is @yaks/sqlite over an in-memory database, which is how an
 // application composes this package: the adapter owns the bytes, the graph owns
@@ -55,7 +56,7 @@ let doc: VocabDoc = {
       relation: 'linked',
     },
     // Something that is NOT a relation, so the tests can prove an ordinary
-    // component riding beside an edge is never mistaken for one.
+    // component stored beside an edge is never mistaken for one.
     pinned: {
       component: true,
       type: 'object',

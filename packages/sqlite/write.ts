@@ -5,7 +5,7 @@
 //   omitted columns are untouched       a patch names only what changes
 //   a column set to null is cleared     null is a value, not an absence
 //   a component set to null is dropped  the row goes, the entity stays
-//   a tombstoned entity takes no patch  death is final; ids never recycle
+//   a tombstoned entity takes no patch  deletion is final; ids never recycle
 //
 // Every write here is a STATEMENT, built before it is sent, and every statement
 // is SELF-SUFFICIENT: an owner id is a subquery (`select id from entity where
@@ -14,26 +14,28 @@
 // two writes.
 //
 // That is what lets one write path serve every SQLite-shaped adapter. An
-// embedded engine could afford to ask — look up an id, insert a row, ask again
-// — but D1 answers over the network and gives no interactive transaction, so a
-// write that asked questions mid-flight could not be atomic there: whatever it
-// learned would be learned outside the batch that commits. Statements that ask
-// nothing can be gathered into one list and sent as a single all-or-nothing
-// unit, which is exactly what @yaks/d1 does with the ones built here.
+// embedded engine could afford to query mid-write — look up an id, insert a
+// row, query again — but D1 runs over the network and gives no interactive
+// transaction, so a write that queried mid-flight could not be atomic there:
+// whatever it learned would be learned outside the batch that commits.
+// Statements that query nothing can be gathered into one list and sent as a
+// single all-or-nothing unit, which is exactly what @yaks/d1 does with the ones
+// built here.
 //
 // The one read that remains is about IDENTITY, not about ids: which of the
-// named eids are already in the grave, asked once for the whole batch. What
-// numbers the new ones were given is not asked at all — every mint statement
-// RETURNS its own row, so an insert that minted says so and an insert that
-// found the eid already there says nothing. That is why @yaks/d1 can mint
+// named eids are already tombstoned, queried once for the whole batch. What
+// numbers the new ones were given is not queried at all — every mint statement
+// RETURNS its own row, so an insert that minted returns one and an insert that
+// found the eid already there returns none. That is why @yaks/d1 can mint
 // without knowing a number in advance: its batch comes back statement by
 // statement, and the numbers are in it.
 //
 // What is NOT here is which entities a delete takes with it. A reference's
-// death word (`cascade`, `detach`, `release`, `keep`) is a rule about MEANING,
-// declared in the vocabulary, and @yaks/graph reads it — through the same
-// transaction — to decide who dies. This file removes exactly the entities it
-// is handed. One decision, in one place, shared by every storage adapter.
+// declared death behavior (`cascade`, `detach`, `release`, `keep`) is a rule
+// about MEANING, declared in the vocabulary, and @yaks/graph reads it — through
+// the same transaction — to decide which entities go. This file removes exactly
+// the entities it is given. One decision, in one place, shared by every storage
+// adapter.
 //
 // IDENTITY IS STORAGE'S: `patch` mints a spine for every eid the batch touches
 // or points at (so a reference may name a target created in the same batch, in
@@ -68,13 +70,13 @@ let scalar = (value: unknown): Param =>
 let isRef = (v: Vocab, comp: string, prop: string): boolean =>
   v.column(comp, prop)?.category == 'ref'
 
-/** What the store already knows about an eid: whether that identity is in its
- * grave. An eid with no entry wears no entity yet. */
+/** What the store already knows about an eid: whether that identity is
+ * tombstoned. An eid with no entry has no entity yet. */
 export type Spine = { dead: boolean }
 
 /** What the store knows about these eids — one statement, whatever the batch's
  * size. An eid absent from the map has no entity; one present with `dead` is
- * tombstoned, and a dead identity is still an identity: it answers by eid
+ * tombstoned, and a deleted identity is still an identity: it resolves by eid
  * forever, it just takes no more writes. */
 export let spines = (
   driver: Driver,
@@ -101,20 +103,21 @@ export let buried = (driver: Driver, eids: string[]): Set<string> =>
   )
 
 /**
- * The statement that mints an identity, and reports what it minted. SQLite
+ * The statement that mints an identity, and returns what it minted. SQLite
  * takes the next number at insert time — inside whatever transaction the
  * statement runs in, so it is exact under a concurrent writer — and RETURNING
- * hands it straight back. `do nothing` on an eid that already has an identity,
+ * passes it straight back. `do nothing` on an eid that already has an identity,
  * so minting twice is not an error; RETURNING then emits NO row, which is also
- * the answer to "was this one new". A number is OPT-IN: unsaid, the spine is
- * minted with a NULL number, which is what a store whose entities nobody ever
- * types the number of wants. `number = true` puts it on the human line.
+ * how the caller knows whether this one was new. A number is OPT-IN: left out,
+ * the spine is minted with a NULL number, which is what a store whose entities
+ * nobody ever types the number of wants. `number = true` gives it a
+ * human-readable number.
  *
  * `number` may also be a NUMBER, and then it is the one the entity takes: a
  * store seeded from another store's export adopts the numbers that export
  * already carries, because an entity read as `T-37574` somewhere is `T-37574`
  * everywhere. The sequence follows — `entity_number_insert` raises its high
- * water mark — so the next minted number is still past every stated one.
+ * water mark — so the next minted number is still past every given one.
  */
 export let mintSql = (eid: string, number: boolean | number = false): Sql => ({
   sql: `insert into entity (eid, num)
@@ -130,7 +133,7 @@ export let mintSql = (eid: string, number: boolean | number = false): Sql => ({
 })
 
 /** The identity a {@link mintSql} statement reported — the rows it returned —
- * or `undefined` when the eid already wore one and nothing was minted. */
+ * or `undefined` when the eid already had one and nothing was minted. */
 export let minted = (rows: Row[]): Entity | undefined =>
   rows[0]
     ? {
@@ -150,10 +153,11 @@ export let minted = (rows: Row[]): Entity | undefined =>
  * inserted row. Its WHERE is also what lets SQLite parse the upsert clause.
  *
  * A tag insert is `or ignore` in both forms: existence is the whole fact it
- * asserts, so a component whose table demands a column the tag cannot supply
- * is a no-op rather than a failed batch. That is what keeps a server-minted
- * audit — a row a host writes with its own columns — un-mintable from the
- * wire without the wire being able to break the batch by naming it.
+ * asserts, so a component whose table requires a column the tag cannot supply
+ * is a no-op rather than a failed batch. That is what keeps a server-written
+ * audit row — one the server writes with its own columns — impossible to create
+ * from a client request, without a client being able to fail the batch by
+ * naming it.
  */
 export let upsertSql = (
   v: Vocab,
@@ -265,11 +269,11 @@ let patchOne = (
 }
 
 /**
- * The statements that remove one entity: every component row it wears, then the
+ * The statements that remove one entity: every component row it has, then the
  * tombstone that keeps its id from ever being reused. Components go in reverse
  * declaration order, so a dependent is gone before what it references and no
  * foreign key blocks the delete. The tombstone is an INSERT…SELECT, so an eid
- * no entity wears tombstones nothing.
+ * no entity uses tombstones nothing.
  */
 export let removeSql = (v: Vocab, entity: Entity, at: string): Sql[] => [
   ...[...v.all].reverse()
@@ -315,7 +319,8 @@ export let patch = (
   // reference can name a target created in the same batch, in any order. An
   // eid the store already knows is skipped here and would be a no-op anyway.
   // Classification sees the whole admitted batch, including targets referenced
-  // before their own bundle. Existing excluded facets remain unnumbered.
+  // before their own bundle. Entities that already carry an excluded component
+  // remain unnumbered.
   let excluded = new Set<string>()
   if (typeof number == 'object') {
     for (let name of number.except) {
@@ -390,9 +395,9 @@ export let patch = (
 }
 
 /**
- * Remove these entities: every component row they wear goes, and their
- * identity is tombstoned so the id can never be reused. Exactly the entities
- * named — @yaks/graph decided who they are.
+ * Remove these entities: every component row they have goes, and their identity
+ * is tombstoned so the id can never be reused. Exactly the entities named —
+ * @yaks/graph decided which they are.
  */
 export let remove = (
   driver: Driver,

@@ -4,9 +4,9 @@
  * ## What it is
  * D1 is a serverless SQLite reachable only over an async API, so this adapter
  * is async end to end: every read and every write returns a promise. It
- * composes the yaks query → vocabulary → SQL stack over a D1 binding to satisfy
- * {@link https://jsr.io/@yaks/graph | @yaks/graph}'s `Storage` seam — a query
- * in, whole bundles out; a change patched into rows.
+ * composes the yaks query → vocabulary → SQL stack over a D1 binding to
+ * implement {@link https://jsr.io/@yaks/graph | @yaks/graph}'s `Storage`
+ * interface — a query in, whole bundles out; a change patched into rows.
  *
  * ```ts
  * import { graph } from '@yaks/graph'
@@ -19,12 +19,12 @@
  * // await g.read('.kind=doc')
  * ```
  *
- * Because the seam is async-OR-sync and @yaks/graph threads either (its `then`
- * awaits a promise and passes a plain value straight through), the SAME
- * `apply()` is synchronous over @yaks/sqlite and asynchronous here. Nothing in
- * between has to know which.
+ * Because `Storage` may be either asynchronous or synchronous, and @yaks/graph
+ * handles either (its `then` awaits a promise and passes a plain value straight
+ * through), the SAME `apply()` is synchronous over @yaks/sqlite and
+ * asynchronous here. No caller in between has to know which.
  *
- * ## The transaction, stated plainly
+ * ## The transaction, in plain terms
  * D1 has no interactive transaction — no call opens one, lets your code read
  * and decide inside it, and commits at the end. What it has is `batch()`, which
  * runs a list of statements sequentially in one implicit transaction and rolls
@@ -32,7 +32,8 @@
  * immediately against the committed database, writes are gathered as
  * statements, returning flushes them as ONE atomic batch, and throwing discards
  * them unsent. Reads inside the transaction see its own pending writes through
- * an in-memory overlay judged by {@link https://jsr.io/@yaks/match | @yaks/match}.
+ * an in-memory overlay evaluated by
+ * {@link https://jsr.io/@yaks/match | @yaks/match}.
  *
  * The write is atomic; the transaction is NOT serializable, because the reads
  * cannot be enrolled in a batch that has not been sent. See the README's

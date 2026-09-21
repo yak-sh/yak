@@ -1,28 +1,29 @@
-// Writing a value that is already somebody's, and reading a value back.
+// Writing a value somebody already holds, and reading a value back.
 //
-// The key's id is the pair (./eid.ts), so a value that has been claimed is a
-// row sitting at an id anyone can compute. Two things follow, and they are this
-// file.
+// A key's id is derived from its kind and value (./eid.ts), so a value that has
+// been claimed is a row sitting at an id anyone can compute. Two things follow,
+// and they are this file.
 //
-// THE DEDUPE. A batch that mints an entity under a `$alias` and states a value
-// for it — which is what a seed, a chunked import and a page that saves the
-// same row every time it opens all do — should land on the entity that already
-// holds the value rather than beside it. So after @yaks/graph has named every
-// `$alias`, the derived rows are READ (one `get` by id for the whole batch; no
-// query), and where a value is already held the minted id gives way to the
-// holder's, in the bundle and in everything pointing at it (`substitute`). The
-// rest of the batch then patches the entity that was already there.
+// RESOLVING ONTO THE HOLDER. A write that mints an entity under a `$alias` and
+// gives it a value — which is what a seed, a chunked import and a page that
+// saves the same row every time it opens all do — should land on the entity
+// that already holds that value rather than beside it. So after @yaks/graph has
+// assigned an id to every `$alias`, the derived rows are READ (one `get` by id
+// for the whole write; no query), and where a value is already held the minted
+// id gives way to the holder's, in the bundle and in everything pointing at it
+// (`substitute`). The rest of the write then patches the entity that was
+// already there.
 //
-// THE REFUSAL. A key whose `of` was NOT minted in this batch — a caller who
-// wrote an id down — is refused instead, naming the holder. The caller said
-// both which entity and which value and they disagree; swapping the id under
+// THE REFUSAL. A key whose `of` was NOT minted in this write — a caller who
+// wrote an id down — is refused instead, naming the holder. The caller named
+// both the entity and the value and the two disagree; swapping the id underneath
 // them would be a lie, and the holder's id is the one they wanted.
 //
-// The read is taken in `mint`, which runs OUTSIDE the transaction. That is a
-// window: two isolates claiming one free value at the same instant both find
+// The read happens in `mint`, which runs OUTSIDE the transaction. That leaves a
+// window: two processes claiming one free value at the same instant both find
 // nothing and both write. The derived id closes it — both writes address the
-// same row, so the second is a patch of the first rather than a second row, and
-// the `of` that lands is the one that committed last.
+// same row, so the second patches the first rather than creating a second row,
+// and the `of` that ends up stored is the one that committed last.
 
 import type { Eid, Hook, Tx } from '@yaks/graph'
 import { Refused, substitute, then } from '@yaks/graph'
@@ -32,9 +33,9 @@ import { keyEid, tagOf } from './eid.ts'
 import { KEY, names } from './kinds.ts'
 
 /**
- * Who holds each of these values in a kind — one `get` for the whole list, and
- * a value nobody holds is simply absent from the answer. The lookup every door
- * makes: no query, no index, no scan.
+ * Who holds each of these values in a kind — one `get` for the whole list, with
+ * a value nobody holds simply absent from the result. This is the lookup
+ * everything else makes: no query, no index, no scan.
  */
 export let held = (
   tx: Tx,
@@ -55,9 +56,10 @@ export let held = (
 }
 
 /**
- * The `cascade` hook that finishes a release: when what a key named dies, the
- * `key` row goes by the vocabulary's own word (`death: release`) and this drops
- * the kind tag beside it, so nothing is left wearing half a key.
+ * The `cascade` hook that finishes a release: when the entity a key identified
+ * is deleted, the `key` row goes because the vocabulary declares
+ * `death: release`, and this removes the kind tag beside it, so no entity is
+ * left holding half a key.
  *
  * It is a RELEASE and not a cascade on purpose. A cascade would tombstone the
  * key entity, and that id is derived from the value — so the value could never
@@ -82,10 +84,11 @@ export let retired = (vocab: Vocab): Hook => {
 }
 
 /**
- * The `mint` hook that makes a value permanent: a key somebody already holds
- * resolves this batch's entity onto theirs, and a clash is refused with the
- * holder named. Registered by {@link keys}; exported on its own for a graph
- * that wants the behaviour without the vocabulary.
+ * The `mint` hook that keeps one value on one entity: claiming a value somebody
+ * already holds resolves this write's entity onto theirs, and a clash is
+ * refused with the holder named. Registered by
+ * {@link https://jsr.io/@yaks/key/doc/~/keys | keys}; exported on its own for a
+ * graph that wants the behaviour without the rest of the plugin.
  */
 export let settled = (vocab: Vocab): Hook => {
   let tags = names(vocab)
@@ -96,9 +99,9 @@ export let settled = (vocab: Vocab): Hook => {
       return value && tag && ofOf(b) ? [[b, tag, value] as const] : []
     })
     if (!claims.length) return bundles
-    // A key is named by its pair. A bundle filed anywhere else would be a
-    // second row for one value, which is the one thing this component may not
-    // be.
+    // A key's id is derived from its kind and value. A bundle written at any
+    // other id would be a second row for one value, which is the one thing this
+    // component may not be.
     for (let [b, tag, value] of claims) {
       let at = keyEid(tag, value)
       if (b.entity.eid != at) {
@@ -108,7 +111,7 @@ export let settled = (vocab: Vocab): Hook => {
         )
       }
     }
-    // Which entities this batch minted under a `$alias`: the ones whose id is
+    // Which entities this write minted under a `$alias`: the ones whose id was
     // the graph's to pick, and so the ones an existing holder may replace.
     let ours = new Set(
       bundles.flatMap((b) => b.$alias == null ? [] : [b.entity.eid]),

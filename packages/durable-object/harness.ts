@@ -198,10 +198,10 @@ export let durable = (): DurableStorage & {
     getAlarm: () => Promise.resolve(alarm),
     setAlarm: (at: number) => Promise.resolve(void (alarm = at)),
     deleteAlarm: () => Promise.resolve(void (alarm = null)),
-    // A statement run BENEATH the authorizer, which is the runtime's own hand:
-    // planting `_cf_KV` and reading it back are both things workerd refuses to
-    // an object and does itself. The only door a test has to what every
-    // deployed object is carrying.
+    // A statement run BELOW the authorizer, as the runtime itself does:
+    // creating `_cf_KV` and reading it back are both things workerd refuses to
+    // an object and does itself. This is the only way a test can see what every
+    // deployed object actually contains.
     beneath: (query: string) => run(query, []),
     // Nested savepoints, which is what the runtime's own transaction is: an
     // inner throw rolls back only the inner run.

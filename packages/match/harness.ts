@@ -1,9 +1,9 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
-// small made-up vocabulary and a corpus of bundles the test files read against.
-// The domain is a bookshop — documents, books, reviews, members — chosen
-// because it exercises every column type the grammar can ask about (text, prose,
-// number, boolean, enum, timestamp, reference) and both directions of a
-// reference, without any knowledge outside this file.
+// small made-up vocabulary and a set of bundles the test files run against. The
+// domain is a bookshop — documents, books, reviews, members — chosen because it
+// exercises every column type the grammar can ask about (text, prose, number,
+// boolean, enum, timestamp, reference) and both directions of a reference, and
+// because reading the tests needs no knowledge from outside this file.
 
 import type { Bundle } from './read.ts'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -16,7 +16,7 @@ let doc: VocabDoc = {
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
-    // A named thing: a title and a body of prose. Everything in the shop wears
+    // A named thing: a title and a body of prose. Everything in the shop has
     // one, so this is also where the searchable text lives.
     doc: {
       component: true,
@@ -28,7 +28,7 @@ let doc: VocabDoc = {
       },
     },
     // A book on sale: what it costs, when it came out, whether it is in stock,
-    // where it is in its life, and who wrote it.
+    // what state it is in, and who wrote it.
     book: {
       component: true,
       type: 'object',
@@ -42,7 +42,7 @@ let doc: VocabDoc = {
         author: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },
-    // A review exists ABOUT a book — deleting the book takes its reviews too.
+    // A review is about a book — deleting the book deletes its reviews too.
     review: {
       component: true,
       type: 'object',
@@ -60,9 +60,9 @@ let doc: VocabDoc = {
       before: ['doc'],
       properties: { joined: { type: 'string', format: 'date-time' } },
     },
-    // A TAG: a component with no columns at all, whose presence is the whole
-    // fact. Wearing it says the shop signed this copy; there is nothing else to
-    // say about it, so `.signed!` and `.signed=` are the only questions it
+    // A TAG: a component with no columns at all, where having it is the whole
+    // fact. It records that the shop signed this copy; there is nothing else to
+    // record about it, so `.signed!` and `.signed=` are the only questions it
     // answers.
     signed: {
       component: true,
@@ -78,7 +78,7 @@ export let shop: Vocab = loadVocab(doc)
 /** The moment every relative time phrase in the tests resolves against. */
 export let NOW: number = Date.parse('2024-06-15T12:00:00.000Z')
 
-// The corpus, written in dependency order so an entity is minted before
+// The bundles, written in dependency order so an entity is created before
 // anything points at it, which makes the entity numbers below match the order
 // of this list.
 let rows: Bundle[] = [
@@ -143,15 +143,15 @@ let rows: Bundle[] = [
   { entity: { eid: 'r9' }, review: { stars: 1, book: 'b3' } },
 ]
 
-/** The eid whose entity is deleted after the corpus is written. */
+/** The eid of the entity that is deleted after the fixture is written. */
 export let DEAD = 'r9'
 
-/** The corpus as it is written to storage, in order. */
+/** The fixture as it is written to storage, in order. */
 export let corpus: Bundle[] = rows
 
 /**
- * The same corpus as a caller holds it in memory: the entity numbers storage
- * would mint (one per bundle, in write order), and the deleted entity as the
+ * The same fixture as a caller holds it in memory: the entity numbers storage
+ * would assign (one per bundle, in write order), and the deleted entity as the
  * tombstone it becomes — its component rows gone, its identity kept.
  */
 export let bundles: Bundle[] = rows.map((b, i) => {

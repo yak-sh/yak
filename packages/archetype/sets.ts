@@ -2,7 +2,8 @@ import { derivedEid } from '@yaks/graph'
 import type { Presence, VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 
-/** The archetype and retired components, loaded beside a host's vocabulary. */
+/** The archetype and retired components, loaded beside the application's own
+ * vocabulary. */
 export const archetypeDoc: VocabDoc = doc
 
 /** A canonical table set with its portable, domain-separated derived entity id. */
@@ -15,8 +16,9 @@ export type Archetype = {
 export function canonical(tables: Iterable<string>): string[] {
   let encoder = new TextEncoder()
   let entries = [...new Set(tables)].map((name) => {
-    // The identity framing reserves comma and |; refuse ambiguity rather than let
-    // two different sets share an address. SQLite component names never use it.
+    // The string the id is derived from reserves comma and |; reject an
+    // ambiguous name rather than let two different sets share an address.
+    // SQLite component names never contain these characters.
     if (
       !name || name.includes('|') || name.includes(',') || name.includes('\0')
     ) {
@@ -38,7 +40,7 @@ export function eidOf(tables: Iterable<string>): string {
   return derivedEid('archetype|' + canonical(tables).join(','))
 }
 
-/** Decode the scalar wire/storage representation of archetype.tables. */
+/** Decode the scalar form `archetype.tables` is stored and transmitted in. */
 export function tablesOf(value: unknown): string[] {
   let list = typeof value == 'string' ? JSON.parse(value) : value
   if (!Array.isArray(list) || list.some((v) => typeof v != 'string')) {

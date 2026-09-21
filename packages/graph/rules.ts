@@ -1,48 +1,53 @@
-// The declarative half of the phase seam. A {@link Hook} is code that takes the
-// batch; a RULE is a query over one bundle in it plus what comes out — and the
-// query says both things at once. `.entity, +!created` is what the rule needs
-// (an entity the graph holds no `created` for) and what it does about it (add
-// `created`, which is what makes the rule fire once, ever). A plugin declares
-// rules beside its hooks, and the phase runs them.
+// The declarative way to extend a phase. A {@link Hook} is code that takes the
+// bundles; a RULE is a query over one bundle in the change plus what the rule
+// produces — and the query expresses both at once. `.entity, +!created` states
+// what the rule needs (an entity the graph holds no `created` for) and what it
+// does about it (add `created`, which is also what makes the rule fire exactly
+// once, ever). A plugin declares rules beside its hooks, and the phase runs
+// them.
 //
-// ONE TICK, ONE VIEW. The bundles a phase's rules are judged against are
-// composed once — what the graph holds for each entity, with the batch's patch
-// folded in — before any rule fires. Two rules in a phase therefore see the
-// same world and cannot chase each other's writes, which is exactly what the
-// `created`/`updated` pair needs: a birth is not also a touch.
+// ALL RULES IN A PHASE SEE THE SAME STATE. The bundles a phase's rules are
+// evaluated against are composed once — what the graph holds for each entity,
+// with this change's patch folded in — before any rule fires. Two rules in one
+// phase therefore see the same state and cannot react to each other's writes,
+// which is exactly what the `created`/`updated` pair needs: creating an entity
+// must not also count as updating it.
 //
-// The `*comp` write set is a rule's declaration of what it writes. v1 records it
-// and refuses a produce or a run that writes outside it. In the effect phase it
-// also names the writes that wake the rule: at least one must be in this batch,
-// so a stored component alone cannot repeat an effect on an unrelated edit.
-// A rule that declares none is unchecked — declaring is opting in.
+// The `*comp` write set is a rule's declaration of what it writes. The current
+// version records it and refuses a `produce` or a `run` that writes outside
+// it. In the effect phase it also names the writes that trigger the rule: at
+// least one of them must appear in this change, so the mere presence of a
+// stored component cannot re-run an effect on an unrelated edit. A rule that
+// declares no write set is unchecked — declaring one is opting in.
 //
 // RESOURCES are the other half of a rule's match. `#Now` binds a singleton the
-// tick provides — the batch's instant, its actor, the vocabulary, a host's
-// environment — into the bundle under its own name, so `run` takes the bound
-// bundle and nothing else: everything a rule reads, it named. They are made at
-// most once per tick and read-only; writing one is refused like a write outside
-// the write set. A resource is not vocabulary, so a rule naming one nobody
-// provides is an error where a rule naming an unknown COMPONENT is inert.
+// phase provides — the change's timestamp, its actor, the vocabulary, the
+// calling program's environment — into the bundle under its own name, so `run`
+// takes the bound bundle and nothing else: everything a rule reads, it named.
+// Resources are built at most once per phase and are read-only; writing one is
+// refused the same way a write outside the write set is. A resource is not part
+// of the vocabulary, so a rule naming a resource nobody provides is an error,
+// while a rule naming an undeclared COMPONENT simply never matches.
 //
-// A resource is CAPITALIZED — `#Actor`, `#Now` — because it is bound into the
-// same bundle as the components, and a component is a lowercase word. So
-// `({ trashed, Actor, Now })` reads which is which, and a collision between the
-// two is impossible rather than checked for. A resource registered under a
-// lowercase name is refused where the registry is composed.
+// A resource name is CAPITALIZED — `#Actor`, `#Now` — because it is bound into
+// the same bundle as the components, and a component name is lowercase. So
+// `({ trashed, Actor, Now })` shows which is which, and a collision between
+// the two is impossible rather than something to check for. A resource
+// registered under a lowercase name is refused when the registry is built.
 //
-// A resource is COMPONENT-SHAPED, like everything else in a bundle: a bag of
-// columns (`Now.at`, `Actor.by`) rather than a bare value. And like an entity
-// written into a reference column, it STANDS FOR one value when a rule writes
-// it as a column: `{ at: Now, by: Actor }` writes the instant and the actor's
-// eid. That is not per-resource sugar — each resource says what it stands for
-// (see {@link stands}), a rule's patch resolves what it wrote, and a resource
-// standing for nothing writes nothing at all.
+// A resource has the same shape as a component: an object of columns
+// (`Now.at`, `Actor.by`) rather than a bare value. And like an entity written
+// into a reference column, it CONVERTS TO one value when a rule writes it into
+// a column: `{ at: Now, by: Actor }` writes the timestamp and the actor's eid.
+// That is not special-cased per resource — each resource declares what it
+// converts to (see {@link stands}), a rule's patch resolves what it wrote, and
+// a resource that converts to nothing writes nothing at all.
 //
-// What a resource is NOT is a value the MATCH can see: `expires.at<Now.at`
-// would need a value-side reference, which the grammar's values do not have
-// (that is @yaks/logic's unification, v2). A rule that writes one is refused
-// where it would otherwise have compared against the literal text.
+// What a resource is NOT is a value the MATCH side can read:
+// `expires.at<Now.at` would need a reference on the value side of a
+// comparison, which the query grammar's values do not have (that is
+// @yaks/logic's unification, planned). A rule that tries it is refused rather
+// than silently compared against the literal text `Now.at`.
 
 import { matcher, type Select } from '@yaks/match'
 import {
@@ -61,43 +66,45 @@ import type { Query, Tx } from './storage.ts'
 import { each, then } from './pipe.ts'
 
 /**
- * One phase's TICK: the frozen world its rules are judged against, and what
- * they are made of. The batch is the world's contents; the rest is what the
- * host knows about the run.
+ * The context one phase's rules run in: the frozen state they are evaluated
+ * against, and what they are built from. `bundles` is that state; the rest is
+ * what the graph knows about the run.
  */
 export type Tick = {
-  /** the component vocabulary this graph speaks */
+  /** the component vocabulary this graph uses */
   vocab: Vocab
-  /** the transaction of the phase (detached outside the batch's own) */
+  /** the phase's transaction (a detached one outside the change's own) */
   tx: Tx
-  /** the phase running: what tells a rule whose output still has to be written
-   * from one whose output the `mutate` phase will write for it */
+  /** the phase running: what distinguishes a rule whose output still has to be
+   * written from one whose output the `mutate` phase will write for it */
   phase: Phase
-  /** the batch as this phase found it — what the rules are judged against.
-   * Effect rules with a `*write` set require one of those components to appear
-   * in this batch for the matched entity, even when `of` supplies more. */
+  /** the change as this phase found it — what the rules are evaluated against.
+   * An effect rule with a `*write` set requires one of those components to
+   * appear in this change for the matched entity, even when `of` supplies
+   * more. */
   bundles: Bundle[]
   /** the singletons a rule may name with `#`, by name */
   resources: Record<string, Resource>
-  /** the graph as this batch found it, for the entities it names. A rule asks
-   * about a component the batch does not carry — a gate on `created` — through
-   * this; a phase with nothing to offer leaves it out, and a rule then sees the
-   * batch alone. */
+  /** the graph as this change found it, for the entities the change names. A
+   * rule asks about a component the change does not carry — a condition on
+   * `created`, say — through this; a phase with nothing gathered leaves it out,
+   * and a rule then sees only the change itself. */
   of?: (eid: Eid) => Bundle | undefined
 }
 
 /**
- * A resource: a singleton made from the tick, bound into a rule's bundle by
- * `#Name`. It is made at most once per tick and only if a rule asked, so an
- * expensive one costs nothing until something names it.
+ * A resource: a singleton built from the phase context and bound into a rule's
+ * bundle by `#Name`. It is built at most once per phase and only if a rule
+ * asked for it, so an expensive one costs nothing until something names it.
  */
 export type Resource = (tick: Tick) => unknown
 
 /**
- * A resource's value: its columns, and the one value it STANDS FOR when a rule
- * writes it into a column — the instant for `#Now`, the eid for `#Actor`. It
- * says so the way any JavaScript value says what it is worth as a primitive,
- * so `${Now}` and a written `at: Now` agree by construction.
+ * A resource's value: its columns, plus the one value it CONVERTS TO when a
+ * rule writes it into a column — the timestamp for `#Now`, the eid for
+ * `#Actor`. It declares that the way any JavaScript value declares its
+ * primitive conversion, so `${Now}` and a written `at: Now` agree by
+ * construction.
  *
  * ```ts
  * import { stands } from '@yaks/graph'
@@ -108,8 +115,8 @@ export type Resource = (tick: Tick) => unknown
  * ```
  *
  * The default is the component's FIRST column, which is what a one-column
- * resource means and what `{at}` and `{by, via}` both want; a resource whose
- * columns do not lead with the value it stands for names it outright.
+ * resource means and what both `{at}` and `{by, via}` want; a resource whose
+ * first column is not the value it converts to passes that value explicitly.
  */
 export let stands = <T extends Comp>(comp: T, value?: unknown): T =>
   Object.assign(comp, {
@@ -117,17 +124,17 @@ export let stands = <T extends Comp>(comp: T, value?: unknown): T =>
       value === undefined ? Object.values(comp)[0] : value,
   })
 
-// What a resource written into a column comes to. Anything else is itself.
+// What a resource written into a column converts to. Anything else is itself.
 let worth = (v: unknown): unknown =>
   v && typeof v == 'object' && Symbol.toPrimitive in v
     ? (v as { [Symbol.toPrimitive]: () => unknown })[Symbol.toPrimitive]()
     : v
 
 /**
- * The resources of a tick, composed from what each provider offers — the
- * plugins, then the graph's own, which have the last word. A name that is not
- * capitalized is refused here: the capital is the whole reason a resource and
- * a component can share one bundle without colliding.
+ * The resources available to a phase, merged from what each provider offers —
+ * the plugins first, then the graph's own, which take precedence. A name that
+ * is not capitalized is refused here: the capital letter is the whole reason a
+ * resource and a component can share one bundle without colliding.
  */
 export let registry = (
   sets: (Record<string, Resource> | undefined)[],
@@ -139,7 +146,7 @@ export let registry = (
         throw new Error(
           `resource ${name} must be capitalized (#${
             name.slice(0, 1).toUpperCase() + name.slice(1)
-          }): a lowercase word is a component`,
+          }): a lowercase name is a component`,
         )
       }
       out[name] = make
@@ -150,40 +157,42 @@ export let registry = (
 
 /**
  * What a rule's `run` is handed: the bundle it matched — the entity's
- * components, with the match's ensures and gate already on — plus the resources
- * its `#names` named, under those names. There is nothing else; a rule reads
- * what it declared.
+ * components, with the match's `+` components and its condition already
+ * applied — plus the resources its `#names` referred to, under those names.
+ * There is nothing else; a rule reads only what it declared.
  *
- * The three @yaks/graph provides itself are typed here because the core's own
- * rules read them; a host's own resource is reached by name, like a component.
- * The capital is what tells them apart: `({ trashed, Actor, Now })`.
+ * The three resources @yaks/graph provides itself are typed here because the
+ * core's own rules read them; a resource the calling program adds is reached by
+ * name, like a component. The capital letter is what tells the two apart:
+ * `({ trashed, Actor, Now })`.
  */
 export type Bound = Bundle & {
-  /** `#Vocab` — the component vocabulary this graph speaks */
+  /** `#Vocab` — the component vocabulary this graph uses */
   Vocab: Vocab
-  /** `#Now` — the instant this batch stamps with; `Now.at` reads it, and a
-   * column written `at: Now` gets it */
+  /** `#Now` — the timestamp this transaction stamps with; `Now.at` reads it,
+   * and a column written `at: Now` is given it */
   Now: { at: string }
-  /** `#Actor` — who is writing the batch; a column written `by: Actor` gets
-   * the eid, and nothing at all when nobody is named */
+  /** `#Actor` — who is writing this change; a column written `by: Actor` is
+   * given the eid, and nothing at all when no actor is named */
   Actor: Actor
 }
 
 /**
- * What a rule writes: components by name (or `null` to drop one), with no
- * identity of its own — the bundle it matched says who it is about. A rule
- * writes to the entity it matched and nowhere else; making OTHER entities is
- * what a hook is still for.
+ * What a rule writes: components by name (or `null` to remove one), with no
+ * identity of its own — the bundle it matched determines which entity it is
+ * about. A rule writes to the entity it matched and nowhere else; creating
+ * OTHER entities is still a hook's job.
  */
 export type Patch = Record<string, Comp | null>
 
 /**
- * A rule: a query over one bundle in the batch, and what comes out of it.
+ * A rule: a query over one bundle in the change, plus what it produces.
  *
  * `produce` is the no-code case — a bundle template merged into the matched
- * bundle — and `run` is the rest, a function of the bound bundle. The ensures
- * and the gate of the match are applied BEFORE either, so a gated rule's `run`
- * already sees the component that will stop it firing again.
+ * bundle — and `run` covers everything else, as a function of the bound
+ * bundle. The match's `+` components and its `!` condition are applied BEFORE
+ * either, so the `run` of a rule that fires once already sees the component
+ * that will stop it firing again.
  *
  * ```ts
  * import type { Rule } from '@yaks/graph'
@@ -199,22 +208,26 @@ export type Patch = Record<string, Comp | null>
 export type Rule = {
   /** the phase it runs in */
   phase: Phase
-  /** the query it matches, as text (parsed with no bare-word text terms) or an
-   * already-built AST. `+comp` ensures, `+!comp` gates, `*comp` declares the
-   * write set (and says the component is present), `#Name` binds a resource,
-   * and the rest filters. An effect rule with a write set only runs when this
-   * batch writes one of those components on the matched entity. */
+  /** the query it matches, as text (parsed with bare-word text terms
+   * disabled) or an already-parsed AST. `+comp` ensures the component exists,
+   * `+!comp` also requires it did not already, so the rule fires once; `*comp`
+   * declares the write set (and requires the component to be present);
+   * `#Name` binds a resource; the rest filters. An effect rule with a write
+   * set only runs when this change writes one of those components on the
+   * matched entity. */
   match: Query
-  /** components to write into the matched bundle, verbatim */
+  /** components to merge into the matched bundle, verbatim */
   produce?: Patch
   /** anything else: the bound bundle in, the patch to write out (or nothing) */
   run?: (bound: Bound) => Patch | undefined | Promise<Patch | undefined>
-  /** a name, for the refusal that says which rule wrote outside its write set */
+  /** a name, used by the refusal that reports which rule wrote outside its
+   * write set */
   name?: string
 }
 
-// A rule's match, compiled: the test, and the names its sigils named. A `test`
-// of null is a rule this graph has no vocabulary for — inert, not wrong.
+// A rule's match, compiled: the test, plus the names its sigils referred to. A
+// `test` of null means this graph's vocabulary declares none of the components
+// the rule is about — the rule never fires, which is not an error.
 type Ready = {
   test: Select | null
   ensures: string[]
@@ -226,17 +239,18 @@ type Ready = {
   checked: boolean
 }
 
-// The capitalized words a match COMPARES against: `expires.at<Now.at` reads as
-// the literal text `Now.at`, because a value in this grammar is a value. Which
-// of them is a resource only the tick knows, so the names travel and `fire`
-// refuses the ones it provides rather than comparing against their spelling.
+// The capitalized names a match COMPARES against: `expires.at<Now.at` parses
+// as a comparison with the literal text `Now.at`, because a value in this
+// grammar is always a literal. Only the running phase knows which of these
+// names is a resource, so the names are carried along and `fire` refuses the
+// ones the phase provides rather than comparing against their text.
 let cited = (f: And): string[] =>
   f.clauses.flatMap((c) => c.kind == 'pred' ? raws(c.value) : [])
     .filter((raw) => /^[A-Z][A-Za-z_]*(\.|$)/.test(raw))
     .map((raw) => raw.split('.')[0])
 
-// Every literal in a value, however it is spelled — one, a list of them, the
-// ends of a range.
+// Every literal inside a value, in any of its forms — a single value, a list
+// of them, or the two ends of a range.
 let raws = (v: Value | null): string[] =>
   !v
     ? []
@@ -247,15 +261,16 @@ let raws = (v: Value | null): string[] =>
     : [...raws(v.lo), ...raws(v.hi)]
 
 // Every component a match NAMES, wherever it names it: the filter reads them,
-// the `+`/`!` halves write and gate them. Which one a rule is about decides
-// whether it is inert in a graph — a store that never heard of `sweep` cannot
-// have a rule about one, and asking is not an error there.
+// and the `+`/`!` parts write and test them. Which components a rule is about
+// decides whether it can ever fire in a given graph — a store whose vocabulary
+// has no `sweep` component cannot have a rule about one, and asking for it
+// there is not an error.
 let words = (f: And): string[] =>
   f.clauses.flatMap((c) => c.kind == 'pred' && c.path.length ? [c.path[0]] : [])
 
 // Compiled once per rule, per vocabulary. Keyed by the rule OBJECT, so this is
 // a memo rather than a registry — two graphs sharing a plugin share the
-// compilation only while they speak the same vocabulary.
+// compilation only while they use the same vocabulary.
 let cache = new WeakMap<Rule, { v: Vocab; ready: Ready }>()
 
 let compile = (r: Rule, v: Vocab): Ready => {
@@ -277,9 +292,10 @@ let compile = (r: Rule, v: Vocab): Ready => {
     checked: d.writes.length > 0,
   }
   try {
-    // A phase selects from one frozen set. Building its reference index once
-    // per rule (not once per entity) keeps a batch linear in its size. Rules
-    // are predicates: ordering and windows do not limit which entities fire.
+    // A phase selects from one frozen set of bundles. Building the reference
+    // index once per rule, rather than once per entity, keeps the cost linear
+    // in the size of the change. Rules are predicates: ordering and windowing
+    // do not decide which entities fire, so those clauses are dropped.
     ready.test = matcher({
       ...d.filter,
       clauses: d.filter.clauses.filter((c) =>
@@ -287,26 +303,29 @@ let compile = (r: Rule, v: Vocab): Ready => {
       ),
     }, v)
   } catch (e) {
-    // A rule about a component this graph does not have is INERT, not an
-    // error: the stamp rules ship with the core, and a vocabulary need not
-    // declare `created` at all. Every component it names counts, the ones it
-    // only READS included — one store's schedules are another's unknown word,
-    // and both hold the same rule list. A rule whose components all exist and
-    // still will not compile is a mistake, and says so.
+    // A rule about a component this graph does not declare never fires, and
+    // that is not an error: the stamp rules ship with the core, and a
+    // vocabulary need not declare `created` at all. Every component the rule
+    // names counts, including the ones it only READS — one store's `schedule`
+    // is a component another store has never heard of, and both hold the same
+    // rule list. A rule whose components all exist and still will not compile
+    // is a mistake, and throws.
     if ([...named, ...words(d.filter)].every((c) => !!v.comp(c))) throw e
   }
   cache.set(r, { v, ready })
   return ready
 }
 
-// What a refusal calls a rule: its name, or the query that is its name enough.
+// How a refusal identifies a rule: its name, or its query, which identifies it
+// well enough.
 let named = (r: Rule): string => r.name ?? String(r.match)
 
-// A written resource becomes the value it stands for — `at: Now` the instant,
-// `by: Actor` the eid — and a resource standing for nothing writes nothing, so
-// a rule needs no `actor.by ? … : {}` around the column it wanted to write. A
-// component that wrote one is rebuilt rather than edited, because a `produce`
-// template is the rule's own object and a rule fires more than once.
+// A resource written into a column becomes the value it converts to — `at:
+// Now` the timestamp, `by: Actor` the eid — and a resource that converts to
+// nothing writes nothing, so a rule needs no `actor.by ? … : {}` around the
+// column it wanted to write. A component containing one is rebuilt rather than
+// edited in place, because a `produce` template is the rule's own object and a
+// rule fires more than once.
 let resolved = (p: Patch): Patch => {
   let out: Patch = {}
   for (let [name, comp] of Object.entries(p)) {
@@ -326,18 +345,19 @@ let resolved = (p: Patch): Patch => {
   return out
 }
 
-// The components a rule's patch writes, identity and `$` sugar aside.
+// The components a rule's patch writes, ignoring the identity and the `$`
+// keys.
 let wrote = (p: Patch): string[] =>
   Object.keys(p).filter((k) => !RESERVED.includes(k) && !k.startsWith('$'))
 
 /**
- * Run the rules of one phase over a batch: the bundles in, the batch plus what
- * the rules produced out.
+ * Run the rules of one phase over a change: the bundles in, the bundles plus
+ * what the rules produced out.
  *
- * Every rule is matched against the same frozen view before any of them writes,
- * and a phase that runs after `mutate` writes what its rules produced through
- * the transaction — before it, the patches simply join the batch and `mutate`
- * writes them like any other.
+ * Every rule is matched against the same frozen state before any of them
+ * writes. A phase that runs after `mutate` writes what its rules produced
+ * through the transaction; before `mutate`, the patches simply join the change
+ * and `mutate` writes them like any other.
  */
 export let fire = (
   rules: Rule[],
@@ -345,9 +365,9 @@ export let fire = (
 ): Bundle[] | Promise<Bundle[]> => {
   let { bundles } = tick
   if (!rules.length) return bundles
-  // One view per ENTITY, not per patch: the phases add their bundles to the
-  // batch as they go, and a rule is about the entity, so it must not fire once
-  // per patch that mentions it.
+  // One view per ENTITY, not per patch: the phases add bundles to the change
+  // as they go, and a rule is about the entity, so it must not fire once per
+  // patch that mentions that entity.
   let seen = new Map<Eid, Bundle>()
   let written = new Map<Eid, Set<string>>()
   for (let b of bundles) {
@@ -359,20 +379,20 @@ export let fire = (
   }
   let views = [...seen.values()]
   let positions = new Map(views.map((v, i) => [v.entity.eid, i]))
-  // Made once, however many rules name it: `#Now` is one instant for the whole
-  // tick because it is one call for the whole tick.
+  // Built once, however many rules name it: `#Now` is a single timestamp for
+  // the whole phase because the resource is called once for the whole phase.
   let held = new Map<string, unknown>()
   let hold = (name: string): unknown => {
     if (!held.has(name)) held.set(name, tick.resources[name](tick))
     return held.get(name)
   }
-  // The tick: every match is judged before any rule acts.
+  // Every match is evaluated before any rule acts.
   let hits: [Rule, Ready, number][] = []
   for (let r of rules) {
     let ready = compile(r, tick.vocab)
-    // Before the match, and whether or not this rule is inert here: a resource
-    // nobody provides is a rule asking for something that does not exist,
-    // which is a mistake to say out loud rather than one to run silently.
+    // Checked before the match, and whether or not this rule could ever fire
+    // here: a resource nobody provides means the rule asks for something that
+    // does not exist, which should throw rather than silently do nothing.
     for (let name of ready.resources) {
       if (!(name in tick.resources)) {
         throw new Error(
@@ -404,13 +424,15 @@ export let fire = (
   return then(
     each(hits, [] as Bundle[], (out, [r, ready, i]) => {
       let patch: Patch = {}
-      // The gate is absent by the match; an ensure may already be there.
+      // The match guarantees a `+!` component is absent; a `+` component may
+      // already be present.
       for (let c of ready.gates) patch[c] = {}
       for (let c of ready.ensures) if (!views[i][c]) patch[c] = {}
       Object.assign(patch, r.produce)
-      // What the rule sees: the view, what the gate and the ensures put on,
-      // and the resources it named. The cast is the seam — which resources are
-      // there is the rule's own match, not something a type can carry.
+      // What the rule sees: the entity's view, the components the `+` and `+!`
+      // clauses just added, and the resources it named. The cast is
+      // unavoidable — which resources are present depends on the rule's own
+      // match, which no static type can express.
       let got: Record<string, unknown> = {}
       for (let name of ready.resources) got[name] = hold(name)
       let bound = { ...views[i], ...patch, ...got } as Bound
@@ -441,9 +463,9 @@ export let fire = (
     }),
     (made) => {
       if (!made.length) return bundles
-      // The rules of a phase run AFTER its core work, so from `mutate` on the
-      // batch has already been written and what a rule made has to be written
-      // itself. Before it, `mutate` is still to come and will write it.
+      // A phase's rules run AFTER its core work, so from `mutate` onwards the
+      // change has already been written and whatever a rule produced has to be
+      // written here. Before `mutate`, it is still to come and will write it.
       let late = PHASES.indexOf(tick.phase) >= PHASES.indexOf('mutate')
       return late
         ? then(tick.tx.patch(made), () => [...bundles, ...made])

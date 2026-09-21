@@ -1,6 +1,8 @@
-// Human handles are requested by a door, never inferred from components.
-// The allocator runs under the graph's write transaction and must be
-// idempotent: an existing number is returned, never replaced.
+// A human-facing number is requested explicitly, with `$num: true` on a
+// bundle, never inferred from which components an entity has. The allocator
+// runs inside the graph's write transaction and must be idempotent: for an
+// entity that already has a number, it returns that number rather than
+// assigning a new one.
 import type { Entity } from './bundle.ts'
 import { dead } from './bundle.ts'
 import type { Plugin } from './plugin.ts'

@@ -1,4 +1,4 @@
-// Following links: the three questions anyone asks of a graph, answered as
+// Following links: the three questions anyone asks of a graph, implemented as
 // ordinary queries against a {@link Storage}.
 //
 //   out(p, 'cites')       what does this post cite?
@@ -6,17 +6,18 @@
 //   reach(p, 'cites', 3)  everything within three hops of it
 //
 // Each is a read, not a new mechanism: an edge is a component, so "the links
-// out of p" is the query `.edge.from=p` narrowed to the entities wearing the
-// relation's tag. `reach` is one such query per level, which is why its depth
-// is required — a walk with no cap is a graph scan wearing a friendly name.
+// out of p" is the query `.edge.from=p` narrowed to entities that also carry
+// the relation's component. `reach` runs one such query per level, which is why
+// its depth argument is required — an uncapped walk is a full graph scan under
+// a friendlier name.
 //
-// Every answer is a set of ENTITY ids, not edges: the far ends, deduplicated,
-// which is what a caller almost always wanted. Reading the links themselves is
-// `storage.read` with the same query.
+// Each returns a set of ENTITY ids rather than links: the far endpoints,
+// deduplicated, which is what a caller almost always wants. To read the links
+// themselves, call `storage.read` with the same query.
 //
-// Sync in, sync out: a storage over an embedded database answers immediately
-// and so does this, while an asynchronous one turns the walk into a promise.
-// Nothing in between has to know which.
+// Synchronous in, synchronous out: a storage over an embedded database returns
+// immediately and so does this, while an asynchronous storage makes the walk
+// return a promise. No caller in between has to know which.
 
 import { and, eq, type Input, list, present } from '@yaks/query'
 import { each, type Eid, type Storage, then } from '@yaks/graph'
@@ -26,7 +27,7 @@ import { EDGE, relations } from './relations.ts'
 /** Which way a walk follows a link: away from the entity, or back to it. */
 export type Dir = 'out' | 'in'
 
-/** The traversal seam, bound to one storage and vocabulary. */
+/** The traversal interface, bound to one storage and vocabulary. */
 export type Walk = {
   /** the entities this one links to through `relation` */
   out: (eid: Eid, relation: string) => Eid[] | Promise<Eid[]>
@@ -46,8 +47,8 @@ let value = (eids: Eid[]): Input => eids.length == 1 ? eids[0] : list(...eids)
 
 /**
  * The traversal helpers over a storage. `vocab` is the loaded vocabulary the
- * storage answers for; a relation it does not declare is refused, since the
- * alternative is an empty answer that reads like "nothing links here".
+ * storage serves; a relation it does not declare throws, since the alternative
+ * is an empty result that reads as "nothing links here".
  */
 export let walk = (storage: Storage, vocab: Vocab): Walk => {
   let rels = relations(vocab)
@@ -65,7 +66,8 @@ export let walk = (storage: Storage, vocab: Vocab): Walk => {
     return tag
   }
 
-  // One level: the far ends of every edge of this relation touching `eids`.
+  // One level: the far endpoints of every link of this relation touching
+  // `eids`.
   let hop = (eids: Eid[], relation: string, dir: Dir) => {
     let tag = tagOf(relation)
     let [here, there] = dir == 'out' ? ['from', 'to'] : ['to', 'from']
@@ -91,9 +93,10 @@ export let walk = (storage: Storage, vocab: Vocab): Walk => {
         () =>
           then(hop(level, relation, dir), (far) => {
             // A cycle comes back to somewhere already walked; the seen set is
-            // what stops it, and the depth cap is what stops everything else.
-            // The start is not in the answer for being the start — but it is
-            // if a path of at least one hop leads back to it.
+            // what stops it, and the depth limit is what stops everything
+            // else. The starting entity is not included for being the start —
+            // but it is included if a path of at least one hop leads back to
+            // it.
             level = far.filter((e) => !seen.has(e))
             for (let e of level) seen.add(e)
             return null

@@ -1,10 +1,10 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
-// library, written as a vocabulary. Books, and two kinds of value a book or a
-// person answers to: an `isbn`, declared the plain way, and an `email`
-// declared as `mailbox`, so the tests also cover a vocabulary whose tag and its
-// reading differ.
+// library, as a vocabulary. Books, and two kinds of value identifying a book or
+// a person: an `isbn`, declared the plain way, and an `email` declared as
+// `mailbox`, so the tests also cover a vocabulary where the component written
+// and the kind queries name differ.
 //
-// The store is @yaks/sqlite over an in-memory database, which is how an
+// Storage is @yaks/sqlite over an in-memory database, which is how an
 // application composes this package: the adapter owns the bytes, the graph owns
 // the rules, and this package brings the key.
 
@@ -52,14 +52,14 @@ let doc: VocabDoc = {
       type: 'object',
       key: true,
     },
-    // A person's address — written `email`, read `mailbox`.
+    // A person's address — the component is `email`, the kind is `mailbox`.
     email: {
       component: true,
       type: 'object',
       key: 'mailbox',
     },
     // Something that is NOT a kind, so the tests can prove an ordinary
-    // component riding beside a key is never mistaken for one.
+    // component stored beside a key is never mistaken for one.
     pinned: {
       component: true,
       type: 'object',

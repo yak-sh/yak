@@ -1,4 +1,4 @@
-// Which SQLite library the FFI driver opens, said before the driver loads.
+// Which SQLite library the FFI driver opens, set before the driver loads.
 //
 // @db/sqlite reaches a NATIVE library through FFI, and when nothing names one
 // it downloads a prebuilt. On Linux x86_64 that prebuilt kills the process the
@@ -9,9 +9,9 @@
 //
 // This is its own module because ES evaluation runs a module's dependencies
 // before its body, in declaration order: ./db.ts imports this first, then
-// '@db/sqlite', so the environment already says the path when the driver
-// initializes. Take `Database` from ./db.ts and this ordering is not something
-// a caller has to know.
+// '@db/sqlite', so the environment variable is already set when the driver
+// initializes. Import `Database` from ./db.ts and this ordering is not
+// something a caller has to know.
 
 let paths: Record<string, string> = {
   linux: 'libsqlite3.so.0',

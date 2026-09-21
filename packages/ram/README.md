@@ -56,12 +56,13 @@ g.apply([
 g.read('.pages>300') // → the bundles, no await
 ```
 
-Nothing here returns a promise, so a page can read a query in a render and a
-test can write a whole corpus in a line.
+Nothing here returns a promise, so a browser page can run a query during a
+render and a test can write a whole corpus in one line.
 
-You can also hold the store on its own, without a graph — but then you are
-patching rows rather than applying changes, and the rules `apply()` owns
-(admission, `$was`, who dies with what, provenance) are not applied:
+You can also use the store on its own, without a graph — but then you are
+patching rows rather than applying changes, and none of the rules `apply()` owns
+(admitting columns, checking `$was`, cascading deletes, recording provenance)
+are applied:
 
 ```ts
 import { ram } from '@yaks/ram'
@@ -77,26 +78,26 @@ store.read('.kind=book')
 ram(vocab, base?) // bind a store to a vocabulary
 ```
 
-returns a `Store` — @yaks/graph's `Storage`, answered synchronously:
+returns a `Store` — @yaks/graph's `Storage`, implemented synchronously:
 
 - `ddl(): string[]` — `[]`. A Map has no schema.
 - `install(): void` — a no-op, for the same reason. Both are here so a caller
   can swap this adapter for a database one without changing a line.
 - `read(query, opts?): Bundle[]` — a query → the matching entities as bundles,
   ordered and windowed as the query asks.
-- `rows(query, opts?): Row[]` — one raw `{ eid }` row per match, the membership
-  shape a database adapter answers with; `.count!` answers the one
-  `{ value: '', n }` row @yaks/sql does.
+- `rows(query, opts?): Row[]` — one raw `{ eid }` row per match, the same shape
+  a database adapter returns; `.count!` returns the single `{ value: '', n }`
+  row @yaks/sql returns.
 - `tx(body): R` — run `body` against a transaction, committing when it returns
   and rolling back if it throws. Transactions nest: an inner one rolls back to
   where it opened, and an outer rollback still undoes what it committed. The
   transaction offers:
   - `read(query, opts?): Bundle[]` — as above.
-  - `get(eids): Bundle[]` — identity, not search: these entities, whole. A
+  - `get(eids): Bundle[]` — lookup by id, not search: these entities, whole. A
     deleted one comes back with a `tombstone` component; an unknown one is
     absent.
-  - `patch(bundles): Entity[]` — patch a batch in → the entities it MINTED, each
-    with the `num` it was given.
+  - `patch(bundles): Entity[]` — apply these patches → the entities they
+    CREATED, each with the `num` it was given.
   - `remove(entities): void` — drop their components and tombstone them.
 
 `base` (and a per-call `opts`) carries `now`, the moment a relative time phrase
@@ -111,34 +112,34 @@ in a query resolves against, and `adopt`.
 
 ### Identity, and `num`
 
-Identity belongs to storage. `patch` mints a record for every eid a batch
-touches **or points at** — so a reference may name a target the same batch
-creates, in any order — and numbers each new one in first-touch order, starting
-at 1. `num` is therefore always present, which is what makes `.limit`/`.after`
-paging and `.order` mean the same thing here as against a database. A
-rolled-back batch gives its numbers back.
+Identity belongs to storage. `patch` creates a record for every eid the write
+touches **or points at** — so a reference may name a target the same write
+creates, in any order — and numbers each new one in the order it was first
+touched, starting at 1. `num` is therefore always present, which is what makes
+`.limit`/`.after` paging and `.order` mean the same thing here as against a
+database. A rolled-back write releases the numbers it took.
 
-`ram(vocab, { adopt: true })` turns that around: a patch whose identity already
-carries a `num` keeps it, and an entity this store numbered on its own takes the
+`ram(vocab, { adopt: true })` reverses that: a patch whose identity already
+carries a `num` keeps it, and an entity this store numbered itself accepts the
 correction when one arrives. That is what a store MIRRORING another graph needs
-— a page holding [@yaks/sync](https://jsr.io/@yaks/sync) is being told the
-identity by the server, not asking for one — so a recipe has the same number in
-the browser as it has in the database. Off by default: a store without
-synchronization owns its own numbering.
+— a page using [@yaks/sync](https://jsr.io/@yaks/sync) is told its identities by
+the server rather than assigning them — so a recipe has the same number in the
+browser as it has in the database. Off by default: a store that mirrors nothing
+owns its own numbering.
 
 ### Rollback
 
 A record is never mutated in place: a patch builds the next record and puts it
 in the map. So the transaction keeps an **undo log** — one entry per entity it
-is about to change, holding the record that entity had first — and rolls back by
-replaying it backwards (and restoring the number counter). Nothing the batch did
-not write is copied, so a rollback costs what the batch wrote, not what the map
-holds.
+is about to change, holding that entity's previous record — and rolls back by
+replaying it backwards (and restoring the number counter). Nothing the write did
+not touch is copied, so a rollback costs what the write changed, not what the
+map holds.
 
 ## Differences from a database adapter
 
-Two, and both are the map being straightforward rather than the adapter being
-loose:
+There are two, and both come from the map being simpler than a database rather
+than the adapter being lax:
 
 - **A read returns the columns that were written.** A database reads back every
   declared column, with `null` for the ones never written; the map holds what it
@@ -148,13 +149,13 @@ loose:
 - **A value keeps its type.** A boolean stays `true`, where a database column
   with integer affinity reads back as `1`.
 
-A question the reads cannot answer exactly — an aggregate other than a count
-(`.tally`, `.distinct`), a nearest-neighbour (`.near`), the `.edges!` rider, a
-computed column — throws `@yaks/match`'s `Unsupported`, the same decline
-`@yaks/sql` throws; that package's README lists every one. There is no full-text
-index either: a bare word is matched token by token over the text the bundles
-hold, which selects what an index over the same words would select, without the
-ranking.
+A query these reads cannot answer exactly — an aggregate other than a count
+(`.tally`, `.distinct`), a nearest-neighbour search (`.near`), the `.edges!`
+clause, a computed column — throws `@yaks/match`'s `Unsupported`, the same error
+`@yaks/sql` throws; that package's README lists every case. There is no
+full-text index either: a bare word is matched token by token over the text the
+bundles hold, which selects what an index over the same words would select,
+without the ranking.
 
 ## Compatibility
 

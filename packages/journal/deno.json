@@ -8,7 +8,7 @@
     "./tools": "./tools.ts"
   },
   "license": "Apache-2.0",
-  "description": "Records graph changes and their authors within each transaction, providing entity history, batch undo, and a cursor-based delta feed.",
+  "description": "Records every committed graph transaction, and who wrote it, inside that same transaction: entity history, undo, and a cursor-based feed of changes.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@db/sqlite": "jsr:@db/sqlite@0.13.0"

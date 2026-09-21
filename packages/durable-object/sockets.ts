@@ -1,20 +1,21 @@
 // The socket plumbing, and only the plumbing. What a subscription MEANS — a
-// saved query whose answer is pushed again when a committed batch changes it —
-// is @yaks/api's; this file carries frames between that registry and a Durable
-// Object's WebSockets, which no standard covers.
+// saved query whose results are sent again when a committed write changes them
+// — belongs to @yaks/api; this file carries frames between that registry and a
+// Durable Object's WebSockets, which no standard covers.
 //
 // The whole difficulty is HIBERNATION. A socket accepted with
 // `ctx.acceptWebSocket` outlives the object: the runtime evicts the object
 // between two frames and rebuilds it on the next one, so every subscription
 // held in memory is gone while the client still believes it is watching. The
 // only thing that survives is the socket's ATTACHMENT, so that is where what a
-// socket asked for is written, and a woken object rebuilds the registry from it
-// (`wake`) before it does anything else. A client's first frame after a
-// hibernation is answered with its set again — a resync, not a silence.
+// socket subscribed to is written, and a woken object rebuilds the registry
+// from it (`wake`) before doing anything else. A client's first frame after a
+// hibernation is answered with its current results again — a resync, not
+// silence.
 //
-// Hibernated sockets do not fire events either, so `attach()` from @yaks/api
-// (which listens) is not the door here: the object's own
-// `webSocketMessage`/`webSocketClose` handlers are, and they call
+// A hibernated socket fires no events either, so @yaks/api's `attach()`, which
+// registers event listeners, cannot be used here: the object's own
+// `webSocketMessage` and `webSocketClose` handlers take its place, calling
 // {@link Sockets.message} and {@link Sockets.close}.
 
 import {
@@ -74,17 +75,18 @@ export type Sockets = {
 // handed to the runtime instead, which is what hibernation means.
 declare let WebSocketPair: { new (): { 0: unknown; 1: Wire } }
 
-// What a socket asked for, kept on the socket. The runtime caps an attachment
-// at 2KB and a host may be holding fields of its own there, so the asks live
-// under one key and the rest is left alone.
+// A socket's subscriptions, stored on the socket. The runtime caps an
+// attachment at 2KB, and the application may be storing fields of its own
+// there, so the subscriptions live under one key and the rest is left alone.
 type Held = { subs?: Record<string, Ask>; relay?: string[] }
 let CAP = 2048
 // A `sync: peers` value is held in MEMORY, and this object's memory does not
 // survive hibernation. What survives is the attachment, so the KEYS go there:
 // a value lost to an eviction cannot be re-sent, but its clearing still can,
-// and a peer left staring at a cursor that will never move again is the worse
-// failure. Bounded, because the 2KB is shared with the asks — past this many a
-// value lost to an eviction lingers until its writer clears it.
+// and a peer left watching a cursor that will never move again is the worse
+// failure. Bounded, because the 2KB is shared with the subscriptions — beyond
+// this many keys, a value lost to an eviction remains until its writer clears
+// it.
 let KEYS = 16
 
 let asksOf = (ws: Wire): Record<string, Ask> => {
@@ -93,9 +95,10 @@ let asksOf = (ws: Wire): Record<string, Ask> => {
   return subs && typeof subs == 'object' ? { ...subs } : {}
 }
 
-// Write the asks back beside whatever else the host holds. `false` means they
-// would not fit — the runtime would drop the whole attachment at the next
-// hibernation, so the subscription is refused now instead of dying quietly.
+// Write the subscriptions back beside whatever else the application stores.
+// `false` means they would not fit — the runtime would drop the whole
+// attachment at the next hibernation, so the subscription is rejected now
+// rather than disappearing silently later.
 let hold = (ws: Wire, subs: Record<string, Ask>): boolean => {
   let held = ws.deserializeAttachment()
   let next = { ...(held && typeof held == 'object' ? held : {}), subs }
@@ -120,8 +123,9 @@ let remember = (ws: Wire, keys: string[]) => {
   if (JSON.stringify(next).length <= CAP) ws.serializeAttachment(next)
 }
 
-// What a frame asked for, read alongside @yaks/api's own dispatch so the
-// attachment can be kept current. Junk is nobody's ask — `receive` refuses it.
+// What a frame subscribed to, read alongside @yaks/api's own dispatch so that
+// the attachment stays current. Anything malformed is not a subscription —
+// `receive` rejects it.
 let asked = (data: unknown): { id: string; ask?: Ask } | null => {
   try {
     let msg = JSON.parse(String(data))
@@ -153,9 +157,10 @@ let asked = (data: unknown): { id: string; ask?: Ask } | null => {
 export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
   let sinks = new Map<Wire, Sink>()
 
-  // The sink for a socket, made once. A socket this object has not seen before
-  // may still be one it INHERITED, so its held asks are re-opened here — the
-  // client is answered with its current set, which is the resync.
+  // The sink for a socket, created once. A socket this object has not seen
+  // before may still be one it INHERITED, so its stored subscriptions are
+  // re-opened here — the client is sent its current results, which is the
+  // resync.
   let sink = (ws: Wire): Sink => {
     let to = sinks.get(ws)
     if (to) return to

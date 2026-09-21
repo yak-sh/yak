@@ -19,9 +19,9 @@ it contains matching words.
 
 ## The `by_name` keyword
 
-This package owns one keyword. A component that declares `"by_name": true` says
-its entities answer to a name, read from the vocabulary's name column (`title`
-by default); a string names a different column.
+This package owns one keyword. A component that declares `"by_name": true` makes
+its entities addressable by name, read from the vocabulary's name column
+(`title` by default); a string names a different column.
 
 ```json
 {
@@ -59,22 +59,23 @@ nameOf(v)(shelf[1]) // undefined — a review's title is not a name
 resolve(v)('le guin', shelf) // the author
 ```
 
-A candidate is anything with its components under `comps`, and you get your own
-object back — the package reads the vocabulary and the name, never your row
+A candidate is any object with its components under `comps`, and you get your
+own object back — the package reads the vocabulary and the name, never your row
 type.
 
 ## Matching
 
-An exact name always wins. Failing that the closest name above the match floor
-wins, because nobody types a name the way it is stored: the case drifts, the
-punctuation goes, and a long name gets abbreviated to its first word. Pass
-`{ close: 1 }` to accept exact names only.
+An exact name always wins. Failing that, the closest name above the match
+threshold wins, because nobody types a name exactly as it is stored: the case
+drifts, the punctuation is dropped, and a long name gets abbreviated to its
+first word. Pass `{ close: 1 }` to accept exact names only.
 
 `match.ts` is the scoring on its own — `score`, `closeness`, `nearest` — usable
-over any list, in case you want the same reading of "close enough" somewhere
-else (a did-you-mean, say). Two gates keep containment off coincidence: a short
-word must cover most of the longer name, and a prefix beats a word merely
-spelled inside it, because a prefix is how a name gets shortened.
+over any list, in case you want the same definition of "close enough" elsewhere
+(in a did-you-mean suggestion, say). Two conditions keep substring matching from
+firing on coincidence: the shorter string must cover most of the longer name,
+and a string that is a prefix scores higher than one that merely appears
+somewhere inside, because a prefix is how a name usually gets shortened.
 
 ## Exports
 
@@ -83,15 +84,15 @@ spelled inside it, because a prefix is how a name gets shortened.
 | `nameKeywords`, `NAMES_URI`              | the `by_name` keyword vocabulary, ready to register   |
 | `named(v)`                               | every component addressable by name → its name column |
 | `nameOf(v)`                              | an entity → its name, or nothing when it has none     |
-| `resolve(v)`                             | a typed name + candidates → the entity meant          |
+| `resolve(v)`                             | a typed name + candidates → the entity it refers to   |
 | `score`, `closeness`, `nearest`, `CLOSE` | the matching, on its own                              |
 
 ## Integration
 
 An extension of [@yaks/vocab](https://jsr.io/@yaks/vocab): the meta-model
-carries the `by_name` keyword without knowing what it means, and this package is
-what it means. It sits beside [@yaks/id](https://jsr.io/@yaks/id), which owns
-the other way an entity is addressed — the human id (`B-7`) a person types.
+carries the `by_name` keyword without interpreting it, and this package supplies
+the interpretation. It sits beside [@yaks/id](https://jsr.io/@yaks/id), which
+owns the other way an entity is addressed — the human id (`B-7`) a person types.
 
 ## Compatibility
 

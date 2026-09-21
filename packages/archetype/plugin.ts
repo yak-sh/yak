@@ -155,11 +155,12 @@ function tracking(
     tx: wrapped,
     flush: (bundles) => {
       if (!dirty.size) return bundles
-      // Classification is this plugin's own bookkeeping, so none of it is news
-      // by itself (@yaks/graph `composed`): the pointer still rides the bundle
-      // of an entity the batch is answering for, and an entity nothing else in
-      // the batch spoke of — a descriptor, a reference that minted a spine —
-      // is written and journaled without appearing in the answer.
+      // Classification is this plugin's own bookkeeping, so on its own it is
+      // never reported back to the caller (@yaks/graph `composed`): the pointer
+      // still appears on the bundle of an entity the write already returns, and
+      // an entity nothing else in the write mentioned — a descriptor, or an
+      // entity created only to be referenced — is written and journaled without
+      // appearing in the result.
       let assignments: Bundle[] = [...dirty].flatMap((eid) => {
         let h = held.get(eid)!
         return h.assigned == h.set.eid
@@ -172,8 +173,9 @@ function tracking(
         let a = cache.get(b.entity.archetype!)!
         return [a.eid, a]
       }))
-      // Archetype entities themselves wear archetype. This fixed point ends
-      // at one self-classifying entity, not an infinite chain of descriptors.
+      // Archetype entities themselves carry an archetype. That recursion stops
+      // at one self-classifying entity, rather than an infinite chain of
+      // descriptors.
       let meta = cache.intern(['archetype'])
       needed.set(meta.eid, meta)
       return then(tx.get([...needed.keys()]), (rows) => {

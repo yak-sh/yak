@@ -1,15 +1,15 @@
-/** Transport-independent identity for graph tools, and the one thing every
- * tool that takes an id does with it. */
+/** How a tool is named, independently of any transport, plus the id
+ * resolution every tool that takes an id needs. */
 import type { Bundle, Eid } from './bundle.ts'
 import type { Tool, ToolCtx } from './plugin.ts'
 
 /**
- * The ids a caller typed, as the eids they name — whatever a plugin says
- * addresses one (a name, a human id), and the word itself where nothing does,
- * since an eid needs nobody to say so.
+ * The ids a caller passed, resolved to the eids they refer to — through
+ * whatever a plugin resolves (a name, a human-readable id), and left as they
+ * are when no plugin resolves them, since an eid needs no resolution.
  *
- * Every tool taking an id owes its caller this: an argument is what a person
- * types, never what the store happens to key by.
+ * Every tool that takes an id owes its caller this: an argument is what a
+ * person types, not what the store happens to key rows by.
  */
 export let addressed = async (
   graph: {
@@ -21,18 +21,19 @@ export let addressed = async (
   return ids.map((id) => at.get(id) ?? id)
 }
 
-/** The three fields that decide what a tool is CALLED — the only part of a
- * tool naming reads, so it costs nothing to ask about one whose context and
- * result are somebody else's. */
+/** The three fields that decide what a tool is CALLED — all `toolName` reads,
+ * so it can be called on a tool whose context and result types belong to
+ * another package. */
 export type ToolId = { name?: string; noun?: string; verb?: string }
 
 export type NamedTool<C = ToolCtx, R = Bundle[]> = Tool<C, R> & {
   name: string
 }
 
-/** What a tool is called on the wire: its own name where it has one, else the
- * words it declared — `noun_verb` for a pair, and the single word for a tool
- * that declared one alone, where the line and the name are the same word. */
+/** The name a tool is listed and called under: its own `name` where it has
+ * one, otherwise derived from what it declared — `noun_verb` for a pair, and
+ * the single word for a tool that declared only a noun or only a verb, where
+ * the command and the tool name are the same word. */
 export const toolName = (tool: ToolId): string => {
   const said = [tool.noun, tool.verb].filter((w) => w != null)
   if (said.length) {

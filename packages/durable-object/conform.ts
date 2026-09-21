@@ -10,7 +10,7 @@
 // repo-wide check, because @cloudflare/workers-types arrives as GLOBALS — the
 // package declares them and exports nothing — and those globals merge into
 // whatever program includes them, redefining `Response`, `WebSocket` and
-// friends for every other file in it. One file wears them; the rest of the
+// rest for every other file in it. One file includes them; the rest of the
 // repo type-checks against the web. @yaks/workerd keeps the same gate.
 
 import type { DurableSql, DurableStorage, SqlCursor, SqlValue } from './sql.ts'
@@ -22,8 +22,8 @@ import type { Subs } from '@yaks/api'
 
 let state = null as unknown as DurableObjectState
 
-// The storage seam: `ctx.storage` is a `DurableStorage`, its `sql` a
-// `DurableSql`, and a cursor is what this package drains.
+// Storage: `ctx.storage` is a `DurableStorage`, its `sql` is a `DurableSql`,
+// and a cursor is what this package reads rows from.
 let _storage: DurableStorage = state.storage
 let _sql: DurableSql = state.storage.sql
 let _cursor: SqlCursor<Record<string, SqlStorageValue>> =
@@ -31,11 +31,11 @@ let _cursor: SqlCursor<Record<string, SqlStorageValue>> =
 // Every value the driver converts to is one the engine takes.
 let _value: SqlStorageValue = null as unknown as SqlValue
 
-// The socket seam: the object's own state accepts sockets, and the sockets it
-// hands back are `Wire`s.
+// Sockets: the object's own state accepts sockets, and the sockets it returns
+// are `Wire`s.
 let _ctx: Hibernation = state
 let _wire: Wire = state.getWebSockets()[0]
 
-// And the two doors, called the way a Durable Object calls them.
+// And the two entry points, called the way a Durable Object calls them.
 let _store = (vocab: Vocab) => storage(state.storage, vocab)
 let _live = (subs: Subs): Sockets => sockets(subs, state)

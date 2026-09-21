@@ -1,5 +1,6 @@
-// What a batch MEANS about the set of tables an entity occupies: the `rules`
-// facet a host takes (`@yaks/archetype/rules`).
+// The graph plugins this package contributes: the module a server imports at
+// `@yaks/archetype/rules`. It keeps each entity's archetype up to date as that
+// entity gains and loses components.
 
 import type { Plugin } from '@yaks/graph'
 import { archetypes } from './plugin.ts'

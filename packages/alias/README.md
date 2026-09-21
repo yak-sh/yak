@@ -1,12 +1,13 @@
 # @yaks/alias
 
 Persistent names for entities in an [@yaks/graph](../graph/README.md) store. Use
-aliases when callers need a stable, readable identifier or repeated imports
-should update the same entity without first looking up its EID.
+aliases when callers need a stable, readable identifier, or when a repeated
+import should update the same entity without first looking up its eid.
 
-This differs from a graph's `$temporary` aliases: those resolve only within one
-batch. This plugin stores names through [@yaks/key](../key/README.md), so they
-can be resolved in later batches and requests.
+This is not the same thing as a graph's `$temporary` aliases, which resolve only
+within the one list of changes they appear in. This plugin stores names through
+[@yaks/key](../key/README.md), so they can be resolved by later writes and
+requests.
 
 ## Setup
 
@@ -43,23 +44,24 @@ await g.apply([{
 ```
 
 Repeating the first write with the same `alias.name` also updates the named
-entity rather than creating a duplicate. The `keys` plugin must precede
+entity rather than creating a duplicate. The `keys` plugin must be listed before
 `aliases`.
 
-## Representation and lookup
+## How a name is stored and looked up
 
-`alias: { name }` on an incoming entity is input syntax consumed during
-normalization. `name` is not a persisted column on the `alias` component. The
-plugin creates a separate key entity with `key{of,value}` and an `alias` tag.
-Its derived identity makes a name unique; an entity can have multiple names.
-Deleting the target releases its names through the key's reference rules.
+`alias: { name }` on an incoming entity is input syntax, consumed during the
+`normalize` phase. `name` is not a stored column of the `alias` component.
+Instead the plugin creates a separate key entity holding `key{of, value}` with
+an `alias` component beside it. That key entity's id is derived from its value,
+which is what makes a name unique; one entity can have several names. Deleting
+the named entity releases its names, through the key's reference rules.
 
-Names can be used as bundle EIDs and reference targets. `g.address(names)` also
-resolves them explicitly. An existing EID takes precedence over an alias with
-the same spelling. UUID-shaped IDs and content hashes are treated as direct IDs
-and are not looked up as aliases.
+Names can be used as bundle eids and as reference values. `g.address(names)`
+also resolves them explicitly. An existing eid always wins over an alias spelled
+the same way. Ids shaped like UUIDs and content hashes are treated as direct ids
+and are never looked up as aliases.
 
-A colon in a name has no namespace semantics; it is ordinary text. Choose a
+A colon in a name carries no namespace meaning; it is ordinary text. Choose a
 naming convention in the application if names from different sources must not
 collide. This package provides name resolution, not authorization or ownership
 policy.

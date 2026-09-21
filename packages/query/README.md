@@ -1,11 +1,11 @@
 # @yaks/query
 
-A schema-independent parser and builder for the yaks query format. `parse()`
-turns a query string into a serializable abstract syntax tree (AST); the builder
-creates the same structure from code. The parser handles syntax, not whether a
-column exists or whether a backend supports a query. Use
-[@yaks/sql](../sql/README.md) to compile it or [@yaks/match](../match/README.md)
-to evaluate it over bundles in memory.
+A parser and a set of builders for the yaks query format, with no knowledge of
+any schema. `parse()` turns a query string into a serializable abstract syntax
+tree (AST); the builders construct the same tree from code. The parser checks
+syntax only — not whether a column exists, and not whether a given backend can
+answer the query. Use [@yaks/sql](../sql/README.md) to compile the tree to SQL,
+or [@yaks/match](../match/README.md) to evaluate it over bundles in memory.
 
 ## Install
 
@@ -31,8 +31,10 @@ parse('.status=open .priority<=1 .team=frontend,backend')
 // }
 ```
 
-Bare words are full-text terms, and whitespace separates clauses, so a search
-box mixes filters and text on one line:
+A bare word is a full-text term over the document, and whitespace separates
+terms, so one line from a search box can mix the two. A trailing `*` on a word
+(`lemo*`) is a prefix term; a lone `*` as a whole token is the projection
+directive below, not a term.
 
 ```ts
 parse('crash on save .updated.at=today')
@@ -56,152 +58,232 @@ let b = and(
 // a deep-equals b
 ```
 
-Vocabulary: `eq ne contains lt le gt ge present absent want pred` (predicates);
-`ensure gate mutable gone resource variable` (the rule sigils);
-`list range scalar
-time text` (values and terms); `and or` (composition);
-`clauses orderOf nearOf
-windowOf declared` (accessors); the walk `walk`; and the
-directives
-`order near refs hasRefs
-count distinct tally fields every limit after edges`.
+The exported builders are:
 
-## The format
+| group         | exports                                                                             |
+| ------------- | ----------------------------------------------------------------------------------- |
+| predicates    | `eq ne contains lt le gt ge present absent want pred`                               |
+| rule prefixes | `ensure gate mutable gone resource variable`                                        |
+| values        | `scalar list range time text never`                                                 |
+| composition   | `and or`                                                                            |
+| the walk      | `walk`                                                                              |
+| directives    | `order near refs hasRefs count distinct tally fields field every limit after edges` |
+| accessors     | `clauses orderOf nearOf windowOf declared`                                          |
 
-A token is one of three things **by its own shape**: a component clause (it
-starts with a sigil, or it carries an operator), a quoted text term, or a bare
-word, which is a text term. Nothing is read by trying and failing — a malformed
-clause throws where it is read rather than falling back to text.
+## The query format
+
+### A token's shape decides what it is
+
+Every token is one of three things, decided by how it is written: a clause on a
+component (it starts with a prefix character, or it contains an operator), a
+quoted string, which is a full-text term, or a bare word, which is also a
+full-text term. Nothing is parsed by trying one reading and falling back to
+another — a malformed clause throws where it is read rather than quietly
+becoming a search term.
 
 A clause is `path [qualifiers]? operator value`. The bracket binds to the
 **path** and is read before any operator, so `.requires[<=3]->item-42` is the
-path `requires` qualified by a cap, then the walk operator; a bracket after the
-operator is part of the value (`.title~=x[1]`).
+path `requires` with a depth cap, followed by the walk operator; a bracket after
+the operator is part of the value (`.title~=x[1]`).
 
-- **Sigils** mark a component word: `.comp` present · `!comp` absent · `+comp`
-  ensure (add it before the rule runs) · `+!comp` gate (it must be absent, and
-  is added, so a rule fires once) · `*comp` mutable (the rule's write set; it
-  says the component is present as well, so `*comp` needs no `.comp` beside it,
-  and `+comp`/`+!comp` is how a rule writes one that is not there yet) · `-comp`
-  gone (this BATCH removed it from the entity) · `#Name` a singleton resource,
-  capitalized so it cannot collide with a component in the bundle a rule binds
-  them into · `$name` a variable. The first two are ordinary predicates —
-  presence and absence are questions any evaluator answers — and the rest are a
-  rule's own words, which an evaluator with no rule engine refuses
-  (`Unsupported`) rather than guessing at. `declared(ast)` splits a query into
-  the filter half and those lists.
-- **`-comp` is not `!comp`.** An absence is about a row that is not there; a
-  removal is about a batch that took one, and once the row is gone the two read
-  alike. So `-comp` is answered only where the batch is — a rule's overlay
-  (`@yaks/sqlite`'s `overlay()`, which keeps a list of what the batch took), or
-  the reading an effect takes of what it just committed — and an evaluator with
-  no batch under it refuses rather than answering "none". A bare `-word` is
-  therefore a clause now, not a text term.
-- **Operators**: `.p=v` equals · `.p=a,b,c` any-of · `.p=1..5` range
-  (inclusive), `1...5` exclusive end · `.p!=v` not · `.p~=v` contains (literal)
-  · `.p<v .p<=v .p>v .p>=v` comparisons · `.p?` want the field alongside the
-  filter.
-- **The walk**: `.requires->item-42` selects what reaches `item-42` through
-  `requires` hops; `.requires<-item-42` walks the other way (what `item-42`
-  reaches); `.requires[<=3]->item-42` caps the depth. The path is a relation
-  name, a reference column (`.fork.from->S-7`), or a chain of reference columns
-  (`.fork.from.session->S-1` — one step composed of the hops, so a walk over it
-  is the fork lineage) — which is schema — and the target is one entity, by eid
-  or human id. Without a bracket, the walk has no hop cap and returns at most
-  10,000 nearest non-seed nodes; only an explicit `[<=N]` adds a hop cap. Parses
-  to a `walk` node (`walk(field, dir,
-  target, depth?)`).
-- **Qualifiers**: a path may include brackets of comma-separated arguments —
-  `<=3` (an operator and a value), `key=value`, or a bare `word`. Each clause
-  says which it accepts: the walk takes exactly one depth cap,
-  `.edges[type,
-  via]` two bare words, and every other clause none — an unknown
-  qualifier is refused by name (`.status[<=3]=open` throws), never dropped.
-- The leading `.` is **accepted everywhere and required nowhere**: it keeps a
-  URL query string's filters apart from its `page` and `per`, and a rule that
-  never travels in a URL may drop it — `comp.prop=1` is the same clause as
-  `.comp.prop=1`, and `"comp.prop=1"` in quotes is the text term. It IS what
-  tells the opless `.env` (has `env`) from `env` (search for it).
-- `.p!` (present) and `.p=` (absent) are the older spellings of `.p` and `!p`,
-  still parsed to the same nodes; saved queries keep working.
-- **Separators**: between terms, whitespace, `&` and `,` are aliases for AND
-  (`&` is the URL-query form), and every term stands alone; inside a value `,`
-  is the list operator. A list has no spaces and no empty member: `.p=a,b` is
-  one clause, `.p=a, b` is refused. A value holding a space is quoted —
-  `.title~="two words"`, `.status='open wip'`, a backslash escaping inside —
-  where unquoted `.title~=two words` is the filter `two` and the search term
-  `words`.
-- `?comp` is the prefix mirror of `!comp`: optional, selected when present and
-  never filtered on. `.comp?` is its older suffix spelling, still parsed.
+### Operators
+
+| written                       | meaning                                                       |
+| ----------------------------- | ------------------------------------------------------------- |
+| `.p=v`                        | equals                                                        |
+| `.p=a,b,c`                    | equals any one of them                                        |
+| `.p=1..5`                     | in the range, inclusive; `1...5` excludes the end             |
+| `.p=`                         | absent (the same clause as `!p`)                              |
+| `.p!`                         | present, including an empty value (the same clause as `.p`)   |
+| `.p!=v`                       | not equal                                                     |
+| `.p~=v`                       | contains — a literal substring, never a pattern               |
+| `.p<v` `.p<=v` `.p>v` `.p>=v` | comparisons                                                   |
+| `.p?`                         | carry this field alongside the filter without filtering on it |
+
+### Component prefixes
+
+A component name can carry a prefix character that declares what a rule does
+with it:
+
+| written  | AST node   | meaning                                                             |
+| -------- | ---------- | ------------------------------------------------------------------- |
+| `.comp`  | `pred` `!` | the entity has this component                                       |
+| `!comp`  | `pred` `=` | the entity does not have it                                         |
+| `?comp`  | `pred` `?` | optional: selected when present, never filtered on                  |
+| `+comp`  | `ensure`   | add it before the rule runs                                         |
+| `+!comp` | `gate`     | it has to be absent, and is then added — so the rule runs once      |
+| `*comp`  | `mutable`  | the rule's write set                                                |
+| `-comp`  | `gone`     | this write removed it from the entity                               |
+| `#Name`  | `resource` | a singleton, capitalized so it cannot collide with a component name |
+| `$name`  | `var`      | a variable                                                          |
+
+`*comp` also asserts that the component is present, so it needs no `.comp`
+beside it; `+comp` and `+!comp` are how a rule writes a component that is not
+there yet. A `+` or `*` prefix may also name a column and a value
+(`+result.call=$call`), because the prefix already means "this is written" and
+naming the column is part of the same statement. A gate has no such form: an
+absence has no value to write.
+
+The first three rows are ordinary predicates — presence, absence and projection
+are questions any evaluator can answer from the stored data. The rest mean
+something only a rule engine can act on, and an evaluator without one refuses
+them (`Unsupported`) rather than guessing. `declared(ast)` splits a query into
+the part that filters and lists of the rest.
+
+**`-comp` is not `!comp`.** An absence is a statement about a row that is not
+there; a removal is a statement about a write that took one away, and once the
+row is gone the two look identical. So `-comp` can only be answered where that
+write is still available — a rule's overlay (`@yaks/sqlite`'s `overlay()`, which
+keeps a list of what the write removed), or an effect reading back what it just
+committed — and an evaluator without one refuses rather than answering "none".
+Because of this, a bare `-word` is a clause, not a text term.
+
+### The walk
+
+`.requires->item-42` selects the entities that reach `item-42` through
+`requires` hops; `.requires<-item-42` walks the other way, selecting what
+`item-42` reaches. `.requires[<=3]->item-42` caps the depth at three hops.
+
+The path is a relation name, a reference column (`.fork.from->S-7`), or a chain
+of reference columns (`.fork.from.session->S-1`, one step composed of those
+hops, so walking it follows the fork lineage) — which of those it is, is schema.
+The target is a single entity, named by eid or by human id. Without a bracket a
+walk has no hop cap and returns at most 10,000 of the nearest non-seed nodes;
+only an explicit `[<=N]` adds a hop cap. It parses to a `walk` node:
+`walk(field, dir, target, depth?)`.
+
+### Qualifiers
+
+A path may carry a bracket of comma-separated arguments: `<=3` (an operator and
+a value), `key=value`, or a bare `word`. Each kind of clause declares which
+qualifiers it accepts — the walk takes exactly one depth cap, `.edges` takes two
+bare words, and every other clause takes none. An unrecognized qualifier is
+refused by name (`.status[<=3]=open` throws) rather than dropped, because the
+caller meant something by it.
+
+### Separators, grouping and quoting
+
+Between terms, whitespace, `&` and `,` all mean AND, and each term stands on its
+own; `&` is the form that survives in a URL query string. `|` between terms is
+OR, and it binds more loosely than the AND of adjacent terms, so
+`.a=1 .b=2|.c=3` is `(a and b) or c`. Parentheses group: `.a=1 (.b=2|.c=3)` is
+`a and (b or c)`. An empty alternative beside a `|` is refused.
+
+Inside a value, `,` is the any-of operator. A list has no spaces and no empty
+member: `.p=a,b` is one clause, and `.p=a, b` is refused rather than repaired. A
+value containing a space is quoted — `.title~="two words"`,
+`.status='open wip'`, with a backslash escaping inside the quotes — where the
+unquoted `.title~=two words` is the filter `two` plus the search term `words`.
+
+### The leading dot
+
+The leading `.` is accepted everywhere and required nowhere. It keeps a URL
+query string's filters apart from its `page` and `per` parameters, and a rule
+that never appears in a URL can leave it off: `comp.prop=1` is the same clause
+as `.comp.prop=1`, while `"comp.prop=1"` in quotes is a text term. The dot does
+carry meaning in one case: with no operator, `.env` tests for the component
+`env`, where `env` searches for the word.
+
+### Directives
+
+Directives sit in the clause list beside the filters, but rank, project,
+aggregate or bound the answer rather than filtering it:
+
+| written                | meaning                                                                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.order=hot`           | the order the answer comes back in                                                                                                         |
+| `.near=42`             | rank by similarity to this entity                                                                                                          |
+| `.refs=42`             | everything that references entity 42; `.refs!` references anything, `.refs=` references nothing                                            |
+| `.count!`              | how many rows match, instead of the rows                                                                                                   |
+| `.distinct=col`        | the distinct values of one column                                                                                                          |
+| `.tally=col`           | each value of one column with its count                                                                                                    |
+| `.fields=pin.x,pin.z~` | the columns each row carries; a trailing `~` keeps a column from waking a subscription                                                     |
+| `*`                    | every component of each selected entity                                                                                                    |
+| `.limit=200`           | at most this many rows                                                                                                                     |
+| `.after=13882`         | continue past this entity                                                                                                                  |
+| `.edges!`              | the edges touching the answer; `.edges.peers=status,title` projects the far endpoint; `.edges[watches,author.team]!` selects one edge type |
+
+`.after=<num>` is the paging cursor: the entity number to continue past, and the
+only cursor form there is (`.after=T-13882` is the same number written with its
+display prefix). It deliberately does not depend on the ordering — an evaluator
+works out where that entity sits in whatever order the query asked for, so a
+caller can page without ever learning the order key. This parser only records
+which entity it names; working out where that entity sits is evaluation
+(`@yaks/sql`, `@yaks/match`).
+
+### Two more rules
+
+- `.p!` (present) and `.p=` (absent) are the older ways of writing `.p` and
+  `!p`, and still parse to the same nodes, so saved queries keep working. So
+  does `.comp?`, the older suffix form of `?comp`.
 - `parse(q, { text: false })` refuses bare-word text terms, so a rule or a saved
-  filter fails on a stray word instead of quietly gaining one. A quoted term is
-  still allowed — quoting is how a strict query asks for a word.
-- Paths are raw dotted segments: `.review.book.title~=magic`. This parser does
-  not route them to a schema — that is a downstream job.
-- Directives ride the clause list: `.order=hot` `.near=42` `.refs=42` `.count!`
-  `.distinct=col` `.tally=col` `.fields=pin.x,pin.z~` `*` (every component)
-  `.limit=200` `.after=13882` `.edges!` `.edges.peers=status,title`
-  `.edges[watches,author.team]!`.
-- Quotes glue a value across whitespace; the empty query selects nothing
-  (`{ kind: 'never' }`).
-- `.after=<num>` is the window's cursor: the entity number of the entity to
-  continue past, and the ONLY cursor spelling (`.after=T-13882` is the same
-  number wearing its display prefix). It is order-agnostic on purpose — an
-  evaluator derives the anchor's place in whatever order the query asked for, so
-  a caller pages without ever learning the order key. This parser only says
-  which entity it names; where that sits is evaluation (`@yaks/sql`,
-  `@yaks/match`).
+  filter fails on a stray word instead of quietly gaining a search term. A
+  quoted term is still allowed — quoting is how a strict query asks for a word.
+- Paths stay raw dotted segments: `.review.book.title~=magic` is four segments
+  and nothing more. Routing them to a schema is a downstream job.
+- The empty query selects nothing: an empty string, or one with no clauses,
+  parses to a single `{ kind: 'never' }`.
 
 ## Time literals
 
-A value's _syntax_ never marks it a time — `today` looks like any word, and
-`.team=today` is a plain string. Whether a field is time-typed is schema, so
-`parse` emits scalars and never a `time` node. The generic recognizer is here
-for downstream to promote a scalar once the schema says the column is
-time-typed:
+Nothing about how a value is written makes it a time — `today` looks like any
+other word, and `.team=today` is a plain string. Whether a field holds a time is
+schema, so `parse` emits scalars and never a `time` node. The recognizer below
+is here for a schema-aware compiler to promote a scalar once the schema declares
+that the column holds a time:
 
 ```ts
 import { isTimeLiteral, timeInstant, timeSpan } from '@yaks/query'
 
 timeSpan('1 hour ago') // { start, end } | null
-timeInstant('in 5m') // one moment (a forward phrase reads its end)
+timeInstant('in 5m') // one moment (a forward-looking phrase gives its end)
 ```
 
-The `time(raw)` builder makes the explicit node a promoted AST or a hand-written
-query carries.
+The `time(raw)` builder creates the explicit node that a promoted AST, or a
+hand-written query, carries.
 
-## Query consumers
+## What this package leaves to a schema-aware compiler
 
 This package deliberately stops at structure. Everything that needs a schema is
-left as raw tokens for a schema-aware compiler such as `@yaks/sql`:
+left as raw tokens for a compiler that has one, such as `@yaks/sql`:
 
 - **Field routing** — mapping a bare `.status` to the record type that owns it,
-  and resolving alternate spellings of the same field into the right hop. Paths
-  stay raw segments here.
-- **Reference resolution** — turning an id or name (`.author=alice`) into a
-  reference id, and resolving `.refs`/reverse-union targets, needs the schema.
-- **Type coercion** — reading a scalar as a number, an enum, a boolean, or a
-  time, and promoting time-typed scalars via `timeSpan`.
-- **Reverse associations** — `.reviews`, its cardinality (`.reviews>=5`), and a
-  mid-bang all/none form (`.reviews!.rating!=5`) are named by pluralizing a
-  record type that references this one, which is schema. Non-bang reverse forms
-  parse as ordinary path predicates for the compiler to restructure. The
-  mid-bang form carries `not: true`; nested quantifiers retain a child `where`
+  and resolving alternate names for the same field to the right hop. Paths stay
+  raw segments here.
+- **Reference resolution** — turning an id or a name (`.author=alice`) into a
+  reference id, and resolving the targets of `.refs` and of reverse unions.
+- **Type coercion** — reading a scalar as a number, an enum, a boolean or a
+  time, and promoting time-typed scalars through `timeSpan`.
+- **Reverse associations** — `.reviews`, its cardinality (`.reviews>=5`), and
+  the mid-bang all/none form (`.reviews!.rating!=5`) are named by pluralizing a
+  record type that references this one, which is schema. Reverse forms without
+  the bang parse as ordinary path predicates for the compiler to restructure.
+  The mid-bang form carries `not: true`; nested quantifiers keep a child `where`
   clause. The binder refuses names that are not reverse associations. Builders
-  may also put a conjunction in `where`. A builder-set `facet: true` preserves a
-  terminal component name when a same-named column would otherwise win.
-- **Scopes** — `.kind=book` parses as an ordinary predicate; expanding it to the
-  presence/absence clauses a kind implies needs the schema's kind order.
+  may also put a conjunction in `where`. A builder-set `facet: true` keeps a
+  trailing component name from being read as a same-named column.
+- **Scopes** — `.kind=book` parses as an ordinary predicate; expanding it into
+  the presence and absence clauses that kind implies needs the schema's kind
+  order.
 - **Directive validation** — whether a walk's path names a relation or a chain
   of reference columns, which edge types `.edges` may name, and whether a
-  `.distinct`/`.fields` path is a single column, is schema.
-- **Evaluation** — matching rows, compiling SQL, and interpreting `.order`
-  rankings (`hot`, `search`, `similar`) against real data.
+  `.distinct` or `.fields` path is a single column.
+- **Evaluation** — matching rows, compiling SQL, and interpreting the `.order`
+  rankings (`hot`, `search`, `similar`) against stored data.
 
-## Experimental multi-entity rules
+## Multi-entity rules
 
-`parseJoinRule()` parses semicolon-separated entity patterns, curly property
-bindings, and absent/add gates. It is separate from `parse()` and does not
-change storage queries. See
-[the prototype design and limitations](../graph/JOIN_RULES.md) before using it;
-automatic join planning and general rule registration are not implemented.
+A rule is not a second language: it is one or more of these patterns separated
+by `;`, one per entity, joined by the variables they share. This package parses
+one pattern and `declared()` separates its filter from its instructions; reading
+a `;`-separated set of them into a match plan is
+[@yaks/graph](../graph/join.ts)'s job.
+
+## Teaching the format
+
+`OPERATORS` and `DIRECTIVES` are the tables above as data, and `FORMAT` is a
+prose description of the format composed from them — what a CLI or an MCP server
+prints when asked how a query is written. A help page and a tab-completion list
+read the same two tables, so they cannot disagree with each other. None of them
+knows a schema: which columns hold times, which names are kinds, and how an id
+resolves are for a schema-aware caller to describe alongside.

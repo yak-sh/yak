@@ -1,25 +1,27 @@
-// The IDENTITY operand list. `.eid=` and `.num=` on the spine NAME entities
-// rather than compare a column, so their right-hand side is a set — the shape
-// an index answers, and the shape a client fetching named rows asks for.
+// The identity operand list. `.eid=` and `.num=` on the entity table NAME
+// entities rather than compare a column, so the right-hand side is a set — the
+// shape an index can look up, and the shape a client fetching named rows asks
+// for.
 //
-// A human id lands here too: @yaks/id reads `B-7` as the entity numbered 7 (the
-// letter is display, the number is identity), so one spelling fetches by eid, by
-// spine number, or by the id a person types. Every operand falls into one of the
-// two sets an evaluator looks it up in.
+// A human-readable id belongs here too: @yaks/id reads `B-7` as the entity
+// numbered 7 (the letter is for display, the number is the identity), so one
+// syntax fetches by eid, by entity number, or by the id a person types. Every
+// operand falls into one of the two sets an evaluator looks it up in.
 //
-// `undefined` is the deliberate decline: an empty value (absence grammar), a
-// range, or a word that is no number under `.num`. The caller then lowers the
-// column the ordinary way, so nothing that already worked changes shape.
+// `undefined` is a deliberate decline: an empty value (which means absence), a
+// range, or an operand that is not a number under `.num`. The caller then
+// compiles the column the ordinary way, so nothing that already worked
+// changes.
 
 import { parse } from '@yaks/id'
 
-/** An operand list, split into the eids and the spine numbers it names. */
+/** An operand list, split into the eids and the entity numbers it names. */
 export type Identity = { eids: string[]; nums: number[] }
 
 /**
- * The entities an operand list names, or `undefined` when the value is not one.
- * `column` is the spine column the query said: `eid` takes either spelling,
- * `num` only numbers.
+ * The entities an operand list names, or `undefined` when the value is not an
+ * operand list. `column` is the entity-table column the query used: `eid`
+ * accepts either form, `num` accepts only numbers.
  */
 export let identity = (
   column: string,

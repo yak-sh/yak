@@ -1,18 +1,20 @@
 /**
- * @yaks/key — the values an entity answers to, as entities.
+ * @yaks/key — the values that identify an entity, stored as entities.
  *
- * A name in a yaks graph is not a column on the thing it names; it is an entity
- * of its own carrying the `key{of, value}` component and a KIND TAG that says
- * what sort of value it is. A store names its recipes (`alias`), a directory
- * its people (`email`), a library its books (`isbn`); the shape is the same,
- * and the kinds are yours to declare — this package ships the carrier, the
- * mechanism, and not one kind.
+ * A value that identifies something is not a column on the thing it identifies;
+ * it is an entity of its own, carrying the `key{of, value}` component and a
+ * KIND TAG component naming what sort of value it is. A store identifies its
+ * recipes by a short name (`alias`), a directory its people by address
+ * (`email`), a library its books by `isbn`; the structure is the same, and the
+ * kinds are yours to declare — this package ships the carrier and the mechanism
+ * and not one kind.
  *
  * It is to a has-many VALUE exactly what
  * {@link https://jsr.io/@yaks/edge | @yaks/edge} is to a LINK: one generic
- * carrier component, tagged by the application's own words, with the entity's
- * id derived from what it says — so an entity has as many values as you write,
- * writing one twice writes one row, and retiring one is dropping that row.
+ * carrier component, tagged by the application's own components, with the
+ * entity's id derived from what it holds — so an entity has as many values as
+ * you write, writing one twice writes one row, and retiring one means deleting
+ * that row.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
@@ -31,19 +33,20 @@
  *
  * Four things follow from that:
  *
- * - **A key is named by what it says.** {@link keyEid} hashes the kind and the
- *   value, so two writers who state the same value land on one entity, a value
- *   is unique within its kind by construction, and reading one back is a `get`
- *   rather than a query.
- * - **A key lives only while what it names does.** `of` is a reference with
- *   `death: cascade`, so a deleted book takes its isbn with it and the value is
- *   free again.
- * - **Half a sentence is refused**, by name: a key with no kind, no value or no
- *   `of` never reaches storage.
- * - **Stating a held value resolves onto its holder.** A batch minting an
- *   entity under a `$alias` and claiming a value somebody already holds patches
- *   that entity instead of making a second one; a caller who wrote an id down
- *   is refused, with the holder named.
+ * - **A key's id is derived from the value.** {@link keyEid} hashes the kind
+ *   and the value, so two writers giving the same value land on one entity, a
+ *   value is unique within its kind by construction, and reading one back is a
+ *   `get` rather than a query.
+ * - **A key lives only as long as what it identifies.** `of` is a reference
+ *   declared `death: release`, so deleting a book removes its isbn row and
+ *   frees the value.
+ * - **An incomplete key is refused**, naming what is missing: a key with no
+ *   kind, no value or no `of` never reaches storage.
+ * - **Claiming a value somebody already holds lands on the holder.** A write
+ *   that mints an entity under a `$alias` and gives it a value another entity
+ *   already holds patches that entity instead of creating a second one; a
+ *   caller who wrote an id down rather than using an alias is refused, with the
+ *   holder named.
  *
  * It imports no platform API, so the same code runs on a server, in a worker,
  * and in a browser tab.

@@ -1,23 +1,25 @@
-// The shapes @yaks/vocab speaks. A vocab is authored as JSON Schema (2020-12)
-// plus the yaks keyword vocabulary; this module names the parts a loaded
-// instance answers with, so a downstream binder (@yaks/sql) never reads a raw
-// schema — it reads a `Column`, a `Hop`, a `Kind`.
+// The types @yaks/vocab returns. A vocabulary is authored as JSON Schema
+// (2020-12) plus the yaks keywords; this module names the parts a loaded
+// document is read back as, so a downstream storage binder (@yaks/sql) never
+// reads a raw schema — it reads a `Column`, a `Hop`, a `Kind`.
 //
 // Nothing here is application-specific: `Death`, `Scalar`, and the keyword
-// names are the meta-model, and any set of components is one instance of it.
+// names describe the format, and any set of components is one instance of it.
 
 import type { Sync } from './lifetime.ts'
 
-// What the reaper does to a reference column when its TARGET entity dies. The
-// four words are the whole vocabulary — a reference without one is refused, so
-// an undeclared behavior cannot exist.
-//   cascade  the referencing entity dies with the target
-//   detach   the column is set null and the wire hears it
-//   release  the ROW dies but its entity lives (a tag whose existence IS the ref)
+// What the cascading delete (@yaks/graph cascade.ts) does to a reference column
+// when its TARGET entity is deleted. These four values are the whole set — a
+// reference that declares none is rejected, so an undeclared behavior cannot
+// exist.
+//   cascade  the referencing entity is deleted with the target
+//   detach   the column is set null and clients are told about it
+//   release  the ROW is deleted but its entity lives (a tag whose existence IS
+//            the reference)
 //   keep     the reference stands as history (no FK; the tombstone is the mark)
 export type Death = 'cascade' | 'detach' | 'release' | 'keep'
 
-// The scalar spellings a column reconstructs to — a compact type vocabulary
+// The scalar type names a column reconstructs to — a compact type set
 // recovered from native JSON Schema (`type` + `format`):
 //   text   string, no format          number  number
 //   time   string, format:date-time   priority number, format:priority
@@ -25,7 +27,7 @@ export type Death = 'cascade' | 'detach' | 'release' | 'keep'
 //   query  string, format:query       json    string, format:json
 //
 // Where a string column KEEPS its value is a separate question, and not this
-// meta-model's: @yaks/blob owns the `store` keyword and answers it.
+// format's: @yaks/blob owns the `store` keyword and answers it.
 export type Scalar =
   | 'text'
   | 'number'
@@ -36,25 +38,27 @@ export type Scalar =
   | 'time'
   | 'url'
 
-// One column, interrogated. `kind` is the coarse category a binder switches on;
-// `scalar` refines a scalar column to its type spelling; `values`/`ref` carry
-// the closed set or the pointed-at entity kind. `affinity` and `fk` are the two
-// answers a SQLite lowering needs and nothing else has to recompute.
+// One column, read back. `category` is the coarse kind a storage binder
+// switches on; `scalar` refines a scalar column to its type name;
+// `values`/`ref` carry the closed set or the referenced entity kind. `affinity`
+// and `fk` are the two answers a SQLite lowering needs and nothing else has to
+// recompute.
 export type Column = {
   comp: string
   prop: string
-  /** what the column MEANS, as its schema says it — the sentence a schema
-   * door hands an agent so a column is not read off its name alone */
+  /** what the column MEANS, as its schema describes it — the text a schema
+   * listing hands an agent, so a column is not read off its name alone */
   description?: string
   category: 'scalar' | 'enum' | 'ref'
   scalar?: Scalar
   values?: string[] // enum members
-  aliases?: Record<string, string> // input spellings → a member
+  aliases?: Record<string, string> // input forms → a member
   ref?: string // the entity kind a reference names ('entity' = any)
   death?: Death
-  stamped: boolean // server-owned: readable, never wire-writable
-  /** this text column's words are indexed: a bare-word search matches them
-   * (@yaks/fts reads it). A column nobody declares is never searched. */
+  stamped: boolean // the server owns it: clients read it, never write it
+  /** this text column is full-text indexed, so a bare word in a query matches
+   * it (@yaks/fts builds the index). A column nobody declares is never
+   * searched. */
   search: boolean
   /** derived, never stored: no column holds it and nobody writes it, but a
    * reader still sees it (a query-only rank, an aggregate, a derived status) */
@@ -66,28 +70,28 @@ export type Column = {
   fk: boolean // a reference carrying a foreign key to entity(id)
   /** the component's `required` list names it: a row may not hold it null */
   required: boolean
-  /** what a row holds when the writer said nothing — see {@link Default} */
+  /** what a row holds when the writer supplied nothing — see {@link Default} */
   default?: Default
   keywords: Record<string, unknown> // registered extension keywords, verbatim
 }
 
 // A column's default, from native `default`: a literal the row takes, or the
-// clock — `{"now": true}` is the one spelling JSON has no literal for, so it is
-// an object no scalar column could hold and never mistaken for a value.
+// clock — `{"now": true}` is the one value JSON has no literal for, so it is
+// written as an object no scalar column could hold and never mistaken for one.
 export type Default = { now: true } | { value: string | number | boolean }
 
-// A component, interrogated: its columns split writable/stamped, its display
+// A component, read back: its columns split writable/stamped, its display
 // facts, and whatever extension keywords a caller registered (keywords.ts) —
-// carried verbatim, never interpreted here.
+// copied verbatim, never interpreted here.
 export type CompInfo = {
   name: string
-  description?: string // what the component means, as its schema says it
-  wire: boolean // false = readable-not-writable component (the spine)
+  description?: string // what the component means, as its schema describes it
+  wire: boolean // false = a component clients read but cannot write
   kind: boolean // this comp names a display kind
   before: string[] // kinds this kind sorts before (feeds kindOrder)
-  writable: string[] // wire-writable column names
-  stamped: string[] // server-owned column names
-  /** who hears about a write to it — see {@link Sync} */
+  writable: string[] // column names a client may write
+  stamped: string[] // column names only the server writes
+  /** who is told about a write to it — see {@link Sync} */
   sync: Sync
   /** how long one of its values lives: `forever`, `connection`, or a duration
    * (lifetime.ts `ms` reads the span out of one) */
@@ -96,7 +100,8 @@ export type CompInfo = {
 }
 
 // The columns an entity's own id is derived from, in the order the derivation
-// says them. Empty for the ordinary component, whose entities take a minted id.
+// reads them. Empty for the ordinary component, whose entities take a minted
+// id.
 export type Identity = string[]
 
 // One index over a component's table: the columns it covers, in order, and
@@ -108,7 +113,7 @@ export type Identity = string[]
 export type Index = { cols: string[]; unique: boolean; present?: string[] }
 
 // One entry of a component's composite `unique`/`index` list: the column names
-// alone, or an object that also says which columns must be present.
+// alone, or an object that also names which columns must be present.
 export type Composite = string[] | { cols: string[]; present?: string[] }
 
 // One deref step of a dotted path: the component a segment landed in and the
@@ -120,14 +125,14 @@ export type Hop = { comp: string; prop: string }
 // it, so the association is that (comp, prop) pair under a plural name.
 export type Assoc = { comp: string; prop: string }
 
-// Which components an entity WEARS, and no column value: all of these present,
-// none of those. The word both a binder (@yaks/sql) and a table-set cache
-// (@yaks/archetype) speak, so it lives under neither of them.
+// Which components an entity HAS, with no column value: all of these present,
+// none of those. Both the storage binder (@yaks/sql) and the table-set cache
+// (@yaks/archetype) take this type, so it lives under neither of them.
 export type Presence = { all?: readonly string[]; none?: readonly string[] }
 
-// A vocab document, as authored: a JSON Schema whose `$defs` are the components.
-// Loose on purpose — the meta-schema and loadVocab() are what validate it; this
-// is just enough shape for the reader.
+// A vocabulary document, as authored: a JSON Schema whose `$defs` are the
+// components. Loose on purpose — the meta-schema and loadVocab() are what
+// validate it; this is just enough shape for the reader.
 export type VocabDoc = {
   $id?: string
   $vocabulary?: Record<string, boolean>
@@ -141,18 +146,19 @@ export type VocabDoc = {
 export type PropSchema = {
   type?: string
   properties?: Record<string, PropSchema>
-  // What a $defs entry IS. An entry says one of these or it is an ordinary
-  // reusable subschema — the loader plants neither a table nor a tool for it.
+  // What a $defs entry IS. An entry carries one of these markers or it is an
+  // ordinary reusable subschema — the loader creates neither a table nor a
+  // tool for it.
   component?: boolean
   tool?: boolean
   rule?: boolean
-  // A rule declaration's own words: the query it matches, and the phase it
+  // A rule declaration's own keywords: the query it matches, and the phase it
   // runs in (`rules` by default; `effect` is a rule a post-commit runner asks
   // for). `before` is shared with a kind's ordering and means the same thing —
   // what this runs before.
   match?: string
   phase?: string
-  // A tool declaration's own words: what it is called, and what it takes.
+  // A tool declaration's own keywords: what it is called, and its arguments.
   noun?: string
   verb?: string
   input?: Record<string, PropSchema>
@@ -165,13 +171,13 @@ export type PropSchema = {
   examples?: readonly unknown[]
   $ref?: string
   // yaks core keywords (death is loose here — a JSON import infers plain
-  // string; the storable check is what refuses a word outside the four)
+  // string; the storable check is what rejects a value outside the four)
   ref?: string
   death?: string
   // true = derived, never stored (on a COLUMN)
   computed?: boolean
   stamped?: boolean
-  // On a COMPONENT: who hears about a write, and how long the value lives
+  // On a COMPONENT: who is told about a write, and how long the value lives
   // (lifetime.ts).
   sync?: string
   durable?: string
@@ -182,17 +188,17 @@ export type PropSchema = {
   wire?: boolean
   bare?: boolean
   // On a COLUMN a boolean (this column alone); on a COMPONENT the composite
-  // column lists. `Vocab.indexes` merges the two spellings. Stored references
-  // are always indexed: index: true is redundant and false does not opt out.
+  // column lists. `Vocab.indexes` merges the two forms. Stored references are
+  // always indexed: index: true is redundant and false does not opt out.
   unique?: boolean | Composite[]
   index?: boolean | Composite[]
   // native: the columns a row must hold (NOT NULL), on the COMPONENT
   required?: string[]
   // What the entity's id is DERIVED from. On a COLUMN, true; on a COMPONENT,
-  // the column list a composite identity is spelled across. One tuple, not a
-  // list of them: an entity has one id. `Vocab.identity` merges the spellings.
+  // the column list a composite identity is written across. One tuple, not a
+  // list of them: an entity has one id. `Vocab.identity` merges the two forms.
   identity?: boolean | string[]
   aliases?: Record<string, string>
-  // an extension vocabulary's keywords ride here too (keywords.ts)
+  // an extension vocabulary's keywords are carried here too (keywords.ts)
   [k: string]: unknown
 }

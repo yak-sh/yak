@@ -1,68 +1,71 @@
 # @yaks/vocab
 
-Describe component vocabularies with JSON Schema 2020-12 and yaks extension
-keywords. `loadVocab()` loads these documents into a runtime model used for
-validation, query resolution, and storage schema generation. This package
-defines the vocabulary format, not application components.
+A **vocabulary document** is a JSON Schema 2020-12 document whose `$defs`
+entries are marked `component: true` or `tool: true`. This package defines that
+format and loads it: `loadVocab()` reads one or more such documents into a
+runtime model used for validation, query resolution, and storage schema
+generation. This package declares no components of its own — the components you
+declare are an instance of the format it defines.
 
 ## The format
 
-A vocab is a JSON Schema document. Each entry in `$defs` says what it IS:
-`"component": true` is a component (an object schema whose properties are its
-columns), `"tool": true` is a tool declaration, and an entry saying neither is
-an ordinary reusable subschema this meta-model passes over — `$defs` is JSON
-Schema's own reuse slot and stays usable as one. Native JSON Schema carries
-`type`, `format`, `enum`, `const`, `default`, `description`, `examples`; the
-yaks keyword vocabulary (declared via JSON Schema's own `$vocabulary` mechanism,
-`meta/core.vocab.json`) adds what a component table needs:
+Each entry in `$defs` declares what it is. `"component": true` marks a
+component: an object schema whose properties are the component's columns.
+`"tool": true` marks a tool declaration. An entry with neither marker is an
+ordinary reusable subschema that this format ignores — `$defs` is JSON Schema's
+own reuse slot and stays usable as one.
 
-| keyword     | on     | says                                                                |
+Native JSON Schema carries `type`, `format`, `enum`, `const`, `default`,
+`description` and `examples`. The yaks keywords — declared through JSON Schema's
+own `$vocabulary` mechanism, in `meta/core.vocab.json` — add what a component
+table needs on top:
+
+| keyword     | on     | means                                                               |
 | ----------- | ------ | ------------------------------------------------------------------- |
 | `component` | entry  | `true` = this entry is a component. Required; there is no default   |
 | `tool`      | entry  | `true` = this entry is a tool declaration, not a table              |
 | `noun`      | tool   | the resource word a CLI answers to (`session list`, `list session`) |
 | `verb`      | tool   | the operation word; either word alone is the whole command          |
-| `input`     | tool   | one schema per named argument, the way a component says columns     |
+| `input`     | tool   | one schema per named argument, as a component declares columns      |
 | `ref`       | column | the entity kind a string references (`"project"`, `"entity"`)       |
 | `death`     | column | `cascade` \| `detach` \| `release` \| `keep` when the target dies   |
 | `computed`  | column | `true` = derived, never stored (a query-only rank)                  |
-| `stamped`   | column | `true` = server-owned: readable, never wire-writable                |
-| `search`    | column | `true` = this text column's words are full-text indexed             |
+| `stamped`   | column | `true` = the server owns it: clients read it, never write it        |
+| `search`    | column | `true` = this text column is full-text indexed                      |
 | `store`     | column | `"blob"` = a content-addressed markdown body                        |
-| `aliases`   | column | input spellings that resolve to an enum member                      |
-| `bare`      | both   | `false` = never claims its bare filter spelling; qualified only     |
+| `aliases`   | column | input forms that resolve to an enum member                          |
+| `bare`      | both   | `false` = never claims its bare filter name; qualified only         |
 | `unique`    | both   | column: no two rows share it. comp: `[["space","slug"]]`            |
-| `index`     | both   | the same two spellings, without the uniqueness                      |
+| `index`     | both   | the same two forms, without the uniqueness                          |
 | `required`  | comp   | native: the columns every row holds (NOT NULL)                      |
 | `default`   | column | native: the row's fallback; `{"now": true}` is the clock            |
 | `identity`  | both   | the entity's id is DERIVED from this. comp: `["space","slug"]`      |
 | `kind`      | comp   | this component names a display kind                                 |
 | `before`    | comp   | kinds this kind sorts before (feeds the derived kindOrder)          |
-| `wire`      | comp   | `false` = readable-not-writable component (entity metadata)         |
-| `sync`      | comp   | who hears a write: `none` \| `server` (default) \| `peers`          |
+| `wire`      | comp   | `false` = a component clients read but cannot write                 |
+| `sync`      | comp   | who is told about a write: `none` \| `server` (default) \| `peers`  |
 | `durable`   | comp   | how long a value lives: `forever` (default) \| `connection` \| `5s` |
 
 Native keywords reach the table as written: `type: integer` stores with integer
-affinity where a plain `number` stores real, `enum` is a CHECK on the column,
-`required` is NOT NULL, and `default` fills the row that omits the column. A
-composite `unique`/`index` entry may be partial —
-`{"cols": ["key"], "present":
-["key"]}` covers only the rows that hold a key, so
-keyless rows are many and keyed ones are one.
+affinity where a plain `number` stores real, `enum` becomes a CHECK on the
+column, `required` becomes NOT NULL, and `default` fills the row that omits the
+column. A composite `unique` or `index` entry may be partial: an entry of
+`{"cols": ["key"], "present": ["key"]}` covers only the rows that hold a key, so
+keyless rows may be many and keyed ones must be one.
 
 Every stored `ref` column is indexed automatically, including stamped refs and
 refs with `death: "keep"`. No `index: true` is needed, and `index: false` does
 not opt out. A reference that already leads a declared index (including a
 composite unique or identity index) needs no additional single-column index.
 
-**`search` is the one that says what a search reads.** A column marked
-`"search": true` has its words indexed, and a bare word in a query line matches
-them; a text column nobody marked is stored and readable but never searched, so
-a repo path or a provider name is not what a search has to wade through. The
-keyword is for stored prose — a number, a stamp, a reference, a closed set and a
-computed column carry no words, and `validate.ts` refuses it there. This package
-DECLARES it; [@yaks/fts](https://jsr.io/@yaks/fts) is what cuts the index, one
-per component, from the columns that said so.
+**`search` is what makes a column searchable.** A column marked `"search": true`
+is full-text indexed, and a bare word in a query matches it; a text column
+nobody marked is stored and readable but never searched, so a repo path or a
+provider name is not something a search has to wade through. The keyword is for
+stored prose — a number, a stamp, a reference, a closed set and a computed
+column hold no prose, and `validate.ts` rejects the keyword there. This package
+DECLARES it; [@yaks/fts](https://jsr.io/@yaks/fts) builds the index, one per
+component, from the columns that declared it.
 
 ```json
 {
@@ -76,10 +79,10 @@ per component, from the columns that said so.
 }
 ```
 
-**`identity` is the one that names the entity.** A component whose column says
+**`identity` is what names the entity.** A component whose column is marked
 `"identity": true` has its entities' ids DERIVED from that value — the same
 derivation an edge and a key already use — so a file, a row or a seed written
-twice is one entity and there is no eid for anybody to have kept:
+twice is one entity, and there is no eid for anybody to have kept:
 
 ```json
 {
@@ -94,20 +97,20 @@ twice is one entity and there is no eid for anybody to have kept:
 ```
 
 `{guide: {slug: 'store', brief: '…'}}` applied a second time patches the first
-entity. This package DECLARES it and answers `identity(comp)`;
-[@yaks/graph](https://jsr.io/@yaks/graph) is what derives the id and refuses a
-bundle whose eid disagrees with it.
+entity. This package DECLARES the keyword and reports it through
+`identity(comp)`; [@yaks/graph](https://jsr.io/@yaks/graph) derives the id and
+rejects a bundle whose eid disagrees with it.
 
-A text field's completions draw from native `examples` ∪ the column's own live
-distinct values. Ordering is derived, never hand-ranked: component and stamped
-order are alphabetical, and kindOrder is alphabetical refined topologically by
-`before` (a cycle refuses).
+A text field's completions draw from native `examples` plus the column's own
+live distinct values. Ordering is derived, never hand-ranked: component and
+stamped order are alphabetical, and kindOrder is alphabetical refined
+topologically by `before` (a cycle is an error).
 
 **Reverse associations are derived too.** Every reference column is also a name
-on the far side: `review.book` makes `.reviews` the reviews pointing at a book,
-and a component with several references disambiguates with the column
-(`loan.book` → `.loans_book`). A forward spelling always wins its name, so an
-association never shadows a real column or component.
+on the far side: `review.book` makes `.reviews` mean the reviews pointing at a
+book, and a component with several references disambiguates with the column name
+(`loan.book` → `.loans_book`). A forward name always wins, so an association
+never shadows a column or a component.
 
 ```json
 {
@@ -126,9 +129,10 @@ association never shadows a real column or component.
 }
 ```
 
-`meta/vocab.schema.json` is the meta-schema a vocab file validates against.
+`meta/vocab.schema.json` is the meta-schema a vocabulary document validates
+against.
 
-A JSON column uses `{ "type": "string", "format": "json" }`. The runtime reports
+A JSON column is `{ "type": "string", "format": "json" }`. The runtime reports
 scalar `json` with text affinity and accepts a string containing any valid JSON
 value. Objects and arrays are encoded in that string; a column never holds a
 nested object or array directly. A null clears the column, while the string
@@ -157,33 +161,34 @@ v.column('book', 'weight').keywords.unit // 'gram'
 extendMeta([shelf]) // the meta-schema, now admitting those keywords
 ```
 
-The loader **carries** a registered keyword and never interprets one — what it
-_means_ belongs to the package that declared it.
-[@yaks/id](https://jsr.io/@yaks/id) owns `prefix` this way, and
+The loader **carries** a registered keyword through to the loaded model and
+never interprets one — what a keyword MEANS belongs to the package that declared
+it. [@yaks/id](https://jsr.io/@yaks/id) owns `prefix` this way, and
 [@yaks/names](https://jsr.io/@yaks/names) owns `by_name`. A keyword nobody
-registered is invisible.
+registered is dropped.
 
 ## The runtime
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
 
-let v = loadVocab([kernel, work]) // one or many docs, merged; a name has one home
+let v = loadVocab([kernel, work]) // one or many docs, merged; one home per name
 
-v.comps // wire-writable component names, alphabetical
+v.comps // client-writable component names, alphabetical
 v.kinds // kindOrder: alphabetical + topological over `before`
 v.column('task', 'project')
 // { category: 'ref', ref: 'project', death: 'detach',
 //   affinity: 'integer', fk: true, stamped: false, computed: false, … }
-v.route('title') // { comp: 'doc', prop: 'title' }   bare prop → its home
+v.route('title') // { comp: 'doc', prop: 'title' }   bare prop → its component
 v.route('eid') // { comp: 'entity', prop: 'eid' }  the entity identity
 v.aim('comment.target.doc.title') // [{comment,target}, {doc,title}]  path → hops
-v.aim('project', true) // [{project,''}]  the bare-bang form: `.project!` is the
-// component's facet even where task.project claims the bare spelling
+v.aim('project', true) // [{project,''}]  the presence form: `.project!` asks
+// whether the entity has the `project` component, even where `task.project`
+// claims the bare name
 
 v.assoc('reviews') // { comp: 'review', prop: 'book' }  a plural → its reverse
 v.kindOf({ task: 1, doc: 1 }) // 'task' — most specific kind wins
-v.deaths('cascade') // the reaper's worklist: [comp, col] pairs
+v.deaths('cascade') // the delete worklist: [comp, col] pairs
 v.check('task', { priority: 1 }) // [] — instance well-formedness
 ```
 
@@ -191,7 +196,7 @@ v.check('task', { priority: 1 }) // [] — instance well-formedness
 scalar/ref/enum columns — no nesting, arrays, or recursive `$ref` a table can't
 lower), **reserved** names a base vocabulary already owns, and **grow** — the
 additive-forever rule: a column never drops or retypes, because its rows were
-written under the old word.
+written under the old type.
 
 See `vocab_test.ts` and `validate_test.ts` for vocabulary loading and validation
 examples.
@@ -222,13 +227,14 @@ A tool is declared where the components are, in `$defs`, marked `tool: true`:
 }
 ```
 
-`toolsIn(docs)` returns those declarations, each with its `input` map lowered to
-the one object schema every door downstream already reads; `loadVocab` passes
-over them, so a document is read once for its components and once for its tools
-and neither reading knows about the other. The entry's NAME is the tool's, which
-is how an implementation is found: `@yaks/graph/tools` `loadTools(docs, runs)`
-joins a declaration to the run the module gives it, and a declaration nobody
-implements is a load error rather than a word that lists and then fails.
+`toolsIn(docs)` returns those declarations, each with its `input` map converted
+to the single object schema everything downstream reads — the CLI's argument
+parser, an MCP `tools/list`, a shell completion. `loadVocab` skips tool entries,
+so a document is read once for its components and once for its tools and neither
+reading knows about the other. The entry's NAME is the tool's name, which is how
+an implementation is found: `loadTools` in `@yaks/graph/tools` joins a
+declaration to the handler the module supplies, and a declaration nobody
+implements is a load error rather than a tool that lists and then fails.
 
 `@yaks/vocab/tools` also validates a declaration written in code, independently
 of any document.
@@ -261,24 +267,23 @@ defaults, for adapters that need a reusable validator. Validators are cached per
 schema object. Treat registered schemas as immutable.
 
 Nouns and verbs are single lowercase words (hyphens and digits allowed). A tool
-may say both, or either one alone: two words are a line said in either order
-(`session list`, `list session`) and transported as `session_list`, while one
-word alone is the whole command and the whole transport name —
-`"noun":
-"history"` is `yak history T-5` and `history` over `/mcp`. The entry's
-own name is the tool's either way, so a tool that already has a name (`land`)
-may say neither. `options.positional` orders input property names;
-`options.short` maps single letter flags to property names. Long options derive
-from property names. Handlers remain code and receive the existing graph Tool
-context. The older opaque/Zod argument bag remains supported by existing
-adapters, but cannot be combined with `inputSchema` on the same tool. JSON
-output declarations and a uniform migration of legacy tools are not part of this
-first input pilot.
+may declare both, or either one alone. Two words are a command line accepted in
+either order (`session list`, `list session`) and sent to the server as
+`session_list`; one word alone is the whole command and the whole transport
+name, so `"noun": "history"` is `yak history T-5` on the command line and
+`history` over `/mcp`. The entry's own name is the tool's name either way, so a
+tool that already has a name (`land`) may declare neither. `options.positional`
+orders input property names; `options.short` maps single letter flags to
+property names. Long options derive from property names. Handlers remain code
+and receive the existing graph Tool context. The older opaque/Zod argument bag
+remains supported by existing adapters, but cannot be combined with
+`inputSchema` on the same tool. JSON output declarations and a uniform migration
+of legacy tools are not part of this first input pilot.
 
 ## Rules
 
 A `$defs` entry marked `rule: true` is a RULE: a query the graph runs over every
-batch, and there is nothing else to it.
+batch of changes, and there is nothing else to it.
 
 ```json
 {
@@ -294,13 +299,15 @@ batch, and there is nothing else to it.
 ```
 
 `match` is one or more ordinary query patterns separated by `;`, one per entity,
-joined by the variables they share. The sigils say the rest — `+comp` ensures,
-`+!comp` gates so it fires once, `*comp` is its write set, `$name` names an
-entity, and a `$name` in a value is that same variable. `before` names the rules
-this one runs before, so order is declared rather than incidental.
+joined by the variables they share. The sigils carry the rest: `+comp` ensures
+the component, `+!comp` gates so the rule fires once, `*comp` is its write set,
+`$name` names an entity, and a `$name` in a value refers to that same variable.
+`before` names the rules this one runs before, so order is declared rather than
+incidental.
 
-`rulesIn(docs)` reads them, the way `toolsIn` reads tool declarations, and
-`loadVocab` passes over both. The difference is that there is nothing to join a
-rule to: a tool says what it is called and a module says what it does, while a
-rule's match IS what it does. `@yaks/graph` reads a plugin's own documents for
-them, so an app that ships one in its manifest needs no wiring at all.
+`rulesIn(docs)` reads rule entries, the way `toolsIn` reads tool declarations,
+and `loadVocab` skips both. The difference is that there is nothing to join a
+rule to: a tool declaration names the tool and a module implements it, while a
+rule's `match` IS the implementation. `@yaks/graph` reads a plugin's own
+documents for rules, so an app that ships one in its manifest needs no wiring at
+all.

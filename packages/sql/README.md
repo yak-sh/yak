@@ -1,10 +1,35 @@
 # @yaks/sql
 
-Compile a [@yaks/query](../query/README.md) AST and a
-[@yaks/vocab](../vocab/README.md) vocabulary into parameterized SQL. Binding
-resolves schema paths and types into a relational intermediate representation
-(IR); rendering produces SQL text and parameters. This package does not open a
-database or execute statements.
+Compiles a query into a SQL statement and the parameters to bind to it. The
+query comes in as a [@yaks/query](../query/README.md) AST; the schema it is
+compiled against is a [@yaks/vocab](../vocab/README.md) vocabulary. This package
+never opens a database and never executes a statement — it only produces the
+text and the parameters.
+
+```sh
+deno add jsr:@yaks/sql
+```
+
+## Terms used here
+
+- **entity table** — the one table every entity has a row in. Its columns are
+  the integer primary key `id`, the public `eid`, the sequence number `num`, and
+  `archetype`. In the code it is called the spine, and `Dialect.spine` is the
+  SQL that names it.
+- **component table** — one table per component, named for the component. Its
+  `entity` column holds the owner's integer `id`, and its other columns are the
+  component's own. Reading a component column means LEFT JOINing that table, so
+  "the column is NULL" and "the component is absent" are the same answer.
+- **reference column** — a column that points at another entity. It stores the
+  referent's integer `id`, so comparing it to an `eid` costs one lookup in the
+  entity table and then an integer comparison.
+- **presence test** — a predicate that asks only whether an entity has a
+  component at all (`.task`, `.doc!`, `!.claim`), rather than comparing one of
+  its columns. The AST field that marks one is called `facet`.
+
+A deleted entity keeps its row in the entity table, because its integer `id`
+must never be reused, but it is listed in the `tombstone` table. Every statement
+this package compiles excludes tombstoned entities.
 
 ## The pipeline
 
@@ -19,46 +44,62 @@ let { sql, params } = compile(parse('.status=open&.priority>=1'), vocab)
 // params: [1]
 ```
 
-Two passes over a dialect-agnostic relational IR:
+There are two passes, both over a relational intermediate representation that
+holds no SQL text:
 
-- **`bind(ast, vocab, opts)` → `Rel`** — route every path through the vocab,
-  coerce every value by its column's category, build the joins, turn each
-  directive into a projection, a bound, or an ordering.
-- **`render(rel)` → `{ sql, params }`** — the dialect turns the IR into SQL
-  text.
+- `bind(ast, vocab, opts)` returns a `Rel`. It routes every path through the
+  vocabulary, coerces every value according to its column's type, collects the
+  joins, and turns each directive into a projected column, a LIMIT, or an ORDER
+  BY.
+- `render(rel)` returns `{ sql, params }`. This is where the dialect turns the
+  representation into SQL text.
 
-`compile` is their composition.
+`compile` is the two composed.
 
-## Archetype presence
+## Matching on the archetype column
 
-`opts.archetypes` resolves a table-presence predicate to the current file's
-integer archetype ids. `archetypeSet(cache, ids)` binds an `Archetypes` content
-cache from `@yaks/archetype` to a snapshot mapping descriptor eids to those ids.
-With this option, `.task`, `.doc!`, `!.claim`, and kind precedence compile to
-`entity.archetype in (…)`, not component joins. Boolean composition, reference
-targets and reverse-child facets use the same matching. Value predicates still
-join their own tables; a component row with all-null columns remains present.
+An entity's archetype records which set of component tables it has rows in. Pass
+`opts.archetypes` and a presence test compiles to `entity.archetype in (…)`
+instead of joining the component table it names. `archetypeSet(cache, ids)`
+builds that function from an `Archetypes` cache (`@yaks/archetype`), which maps
+a presence test to archetype eids, plus a map from those eids to the integer ids
+this database file uses.
 
-The caller must supply a **current, complete** catalog for each plan. Returning
-`undefined` declines an incomplete catalog; returning `[]` means nothing
-matches. Without this option (or a dialect's `archetype` expression), existing
-join-based lowering is unchanged. `@yaks/sqlite` supplies a lazy catalog for
-archetype-enabled vocabularies automatically.
+The same matching covers presence tests combined with AND/OR/NOT, a presence
+test on the far side of a reference (`.session.claim!`), a presence test on the
+child row inside a reverse hop, and `.kind=`, which expands to the named kind
+being present and every kind that sorts before it being absent. Predicates that
+compare a value still join their own table: a component row whose columns are
+all NULL is still present, so the archetype cannot answer a value comparison.
 
-## Intermediate representation
+The caller must supply a catalog that is current and complete for each plan.
+Returning `undefined` declines — the compiler falls back to joins — and
+returning `[]` means no archetype matches. Without this option, or against a
+dialect with no `archetype` expression, nothing changes: presence still compiles
+to a join. `@yaks/sqlite` builds the catalog lazily for any vocabulary that uses
+archetypes.
 
-The IR (`ir.ts`) is Arel-shaped and carries the statement as data, so a new
-backend (D1, Postgres) is another **renderer over the same value** — the
-structure never changes, only the leaf column lowerings behind a `Dialect`
-(`sqlite.ts`) and, for a non-`?` placeholder dialect, a renumber of the params.
+## The intermediate representation
+
+`ir.ts` holds a SELECT statement as data: the projected columns, the joins, a
+boolean condition tree, grouping, ordering and the row limit. The names come
+from Arel — project, join, where, group, order, take, distinct — so anyone who
+has used Arel or ActiveRecord already knows what they do.
+
+Because the representation carries no SQL text, a second backend (D1, Postgres)
+is another renderer over the same value: the structure does not change, only how
+leaf column expressions are lowered (a `Dialect`, see `sqlite.ts`) and, for a
+backend whose placeholders are not `?`, a renumbering of the parameters on the
+way out.
 
 ## Computed columns
 
-A column a vocabulary marks `computed: true` has no stored value — its formula
-belongs to the application, not the schema. Supply those through the **derived
-hook** (`derived.ts`): a `Derived` map from `comp.prop` to the SQL expression
-that reads it. A registered expression compiles a computed column through the
-index instead of a JS scan.
+A column the vocabulary marks `computed: true` has no stored value — its formula
+belongs to the application, not to the schema. Supply those formulas through the
+derived hook (`derived.ts`): a `Derived` map from `comp.prop` to the SQL
+expression that reads the value. Registering an expression is what lets a
+computed column be filtered in SQL, through an index, instead of scanning every
+row in JavaScript.
 
 ```ts
 import type { Derived } from '@yaks/sql'
@@ -74,21 +115,22 @@ let derived: Derived = {
 compile(ast, vocab, { derived })
 ```
 
-A qualified path names its component as much as its column, so such a read is
-NULL for a row that does not wear it — the way every stored column reads through
-the left join — whatever rows the expression itself builds on. A read that
-ANSWERS for a row wearing nothing says `worn: false` (a `updated.at` that falls
-back to `created.at`), and only then.
+A qualified path names its component as much as its column, so by default such a
+read is NULL for an entity that does not have that component — the same answer a
+stored column gives through its LEFT JOIN — no matter which rows the expression
+itself reads. Set `worn: false` for the exception: an expression that is meant
+to return a value even for an entity without the component, such as an
+`updated.at` that falls back to `created.at`.
 
-## SQL extensions
+## Extensions
 
-Some clauses need machinery this package does not own — a full-text term needs a
+Some clauses need machinery this package does not own: a full-text term needs a
 search index, `.near` needs vectors, `.edges` needs a link table. Each of those
-lives in its own package, and each contributes one thing: how ITS clause becomes
-a condition over this IR.
+lives in its own package, and each has one thing to contribute here — how its
+own clause becomes a condition over this representation.
 
-An **`Extension`** (`extend.ts`) is that contribution, registered the way a
-plugin contributes a vocabulary — a named object passed to `compile`:
+An `Extension` (`extend.ts`) is that contribution. It is registered the way a
+plugin contributes a vocabulary: a named object passed to `compile`.
 
 ```ts
 import { compile, type Extension, raw } from '@yaks/sql'
@@ -109,92 +151,95 @@ let shelves: Extension = {
 compile(ast, vocab, { extend: [shelves] })
 ```
 
-The contract, whole:
+The whole contract:
 
-- A compiler takes the clause and a **`Site`** — the bound `vocab`, the
-  `dialect`, `now`, `owner` (the SQL naming this row's integer id), and
-  `join(comp)`, which pulls a component table into the statement as a LEFT join
-  and answers its owner column.
+- A clause compiler is called with the clause and a `Site`: the vocabulary being
+  compiled against, the `dialect`, `now`, `owner` (the SQL naming this row's
+  integer id), and `join(comp)`, which pulls a component table into the
+  statement as a LEFT JOIN and returns its owner column.
 - It returns a `Cond` (build one with `raw`/`and`/`or`/`not` from `ir.ts`), or
-  `null` to **decline** — the binder then compiles the clause itself, or refuses
-  it as `Unsupported`.
-- Extensions run in registration order, first non-null wins, and always **before
-  the built-in** compilation, so one may replace a built-in lowering as well as
-  supply a missing one.
-- Claiming a directive kind that would otherwise decline (`near`, `edges`,
-  `reaches`) makes it compile as a filter instead of throwing.
-- An extension may also spell an **ordering** the vocabulary has no column for —
-  a relevance, a similarity — through an `order(value, site)` hook. It is handed
-  the `.order=` value with any leading `-` stripped and answers the `ORDER BY`
-  expression, or `null` to let the value route to a column as usual. The
-  expression carries no bound params (the IR's `ORDER BY` holds none), so a
-  ranking lowers to an expression over values it can spell safely — the integer
-  ids it already resolved, or a joined column. `site.owner` names the row the
-  expression speaks about: a `.after` cursor asks the same hook a second time
-  with the ANCHOR's owner id, so a ranking is pageable without another extension
-  API.
-- One `bind` is one QUESTION, and an extension that remembers anything between
-  its two hooks — the neighbourhood a `.near` resolved, so the ordering can rank
-  by it — says so with a **`begin(screen)`** hook. The binder calls it before
-  any clause of a new question compiles, which is what lets a long-lived
-  extension (one a host registered at compose time and serves every query
-  through) answer each query from that query alone.
-- `screen()` is what the REST of the line selects: a statement over the eids
-  every other clause admits, with this extension's own clauses and the
-  answer-shaping directives left out (`null` when nothing else is on the line).
-  An extension that RANKS needs it, because a ranking cut to a limit before the
-  other clauses filter is a ranking of the wrong set — the eight nearest
-  entities of any kind, intersected with "and a memory", is usually nothing.
-  Filter, then rank, then cut. It is a function: compiling it costs something an
-  extension that does not rank should not pay.
+  `null` to decline, in which case the binder compiles the clause itself or
+  refuses it by throwing `Unsupported`.
+- Extensions run in registration order, the first non-null result wins, and all
+  of them run before the built-in compilation — so an extension can replace a
+  built-in lowering as well as supply a missing one.
+- Claiming a directive kind that would otherwise be refused (`near`, `edges`,
+  `reaches`) makes it compile as a filter rather than throw.
+- An extension can also supply an ORDER BY the vocabulary has no column for — a
+  relevance score, a similarity — through an `order(value, site)` hook. It is
+  handed the `.order=` value with any leading `-` already stripped, and returns
+  the ORDER BY expression or `null` to let the value route to a column as usual.
+  The expression carries no bound parameters, because the ORDER BY in this
+  representation holds none, so a ranking has to lower to an expression over
+  values it can write into the SQL safely: the integer ids it already resolved,
+  or a joined column. `site.owner` names the row the expression is about, and a
+  `.after` cursor calls the same hook a second time with the anchor row's owner
+  id — which is how a ranking can be paged without a second extension API.
+- One call to `bind` is one query. An extension that has to remember something
+  between its two hooks — the set of neighbours a `.near` resolved, so the
+  ordering can rank by it — declares a `begin(screen)` hook. The binder calls it
+  before any clause of a new query compiles, which is what lets an extension
+  registered once, at startup, and used for every query afterwards, answer each
+  query from that query alone.
+- `screen()` returns the statement selecting the eids that the rest of the query
+  admits: every other clause, with this extension's own clauses left out and the
+  directives that shape an answer rather than narrow it (order, limit,
+  projection) left out too. It returns `null` when there is nothing else in the
+  query. An extension that ranks needs this, because a ranking cut to a limit
+  before the other clauses have filtered is a ranking of the wrong set — the
+  eight nearest entities of any kind, intersected with "and is a memory", is
+  usually nothing. Filter, then rank, then cut. It is a function rather than a
+  value because compiling it costs something an extension that does not rank
+  should not have to pay.
 
 ## Ordering and paging
 
-`.order=` sorts by a column (a leading `-` descending) or by an extension's
-ranking, and `"entity"."num" desc` breaks its ties, so the order is total.
+`.order=` sorts by a column (a leading `-` makes it descending) or by an
+extension's ranking. `"entity"."num" desc` breaks ties, so the order is total.
 
-A `.limit`/`.after` window pages **within** that order — a window says how much
-of a sequence to answer with, never which sequence. With no `.order=` the
-sequence is newest-first by entity num, as it always was.
+A `.limit`/`.after` window pages within that order: a window states how much of
+a sequence to return, never which sequence. With no `.order=` the sequence is
+newest first by entity `num`, as it has always been.
 
-`.after=<num>` names the entity to continue past, the same spelling however the
-answer is ordered. It compiles to a **keyset** on the anchor's own place in the
-order: the anchor's value is read back through a correlated subselect and
-compared against each row's, with the entity num breaking ties. Three fallbacks
-fall out of that shape rather than being cased — an anchor that no longer
-matches the query still has an order value to page from, one with no value pages
-by its num alone, and one that no entity has leaves the guard true, which is the
-first page. `@yaks/match` answers the same rule in memory, and its
-`parity_test.ts` pins the agreement.
+`.after=<num>` names the entity to continue past, written the same way however
+the results are ordered. It compiles to a keyset condition on the anchor
+entity's own place in the order: the anchor's value is read back through a
+correlated subselect and compared against each row's, with the entity `num`
+breaking ties. Three fallbacks follow from that shape rather than being special
+cases — an anchor that no longer matches the query still has an order value to
+page from, one with no value pages by its `num` alone, and one that names no
+entity at all leaves the condition true, which is the first page. `@yaks/match`
+applies the same rule in memory, and its `parity_test.ts` pins the two together.
 
-## Honest coverage
+## What it compiles, and what it refuses
 
-The common query path is exact: predicates (every operator), any-of lists,
-ranges, time phrases, boolean composition, reference-deref paths, reverse hops,
-full-text terms, the `.kind` scope, presence/absence, ordering,
-`.limit`/`.after` windows, `.count`/`.distinct`/`.tally` aggregates, `.fields`
-and `*` projections, the `.refs=` backlink union, and the `.eid=`/`.num=`
-identity predicate.
+The common query path compiles exactly: predicates (every operator), any-of
+lists, ranges, time phrases, boolean composition, paths that dereference a
+reference column, reverse hops, full-text terms, the `.kind` scope, presence and
+absence, ordering, `.limit`/`.after` windows, the `.count`/`.distinct`/`.tally`
+aggregates, `.fields` and `*` projections, the `.refs=` backlink union, and the
+`.eid=`/`.num=` identity predicate.
 
-The `.refs=` backlink union obeys the same compound ceiling the death cascade
-does (below): its arms are grouped by table, cut into unions of `ARMS`, and the
-groups OR'd — so a vocabulary that references more ways than one compound may
-carry is still asked in one statement.
+The `.refs=` backlink union obeys the same compound SELECT limit the death
+cascade does (see below): its terms are grouped by table, cut into unions of
+`ARMS` terms, and the groups combined with OR — so a vocabulary with more
+reference columns than one compound SELECT can carry is still asked in one
+statement.
 
-Advanced directives it cannot yet reach throw **`Unsupported`** rather than
-answer almost-right — a caller catches it to fall back to a JS matcher or to
-report the gap. The current gaps are the `.edges` rider and the edge-typed walk
-(`.cites->p1`, claimed by `@yaks/edge`), and the `.near` KNN unless a vector
-package claims it — `@yaks/embedding` does, ordering included (`bind.ts` has the
-exact list).
+Anything outside that path throws `Unsupported` rather than return an
+almost-right answer; a caller catches it to fall back to a JavaScript matcher or
+to report the gap. What is missing today is the `.edges` rider and the
+edge-typed walk (`.cites->p1`), both claimed by `@yaks/edge`, and the `.near`
+nearest-neighbour search unless a vector package claims it — `@yaks/embedding`
+does, ordering included. `bind.ts` lists them exactly.
 
 ## Naming entities
 
-`.eid=` and `.num=` NAME entities rather than filter them, so their operand list
-is a set and compiles to one lookup on the entity table. A human id is an
-operand too — `@yaks/id` reads `B-7` as the entity numbered 7, the letter being
-display and the number identity — so one grammar fetches a named set and filters
-it.
+`.eid=` and `.num=` name entities rather than filter them, so the right-hand
+side is a set and compiles to one lookup on the entity table. A human-readable
+id is an operand too: `@yaks/id` reads `B-7` as the entity numbered 7, where the
+letter is for display and the number is the identity. One grammar therefore
+fetches a named set and filters it.
 
 ```
 .eid=a3f1               "entity"."eid" in (?)
@@ -203,15 +248,16 @@ it.
 .eid=B-7                "entity"."num" in (?)
 ```
 
-`@yaks/match` answers the same predicate as a set lookup, so a client can fetch
-named entities from a database or from bundles it already holds.
+`@yaks/match` evaluates the same predicate as a set lookup, so a client can
+fetch named entities either from a database or from bundles it already holds.
 
 ## Reverse hops
 
-A reference column is a name on the far side too: with a `review` component
+A reference column is also a name on the far side. Given a `review` component
 whose `book` column points at a book, `@yaks/vocab` derives the association
 `.reviews`, and this package compiles it as a correlated `EXISTS` (or `count`)
-over that column — an index search per candidate, never a widening join.
+over that column — one index search per candidate row, never a join that widens
+the result.
 
 ```
 .reviews!          the books that have a review
@@ -220,20 +266,20 @@ over that column — an index search per candidate, never a widening join.
 .reviews.stars=5   a review of five stars exists
 ```
 
-A child filter uses the same compiler over the child row, so a clause that
-declines there declines the whole hop; a child predicate naming entity metadata
-declines too, since inside the subquery that name is the correlation to the
-outer row.
+A filter on the child row runs through the same clause compiler, so a clause
+that declines inside the subquery declines the whole hop. A child predicate
+naming entity metadata declines as well, because inside the subquery that name
+refers to the correlation with the outer row.
 
-## The walk
+## The transitive walk
 
 `.fork.from->S-7` follows a reference column transitively: one recursive CTE
-(`walk.ts`), seeded at the target and stepped along the arrow, capped by the
-depth the grammar carries. What the binder supplies is only the **step** — a
-relation of `"from"`/`"to"` owner ids, one hop.
+(`walk.ts`), seeded at the target and stepped along the reference, capped at the
+depth the query gives. All the binder supplies is the step — a relation of
+`"from"`/`"to"` owner ids, one hop wide.
 
-A path may be a **chain** of reference columns, and then the step is the
-composed relation: each hop joined on the one before, `from` the first
+A path may be a chain of reference columns, and then the step is the composed
+relation: each hop joined to the one before it, `from` being the first
 component's owner and `to` the last hop's referent. `.fork.from.session->S-1` —
 the sessions whose fork lineage reaches session 1 — steps
 
@@ -243,17 +289,18 @@ from "fork" join "entry" as "__w1" on "__w1"."entity" = "fork"."from"
 ```
 
 so one rung of the CTE crosses the whole chain. Every hop must be a reference
-column; a hop that is not (and a path naming a relation, which is
-`@yaks/edge`'s) declines with `Unsupported`, never an empty answer.
+column; a hop that is not one, and a path naming a relation (which belongs to
+`@yaks/edge`), throws `Unsupported` rather than return an empty result.
 `@yaks/match` composes the same chain in memory, and `parity_test.ts` pins the
-agreement.
+two together.
 
 ## The death cascade
 
-One thing here is not a query. A reference column's `death` word says what
-happens to it when the entity it points at dies, and `@yaks/graph` decides all
-of it — but "who dies with these, and who has to let go" is a transitive
-question, and walked it costs a read per rung. `cascade.ts` compiles it instead:
+One thing here is not a query. A reference column declares in the vocabulary
+what happens to it when the entity it points at is deleted, and `@yaks/graph`
+decides all of it — but "who is deleted along with these, and who has to drop a
+reference to them" is a transitive question, and walking it costs one read per
+rung. `cascade.ts` compiles it into a statement instead:
 
 ```ts
 import { doomSql, looseSql, narrow } from '@yaks/sql'
@@ -263,27 +310,29 @@ import { doomSql, looseSql, narrow } from '@yaks/sql'
 //   union select "review"."entity", min(__doom."depth" + 1, 32)
 //     from "review", __doom where "review"."product" = __doom."id" and …
 // ) select eid, num, min(depth) …
-doomSql(vocab, ['p1']) //  every casualty, with the rung it fell on
+doomSql(vocab, ['p1']) //  every entity deleted, with the rung it fell on
 looseSql(vocab, ['p1']) // the survivors' detach/release columns into it
 ```
 
-The rung count saturates at 32 rather than climbing, which is what makes a
-reference cycle terminate; the SET is complete at any depth. A storage answers
-`Tx.doom` with these (`@yaks/sqlite`, `@yaks/d1`); one that cannot compile them
-is walked by `@yaks/graph`.
+The rung count stops at 32 instead of climbing further, which is what makes a
+cycle among reference columns terminate; the set of entities is complete at any
+depth. Storage backends answer `Tx.doom` with these statements (`@yaks/sqlite`,
+`@yaks/d1`); a backend that cannot compile them is walked by `@yaks/graph`
+instead.
 
-Both return a LIST. Every backwards arm is a term of one compound SELECT, and
-workerd — the runtime under a Durable Object and under D1 — allows five
-(SQLite's own default is 500), so a table's death columns are OR'd into one arm
-and the arms are cut into statements of `ARMS`. A vocabulary `narrow(vocab)`
-enough for one statement is answered whole, and `looseSql` re-states its closure
-so both ride one batch. A wider one is asked in ROUNDS: each statement is
-transitive within its own tables, so the caller re-asks with what the last round
-turned up until nothing new comes back, and hands `looseSql` a set already
-closed.
+Both functions return a list of statements. Every backward term is a term of one
+compound SELECT, and workerd — the runtime under a Durable Object and under D1 —
+allows five of them (SQLite's own default is 500). So a table's death columns
+are combined with OR into a single term, and the terms are cut into statements
+of `ARMS` terms each. A vocabulary `narrow(vocab)` enough to fit in one
+statement is answered whole, and `looseSql` restates the closure inside itself
+so both can be sent in one batch. A wider vocabulary is asked in rounds: each
+statement is transitive within its own tables, so the caller re-asks with
+whatever the last round turned up until nothing new comes back, and then hands
+`looseSql` a set that is already closed.
 
 ## Compatibility
 
-Pure TypeScript with no runtime dependency beyond a `@yaks/query` AST, a
-`@yaks/vocab` schema, and `@yaks/id` for reading a human id. Runs on **Deno**
-and **Node** (via JSR / npm).
+Pure TypeScript, with no runtime dependency beyond a `@yaks/query` AST, a
+`@yaks/vocab` schema, and `@yaks/id` for reading a human-readable id. Runs on
+Deno and on Node (via JSR / npm).

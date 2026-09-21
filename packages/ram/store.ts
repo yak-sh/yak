@@ -3,20 +3,21 @@
 // run in a page, in a worker, or in a test with no database to install, no
 // driver to bind, and no promise to await.
 //
-// Reads go through @yaks/match: the same query line @yaks/sql compiles into a
-// statement is evaluated here as a predicate over the bundles the map holds.
-// That is the whole read half; this file only has to hand match the set.
+// Reads go through @yaks/match: the same query string @yaks/sql compiles into a
+// SQL statement is evaluated here as a predicate over the bundles the map
+// holds. That is the whole read side; this file only has to pass the candidate
+// set to the matcher.
 //
-// Writes are the patch rules every adapter honors — omitted columns untouched,
-// a null column cleared, a null component dropped, a tombstoned entity taking
-// no patch — and identity is storage's: `patch` mints a record for every eid
-// the batch touches OR points at, numbers each new one in first-touch order,
-// and reports what it minted.
+// Writes follow the patch rules every adapter implements — omitted columns
+// untouched, a null column cleared, a null component dropped, a tombstoned
+// entity taking no patch — and identity belongs to storage: `patch` creates a
+// record for every eid the write touches OR points at, numbers each new one in
+// the order it was first touched, and returns what it created.
 //
 // A record is never mutated in place: a patch builds the next record and puts
 // it in the map. That is what makes rolling back cheap — an undo log of one
 // reference per entity a transaction touched, replayed backwards, restores the
-// map exactly as it was without copying anything the batch did not write.
+// map exactly as it was without copying anything the write did not touch.
 
 import type { Bundle, Comp, Eid, Entity, ReadOpts, Row } from '@yaks/graph'
 import { comps, isPromise, tombstoned } from '@yaks/graph'
@@ -26,35 +27,36 @@ import type { Vocab } from '@yaks/vocab'
 
 export type { Query }
 
-/** What rides every read of a store: the moment relative time phrases in a
- * query (`.released=today`) resolve against. A per-call `opts` wins over it. */
+/** Passed to every read of a store: the moment relative time phrases in a query
+ * (`.released=today`) resolve against. A per-call `opts` overrides it. */
 export type RamOpts = {
   /** the reference moment for time phrases (default: the read's own `now`) */
   now?: number
-  /** adopt the `num` a patch's identity carries instead of minting one. What a
-   * store MIRRORING another graph needs — a client applying the batch a server
-   * answered with is being told the identity, not asking for one. Off by
-   * default: a store nobody mirrors owns its own numbering. */
+  /** keep the `num` a patch's identity already carries instead of assigning a
+   * new one. This is what a store MIRRORING another graph needs — a client
+   * applying the changes a server returned is being told the identity, not
+   * choosing it. Off by default: a store that mirrors nothing owns its own
+   * numbering. */
   adopt?: boolean
-  /** Put new entities on the human number line. OPT-IN, the same word
-   * @yaks/sqlite says it with: unsaid, an entity is its eid and nothing else.
-   * `{ except: [comp, …] }` turns them on while keeping a component's
-   * entities off the line. */
+  /** Give new entities a human-readable number. OPT-IN, with the same option
+   * name @yaks/sqlite uses: left out, an entity has its eid and nothing else.
+   * `{ except: [comp, …] }` turns numbering on while leaving the entities of
+   * the named components unnumbered. */
   number?: boolean | { except: readonly string[] }
 }
 
 /**
- * A transaction over the map: @yaks/graph's `Tx`, answered immediately. The
- * store commits when the body returns and rolls back when it throws, so a
- * refused batch leaves the map exactly as it found it.
+ * A transaction over the map: @yaks/graph's `Tx`, implemented synchronously.
+ * The store commits when the body returns and rolls back when it throws, so a
+ * rejected write leaves the map exactly as it found it.
  */
 export type Tx = {
   /** a query → the matching entities as whole bundles */
   read: (query: Query, opts?: ReadOpts) => Bundle[]
-  /** identity, not search: these entities as they stand, whole. A dead one
-   * wears `tombstone`; an unknown one is simply absent. */
+  /** lookup by id, not search: these entities as they stand, whole. A deleted
+   * one carries `tombstone`; an unknown one is simply absent. */
   get: (eids: Eid[]) => Bundle[]
-  /** patch the bundles in → the entities this patch MINTED, with their `num` */
+  /** apply these patches → the entities they CREATED, each with its `num` */
   patch: (bundles: Bundle[]) => Entity[]
   /** Evict live payloads, not identities. A later patch keeps the same number.
    * Tombstones remain permanent; eviction is never deletion. */
@@ -64,9 +66,10 @@ export type Tx = {
 }
 
 /**
- * A bound store: @yaks/graph's `Storage`, answered synchronously. The
- * same five members a database adapter has, so it satisfies `Storage` wherever
- * one is wanted — and a caller holding a `Store` directly never awaits a row.
+ * A bound store: @yaks/graph's `Storage`, implemented synchronously. It has
+ * the same five members a database adapter has, so it satisfies `Storage`
+ * wherever one is wanted — and a caller using a `Store` directly never awaits
+ * a row.
  */
 export type Store = {
   /** no schema to state: a map needs none */
@@ -75,15 +78,15 @@ export type Store = {
   install: () => void
   /** a query → the matching entities as whole bundles */
   read: (query: Query, opts?: ReadOpts) => Bundle[]
-  /** a query → one raw `{ eid }` row per match (aggregates are declined) */
+  /** a query → one raw `{ eid }` row per match (aggregates are not supported) */
   rows: (query: Query, opts?: ReadOpts) => Row[]
   /** run `body` in a transaction: commit on return, roll back on throw */
   tx: <R>(body: (tx: Tx) => R) => R
 }
 
-// One entity as the map holds it: its identity, the components it wears, and
-// whether it is in the grave. A dead record keeps its identity forever (the id
-// can never be reused) and nothing else.
+// One entity as the map holds it: its identity, the components it has, and
+// whether it has been deleted. A deleted record keeps its identity forever (the
+// id can never be reused) and nothing else.
 type Rec = { entity: Entity; comps: Record<string, Comp>; dead?: boolean }
 
 let bundleOf = (r: Rec): Bundle =>
@@ -130,8 +133,8 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let read = (query: Query, opts: ReadOpts = {}): Bundle[] =>
     matcher(query, vocab, { now: opts.now ?? base.now })(all())
 
-  // The raw-rows door: one `{ eid }` per match, or for `.count!` the one
-  // `{ value: '', n }` row @yaks/sql answers, so a caller counting a set reads
+  // The raw-rows path: one `{ eid }` per match, or for `.count!` the one
+  // `{ value: '', n }` row @yaks/sql returns, so a caller counting a set reads
   // the same shape from either storage. Match declines aggregates, so the count
   // clause is lifted out and the rest of the query selects what to count.
   let raw = (query: Query, opts?: ReadOpts): Row[] => {
@@ -172,8 +175,8 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         }
       }
     }
-    // Mint a record for every eid this batch touches or points at, so a
-    // reference may name a target created in the same batch, in any order.
+    // Create a record for every eid this write touches or points at, so that a
+    // reference may name a target created by the same write, in any order.
     let birth = (eid: Eid, num?: number | null) => {
       let rec = rows.get(eid)
       if (rec) {

@@ -1,17 +1,16 @@
-// The door: a query in, the bundles it selects out.
+// The package's two public functions: a query in, the bundles it selects out.
 //
-// Compiling a query yields three things — a test every bundle must pass, an
+// Compiling a query produces three things — a test every bundle must pass, an
 // ordering, and a window — and this file is where they meet. The test is built
-// once (./clause.ts), so a query that cannot be answered exactly refuses HERE,
-// when it is compiled, not halfway through a set.
+// once, in ./clause.ts, so a query that cannot be answered exactly is rejected
+// HERE, at compile time, rather than halfway through an array of bundles.
 //
-// The order a selection comes back in is the order the query asks for:
-// `.order=field` sorts by that column (a leading `-` descending), the entity
-// number breaks its ties, and a `.limit`/`.after` window pages WITHIN that
-// order — `.after` naming the entity to continue past, wherever it sits in the
-// sequence. A window with no `.order` is newest-first by entity number, the way
-// a database answers the same directives. With neither, the bundles keep the
-// order they were given.
+// Results come back in the order the query asks for: `.order=field` sorts by
+// that column (a leading `-` descending), the entity number breaks ties, and a
+// `.limit`/`.after` window pages WITHIN that order — `.after` naming the entity
+// to continue past, wherever it sits in the sequence. A window with no `.order`
+// is newest-first by entity number, the way a database answers the same
+// directives. With neither, the bundles keep the order they were given.
 
 import {
   type After,
@@ -37,36 +36,37 @@ import {
 /** A query, as text (parsed by @yaks/query) or an already-built AST. */
 export type Query = string | Ast
 
-/** What rides a run: the moment a relative time phrase resolves against, and
+/** Options for one run: the moment a relative time phrase resolves against, and
  * the rules that read the vocabulary's computed columns. */
 export type MatchOpts = {
   /** the reference moment for time phrases (default: now) */
   now?: number
   /** `comp.prop` → the value for one bundle, for a column the vocabulary
-   * declares but never stores. The in-memory twin of @yaks/sql's `derived`
-   * hook: an unregistered computed column declines, as it does there. */
+   * declares but never stores. The in-memory equivalent of @yaks/sql's
+   * `derived` hook: an unregistered computed column is refused, as it is
+   * there. */
   computed?: Computed
 }
 
-/** A compiled query: the bundles of a set that it selects, in order. */
+/** A compiled query: the bundles of an array that it selects, in order. */
 export type Select = (bundles: readonly Bundle[]) => Bundle[]
 
 /**
- * A compiled filter, judged one bundle at a time. `among` is the set that
+ * A compiled filter, applied to one bundle at a time. `among` is the array that
  * answers questions about OTHER entities — a reference followed to its target,
  * the backlinks of an id, the children of a reverse hop — and defaults to the
- * bundle alone. Ordering and windowing are not its business: a filter says
- * whether one bundle belongs, and nothing about where it belongs.
+ * bundle alone. Ordering and windowing are not its job: a filter reports whether
+ * one bundle matches, and nothing about where it ranks.
  */
 export type Filter = (bundle: Bundle, among?: readonly Bundle[]) => boolean
 
 let ast = (q: Query): And => typeof q == 'string' ? parse(q) : q
 
-// The directives that ride the clause list rather than filter, and the ones
-// this package refuses: an aggregate is a row shape, not a selection of
-// entities, and a nearest-neighbour or the edge rider needs an index no bundle
-// carries. A projection (`fields`, `*`) says which columns an answer carries
-// and nothing about which bundles belong, so it rides and never judges.
+// The directives that sit in the clause list without filtering anything, and
+// the ones this package refuses: an aggregate is a row shape, not a selection
+// of entities, and `.near` and `.edges` need an index no bundle holds. A
+// projection (`fields`, `*`) names which columns the result should carry and
+// nothing about which bundles match, so it is carried along and never tested.
 let DIRECTIVES = new Set([
   'order',
   'near',
@@ -99,8 +99,8 @@ let compare = (a: unknown, b: unknown): number => {
   return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0
 }
 
-// One compile, shared by both doors: the context, the query's clauses, and the
-// test its filter clauses make. Every decline happens here.
+// One compile step, shared by matcher() and filter(): the context, the query's
+// clauses, and the test its filter clauses build. Every refusal happens here.
 let compiled = (
   query: Query,
   vocab: Vocab,
@@ -129,10 +129,10 @@ let field = (ctx: Ctx, path: string): Read => {
 }
 
 // The sort a query asks for, or null to keep the order given. An explicit
-// `.order` SURVIVES a window — a window says how much of a sequence to answer
-// with, never which sequence — and the entity number breaks its ties, so the
-// order is TOTAL and a page cut here holds the rows a page cut in SQL holds. A
-// window with no `.order` is that tiebreak alone: newest first.
+// `.order` SURVIVES a window — a window sets how much of a sequence to return,
+// never which sequence — and the entity number breaks its ties, so the order is
+// TOTAL and a page cut here holds the rows a page cut in SQL holds. A window
+// with no `.order` is that tiebreak alone: newest first.
 let sorter = (
   ctx: Ctx,
   cs: Clause[],
@@ -148,14 +148,14 @@ let newest = (a: Bundle, b: Bundle) =>
   -compare(a.entity.num ?? null, b.entity.num ?? null)
 
 /**
- * Compile a query into the selection it names: the bundles of a set that match,
- * ordered and windowed as the query asks. The set is the whole world for that
- * run — a reference, a backlink or a reverse hop is answered from it, and
- * tombstoned entities are excluded from the answer the way a database excludes
- * its graves.
+ * Compile a query into the selection it names: the bundles of an array that
+ * match, ordered and windowed as the query asks. That array is all the data the
+ * run can see — a reference, a backlink or a reverse hop is looked up in it —
+ * and tombstoned entities are left out, the way a database leaves out rows it
+ * has marked deleted.
  *
  * Throws {@link Unsupported} at compile time for anything this package cannot
- * answer exactly — see the README's Declines.
+ * answer exactly — see "Refused queries" in the README.
  *
  * ```ts
  * let live = matcher('.status=live&.price<20', vocab)
@@ -181,11 +181,12 @@ export let matcher = (
 }
 
 // The `.after` cursor: the rows strictly past the anchor entity's own place in
-// the order. The anchor is found by its spine number — one cursor spelling
-// however the answer is ordered — and it is looked up in the WHOLE set rather
-// than the hits, because an anchor that no longer matches the query still names
-// a place in the order. An anchor that is not in the set at all leaves the page
-// whole, which is the first page. This is the keyset @yaks/sql compiles.
+// the order. The anchor is found by its entity number — one cursor form for
+// every ordering — and it is looked up in the WHOLE array rather than among the
+// matches, because an anchor that no longer matches the query still names a
+// place in the order. An anchor that is not in the array at all leaves the page
+// whole, which is the first page. @yaks/sql compiles the same rule as a keyset
+// predicate.
 let past = (
   out: Bundle[],
   bundles: readonly Bundle[],
@@ -197,12 +198,13 @@ let past = (
 }
 
 /**
- * Compile a query into its FILTER alone — does this one bundle belong? — for a
- * caller that already keeps its own order, or that is re-testing a single
- * bundle that just changed rather than sweeping a whole set.
+ * Compile a query into its FILTER alone — does this one bundle match? — for a
+ * caller that already keeps its own order, or that is re-testing the single
+ * bundle that just changed rather than sweeping a whole array.
  *
- * The query's ordering and window are ignored (a window is a property of a set,
- * not of a bundle); everything else answers exactly as {@link matcher} does.
+ * The query's ordering and window are ignored (a window is a property of a
+ * sequence, not of one bundle); everything else answers exactly as
+ * {@link matcher} does.
  */
 export let filter = (
   query: Query,

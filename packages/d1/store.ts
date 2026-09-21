@@ -16,32 +16,35 @@
 //   returning flushes the gathered statements as ONE `batch()` — atomic;
 //   throwing discards them — nothing was ever sent.
 //
-// So the WRITE half is genuinely all-or-nothing, and a refused batch (a failing
-// `$was` guard, a hook that says no at commit) leaves the database untouched
-// because it was never written to. It can wait like that because the writes
-// themselves ask nothing: @yaks/sqlite builds every one as a self-sufficient
-// statement (an owner id is a subquery, never a value looked up first), and this
-// package gathers those same statements rather than keeping a write path of its
-// own.
+// So the WRITE half is genuinely all-or-nothing, and a rejected batch (a failed
+// `$was` precondition, a hook that rejects it at commit) leaves the database
+// untouched, because it was never written to. The writes can wait like that
+// because they need nothing read first: @yaks/sqlite builds every one as a
+// self-sufficient statement (an owner id is a subquery, never a value looked up
+// first), and this package collects those same statements rather than keeping a
+// write path of its own.
 //
-// READ-YOUR-OWN-WRITES, which `apply()` needs — the death cascade reads who
-// points at a dying entity AFTER the batch's own patches — is answered from an
-// OVERLAY rather than from the database: every entity this transaction wrote is
-// kept in memory as it will be once the batch lands, and a read inside the
-// transaction is the committed answer with those entities replaced by their
-// pending state (evaluated with @yaks/match, the same query grammar the
-// database answers). Untouched entities are never routed through the overlay,
-// so a transaction that has not written yet reads exactly as the database does.
+// READ-YOUR-OWN-WRITES, which `apply()` needs — a cascading delete has to find
+// who points at a deleted entity AFTER the batch's own patches — is served from
+// an in-memory OVERLAY rather than from the database: every entity this
+// transaction wrote is held in the state it will have once the batch commits,
+// and a read inside the transaction returns the committed result with those
+// entities replaced by their pending state (evaluated with @yaks/match, the
+// same query grammar the database implements). Untouched entities never go
+// through the overlay, so a transaction that has not written yet reads exactly
+// as the database does.
 //
 // WHAT IS NOT PROMISED, precisely. The reads are not part of the write's
 // transaction, because D1 has nowhere to put them. Between a read and the flush
-// another writer may move what was read: this is read-committed with an atomic
-// write batch, NOT serializable isolation. A guard that must not lose a race —
-// `$was` — is therefore best-effort against a concurrent writer here, where it
-// is exact over @yaks/sqlite. The failure it cannot prevent is a lost update
-// detected nowhere, not a half-written batch; atomicity holds regardless.
+// another writer may change what was read: this is read-committed with an
+// atomic write batch, NOT serializable isolation. A check that must not lose a
+// race — `$was` — is therefore best-effort against a concurrent writer here,
+// where it is exact over @yaks/sqlite. The failure it cannot prevent is a lost
+// update that nothing detects, not a half-written batch; atomicity holds
+// either way.
 //
-// MINTING IS NOT A READ. An identity's `num` is SQLite's to pick, at the moment
+// ASSIGNING A NUMBER IS NOT A READ. An entity's `num` is SQLite's to pick, at
+// the moment
 // the insert runs and so inside the batch's own transaction — exact under a
 // concurrent writer, and nothing has to ask for a high-water mark first. The
 // price is that a number is not known until the batch lands: `patch` reports
@@ -108,7 +111,7 @@ export type Store = {
 }
 
 // The identity of an eid as the database holds it, or `null` for an eid no
-// entity wears. Cached per transaction so one gather answers every question.
+// entity has. Cached per transaction so one gather serves every lookup.
 type Spine = { num?: number | null; dead: boolean } | null
 
 // A patch merged onto the bundle it patches: a null component drops the row,
@@ -156,8 +159,8 @@ let deadly = (v: Vocab): Set<string> =>
   )
 
 /** What a D1 store is bound with: @yaks/sql's read options, plus whether new
- * spines go on the human number line. A number is OPT-IN, the same word
- * @yaks/sqlite says it with: unsaid, an entity is its eid and nothing else. */
+ * spines get a human-readable number. A number is OPT-IN, under the same option
+ * name @yaks/sqlite uses: left unset, an entity is its eid and nothing else. */
 export type Opts = BindOpts & {
   number?: boolean | { except: readonly string[] }
 }
@@ -168,9 +171,9 @@ export let storage = <S extends Stmt<S>>(
   base: Opts = {},
 ): Store => {
   let bears = deadly(vocab)
-  // `bind` at the door, so a statement may be built in the plain SQLite values
-  // @yaks/sqlite's shared write path speaks (a bigint, a byte array) and D1's
-  // narrower type table is met in exactly one place.
+  // `bind` at the boundary, so a statement may be built from the plain SQLite
+  // values @yaks/sqlite's shared write path uses (a bigint, a byte array) and
+  // D1's narrower set of types is satisfied in exactly one place.
   let prep = (s: Sql): S => db.prepare(s.sql).bind(...s.params.map(bind))
 
   // One statement, one round trip.
@@ -271,7 +274,7 @@ export let storage = <S extends Stmt<S>>(
     // target created in the same batch, in any order. NOTHING IS ASKED: the
     // number is SQLite's to pick when the insert runs, inside the batch's own
     // transaction, and the statement returns it. So the entity handed out here
-    // wears no `num` yet — `flush` fills it into this very object, before the
+    // has no `num` yet — `flush` fills it into this very object, before the
     // transaction settles and before anything outside can read it.
     let birth = (eid: Eid, born: Entity[], numbered: boolean): void => {
       if (known.get(eid)) return

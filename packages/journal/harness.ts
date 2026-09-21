@@ -1,12 +1,13 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // wiki, written as a vocabulary. Pages several people edit, and notes that
-// exist ABOUT a page — so a deleted page takes its notes with it and a
-// cascade's casualties are something the tests can watch a journal record.
+// exist ABOUT a page — so a deleted page takes its notes with it, and the
+// entities a cascading delete takes down are something the tests can watch the
+// journal record.
 //
 // The log is tables beside the store's own, so a fixture is a database: one
 // `mem()`, the wiki's tables installed on it, the journal's `ddl()` run against
 // it, and a graph over both. The clock is fixed, so a test can assert on the
-// moment a batch was stamped with.
+// timestamp a transaction was stamped with.
 
 import { type Graph, graph, isPromise, type Options } from '@yaks/graph'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -64,18 +65,19 @@ let doc: VocabDoc = {
 /** The wiki vocabulary the tests write against. */
 export let wiki: Vocab = loadVocab([doc])
 
-/** The moment every fixture batch is stamped with. */
+/** The timestamp every fixture transaction is stamped with. */
 export let NOW = '2026-01-01T00:00:00.000Z'
 
-// The actors and instruments the tests write as. A batch row names them by
-// their spine id, so they have to BE entities before anything can be
-// attributed to them — seeded straight onto the spine, so seeding is not
-// itself a batch the tests then have to count past.
+// The actors and instruments the tests write as. A `journal_tx` row names them
+// by their id in the entity table, so they have to BE entities before anything
+// can be attributed to them — inserted straight into that table, so seeding
+// them is not itself a transaction the tests then have to count past.
 let ACTORS = ['ada', 'bob', 'cli']
 
 /** An embedded database with the wiki's tables and the journal's, and a log
- * bound to it — what a graph and a test both read through. The driver comes
- * back beside them, since a facet is built from a host's own connection. */
+ * bound to it — what a graph and a test both read through. The driver is
+ * returned beside them, because `@yaks/journal/rules` and
+ * `@yaks/journal/tools` are both built from the server's own connection. */
 export let wikiLog = (): {
   g: (p?: Options['plugins']) => Graph
   j: Log

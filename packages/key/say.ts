@@ -1,14 +1,17 @@
-// Saying a value, and taking it back.
+// `keyed()` and `unkeyed()`: the bundle that claims a value, and the bundle
+// that gives it back.
 //
-// A key is written the way everything else is — as a bundle. The entity is the
-// pair itself, so it needs no id from anywhere: `keyed()` derives it, and a
-// batch that states the same value twice writes one entity.
+// A key is written the way everything else is — as a bundle passed to
+// `graph.apply()`. The entity's id is derived from the kind and the value, so
+// it needs no id from anywhere: `keyed()` computes it, and writing the same
+// value twice in one transaction writes one entity.
 //
-// Retiring a value is not a DEATH. The value is no longer claimed, and the same
-// value may be claimed again tomorrow — by this entity or another — so its
-// COMPONENTS go and the identity stays. An entity wearing nothing is invisible
-// to every reader; deleting it instead would tombstone an id DERIVED from the
-// pair, and a tombstone is forever: `lemon-cake` could never be a name again.
+// Retiring a value is not a DELETE of the entity. The value is simply no longer
+// claimed, and the same value may be claimed again tomorrow — by this entity or
+// another — so its COMPONENTS are removed and the entity itself stays. An
+// entity carrying no components is invisible to every reader; deleting it
+// instead would tombstone an id DERIVED from the kind and the value, and a
+// tombstone is forever: `lemon-cake` could never be used again.
 
 import type { Bundle, Eid } from '@yaks/graph'
 import { keyEid } from './eid.ts'
@@ -16,8 +19,8 @@ import { KEY } from './kinds.ts'
 import { OF, VALUE } from './comp.ts'
 
 /**
- * The bundle that states a value: `keyed('alias', r, 'lemon-cake')`.
- * `kind` is the tag component the key wears.
+ * The bundle that claims a value: `keyed('alias', r, 'lemon-cake')`. `kind` is
+ * the tag component the key carries.
  */
 export let keyed = (kind: string, of: Eid, value: string): Bundle => ({
   entity: { eid: keyEid(kind, value) },
@@ -26,7 +29,7 @@ export let keyed = (kind: string, of: Eid, value: string): Bundle => ({
 })
 
 /**
- * The bundle that takes that value back: both components dropped, the identity
+ * The bundle that gives that value back: both components deleted, the entity
  * left standing so the same value can be claimed again.
  */
 export let unkeyed = (kind: string, value: string): Bundle => ({

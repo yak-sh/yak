@@ -34,7 +34,7 @@
             "matched"
           ],
           "stamped": true,
-          "description": "what happened to it, or `matched` where a pattern held over it"
+          "description": "what happened to it, or `matched` where a query matched it"
         },
         "state": {
           "enum": [
@@ -43,7 +43,7 @@
             "failed"
           ],
           "stamped": true,
-          "description": "where the run got to"
+          "description": "how far the run got"
         },
         "attempts": {
           "type": "number",
@@ -59,13 +59,13 @@
         "error": {
           "type": "string",
           "stamped": true,
-          "description": "what the last attempt threw — kept beside a run that rested failed, so the verdict says why"
+          "description": "what the last attempt threw — kept beside a run left failed, so the record shows why"
         },
         "next": {
           "type": "string",
           "format": "date-time",
           "stamped": true,
-          "description": "when the next attempt falls due; set means a failure that REPORTED and is waiting out its backoff, absent means a run that is going (or one nobody has picked up)"
+          "description": "when the next attempt falls due; set means a failure that REPORTED and is waiting out its backoff, absent means a run in progress (or one nobody has picked up)"
         },
         "lease_owner": {
           "type": "string",
@@ -81,7 +81,7 @@
           "type": "string",
           "format": "date-time",
           "stamped": true,
-          "description": "when the claim lapses and another process may take it"
+          "description": "when the claim expires and another process may take it"
         }
       }
     },
@@ -89,22 +89,22 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "a duty one process holds at a time — its id is derived from `name`, so two processes reaching for one duty reach for one row and the take is settled by the graph's own precondition",
+      "description": "a background job held by one process at a time — its eid is derived from `name`, so two processes reaching for the same job address one row and the winner is settled by the graph's own precondition",
       "properties": {
         "name": {
           "type": "string",
-          "description": "what is held — a sweep, a clock, a start-up pass; the id is derived from it, so the same duty is the same row in every graph"
+          "description": "the job being held — a sweep, a clock, a start-up pass; the eid is derived from it, so the same job is the same row in every graph"
         },
         "holder": {
           "type": "string",
           "ref": "entity",
           "death": "detach",
-          "description": "the process doing it — absent means nobody is, and the next process to ask gets it"
+          "description": "the process running it — absent means nobody is, and the next process to ask gets it"
         },
         "until": {
           "type": "string",
           "format": "date-time",
-          "description": "when the take lapses; a holder still at it pushes this out on a beat, and one that was killed leaves a row that expires without anybody reaping it"
+          "description": "when the hold expires; a holder still working pushes this out on a timer, and one that was killed leaves a row that expires without anything having to clean up after it"
         }
       }
     },
@@ -113,7 +113,7 @@
       "noun": "effect",
       "verb": "check",
       "title": "Check the effect ledger",
-      "description": "Every effect run reached an end somebody would hear about: a run that spent its attempts is marked failed and left for a person, and a run still pending long after it came due means nothing is dispatching at all.",
+      "description": "Check that every effect run reached an end somebody would hear about: a run that spent its attempts is marked failed and left for a person, and a run still pending long after it came due means nothing is dispatching at all.",
       "input": {},
       "readOnly": true
     }

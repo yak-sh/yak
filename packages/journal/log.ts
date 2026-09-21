@@ -1,33 +1,37 @@
-// The journal's tables: three of them, append-only, off the spine.
+// The journal's tables: three of them, append-only, holding no entities of
+// their own. A TRANSACTION here is one call to `graph.apply()`, whose bundles
+// all commit or none do.
 //
-//   journal_tx     one row per committed batch — its id IS the total order
-//                  and the cursor
+//   journal_tx     one row per committed transaction — its id IS the total
+//                  order and the cursor
 //   journal_change one ordered operation per component patched or removed
 //   journal_field  one ordered after-image per column an operation wrote
 //
 // After-images ONLY: what a write left, never both sides of it. The before-
-// value a history read wants is derived from the entity's own slice of the log
-// (`before()`), which is bounded to one entity and never a scan — and that is
-// what keeps the log a third of the size of one that stores both sides. A
-// column whose text the graph already keeps under a content address is
-// recorded by its ADDRESS ({@link Cas}), so a log of every revision of every
-// document costs a row, not the document.
+// value a history read needs is rebuilt from the entity's own rows in the log
+// (`before()`), a read bounded to one entity and never a table scan — which is
+// what keeps the log about a third of the size of one that stores both sides. A
+// column whose text the graph already keeps under a content address is recorded
+// by its ADDRESS ({@link Cas}), so logging every revision of every document
+// costs a row rather than the document.
 //
 // Nothing is read in order to write, so there is no precondition phase and
-// nothing rides forward on the batch: the log is derived wholly from what was
-// applied, inside the caller's own transaction. A refused batch leaves no
-// trace; a committed one always has a row.
+// nothing is passed forward to a later phase: the log is derived entirely from
+// what was applied, inside the caller's own transaction. A refused transaction
+// leaves no trace; a committed one always has a row.
 //
-// The host is one function wide: `rows(sql, params)`. No platform API, no
-// driver object, no transaction of its own — the caller owns the transaction.
+// The caller supplies one function: `rows(sql, params)`. No platform API, no
+// driver object, and no transaction of its own — the caller owns the
+// transaction.
 
 import type { Bundle, Comp, Eid, Plugin, Tx } from '@yaks/graph'
 import { actorOf, comps, dead } from '@yaks/graph'
 import type { Batch, Delta, Entry, Patch } from './batch.ts'
 import { dec, enc } from './value.ts'
 
-/** A parameterized statement, run for its rows: the whole of the host. A
- * write goes through it too — `insert … returning id` answers a row. */
+/** A parameterized statement, run for its rows: the whole of what the caller
+ * has to supply. A write goes through it too — `insert … returning id` returns
+ * a row. */
 export type Rows = (
   sql: string,
   params: unknown[],
@@ -35,14 +39,14 @@ export type Rows = (
 
 /**
  * A column whose text the graph already stores once, under a content address.
- * The journal then records the ADDRESS and shares the graph's bytes instead of
- * repeating them — which is the difference between a log that keeps every
- * revision of every document and one that keeps a row per revision.
+ * The journal then records that ADDRESS and points at the graph's bytes instead
+ * of repeating them — the difference between a log that keeps every revision of
+ * every document and one that keeps a row per revision.
  */
 export type Cas = {
   /** is this column content-addressed? */
   at: (comp: string, column: string) => boolean
-  /** land the text and answer the id the journal records */
+  /** store the text and return the id the journal records */
   put: (text: string) => number
   /** the table holding the content, and its key and value columns */
   table: string
@@ -56,14 +60,14 @@ export type Cas = {
  * content-addressed.
  */
 export type Hit = {
-  /** the row's own id — what a scrub names */
+  /** the row's own id — what a redaction names to rewrite it */
   field: number
   /** the entity the value was written about */
   target: Eid | null
   /** the component and column it belongs to */
   comp: string
   column: string
-  /** the batch it rode and when that committed */
+  /** the transaction it was written by, and when that committed */
   seq: number
   at: string
   /** the value as recorded, decoded */
@@ -74,32 +78,32 @@ export type Hit = {
 
 /** How the log is bound to a store. */
 export type LogOpts = {
-  /** the statement runner — the whole host */
+  /** the statement runner — the whole of what the caller supplies */
   rows: Rows
-  /** the spine: where an eid becomes the integer the tables store */
+  /** the entity table: where an eid becomes the integer the tables store */
   spine?: { table?: string; id?: string; eid?: string }
   /** content-addressed columns, if the graph has any */
   cas?: Cas
 }
 
 // The tables. Append-only, no eid of their own, never in a snapshot and never
-// in a client cache: this is the record OF the wire, not part of it.
+// in a client cache: this is the record OF what was applied, not part of it.
 //
-// `tx.id` is an integer primary key, so it is the next rowid — monotonic,
-// which is what lets the total order rest on something other than a clock, and
-// what every cursor in the system holds.
+// `tx.id` is an integer primary key, so it is the next rowid — monotonic, which
+// is what lets the total order rest on something other than a clock, and what
+// every cursor in the system holds.
 //
-// `change.operation` is `upsert` (a present component, an empty one being an
-// upsert with no field rows) or `remove` (a component removed, or the entity
-// dead when component = 'entity'). A spine row outlives its entity, so every
-// change names one.
+// `change.operation` is `upsert` (the component is present; an empty one is an
+// upsert with no field rows) or `remove` (the component was removed, or the
+// entity was deleted when component = 'entity'). A row in the entity table
+// outlives the entity it names, so every change can keep pointing at one.
 //
-// `field.present = 1` records a written value, JSON-encoded, so a present null
-// stays distinct from a tombstone; `present = 0` is the TOMBSTONE written for
-// each then-present column when its component is removed, so column history,
-// predecessor lookup and undo stay self-contained and no value leaks across a
-// removal and a later recreation. `ref` names content-addressed bytes the
-// graph already holds, and then `value` stays null.
+// `field.present = 1` records a written value, JSON-encoded, so a value that is
+// null stays distinct from a tombstone; `present = 0` is the TOMBSTONE written
+// for each column a component still held when it was removed, which keeps
+// column history, before-value lookup and undo self-contained and stops a value
+// leaking across a removal and a later recreation. `ref` names content-
+// addressed bytes the graph already holds, and then `value` stays null.
 export let ddl = (spine = 'entity'): string => `
   create table if not exists journal_tx (
     id    integer primary key,
@@ -139,29 +143,31 @@ export let ddl = (spine = 'entity'): string => `
 let written = (value: Comp): [string, unknown][] =>
   Object.entries(value).filter(([column]) => column != 'eid')
 
-/** The log bound to one store: the writer, and the questions a journal is
- * kept to answer. */
+/** The log bound to one store: the writer, and the questions a journal is kept
+ * in order to answer. */
 export type Log = {
-  /** write one batch down inside the caller's transaction; answers its seq */
+  /** write one transaction down inside the caller's own transaction; returns
+   * its seq */
   write: (
     meta: { at: string; by?: Eid | null; via?: Eid | null; note?: unknown },
     applied: Patch[],
   ) => number
-  /** one batch's operations, whole or cut to one entity, in applied order */
+  /** one transaction's operations, whole or cut to one entity, in applied
+   * order */
   patches: (seq: number, target?: Eid) => Patch[]
-  /** the batches that touched one entity, newest first, cut to it */
+  /** the transactions that touched one entity, newest first, cut to it */
   entries: (target: Eid, n?: number) => Entry[]
-  /** every batch one instrument wrote, newest first, whole */
+  /** every transaction one instrument wrote, newest first, whole */
   by: (via: Eid, n?: number) => Entry[]
-  /** the batches after a cursor, oldest first — the feed */
+  /** the transactions after a cursor, oldest first — the feed */
   since: (cursor?: number) => Entry[]
-  /** one batch as the package's own Batch, both sides of every movement */
+  /** one transaction as a Batch, both sides of every movement */
   at: (seq: number) => Batch | undefined
   /** what happened to one entity, oldest first, as Batch */
   history: (target: Eid, n?: number) => Batch[]
-  /** one entity's components as of just before a batch */
+  /** one entity's components as of just before a transaction */
   before: (target: Eid, seq: number) => Record<string, Comp>
-  /** the last batch that touched one entity, or 0 */
+  /** the last transaction that touched one entity, or 0 */
   latest: (target: Eid) => number
   /** every recorded write of one column, oldest first */
   wrote: (
@@ -170,7 +176,7 @@ export type Log = {
   ) => { target: Eid; value: unknown; seq: number }[]
   /** the highest seq the log holds, or 0 */
   tip: () => number
-  /** has anything touched this entity since a batch? */
+  /** has anything touched this entity since a given transaction? */
   touchedSince: (target: Eid, seq: number) => boolean
   /** does the log still read its text through this content? */
   holds: (ref: number) => boolean
@@ -178,9 +184,10 @@ export type Log = {
   seek: (text: string) => Hit[]
   /** rewrite one recorded inline value in place */
   scrubValue: (field: number, value: string) => void
-  /** repoint one recorded content-addressed value */
+  /** point one recorded content-addressed value at different content */
   scrubRef: (field: number, ref: number) => void
-  /** the eid→spine-id fragment, for a host that must reach the same rows */
+  /** the SQL fragment turning an eid into the entity table's integer id, for a
+   * caller that has to reach the same rows */
   spineId: string
 }
 
@@ -200,7 +207,8 @@ export let log = (opts: LogOpts): Log => {
   let idCol = opts.spine?.id ?? 'id'
   let eidCol = opts.spine?.eid ?? 'eid'
   let cas = opts.cas
-  // An eid bound where a column holds a spine id, and the projection back.
+  // An eid bound where a column holds an entity-table id, and the lookup back
+  // the other way.
   let spineId = `(select ${idCol} from ${table} where ${eidCol} = ?)`
   let eidOf = (col: string) =>
     `(select ${eidCol} from ${table} where ${idCol} = ${col})`
@@ -208,14 +216,15 @@ export let log = (opts: LogOpts): Log => {
   let num = (v: unknown) => Number(v ?? 0)
   let str = (v: unknown) => (v == null ? null : String(v))
 
-  // Every change of a batch, optionally cut to one entity, in applied order.
-  // A change whose entity has no spine row is not read — a purged spine has no
-  // eid to speak.
+  // Every change of a transaction, optionally cut to one entity, in applied
+  // order. A change whose entity has no row in the entity table is not read —
+  // once that row is purged there is no eid left to report.
   let changeRows = `select jc.id as id, e.${eidCol} as eid,
       jc.component as component, jc.operation as operation
     from journal_change jc join ${table} e on e.${idCol} = jc.entity`
 
-  // A ref'd column reads its text back through the content it names.
+  // A column recorded by address reads its text back through the content it
+  // names.
   let fieldsSql = cas
     ? `select jf.field as field, jf.value as value, c.${cas.value} as text
        from journal_field jf
@@ -237,7 +246,8 @@ export let log = (opts: LogOpts): Log => {
       return { target, comp, value }
     })
 
-  /** One batch's operations, whole or cut to one entity, in applied order. */
+  /** One transaction's operations, whole or cut to one entity, in applied
+   * order. */
   let patches = (seq: number, target?: Eid): Patch[] =>
     rebuild(
       target == null
@@ -259,9 +269,10 @@ export let log = (opts: LogOpts): Log => {
   })
 
   /**
-   * Write one batch down, inside the caller's transaction, and answer its
-   * seq. Derived wholly from what was applied: nothing was read first, so a
-   * writer owes this call nothing but the truth about what it wrote.
+   * Write one transaction down, inside the caller's own transaction, and
+   * return its seq. It is derived entirely from what was applied: nothing was
+   * read first, so a caller owes this function nothing but an accurate account
+   * of what it wrote.
    */
   let write = (
     meta: { at: string; by?: Eid | null; via?: Eid | null; note?: unknown },
@@ -276,8 +287,8 @@ export let log = (opts: LogOpts): Log => {
     )
     // The columns a component still holds, newest after-image per column: the
     // field id is monotonic, so the highest-id row per column is the latest in
-    // total order — and it reads THIS batch's earlier upserts, uncommitted but
-    // visible on the same connection.
+    // total order — and it reads THIS transaction's earlier upserts, which are
+    // uncommitted but visible on the same connection.
     let held = `select field from (
         select jf.field as field, jf.present as present,
                row_number() over (
@@ -321,10 +332,10 @@ export let log = (opts: LogOpts): Log => {
   }
 
   /**
-   * One entity's component state as of just BEFORE `seq`, rebuilt by
-   * column-merging that entity's own slice of the log — bounded to one entity,
-   * never a scan. This is where the before-value an after-image log does not
-   * store comes from.
+   * One entity's component state as of just BEFORE `seq`, rebuilt by merging,
+   * column by column, that entity's own rows in the log — bounded to one
+   * entity, never a table scan. This is where the before-value an after-image
+   * log does not store comes from.
    */
   let before = (target: Eid, seq: number): Record<string, Comp> => {
     let state: Record<string, Comp> = {}
@@ -335,8 +346,8 @@ export let log = (opts: LogOpts): Log => {
         [target, seq],
       ))
     ) {
-      // A death mid-window cannot precede a live target, but resetting keeps
-      // the reconstruction honest if one is seen.
+      // A deletion partway through cannot precede a live target, but resetting
+      // keeps the reconstruction correct if one turns up.
       if (p.comp == 'entity') {
         if (!p.value) state = {}
         continue
@@ -347,12 +358,12 @@ export let log = (opts: LogOpts): Log => {
     return state
   }
 
-  // An entry's operations said as the package says them: a component that was
-  // not there is announced by a column-less delta before its columns follow, a
-  // component that went is a column-less delta carrying what it held, and a
-  // death is a tombstone. The before-side comes from `before()`, carried
-  // forward across the batch so a batch that touches one component twice reads
-  // as two movements.
+  // An entry's operations as deltas: a component that was not there is
+  // announced by a column-less delta before its columns follow, a component
+  // that went is a column-less delta carrying what it held, and a deletion is a
+  // tombstone. The before-side comes from `before()`, carried forward across
+  // the transaction so that a transaction touching one component twice reads as
+  // two movements.
   let deltasOf = (e: Entry): Delta[] => {
     let held = new Map<Eid, Record<string, Comp>>()
     let now = (eid: Eid) => {
@@ -422,7 +433,8 @@ export let log = (opts: LogOpts): Log => {
   let txRows = `select id, ts, ${eidOf('actor')} as actor,
       ${eidOf('via')} as via, trace from journal_tx`
 
-  /** Every batch that touched one entity, newest first, cut to that entity. */
+  /** Every transaction that touched one entity, newest first, cut to that
+   * entity. */
   let entries = (target: Eid, n = 50): Entry[] =>
     rows(
       `select jc.tx as id, jt.ts as ts, ${eidOf('jt.actor')} as actor,
@@ -433,20 +445,20 @@ export let log = (opts: LogOpts): Log => {
       [target, n],
     ).map((r) => entryOf(r, target))
 
-  /** Every batch one instrument wrote, newest first, whole — a ledger wants
-   * the batch's full sentence, not one entity's slice of it. */
+  /** Every transaction one instrument wrote, newest first, whole — a ledger
+   * wants everything a transaction did, not one entity's part of it. */
   let by = (via: Eid, n = 500): Entry[] =>
     rows(`${txRows} where via = ${spineId} order by id desc limit ?`, [via, n])
       .map((r) => entryOf(r))
 
-  /** The batches after a cursor, oldest first — the feed. The before-side is
-   * not derived here: a feed replays what was written, and deriving it would
-   * turn a range read into a walk per entity. */
+  /** The transactions after a cursor, oldest first — the feed. The before-side
+   * is not derived here: a feed replays what was written, and deriving it would
+   * turn one range read into a walk of the log per entity. */
   let since = (cursor = 0): Entry[] =>
     rows(`${txRows} where id > ? order by id`, [cursor]).map((r) => entryOf(r))
 
-  /** One batch, whole, as the package's own Batch — both sides of every
-   * movement, which is what `undone()` reverses and `applied()` replays. */
+  /** One transaction, whole, as a Batch — both sides of every movement, which
+   * is what `undone()` reverses and `applied()` replays. */
   let at = (seq: number): Batch | undefined => {
     let found = one(`${txRows} where id = ?`, [seq])
     if (!found) return undefined
@@ -454,14 +466,13 @@ export let log = (opts: LogOpts): Log => {
     return e.patches.length ? batchOf(e) : undefined
   }
 
-  /** What happened to one entity, oldest first, as the package's own Batch —
-   * carrying only the movements about that entity, which is what
-   * `history(src)` answers over the component layout. */
+  /** What happened to one entity, oldest first, as Batch values carrying only
+   * the movements about that entity — what the `history` tool reports. */
   let history = (target: Eid, n = 50): Batch[] =>
     entries(target, n).reverse().map(batchOf)
 
-  /** The last batch that touched one entity, or 0 — what an undo with no seq
-   * reverses. */
+  /** The last transaction that touched one entity, or 0 — what an undo with no
+   * seq reverses. */
   let latest = (target: Eid): number =>
     num(
       one(
@@ -472,8 +483,9 @@ export let log = (opts: LogOpts): Log => {
 
   /**
    * Every recorded write of one column, oldest first: the entity it was about,
-   * what it wrote, and the batch it rode. The question a backfill asks — what
-   * did this column ever hold, anywhere — which no per-entity reader answers.
+   * what it wrote, and the transaction that wrote it. This is the question a
+   * backfill asks — what has this column ever held, on any entity — which no
+   * per-entity reader can answer.
    */
   let wrote = (
     comp: string,
@@ -495,8 +507,9 @@ export let log = (opts: LogOpts): Log => {
   /** The highest seq the log holds, or 0 — the cursor a reader starts from. */
   let tip = (): number => num(one(`select max(id) as m from journal_tx`)?.m)
 
-  /** Has anything touched this entity since `seq`? The coarse "the world
-   * moved" an undo asks where there is no column to guard. */
+  /** Has anything touched this entity since `seq`? The coarse "something
+   * changed" question an undo asks where there is no column to put a
+   * precondition on. */
   let touchedSince = (target: Eid, seq: number): boolean =>
     !!one(
       `select 1 from journal_change where entity = ${spineId} and tx > ?
@@ -508,8 +521,8 @@ export let log = (opts: LogOpts): Log => {
    * Every recorded value that contains this text, oldest first — the scan a
    * redaction starts from. `value` is the stored JSON and `ref` the content
    * address when the column is content-addressed; the caller decodes and
-   * decides, because whether a column is content or structure is its policy,
-   * not the log's.
+   * decides, because whether a column holds content or structure is the
+   * caller's policy, not the log's.
    */
   let seek = (text: string): Hit[] => {
     let encoded = JSON.stringify(text).slice(1, -1)
@@ -540,22 +553,23 @@ export let log = (opts: LogOpts): Log => {
     }))
   }
 
-  /** Does the log still hold this content? Content-addressed bytes outlive
-   * the graph row that first wrote them, and this is who else is holding. */
+  /** Does the log still refer to this content? Content-addressed bytes outlive
+   * the graph row that first wrote them, and this reports whether the log is
+   * one of the things still holding a reference. */
   let holds = (ref: number): boolean =>
     !!one(`select 1 from journal_field where ref = ? limit 1`, [ref])
 
   // Rewrite one recorded value in place — the one write here that is not an
-  // append. A value deliberately forgotten must leave the log too, or it leaks
-  // through the door that keeps history; the row stays, so the chain stays
-  // navigable and reads back as whatever replaced it.
+  // append. A value deliberately forgotten has to leave the log too, or it
+  // survives in the very thing that keeps history; the row itself stays, so the
+  // chain of changes stays navigable and reads back as whatever replaced it.
 
   /** Scrub an inline value, JSON-encoded as the log stores it. */
   let scrubValue = (field: number, value: string) => {
     rows(`update journal_field set value = ? where id = ?`, [value, field])
   }
 
-  /** Repoint a content-addressed value at clean content. */
+  /** Point a content-addressed value at clean content instead. */
   let scrubRef = (field: number, ref: number) => {
     rows(`update journal_field set ref = ? where id = ?`, [ref, field])
   }
@@ -577,7 +591,8 @@ export let log = (opts: LogOpts): Log => {
     seek,
     scrubValue,
     scrubRef,
-    /** the eid→spine-id fragment, for a host that must reach the same rows */
+    /** the SQL fragment turning an eid into the entity table's integer id,
+     * for a caller that has to reach the same rows */
     spineId,
   }
 }
@@ -585,17 +600,18 @@ export let log = (opts: LogOpts): Log => {
 export { dec, enc }
 
 /**
- * The log as a plugin, so a graph keeps a journal by saying so:
+ * The log as a plugin, so that a graph keeps a journal by listing it:
  *
  * ```ts
  * let j = log({ rows })
  * graph({ storage, vocab, plugins: [journal(j)] })
  * ```
  *
- * It hooks the `journal` phase alone: an after-image log needs no reading to
- * write, so nothing is gathered before the batch and nothing rides forward on
- * it. The batch is written as APPLIED — one row per component the bundles
- * patched or removed, in the order they arrived.
+ * It registers a hook on the `journal` phase alone: an after-image log needs to
+ * read nothing in order to write, so nothing is gathered beforehand and nothing
+ * is passed forward to a later phase. The transaction is recorded as APPLIED —
+ * one row per component the bundles patched or removed, in the order they
+ * arrived.
  */
 export let journal = (
   n: Log,

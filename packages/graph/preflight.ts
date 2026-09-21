@@ -1,7 +1,9 @@
-// Ordered preconditions for hosts whose rules read derived storage state.
-// Rehearse the admitted, storage-ready batch in a nested transaction, checking
-// each operation against its prefix, then ALWAYS roll it back. Unlike $was,
-// these guards intentionally see earlier writes. No stamps/effects run here.
+// Ordered preconditions, for an application whose checks have to read state
+// that storage derives. It rehearses the admitted, storage-ready change in a
+// nested transaction, checking each operation against the ones written before
+// it, and then ALWAYS rolls that transaction back. Unlike `$was`, these checks
+// deliberately see earlier writes in the same change. No stamps and no effects
+// run during the rehearsal.
 import type { Bundle } from './bundle.ts'
 import { dead } from './bundle.ts'
 import type { Hook } from './plugin.ts'
@@ -12,15 +14,17 @@ import { mutate } from './mutate.ts'
 import { cascade } from './cascade.ts'
 import { state } from './state.ts'
 
-/** Build a precondition hook that checks an ordered batch against its own
- * prefix. Register AFTER storage transforms (e.g. blob swaps). `check` receives
- * one live bundle at a time; its returned bundle(s) replace that operation.
+/** Build a precondition hook that checks each operation in a change against
+ * the operations before it. Register it AFTER any storage transformations
+ * (blob swaps, for instance). `check` receives one live bundle at a time, and
+ * whatever it returns replaces that operation.
  *
- * The storage MUST support nested rollback transactions on the same writer.
- * The independent transaction view is deliberate: using the pipeline's
- * gathered Tx would poison its snapshot with writes that were rolled back.
- * Rehearsal invokes only mutate/cascade, never graph.apply, stamps or effects.
- * External side effects in either `check` or storage.patch are not supported.
+ * The storage adapter MUST support nested, rollback-only transactions on the
+ * same writer. Using a separate transaction is deliberate: rehearsing through
+ * the pipeline's gathered `Tx` would leave its snapshot holding writes that
+ * were rolled back. The rehearsal calls only `mutate` and `cascade`, never
+ * `graph.apply`, and never runs stamps or effects. External side effects in
+ * either `check` or `storage.patch` are not supported.
  */
 export let preflight = (
   storage: Storage,

@@ -1,17 +1,18 @@
-// Human time phrases, as pure structure. A phrase names a RANGE; a caller that
-// wants one moment takes the relevant edge (`timeInstant`). This is the generic
-// half of time in a query: recognizing and resolving the LITERAL grammar
-// (today, 1 hour ago, in 60m, 9am, an ISO stamp) against a clock. It knows no
-// column and no schema — deciding that a given field is time-typed, and so that
-// its scalar should be read through here, is a downstream job.
+// Time phrases people write, resolved to numbers. A phrase names a RANGE; a
+// caller that wants a single moment takes the relevant edge of it
+// (`timeInstant`). This is the schema-independent half of time in a query:
+// recognizing the literal forms (today, 1 hour ago, in 60m, 9am, an ISO
+// timestamp) and resolving them against a clock. It knows no column and no
+// schema — deciding that a given field holds a time, and so that its scalar
+// should be read through here, is for a compiler that has one.
 //
 // Day boundaries belong to the evaluator: a browser and a server each read the
 // clock in their own local zone, so the phrase stays authored (`today` must
 // advance tomorrow) and `now` rides in as a parameter tests can fix.
 
-// `forward` marks a phrase that BEGINS at now and names its end (`in 5m`) — the
-// family `timeInstant` reads the end of. It is a fact about the phrase's shape,
-// not about the numbers.
+// `forward` marks a phrase that BEGINS at now and names its end (`in 5m`) —
+// the kind `timeInstant` reads the end of. It records how the phrase was
+// written, not anything about the numbers.
 export type Span = { start: number; end: number; forward?: boolean }
 
 let UNIT_MS: Record<string, number> = {
@@ -22,7 +23,7 @@ let UNIT_MS: Record<string, number> = {
   week: 604_800_000,
 }
 
-// Short forms a hand types: `m` is minutes and `mo` is months, by calendar
+// The short forms people type: `m` is minutes and `mo` is months, by the usual
 // convention; seconds are here because machines emit them.
 let unit = (w: string): string | undefined =>
   ({
@@ -84,8 +85,8 @@ export let timeSpan = (s: string, now: number = Date.now()): Span | null => {
         end: +new Date(+y, +mo - 1, +dd + 1),
       }
     }
-    // A named zone belongs to the stamp; an unzoned moment is local, like every
-    // other day boundary in the vocabulary.
+    // A named zone belongs to the timestamp; a moment with no zone is local,
+    // like every other day boundary in this format.
     let start = zone
       ? Date.parse(s.trim())
       : +new Date(+y, +mo - 1, +dd, +hh, +mi, +(ss ?? 0))
@@ -154,7 +155,7 @@ export let timeSpan = (s: string, now: number = Date.now()): Span | null => {
     let n = Number(m[1]), u = unit(m[2])!
     return { start: UNIT_MS[u] ? now - n * UNIT_MS[u] : shift(-n, u), end: now }
   }
-  // `in` and `after` say the same forward range.
+  // `in` and `after` name the same forward range.
   m = t.match(/^(?:in|after) (\d+) ?([a-z]+)$/)
   if (m && unit(m[2])) {
     let n = Number(m[1]), u = unit(m[2])!

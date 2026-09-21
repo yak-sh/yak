@@ -1,18 +1,19 @@
-// The extension seam. JSON Schema 2020-12 already has an extension mechanism —
+// The extension point. JSON Schema 2020-12 already has an extension mechanism —
 // a KEYWORD VOCABULARY: a URI naming a set of keywords, a document describing
 // each keyword's schema, and a `$vocabulary` declaration in the files that use
-// them. This module lets a package outside @yaks/vocab bring its own keywords
-// through that same door.
+// them. This module lets a package outside @yaks/vocab add its own keywords
+// through that same mechanism.
 //
-// The core vocabulary (meta.ts) describes what a component TABLE needs. Anything
-// beyond that — an id prefix, a name column, a unit of measure — is somebody
-// else's concern, so it arrives as a `Keywords` registration: `loadVocab(docs,
-// [myKeywords])` makes the loader carry those keywords onto the components and
-// columns that declare them, and `extendMeta` composes them into the published
-// meta-schema so a vocab file using them still validates.
+// The core keyword set (meta.ts) describes what a component TABLE needs.
+// Anything beyond that — an id prefix, a name column, a unit of measure — is
+// somebody else's concern, so it arrives as a `Keywords` registration:
+// `loadVocab(docs, [myKeywords])` makes the loader copy those keywords onto the
+// components and columns that declare them, and `extendMeta` composes them into
+// the published meta-schema so a vocabulary document using them still
+// validates.
 //
-// The loader CARRIES an extension keyword; it never interprets one. What a
-// keyword MEANS belongs to the package that declared it.
+// The loader COPIES an extension keyword through; it never interprets one. What
+// a keyword MEANS belongs to the package that declared it.
 
 import type { JsonSchema } from './meta.ts'
 import { metaSchema } from './meta.ts'
@@ -24,7 +25,7 @@ import { metaSchema } from './meta.ts'
  * `meta/core.vocab.json` — a `$defs` entry per keyword).
  */
 export type Keywords = {
-  /** the URI a vocab file declares under `$vocabulary` for this keyword set */
+  /** the URI a vocabulary document declares under `$vocabulary` for this set */
   uri: string
   /** keywords this vocabulary adds to a component (a `$defs` entry) */
   comp?: string[]
@@ -54,11 +55,11 @@ let admit = (def: unknown, add: Record<string, unknown>): unknown =>
   }
 
 /**
- * The meta-schema, composed with extension vocabularies: every registered
- * keyword is admitted on the component or column it belongs to, and each
- * vocabulary's URI is declared under `$vocabulary`. A vocab file that uses
- * `prefix` validates against `extendMeta([idKeywords])`, not against the bare
- * core meta-schema.
+ * The meta-schema, composed with extension keyword vocabularies: every
+ * registered keyword is admitted on the component or column it belongs to, and
+ * each vocabulary's URI is declared under `$vocabulary`. A vocabulary document
+ * that uses `prefix` validates against `extendMeta([idKeywords])`, not against
+ * the bare core meta-schema.
  */
 export let extendMeta = (extras: Keywords[]): JsonSchema => {
   let defs = { ...(metaSchema.$defs as Record<string, unknown>) }

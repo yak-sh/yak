@@ -1,9 +1,10 @@
-// Sync pass-through. Every seam in this package is async-OR-sync: a storage
-// adapter over an embedded database answers immediately, one over a network
-// answers with a promise, and the same pipeline has to serve both. So instead
-// of making everything `async` (which would turn every embedded write into a
-// promise, and every caller into an `await`), each step is threaded with
-// `then`: a promise is awaited, a plain value flows straight through.
+// Staying synchronous when nothing forces a promise. Every interface in this
+// package is async OR sync: a storage adapter over an embedded database
+// returns immediately, one over a network returns a promise, and the same
+// pipeline has to serve both. So instead of making everything `async` (which
+// would turn every embedded write into a promise, and every caller into an
+// `await`), each step goes through `then`: a promise is awaited, a plain value
+// passes straight through.
 //
 // The rule that falls out: a pipeline built only from synchronous parts stays
 // synchronous end to end, and the first asynchronous part turns the rest of
@@ -16,7 +17,8 @@ export let isPromise = <T>(v: T | Promise<T>): v is Promise<T> =>
 /**
  * Apply `f` to a value that may still be in flight: a promise is awaited, a
  * plain value is passed straight in, and the result is a promise only when the
- * input was one. The one primitive behind this package's sync pass-through.
+ * input was one. This is the one primitive that keeps the package synchronous
+ * when nothing forces a promise.
  */
 export let then = <A, B>(
   v: A | Promise<A>,
@@ -28,9 +30,9 @@ export let then = <A, B>(
 
 /**
  * Fold over `items` one at a time, awaiting a step only when it returns a
- * promise. While every step answers synchronously this is a plain loop; the
- * first promise defers the remaining items into a promise chain, so a long
- * synchronous batch never grows the stack.
+ * promise. While every step returns synchronously this is a plain loop; the
+ * first promise moves the remaining items into a promise chain, so a long
+ * synchronous run never grows the stack.
  */
 export let each = <T, A>(
   items: T[],

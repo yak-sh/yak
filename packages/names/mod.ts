@@ -2,15 +2,15 @@
  * @yaks/names — resolve an entity by name.
  *
  * ## Not everything has a name
- * An author is reached as `Ursula Le Guin`. A review is not reached by the
- * sentence it opens with, even though it has a title too: a word deep inside a
+ * An author is found by typing `Ursula Le Guin`. A review is not found by the
+ * sentence it opens with, even though it has a title too: a word buried in a
  * store's prose matches by coincidence, and in a large store there is always
- * one. So a component says which it is.
+ * one such word. So each component declares which case it is.
  *
  * ## The `by_name` keyword
  * This package owns one keyword. A component that declares `"by_name": true`
- * says its entities answer to a name, read from the vocabulary's name column
- * (`title` by default); a string names a different column.
+ * makes its entities addressable by name, read from the vocabulary's name
+ * column (`title` by default); a string names a different column.
  *
  * ```json
  * { "$defs": { "author": { "type": "object", "kind": true, "by_name": true } } }
@@ -34,15 +34,16 @@
  * resolve(v)('le guin', shelf) // the author
  * ```
  *
- * An exact name always wins; failing that the closest name above the match
- * floor does, because nobody types a name the way it is stored — the case
- * drifts, the punctuation goes, a long name gets abbreviated to its first word.
- * Pass `{ close: 1 }` to accept exact names only.
+ * An exact name always wins; failing that, the closest name above the match
+ * threshold does, because nobody types a name exactly as it is stored — the
+ * case drifts, the punctuation is dropped, a long name gets abbreviated to its
+ * first word. Pass `{ close: 1 }` to accept exact names only.
  *
  * The pieces:
  * - `keywords.ts` — the `by_name` keyword vocabulary, ready to register
- * - `names.ts` — what the vocabulary says: which components are named, where,
- *   and the entity a typed name reaches
+ * - `names.ts` — what the vocabulary declares: which components are addressable
+ *   by name, which column holds the name, and which entity a typed name refers
+ *   to
  * - `match.ts` — the scoring, on its own: how close two names are
  *
  * @module

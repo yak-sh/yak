@@ -8,16 +8,16 @@
       "tool": true,
       "noun": "history",
       "title": "What happened to it",
-      "description": "Every committed batch that touched one entity, newest first. Each answers as the patch that batch applied — the components it wrote, or `$delete` for the death it was — stamped with who wrote it, when, and through what instrument. The log is written inside the transaction that wrote, so this is blame and diff without a version table; it starts where this graph started journaling.",
+      "description": "Every committed transaction that touched one entity, newest first. Each is returned as the patch it applied — the components it wrote, or `$delete` if it deleted the entity — stamped with who wrote it, when, and through what instrument. The record is written inside the transaction that wrote, so this gives attribution and a diff with no version table; it covers changes made since this graph started journaling.",
       "input": {
         "entity": {
           "type": "string",
           "ref": "entity",
-          "description": "whose past to read — an id, a name, or an eid"
+          "description": "the entity whose history to read — an id, a name, or an eid"
         },
         "limit": {
           "type": "number",
-          "description": "at most this many batches, counting back from the newest"
+          "description": "at most this many transactions, counting back from the newest"
         }
       },
       "required": [

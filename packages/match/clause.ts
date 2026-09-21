@@ -1,11 +1,11 @@
 // One clause of a query to one test over a bundle. This is the routing half:
 // where ./value.ts knows how a VALUE compares, this knows what a dotted path
-// NAMES — a column on this entity, a component it either wears or does not, a
+// NAMES — a column on this entity, a component it either has or does not, a
 // reference followed to another entity, the children pointing back at it, the
-// kind it displays as, or a word to look for in its text.
+// kind it displays as, or a search term to look for in its text.
 //
-// Every route is asked of the vocabulary, never guessed, and the tests are
-// built ONCE, when the query is compiled: a path that names no column, a
+// Every route is resolved through the vocabulary, never guessed, and the tests
+// are built ONCE, when the query is compiled: a path that names no column, a
 // comparison a column's type cannot answer, or a directive that needs an index
 // is refused there and then, before any bundle is read.
 
@@ -32,13 +32,14 @@ import {
 import { check, EXISTS } from './value.ts'
 import { search } from './text.ts'
 
-/** The name this package declines under, so a refusal says who refused. */
+/** The package name an `Unsupported` error carries, so a refusal reports which
+ * of the two evaluators refused. */
 export let BY = '@yaks/match'
 
 /**
- * A compiled test: does this bundle satisfy the clause? The whole bundle set
- * rides along, because a reference, a backlink and a reverse hop are questions
- * about other entities.
+ * A compiled test: does this bundle satisfy the clause? The whole bundle array
+ * is passed along with it, because a reference, a backlink and a reverse hop
+ * are questions about other entities.
  */
 export type Test = (bundle: Bundle, among: Index) => boolean
 
@@ -51,9 +52,9 @@ export type Ctx = { v: Vocab; now: number; computed: Computed }
 let YES: Test = () => true
 let NO: Test = () => false
 
-// A structured value flattened back to the one string the value lowerings
-// re-parse — a list to `a,b`, a range to `lo..hi` (inclusive) or `lo...hi`
-// (exclusive end). The lowerings split it again, so the round trip is faithful.
+// A structured value flattened back to the single string ./value.ts re-parses —
+// a list to `a,b`, a range to `lo..hi` (inclusive) or `lo...hi` (exclusive end).
+// ./value.ts splits it again, so the round trip is faithful.
 let flat = (val: Value | null): string => {
   if (val == null) return ''
   if (val.kind == 'scalar' || val.kind == 'time') return val.raw
@@ -62,9 +63,9 @@ let flat = (val: Value | null): string => {
   return `${flat(r.lo)}..${r.exclusiveEnd ? '.' : ''}${flat(r.hi)}`
 }
 
-// The operator spelling the value lowerings switch on: '' equals (and, with an
-// empty operand, absence), '!' not-equals, '~' contains, the comparisons
-// literal, 'exists' presence, 'want' the value-less projection request.
+// The operator name ./value.ts switches on: '' equals (and, with an empty
+// operand, absence), '!' not-equals, '~' contains, the comparisons unchanged,
+// 'exists' presence, 'want' the value-less projection request.
 let opOf = (p: Pred): string =>
   p.op == '!'
     ? EXISTS
@@ -78,7 +79,7 @@ let opOf = (p: Pred): string =>
     ? '~'
     : p.op
 
-// A test over a column read off one entity, or a decline naming the predicate.
+// A test over a column read off one entity, or a refusal naming the predicate.
 let scalar = (ctx: Ctx, hop: Hop, p: Pred): (b?: Bundle) => boolean => {
   let read = column(ctx.v, hop.comp, hop.prop, ctx.computed)
   if (!read) {
@@ -99,9 +100,10 @@ let scalar = (ctx: Ctx, hop: Hop, p: Pred): (b?: Bundle) => boolean => {
   return (b) => hit(b ? read.read(b) : null)
 }
 
-// A single-hop predicate: a direct column, or a component facet (an empty leaf
-// prop — presence grammar). `.review!` and `.review~=` ask for the component,
-// everything else asks for its absence.
+// A single-hop predicate: a direct column, or a test for the component itself
+// (an empty leaf prop, which is the presence form). `.review!` and `.review~=`
+// ask for entities that have the component, everything else for those that do
+// not.
 let single = (ctx: Ctx, hop: Hop, p: Pred): Test => {
   let op = opOf(p)
   if (op == 'want') return YES // a projection request, not a filter
@@ -109,8 +111,9 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Test => {
     let present = op == '~' || op == EXISTS
     return (b) => wears(b, hop.comp) == present
   }
-  // On the spine, `=` NAMES entities instead of comparing a column, so it is a
-  // set lookup — the same operand list @yaks/sql lowers to `in (?, …)`.
+  // On the identity component, `=` NAMES entities instead of comparing a
+  // column, so it is a set lookup — the same operand list @yaks/sql compiles to
+  // `in (?, …)`.
   if (hop.comp == 'entity' && op == '') {
     let set = identity(hop.prop, flat(p.value))
     if (set) {
@@ -128,10 +131,10 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Test => {
 let isRef = (v: Vocab, hop: Hop) =>
   v.column(hop.comp, hop.prop)?.category == 'ref'
 
-// A reference-deref path: a chain of one-to-one lookups through reference
-// columns, ending in a leaf tested against the operator. Every non-final hop
-// must be a reference, and every step is resolved inside the bundle set — an
-// entity the set does not hold reads as an absent value, exactly as a missing
+// A dereference path: a chain of one-to-one lookups through reference columns,
+// ending in a leaf column tested against the operator. Every hop but the last
+// must be a reference, and every step is looked up in the bundle array — an
+// entity the array does not hold reads as an absent value, exactly as a missing
 // row does.
 let path = (ctx: Ctx, hops: Hop[], p: Pred): Test => {
   let op = opOf(p)
@@ -156,7 +159,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Test => {
     return typeof eid == 'string' ? among.of(eid) : undefined
   }
   let leaf = hops[hops.length - 1]
-  // A leaf facet: does the target wear this component?
+  // The leaf is a component rather than a column: does the target have it?
   if (!leaf.prop) {
     let present = op == '~' || op == EXISTS
     return (b, among) => {
@@ -165,16 +168,19 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Test => {
     }
   }
   let hit = scalar(ctx, leaf, p)
-  // The narrowing a rooted path keeps: the entity must wear the root component.
-  // Without it, `.maker.title=` (absent) would also select rows with no maker.
+  // For the operators only a present value can satisfy, the entity must also
+  // have the path's ROOT component. The absent forms skip that check on
+  // purpose, so `.maker.title=` selects rows with no maker as well as rows
+  // whose maker has no title. @yaks/sql narrows the same predicates the same
+  // way (bind.ts, `needsRoot`).
   let rooted = op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
     ((op == '' || op == '~') && flat(p.value) != '')
   return (b, among) => (!rooted || wears(b, root.comp)) && hit(follow(b, among))
 }
 
-// `.kind=K`: the entity wears K and every kind that sorts before it is absent —
-// "K is the most specific kind present". A plural folds in (`.kind=reviews`
-// reads as `.kind=review`).
+// `.kind=K`: the entity has component K and none of the kinds ordered before it
+// — that is, K is the most specific kind present. A plural folds to the
+// singular (`.kind=reviews` reads as `.kind=review`).
 let kindScope = (ctx: Ctx, value: string): Test => {
   let kinds = ctx.v.kinds
   let k = kinds.includes(value)
@@ -188,9 +194,10 @@ let kindScope = (ctx: Ctx, value: string): Test => {
 }
 
 // `.refs=X`: the backlinks of X — every entity holding a reference to it, over
-// every reference column the vocabulary declares. Presence and absence forms
-// decline: "references anything" is a different question, and answering it as a
-// union of columns would say something the grammar does not mean.
+// every reference column the vocabulary declares. The presence and absence
+// forms are refused: "references anything" is a different question, and
+// answering it as a union over all reference columns would not be what the
+// query means.
 let refs = (ctx: Ctx, r: Refs): Test => {
   if (r.op != '=' || !r.value) {
     throw new Unsupported('.refs', 'only .refs=<id> is answered', BY)
@@ -202,15 +209,17 @@ let refs = (ctx: Ctx, r: Refs): Test => {
 }
 
 // The WALK, in memory: `.cites[<=3]->p1` selects the bundles that reach the
-// target through at most `depth` hops of one step; `<-` the bundles the target
-// reaches. A step is one (from, to) pair a bundle states — an edge bundle
-// wearing the relation's tag (`edge{from,to}` beside `cites{}`), or an entity's
-// own reference column (`fork.from` reads as this entity → the entry), or a
-// CHAIN of them composed into one pair (`fork.from.session` reads as this
-// entity → the session of the entry it forked from) — read off the same
-// vocabulary @yaks/edge and @yaks/sql read. The closure is one
-// breadth-first fixpoint per bundle set, capped like the CTE, then a set lookup
-// per candidate; the target itself belongs only when a cycle leads back to it.
+// target in at most `depth` hops; `<-` selects the bundles the target reaches.
+// A hop is one (from, to) pair, and a bundle can supply one in three ways — an
+// edge entity, which has the relation's tag component alongside `edge{from,to}`
+// (`cites {}` beside `edge`); an entity's own reference column (`fork.from`
+// reads as this entity → the entry); or a CHAIN of reference columns composed
+// into one pair (`fork.from.session` reads as this entity → the session of the
+// entry it forked from). All three are resolved through the same vocabulary
+// @yaks/edge and @yaks/sql read. The closure is one breadth-first traversal per
+// bundle array, capped at the same row count as the recursive CTE @yaks/sql
+// emits, then a set lookup per candidate; the target itself is selected only
+// when a cycle leads back to it.
 let relation = (v: Vocab, name: string): string | undefined =>
   v.comp('edge') && v.all.find((tag) => {
     let kw = v.comp(tag)?.keywords
@@ -242,8 +251,8 @@ let stepOf = (ctx: Ctx, w: Walk): Step => {
     )
   }
   // A chain follows one reference to the next, each link read off the bundle
-  // the one before named: a link the set does not hold states no pair, exactly
-  // as a missing join row drops it from the step relation.
+  // the previous one named: a link the array does not hold produces no pair,
+  // exactly as a missing join row drops it from the set of hops.
   return (b, among) => {
     let eid = comp(b, hops[0].comp)?.[hops[0].prop]
     for (let h of hops.slice(1)) {
@@ -333,10 +342,10 @@ let counted = (n: number, op: string, m: number): boolean =>
 
 // A REVERSE HOP: the entities whose child rows point back at them, named by the
 // vocabulary's derived association (`.reviews` = the reviews whose `product` is
-// this entity). `.reviews!` is presence, `.reviews=` absence, `.reviews>=5` a
-// cardinality test, and `.reviews.stars=5` an existential over a filtered child.
-// A child filter rides the SAME clause compiler over the child bundle, so
-// anything that declines there declines the whole hop.
+// this entity). `.reviews!` tests for at least one, `.reviews=` for none,
+// `.reviews>=5` counts them, and `.reviews.stars=5` asks whether any child
+// matches. A child predicate goes through the SAME clause compiler, over the
+// child bundle, so anything refused there refuses the whole hop.
 let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Test => {
   let kids = (b: Bundle, among: Index): Bundle[] =>
     among.list.filter((k) => comp(k, a.comp)?.[a.prop] === b.entity.eid)
@@ -358,8 +367,9 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Test => {
     let n = Number(value)
     return (b, among) => counted(kids(b, among).length, op, n)
   }
-  // Inside the hop the spine names the CHILD, not the entity being tested, so a
-  // child predicate that reaches it would silently ask a different question.
+  // Inside the hop the identity component names the CHILD, not the entity being
+  // tested, so a child predicate that reached it would silently ask a different
+  // question.
   if (
     rest.length && ctx.v.aim(rest.join('.')).some((h) => h.comp == 'entity')
   ) {
@@ -373,9 +383,9 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Test => {
   return (b, among) => kids(b, among).some((k) => inner(k, among)) != !!p.not
 }
 
-// A bare word: the entity's text, searched. Every stored text-shaped column of
-// every component it wears is searchable — the same fields a full-text index
-// covers by default.
+// A bare word: a search over the entity's text. Every stored text column of
+// every component the entity has is searched — the same fields a full-text
+// index covers by default.
 let words = (ctx: Ctx, value: string): Test => {
   let hit = search(value)
   if (!hit) return NO
@@ -416,8 +426,9 @@ export let clause = (ctx: Ctx, c: Clause): Test => {
     if (c.path[0] == 'kind' && c.path.length == 1) {
       return kindScope(ctx, flat(c.value))
     }
-    // A plural leading the path is a reverse association, read from the far
-    // side; anything else routes forward through the vocabulary.
+    // A plural at the head of the path is a reverse association, read from the
+    // far side of a reference; anything else is resolved forward through the
+    // vocabulary.
     let assoc = ctx.v.assoc(c.path[0])
     if (assoc) return reverse(ctx, c.path[0], assoc, c)
     if (c.not || c.where) {

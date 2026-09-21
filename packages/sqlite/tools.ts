@@ -1,15 +1,15 @@
-// What an agent may ASK for here: the `tools` facet a host takes
-// (`@yaks/sqlite/tools`) — the runs behind the `tool: true` declarations in
-// ./vocab.json. Both are CHECKS: tools whose verb is `check`, which is the
-// whole of what a "doctor" is (@yaks/tools ./check.ts).
+// The tools an agent can call here: the module exported as
+// `@yaks/sqlite/tools`, holding the implementations behind the `tool: true`
+// declarations in ./vocab.json. Both are CHECKS: tools whose verb is `check`,
+// which is all a "doctor" command is (@yaks/tools ./check.ts).
 //
-// These are the checks that cannot be asked of a graph. An orphaned component
-// row and a reference to an entity that is gone are invisible to every query
-// by construction — a read starts from the spine, so a row with no spine is
-// not there to be found, which is exactly why the fleet's copies of them hid
-// for months. They are questions about the FILE, so they belong to the package
-// that owns the file, and they are asked of the connection (`host.sql`), not
-// of the store.
+// These are the checks that cannot be run as graph queries. An orphaned
+// component row and a reference to an entity that is gone are invisible to
+// every query by construction — a read starts from the spine, so a row with no
+// spine is not there to be found, which is exactly why the fleet's copies of
+// them went unnoticed for months. They are questions about the FILE, so they
+// belong to the package that owns the file, and they are run against the
+// connection (`host.sql`), not the store.
 //
 // WHAT THE SCHEMA ALREADY PREVENTS is most of it: every component table keys
 // to `entity(id)` and every reference carries a foreign key, so neither state
@@ -17,16 +17,16 @@
 // cheap and precise instead of a scan: ask SQLite whether enforcement is on,
 // and ask it which rows violate a key. A file that was written by a connection
 // with `foreign_keys` off is how the impossible gets in, and that is the one
-// thing worth saying out loud. A `keep` reference is deliberately key-free —
-// it outlives the row it names, which is what "kept as history" means — so it
-// is never a finding here.
+// thing worth reporting. A `keep` reference is deliberately key-free — it
+// outlives the row it names, which is what "kept as history" means — so it is
+// never a finding here.
 //
 // THE ARCHETYPE POINTER is the same kind of question. @yaks/archetype
 // maintains it inside the transaction, and ./archetype.ts `drift` reads the
-// physical presence it should describe; a raw writer that lands rows without
-// naming the owners it touched leaves a pointer the read door and the query
-// planner both believe. @yaks/archetype cannot ask this — it knows sets and
-// moves, not tables — so the check lives here, where the file is.
+// physical presence it should describe; a raw writer that inserts rows without
+// naming the owners it touched leaves a pointer both the read path and the
+// query planner trust. @yaks/archetype cannot run this check — it knows
+// component sets and moves, not tables — so it lives here, where the file is.
 
 import type { Runs } from '@yaks/graph/tools'
 import { checked, type Finding } from '@yaks/tools'
@@ -34,7 +34,7 @@ import { drift } from './archetype.ts'
 import { componentTables } from './physical.ts'
 import type { Driver, Row } from './driver.ts'
 
-/** What a config says to `@yaks/sqlite`'s checks. */
+/** What configuration this package's checks accept. */
 export type Options = {
   /** how many drifted entities to name (default 12) */
   sample?: number
@@ -42,7 +42,7 @@ export type Options = {
 
 let SAMPLE = 12
 
-// `pragma foreign_key_check` answers one row per violation: the table holding
+// `pragma foreign_key_check` returns one row per violation: the table holding
 // it, its rowid, and which of that table's foreign keys it broke.
 type Violation = { table?: unknown; parent?: unknown; rowid?: unknown }
 
@@ -55,16 +55,17 @@ let tally = (rows: Row[]): Map<string, number> => {
   return out
 }
 
-/** The runs behind the tools ./vocab.json declares — over this host's own
- * connection, which is why the facet is a factory. */
+/** The implementations behind the tools ./vocab.json declares — over the
+ * calling application's own connection, which is why this is a factory. */
 export let runs = (
   host: { sql: Driver },
   options: Options = {},
 ): Runs => ({
   storage_check: (_bundles, ctx) => {
     let found: Finding[] = []
-    // Enforcement first: every finding below is only as true as this answer,
-    // and a file written with it off is how a broken key gets in at all.
+    // Enforcement first: every finding below is only as reliable as this
+    // pragma, and a file written with it off is how a broken key gets in at
+    // all.
     let on = host.sql.query('pragma foreign_keys', [])[0]
     if (!Number(Object.values(on ?? {})[0] ?? 0)) {
       found.push({
@@ -100,9 +101,9 @@ export let runs = (
 
   archetype_check: (_bundles, ctx) => {
     let about = 'every archetype pointer matches the components its owner wears'
-    // A host that never composed @yaks/archetype has no such table and no
-    // pointers to disagree with anything. Saying so beats an audit that reads
-    // every entity as drifted because nothing ever classified one.
+    // An application that never composed @yaks/archetype has no such table and
+    // no pointers to disagree with anything. Reporting that beats an audit that
+    // reads every entity as drifted because nothing ever classified one.
     if (!componentTables(host.sql).includes('archetype')) {
       return checked(ctx.call, about, [{
         level: 'warn',

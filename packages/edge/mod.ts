@@ -2,10 +2,11 @@
  * @yaks/edge — links between entities, as a component.
  *
  * A relationship in a yaks graph is not a foreign-key column; it is an entity
- * of its own carrying the `edge{from, to, ord}` component and a RELATION TAG
- * that says what kind of link it is. A blog says `post cites post`; a bookstore
- * says `book cites book`; the shape is the same, and the relations are yours to
- * declare — this package ships the link, the mechanism, and not one relation.
+ * of its own, carrying the `edge{from, to, ord}` component plus a second
+ * component naming the relation. A blog declares that a post cites a post; a
+ * bookstore declares that a book cites a book; the structure is the same, and
+ * the relations are yours to declare — this package ships the link mechanism
+ * and no relations of its own.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
@@ -14,7 +15,7 @@
  * let blog = {
  *   $defs: {
  *     post: { type: 'object', kind: true, properties: { title: {} } },
- *     // one component, and `cites` is a relation
+ *     // one component, declared as a relation
  *     cites: { type: 'object', relation: true },
  *   },
  * }
@@ -24,20 +25,21 @@
  *
  * Four things follow from that:
  *
- * - **An edge is named by what it says.** {@link edgeEid} hashes the sentence,
- *   so two writers who state the same link land on one entity and a writer who
- *   takes a link back ({@link unlink}) names it without a lookup.
- * - **A link lives only while both ends do.** Both ends are references with
- *   `death: cascade`, so a deleted post takes its links with it.
- * - **Half a sentence is refused**, by name: an edge with no relation, or with
- *   an end missing, never reaches storage ({@link edges} registers the check).
- * - **Walking is querying.** {@link walk} answers `out`, `in` and a bounded
- *   `reach` through {@link https://jsr.io/@yaks/graph | @yaks/graph}'s Storage
- *   seam, and {@link traverse} teaches
+ * - **A link's id is derived from the link itself.** {@link edgeEid} hashes
+ *   `from | relation | to`, so two writers who create the same link land on one
+ *   entity, and a writer removing a link ({@link unlink}) computes its id
+ *   without a lookup.
+ * - **A link lives only while both endpoints do.** Both endpoints are
+ *   references declared `death: cascade`, so deleting a post deletes its links.
+ * - **An incomplete link is rejected** by name: an edge component with no
+ *   relation beside it, or with an endpoint missing, never reaches storage
+ *   ({@link edges} registers the check).
+ * - **Walking is querying.** {@link walk} implements `out`, `in` and a bounded
+ *   `reach` over {@link https://jsr.io/@yaks/graph | @yaks/graph}'s `Storage`
+ *   interface, and {@link traverse} adds to
  *   {@link https://jsr.io/@yaks/sql | @yaks/sql} the two clauses it cannot
- *   answer on its own — `.cites[<=3]->p1` as a recursive walk over one
- *   relation, `.edges[cites]!` as the rider that carries a result's links back
- *   with it.
+ *   compile on its own — `.cites[<=3]->p1`, a recursive walk over one relation,
+ *   and `.edges[cites]!`, which returns a result's links alongside it.
  *
  * It imports no platform API, so the same code runs on a server, in a worker,
  * and in a browser tab.

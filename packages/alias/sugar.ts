@@ -1,19 +1,21 @@
-// The spelling: a name said on the entity it names.
+// The shorthand: a name written on the entity it names.
 //
-// A key is its own entity — `{key: {of, value}, alias: {}}` — and that is the
-// right shape to STORE and the wrong shape to write by hand. What anybody
-// writes is the name beside the thing:
+// A key is its own entity — `{key: {of, value}, alias: {}}` — which is the
+// right shape to STORE and the wrong shape to write by hand. What people
+// actually write is the name beside the entity:
 //
 //   { entity: { eid: '$r' }, alias: { name: 'recipe:lemon-cakes' },
 //     doc: { title: 'Lemon cakes' } }
 //
-// So the `normalize` phase lifts it: the tag comes off the bundle and a key
-// entity goes in beside it, pointing back. Everything after that is @yaks/key's
-// — the derived id, the dedupe that lands a repeat on one row, the refusal when
-// somebody else holds the name — because a name is nothing but a kind of key.
+// So the `normalize` phase rewrites it: the `alias` component comes off the
+// bundle and a key entity is added beside it, pointing back. Everything after
+// that belongs to @yaks/key — the derived id, the deduplication that lands a
+// repeat on one row, the rejection when another entity already has the name —
+// because a name is simply a kind of key.
 //
-// It runs before `admit`, which is why `name` may be a word the vocabulary has
-// never heard of: the sugar is consumed before anything is asked about it.
+// It runs before `admit`, which is why `name` may be a property the vocabulary
+// has never heard of: the shorthand is consumed before the vocabulary is
+// consulted.
 
 import type { Bundle, Hook } from '@yaks/graph'
 import { Refused } from '@yaks/graph'
@@ -22,8 +24,8 @@ import { ALIAS, nameOf } from './comp.ts'
 
 /**
  * The `normalize` hook that turns `alias{name}` on an entity into the key
- * entity it means. A bundle that carries the tag bare (`alias: {}`) is the key
- * itself and is left exactly alone.
+ * entity it stands for. A bundle carrying the component with no `name`
+ * (`alias: {}`) is the key entity itself and is left exactly alone.
  */
 export let split = (): Hook => (bundles) => {
   let out: Bundle[] = []

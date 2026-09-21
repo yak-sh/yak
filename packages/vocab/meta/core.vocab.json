@@ -3,18 +3,18 @@
   "$id": "https://yaks.sh/vocab/core",
   "title": "yaks core keyword vocabulary",
   "description": "The keywords the yaks meta-model adds to JSON Schema 2020-12 to describe a component vocabulary. Native JSON Schema still carries type, format, enum, const, default, description, examples, $ref/$defs; these keywords add what a component table needs on top. Native keywords reach the table too: `type: integer` stores with integer affinity, a component's `required` list is NOT NULL, `default` is the column default (`{\"now\": true}` for the clock), and `enum` is a CHECK. `examples` is native and subsumes the old `well` concept: a text field's completion draws from its examples union the column's own live distinct values.",
-  "$comment": "A vocabulary declaration in the JSON Schema sense: a URI that names this keyword set, plus the schema of each keyword. A vocab file declares it under $vocabulary.",
+  "$comment": "A vocabulary declaration in the JSON Schema sense: a URI that names this keyword set, plus the schema of each keyword. A vocabulary document declares it under $vocabulary.",
   "$defs": {
     "component": {
-      "description": "true = this $defs entry declares a COMPONENT: an object schema whose properties are the component's columns. Required \u2014 an entry that says neither this nor `tool` is an ordinary reusable subschema the loader never plants.",
+      "description": "true = this $defs entry declares a COMPONENT: an object schema whose properties are the component's columns. Required \u2014 an entry marked neither this nor `tool` is an ordinary reusable subschema, and the loader creates no table for it.",
       "const": true
     },
     "tool": {
-      "description": "true = this $defs entry declares a TOOL: one named thing an agent can ask the graph to do. Its implementation is the module's, keyed by the entry name (or noun_verb); the declaration is the part that travels.",
+      "description": "true = this $defs entry declares a TOOL: one named operation an agent can ask the graph to perform. The implementation is a function the module exports, looked up by the entry name (or noun_verb); the declaration is the part that is sent to clients.",
       "const": true
     },
     "rule": {
-      "description": "true = this $defs entry declares a RULE: a query the graph runs over every batch, and nothing else. No implementation anywhere \u2014 the match IS the rule, and what its `+` words say is what it writes.",
+      "description": "true = this $defs entry declares a RULE: a query the graph runs over every batch of changes, and nothing else. There is no implementation anywhere \u2014 the `match` query IS the rule, and the components its `+` patterns name are what it writes.",
       "const": true
     },
     "match": {
@@ -22,15 +22,15 @@
       "type": "string"
     },
     "noun": {
-      "description": "A tool's resource word, one lowercase word \u2014 what it acts on. Said beside a `verb` it is half of a two-word line a CLI answers to in either order (`session list`, `list session`); said alone it IS the word, on the line and on the wire (`history`).",
+      "description": "A tool's resource word, one lowercase word \u2014 what it acts on. Declared beside a `verb` it is half of a two-word command a CLI accepts in either order (`session list`, `list session`); declared alone it is the whole command name, both on the command line and in an MCP request (`history`).",
       "type": "string"
     },
     "verb": {
-      "description": "A tool's operation word, one lowercase word \u2014 what it does. Said beside a `noun` it is the other half of the two-word line; said alone it IS the word, on the line and on the wire (`land`).",
+      "description": "A tool's operation word, one lowercase word \u2014 what it does. Declared beside a `noun` it is the other half of the two-word command; declared alone it is the whole command name, both on the command line and in an MCP request (`land`).",
       "type": "string"
     },
     "input": {
-      "description": "A tool's arguments: one JSON Schema per named argument, the same shape a component's `properties` takes. The entry's `required` list names the ones a call must carry.",
+      "description": "A tool's arguments: one JSON Schema per named argument, the same shape a component's `properties` takes. The entry's `required` list names the arguments a call must supply.",
       "type": "object"
     },
     "ref": {
@@ -47,7 +47,7 @@
       ]
     },
     "sync": {
-      "description": "Who hears about a write to this component. \"server\" (the default) sends it to the server, which owns it and fans it out to subscribers; \"none\" keeps it on the writing node; \"peers\" sends it to the server, which RELAYS it to subscribers without owning it.",
+      "description": "Who is told about a write to this component. \"server\" (the default) sends it to the server, which owns it and fans it out to subscribers; \"none\" keeps it on the writing node; \"peers\" sends it to the server, which RELAYS it to subscribers without storing it.",
       "enum": [
         "none",
         "server",
@@ -66,11 +66,11 @@
       "default": false
     },
     "stamped": {
-      "description": "true = server-owned: readable but never wire-writable.",
+      "description": "true = the server owns this column: clients can read it, never write it.",
       "type": "boolean"
     },
     "search": {
-      "description": "true = this text column is full-text indexed: its words are what a bare-word search matches, and a hit ranks by them. A column no one declares is stored and readable but never searched.",
+      "description": "true = this text column is full-text indexed: a bare word in a query matches it, and a hit is ranked by it. A column nobody declares is stored and readable but never searched.",
       "type": "boolean"
     },
     "kind": {
@@ -85,24 +85,24 @@
       }
     },
     "wire": {
-      "description": "false = a readable-not-writable component (the spine, `entity`). Default true.",
+      "description": "false = clients can read this component but never write it (the spine component, `entity`). Default true.",
       "type": "boolean",
       "default": true
     },
     "bare": {
-      "description": "false = this column (or every column of this component) never claims its bare filter spelling; it is reached qualified only (.comp.prop). The declarative form of a lazy log partition, or of yielding a bare word an older concept already owns.",
+      "description": "false = this column (or every column of this component) never claims its bare filter name; it is reached qualified only (.comp.prop). Use it for a column that should only be queried explicitly — a large log partition, or a name another component already claims.",
       "type": "boolean",
       "default": true
     },
     "aliases": {
-      "description": "Input spellings that resolve to an enum member; output always speaks the canonical member.",
+      "description": "Input forms that resolve to an enum member; output always uses the canonical member.",
       "type": "object",
       "additionalProperties": {
         "type": "string"
       }
     },
     "unique": {
-      "description": "The uniqueness a race is decided by. On a COLUMN, true = no two rows of the component may share the value. On a COMPONENT, the composite uniques as column lists: [[\"space\", \"slug\"]], or {\"cols\": [\"key\"], \"present\": [\"key\"]} for a unique over the rows that hold the key (a partial index).",
+      "description": "A uniqueness constraint, which is what decides a race between two writers. On a COLUMN, true = no two rows of the component may share the value. On a COMPONENT, the composite uniques as column lists: [[\"space\", \"slug\"]], or {\"cols\": [\"key\"], \"present\": [\"key\"]} for a unique over the rows that hold the key (a partial index).",
       "anyOf": [
         {
           "type": "boolean"
@@ -119,7 +119,7 @@
       ]
     },
     "identity": {
-      "description": "What the entity's own id is DERIVED from. On a COLUMN, true = this component's entities are identified by this value: the eid is sha256(\"<component>|<value>\") worn as a UUID, so writing the same value twice is one entity and uniqueness is a fact about ids rather than a race. On a COMPONENT, the column list a composite identity is spelled across, in derivation order: [\"space\", \"slug\"]. One tuple, never a list of them \u2014 an entity has one id.",
+      "description": "What the entity's own id is DERIVED from. On a COLUMN, true = this component's entities are identified by this value: the eid is sha256(\"<component>|<value>\") formatted as a UUID, so writing the same value twice writes one entity and uniqueness is a property of the id rather than the outcome of a race. On a COMPONENT, the column list a composite identity spans, in derivation order: [\"space\", \"slug\"]. One tuple, never a list of them \u2014 an entity has one id.",
       "anyOf": [
         {
           "type": "boolean"
@@ -133,7 +133,7 @@
       ]
     },
     "index": {
-      "description": "An index to read by, carrying no uniqueness. On a COLUMN, true = index it. Stored refs are always indexed: true is redundant and false does not opt out. On a COMPONENT, the composite indexes as column lists: [[\"app\", \"version\"]], or {\"cols\": [...], \"present\": [...]} for a partial index over the rows that hold those columns.",
+      "description": "An index to read by, with no uniqueness constraint. On a COLUMN, true = index it. Stored references are always indexed: true is redundant and false does not opt out. On a COMPONENT, the composite indexes as column lists: [[\"app\", \"version\"]], or {\"cols\": [...], \"present\": [...]} for a partial index over the rows that hold those columns.",
       "anyOf": [
         {
           "type": "boolean"

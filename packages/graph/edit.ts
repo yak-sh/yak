@@ -1,17 +1,19 @@
-// Portable surgical edits, shared by field operators and patch-format doors.
+// Find-and-replace edits to a text column, shared by the `$edit` field
+// operator and by any handler that accepts a patch format.
 import { type Bundle, comps, dead } from './bundle.ts'
 import { token } from './guard.ts'
 import type { Plugin } from './plugin.ts'
 
-// One surgical hunk: replace `old` with `new`, unique-or-`all` — the file Edit
-// tool's contract. A `$edit` field carries one of these or a list; a V4A
-// section parses into a list of them.
+// One replacement: swap `old` for `new`, requiring a unique match unless `all`
+// is set — the same contract a file-editing tool uses. A `$edit` field carries
+// one of these or a list of them; a V4A patch section parses into a list.
 export type EditHunk = { old: string; new: string; all?: boolean }
 
-// THE core: apply a sequence of surgical replacements to `value`, each match
-// unique unless `all`, refusing rather than clobbering. `where` names the
-// column for the error. A net-unchanged result refuses — an edit that writes
-// nothing is a mistake, not a no-op. Pure: no db, no sha, just the string.
+// Apply a sequence of replacements to `value`, requiring each match to be
+// unique unless `all` is set, and throwing rather than replacing the wrong
+// occurrence. `where` names the column, for the error message. A result equal
+// to the input throws — an edit that changes nothing is a mistake, not a
+// no-op. Pure: no database, no hashing, just the string.
 export let patchText = (
   value: string,
   hunks: EditHunk[],
@@ -38,9 +40,10 @@ export let patchText = (
   return out
 }
 
-// A `$edit` field-operator payload → hunks. `{ old, new, all? }`, or a list of
-// them for a multi-hunk patch. This is Claude's own Edit idiom, riding a comp
-// value in the bundle/change format instead of a bespoke tool.
+// A `$edit` field-operator payload → the replacements it describes.
+// `{ old, new, all? }`, or a list of them for a multi-part patch. It is the
+// same find-and-replace form a file-editing tool takes, carried as a column
+// value inside an ordinary bundle rather than needing a tool of its own.
 export let editHunks = (op: unknown): EditHunk[] => {
   let one = (h: unknown): EditHunk => {
     if (!h || typeof h != 'object' || Array.isArray(h)) {
@@ -55,38 +58,44 @@ export let editHunks = (op: unknown): EditHunk[] => {
   return Array.isArray(op) ? op.map(one) : [one(op)]
 }
 
-// Is this comp value a `$edit` field operator (rather than a literal)? A column
-// value that is a plain object carrying `$edit`. apply() detects it, reads the
-// current column, and lands the patched result with the was-guard.
+// Is this column value a `$edit` field operator rather than a literal? That
+// is, a plain object carrying a `$edit` key. `apply()` detects it, reads the
+// column's current value, and writes the patched result with a `$was`
+// precondition.
 export let isEditOp = (v: unknown): v is { $edit: unknown } =>
   v != null && typeof v == 'object' && !Array.isArray(v) && '$edit' in v
 
-// Is this comp value ANY field operator — a plain object with a `$`-sigil key?
-// Every real scalar is a literal, so a `$`-keyed object is an operator: a known
-// one apply() resolves, or a typo apply() must refuse legibly rather than pass
-// to storage as a non-scalar.
+// Is this column value ANY field operator — a plain object with a `$`-prefixed
+// key? Every real column value is a scalar, so a `$`-keyed object must be an
+// operator: one `apply()` knows and resolves, or a typo `apply()` should
+// refuse with a clear message rather than hand to storage as a non-scalar.
 export let isFieldOp = (v: unknown): v is Record<string, unknown> =>
   v != null && typeof v == 'object' && !Array.isArray(v) &&
   Object.keys(v as object).some((k) => k.startsWith('$'))
 
-/** The host of ordered field edits. Reads must be held stable through commit:
- * normalize runs BEFORE core opens its transaction, so a database host must
- * wrap graph.apply in its outer write transaction. Values are hydrated text. */
+/** What the calling program must supply for field edits. Its reads have to
+ * stay stable through the commit: `normalize` runs BEFORE the core opens its
+ * transaction, so a program backed by a database must wrap `graph.apply` in a
+ * write transaction of its own. Values come back as plain text. */
 export type EditHost = {
-  /** A known component's value as FOUND, never an earlier same-batch write. */
+  /** A declared component's value as it is STORED, never a value written
+   * earlier in the same change. */
   component: (eid: string, name: string) => Record<string, unknown> | undefined
-  /** Whether this is a declared, wire-writable text/body column. */
+  /** Whether this is a declared, client-writable text column. */
   text: (name: string, column: string) => boolean
-  /** Unknown components remain admission's forward-compatible no-op. */
+  /** Whether the vocabulary declares this component; an undeclared one stays
+   * admission's forward-compatible no-op. */
   known: (name: string) => boolean
-  /** Optional human-readable identity for addressed refusal messages. */
+  /** Optional: a human-readable name for an entity, for refusal messages. */
   name?: (eid: string) => string
 }
 
-/** Resolve field operators in order, without mutating the caller's batch.
- * Literals feed later edits; explicit drops discard pending values for that
- * entity, restoring the stored-value fallback (the existing edit contract).
- * Auto guards describe FOUND state; an explicit caller guard is never erased. */
+/** Resolve field operators in order, without mutating the caller's bundles. A
+ * literal written earlier in the change feeds a later edit to the same column;
+ * removing a component discards the pending values for that entity, so the
+ * next edit reads the stored value again. Each edit adds a `$was` precondition
+ * describing the STORED value; a precondition the caller supplied is never
+ * overwritten. */
 export let resolveEdits = (bundles: Bundle[], host: EditHost): Bundle[] => {
   let pending = new Map<string, unknown>()
   let drop = (eid: string) => {
@@ -144,7 +153,8 @@ export let resolveEdits = (bundles: Bundle[], host: EditHost): Bundle[] => {
   })
 }
 
-/** A normalize plugin for field edits; see EditHost for the lock contract. */
+/** A plugin that resolves field edits in the `normalize` phase; see
+ * {@link EditHost} for what the calling program must guarantee. */
 export let edits = (host: EditHost): Plugin => ({
   name: 'graph/edits',
   hooks: { normalize: (bundles) => resolveEdits(bundles, host) },

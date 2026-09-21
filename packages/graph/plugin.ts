@@ -1,16 +1,17 @@
 // The pluggable half of `apply()`. A change runs through a FIXED, ordered list
-// of phases; a plugin registers a hook against a NAMED one. The order is
-// load-bearing — a precondition has to read before the batch writes, a cascade
-// has to decide before rows go, an effect must not fire until the transaction
-// commits — so "register code anywhere in apply()" would be a way to write
-// bugs, not a feature.
+// of phases; a plugin registers a hook against a NAMED one. The order matters
+// — a precondition has to read before the change writes, a cascade has to
+// decide which rows go before they go, an effect must not fire until the
+// transaction commits — so "register code anywhere in apply()" would be a way
+// to write bugs, not a feature.
 //
-// A hook takes the batch and returns the batch the next phase sees. That one
-// signature covers everything a hook does: rewriting a bundle, adding one,
-// dropping one, and refusing the whole batch (by throwing). Hooks talk to each
-// other, and to the core, through the bundles: a component is just data on an
-// entity, and a component that never reaches a table is a perfectly good way
-// for one phase to tell a later one what it decided.
+// A hook takes the list of bundles and returns the list the next phase sees.
+// That one signature covers everything a hook does: rewriting a bundle, adding
+// one, removing one, and refusing the whole change (by throwing). Hooks
+// communicate with each other, and with the core, through the bundles: a
+// component is just data on an entity, and a component that never reaches a
+// table is a perfectly good way for one phase to tell a later one what it
+// decided.
 
 import type { Actor, Bundle, Eid } from './bundle.ts'
 import type { Query, ReadOpts, Tx } from './storage.ts'
@@ -25,26 +26,29 @@ import type { VocabDoc } from '@yaks/vocab'
  * The phases of `apply()`, in order:
  *
  * - `normalize` — canonicalize what arrived. Pure, before the transaction.
- * - `admit` — drop unknown components and server-owned columns, refuse an
- *   unknown column, check each value against the vocabulary.
- * - `mint` — give every `$alias` in the batch a real id (a fresh one, or one
+ * - `admit` — drop undeclared components and server-owned columns, refuse an
+ *   undeclared column, validate each value against the vocabulary.
+ * - `mint` — give every `$alias` in the change a real id (a fresh one, or one
  *   derived from the content) and rewrite the references to it.
- * - `precondition` — the `$was` guard, and any other "may this batch land"
- *   check that has to read (a lease, a quota). The transaction is open.
- * - `rules` — the DECLARED half: a rule is a query, and here the batch is
- *   readable as tables (a storage's batch OVERLAY), so a rule is judged
- *   against the graph with this batch already in it and its `+` half joins
- *   the batch as patches. Before persistence on purpose — a component that is
- *   never stored (`sync: peers`) is visible to a rule and can be produced by
- *   one only while the batch is still a batch.
- * - `mutate` — the patches go in.
- * - `cascade` — a delete takes its dependents with it; detached references let
- *   go. Casualties are synthesized into the batch.
- * - `stamp` — `created` at birth, `updated` on a touch.
- * - `journal` — record the batch as applied. (The journal is a plugin.)
- * - `commit` — the last thing inside the transaction; it returns and commits.
+ * - `precondition` — the `$was` check, and any other "may this change be
+ *   applied" check that has to read first (a lease, a quota). The transaction
+ *   is open by now.
+ * - `rules` — the DECLARATIVE half: a rule is a query, and at this point the
+ *   pending change is readable as if it were already in the tables (storage
+ *   provides an OVERLAY), so a rule is evaluated against the graph with this
+ *   change already applied, and the `+` half of the rule joins the change as
+ *   patches. This runs before anything is persisted on purpose — a component
+ *   that is never stored (`sync: peers`) is visible to a rule, and can be
+ *   produced by one, only while the change is still in memory.
+ * - `mutate` — the patches are written.
+ * - `cascade` — a delete takes its dependents with it, and references marked
+ *   `detach` are cleared. The entities it deleted are added to the change.
+ * - `stamp` — `created` when the entity is new, `updated` when it is touched.
+ * - `journal` — record the change as applied. (The journal is a plugin.)
+ * - `commit` — the last thing inside the transaction; it returns and the
+ *   transaction commits.
  * - `effect` — post-commit observers. Each is isolated: a failing effect is
- *   telemetry, never a broken batch.
+ *   reported, never a failed transaction.
  * - `audit` — after a ROLLBACK, to record what was refused.
  */
 export type Phase =
@@ -77,7 +81,7 @@ export let PHASES: Phase[] = [
   'audit',
 ]
 
-/** The phases that run inside the batch's transaction. */
+/** The phases that run inside the change's transaction. */
 export let INSIDE: Phase[] = [
   'precondition',
   'rules',
@@ -89,11 +93,11 @@ export let INSIDE: Phase[] = [
 ]
 
 /**
- * A hook: the batch in, the batch the next phase sees out. Throwing refuses
- * the whole batch (and, from inside the transaction, rolls it back). In the
- * phases outside the transaction the `tx` is a detached one — each call is its
- * own unit of work. The `audit` phase, and only it, also passes the refusal
- * that rolled the batch back.
+ * A hook: the bundles in, the bundles the next phase sees out. Throwing
+ * refuses the whole change (and, from inside the transaction, rolls it back).
+ * In the phases outside the transaction the `tx` is a detached one — each call
+ * is its own unit of work. The `audit` phase, and only it, also passes the
+ * error that rolled the transaction back.
  */
 export type Hook = (
   bundles: Bundle[],
@@ -102,19 +106,21 @@ export type Hook = (
 ) => Bundle[] | Promise<Bundle[]>
 
 /**
- * An ordered guard may certify that THIS batch's checks and writes are
- * independent: checking all operations before mutating/cascading them together
- * has exactly the same result as checking and writing each prefix. This includes
- * its rewrites and any cascades, not just its reads. Default is ordered; batching
- * is used only when every beforeWrite guard certifies the batch.
+ * An ordered write hook may certify that THIS change's checks and writes are
+ * independent of each other: checking every operation and then mutating and
+ * cascading them together produces exactly the same result as checking and
+ * writing them one at a time. That covers the hook's rewrites and any
+ * cascades, not just its reads. The default is one operation at a time; the
+ * operations are combined only when every `beforeWrite` hook certifies the
+ * change.
  */
 export type WriteHook = Hook & { independent?: boolean }
 
 /**
- * A schema for a tool's arguments or its result. What counts as one is the
- * TRANSPORT's business — {@link https://jsr.io/@yaks/mcp | @yaks/mcp} takes Zod
- * schemas, because the MCP SDK does — so the core leaves it opaque rather than
- * depending on a validation library.
+ * A schema for a tool's arguments or its result. What counts as a schema is
+ * the TRANSPORT's business — {@link https://jsr.io/@yaks/mcp | @yaks/mcp}
+ * takes Zod schemas, because the MCP SDK does — so the core leaves this type
+ * opaque rather than depending on a validation library.
  */
 export type Schema = object
 
@@ -125,12 +131,12 @@ export type Schema = object
  * `actor` is the CALLER's, never the runner's: a tool that writes writes in
  * the name of whoever wrote the call, so authorization is decided about the
  * person asking (see {@link https://jsr.io/@yaks/tools | @yaks/tools}). It is
- * the PAIR the wire carries — `by` the identity, `via` the run it came
+ * the same pair a change carries — `by` the identity, `via` the run it came
  * through — so a tool that needs the session behind a call reads `via`.
  *
- * There is no door to write through — a tool ANSWERS with bundles and the
- * runner lands them, signed, so a tool cannot write in somebody else's name by
- * accident and a host can refuse, batch, or replay what it was asked for.
+ * There is no write method here: a tool RETURNS bundles and the runner applies
+ * them, signed, so a tool cannot write in somebody else's name by accident and
+ * the calling program can refuse, combine, or replay what it was asked for.
  */
 export type ToolCtx = {
   /** the graph the tool works on (its vocabulary and storage included) */
@@ -144,93 +150,107 @@ export type ToolCtx = {
    * tool's schema by the runner. The same values the call's bundle carries as
    * JSON, so a tool reads them here rather than parsing its own input. */
   args: Record<string, unknown>
-  /** the call entity being answered — what a bundle the tool makes says it
-   * came from (`output.source`) */
+  /** the call entity being answered — what a bundle the tool produces records
+   * as its source (`output.source`) */
   call: Eid
-  /** the directory the process running this call stands in, where the host
-   * knows one. A tool that acts on the BOX rather than the graph needs it —
-   * `land` fast-forwards the checkout its caller is standing in, which on a
-   * command line is where the person typed. A graph in a browser tab or a
-   * worker has none, and a tool that wants one says so itself. */
+  /** the working directory of the process running this call, where the calling
+   * program knows one. A tool that acts on the MACHINE rather than the graph
+   * needs it — `land` fast-forwards the git checkout its caller is in, which
+   * on a command line is the directory the person ran it from. A graph in a
+   * browser tab or a worker has no working directory, and a tool that requires
+   * one has to check for itself. */
   cwd?: string
 }
 
 /**
- * A tool: one named thing an agent can ask a graph to do, contributed the same
- * way a plugin contributes components and hooks. A transport (@yaks/mcp) is
- * what lists it and calls it; this package only carries the declaration.
+ * A tool: one named operation an agent can ask a graph to perform,
+ * contributed the same way a plugin contributes components and hooks. A
+ * transport (@yaks/mcp) lists it and calls it; this package only carries the
+ * declaration.
  *
- * A tool is a function from BUNDLES to BUNDLES. What it is handed is the
- * call's own bundle and whatever the caller attached to it; what it answers is
- * the bundles that ARE the answer — entities it found, entities it wants
- * made, prose as `content{body}`. The runner lands them beside the
- * `result{call}` entity in one batch.
+ * A tool is a function from BUNDLES to BUNDLES. It is handed the call's own
+ * bundle and whatever the caller attached to it; it returns the bundles that
+ * ARE the result — entities it found, entities it wants created, text as
+ * `content{body}`. The runner applies them beside the `result{call}` entity in
+ * one transaction.
  */
 export type Tool<C = ToolCtx, R = Bundle[]> = {
-  /** Legacy transport name. Structured tools derive it from noun and verb. */
+  /** The older flat tool name. A tool declaring `noun`/`verb` derives it from
+   * those instead. */
   name?: string
-  /** the entity a CALL names this tool at, where the graph keeps tool rows of
-   * its own. Derived from the name otherwise (@yaks/tools `toolEid`). */
+  /** the entity a CALL references this tool by, where the graph stores tool
+   * rows of its own. Derived from the name otherwise (@yaks/tools
+   * `toolEid`). */
   eid?: Eid
-  /** Resource word, independent of CLI word order or graph components. */
+  /** The thing the tool acts on, independent of CLI argument order or graph
+   * component names. */
   noun?: string
-  /** Operation word. Must be supplied together with noun. */
+  /** The operation performed on the noun. Must be supplied together with a
+   * noun. */
   verb?: string
-  /** JSON Schema object for the complete argument object. Preferred over input. */
+  /** JSON Schema object for the complete argument object. Preferred over
+   * `input`. */
   inputSchema?: Record<string, unknown>
-  /** Optional CLI presentation; ordinary long options use property names. */
+  /** Optional CLI presentation; ordinary long options use the property names
+   * from the schema. */
   options?: {
     positional?: readonly string[]
     short?: Readonly<Record<string, string>>
-    /** the property the bare words left over after the positionals fill:
-     * `key=value` pairs for an object, the words themselves for an array */
+    /** the property that collects the arguments left over after the
+     * positionals are filled: `key=value` pairs for an object, the arguments
+     * themselves for an array */
     rest?: string
   }
-  /** a short human title */
+  /** a short human-readable title */
   title?: string
-  /** what it does and when to reach for it — the agent reads this */
+  /** what it does and when to use it — the agent reads this */
   description: string
   /** one schema per named argument */
   input?: Record<string, Schema>
-  /** this tool only reads — a client may call it without asking first */
+  /** this tool only reads — a client may call it without asking the user
+   * first */
   readOnly?: boolean
   /** this tool can DELETE or otherwise irreversibly change what it touches, so
-   * a client should ask before every call. A create is not destructive: it
-   * only adds, and undoing it is the delete that IS. Left unsaid, a writing
-   * tool is taken to be destructive — the safe reading of silence. */
+   * a client should ask before every call. Creating is not destructive: it
+   * only adds, and undoing a create is a delete, which is. Left undeclared, a
+   * writing tool is treated as destructive — the safe reading of silence. */
   destructive?: boolean
-  /** calling it twice with the same arguments leaves the same world as calling
-   * it once — a setter that converges on a value, not an appender. */
+  /** calling it twice with the same arguments leaves the same state as calling
+   * it once — a setter that converges on a value, not something that
+   * appends. */
   idempotent?: boolean
   /** it reaches OUTSIDE this graph: mail to a stranger, a page anyone on the
    * web can then read, a record at another company. A tool that only touches
    * what is stored here is closed-world, whatever it writes. */
   openWorld?: boolean
-  /** what the TRANSPORT should say about this tool beside its schemas, handed
-   * to the client verbatim — an MCP `_meta`, say, naming the page a host
-   * renders the answer in. Opaque here, like {@link Schema}. */
+  /** what the TRANSPORT should send about this tool beside its schemas, handed
+   * to the client verbatim — an MCP `_meta`, say, naming the page the client
+   * should render the result in. Opaque here, like {@link Schema}. */
   meta?: Record<string, unknown>
-  /** say what the answer is: the call's bundles in, the answer's out */
+  /** the implementation: the call's bundles in, the result's bundles out */
   run: (bundles: Bundle[], ctx: C) => R | Promise<R>
 }
 
 /**
  * A plugin: a self-contained contribution to a graph. It brings a component
  * vocabulary (its domain) and hooks on the phases it cares about. This is the
- * same shape an application uses to add its own components — the fleet's own
- * machinery is plugins, not privileged code.
+ * same shape an application uses to add its own components — nothing in this
+ * family gets privileged access; it is all plugins.
  */
 export type Plugin = {
-  /** Transaction-local write tracking. Receives the gathered pre-image lookup
-   * (undefined means not gathered, null means absent). Wraps every phase's
-   * writes; flush runs before journal and after commit hooks, inside the same
-   * transaction. Use it for derived storage metadata, never external effects. */
+  /** Transaction-local write tracking. Receives a lookup for the gathered
+   * pre-write state (undefined means it was not gathered, null means the
+   * entity does not exist). It wraps every phase's writes; `flush` runs before
+   * the journal hooks and again after the commit hooks, inside the same
+   * transaction. Use it for derived storage metadata, never for external
+   * effects. */
   track?: (tx: Tx, found: (eid: Eid) => Bundle | null | undefined) => Tracker
-  /** Ordered write policy. The factory sees the storage-ready batch once;
-   * its hook checks/rewrites each live operation against its already-written
-   * prefix. Opting in makes mutate/cascade run per operation, in the SAME
-   * transaction. $was remains a pre-write FOUND-state guard. No external
-   * side effects: any later refusal rolls the entire prefix back. */
+  /** Ordered write policy. The factory sees the storage-ready bundles once;
+   * the hook it returns checks or rewrites each live operation against the
+   * operations already written before it. Opting in makes mutate and cascade
+   * run one operation at a time, in the SAME transaction. `$was` still checks
+   * against the pre-write state. No external side effects: any later refusal
+   * rolls back everything written before it. */
   beforeWrite?: (bundles: Bundle[]) => WriteHook
   /** the plugin's name, for diagnostics */
   name: string
@@ -238,42 +258,44 @@ export type Plugin = {
   vocab?: VocabDoc[]
   /** the phases it hooks, at most one hook each */
   hooks?: Partial<Record<Phase, Hook>>
-  /** the rules it declares — the same seam said as data: a query over one
-   * bundle in the batch plus what comes out (see {@link Rule}). The phase runs
-   * every rule registered on it, in plugin order, before its hooks. */
+  /** the rules it registers in code: a query over one bundle in the change,
+   * plus what the rule produces (see {@link Rule}). The phase runs every rule
+   * registered on it, in plugin order, before its hooks. */
   rules?: Rule[]
-  /** the rules it DECLARES — a query and nothing else (see {@link Declared}).
-   * They run in the `rules` phase, over a storage's batch overlay, to a
-   * fixpoint, and what they produce joins the batch. A declared rule needs no
-   * code at all: an app ships one in its vocabulary. */
+  /** the rules it DECLARES as data — a query and nothing else (see
+   * {@link Declared}). They run in the `rules` phase, over storage's overlay
+   * of the pending change, until they reach a fixpoint, and what they produce
+   * joins the change. A declared rule needs no code at all: an app ships one
+   * in its vocabulary. */
   declared?: Declared[]
-  /** the resources it provides: a singleton made from the tick, which any
-   * rule may then bind by `#Name` (see {@link Resource}). The graph provides
-   * `#Vocab`, `#Now` and `#Actor` itself; a host adds its own — an `#Env`, a
-   * `#Request` — as one entry each. A resource is capitalized, which is what
-   * keeps it and a component apart in the bundle they share; a lowercase name
-   * is refused. */
+  /** the resources it provides: a singleton built from the current phase's
+   * context, which any rule may then bind by `#Name` (see {@link Resource}).
+   * The graph provides `#Vocab`, `#Now` and `#Actor` itself; the calling
+   * program adds its own — an `#Env`, a `#Request` — as one entry each. A
+   * resource name is capitalized, which is what distinguishes it from a
+   * component name in the bundle they share; a lowercase name is refused. */
   resources?: Record<string, Resource>
-  /** what its hooks are going to READ, given the batch. `apply()` unions every
-   * plugin's asks with its own and answers them all in one gather before a hook
-   * runs (see {@link Ask} and ./gather.ts), so a hook's `tx.get` and `about()`
-   * are answered from memory instead of costing a round trip each. Declaring
-   * nothing is safe — the reads still work, they just cost what they used
-   * to. */
+  /** what its hooks are going to READ, given the change. `apply()` merges
+   * every plugin's asks with its own and satisfies them all in one read before
+   * any hook runs (see {@link Ask} and ./gather.ts), so a hook's `tx.get` and
+   * `about()` are answered from memory instead of costing a round trip each.
+   * Declaring nothing is safe — the reads still work, they just cost what they
+   * used to. */
   wants?: (bundles: Bundle[]) => Ask[]
   /** the tools it contributes to a transport that serves them */
   tools?: Tool[]
-  /** the components of its that are CONTENT-ADDRESSED, and how each names its
-   * entity — consulted in the `mint` phase when such a component arrives under
-   * an alias (see {@link Derive}) */
+  /** which of its components are CONTENT-ADDRESSED, and how each derives its
+   * entity's id — consulted in the `mint` phase when such a component arrives
+   * under an alias (see {@link Derive}) */
   derive?: Record<string, Derive>
-  /** how an id a CALLER typed becomes an eid, for the ids that are not already
-   * one. The answer holds only the ids that MOVED, so a door reads it as
-   * `at.get(id) ?? id`, and an id this plugin knows nothing about is simply
-   * absent. Asked through {@link Graph.address}; the reason it is a plugin's
-   * word is that "what names an entity" is a question about a component
-   * ({@link https://jsr.io/@yaks/alias | @yaks/alias}'s `alias{name}` is the
-   * one that answers it), not about the core. */
+  /** how an id a CALLER passed becomes an eid, for the ids that are not
+   * already one. The returned map holds only the ids that CHANGED, so a caller
+   * reads it as `at.get(id) ?? id`, and an id this plugin knows nothing about
+   * is simply absent. Called through {@link Graph.address}. It belongs to a
+   * plugin rather than the core because "what name refers to an entity" is a
+   * question about a component —
+   * {@link https://jsr.io/@yaks/alias | @yaks/alias}'s `alias{name}` is the
+   * component that answers it. */
   address?: (
     tx: Tx,
     ids: string[],
@@ -286,16 +308,19 @@ export let vocabOf = (plugins: Plugin[]): VocabDoc[] =>
   plugins.flatMap((p) => p.vocab ?? [])
 
 /** Every tool a set of plugins contributes, in plugin order — what a transport
- * lists beside its own. */
+ * lists beside the tools it has itself. */
 export let toolsOf = (plugins: Plugin[]): Tool[] =>
   plugins.flatMap((p) => p.tools ?? [])
 
-/** A transaction-local projection of writes. Flush may append synthesized
- * bundles, so the journal and the caller hear the same derived facts. The
- * second flush includes journal/commit writes without journaling the log itself. */
+/** A transaction-local projection of the writes made so far. `flush` may
+ * append bundles it derived, so the journal and the caller both see the same
+ * derived data. The second flush covers the journal and commit hooks' own
+ * writes without journaling the journal itself. */
 export type Tracker = {
-  /** The transaction with writes observed; reads retain the storage contract. */
+  /** The same transaction, with its writes observed; reads behave exactly as
+   * the storage contract specifies. */
   tx: Tx
-  /** Drain pending changes; repeated flushes with no writes are no-ops. */
+  /** Drain the pending changes; a repeated flush with no writes since does
+   * nothing. */
   flush: (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
 }

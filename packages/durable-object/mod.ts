@@ -10,17 +10,19 @@
  * its in-transaction phases inside.
  *
  * ## Two halves
- * {@link storage} is the `Storage` seam — and it is one line of composition:
+ * {@link storage} implements the `Storage` interface — in one line of
+ * composition:
  * {@link driver} turns the object's SQLite into a
  * {@link https://jsr.io/@yaks/sqlite | @yaks/sqlite} `Driver`, and that package
- * owns the schema, the compiled reads, the patches and the death cascade. No
- * SQL is written twice.
+ * owns the schema, the compiled reads, the patches and the cascading deletes.
+ * No SQL is written twice.
  *
  * {@link sockets} is the plumbing between the object's WebSockets and
  * {@link https://jsr.io/@yaks/api | @yaks/api}'s subscriptions — accept a
- * socket for hibernation, hand its frames to the registry, and rebuild the
+ * socket for hibernation, pass its frames to the registry, and rebuild the
  * subscriptions of a woken object from what its sockets hold. What a
- * subscription MEANS lives in @yaks/api; only the wire is here.
+ * subscription MEANS lives in @yaks/api; only the Cloudflare-specific plumbing
+ * is here.
  *
  * ```ts
  * import { graph } from '@yaks/graph'

@@ -23,9 +23,10 @@ interface by adapting the object’s SQLite API to an
 creation, reads, patches, and deletion cascades. The storage API is synchronous;
 asynchronous graph plugins can still make `apply()` return a promise.
 
-**Sockets.** `sockets(subs, ctx)` sends frames between WebSockets and
-[@yaks/api](../api/README.md) subscriptions. The API package evaluates saved
-queries after committed changes; this adapter handles Cloudflare sockets.
+**Sockets.** `sockets(subs, ctx)` carries frames between the object's WebSockets
+and [@yaks/api](../api/README.md) subscriptions. That package re-evaluates saved
+queries after a committed change; this adapter handles the Cloudflare-specific
+socket lifecycle.
 
 ## The whole object
 
@@ -109,7 +110,7 @@ tag = "v1"
 new_sqlite_classes = ["Bookshop"]
 ```
 
-Then the object answers the three routes [@yaks/api](https://jsr.io/@yaks/api)
+The object then serves the three routes [@yaks/api](https://jsr.io/@yaks/api)
 defines:
 
 ```sh
@@ -134,36 +135,37 @@ runtime evicts the object between two frames and rebuilds it on the next one, so
 an idle client costs nothing — but every subscription held in memory is gone
 while that client still believes it is watching.
 
-So what a socket asked for is written on the socket itself, in its attachment,
-which is the one thing that survives. A woken object rebuilds its registry from
-there:
+So each socket's subscriptions are written on the socket itself, in its
+attachment, which is the one thing that survives. A woken object rebuilds its
+registry from there:
 
 - `wake()` re-opens the subscriptions of every socket the object inherited. Call
-  it at the top of `fetch`, so a batch applied by the request that woke the
-  object still reaches the sockets.
-- Re-opening answers each subscription with its current set — a resync, not a
-  silence. A client that missed batches while the object slept is told where
-  things stand.
+  it at the top of `fetch`, so that a change applied by the request that woke
+  the object still reaches those sockets.
+- Re-opening sends each subscription its current results — a resync, not
+  silence. A client that missed changes while the object was evicted is told
+  where things stand.
 - The runtime caps an attachment at 2KB. A subscription that would push it over
-  is refused with a `RangeError` frame rather than dying quietly at the next
-  hibernation. Your own attachment fields are left alone; the asks live under
-  one key.
+  the cap is rejected with a `RangeError` frame, rather than being dropped
+  silently at the next hibernation. Your own attachment fields are left alone;
+  the subscriptions are stored under one key.
 
-`message` and `close` are the object's `webSocketMessage` and `webSocketClose`
-handlers — hibernated sockets deliver no events, which is why @yaks/api's Use
-the hibernation callbacks rather than `attach()`, which installs listeners.
+Pass the object's `webSocketMessage` and `webSocketClose` calls to `message` and
+`close`. A hibernated socket fires no events, so @yaks/api's `attach()`, which
+registers event listeners, cannot be used here.
 
 ## What the runtime is strict about
 
 Both of these are handled for you; they are here because they explain the shape
 of the code.
 
-- **Values are narrow.** A binding must be an `ArrayBuffer`, a string, a number
-  or null. A boolean would bind as the text `'true'` and a bigint throws, so the
-  driver converts both, and a blob comes back as bytes like every other adapter.
-- **Transactions are not SQL.** `begin` and `savepoint` are refused as
-  statements; `ctx.storage.transactionSync` is the transaction, and it nests.
-  The adapter implements this through `Driver.tx`.
+- **Bound values are restricted.** A bound value must be an `ArrayBuffer`, a
+  string, a number or null. A boolean would bind as the text `'true'` and a
+  bigint throws, so the driver converts both, and a blob is read back as bytes,
+  as in every other adapter.
+- **Transactions are not SQL statements.** `begin` and `savepoint` are rejected
+  as statements; `ctx.storage.transactionSync` is the transaction, and it nests.
+  The adapter implements `Driver.tx` with it.
 
 Foreign keys are turned on when the store is bound — the enforcement the
 schema's references are written for, which the runtime leaves off per
@@ -178,8 +180,8 @@ sockets(subs, ctx) //                → { accept, message, close, wake }
 ```
 
 `Store` is [@yaks/sqlite](https://jsr.io/@yaks/sqlite)'s: `ddl()`, `install()`,
-`read()`, `rows()`, `tx()`. `base` options — a derived-column registry, a fixed
-`now` for time phrases — ride every read.
+`read()`, `rows()`, `tx()`. The `base` options — a derived-column registry, a
+fixed `now` for time phrases — are applied to every read.
 
 A regular Worker uses a different WebSocket lifecycle: a `WebSocketPair`
 accepted in the isolate, for [@yaks/api](https://jsr.io/@yaks/api)'s own `/ws`
@@ -197,8 +199,8 @@ One of three interchangeable storage adapters, all implementing the same
   the reference every other adapter is tested against;
 - **@yaks/d1** — Cloudflare D1, async.
 
-A graph is portable across them: this package runs the same batch-for-batch
-conformance script @yaks/sqlite defines, and must agree with it on every step.
+A graph is portable across them: this package runs the same step-for-step
+conformance script @yaks/sqlite defines, and must agree with it at every step.
 
 ## Compatibility
 
@@ -218,9 +220,10 @@ because those types arrive as globals that would redefine `Response` and
 
 A query string is parsed by [@yaks/query](https://jsr.io/@yaks/query); a
 vocabulary is described with [@yaks/vocab](https://jsr.io/@yaks/vocab);
-[@yaks/graph](https://jsr.io/@yaks/graph) owns the bundle wire and `apply()`;
-[@yaks/sqlite](https://jsr.io/@yaks/sqlite) owns the SQL this package runs; and
-[@yaks/api](https://jsr.io/@yaks/api) provides the HTTP and subscription API.
+[@yaks/graph](https://jsr.io/@yaks/graph) owns the JSON bundle format and
+`apply()`; [@yaks/sqlite](https://jsr.io/@yaks/sqlite) owns the SQL this package
+runs; and [@yaks/api](https://jsr.io/@yaks/api) provides the HTTP and
+subscription API.
 
 ## License
 

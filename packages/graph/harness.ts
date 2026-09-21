@@ -16,8 +16,8 @@ import type { Query, Row, Storage, Tx } from './storage.ts'
 import { isPromise } from './pipe.ts'
 
 // A bookstore: books by publishers, reviews about books, bookmarks that only
-// exist to point at something. One reference per death word, so the cascade
-// rules are all exercised by a domain anyone can hold in their head.
+// exist to point at something. One reference per death behavior, so the
+// cascade rules are all exercised by a domain anyone can hold in their head.
 let doc: VocabDoc = {
   $defs: {
     entity: {
@@ -63,8 +63,9 @@ let doc: VocabDoc = {
         of: { type: 'string', ref: 'entity', death: 'release' },
       },
     },
-    // A MARK: a participle the wire writes bare and the graph signs, said
-    // once. The three columns are what makes it one (@yaks/graph stamp.ts).
+    // A MARK: a component a client writes empty and the graph fills in, once.
+    // Declaring these three columns server-owned is what makes it a mark
+    // (@yaks/graph stamp.ts).
     sold: {
       component: true,
       type: 'object',

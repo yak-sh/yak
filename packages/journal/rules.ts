@@ -1,23 +1,25 @@
-// The log OF the wire: the `rules` facet a host takes (`@yaks/journal/rules`).
-// It raises the three append-only tables through the host's own connection and
-// returns the plugin that writes a row per component every batch touched.
+// `@yaks/journal/rules` — what a server composed from a config file imports to
+// switch the journal on. It creates the three append-only tables over the
+// server's own database connection and returns the plugin that writes a row per
+// component every transaction touched.
 //
-// The binding itself is here rather than inside `rules`, because the `tools`
-// facet READS the same tables the plugin writes: one host has one log, said
-// once (`logFor`).
+// `logFor` is here rather than inside `rules` because `@yaks/journal/tools`
+// READS the same tables this plugin writes, and both build their reader the
+// same way: one server, one log, bound in one place.
 
 import type { Plugin } from '@yaks/graph'
 import type { Driver } from '@yaks/sqlite'
 import { ddl, journal, type Log, log } from './mod.ts'
 
-/** The log bound to a host: the three tables, through its own connection. */
+/** The log bound to a server: the three tables, read and written over that
+ * server's own connection. */
 export let logFor = (host: { sql: Driver }): Log =>
   log({
     rows: (sql, params) =>
       host.sql.query(sql, params as Parameters<typeof host.sql.query>[1]),
   })
 
-/** Who wrote what, within the transaction that wrote it. */
+/** Record who wrote what, inside the transaction that wrote it. */
 export let rules = (host: { sql: Driver }): Plugin[] => {
   host.sql.exec(ddl())
   return [journal(logFor(host))]

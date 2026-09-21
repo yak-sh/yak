@@ -1,6 +1,7 @@
-// The archetype words, and only the words: the `vocab` facet a host takes
-// (`@yaks/archetype/vocab`). It reaches no storage, no SQL and no runtime, so a
-// browser tab loading this vocabulary loads nothing else.
+// The component declarations, and nothing else: the module a server or a
+// browser page imports at `@yaks/archetype/vocab`. It reaches no storage, no
+// SQL and no runtime, so a browser tab loading this vocabulary loads nothing
+// else.
 
 import type { VocabDoc } from '@yaks/vocab'
 import { archetypeDoc } from './sets.ts'

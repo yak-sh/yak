@@ -2,15 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yaks.sh/vocab/edge",
   "title": "yaks edge keyword vocabulary",
-  "description": "The keyword @yaks/edge adds to a component vocabulary. A component declaring `relation` is a RELATION TAG: an edge entity wearing it states a link of that kind, so `cites` beside `edge{from,to}` is the sentence \"this post cites that one\". Which relations exist is the application's to declare — this keyword is how it says so.",
+  "description": "The keyword @yaks/edge adds to a component vocabulary. A component declaring `relation` names a relation: an entity carrying it, beside `edge{from,to}`, is a link of that kind — a `cites` component beside `edge{from,to}` means this post cites that one. Which relations exist is for the application to declare, and this keyword is how it declares them.",
   "$comment": "A vocabulary declaration in the JSON Schema sense: a URI naming this keyword set, plus the schema of each keyword. A vocab file declares it under $vocabulary; a loader registers it with loadVocab(docs, [edgeKeywords]).",
   "$defs": {
     "edge": {
-      "description": "This component tags an edge with the kind of link it states. `true` names the relation after the component itself (a `cites` component is the `cites` relation); a string names it something else, for a vocabulary whose tag and its reading differ (a `references` tag read as `referenced`). The keyword is the CARRIER's name, so one rule reads every carrier's tags — a tag on a key says `key`.",
+      "description": "This component, stored beside an `edge` component, names the kind of link. `true` names the relation after the component itself (a `cites` component is the `cites` relation); a string gives it a different name in queries, for a vocabulary that stores `references` but queries it as `referenced`. The keyword is named after the component it accompanies, so one rule covers them all — a component stored beside a key declares `key`.",
       "type": ["boolean", "string"]
     },
     "relation": {
-      "description": "The older spelling of `edge`, meaning exactly the same thing. Old spellings never die: a vocabulary written with `relation: true` loads unchanged, and new ones say `edge: true`.",
+      "description": "The older name for `edge`, meaning exactly the same thing. A vocabulary written with `relation: true` still loads unchanged; new ones use `edge: true`.",
       "type": ["boolean", "string"]
     }
   }

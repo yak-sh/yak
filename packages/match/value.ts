@@ -1,25 +1,25 @@
-// How one VALUE tests against one column value, in memory. This is the mirror
-// of the value lowerings a SQL dialect emits: where the dialect answers a
-// comparison as a SQL fragment, this answers it as a JavaScript predicate over
-// the value read out of a bundle. Same grammar, same branch order, same
-// declines — so a query answered here and the same query answered by a database
-// agree row for row.
+// How one operand tests against one column value, in memory. This mirrors the
+// SQL fragments a @yaks/sql dialect emits for the same predicates: where the
+// dialect returns a SQL fragment, this returns a JavaScript predicate over the
+// value read out of a bundle. Same grammar, same branch order, same refusals —
+// so a query answered here and the same query answered by a database return the
+// same rows.
 //
 // The rules a caller can rely on, in the order they are tried:
-//   `` (equals)  an empty operand is ABSENT; `lo..hi` is an inclusive range and
-//                `lo...hi` excludes its end; `a,b` is any-of; a number column
-//                compares numerically, anything else as text.
+//   `` (equals)  an empty operand means ABSENT; `lo..hi` is an inclusive range
+//                and `lo...hi` excludes its end; `a,b` is any-of; a number
+//                column compares numerically, anything else as text.
 //   `!`          not-equals, where an absent column COUNTS as different.
-//   `~`          contains, case-insensitively; an empty operand is presence.
+//   `~`          contains, case-insensitively; an empty operand means presence.
 //   < <= > >=    comparisons, and an absent column never compares true.
 //   exists       the column has a value.
-// A time-typed column reads its operand as a time PHRASE first (a span, whose
-// edge the operator picks) and falls back to the plain rules when the operand
-// is no phrase at all.
+// A time-typed column reads its operand as a time PHRASE first (a span, one
+// edge of which the operator picks) and falls back to the plain rules when the
+// operand is no phrase at all.
 //
-// A lowering answers `null` where it cannot express the question exactly — a
-// comparison against an operand the column's type cannot hold. The caller turns
-// that into a decline rather than a wrong answer.
+// A function here returns `null` where it cannot express the question exactly —
+// a comparison against an operand the column's type cannot hold. The caller
+// turns that into an `Unsupported` refusal rather than a wrong answer.
 
 import { type Span, timeSpan } from '@yaks/query'
 import type { Tag } from '@yaks/sql'
@@ -30,14 +30,14 @@ import type { Tag } from '@yaks/sql'
  */
 export type Check = (value: unknown) => boolean
 
-/** The operator spelling `check` switches on: presence. */
+/** The operator name `check` switches on for a presence test. */
 export let EXISTS = 'exists'
 
 // The three tags that compare as numbers. Everything else compares as text.
 let NUMERIC: Tag[] = ['number', 'priority', 'bool']
 let numeric = (s: string): boolean => /^-?\d+(\.\d+)?$/.test(s)
 
-// One comparison, over two values of the same kind. The four ordered operators
+// One comparison, over two values of the same type. The four ordered operators
 // plus the equality a time INSTANT asks for.
 let rel = <T extends string | number>(a: T, b: T, op: string): boolean =>
   op == '<'
@@ -50,9 +50,9 @@ let rel = <T extends string | number>(a: T, b: T, op: string): boolean =>
     ? a >= b
     : a == b
 
-// A time column holds one spelling (an ISO stamp), over which lexical order is
-// chronological. A value outside the band a canonical stamp lives in is no
-// stamp, and never answers a time comparison.
+// A time column holds one format (an ISO 8601 timestamp), over which
+// lexicographic order is chronological. A value outside the range a canonical
+// timestamp falls in is not a timestamp, and never matches a time comparison.
 let LO = '0000-01-01T00:00:00.000Z'
 let HI = '9999-12-31T23:59:59.999Z'
 let stamp = (v: unknown): v is string =>
@@ -60,8 +60,8 @@ let stamp = (v: unknown): v is string =>
 
 /**
  * A comparison (`<`, `<=`, `>`, `>=`) against a typed operand, or `null` where
- * the operand does not type against the column: a word against a number column,
- * a number against a text one. An absent column never compares true.
+ * the operand's type does not match the column's: text against a number
+ * column, a number against a text one. An absent column never compares true.
  */
 export let cmp = (op: string, value: string, tag: Tag): Check | null => {
   if (NUMERIC.includes(tag)) {
@@ -77,8 +77,8 @@ export let cmp = (op: string, value: string, tag: Tag): Check | null => {
 /**
  * Equality: an empty operand asks for an ABSENT (or empty) column, `lo..hi` for
  * an inclusive range and `lo...hi` for one that excludes its end, `a,b,c` for
- * any of several. Answers `null` when a bound or a member does not type against
- * the column.
+ * any of several. Returns `null` when a bound or a list member has a type the
+ * column cannot hold.
  */
 export let eq = (value: string, tag: Tag): Check | null => {
   if (value == '') return (v) => v == null || String(v) == ''
@@ -97,7 +97,8 @@ export let eq = (value: string, tag: Tag): Check | null => {
   }
   if (NUMERIC.includes(tag)) {
     // An operand that does not survive a round trip through number formatting
-    // can equal no stored number, so the exact answer is a constant false.
+    // ('12.0' formats back as '12') can equal no stored number, so the exact
+    // answer is a constant false.
     return numeric(value) && String(Number(value)) === value
       ? (v) => v != null && Number(v) == Number(value)
       : () => false
@@ -124,14 +125,14 @@ export let contains = (value: string): Check => {
   return (v) => String(v ?? '').toLowerCase().includes(needle)
 }
 
-// ---- time phrases (a phrase names a range; the operator picks its edge) ----
+// ---- time phrases (a phrase names a span; the operator picks one edge) ----
 
 let iso = (ms: number): string => new Date(ms).toISOString()
 let at = (op: string, ms: number): Check => (v) => rel(String(v), iso(ms), op)
 let both = (a: Check, b: Check): Check => (v) => a(v) && b(v)
 
-// A span whose end is its start is an INSTANT, where the `=` arm carries the
-// whole answer; a span with width answers `=` as a half-open band.
+// A span whose end equals its start is an INSTANT, where the `=` branch carries
+// the whole answer; a span with width answers `=` as a half-open interval.
 let edge = (op: string, s: Span): Check => {
   let point = s.end <= s.start
   return op == '<'
@@ -148,10 +149,10 @@ let edge = (op: string, s: Span): Check => {
 }
 
 /**
- * A time-typed column against a time PHRASE, resolved at the moment `now`. A
+ * A time-typed column against a time PHRASE, resolved relative to `now`. A
  * comma list of phrases is any-of under equals (none-of under not-equals);
- * anything else reads the whole operand as one phrase. Answers `null` when the
- * operand is no time phrase, so the caller falls back to the plain rules.
+ * anything else reads the whole operand as one phrase. Returns `null` when the
+ * operand is not a time phrase, so the caller falls back to the plain rules.
  */
 export let time = (op: string, value: string, now: number): Check | null => {
   let phrase = (s: string) => timeSpan(s, now)
@@ -168,9 +169,9 @@ export let time = (op: string, value: string, now: number): Check | null => {
 }
 
 /**
- * The whole scalar road: an operator, its operand and the column's type, to one
- * test. Answers `null` for a question this package cannot answer exactly — the
- * caller reports that as a decline.
+ * The whole scalar path in one call: an operator, its operand and the column's
+ * type, to a single test. Returns `null` for a question this package cannot
+ * answer exactly — the caller turns that into an `Unsupported` refusal.
  */
 export let check = (
   op: string,

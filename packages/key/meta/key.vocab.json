@@ -2,11 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yaks.sh/vocab/key",
   "title": "yaks key keyword vocabulary",
-  "description": "The keyword @yaks/key adds to a component vocabulary. A component declaring `key` is a TAG that rides the `key{of, value}` carrier: a key entity wearing it carries a value unique among that tag's values, so `email` beside `key{of,value}` is the sentence \"this person answers to that address\". The keyword is the carrier's own name — a tag on an edge says `edge`, a tag on a key says `key` — so one rule reads every carrier. Which tags exist is the application's to declare.",
-  "$comment": "A vocabulary declaration in the JSON Schema sense: a URI naming this keyword set, plus the schema of each keyword. A vocab file declares it under $vocabulary; a loader registers it with loadVocab(docs, [keyKeywords]).",
+  "description": "The keyword @yaks/key adds to a component vocabulary. A component declaring `key` is a TAG that goes on the `key{of, value}` carrier: a key entity carrying both holds a value unique among that tag's values, so an `email` component beside `key{of, value}` records that a person is identified by that address. The keyword is named after the carrier it tags — a tag on an edge declares `edge`, a tag on a key declares `key` — so one rule reads every carrier. Which tags exist is the application's to declare.",
+  "$comment": "A vocabulary declaration in the JSON Schema sense: a URI naming this keyword set, plus the schema of each keyword. A vocabulary file declares it under $vocabulary; a loader registers it with loadVocab(docs, [keyKeywords]).",
   "$defs": {
     "key": {
-      "description": "This component tags a key with the kind of value it carries. `true` names the kind after the component itself (an `email` component is the `email` kind); a string names it something else, for a vocabulary whose tag and its reading differ.",
+      "description": "This component tags a key with the kind of value it holds. `true` names the kind after the component itself (an `email` component is the `email` kind); a string names it something else, for a vocabulary where the component written and the kind queries name differ.",
       "type": ["boolean", "string"]
     }
   }

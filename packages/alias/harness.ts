@@ -1,10 +1,11 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
-// cookbook, written as a vocabulary. Recipes and comments, the carrier from
-// @yaks/key, and the `alias` kind this package declares.
+// cookbook, written as a vocabulary. Recipes and comments, the `key` component
+// from @yaks/key, and the `alias` kind of key this package declares.
 //
 // The store is @yaks/sqlite over an in-memory database, which is how an
 // application composes this package: the adapter owns the bytes, the graph owns
-// the rules, @yaks/key brings the carrier, and this package brings the name.
+// the write-time behaviour, @yaks/key brings the `key` component, and this
+// package brings the name.
 
 import { Database } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -67,8 +68,8 @@ export let store = (): Storage => {
   return s
 }
 
-/** The whole stack: a graph over that store, with both plugins registered — the
- * carrier first, since the name rides it. */
+/** The whole stack: a graph over that store, with both plugins registered —
+ * @yaks/key first, since an alias is stored as one of its keys. */
 export let cookbookGraph = (s: Storage = store()): Graph =>
   graph({
     storage: s,

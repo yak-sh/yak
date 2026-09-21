@@ -9,10 +9,10 @@
 // It is CHECKED ON ITS OWN (`deno task check:workers`) and excluded from the
 // repo-wide check, because @cloudflare/workers-types arrives as GLOBALS — the
 // package declares them and exports nothing — and those globals merge into
-// whatever program includes them, redefining `Response`, `WebSocket` and
-// friends for every other file in it. One file wears them; the rest of the repo
-// type-checks against the web. @yaks/durable-object and @yaks/workerd keep the
-// same gate.
+// whatever program includes them, redefining `Response`, `WebSocket` and the
+// rest for every other file in it. One file includes them; the rest of the repo
+// type-checks against the web platform. @yaks/durable-object and @yaks/workerd
+// use the same arrangement.
 //
 // The one shape that cannot be a narrow slice is the PREPARED STATEMENT: it is
 // both what `prepare` returns and what `batch` takes, so a slice would have to
@@ -37,6 +37,6 @@ let _value: D1Value = null as unknown as ArrayBuffer | string | number | boolean
 // A result carries its rows where the adapter reads them.
 let _result: D1Result<Row> = null as unknown as D1Result<Row>
 let _rows: Row[] = _result.results
-// And the door, called the way a Worker calls it — answering the seam
-// @yaks/graph applies changes through.
+// And the entry point, called the way a Worker calls it — implementing the
+// `Storage` interface @yaks/graph applies changes through.
 let _store = (vocab: Vocab): Storage => storage(db, vocab)

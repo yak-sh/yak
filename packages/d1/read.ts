@@ -4,23 +4,24 @@
 // component gather is @yaks/sqlite's `compSql`, so a column that the filter
 // resolves one way cannot come back gathered another.
 //
-// What is this package's own is the SHAPE of the round trips. @yaks/sqlite asks
-// one question at a time because an embedded engine answers in microseconds;
-// over D1 every question is a network hop, so a gather that read one component
-// at a time would cost a hop per component per entity. Here the whole gather —
+// What is this package's own is the NUMBER of round trips. @yaks/sqlite runs
+// one statement at a time, because an embedded engine answers in microseconds;
+// over D1 every statement is a network hop, so reading one component at a time
+// would cost a hop per component per entity. Here the whole gather —
 // every entity's spine, every entity's components — is built as one list of
-// statements and sent as a single `batch()`. A read of any size is two round
-// trips: the compiled query, then the gather.
+// statements and sent as a single `batch()`. A read of any size takes two round
+// trips: the compiled query, then the read of the components.
 //
-// TWO, because the second list has to BIND the eids the first found. When the
-// hits do not need binding — when the query that found them can be named again
-// as a subquery — the two collapse into one: `wholeSql` puts the query, the
-// spine of what it hits and every component of it in a SINGLE batch, each
-// statement saying `where o.eid in (<the query>)`. That is what @yaks/graph's
-// `Tx.whole` asks for, and it is why an `about` read costs one trip and not
-// two. The price is the filter evaluated once per component instead of once,
-// which is why it is offered for a query naming a SET and not for `read`, where
-// a `.limit` re-evaluated per statement could break a tie differently in each.
+// TWO, because the second list has to BIND the eids the first one found. When
+// those eids do not need binding — when the query that found them can simply be
+// repeated as a subquery — the two collapse into one: `wholeSql` puts the
+// query, the `entity` rows it matches and every component of them into a SINGLE
+// batch, each statement ending `where o.eid in (<the query>)`. That is what
+// @yaks/graph's `Tx.whole` asks for, and it is why an `about` read costs one
+// trip rather than two. The cost is that the filter is evaluated once per
+// component instead of once in total, which is why it is offered for a query
+// naming a SET and not for `read`, where a `.limit` re-evaluated per statement
+// could break a tie differently each time.
 
 import { type And, parse } from '@yaks/query'
 import type { BindOpts } from '@yaks/sql'
@@ -92,8 +93,8 @@ let bundleOf = (
 
 /**
  * Turn the answers to a gather back into bundles, one per eid, in the order the
- * eids were asked about. An eid no entity wears is simply absent; a tombstoned
- * one comes back wearing `tombstone` (it is still an identity, just a dead one).
+ * eids were asked about. An eid no entity has is simply absent; a tombstoned
+ * one comes back carrying `tombstone` (it is still an identity, just a dead one).
  *
  * `answers` is the flat result list `batch()` returns for
  * `eids.flatMap(gatherSql)` — one entry per statement, in order.
@@ -110,7 +111,7 @@ export let bundles = (v: Vocab, eids: string[], answers: Row[][]): Bundle[] => {
  * What a WHOLE read asks, as one batch: the compiled query first — it names the
  * hits and fixes their order — then the spine of everything it hits, then one
  * statement per component over that same set. Nothing binds an eid: each
- * statement says the query again as a subquery, which is what lets the answer
+ * statement repeats the query as a subquery, which is what lets the whole read
  * come back in a single round trip. {@link whole} reads it back.
  */
 export let wholeSql = (v: Vocab, q: Sql, opts: BindOpts = {}): Sql[] => {

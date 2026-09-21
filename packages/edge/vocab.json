@@ -9,7 +9,7 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "a link between two entities — the relation it means is a tag component riding beside it",
+      "description": "a link between two entities; the kind of link is named by a second component stored beside this one",
       "properties": {
         "from": {
           "type": "string",
@@ -27,7 +27,7 @@
         },
         "ord": {
           "type": "number",
-          "description": "the link's place among its siblings, where order means"
+          "description": "the link's position among the other links of its relation, for relations where order matters"
         }
       }
     }

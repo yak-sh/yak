@@ -1,22 +1,23 @@
-// The other direction: a NAME where an eid goes.
+// The other direction: a NAME used where an eid is expected.
 //
-// Once an entity answers to `lemon-cake`, the word is worth as much as its id —
-// so a reference column takes it (`comment: {target: 'lemon-cake'}`), a
-// bundle's own `entity.eid` takes it, and a door that reads entities by id
-// takes it. The fleet's own store has resolved bare names beside eids for as
-// long as it has had them (src/db.ts `resolveId`), and this is that ladder with
-// the ambiguity gone: a name is unique in the store, so there is exactly one
-// holder or none.
+// Once an entity has the name `lemon-cake`, that name is accepted anywhere its
+// id is — in a reference column (`comment: {target: 'lemon-cake'}`), as a
+// bundle's own `entity.eid`, and by any caller that reads entities by id. The
+// fleet's own store has resolved bare names alongside eids for as long as it
+// has had them (src/db.ts `resolveId`); this is the same lookup without the
+// ambiguity, since a name is unique in the store, so exactly one entity has it
+// or none does.
 //
-// THE ORDER IS EID FIRST. An id that IS an entity here means that entity, even
-// if somebody holds the same string as a name. A caller who wrote an id down
-// must never find their write on a different row because a name grew over it.
+// EIDS ARE CHECKED FIRST. An id that IS an entity here means that entity, even
+// if some other entity has the same string as a name. A caller who wrote an id
+// down must never find their write land on a different row because a name was
+// later created over it.
 //
-// AND IT IS ONE ROUND TRIP, because a name addresses its own row (@yaks/key):
-// the ladder is `get([the id, the id's key])` and a look at which came back. No
-// query, no index, no scan. A value shaped like an id this family mints — a
-// uuid, a content hash — is not asked about at all, so a batch of ordinary eid
-// references costs nothing.
+// AND IT TAKES ONE ROUND TRIP, because a name's key entity has an id derived
+// from the name (@yaks/key): the lookup is `get([the id, the id's key entity])`
+// and a check of which came back. No query, no index, no scan. A value shaped
+// like an id these packages generate — a UUID, a content hash — is not looked
+// up at all, so ordinary eid references cost nothing.
 
 import type { Bundle, Eid, Hook, Tx } from '@yaks/graph'
 import { comps, substitute, then } from '@yaks/graph'
@@ -25,19 +26,19 @@ import { ofOf } from '@yaks/key'
 import type { Vocab } from '@yaks/vocab'
 import { aliasEid } from './comp.ts'
 
-/** Whether an id is worth asking about as a name — a `$alias` and an id this
- * family mints (@yaks/id `minted`: a uuid, a content hash) are not. */
+/** Whether an id is worth looking up as a name — a `$alias` and an id these
+ * packages generate (@yaks/id `minted`: a UUID, a content hash) are not. */
 export let wordish = (id: string): boolean =>
   !!id && !id.startsWith('$') && !minted(id)
 
 /**
- * These ids as the eids they name. The answer holds ONLY the ids that moved, so
- * a caller reads it as `at.get(id) ?? id`, and an empty answer means every id
- * was already an eid.
+ * Resolves these ids to the eids they name. The returned map holds ONLY the ids
+ * that changed, so a caller reads it as `at.get(id) ?? id`, and an empty map
+ * means every id was already an eid.
  *
- * This is the door's function: a tool that takes ids, a query line that names
- * one, and the hook below all ask it the same question. A graph composed with
- * this plugin answers it as `graph.address(ids)`.
+ * This is the shared entry point: an MCP tool that takes ids, a query that
+ * names one, and the hook below all call it. A graph built with this plugin
+ * exposes it as `graph.address(ids)`.
  */
 export let addressed = (
   tx: Tx,
@@ -49,8 +50,8 @@ export let addressed = (
     let by = new Map(rows.map((b) => [b.entity.eid, b]))
     let at = new Map<string, Eid>()
     for (let id of ask) {
-      // The first rung: an id that is an entity here is that entity, name or
-      // no name. Only then is the name it might be worth reading.
+      // Eids first: an id that is an entity here is that entity, name or no
+      // name. Only otherwise is it looked up as a name.
       if (by.has(id)) continue
       let of = ofOf(by.get(aliasEid(id)))
       if (of) at.set(id, of)
@@ -59,8 +60,8 @@ export let addressed = (
   })
 }
 
-// Every id a batch says out loud: what each bundle is about, and what its
-// reference columns point at.
+// Every id mentioned in a list of bundles: the entity each bundle is about, and
+// whatever its reference columns point at.
 let spoken = (bundles: Bundle[], vocab: Vocab): string[] => {
   let out: string[] = bundles.map((b) => b.entity.eid)
   for (let b of bundles) {
@@ -76,13 +77,15 @@ let spoken = (bundles: Bundle[], vocab: Vocab): string[] => {
 }
 
 /**
- * The `normalize` hook that lets a batch address entities by name: every id in
- * it that is a name somebody holds becomes that entity's eid, in the bundles'
- * own identity and in every reference column. Registered by {@link aliases};
- * exported on its own for a graph that wants it without the vocabulary.
+ * The `normalize` hook that lets a write address entities by name: every id in
+ * it that is some entity's name is replaced by that entity's eid, both as a
+ * bundle's own id and in every reference column. Registered by
+ * {@link aliases}; exported on its own for a graph that wants it without the
+ * vocabulary.
  *
- * It runs before `mint`, so a `$alias` is untouched — nothing holds a `$` name
- * — and the ids the rest of `apply()` writes against are eids.
+ * It runs before `mint`, so a `$alias` is left alone — no entity has a name
+ * starting with `$` — and every id the rest of `apply()` writes against is an
+ * eid.
  */
 export let pointed = (vocab: Vocab): Hook => (bundles, tx) => {
   let ids = spoken(bundles, vocab).filter(wordish)

@@ -1,41 +1,38 @@
-// Provenance: who wrote this, and when. Two components, paired by meaning —
-// `created` is set once, at birth; `updated` is the last touch, absent until
-// the first edit after birth. Both are server-owned: a caller may not write
-// them, and this phase is their only writer.
+// Provenance: who wrote this, and when. Two paired components — `created` is
+// set once, when the entity is created; `updated` records the last write, and
+// is absent until the first edit after creation. Both are server-owned: a
+// caller may not write them, and this phase is their only writer.
 //
-// A MARK is the third shape and the same sentence about an ACT rather than
-// about an entity: `completed`, `archived`, `notified` — a participle the wire
-// writes bare and the server signs with the same `{at, by, via}`. There is no
-// list of them here either; a component whose vocabulary declares that triple
-// server-owned IS one, and gets the filler.
+// A MARK is the third form, and records an EVENT rather than the entity's
+// lifecycle: `completed`, `archived`, `notified` — a component a client writes
+// empty and the server fills in with the same `{at, by, via}` columns. There is
+// no list of marks here either; any component whose vocabulary declares that
+// trio server-owned IS a mark, and gets filled in.
 //
-// The actor rides IN the batch, as the `$actor` component. That is deliberate:
-// the door that received the write — an HTTP handler that authenticated a
-// session, a CLI that knows who is at the keyboard, a test that says so
-// outright — is the only thing that can know who is writing, and it is that
-// door's job to trust or overwrite what a client claimed. `apply()` stamps
-// what reached it.
+// The actor travels IN the change, as the `$actor` key. That is deliberate:
+// whatever received the write — an HTTP handler that authenticated a session, a
+// CLI that knows who is at the keyboard, a test that states it outright — is
+// the only thing that can know who is writing, and it is that code's job to
+// trust or replace what a client claimed. `apply()` stamps whatever reaches it.
 //
-// The columns are the vocabulary's, not this file's: a graph whose `created`
-// carries only `at` gets only `at`, and a graph with no `created` component at
-// all is stamped not at all. Nothing here assumes a shape.
+// The columns come from the vocabulary, not from this file: a graph whose
+// `created` declares only `at` gets only `at`, and a graph with no `created`
+// component at all is not stamped. Nothing here assumes a particular shape.
 
 import type { Vocab } from '@yaks/vocab'
 import type { Actor, Bundle, Comp } from './bundle.ts'
 import type { State } from './state.ts'
 import type { Bound, Patch, Rule } from './rules.ts'
 
-/** The actor a batch names: the first `$actor` component in it. A batch speaks
- * with one voice, so the first one found is the writer for the whole batch. */
 /**
- * A batch as one actor's. Whatever `$actor` the bundles carried is dropped:
- * who is writing is the DOOR's word, never the client's — and it is a door
- * (@yaks/api's `/apply`, @yaks/tools' runner landing what a tool answered)
- * that says it.
+ * Sign a whole change as one actor's. Whatever `$actor` the bundles already
+ * carried is removed: who is writing is decided by the code that received the
+ * request, never by the client — @yaks/api's `/apply` handler, or @yaks/tools'
+ * runner applying what a tool returned.
  *
  * An actor is a PAIR, because a write has two answers to "whose is this": the
  * identity it acts for (`by`) and the instrument it came through (`via`) — a
- * session, a run, a connector. A door that knows only one says only one.
+ * session, a run, a connector. A caller that knows only one passes only one.
  *
  * ```ts
  * signed([{ entity: { eid: 'b1' } }], { by: 'm1' })
@@ -50,12 +47,14 @@ export let signed = (change: Bundle[], who: Actor | null): Bundle[] =>
     return out
   })
 
+/** The actor a change names: the first `$actor` in it. A change has one
+ * writer, so the first one found is the writer for the whole change. */
 export let actorOf = (bundles: Bundle[]): Actor =>
   bundles.find((b) => b.$actor)?.$actor ?? {}
 
 // The stamp for one entity, narrowed to the columns this vocabulary declares
-// on that component — `at`, and whichever of `by`/`via` the batch's actor
-// named. An empty result means there is nothing to say.
+// on that component — `at`, and whichever of `by`/`via` the change's actor
+// supplied. An empty result means there is nothing to write.
 type Attribution = { by?: string | null; via?: string | null }
 
 let mark = (
@@ -69,9 +68,9 @@ let mark = (
   let info = vocab.comp(comp)
   if (!info) return undefined
   let has = new Set(vocab.columns(comp))
-  // A column somebody already filled is left as it was found: a hook that
-  // signed the mark (@yaks/task keeps a completion's author across edits) and
-  // a graph whose policy named the writer both speak before this.
+  // A column something else already filled is left as it was found: a hook
+  // that set the mark's author (@yaks/task keeps a completion's author across
+  // edits) and a graph whose policy supplied the writer both run before this.
   let said = (col: string) => held?.[col] != null
   let out: Comp = {}
   if (has.has('at') && !said('at')) out.at = now
@@ -83,26 +82,29 @@ let mark = (
   return Object.keys(out).length ? out : undefined
 }
 
-/** Application policy may classify a touched entity and supply its per-entity
- * attribution. The generic rules still own column narrowing and the clock.
- * Returning null suppresses provenance (for example, a settled no-op). */
+/** An application's policy may classify a written entity and supply its
+ * per-entity attribution. The generic rules still decide which columns exist
+ * and what the timestamp is. Returning null writes no provenance at all — for
+ * a write that turned out to change nothing, say. */
 export type StampPolicy = (bundle: Bound) =>
   | ({
     kind: 'created' | 'updated'
   } & Attribution)
   | null
 
-/** Default provenance uses two rules judged against ONE frozen view: a birth
- * wears created, a later touch wears updated. Policy can choose or suppress the
- * stamp, but both routes use the same clock, attribution and vocabulary writer.
- * Now, Actor and Vocab are rule resources; no app vocabulary is assumed. */
+/** Default provenance is two rules evaluated against ONE frozen state: a newly
+ * created entity gets `created`, a later write gets `updated`. A policy may
+ * choose the component or write none at all, but both paths use the same
+ * timestamp, attribution and column narrowing. `#Now`, `#Actor` and `#Vocab`
+ * are rule resources; no application vocabulary is assumed. */
 export let provenance = (policy?: StampPolicy): Rule[] =>
   policy
     ? [{
       name: 'provenance',
       phase: 'stamp',
-      // The policy chooses which component to create; no unconditional ensure
-      // may run here, because a suppressed stamp must write nothing at all.
+      // The policy chooses which component to write; the match can carry no
+      // unconditional `+`, because a policy that writes no provenance must
+      // write nothing at all.
       match: '.entity, #Vocab, #Actor, #Now',
       run: (b: Bound) => {
         let choice = policy(b)
@@ -127,11 +129,12 @@ export let provenance = (policy?: StampPolicy): Rule[] =>
 
 export let stamps: Rule[] = provenance()
 
-/** Whether a component is a MARK: a participle the wire writes bare and the
- * server signs — `completed`, `archived`, `notified` — recognized by its
- * shape, so a new one joins with no edit here. `created` and `updated` wear
- * the same columns but fire on a birth and a touch rather than on the mark
- * being written, so they keep their own rules and are named out. */
+/** Whether a component is a MARK: one a client writes empty and the server
+ * fills in — `completed`, `archived`, `notified` — recognized by its declared
+ * columns, so a new one is picked up with no edit here. `created` and
+ * `updated` declare the same columns but fire when the entity is created or
+ * written rather than when the component itself is written, so they keep their
+ * own rules and are excluded by name. */
 export let marked = (vocab: Vocab, comp: string): boolean => {
   if (comp == 'created' || comp == 'updated') return false
   let has = new Set(vocab.comp(comp)?.stamped ?? [])
@@ -139,16 +142,17 @@ export let marked = (vocab: Vocab, comp: string): boolean => {
 }
 
 /**
- * One rule per mark: its `{at, by, via}` filled the first time it lands.
+ * One rule per mark: its `{at, by, via}` are filled the first time the mark is
+ * written.
  *
- * A mark is said ONCE — the gate is its own empty `at`, so a later patch of
- * the same component leaves the first telling alone, and re-archiving
- * something does not rewrite who archived it. That is the whole difference
- * from `updated`, which is meant to move.
+ * A mark is recorded ONCE — the rule's condition is that its own `at` is
+ * empty, so a later patch of the same component leaves the original values
+ * alone, and archiving something again does not rewrite who archived it first.
+ * That is the whole difference from `updated`, which is meant to change.
  *
- * The rules are made from the VOCABULARY, not from a list of component names:
- * a graph that declares the triple server-owned gets the filler, and one that
- * does not gets no rule at all.
+ * The rules are derived from the VOCABULARY, not from a list of component
+ * names: a graph that declares those three columns server-owned gets the rule,
+ * and one that does not gets no rule at all.
  */
 export let marks = (vocab: Vocab): Rule[] =>
   vocab.all.filter((c) => marked(vocab, c)).map((comp) => ({
@@ -160,8 +164,8 @@ export let marks = (vocab: Vocab): Rule[] =>
   }))
 
 // One rule's patch: the component, narrowed to the columns this vocabulary
-// declares. Nothing to say is no patch — the gate has already put the
-// component on.
+// declares. Nothing to write means no patch — the match's `+` clause has
+// already added the component itself.
 let wear = (
   comp: string,
   vocab: Vocab,
@@ -175,11 +179,11 @@ let wear = (
 }
 
 /**
- * The identities storage minted, carried back in the batch: a client that
- * guessed an eid learns the `num` that came with it. The entity is carried BY
- * REFERENCE, not copied — an adapter whose numbers the database picks
- * (@yaks/d1) fills the `num` in when its batch lands, which is after this phase
- * and before the caller sees the answer.
+ * Add the identities storage created to the change, so a client that generated
+ * an eid learns the `num` assigned to it. Each entity is added BY REFERENCE,
+ * not copied — an adapter whose numbers the database picks (@yaks/d1) fills
+ * the `num` in when its statements run, which happens after this phase and
+ * before the caller sees the return value.
  */
 export let births = (bundles: Bundle[], st: State): Bundle[] => {
   let dead = new Set(st.killed)

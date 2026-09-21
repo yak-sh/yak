@@ -5,10 +5,11 @@
 // This adapter is the REFERENCE. A new adapter — a Map, a Durable Object's
 // embedded SQLite, a remote SQL service — proves itself by running the same
 // script through @yaks/graph's own `apply()` and agreeing with this one on
-// every step: the same bundles returned (births with the same numbers,
-// casualties, stamps, `$alias` resolutions), the same batches refused with the
-// same error, and the same entities read back afterwards. That agreement is the
-// promise the seam makes: a graph does not care where its bytes are.
+// every step: the same bundles returned (new entities with the same numbers,
+// casualties, stamped columns, `$alias` resolutions), the same batches refused
+// with the same error, and the same entities read back afterwards. That
+// agreement is what the Storage interface promises: a graph does not care where
+// its bytes are.
 //
 // Adapters differ in one place, smoothed by `plain()`: a database reads back
 // every declared column, `null` for the ones never written, and holds a boolean
@@ -21,9 +22,9 @@ import type { Bundle, Change, Graph, Plugin, Storage } from '@yaks/graph'
 import { each, graph, then, token } from '@yaks/graph'
 import { shop } from './harness.ts'
 
-/** A bookmark is content-addressed: it IS the sentence "someone marked this",
- * so two writers who state it land on one entity. This is what gives the script
- * an `$alias` whose id is derived rather than minted. */
+/** A bookmark is content-addressed: its eid is derived from what it marks, so
+ * two writers recording the same bookmark land on one entity. This is what
+ * gives the script an `$alias` whose id is derived rather than minted. */
 export let bookmarks: Plugin = {
   name: 'bookmarks',
   derive: { bookmark: (comp) => `mark:${comp.of}` },
@@ -209,12 +210,13 @@ let plain = (b: Bundle): Bundle => {
 let byNum = (bs: Bundle[]) =>
   [...bs].sort((a, b) => (a.entity.num ?? 0) - (b.entity.num ?? 0)).map(plain)
 
-// One batch, and what the graph said about it: the bundles it returned, or the
-// refusal it threw. Either is compared across the two stores.
+// One batch, and what the graph reported about it: the bundles it returned, or
+// the refusal it threw. Either is compared across the two stores.
 type Said = { ok?: Bundle[]; err?: string }
 
 // A refusal, however it arrived: a throw from a synchronous graph, a rejection
-// from an asynchronous one. Both are the same answer and compare the same way.
+// from an asynchronous one. Both are the same outcome and compare the same
+// way.
 let refused = (e: unknown): Said => ({
   err: `${(e as Error).name}: ${(e as Error).message}`,
 })

@@ -1,40 +1,42 @@
-// The gather: the reads a batch is going to need, taken once, before the hooks
-// run.
+// The gather: the reads a change is going to need, taken once, before the
+// hooks run.
 //
-// Over a database on the far side of a network the cost of `apply()` is not how
-// much SQL it is — it is how many times the caller waits. D1 has no interactive
-// transaction, so every question a hook asks is its own round trip, and the
-// questions all arrive before a row has moved. They are also all KNOWABLE
-// before a row has moved: the `$was` guard names its columns, a membership
-// guard names the app and the actor, a delete names the entity whose dependents
-// have to be found. So a plugin DECLARES what it is about to read — `wants` in
-// ./plugin.ts — and everything declared is read together.
+// Over a database on the far side of a network, the cost of `apply()` is not
+// how much SQL it runs — it is how many times the caller has to wait. D1 has no
+// interactive transaction, so every question a hook asks is its own round trip,
+// and all those questions arrive before any row has changed. They are also all
+// KNOWABLE before any row has changed: the `$was` check names its columns, a
+// membership check names the app and the actor, a delete names the entity whose
+// dependents have to be found. So a plugin DECLARES what it is about to read —
+// `wants` in ./plugin.ts — and everything declared is read together.
 //
-// TWO ASKS, because two are all a hook has ever needed. `eids` is these
-// entities, whole. `about` is the other direction: the entities whose reference
-// columns point AT these — the death cascade's question, and a membership
-// guard's alike, since a grant is an entity that points at an app and a person,
-// so "everything about this actor" is one read where "their grant, and their
-// seat" is two. `comps` narrows which components an `about` looks through, so
-// asking about a person does not drag back everything they ever created.
+// TWO KINDS OF ASK, because two are all a hook has ever needed. `eids` means
+// these entities, whole. `about` is the reverse direction: the entities whose
+// reference columns point AT these — the delete cascade's question, and a
+// membership check's too, since a grant is an entity that references both an
+// app and a person, so "everything about this actor" is one read where "their
+// grant, and their seat" would be two. `comps` narrows which components an
+// `about` looks through, so asking about a person does not drag back everything
+// they ever created.
 //
-// A MISS IS NOT AN ERROR. `wants` is a declaration written by a plugin this
-// package has never seen, and one that forgets an eid must still get a correct
-// answer — so the transaction built here falls back to the storage for anything
-// it was not asked for, and keeps the answer. The cost of a forgotten ask is
-// then exactly the round trip it would have saved, which is a number a clamp
-// measures (@yaks/d1's `hops_test.ts`), rather than a batch that refuses in
-// production and passes in the test.
+// FORGETTING TO DECLARE A READ IS NOT AN ERROR. `wants` is written by a plugin
+// this package has never seen, and one that forgets an eid must still get a
+// correct answer — so the transaction built here falls back to the storage for
+// anything it was not asked for, and caches the result. The cost of a forgotten
+// ask is then exactly the round trip it would have saved, which is a number a
+// test can measure (@yaks/d1's `hops_test.ts`), rather than a change that fails
+// in production and passes in the test.
 //
 // The gather is also where an asynchronous storage becomes a single await: one
-// `tx.get`, and one backwards read when something asked `about`. That second
-// one is a ROUND TRIP, not just a query: an `about` finds its hits with one
-// statement and then has to read them whole, which over a network is two waits
-// unless the gather of the hits can name them by the query that found them.
-// `Tx.whole` (./storage.ts) is that door and `seek` below is where it is
-// asked, so an `about` costs one trip wherever an adapter offers it. Everything
-// the hooks then ask is answered from memory, synchronously, so the phases
-// between them stay a plain loop (./pipe.ts).
+// `tx.get`, plus one reverse read when something asked `about`. That second one
+// is a ROUND TRIP, not just a query: an `about` finds the matching entities
+// with one statement and then has to read them whole, which over a network is
+// two waits unless the read of those entities can identify them by the query
+// that found them. `Tx.whole` (./storage.ts) is the method for that, and `seek`
+// below is where it is called, so an `about` costs one round trip on any
+// adapter that offers it. Everything the hooks ask afterwards is answered from
+// memory, synchronously, so the phases between them stay a plain loop
+// (./pipe.ts).
 
 import { and, eq, or, type Query as Ast } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
@@ -44,40 +46,42 @@ import type { Tx } from './storage.ts'
 import { then } from './pipe.ts'
 
 /**
- * One read a phase needs taken before it runs. Both directions are optional and
- * an ask may state both; an ask that states neither asks nothing.
+ * One read a phase needs taken before it runs. Both directions are optional
+ * and one ask may use both; an ask that uses neither reads nothing.
  */
 export type Ask = {
   /** these entities, whole */
   eids?: Eid[]
-  /** Named facets sufficient until a whole read or the first write. Omit
-   * for a whole snapshot; a whole ask always wins over a narrow one. */
+  /** just these components, which is enough until something reads the whole
+   * entity or writes to it. Omit it to read the whole entity; an ask for the
+   * whole entity always wins over an ask for a subset. */
   select?: string[]
   /** the entities whose reference columns point AT these */
   about?: Eid[]
-  /** which components an `about` looks through (default: every one that
+  /** which components an `about` looks through (default: every component that
    * declares a reference column) */
   comps?: string[]
 }
 
 /**
- * What one gather read. `got` is the entities it was handed by name, with
+ * What one gather read. `got` holds the entities it was asked for by id, with
  * `null` for one the storage does not hold; `near` is keyed by column AND
- * target, so a later ask through a narrower set of components can tell what was
- * covered from what was not, and a write can re-file what moved.
+ * target, so a later ask through a narrower set of components can tell what
+ * was already covered from what was not, and a write can re-index what
+ * changed.
  */
 export type Snap = {
-  /** the entities asked for by name, `null` for one that is not there */
+  /** the entities asked for by id, `null` for one that does not exist */
   got: Map<Eid, Bundle | null>
-  /** per `comp.prop <eid>`, the entities whose column points there */
+  /** per `comp.prop <eid>`, the entities whose column points at that eid */
   near: Map<string, Bundle[]>
-  /** the (column, target) triples `near` is keyed by */
+  /** the (component, column, target) triples `near` is keyed by */
   pairs: [string, string, Eid][]
-  /** Named snapshots whose unselected facets have not yet been read. */
+  /** for entities read with `select`, which components have been read so far */
   only?: Map<Eid, Set<string>>
 }
 
-/** One backwards read, as the snapshot files it. */
+/** The key one reverse read is filed under. */
 let key = (comp: string, prop: string, eid: Eid): string =>
   `${comp}.${prop} ${eid}`
 
@@ -99,17 +103,19 @@ let want = (
     : []
 
 /**
- * The query that finds everything whose reference columns point at one of these
- * targets: one disjunction over (column, target), so a walk that was a read per
- * column per entity is a read. `null` when there is nothing to ask.
+ * The query that finds everything whose reference columns point at one of
+ * these targets: one disjunction over (column, target), so what would have
+ * been one read per column per entity is a single read. `null` when there is
+ * nothing to ask.
  */
 export let pointing = (pairs: [string, string, Eid][]): Ast | null =>
   pairs.length ? and(or(...pairs.map(([c, p, e]) => eq(`${c}.${p}`, e)))) : null
 
-// A pointing query, asked. It names a SET — a disjunction of equalities, never
-// a window — which is exactly what `Tx.whole` promises to answer in a single
-// round trip, so every backwards read goes through here rather than `read`. An
-// adapter without the door falls back to `read` and reads the same answer.
+// Run a pointing query. It selects a SET — a disjunction of equalities, never
+// a windowed query — which is exactly what `Tx.whole` promises to answer in a
+// single round trip, so every reverse read goes through here rather than
+// `read`. An adapter without `whole` falls back to `read` and gets the same
+// result.
 let seek = (tx: Tx, q: Ast): Bundle[] | Promise<Bundle[]> =>
   (tx.whole ?? tx.read)(q)
 
@@ -119,7 +125,8 @@ let at = (b: Bundle, comp: string, prop: string): Eid | undefined => {
   return v == null ? undefined : String(v)
 }
 
-// File each row under every triple it satisfies, so one read answers many asks.
+// Index each row under every triple it satisfies, so one read answers many
+// asks.
 let file = (snap: Snap, pairs: [string, string, Eid][], rows: Bundle[]) => {
   for (let [c, p, e] of pairs) {
     snap.near.set(key(c, p, e), [])
@@ -132,20 +139,20 @@ let file = (snap: Snap, pairs: [string, string, Eid][], rows: Bundle[]) => {
   }
 }
 
-// The same bundle found through two columns is one answer.
+// The same bundle found through two different columns is returned once.
 let once = (rows: Bundle[]): Bundle[] => {
   let seen = new Set<Eid>()
   return rows.filter((b) => !seen.has(b.entity.eid) && !!seen.add(b.entity.eid))
 }
 
 /**
- * A patch folded into what the snapshot holds: a null component drops it,
- * anything else merges in, so an omitted column keeps what it held and a null
- * one clears it. The same rule ./mutate.ts hands the storage — said here
- * because a hook that WRITES in the gathered phase has to be read back by the
- * hook after it (yaks.app's vouch writes the grant its own membership guard
- * then reads), and because a rule is judged against exactly this fold
- * (./rules.ts).
+ * A patch folded into what the snapshot holds: a null component removes it,
+ * anything else merges in, so an omitted column keeps its value and a null one
+ * clears it. That is the same rule ./mutate.ts gives the storage, implemented
+ * again here because a hook that WRITES in a gathered phase has to be visible
+ * to the hook after it (yaks.app's vouch writes the grant its own membership
+ * check then reads), and because a rule is evaluated against exactly this
+ * merge (./rules.ts).
  */
 export let merged = (held: Bundle | null, b: Bundle): Bundle => {
   let out: Bundle = { ...(held ?? { entity: b.entity }) }
@@ -160,9 +167,9 @@ export let merged = (held: Bundle | null, b: Bundle): Bundle => {
 }
 
 /**
- * Every entity a batch names or points at — what the core itself reads, and
- * what a storage learns while patching. Handed to the gather as its first ask,
- * so `apply()` asks the database about all of them once.
+ * Every entity a change names or references — what the core itself reads, and
+ * what a storage adapter needs while writing. Passed to the gather as its
+ * first ask, so `apply()` reads all of them from the database once.
  */
 export let reached = (bundles: Bundle[], vocab: Vocab): Eid[] => {
   let out = new Set<Eid>()
@@ -180,9 +187,10 @@ export let reached = (bundles: Bundle[], vocab: Vocab): Eid[] => {
 }
 
 /**
- * Take every ask at once: one `tx.get` for the entities named, one `tx.read`
- * for everything pointing at the entities asked about. Each is skipped when
- * nothing asked for it, so a batch nobody wants to read about costs nothing.
+ * Satisfy every ask at once: one `tx.get` for the entities named by id, and
+ * one `tx.read` for everything referencing the entities asked about. Each is
+ * skipped when nothing asked for it, so a change nobody needs to read around
+ * costs nothing.
  */
 export let gather = (
   tx: Tx,
@@ -198,8 +206,9 @@ export let gather = (
   let snap: Snap = { got: new Map(), near: new Map(), pairs: [] }
   let named = [...eids]
   let back = [...pairs.values()]
-  // Set gathers and backwards asks already amortize their full read. Only
-  // the singleton path benefits from deferring unrelated components.
+  // Reading a set of entities, or reading in reverse, already spreads the cost
+  // of a whole read over many rows. Only the single-entity case gains anything
+  // from deferring the components nobody asked for.
   let narrow = tx.pick && named.length == 1 && !back.length &&
     asks.every((a) => !a.eids?.length || a.select != null)
   let selected = new Set(['tombstone', ...asks.flatMap((a) => a.select ?? [])])
@@ -221,8 +230,9 @@ export let gather = (
   })
 }
 
-/** Finish the FOUND snapshot before any mutation or phase needing whole
- * rule context. Only SQL shapes are cached across applies, never row values. */
+/** Read the rest of any partially-read entity, before anything writes or
+ * before a phase that needs the whole entity to evaluate its rules. Only
+ * compiled SQL is cached across applies, never row values. */
 export let complete = (tx: Tx, snap: Snap): void | Promise<void> => {
   if (!snap.only?.size) return
   return then(tx.get([...snap.only.keys()]), (rows) => {
@@ -230,9 +240,10 @@ export let complete = (tx: Tx, snap: Snap): void | Promise<void> => {
     for (let [eid, selected] of snap.only!) {
       let b = found.get(eid)
       let held = snap.got.get(eid)
-      // A host may have retained this very bundle for its lifecycle policy.
-      // Fill it in place before the first write can consult that policy,
-      // preserving the already-observed values (and absence) of selected facets.
+      // The calling program may have kept a reference to this very bundle for
+      // its own lifecycle policy. Fill it in place before the first write can
+      // consult that policy, preserving the values (and the absences) already
+      // observed for the components that were read first.
       if (b && held) {
         for (let [name, comp] of comps(b)) {
           if (!selected.has(name)) held[name] = comp
@@ -245,26 +256,26 @@ export let complete = (tx: Tx, snap: Snap): void | Promise<void> => {
 
 /**
  * The transaction the hooks receive: the storage's own, with `get` and `about`
- * answered from what the gather read, and every `patch` through it folded back
- * in so the next hook reads what the one before it wrote.
+ * answered from what the gather read, and every `patch` made through it folded
+ * back into the snapshot so the next hook sees what the one before it wrote.
  *
- * Anything the gather was not asked for is read from the storage and kept, so a
- * `wants` that forgot something costs a round trip rather than giving a wrong
- * answer. `read` is not answered here at all: a query is the storage's to
- * evaluate, and pretending otherwise would put a second query engine in the
- * core.
+ * Anything the gather was not asked for is read from the storage and cached,
+ * so a `wants` that forgot something costs a round trip rather than returning
+ * a wrong answer. `read` is not answered from the snapshot at all: evaluating
+ * a query is the storage's job, and doing it here would mean a second query
+ * engine in the core.
  *
- * Only the phases that run BEFORE the batch writes are handed one — a snapshot
- * of the graph as the batch FOUND it is exactly what a precondition wants, and
- * exactly what a phase reading after the patches must not have. The cascade
- * takes a fresh one of its own for that reason.
+ * Only the phases that run BEFORE the change is written get one — a snapshot
+ * of the graph as the change FOUND it is exactly what a precondition needs,
+ * and exactly what a phase reading after the write must not have. That is why
+ * the cascade does a fresh gather of its own.
  */
 export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
   ...tx,
-  // Not the storage's own death cascade: it would answer about the rows the
+  // Not the storage's own delete cascade: it would answer about the rows the
   // storage HOLDS, and this transaction is the one place where a hook's
   // pending write is not among them. A phase reading through the snapshot
-  // walks (./cascade.ts `doomed`).
+  // walks the references instead (./cascade.ts `doomed`).
   doom: undefined,
   patch: (bundles) =>
     then(
@@ -275,7 +286,8 @@ export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
             let eid = b.entity.eid
             let held = merged(snap.got.get(eid) ?? null, b)
             if (snap.got.has(eid)) snap.got.set(eid, held)
-            // Where it points now, and where it no longer does.
+            // Re-index it: what it references now, and what it no longer
+            // references.
             for (let [c, p, e] of snap.pairs) {
               let rows = snap.near.get(key(c, p, e))!
               let was = rows.findIndex((r) => r.entity.eid == eid)
@@ -328,9 +340,10 @@ export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
 })
 
 /**
- * The entities whose reference columns point at one of `eids` — through the
- * gather when a `wants` asked for them, and through the storage when none did.
- * The one door a phase or a hook reads backwards through.
+ * The entities whose reference columns point at one of `eids` — from the
+ * gather when some `wants` asked for them, and from the storage when none did.
+ * This is the one function a phase or a hook reads references backwards
+ * through.
  */
 export let about = (
   tx: Tx,

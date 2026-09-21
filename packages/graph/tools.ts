@@ -1,30 +1,32 @@
-// Tools a VOCABULARY declares. A `$defs` entry marked `tool: true` says what
-// the tool is called and what it takes; the run is the module's. This is the
-// join: declarations from the documents, implementations from the module, one
-// `Tool[]` out — so a package's words and its code are written in the two
-// places each belongs and nowhere twice.
+// Tools a VOCABULARY declares. A `$defs` entry marked `tool: true` declares
+// what the tool is called and what arguments it takes; the implementation
+// lives in the module. This file joins the two: declarations from the
+// documents, implementations from the module, one `Tool[]` out — so a
+// package's declarations and its code each live where they belong, and neither
+// is written twice.
 //
 //   let tools = loadTools([vocab], { session_list: (args, ctx) => ... })
 //
-// A declaration nothing implements is a LOAD error, not a tool that answers
-// `not implemented` at call time: the vocabulary is what a client lists, and a
-// word it lists has to work. (An app manifest is the other half of the same
-// rule — there a template stands in for the module, and workers/yak declared.ts
-// runs it.)
+// A declaration nothing implements throws AT LOAD TIME, rather than producing
+// a tool that returns "not implemented" when it is called: the vocabulary is
+// what a client lists, and a tool it lists has to work. (An app manifest is
+// the other half of the same rule — there a template takes the place of the
+// module, and workers/yak declared.ts runs it.)
 //
-// This package's OWN declarations are ./vocab.json — the generic tier, `graph
-// apply` and the rest — and `runs` below is the facet behind them, the same
-// deal every other package makes. What a tool is HANDED is the call's own
-// bundle (its arguments ride on `ctx.args`, parsed and checked by the runner);
-// what it answers is bundles, which for the reads here are the entities they
-// found. The two answers that are not entities say so in their own way:
-// `graph_schema` answers one `content{body}` entity carrying the schema as
-// JSON, and `graph_apply` answers the batch it landed, which the runner lands
-// as the caller. @yaks/mcp `core` is what shapes them for one host.
+// This package's own tool declarations are in ./vocab.json — the generic tier,
+// `graph apply` and the rest — and `runs` below implements them, the same
+// arrangement every other package uses. A tool is handed the call's own bundle
+// (its arguments arrive on `ctx.args`, already parsed and validated by the
+// runner) and returns bundles, which for the reads here are the entities they
+// found. The two results that are not entities say so in their own way:
+// `graph_schema` returns one `content{body}` entity holding the schema as JSON,
+// and `graph_apply` returns the transaction it committed, which the runner
+// commits as the caller. @yaks/mcp's `core` is what shapes these for one
+// server.
 //
-// It is NOT re-exported from mod.ts and never will be: reading a declaration
-// means validating it, which means ajv, which has no business in a browser
-// tab that only wants the graph. `@yaks/graph/tools` is the door.
+// This module is NOT re-exported from mod.ts and never will be: reading a
+// declaration means validating it, which means ajv, which has no business in a
+// browser tab that only wants the graph. Import `@yaks/graph/tools` to get it.
 
 import { toolsIn, toolsSaid } from '@yaks/vocab/tools'
 import type { VocabDoc } from '@yaks/vocab'
@@ -37,9 +39,10 @@ import { signed } from './stamp.ts'
 import { detached } from './storage.ts'
 import { detail, type Guide, index, ofKind } from './words.ts'
 
-/** What a declaration is missing: the run. Keyed by the entry's own name, or
- * by the words it declared for a module that spells it that way — `noun_verb`
- * for a pair, the single word for a tool that declared one alone. */
+/** The implementations a set of declarations needs. Keyed by the declaration's
+ * own `name`, or by the name derived from its noun and verb for a module that
+ * keys them that way — `noun_verb` for a pair, the single word for a tool that
+ * declared only one. */
 export type Runs<C = ToolCtx, R = Bundle[]> = Record<string, Tool<C, R>['run']>
 
 export let loadTools = <C = ToolCtx, R = Bundle[]>(

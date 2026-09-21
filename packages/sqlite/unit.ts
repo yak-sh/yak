@@ -1,7 +1,7 @@
 import type { Driver } from './driver.ts'
 
 // SQLite has one transaction per connection, so nesting is done with
-// SAVEPOINTs: a store used inside a transaction the host already opened (an
+// SAVEPOINTs: a store used inside a transaction the caller already opened (an
 // application's own, or another store's) still gets its own all-or-nothing
 // unit. The counter names each one uniquely — it only ever goes up, so an
 // outer savepoint can never be released by an inner one's name.
@@ -10,7 +10,7 @@ let seq = 0
 // How many units are open on each driver. A driver that owns a FILE needs to
 // know whether it is the outermost one, because that is the one that takes the
 // write lock (see `Driver.file`); everything inside it is a savepoint, since
-// one connection has one transaction whatever the nesting says.
+// one connection has one transaction however deeply the calls nest.
 let depth = new WeakMap<Driver, number>()
 
 // One all-or-nothing unit of work. A driver that owns its own transactions

@@ -15,7 +15,7 @@ import { location } from './bench.ts'
 
 let loc = location()
 let db = new Database(loc.path)
-// Match the hot-path host: prepared SQL cached, never component data.
+// Match the production hot path: prepared SQL cached, never component data.
 let statements = new Map<string, ReturnType<Database['prepare']>>()
 let driver: Driver = {
   query: (sql, params) => {

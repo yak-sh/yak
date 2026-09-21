@@ -1,17 +1,18 @@
-// Matching a name someone typed against the names on hand. Nobody types a name
-// the way it is stored — the case drifts, the punctuation goes, a long name gets
-// abbreviated to its first word — so an exact string compare answers "no such
-// author" far too often.
+// Matching a name someone typed against the names available. Nobody types a
+// name exactly as it is stored — the case drifts, the punctuation is dropped, a
+// long name gets abbreviated to its first word — so an exact string comparison
+// returns "no such author" far too often.
 //
-// This is scoring only. WHICH entities are addressable by name, and which column
-// holds the name, is names.ts; what to do with a winner is the caller's.
+// This is scoring only. WHICH entities are addressable by name, and which
+// column holds the name, is names.ts; what to do with the winner is up to the
+// caller.
 
-// Two names are compared stripped: case, spaces and punctuation carry no
-// meaning in a typed name ('le-guin' and 'Le Guin' are the same reach).
+// Two names are compared with both stripped: case, spaces and punctuation carry
+// no meaning in a typed name ('le-guin' and 'Le Guin' find the same entity).
 let norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
 
-// Levenshtein, one row at a time — a genuine algorithm, over one name, so the
-// naive table is the right size.
+// Levenshtein distance, one row at a time — over a single name, so the naive
+// table is the right size.
 let dist = (a: string, b: string) => {
   let row = [...Array(b.length + 1).keys()]
   for (let i = 1; i <= a.length; i++) {
@@ -30,12 +31,13 @@ let dist = (a: string, b: string) => {
   return row[b.length]
 }
 
-// What CONTAINMENT is worth, 0 when it doesn't hold. It earns its place because
-// edit distance alone reads a longer name as a stranger — `earthsea` against
-// `A Wizard of Earthsea` scores near nothing. Two gates keep it off coincidence:
-// the shorter word must COVER most of the longer (else `le` sits inside half the
-// shelf), and a PREFIX outranks a word merely spelled inside, because a prefix is
-// how a name gets abbreviated.
+// What a SUBSTRING match is worth, and 0 when there is none. It earns its place
+// because edit distance alone treats a longer name as unrelated — `earthsea`
+// against `A Wizard of Earthsea` scores close to nothing. Two conditions keep it
+// from firing on coincidence: the shorter string must COVER most of the longer
+// one (otherwise `le` is inside half the shelf), and a PREFIX scores higher than
+// a substring appearing anywhere else, because a prefix is how a name usually
+// gets abbreviated.
 let within = (a: string, b: string) => {
   let [small, big] = a.length < b.length ? [a, b] : [b, a]
   if (small.length < 3 || !big.includes(small)) return 0
@@ -54,30 +56,33 @@ export let score = (typed: string, name: string): number => {
 }
 
 /**
- * What a candidate ANSWERS to, and what each answer is worth: the whole name,
- * and its first word — how a name gets shortened (`Ursula Le Guin` → `ursula`).
- * Interior words sit out: scoring them lets a common word deep inside a long
- * name win outright, and in a large store there is always one.
+ * The strings a candidate can be matched by, and what each is worth: the whole
+ * name, and its first word — which is how a name gets shortened
+ * (`Ursula Le Guin` → `ursula`). Words in the middle are excluded: scoring them
+ * would let a common word buried in a long name win outright, and in a large
+ * store there is always such a word.
  */
 export let answers = (name: string): [string, number][] => [
   [name, 1],
   [name.split(/\s+/)[0] ?? '', 0.85],
 ]
 
-/** How close a typed word is to a candidate, over everything it answers to. */
+/** How close a typed word is to a candidate, across every string it can be
+ * matched by. */
 export let closeness = (typed: string, name: string): number =>
   Math.max(...answers(name).map(([w, worth]) => worth * score(typed, w)))
 
 /**
- * Close enough to be the name that was meant. Below this a guess is noise, and
- * answering nothing is the more useful answer.
+ * The score at which a match is close enough to be the name that was intended.
+ * Below this, a guess is noise, and returning nothing is more useful.
  */
 export let CLOSE = 0.6
 
 /**
  * The candidate whose name is closest to what was typed, or nothing when none
- * is close. `name` reads a candidate's name (a candidate with none sits out);
- * `close` is the floor a winner must clear — pass 1 to accept exact names only.
+ * is close enough. `name` reads a candidate's name (a candidate with none is
+ * skipped); `close` is the threshold the winner must clear — pass 1 to accept
+ * exact names only.
  */
 export let nearest = <T>(
   typed: string,

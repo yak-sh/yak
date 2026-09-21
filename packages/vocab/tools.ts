@@ -96,10 +96,10 @@ export const validateToolOutput = (
 
 /** Serializable tool metadata; independent of component declarations. */
 export type ToolDefinition = {
-  /** the words a command line spells it as: both, and the line says them in
-   * either order (`session list`); or one alone, and that word is the whole
+  /** the words a command line accepts for it: both, in either order
+   * (`session list`, `list session`); or one alone, which is then the whole
    * command and the whole transport name (`history`). A tool that already has
-   * a name of its own (`land`) says neither (@yaks/graph `toolName`). */
+   * a name of its own (`land`) declares neither (@yaks/graph `toolName`). */
   noun?: string
   verb?: string
   description: string
@@ -122,9 +122,9 @@ export const toolDefinitionSchema: Record<string, unknown> = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   type: 'object',
   required: ['description'],
-  // A noun, a verb, both, or neither: two words are a line said in either
-  // order, and one word is a line of one word. The entry's own key is the name
-  // either way.
+  // A noun, a verb, both, or neither: two words are a command line accepted in
+  // either order, and one word is a one-word command. The entry's own key is
+  // the tool's name either way.
   additionalProperties: false,
   properties: {
     noun: { type: 'string', pattern: '^[a-z][a-z0-9-]*$' },
@@ -185,10 +185,10 @@ export const toolDefinition = (value: unknown): ToolDefinition => {
   return candidate
 }
 
-// A tool's arguments as one object schema. A declaration says them the way a
-// component says columns — one schema per named argument — and every door
-// downstream (the CLI's parser, an MCP `tools/list`, a completion) reads the
-// object schema, so the conversion happens once, here.
+// A tool's arguments as one object schema. A declaration writes them the way a
+// component declares columns — one schema per named argument — and everything
+// downstream (the CLI's argument parser, an MCP `tools/list`, a shell
+// completion) reads the object schema, so the conversion happens once, here.
 let inputOf = (entry: PropSchema): Record<string, unknown> => ({
   type: 'object',
   additionalProperties: false,
@@ -196,7 +196,7 @@ let inputOf = (entry: PropSchema): Record<string, unknown> => ({
   ...entry.required?.length ? { required: entry.required } : {},
 })
 
-// The keywords a declaration says that are the TOOL's, not the schema's.
+// The keywords in a declaration that belong to the TOOL, not to the schema.
 let HINTS = [
   'title',
   'options',
@@ -208,21 +208,23 @@ let HINTS = [
 ] as const
 
 /**
- * The tool declarations one or more vocab documents carry, READ: every `$defs`
- * entry marked `tool: true`, with its `input` map lowered to the one object
- * schema everything downstream reads. The entry's NAME is the tool's, so an
- * implementation is looked up by the word the vocabulary used.
+ * The tool declarations one or more vocabulary documents carry, read without
+ * validating them: every `$defs` entry marked `tool: true`, with its `input`
+ * map converted to the one object schema everything downstream reads. The
+ * entry's NAME is the tool's name, so an implementation is looked up by the
+ * name the vocabulary used.
  *
- * Nothing is validated here. {@link toolsIn} is the same reading with the
- * check, and it is what a host composing somebody else's plugin wants; this is
- * for a document whose declarations are checked where they are AUTHORED (a
- * package's own vocab.json, against the meta-schema, in its tests) — and it is
- * the only reading that works where code generation from strings is forbidden,
- * since ajv compiles a schema by building a function (a Cloudflare Worker).
+ * Nothing is validated here. {@link toolsIn} is the same read with validation,
+ * and it is what a program loading somebody else's plugin wants; this one is
+ * for a document whose declarations are validated where they are AUTHORED (a
+ * package's own vocab.json, against the meta-schema, in its tests). It is also
+ * the only read that works where generating code from strings is forbidden,
+ * such as in a Cloudflare Worker, since ajv validates a schema by compiling it
+ * into a function.
  *
- * `loadVocab` passes over these; this passes over everything else. A document
- * is read once for its components and once for its tools, and neither reading
- * has to know about the other.
+ * `loadVocab` skips tool entries; this skips everything else. A document is
+ * read once for its components and once for its tools, and neither reading has
+ * to know about the other.
  */
 export let toolsSaid = (input: VocabDoc | VocabDoc[]): ToolDefinition[] => {
   let docs = Array.isArray(input) ? input : [input]

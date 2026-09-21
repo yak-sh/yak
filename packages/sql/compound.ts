@@ -1,36 +1,43 @@
-// What one compound SELECT may carry, and how a wider question is cut to fit.
+// How many terms one compound SELECT may carry, and how a wider question is cut
+// up to fit.
 //
 // Workerd — the runtime under a Durable Object and under D1 — is built with
-// SQLITE_MAX_COMPOUND_SELECT = 5 and answers a sixth term with `too many terms
-// in compound SELECT` (measured 2026-09-05; SQLite's own default is 500). Any
-// compiler here that unions one arm per vocabulary column therefore has a
-// ceiling a wide enough vocabulary walks straight into: the death cascade
-// (./cascade.ts) and the `.refs=` backlink union (./bind.ts) both do.
+// SQLITE_MAX_COMPOUND_SELECT = 5, and a sixth term fails with the error
+// `too many terms in compound SELECT` (measured 2026-09-05; SQLite's own
+// default is 500). Any
+// compiler here that unions one term per reference column in the vocabulary
+// therefore has a limit that a wide enough vocabulary runs straight into: the
+// death cascade (./cascade.ts) and the `.refs=` backlink union (./bind.ts) both
+// do.
 //
-// Two moves keep every compound under the cap, and they compose. GROUP first —
-// a component's columns are ONE arm, OR'd, because a term is scarce and `or` is
-// not — then CUT what is left into statements of {@link ARMS}. What the caller
-// does with the pieces is its own: the cascade asks them in rounds and unions
-// the answers; the refs predicate ORs them into one WHERE.
+// Two steps keep every compound SELECT under that limit, and they compose.
+// GROUP first — a component's columns become ONE term, combined with OR,
+// because terms are scarce and OR is not — then CUT what is left into
+// statements of {@link ARMS} terms each. What the caller does with the pieces
+// is its own business: the cascade asks them in rounds and unions the answers;
+// the `.refs=` predicate combines them with OR into one WHERE clause.
 
-/** How many terms one compound SELECT may carry. Workerd allows five and a
- * seeded recursion spends one of them on the seed. It is the FLOOR, and so the
- * default everywhere: an engine that carries more says so, and an engine that
- * forgets to say is slow rather than broken. */
+/** How many terms one compound SELECT may carry. Workerd allows five, and a
+ * seeded recursion spends one of them on the seed. This is the lowest limit any
+ * supported engine has, and so the default everywhere: an engine that allows
+ * more declares it, and an engine that forgets to declare it is slow rather
+ * than broken. */
 export let ARMS = 4
 
-/** What an engine carries when it is NOT workerd — an embedded SQLite is built
- * with the stock SQLITE_MAX_COMPOUND_SELECT of 500, and a driver over one says
- * this (@yaks/sqlite `Driver.arms`) so that a vocabulary-wide probe stays one
- * statement instead of one per four components. Under the stock limit, not at
- * it: a probe is not the only compound a statement may carry. */
+/** What an engine allows when it is NOT workerd — an embedded SQLite is built
+ * with the stock SQLITE_MAX_COMPOUND_SELECT of 500, and a driver over one
+ * declares this (@yaks/sqlite `Driver.arms`) so that a query spanning the whole
+ * vocabulary stays one statement instead of one per four components. Set below
+ * the stock limit rather than at it, because such a query is not the only
+ * compound SELECT a statement may contain. */
 export let STOCK = 400
 
-/** One arm: a component table, and every column of it wearing this word. */
+/** One term of a compound SELECT: a component table, and every column of it
+ * that has the behaviour being asked about. */
 export type Arm = [comp: string, props: string[]]
 
-/** Reference columns grouped by their table, so two columns of one component
- * cost one term rather than two. */
+/** Reference columns grouped by the table they belong to, so two columns of one
+ * component cost one term rather than two. */
 export let arms = (cols: [string, string][]): Arm[] => {
   let by = new Map<string, string[]>()
   for (let [comp, prop] of cols) by.set(comp, [...(by.get(comp) ?? []), prop])
@@ -38,6 +45,7 @@ export let arms = (cols: [string, string][]): Arm[] => {
 }
 
 /** A list cut into groups of at most `n`. Always at least one group, so a
- * vocabulary with no arm at all still states whatever wraps the arms. */
+ * vocabulary with no terms at all still produces the statement that would have
+ * wrapped them. */
 export let cut = <T>(xs: T[], n: number): T[][] =>
   xs.length <= n ? [xs] : [xs.slice(0, n), ...cut(xs.slice(n), n)]

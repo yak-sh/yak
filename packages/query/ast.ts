@@ -1,26 +1,29 @@
-// The AST the yaks query format parses into, and the builder vocabulary that
-// constructs the SAME shape from code. Everything here is plain serializable
-// data — no class, no method, no schema. A node knows the FORMAT (an operator,
-// a list, a range, a directive) and never what a field means; deciding whether
-// `status` is a real column, a ref, or an enum is a downstream (schema) job.
+// The AST the yaks query format parses into, and the builders that construct
+// the SAME shape from code. Everything here is plain serializable data — no
+// class, no method, no schema. A node records the FORMAT (an operator, a list,
+// a range, a directive) and never what a field means; deciding whether
+// `status` is a column, a reference or an enum is left to a compiler that has
+// a schema.
 //
-// The whole point of the boundary: `parse('.a=1 .b=2')` deep-equals
-// `and(eq('a', '1'), eq('b', '2'))`. Builders and parser meet on one shape, so
-// a caller may hand-write a query, parse one, or transform between the two.
+// That boundary is the point: `parse('.a=1 .b=2')` deep-equals
+// `and(eq('a', '1'), eq('b', '2'))`. Builders and parser produce one shape, so
+// a caller can hand-write a query, parse one, or convert between the two.
 
-// The eight predicate operators, exactly as the text spells them. Presence is
-// `!`, absence is `=` with an empty value, `?` requests a component beside the
-// filter (WANT), `~=` is a literal contains. Every richer meaning (a time
-// range, a ref resolution) is read off these downstream, never baked in here.
+// The predicate operators, exactly as they are written in a query. Presence is
+// `!`, absence is `=` with an empty value, `?` asks for a component alongside
+// the filter without filtering on it, and `~=` is a literal substring test. Any
+// richer meaning (a time range, a resolved reference) is derived from these by
+// a compiler that has a schema, never built in here.
 export type Op = '=' | '!=' | '~=' | '<' | '<=' | '>' | '>=' | '!' | '?'
 
 // A VALUE — the right-hand side of a predicate. A scalar carries its raw token
-// verbatim (schema decides if it is a number, an id, an enum, a time phrase). A
-// list is any-of (`a,b,c`); a range is inclusive unless `exclusiveEnd` (`x..y`
-// vs `x...y`); a time node is an EXPLICIT time phrase a builder or a downstream
-// promotion made — `parse` never emits one, because telling a time literal from
-// a plain word (`.domain=today`) needs the column's type. `timeSpan` (time.ts)
-// is the generic recognizer downstream uses to promote a scalar.
+// verbatim (the schema decides whether it is a number, an id, an enum or a time
+// phrase). A list means any-of (`a,b,c`); a range is inclusive unless
+// `exclusiveEnd` (`x..y` against `x...y`); a time node is an EXPLICIT time
+// phrase, built either by a builder or by a compiler promoting a scalar —
+// `parse` never emits one, because telling a time literal from a plain word
+// (`.domain=today`) needs the column's type. `timeSpan` (time.ts) is the
+// recognizer a compiler uses to promote a scalar.
 export type Scalar = { kind: 'scalar'; raw: string }
 export type List = { kind: 'list'; items: Value[] }
 export type Range = {
@@ -32,8 +35,9 @@ export type Range = {
 export type Time = { kind: 'time'; raw: string }
 export type Value = Scalar | List | Range | Time
 
-// A PREDICATE: the dotted path as raw segments (never routed to a component),
-// an operator, and a value — null for the value-less `!` and `?` forms.
+// A PREDICATE: the dotted path as raw segments (never resolved to a
+// component), an operator, and a value — null for the `!` and `?` forms, which
+// take none.
 export type Pred = {
   kind: 'pred'
   path: string[]
@@ -53,9 +57,10 @@ export type Pred = {
 export type Text = { kind: 'text'; value: string }
 export type Never = { kind: 'never' }
 
-// The reserved DIRECTIVES — format words that ride the clause list but rank,
-// project, aggregate, or bound rather than filter. Each carries only its raw
-// tokens; a directive's path is unrouted segments like a predicate's.
+// The reserved DIRECTIVES — reserved names that sit in the clause list but
+// rank, project, aggregate or bound the answer rather than filter it. Each
+// carries only its raw tokens; a directive's path is raw segments, like a
+// predicate's.
 export type Order = { kind: 'order'; value: string }
 export type Near = { kind: 'near'; value: string }
 // `.refs=X` backlinks of X, `.refs!` references anything, `.refs=` references
@@ -64,24 +69,26 @@ export type Refs = { kind: 'refs'; op: '=' | '!'; value: string }
 export type Count = { kind: 'count' }
 export type Distinct = { kind: 'distinct'; path: string[] }
 export type Tally = { kind: 'tally'; path: string[] }
-// One projected column and whether a change to it wakes a subscription (a
-// trailing `~` marks it volatile — projected but muted). `path` is raw segments.
+// One projected column, and whether a change to it wakes a subscription (a
+// trailing `~` projects the column but does not wake on it). `path` is raw
+// segments.
 export type FieldSel = { path: string[]; wake: boolean }
 export type Fields = { kind: 'fields'; fields: FieldSel[] }
 // `*` — carry EVERY component of each selected entity. The widest projection
-// there is, and a projection only: it says nothing about which entities the
-// query selects, so an evaluator reads it beside `fields` and never as a filter.
-// It is a directive rather than a bare word precisely so it cannot fall through
-// to the full-text term `*`, which selects nothing anywhere.
+// there is, and a projection only: it does not affect which entities the query
+// selects, so an evaluator reads it beside `fields` and never as a filter. It
+// is a directive rather than a bare word precisely so it cannot fall through to
+// the full-text term `*`, which matches nothing anywhere.
 export type Every = { kind: 'every' }
 export type Limit = { kind: 'limit'; n: number }
-// The window's cursor: the spine NUMBER of the entity to continue past. It names
-// an entity, never a position or an order key, so one spelling pages any
-// ordering — an evaluator derives where that entity sits.
+// The paging cursor: the spine NUMBER of the entity to continue past. It names
+// an entity, never a position or an order key, so this one form pages any
+// ordering — an evaluator works out where that entity sits.
 export type After = { kind: 'after'; n: number }
-// A stored-edge rider. `select` picks one edge type and optionally projects an
-// endpoint through a reference column (`via`, raw segments); `peers` names the
-// far-endpoint columns (each a raw path) to carry back.
+// Carries stored edges back with the answer. `select` picks one edge type and
+// optionally projects an endpoint through a reference column (`via`, raw
+// segments); `peers` names the columns of the far endpoint (each a raw path)
+// to carry back.
 export type EdgeSelect = { type: string; via?: string[] }
 export type Edges = {
   kind: 'edges'
@@ -89,17 +96,17 @@ export type Edges = {
   peers: string[][]
   limit?: number
 }
-// A QUALIFIER: one argument of the bracket a path may wear (`.p[<=3]`,
+// A QUALIFIER: one argument of the bracket a path may carry (`.p[<=3]`,
 // `.p[key=v]`, `.p[word]`). The bracket binds to the path and is read before
-// any operator, so a clause kind declares which qualifiers it accepts and
+// any operator, so each kind of clause declares which qualifiers it accepts and
 // refuses the rest by name; today only the walk takes one (its depth cap).
 export type Qual = { key?: string; op?: string; value: string }
 
 // A transitive WALK: `.requires[<=3]->T-42` selects what reaches `target`
 // through at most `depth` hops of `path`; `<-` walks the other way. The path is
 // raw segments — a relation name or a reference column, which is schema. The
-// optional cap bounds hops; without it the closure has a WALK_LIMIT row valve.
-// `target` is one entity, by eid or human id.
+// optional cap bounds the hops; without it the walk is bounded by WALK_LIMIT
+// rows instead. `target` is one entity, by eid or human id.
 export type Dir = '->' | '<-'
 export type Walk = {
   kind: 'walk'
@@ -112,18 +119,18 @@ export let WALK_DEPTH = 16
 // Default closure: no hop cap, at most this many non-seed nodes (nearest first).
 export const WALK_LIMIT = 10_000
 
-// ---- rule sigils ----
-// A component word may wear a PREFIX SIGIL saying what a rule does with it.
-// Two of them are ordinary predicates, because an evaluator can answer them
-// from data alone: `.comp` is present, `!comp` is absent. These four are what
-// only a RULE can mean — the component to add before it runs, the gate that
-// makes it fire once, the components it writes, and the singleton resource it
-// reads — and `$name` binds a variable, as `$alias` names an entity in a
-// bundle. An evaluator with no rule engine refuses them rather than guessing.
-// A `+` or `*` word may name a COLUMN and a value as well as a component —
-// `+result.call=$call` — because the sigil already means "this is written",
-// and saying which column is written is not a second idea. The gate has no
-// such spelling: an absence has no value.
+// ---- rule prefixes ----
+// A component name may carry a PREFIX CHARACTER saying what a rule does with
+// it. Two of those are ordinary predicates, because an evaluator can answer
+// them from stored data alone: `.comp` is present, `!comp` is absent. The four
+// below mean something only a RULE can act on — the component to add before it
+// runs, the gate that makes it run once, the components it writes, and the
+// singleton resource it reads — and `$name` binds a variable, the way `$alias`
+// names an entity in a bundle. An evaluator with no rule engine refuses them
+// rather than guessing. A `+` or `*` may name a COLUMN and a value as well as
+// a component — `+result.call=$call` — because the prefix already means "this
+// is written", and naming the column is part of the same statement. A gate has
+// no such form: an absence has no value.
 export type Ensure = {
   kind: 'ensure'
   comp: string
@@ -138,20 +145,19 @@ export type Mutable = {
   value?: Value
 }
 export type Resource = { kind: 'resource'; comp: string }
-// `-comp` — this BATCH removed the component from the bound entity. The one
-// clause no committed row can answer: what went leaves nothing to read, so
-// only a batch knows it (a rule's overlay, an effect's reading of what it just
-// committed), and an evaluator with no batch under it refuses rather than
-// answering "none".
+// `-comp` — this WRITE removed the component from the bound entity. The one
+// clause no committed row can answer: what was removed leaves nothing to read,
+// so only the write itself knows it (a rule's overlay, or an effect reading
+// back what it just committed), and an evaluator with no such write available
+// refuses rather than answering "none".
 export type Gone = { kind: 'gone'; comp: string }
-// A variable, and what BINDS it where a query says so: `$x` alone names a
-// slot, `$x=5` fills it. A bindings-only query is nothing but these, which is
-// what a template invocation's arguments are.
+// A variable, and the value bound to it where the query gives one: `$x` alone
+// names a slot, `$x=5` fills it. A query consisting of nothing but these is a
+// set of bindings, which is what the arguments to a template invocation are.
 export type Var = { kind: 'var'; name: string; value?: Value }
 
-// Boolean composition. `parse` always yields an `and` of the token clauses
-// (the yaks text format is a flat AND-list); `or` is builder-only — the AST is
-// a superset of what the current text grammar can spell.
+// Boolean composition. `parse` always returns an `and` at the root; a `|` in
+// the query becomes an `or` among its clauses, and `or` is a builder as well.
 export type And = { kind: 'and'; clauses: Clause[] }
 export type Or = { kind: 'or'; clauses: Clause[] }
 
@@ -181,13 +187,14 @@ export type Clause =
   | And
   | Or
 
-// The root a `parse` returns.
+// The root node `parse` returns.
 export type Query = And
 
 // ---- builders ----
 
-// What a builder accepts where a value is wanted: a string or number becomes a
-// scalar; a Value node passes through, so `eq('p', range('1', '5'))` composes.
+// What a builder accepts where a value is expected: a string or a number
+// becomes a scalar, and a Value node passes through, so
+// `eq('p', range('1', '5'))` composes.
 export type Input = string | number | Value
 
 let dot = (field: string): string[] => field.split('.')
@@ -214,8 +221,8 @@ export let time = (raw: string): Time => ({ kind: 'time', raw })
 export let text = (value: string): Text => ({ kind: 'text', value })
 export let never = (): Never => ({ kind: 'never' })
 
-// One factory, an explicit signature on each export so the type is written at
-// the boundary (JSR reads it without running the call).
+// One factory, with an explicit signature on each export so the type is stated
+// at the boundary (JSR reads it without running the call).
 let op = (o: Op) => (field: string, value: Input): Pred => ({
   kind: 'pred',
   path: dot(field),
@@ -257,10 +264,10 @@ export let pred = (field: string, o: Op, value: Value | null): Pred => ({
 })
 
 /**
- * Is this the bare presence form — one segment, a trailing bang, no value?
- * `.canvas!` completes a COMPONENT sentence, so an evaluator resolves it to
- * that component's facet even where a same-named column claims the bare
- * spelling everywhere else (@yaks/vocab's `aim(path, facet)`).
+ * Is this the bare presence form — one segment, a trailing `!`, no value?
+ * `.canvas!` names a component, so an evaluator resolves it to that component
+ * even where a column of the same name would otherwise win the bare form
+ * (@yaks/vocab's `aim(path, facet)`).
  */
 export let bare = (p: Pred): boolean =>
   p.op == '!' && p.path.length == 1 && !p.value
@@ -290,7 +297,8 @@ export let walk = (
   depth?: number,
 ): Walk => ({ kind: 'walk', path: dot(field), dir, depth, target })
 
-// A field selector from `'pin.x'` or `'pin.z~'` (volatile), or a ready one.
+// A field selector from `'pin.x'`, or from `'pin.z~'` for a column that does
+// not wake a subscription — or a FieldSel that is already built.
 export let field = (spec: string | FieldSel): FieldSel => {
   if (typeof spec != 'string') return spec
   let wake = !spec.endsWith('~')
@@ -302,11 +310,11 @@ export let fields = (...specs: (string | FieldSel)[]): Fields => ({
 })
 export let every = (): Every => ({ kind: 'every' })
 
-// The rule sigils. `ensure` adds a component before the rule runs; `gate` adds
-// one that had to be ABSENT, which is what makes a rule fire once; `mutable`
-// declares a component the rule writes; `resource` names a singleton; and
-// `variable` binds a name. Presence and absence have builders already
-// (`present`, `absent`) — they are predicates, not rule words.
+// The rule prefixes. `ensure` adds a component before the rule runs; `gate`
+// adds one that had to be ABSENT, which is what makes a rule run once;
+// `mutable` declares a component the rule writes; `resource` names a
+// singleton; and `variable` binds a name. Presence and absence have builders
+// already (`present`, `absent`) — they are predicates, not rule instructions.
 export let ensure = (comp: string, prop?: string, value?: Input): Ensure => ({
   kind: 'ensure',
   comp,
@@ -337,8 +345,9 @@ export let edges = (
 })
 
 // ---- accessors ----
-// The clause list an @yaks/sql compiler reads a directive off; a few of the
-// common ones, spelled once so downstream need not re-scan by hand.
+// The clause list a compiler such as @yaks/sql reads its directives out of,
+// plus a few of the common lookups, written once so every caller need not scan
+// the list by hand.
 
 export let clauses = (ast: Query): Clause[] => ast.clauses
 
@@ -348,7 +357,8 @@ export let orderOf = (ast: Query): string | undefined =>
 export let nearOf = (ast: Query): string | undefined =>
   ast.clauses.find((c): c is Near => c.kind == 'near')?.value
 
-// The window a query asks for, folded from its `.limit`/`.after` clauses.
+// The window a query asks for, collected from its `.limit` and `.after`
+// clauses.
 export let windowOf = (ast: Query): { limit?: number; after?: number } => {
   let out: { limit?: number; after?: number } = {}
   for (let c of ast.clauses) {

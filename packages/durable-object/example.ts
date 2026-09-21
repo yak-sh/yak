@@ -86,8 +86,9 @@ export class Bookshop {
     this.#route = api({ graph: shop, subs })
   }
 
-  /** The object's door. `wake()` first: a batch applied by a request that
-   * woke this object must still reach the sockets it inherited. */
+  /** The object's request entry point. `wake()` first: a change applied by the
+   * request that woke this object must still reach the sockets it
+   * inherited. */
   fetch(request: Request): Response | Promise<Response> {
     this.#live.wake()
     return new URL(request.url).pathname == '/ws'

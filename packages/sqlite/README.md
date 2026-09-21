@@ -12,18 +12,18 @@ For bundle structure, write phases, and adapter responsibilities, see the
 
 Each **entity** has a string id and **components**, with a row per component in
 its own table. An entity _is_ what its components make it: a blog post is a
-`doc` plus a `post`; a product is a `doc` plus a `price`. A component adds one
-facet, and any component can be added to any entity, so two vocabularies compose
-by sharing ids.
+`doc` plus a `post`; a product is a `doc` plus a `price`. Each component covers
+one aspect of an entity, and any component can be stored on any entity, so two
+vocabularies compose by sharing ids.
 
-The adapter reads and writes **bundles**: objects containing an entity’s
+The adapter reads and writes **bundles**: objects holding an entity's
 components. Identity is in the `entity` component, not a root-level `eid`:
 
 ```ts
 { entity: { eid: 'cake-01' }, doc: { title: 'Lemon cake' }, recipe: { serves: 8 } }
 ```
 
-A read hands bundles back; a write takes bundles and patches them in
+A read returns bundles; a write takes bundles and patches them in
 (`Change = Bundle[]`).
 
 ## Usage
@@ -70,12 +70,13 @@ let store = storage(driver, vocab)
 store.install() // create the tables, the doc view, the declared indexes
 ```
 
-A table is what its component says: `required` columns are NOT NULL, a `default`
-fills the row that omits one (`{"now": true}` stamps the clock), an `enum` is a
-CHECK, `type: integer` keeps integer affinity, and a partial `unique` covers
-only the rows that hold its `present` columns. `install()` is additive on a
-standing database: a grown column keeps a literal default and its CHECK, and
-takes the clock only on rows written from then on.
+A table's shape is what its component declares: `required` columns are NOT NULL,
+a `default` fills the row that omits one (`{"now": true}` writes the current
+time), an `enum` becomes a CHECK, `type: integer` keeps integer affinity, and a
+partial `unique` covers only the rows that hold its `present` columns.
+`install()` is additive on an existing database: a column added later keeps a
+literal default and its CHECK, and gets the current time only on rows written
+from then on.
 
 ### Write
 
@@ -100,7 +101,7 @@ Writes are **patches**:
 - **omitted columns are untouched** — a patch names only what changes,
 - **a column set to `null` is cleared**,
 - **a component set to `null` is dropped** — the row goes, the entity stays,
-- **a tombstoned entity takes no patch** — death is final; ids never recycle.
+- **a tombstoned entity takes no patch** — deletion is final; ids never recycle.
 
 Usually you do not call `tx` yourself: point
 [@yaks/graph](https://jsr.io/@yaks/graph) at the store and `apply()` a batch.
@@ -118,18 +119,18 @@ g.apply([
 ])
 ```
 
-Deleting an entity spreads along its references, and each reference's declared
-death word says how: a `cascade` reference pulls its owner into the grave, a
-`release` reference's row is dropped (its owner lives), a `detach` reference is
-nulled, a `keep` reference stands as history. Which entities that adds up to is
-@yaks/graph's decision, read off the vocabulary; `tx.remove()` here removes
-exactly the entities it is handed.
+Deleting an entity propagates along its references, and each reference's
+declared death behavior decides how: a `cascade` reference deletes its owner
+too, a `release` reference's row is dropped (its owner survives), a `detach`
+reference is set to null, a `keep` reference is left as history. Which entities
+that adds up to is @yaks/graph's decision, read off the vocabulary;
+`tx.remove()` here removes exactly the entities it is given.
 
 ### Read
 
-A read compiles a query (a string, or an AST built with `@yaks/query`) and hands
-back the matching entities as bundles, with references resolved back to the ids
-they point at:
+A read compiles a query (a string, or an AST built with `@yaks/query`) and
+returns the matching entities as bundles, with references resolved back to the
+ids they point at:
 
 ```ts
 store.read('.published=true') // every published post, whole
@@ -149,7 +150,7 @@ aggregates — is `@yaks/query`'s; see that package for the full format.
 storage(driver, vocab, base?) // bind a store to a driver + vocabulary
 ```
 
-returns a `Store` — @yaks/graph's `Storage`, answered synchronously:
+returns a `Store` — @yaks/graph's `Storage`, implemented synchronously:
 
 - `ddl(): string[]` — the schema statements the vocabulary implies.
 - `install(): void` — run them (create-if-not-exists, so it is idempotent); it
@@ -164,8 +165,8 @@ returns a `Store` — @yaks/graph's `Storage`, answered synchronously:
   counts, tallies, and field projections).
 - `tx(body): R` — run `body` against a transaction, committing when it returns
   and rolling back if it throws. Transactions nest (they are SAVEPOINTs), so a
-  store used inside a transaction the host already opened still gets its own
-  all-or-nothing unit. The transaction offers:
+  store used inside a transaction the application already opened still gets its
+  own all-or-nothing unit. The transaction provides:
   - `read(query, opts?): Bundle[]` — as above, through the transaction.
   - `get(eids): Bundle[]` — identity, not search: these entities, whole. A
     tombstoned one comes back with a `tombstone` component.
@@ -190,15 +191,14 @@ type Driver = {
 ```
 
 Back it with an in-process SQLite for a test, a pooled handle for a server, or
-any engine that can run parameterized SQL — the values always ride as bound
-params, never concatenated into the statement.
+any engine that can run parameterized SQL — the values are always bound
+parameters, never concatenated into the statement.
 
 `tx` is for an engine that will not open a transaction from SQL: a Cloudflare
-Durable Object refuses `savepoint` as a statement and hands out
-`transactionSync` instead
-([@yaks/durable-object](https://jsr.io/@yaks/durable-object) passes it here).
-Omit it and the store opens its own SAVEPOINTs, which is what every ordinary
-SQLite connection wants.
+Durable Object rejects `savepoint` as a statement and provides `transactionSync`
+instead ([@yaks/durable-object](https://jsr.io/@yaks/durable-object) passes it
+here). Omit it and the store opens its own SAVEPOINTs, which is what every
+ordinary SQLite connection wants.
 
 ## The storage layout
 
@@ -209,11 +209,11 @@ SQLite connection wants.
 - a `tombstone` table — a deleted entity keeps its `entity` row (its integer id
   never recycles) and gains a tombstone the reads exclude on;
 - one table per component, keyed by an integer `entity` owner; a reference
-  stores the target's integer id (with a foreign key), a scalar its value, a
-  column-less component is a bare tag whose row's existence is the fact;
+  stores the target's integer id (with a foreign key), a scalar its value, and a
+  component with no columns is a bare tag whose row's existence is the fact;
 - one index per `unique`/`index` a component declares, named after the columns
   it covers (`app_space_slug`) — a unique one is the constraint a race is
-  decided by, and the losing insert is refused by the engine;
+  decided by, and the losing insert is rejected by the engine;
 - a `doc_value` read view when the vocabulary declares a `doc` component;
 - a `server_meta` key/value table — the store's own, described below.
 
@@ -223,9 +223,9 @@ to `storage()`. SQLite does not depend on FTS or create its indexes.
 
 ### The batch as a world: the overlay
 
-A rule is a query, and a query reads tables — so a rule judged against a batch
-that has not been written yet needs the batch to BE a table. `overlay()` makes
-it one, as a `with` prefix the statement carries:
+A rule is a query, and a query reads tables — so a rule evaluated against a
+batch that has not been written yet needs the batch to BE a table. `overlay()`
+makes it one, as a `with` prefix the statement carries:
 
 ```ts
 import { overlay } from '@yaks/sqlite'
@@ -242,19 +242,19 @@ the committed row once, here; a dropped component and a deleted entity leave the
 CTE; an entity the batch mints gets a NEGATIVE integer id (storage hands out
 positive ones), so a rule can join two entities the same batch created.
 
-What the batch TOOK gets a list of its own (`over.gone`), because a dropped row
-leaves the CTE and "it was taken" then reads exactly like "it was never there".
-`-comp` (@yaks/query's deletion clause) is the question that tells them apart,
-and `rules.ts` contributes its lowering as an @yaks/sql extension — so a rule,
-or a pattern effect, can fire on what a batch removed. A statement with no
-overlay under it answers that clause `false`: asked of the file outright, a
-match is about what is, never about what went.
+What the batch REMOVED gets a list of its own (`over.gone`), because a dropped
+row leaves the CTE and "it was removed" then reads exactly like "it was never
+there". `-comp` (@yaks/query's deletion clause) is the query that tells them
+apart, and `rules.ts` contributes its lowering as an @yaks/sql extension — so a
+rule, or a pattern effect, can fire on what a batch removed. A statement with no
+overlay under it evaluates that clause as `false`: run against the committed
+rows alone, a match is about what is stored, never about what was removed.
 
-It was temp tables shadowing the committed ones until an app-declared rule was
-run inside a deployed Worker: a Durable Object's SQLite refuses a temp object
-outright (`not authorized: SQLITE_AUTH`). A CTE runs wherever SQL does, and it
-took the shadowing hazard with it — while a temp table stood, an unqualified
-INSERT would have landed in it.
+This used to be temp tables shadowing the committed ones, until an
+application-declared rule was run inside a deployed Worker: a Durable Object's
+SQLite rejects a temp object outright (`not authorized: SQLITE_AUTH`). A CTE
+runs wherever SQL does, and it removed the shadowing hazard along with it —
+while a temp table stood, an unqualified INSERT would have landed in it.
 
 It costs the BATCH, never the database: the CTE NAMES the committed table for
 every row the batch never touched, so nothing is copied, and the fourth test in
@@ -262,28 +262,28 @@ every row the batch never touched, so nothing is copied, and the fourth test in
 of 2,002. Pass the components your rules name; a component nobody touched needs
 no overlay at all.
 
-What this asks of `@yaks/sql` is only that a dialect be believed: `table()`,
-`source()` for correlated subqueries, and `refEqAt()` for reference equality all
-route through it, so a dialect that reads a component from somewhere else is
-followed everywhere rather than only at the top-level joins.
+What this requires of `@yaks/sql` is only that its dialect be used everywhere:
+`table()`, `source()` for correlated subqueries, and `refEqAt()` for reference
+equality all route through it, so a dialect that reads a component from
+somewhere else is followed everywhere rather than only at the top-level joins.
 
-A seam, named and not built: an overlay is a query, so a browser that keeps its
-cache as tables could run the same compiled rule against the same shape locally.
-Nothing here assumes a server; nothing here builds that either.
+A possible extension, named and not built: an overlay is a query, so a browser
+that keeps its cache as tables could run the same compiled rule against the same
+shape locally. Nothing here assumes a server; nothing here builds that either.
 
 ### The store's own key/value
 
 Some facts belong to the STORE, not to anything in it: the epoch a returning
-client checks its cursor against, a sweep's high-water mark, the marker saying a
-one-shot repair already ran. They live in `server_meta`, beside the graph — a
-row there has no entity and no component, so no read, no bundle and no client
-cache can ever carry it.
+client checks its cursor against, a sweep's high-water mark, the marker
+recording that a one-shot repair already ran. They live in `server_meta`, beside
+the graph — a row there has no entity and no component, so no read, no bundle
+and no client cache can ever carry it.
 
 ```ts
 import { EPOCH, epoch, meta } from '@yaks/sqlite'
 
 let m = meta(driver)
-m.set('sweep', at) // text in, text out — the host spells its own values
+m.set('sweep', at) // text in, text out — the application formats its own values
 m.get('sweep') // string | undefined
 m.del('sweep')
 
@@ -291,16 +291,12 @@ epoch(driver) // the store's lineage id: minted once, read back forever
 ```
 
 `install()` mints the epoch, and `epoch()` is idempotent, so a store that has
-one keeps it. It WRITES; a read-only path asks `meta(driver).get(EPOCH)` and
-treats an absent one as a store no cursor can be trusted against.
+one keeps it. It WRITES; a read-only path calls `meta(driver).get(EPOCH)`
+instead and treats an absent one as a store no cursor can be trusted against.
 
-The table is spelled `server_meta` (exported as `META`) so it can never collide
+The table is named `server_meta` (exported as `META`) so it can never collide
 with a `meta` COMPONENT, and `create table if not exists` means installing over
-a host's existing one adopts it rather than raising a second.
-
-## License
-
-Apache-2.0
+an application's existing one adopts it rather than creating a second.
 
 Whole-entity gathers use `json_each(?)` to bind a bounded set of identities as
 one array, rather than preparing a statement per entity or a new placeholder
@@ -315,22 +311,23 @@ Load `archetypeDoc` and use the `archetypes()` graph plugin from
 `@yaks/archetype` to maintain the spine's archetype pointer. `install()`
 backfills existing rows. Presence and kind predicates automatically use a lazy
 plan-time catalog; ordinary value-only queries do not load it. `catalog(driver)`
-exposes the same per-plan resolver to hosts compiling SQL themselves; those
-hosts must compile and execute in one read transaction. The built-in query door
-does this automatically.
+exposes the same per-plan resolver to applications compiling SQL themselves;
+those applications must compile and execute in one read transaction. This
+package's own read path does that automatically.
 
 Whole gathers group owners by their descriptor's physical table set and select
-each known present component once, binding only owners wearing it. Singleton
-`get`/`pick` use that set too: even a requested-but-absent facet needs no probe.
-Readers with a smaller vocabulary ignore unknown tables without changing the
-descriptor. Table-set content is cached, never component values or database id
-assignments, so rollback, another writer, and boot retirement remain visible.
+each known present component once, binding only owners that have it. Singleton
+`get`/`pick` use that set too: even a requested-but-absent component needs no
+probe. Readers with a smaller vocabulary ignore unknown tables without changing
+the descriptor. Table-set content is cached, never component values or database
+id assignments, so rollback, another writer, and boot retirement remain visible.
 
-A host that writes a facet row past the graph (raw SQL into a component table,
-inside its own transaction) calls `reclassify(driver, eids)` there: the same
-physical-presence rule as boot, scoped to those owners, no queue and no
-triggers. It returns the pointers that moved and any descriptor it minted, as
-bundles the host can echo; descriptors and unknown eids are left alone.
+An application that writes a component row past the graph (raw SQL into a
+component table, inside its own transaction) calls `reclassify(driver, eids)`
+there: the same physical-presence rule as boot, scoped to those owners, no queue
+and no triggers. It returns the pointers that moved and any descriptor it
+minted, as bundles the application can broadcast; descriptors and unknown eids
+are left alone.
 
 Stores without the archetype vocabulary, and unclassified rows written through
 the low-level `patch()` API before backfill, retain the existing census
@@ -342,24 +339,25 @@ same-driver A/B snapshot, singleton, and graph single-cell/no-op comparison.
 ### Selective human numbering
 
 `storage(driver, vocab, { number: { except: ['entry'] } })` omits human numbers
-for entities carrying any listed facet. The policy sees all bundles in an
+for entities carrying any listed component. The policy sees all bundles in an
 admitted patch, even when a reference precedes the target's bundle. Exclusion
-wins over other facets (an entry that also carries `task` remains unnumbered).
-The engine does not know what `entry` means; applications choose the facets.
-`@yaks/ram` accepts the same option. Default numbering and `number: false`
-remain available.
+wins over other components (an entry that also carries `task` remains
+unnumbered). The engine does not know what `entry` means; applications choose
+the components. `@yaks/ram` accepts the same option. Default numbering and
+`number: false` remain available.
 
-Attaching an excluded facet to an already numbered entity clears its number.
-Removing that facet does not allocate a replacement number: identity is minted
-once. Applications enabling this policy on existing data must clear historical
-numbers for their excluded facets; the harness does this for `entry` on open.
+Attaching an excluded component to an already numbered entity clears its number.
+Removing that component does not allocate a replacement number: identity is
+minted once. Applications enabling this policy on existing data must clear
+historical numbers for their excluded components; the harness does this for
+`entry` on open.
 
 SQLite maintains a transactional `entity_sequence` high-water mark, initialized
 from existing numbers on install and advanced by insert/update triggers.
 Clearing numbers never recycles an old human identifier, even after reopening
 the store. RAM retains its existing transactional high-water counter. An
 identity minted as a bare reference in an _earlier_ transaction may already have
-consumed a number; classification cannot anticipate future facets.
+consumed a number; classification cannot anticipate future components.
 
 ## Preannounced migrations
 
@@ -390,11 +388,12 @@ monitor.stop() // before closing the application connection
 ```
 
 The example assumes `driver` is an existing SQLite driver. Use the same maximum
-polling interval across cooperating hosts; a longer interval on any peer needs a
-correspondingly longer grace period. The default is one second plus a 100 ms
-migration margin. Polling performs one control-table read per interval, not a
-query before every application operation. An observed generation change stops
-the monitor and invokes its callback once, even if it missed the pending phase.
+polling interval across cooperating applications; a longer interval on any peer
+needs a correspondingly longer grace period. The default is one second plus a
+100 ms migration margin. Polling performs one control-table read per interval,
+not a query before every application operation. An observed generation change
+stops the monitor and invokes its callback once, even if it missed the pending
+phase.
 
 The single row retains a generation, migration name, pending/applied/failed
 state, announcement/deadline timestamps, and completion/error information. It is
@@ -422,3 +421,7 @@ The control table must be initialized during that rollout. On a fresh open,
 migration that already completed; version compatibility still belongs to the
 application. Data-only transformations are announced just like DDL when
 performed via this API.
+
+## License
+
+Apache-2.0

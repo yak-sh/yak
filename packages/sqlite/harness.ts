@@ -2,10 +2,10 @@
 // in-memory SQLite driver over jsr:@db/sqlite, and a small made-up vocabulary
 // the test files write against. The domain is a tiny shop — documents,
 // products, reviews, makers, bookmarks, shelves — chosen so it exercises every
-// reference death word (a review cascades with its product, a product detaches
-// from a deleted maker, a bookmark is released) and both index spellings (a
-// product's unique sku, a shelf's composite slot) without any knowledge outside
-// this file.
+// declared reference death behavior (a review cascades with its product, a
+// product detaches from a deleted maker, a bookmark is released) and both index
+// forms (a product's unique sku, a shelf's composite slot) without any
+// knowledge outside this file.
 
 import { Database } from './db.ts'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -15,7 +15,7 @@ import type { Driver } from './driver.ts'
 import { storage, type Store } from './mod.ts'
 
 // A Driver over a fresh in-memory database, foreign keys enforced so a dangling
-// reference is refused the way it would be in production.
+// reference is rejected the way it would be in production.
 export let mem = (): Driver => {
   let db = new Database(':memory:')
   db.exec('pragma foreign_keys = on')
@@ -63,7 +63,8 @@ let doc: VocabDoc = {
       },
     },
     // Where a product sits on the floor: one product per slot, and an aisle
-    // read by the shelf order. The COMPOSITE spellings, said on the component.
+    // read by the shelf order. The COMPOSITE index, declared on the
+    // component.
     shelf: {
       component: true,
       type: 'object',
@@ -119,8 +120,9 @@ let doc: VocabDoc = {
 export let shop: Vocab = loadVocab(doc)
 
 // A ready store over a fresh in-memory database with the schema installed.
-// The shop numbers: its entities are things a person points at by number, so
-// the tests over it see the human line a host opts into.
+// The shop numbers its entities: they are things a person refers to by number,
+// so the tests over it see the human-readable numbering an application opts
+// into.
 export let store = (): Store => {
   let s = storage(mem(), shop, { number: true })
   s.install()

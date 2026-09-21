@@ -1,10 +1,10 @@
 /**
- * @yaks/alias — a name for an entity, and the id it is worth: the `alias` kind
- * of {@link https://jsr.io/@yaks/key | @yaks/key} for a
- * {@link https://jsr.io/@yaks/graph | @yaks/graph}.
+ * @yaks/alias — a persistent name for an entity, accepted anywhere its id is:
+ * the `alias` kind of key from {@link https://jsr.io/@yaks/key | @yaks/key},
+ * for a {@link https://jsr.io/@yaks/graph | @yaks/graph}.
  *
- * A `$alias` lives for one batch. This is the other one — the name that
- * outlives it:
+ * A `$alias` lives only for the list of changes it appears in. This is the
+ * other kind of name — one that is stored and outlives the write:
  *
  * ```ts
  * // written twice, a week apart, and there is ONE lemon cake
@@ -13,27 +13,28 @@
  * //   doc: { title: 'Lemon cakes', body: '3 lemons…' } }
  * ```
  *
- * The second write finds the name, resolves `$r` to the entity already wearing
- * it, and patches that — so a seed, a chunked import and a page that saves the
- * same row every time it opens are all idempotent without a lookup table.
+ * The second write finds the name, resolves `$r` to the entity that already
+ * has it, and patches that entity — so a seed script, a chunked import and a
+ * page that saves the same row every time it opens are all idempotent without a
+ * lookup table.
  *
  * ## A name is a key
- * `alias` is a KIND TAG on @yaks/key's `key{of, value}` carrier, which is where
- * everything structural lives: the key is its own entity, so one thing has as
- * many names as you write; its id is derived from the kind and the value, so a
- * name is unique by construction and reading one back is a `get`; and `of` dies
- * by cascade, so a deleted thing frees its names. The sugar above is this
- * package's — `alias{name}` on the entity is lifted into the key row at the
- * `normalize` phase.
+ * `alias` is one kind of key: the structure lives in @yaks/key's
+ * `key{of, value}` component. The key is its own entity, so one entity has as
+ * many names as you write; the key entity's id is derived from its kind and
+ * value, so a name is unique by construction and reading one back is a single
+ * `get`; and `of` is declared `death: cascade`, so deleting an entity frees its
+ * names. The shorthand above is this package's contribution — `alias{name}` on
+ * the entity is turned into the key entity during the `normalize` phase.
  *
- * ## A name goes where an eid goes
+ * ## A name is accepted wherever an eid is
  * ```ts
  * // { entity: { eid: '$c' }, comment: { target: 'recipe:lemon-cakes' } }
  * ```
- * A reference column takes a name, a bundle's own `entity.eid` takes one, and a
- * door takes one through `graph.address(ids)`. An id that IS an entity always
- * wins; an id shaped like a uuid or a content hash is never looked up at all,
- * so a batch of ordinary references costs nothing.
+ * A reference column accepts a name, a bundle's own `entity.eid` accepts one,
+ * and callers resolve one explicitly through `graph.address(ids)`. An id that
+ * IS an entity always wins; an id shaped like a UUID or a content hash is never
+ * looked up at all, so ordinary eid references cost nothing.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'

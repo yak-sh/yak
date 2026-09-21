@@ -17,36 +17,37 @@
 //                 tag whose presence is the fact.
 //   <index>       declared indexes plus automatic reference indexes, named after
 //                 the columns it covers. A unique one is the constraint a race
-//                 is decided by; the vocabulary is where that is said.
+//                 is decided by; the vocabulary is where it is declared.
 //   doc_value     a view over the `doc` component (when the vocabulary declares
 //                 one): its columns read as TEXT, plus a `rowid` alias. It is
 //                 what @yaks/sql reads a `doc` row through.
 //   server_meta   the store's own key/value, beside the graph: what the store
 //                 knows about itself (its epoch, a sweep's mark), never about
-//                 an entity. ./meta.ts is the seam that reads and writes it.
+//                 an entity. ./meta.ts reads and writes it.
 //
 // Columns are nullable by default: a patch may create a row from any subset of
-// its columns (that is what PATCH means), so a column demands a value only
-// where the vocabulary said so — a `required` column is NOT NULL, and the row
-// that omits it is refused at the engine unless a `default` fills it. An `enum`
-// is a CHECK, so a spelling outside the set is refused where it is written. A
-// reference carries a foreign key so a dangling id is refused at the engine,
-// except a `keep` reference, which outlives the row it points at and stays
-// key-free.
+// its columns (that is what PATCH means), so a column requires a value only
+// where the vocabulary declares one — a `required` column is NOT NULL, and the
+// row that omits it is rejected by the engine unless a `default` fills it. An
+// `enum` becomes a CHECK, so a value outside the set is rejected where it is
+// written. A reference carries a foreign key so a dangling id is rejected by
+// the engine, except a `keep` reference, which outlives the row it points at
+// and stays key-free.
 
 import type { Column, Index, Vocab } from '@yaks/vocab'
 import type { Driver } from './driver.ts'
 
 /**
- * The key/value table's name. Spelled `server_meta`, not `meta`, because a
+ * The key/value table's name. Named `server_meta`, not `meta`, because a
  * vocabulary may well declare a `meta` component and the two must never collide
  * — and because that is the name the fleet's live table already carries, so
- * installing over one adopts it instead of raising a second.
+ * installing over one adopts it instead of creating a second.
  */
 export let META = 'server_meta'
 
-// The identity table, the graveyard, and the store's own key/value. Fixed
-// shape — every layout has exactly this spine, whatever components ride on it.
+// The identity table, the tombstones, and the store's own key/value. Fixed
+// shape — every layout has exactly this spine, whatever components sit on
+// it.
 let SPINE = [
   `create table if not exists entity (
     id   integer primary key,
@@ -65,8 +66,8 @@ let SPINE = [
     entity     integer primary key references entity(id),
     deleted_at text not null
   )`,
-  // Keyed by `k`, valued by `v`, and nothing else: whatever a host keeps here
-  // it keeps as text under a name it chose (./meta.ts).
+  // Keyed by `k`, valued by `v`, and nothing else: whatever an application
+  // keeps here it keeps as text under a name it chose (./meta.ts).
   `create table if not exists ${META} (
     k text primary key,
     v text not null
@@ -76,12 +77,14 @@ let SPINE = [
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 let lit = (s: string): string => `'${s.replaceAll("'", "''")}'`
 
-// The clock, as SQLite spells the instant a row is written — the same ISO
-// form every `at` column carries, so a defaulted stamp reads like a stamped one.
+// The current time, as SQLite formats the instant a row is written — the same
+// ISO form every `at` column carries, so a defaulted timestamp reads like a
+// server-written one.
 export let NOW = `(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`
 
-// A column's default as SQL: the clock, or a literal a row takes when the
-// writer said nothing. A boolean stores as the integer it reads back as.
+// A column's default as SQL: the current time, or a literal a row takes when
+// the writer supplied no value. A boolean stores as the integer it reads back
+// as.
 let defaultSql = (c: Column): string | undefined => {
   let d = c.default
   if (!d) return undefined
@@ -94,9 +97,9 @@ let defaultSql = (c: Column): string | undefined => {
     : String(v)
 }
 
-// A closed set's CHECK. Every spelling the vocabulary admits on the way in is
-// admitted here too (an alias is an input spelling), so the engine never
-// refuses what the loader accepted.
+// A closed set's CHECK. Every value the vocabulary admits on the way in is
+// admitted here too (an alias is an accepted input value), so the engine never
+// rejects what the loader accepted.
 let checkSql = (c: Column): string | undefined =>
   c.category == 'enum'
     ? `check(${q(c.prop)} in (${
@@ -104,10 +107,11 @@ let checkSql = (c: Column): string | undefined =>
     }))`
     : undefined
 
-// A stored column's DDL fragment. Affinity comes straight off the interrogated
-// column; a foreign key rides a reference unless it is a `keep` reference,
-// which must survive its target's tombstone and so carries none. `required`
-// is NOT NULL, `default` and `enum` ride as written above.
+// A stored column's DDL fragment. Affinity comes straight off the column as the
+// vocabulary describes it; a reference carries a foreign key unless it is a
+// `keep` reference, which must survive its target's tombstone and so carries
+// none. `required` becomes NOT NULL; `default` and `enum` are emitted as
+// above.
 let colDdl = (c: Column): string => {
   let d = defaultSql(c)
   let parts = [
@@ -149,8 +153,8 @@ let stored = (v: Vocab, comp: string): Column[] =>
     .filter((c) => !c.computed)
 
 // One component's table. The `entity` owner is the primary key, so a component
-// is worn at most once per entity. A tag component (no stored columns) is just
-// the owner column — its row's existence is the whole fact.
+// is stored at most once per entity. A tag component (no stored columns) is
+// just the owner column — its row's existence is the whole fact.
 let tableDdl = (
   v: Vocab,
   comp: string,
@@ -170,9 +174,9 @@ let tableDdl = (
 
 // One declared index, named `<comp>_<cols>` — derived from what it covers, so
 // the name is the same in every store that loads the vocabulary and a second
-// install finds its own index already standing. `if not exists` is what makes a
+// install finds its own index already there. `if not exists` is what makes a
 // re-install a no-op; a UNIQUE one is the constraint a race is decided by (the
-// loser's insert is refused, and it re-reads to find the winner).
+// loser's insert is rejected, and it re-reads to find the winner).
 // A partial one covers only the rows that hold its `present` columns: the
 // rows without them are as many as they like, the rows with them are one.
 let indexDdl = (comp: string, i: Index): string =>
@@ -182,8 +186,9 @@ let indexDdl = (comp: string, i: Index): string =>
     ? ` where ${i.present.map((p) => `${q(p)} is not null`).join(' and ')}`
     : '')
 
-// How a stored document column reads as text. @yaks/blob swaps a body for
-// its address; the doc_value view resolves it for ordinary document reads.
+// How a stored document column reads as text. @yaks/blob replaces a body with
+// its address; the doc_value view resolves it back for ordinary document
+// reads.
 // Search indexes are composed separately by the application using @yaks/fts.
 export type Text = Record<string, (stored: string) => string>
 
@@ -193,11 +198,12 @@ let docDdl = (v: Vocab, text: Text): string[] => {
   // Absent a resolution the value IS the text, which is every ordinary column.
   let read = (prop: string, s: string) => text[`doc.${prop}`]?.(s) ?? s
   let cols = stored(v, 'doc').map((c) => c.prop)
-  // The view names its columns rather than starring them, because a star cannot
-  // replace one with the expression that resolves it. A star did have one
-  // virtue — it followed a table that GREW — so the view is DROPPED and raised
-  // again rather than left standing: it holds no rows, so re-cutting it costs
-  // nothing, and a view that lags its table is a read that fails at the engine.
+  // The view names its columns rather than selecting `*`, because `*` cannot
+  // replace one with the expression that resolves it. `*` did have one virtue —
+  // it followed a table that gained columns — so the view is DROPPED and
+  // recreated rather than left in place: it holds no rows, so recreating it
+  // costs nothing, and a view that lags its table is a read that fails at the
+  // engine.
   return [
     `drop view if exists doc_value`,
     `create view if not exists doc_value as
@@ -229,9 +235,9 @@ export let tabled = (vocab: Vocab, text: Text = {}): string[] => {
   ]
 }
 
-// Declared and automatic reference indexes. Raised last, after `grown()`: an index
-// may name a column its table only gained on this boot, and SQLite refuses one
-// over a column that is not there yet.
+// Declared and automatic reference indexes. Created last, after `grown()`: an
+// index may name a column its table only gained on this boot, and SQLite
+// rejects one over a column that is not there yet.
 export let indexed = (vocab: Vocab): string[] => [
   // Adapters that only replay schema() may still have the old spine. Until
   // they opt into archetypes/migration, do not index a column they lack.
@@ -247,7 +253,7 @@ export let indexed = (vocab: Vocab): string[] => [
 ]
 
 // The reference columns a component's table carries a foreign key FOR: the
-// stored references the vocabulary says are constrained (a `keep` reference
+// stored references the vocabulary declares as constrained (a `keep` reference
 // outlives its target's tombstone, so it never is), plus the owner column
 // every component table is keyed by.
 let bound = (v: Vocab, comp: string): Set<string> =>
@@ -259,16 +265,16 @@ let bound = (v: Vocab, comp: string): Set<string> =>
   ])
 
 /**
- * What `grown()` cannot say either: a reference whose DEATH moved after its
- * table was raised. A death word is what decides whether a column is
- * constrained, so changing one changes the table's foreign keys — and SQLite
- * has no `alter table drop constraint`. The table is rebuilt instead: a fresh
- * one beside it, the rows copied across the columns both have, the old one
- * dropped and the new one renamed into its place.
+ * What `grown()` cannot fix either: a reference whose declared DEATH behavior
+ * changed after its table was created. That declaration is what decides whether
+ * a column is constrained, so changing it changes the table's foreign keys —
+ * and SQLite has no `alter table drop constraint`. The table is rebuilt
+ * instead: a fresh one beside it, the rows copied across the columns both have,
+ * the old one dropped and the new one renamed into its place.
  *
  * Only a table whose keys DISAGREE with the vocabulary is touched, so this is
- * a no-op on every boot but the one after the vocabulary moved. It must run
- * before `indexed()`, which raises the indexes the drop took with it.
+ * a no-op on every boot but the one after the vocabulary changed. It must run
+ * before `indexed()`, which recreates the indexes the drop took with it.
  */
 export let refit = (driver: Driver, vocab: Vocab): string[] =>
   vocab.all.filter((name) => name != 'entity').flatMap((comp) => {
@@ -281,10 +287,10 @@ export let refit = (driver: Driver, vocab: Vocab): string[] =>
     let held = driver.query(`pragma table_info(${q(comp)})`, [])
     if (!held.length) return []
     // Every column the table HAS comes across, not every column the vocabulary
-    // knows: a word the vocabulary has since dropped is still a word this
-    // table's rows were written under, and a constraint change is no reason to
-    // take one away. Its declaration is copied off the standing table, minus
-    // whatever key it carried.
+    // declares: a column the vocabulary has since dropped is still a column
+    // this table's rows were written under, and a constraint change is no
+    // reason to remove one. Its declaration is copied off the existing table,
+    // minus whatever key it carried.
     let said = new Set(stored(vocab, comp).map((c) => c.prop))
     let extra = held.filter((r) =>
       r.name != 'entity' && !said.has(String(r.name))
@@ -311,17 +317,17 @@ export let refit = (driver: Driver, vocab: Vocab): string[] =>
     ]
   })
 
-// What `schema()` alone cannot say: the columns a component GREW after its
-// table was already raised. `create table if not exists` is silent about a
+// What `schema()` alone cannot do: add the columns a component GAINED after
+// its table was already created. `create table if not exists` does nothing to a
 // table that exists, so a vocabulary that gained a column leaves the table at
 // the shape it was first created with, and every read naming the new column
 // fails at the engine ("no such column"). SQLite has no
-// `add column if not exists`, so the live shape is interrogated and only the
+// `add column if not exists`, so the live shape is inspected and only the
 // missing columns are added.
 //
 // Additive only, and deliberately: nothing is dropped and nothing is retyped,
-// because rows are already written under the words the table has. A column
-// arrives in the form SQLite accepts an `add column` in (grownDdl above).
+// because rows are already written under the columns the table has. A column
+// is emitted in the form SQLite accepts in an `add column` (grownDdl above).
 export let grown = (driver: Driver, vocab: Vocab): string[] => [
   ...(driver.query('pragma table_info(entity)', []).some((r) =>
       r.name == 'archetype'

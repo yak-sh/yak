@@ -1,42 +1,44 @@
-// Admission: what a batch is allowed to say. Three rules, and each is a
+// Admission: what a change is allowed to contain. Three rules, and each is a
 // deliberate choice about which mistakes are loud and which are silent.
 //
-//   an unknown COMPONENT is dropped     forward compatibility: a newer client
+//   an undeclared COMPONENT is dropped  forward compatibility: a newer client
 //                                       may send a component this graph has
 //                                       never heard of, and the rest of its
-//                                       batch must still land
-//   an unknown COLUMN is refused        on a component the vocabulary DOES
-//                                       know, an unrecognized column is a
-//                                       typo, and a silently dropped title is
-//                                       worse than a refused batch
-//   a server-owned column is dropped    `stamped` columns are readable, never
-//                                       wire-writable; a caller who sends one
-//                                       is ignored, not punished (a whole
-//                                       bundle read back and sent again is a
-//                                       normal thing to do)
+//                                       change must still be applied
+//   an undeclared COLUMN is refused     on a component the vocabulary DOES
+//                                       declare, an unrecognized column is a
+//                                       typo, and silently dropping a title is
+//                                       worse than refusing the change
+//   a server-owned column is dropped    `stamped` columns are readable but
+//                                       never writable by a client; a caller
+//                                       that sends one is ignored rather than
+//                                       refused (reading a whole bundle back
+//                                       and sending it again is a normal thing
+//                                       to do)
 //
-// Column VALUES are checked against the vocabulary too — an enum member, a
+// Column VALUES are validated against the vocabulary too — an enum member, a
 // number where a number belongs, a scalar rather than a nested object. That is
 // the vocabulary's own `check`, not a JSON Schema validator: this package
-// carries no validator dependency, and a graph that wants full JSON Schema
-// validation registers one as an `admit` hook.
+// depends on no validator, and a graph that wants full JSON Schema validation
+// registers one as an `admit` hook.
 
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
 import { comps, dead, RESERVED } from './bundle.ts'
 
-/** A batch refused at admission: the component and column are named so the
- * caller can see which word was wrong. */
+/** A change refused at admission: the message names the component and the
+ * column, so the caller can see exactly what was wrong. */
 export class Refused extends Error {
-  /** @param message what was wrong, in the caller's own spelling */
+  /** @param message what was wrong, naming the component and column the caller
+   * sent */
   constructor(message: string) {
     super(message)
     this.name = 'Refused'
   }
 }
 
-// The columns a caller may write on a component: its wire-writable ones, plus
-// the server-owned ones when the caller is trusted. A computed column
+// The columns a caller may write on a component: the client-writable ones,
+// plus the server-owned ones when the caller is trusted. A computed column
 // (`computed: true`) is in neither — it is derived, so there is nothing to
 // write — and is dropped like a stamped one.
 let allowed = (v: Vocab, comp: string, trusted: boolean): Set<string> => {
@@ -44,9 +46,9 @@ let allowed = (v: Vocab, comp: string, trusted: boolean): Set<string> => {
   return new Set(trusted ? [...info.writable, ...info.stamped] : info.writable)
 }
 
-// One component patch, admitted: unknown columns refused, unwritable ones
-// dropped, values checked. Returns undefined when the caller sent columns and
-// every one of them was dropped — nothing is left to write.
+// One component patch, admitted: undeclared columns refused, unwritable ones
+// dropped, values validated. Returns undefined when the caller sent columns
+// and every one of them was dropped — nothing is left to write.
 let admitComp = (
   v: Vocab,
   name: string,
@@ -57,9 +59,9 @@ let admitComp = (
   let declared = new Set(columns)
   let alien = Object.keys(patch).filter((c) => !declared.has(c))
   if (alien.length) {
-    // The refusal names the VOCABULARY, not just the mistake: a caller writing
-    // a column that does not exist is a caller whose picture of this component
-    // is wrong, and the columns it does have are the shortest way to fix it.
+    // The refusal lists the VOCABULARY, not just the mistake: a caller writing
+    // a column that does not exist has the wrong idea of this component, and
+    // the columns it actually has are the shortest way to correct that.
     throw new Refused(
       `unknown column${alien.length > 1 ? 's' : ''}: ${
         alien.map((c) => `${name}.${c}`).join(', ')
@@ -77,11 +79,11 @@ let admitComp = (
 }
 
 /**
- * The admit phase: every bundle in the batch, reduced to what this graph's
- * vocabulary knows and this caller may write. A bundle whose every component
- * was dropped leaves the batch — it asked for nothing this graph can do.
- * `trusted` admits server-owned columns, and is the door's decision, never a
- * client's.
+ * The admit phase: every bundle in the change, reduced to what this graph's
+ * vocabulary declares and this caller may write. A bundle whose components
+ * were all dropped is removed from the change — it asked for nothing this
+ * graph can do. `trusted` admits server-owned columns; it is the calling
+ * program's decision, never a client's.
  */
 export let admit = (
   bundles: Bundle[],
@@ -98,10 +100,12 @@ export let admit = (
     let kept = 0
     for (let [name, patch] of sent) {
       let info = vocab.comp(name)
-      if (!info) continue // an unknown component is a no-op, not an error
-      if (!info.wire && !trusted) continue // the spine is not wire-writable
+      if (!info) continue // an undeclared component is a no-op, not an error
+      // A component marked `wire: false` — the `entity` identity component,
+      // for one — is not writable by a client.
+      if (!info.wire && !trusted) continue
       if (patch == null) {
-        out[name] = null // dropping a component needs no columns
+        out[name] = null // removing a component needs no columns
         kept++
         continue
       }
@@ -110,7 +114,7 @@ export let admit = (
       out[name] = admitted
       kept++
     }
-    // A delete stands on its own: dropping every component it also carried
-    // does not make the death go away.
+    // A delete stands on its own: dropping every component the bundle also
+    // carried does not cancel the delete.
     return kept || dead(b) ? [out] : []
   })

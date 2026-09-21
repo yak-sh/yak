@@ -1,27 +1,30 @@
-// The DECLARED rules, run. A rule is a query (./join.ts reads one into a
-// plan); a storage answers the query against the batch as though it had landed
-// (its `bindings` door, over a batch overlay); and this file is the other
-// half — what a bound row WRITES, and how a batch settles.
+// Running the DECLARED rules. A rule is a query (./join.ts parses one into a
+// plan); a storage adapter evaluates that query against the graph with the
+// pending change folded in (its `bindings` method, over an overlay of the
+// change); and this file is the other half — what a matched row WRITES, and
+// how the whole set of rules reaches a fixpoint.
 //
-// The emit is small on purpose. Each pattern of a rule writes what its `+`
-// and `*` words said: a gated or ensured component arrives as a bare row, and
-// `+result.call=$call` fills a column with what the variable took. A pattern
-// that only writes MAKES its entity, and the id is DERIVED from the rule's
-// name and the entities it bound (./identity.ts `derivedEid`) — so the same
-// rule on the same binding names the same entity, in this batch or a later
-// one, and a rule cannot make a second copy of what it already made.
+// What a rule emits is deliberately small. Each of its patterns writes exactly
+// what its `+` and `*` clauses declared: a `+comp` or `+!comp` component
+// arrives as an empty component, and `+result.call=$call` fills a column with
+// whatever the variable was bound to. A pattern that only writes CREATES its
+// entity, and that entity's id is DERIVED from the rule's name and the
+// entities it matched (./identity.ts `derivedEid`) — so the same rule on the
+// same match always produces the same entity, in this change or a later one,
+// and a rule cannot create a second copy of what it already created.
 //
-// THE FIXPOINT, and why it is short. What a rule produces joins the batch, the
-// overlay is raised again, and every rule is asked again — so a rule may fire
-// on what another rule just wrote. It settles because a rule fires AT MOST
-// ONCE per `(rule name, the entities it bound)`: a firing that repeats a key
-// is not a slow fixpoint, it is a rule that failed to gate itself, and it is
-// refused by name and by binding rather than looped over. That refusal is the
-// whole termination argument; there is no round budget doing the real work.
+// THE FIXPOINT, and why it terminates quickly. What a rule produces joins the
+// change, the overlay is rebuilt, and every rule is evaluated again — so a rule
+// can fire on what another rule just wrote. It terminates because a rule fires
+// AT MOST ONCE per `(rule name, the entities it matched)`: a second firing with
+// the same key is not slow convergence, it is a rule that failed to exclude
+// what it had already written, and it throws, naming the rule and the match,
+// rather than being looped over. That refusal is the whole termination
+// argument; there is no iteration limit doing the real work.
 //
-// Nothing here writes rows. The patches join the batch and `mutate` writes
+// Nothing here writes rows. The patches join the change and `mutate` writes
 // them, so a rule's output is admitted, stamped, journaled, cascaded and
-// answered like anything a client sent.
+// returned exactly like anything a client sent.
 
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { derivedEid } from './identity.ts'
@@ -33,8 +36,8 @@ import type { Column, Vocab } from '@yaks/vocab'
 
 /**
  * A rule as DECLARED: a name, the query it matches, and the rules it runs
- * before. The name is not decoration — it is half the key a rule fires once
- * per, and the word a refusal says.
+ * before. The name is not decoration — it is half of the key a rule may fire
+ * only once per, and what a refusal names.
  */
 export type Declared = {
   name: string
@@ -44,17 +47,18 @@ export type Declared = {
   before?: string[]
 }
 
-/** A declared rule with its match read. */
+/** A declared rule with its match already parsed. */
 export type Ready = { rule: Declared; plan: Match }
 
-/** Read a set of declarations, in the order they should run. */
+/** Parse a set of declarations, in the order they should run. */
 export let ready = (rules: Declared[]): Ready[] =>
   ordered(rules).map((rule) => ({ rule, plan: match(rule.match) }))
 
-// The declared order: alphabetical by name, refined by `before` — the same
-// shape a vocabulary orders its kinds by, so nothing depends on which plugin
-// was registered first. `before` names what comes AFTER, so it is read as the
-// other rule's dependency and every rule is emitted once its own are out.
+// The order rules run in: alphabetical by name, then adjusted by `before` —
+// the same ordering a vocabulary uses for its kinds, so nothing depends on
+// which plugin was registered first. `before` names the rules that come AFTER
+// this one, so it is read as those rules depending on this one, and each rule
+// is emitted once every rule it depends on has been.
 let ordered = (rules: Declared[]): Declared[] => {
   let by = new Map(rules.map((r) => [r.name, r]))
   let first = new Map<string, string[]>()
@@ -84,10 +88,10 @@ let ordered = (rules: Declared[]): Declared[] => {
   return out
 }
 
-// What a written value comes to: a `$name` is what the binding bound, a
-// `#Name` is the resource it stands for, and a literal is the raw token the
-// grammar kept — read as the column's own type, because a query's values are
-// text and a column's are not.
+// What a written value resolves to: a `$name` is whatever the match bound, a
+// `#Name` is the value that resource converts to, and a literal is the raw
+// token the grammar kept — parsed as the column's own type, because a query's
+// values are text and a column's are not.
 let worth = (
   value: Value,
   col: Column | undefined,
@@ -112,14 +116,15 @@ let worth = (
   return raw
 }
 
-/** The key a rule fires at most once per: its name, and what it bound. */
+/** The key a rule may fire at most once per: its name, and the entities it
+ * matched. */
 export let firing = (rule: Declared, row: Binding): string =>
   `${rule.name}(${row.entities.map((e) => e ?? '·').join(', ')})`
 
 /**
- * One bound row, as bundles. Every pattern writes what its own words said; a
- * pattern that makes its entity is named from the firing, so the same binding
- * always names the same entity.
+ * One matched row, as bundles. Every pattern writes what its own clauses
+ * declared; a pattern that creates its entity derives that entity's id from
+ * this key, so the same match always produces the same entity.
  */
 export let emitted = (
   { rule, plan }: Ready,
@@ -128,8 +133,8 @@ export let emitted = (
   resource: (name: string) => unknown = () => undefined,
 ): Bundle[] => {
   let key = firing(rule, row)
-  // The entities each pattern is about, the made ones named first so a `$name`
-  // written into a column can point at one.
+  // The entity each pattern is about. The ids of created entities are derived
+  // first, so a `$name` written into a column can reference one.
   let at: Eid[] = plan.patterns.map((p, i) =>
     p.makes ? derivedEid(`${key}#${i}`) : row.entities[i]!
   )
@@ -150,9 +155,10 @@ export let emitted = (
         made,
         resource,
       )
-      // A resource standing for NOTHING writes nothing — `+created.by=#Actor`
-      // on a batch nobody signed leaves the column alone rather than clearing
-      // it, so a rule needs no conditional around the column it wanted.
+      // A resource that converts to NOTHING writes nothing —
+      // `+created.by=#Actor` on a change nobody signed leaves the column alone
+      // rather than clearing it, so a rule needs no conditional around the
+      // column it wanted to write.
       if (v !== undefined) patch[s.comp][s.prop] = v
     }
     if (Object.keys(patch).length) {
@@ -163,15 +169,16 @@ export let emitted = (
 }
 
 /**
- * Run a set of declared rules over a batch until nothing new fires.
+ * Run a set of declared rules over a change until nothing new fires.
  *
- * `tx.bindings` is the storage's door: it answers each match against the graph
- * with the batch folded in. A storage that has none runs no declared rules —
- * they are a query, and a store that cannot answer one has nothing to say.
+ * `tx.bindings` is the storage adapter's method: it evaluates each match
+ * against the graph with the pending change folded in. A storage adapter
+ * without it runs no declared rules — a rule is a query, and a store that
+ * cannot evaluate one can say nothing about it.
  *
- * `admit` is the graph's own admission, handed in so this file need not know
- * what a column is: what a rule wrote goes through it before it joins the
- * batch.
+ * `admit` is the graph's own admission function, passed in so this file need
+ * not know what a column is: whatever a rule wrote goes through it before it
+ * joins the change.
  */
 export let settle = (
   rules: Ready[],
@@ -195,8 +202,8 @@ export let settle = (
             if (fired.has(key)) {
               throw new Error(
                 `rule ${r.rule.name} fired twice on the same binding: ` +
-                  `${key} — a rule that has to look again is a rule that did ` +
-                  `not gate itself`,
+                  `${key} — a rule that matches again after it has written ` +
+                  `is a rule whose match does not exclude its own output`,
               )
             }
             fired.add(key)
@@ -205,9 +212,9 @@ export let settle = (
         })
         if (!made.length) return batch
         // Admitted like anything else that reaches the graph: a column this
-        // vocabulary does not declare is dropped, a value it refuses refuses
-        // the batch. A rule is server code, so its server-owned columns are
-        // its to write.
+        // vocabulary does not declare is dropped, and a value it rejects
+        // refuses the whole change. A rule is server code, so it is allowed to
+        // write server-owned columns.
         return round([...batch, ...admit(made)])
       },
     )
@@ -217,11 +224,11 @@ export let settle = (
 /**
  * A TEMPLATE, invoked: the template's query merged with its arguments as a
  * bindings query (./join.ts `filled`), matched against the graph once, and the
- * bundles it emits — for a host to land as an ordinary batch.
+ * bundles it emits — for the caller to apply as an ordinary change.
  *
- * It is the same engine the rules phase runs, asked outright instead of about
- * a batch. That is the whole of what a template is: a rule with its variables
- * filled in.
+ * It is the same engine the `rules` phase runs, called directly instead of
+ * being asked about a pending change. That is all a template is: a rule with
+ * its variables filled in.
  */
 export let invoked = (
   tx: Tx,
@@ -241,7 +248,8 @@ export let invoked = (
   )
 }
 
-/** The components a rule set reads — what a batch overlay has to cover. */
+/** The components a set of rules reads — what storage's overlay of the pending
+ * change has to cover. */
 export let cover = (rules: Ready[], vocab: Vocab): string[] => [
   ...new Set(rules.flatMap((r) => reads(r.plan, vocab))),
 ]

@@ -58,9 +58,9 @@ let multiple = (sql: string): boolean =>
 
 /** The stand-in's prepared statement. It carries the SQL and bindings it was
  * given, which is how `batch` reads back what it was handed. `all`, `first` and
- * `run` are the three doors D1 offers onto ONE round trip; the adapter uses
+ * `run` are the three methods D1 offers for ONE round trip; the adapter uses
  * `all`, and the other two are here so that a count of round trips
- * ({@link counting}) cannot be dodged by switching doors. */
+ * ({@link counting}) cannot be dodged by switching methods. */
 export type Prepared = {
   sql: string
   params: D1Value[]
@@ -148,7 +148,7 @@ export let store = async (vocab: Vocab = shop): Promise<Store> => {
  * preparing a statement costs nothing until it is run.
  */
 export type Hops = {
-  /** statements prepared — free, but it says how wide the batches are */
+  /** statements prepared — free, but it shows how wide the batches are */
   prepare: number
   /** `batch()` calls — one round trip each */
   batch: number
@@ -175,7 +175,8 @@ export type Counted = {
 }
 
 /**
- * A {@link d1} stand-in that counts. Every door onto a round trip is counted,
+ * A {@link d1} stand-in that counts. Every method that makes a round trip is
+ * counted,
  * including the ones this adapter does not use, so the tally is the whole
  * traffic and not just the traffic it expects.
  */

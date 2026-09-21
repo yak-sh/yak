@@ -1,13 +1,14 @@
-// The runtime. `loadVocab(docs)` reads one or more JSON Schema vocab documents
-// into an in-memory `Vocab` and exposes the interrogation + routing API a binder
-// (@yaks/sql) consumes: what a column IS, how a dotted path routes to
-// {comp, prop} hops, the derived kindOrder and the kind an entity carries, and
-// whether an instance is well-formed. The same questions a hand-generated set
-// of types answers over one hardcoded vocabulary, answered here over a LOADED
-// instance instead — parameterized, not hardcoded.
+// The runtime. `loadVocab(docs)` reads one or more JSON Schema vocabulary
+// documents into an in-memory `Vocab` and exposes the query and routing API a
+// storage binder (@yaks/sql) calls: what a column IS, how a dotted path routes
+// to {comp, prop} hops, the derived kindOrder and the kind an entity carries,
+// and whether an instance is well-formed. These are the same questions a
+// hand-generated set of types answers over one hardcoded vocabulary, answered
+// here over a LOADED document instead — parameterized, not hardcoded.
 //
-// A vocab ships zero components: your components are an instance it loads, and a
-// small app is a smaller instance in the same format.
+// This package declares zero components: the components you declare are an
+// instance of the format, and a small app is a smaller instance of the same
+// format.
 
 import type {
   Assoc,
@@ -27,10 +28,11 @@ import type { Keywords } from './keywords.ts'
 import { kept, said, type Sync } from './lifetime.ts'
 import { kindOrder as deriveKindOrder } from './order.ts'
 
-/** A word this vocabulary does not know. One sentence for every door, minted
- * here because the vocabulary is what decides: `route()` when nothing claims
- * the bare spelling, and a binder (@yaks/sql) when a presence form names a
- * component it has no table for. `prop` is the word, unadorned. */
+/** A name this vocabulary does not know. One error message for every caller,
+ * raised here because the vocabulary is what decides: `route()` raises it when
+ * nothing claims the bare name, and the storage binder (@yaks/sql) raises it
+ * when a presence test names a component it has no table for. `prop` is the
+ * name, unadorned. */
 export class Unknown extends Error {
   prop: string
   constructor(prop: string) {
@@ -40,11 +42,12 @@ export class Unknown extends Error {
   }
 }
 
-/** A bare word several components claim. The vocabulary alone cannot say which
- * is meant — so it says WHICH ONES, and whoever holds more of the sentence than
- * one word decides between them (@yaks/graph's `meaning`, which reads the comp
- * off the rest of the line). Unresolved, it reaches the caller as this: the
- * word, the choices, and a qualified spelling to type instead. */
+/** A bare name several components declare. The vocabulary alone cannot decide
+ * which is meant, so it reports WHICH ONES, and a caller that holds more than
+ * the one name picks between them (@yaks/graph's `meaning`, which reads the
+ * component off the rest of the query). Unresolved, it reaches the caller as
+ * this error: the name, the candidates, and a qualified name to use
+ * instead. */
 export class Ambiguous extends Error {
   prop: string
   comps: string[]
@@ -58,8 +61,8 @@ export class Ambiguous extends Error {
   }
 }
 
-// The extension keywords a registration admits, picked off a schema verbatim.
-// A keyword the caller did not register is invisible: the loader carries what
+// The extension keywords a registration admits, copied off a schema verbatim.
+// A keyword the caller did not register is dropped: the loader carries what
 // somebody asked for and nothing else.
 let carried = (
   s: PropSchema,
@@ -70,8 +73,8 @@ let carried = (
   return out
 }
 
-// One property schema → the column it describes. The scalar spelling is
-// reconstructed from native JSON Schema (`type` + `format`), so a vocab
+// One property schema → the column it describes. The scalar type name is
+// reconstructed from native JSON Schema (`type` + `format`), so a vocabulary
 // authored in plain JSON Schema round-trips to this compact type set.
 let scalarOf = (s: PropSchema): Scalar => {
   if (s.type == 'boolean') return 'bool'
@@ -95,8 +98,9 @@ let jsonText = (value: unknown): boolean => {
   }
 }
 
-// A number stores as real unless the schema said `integer`, which is native
-// JSON Schema saying the value has no fraction — so the store keeps it as one.
+// A number stores as real unless the schema declared `integer`, which is
+// native JSON Schema's way of stating the value has no fractional part — so
+// the store keeps it as one.
 let affinityOf = (
   category: Column['category'],
   scalar: Scalar | undefined,
@@ -108,9 +112,9 @@ let affinityOf = (
     ? 'real'
     : 'text'
 
-// Native `default`, read as the two things a row can take: the clock, spelled
+// Native `default`, read as the two things a row can take: the clock, written
 // `{"now": true}`, or a scalar literal. Anything else is no default — the
-// storable check is what refuses it.
+// storable check is what rejects it.
 let defaultOf = (d: unknown): Default | undefined =>
   d != null && typeof d == 'object' && (d as { now?: unknown }).now === true
     ? { now: true }
@@ -118,8 +122,8 @@ let defaultOf = (d: unknown): Default | undefined =>
     ? { value: d }
     : undefined
 
-// A death word, narrowed honestly — anything outside the four is undefined
-// here and refused by the storable check.
+// A `death` value, narrowed to the declared type — anything outside the four
+// is undefined here and rejected by the storable check.
 let deathOf = (s?: string): Death | undefined =>
   s == 'cascade' || s == 'detach' || s == 'release' || s == 'keep'
     ? s
@@ -163,12 +167,12 @@ let columnOf = (
   }
 }
 
-// The interrogation surface. Every method answers over the loaded instance;
-// none reads a global.
+// The query surface. Every method answers over the loaded documents; none
+// reads a global.
 export type Vocab = {
   docs: VocabDoc[]
   keywords: Keywords[] // the extension vocabularies this load registered
-  comps: string[] // wire-writable component names, alphabetical
+  comps: string[] // component names a client may write, alphabetical
   all: string[] // every declared component name, alphabetical
   kinds: string[] // kindOrder: alphabetical, refined by `before`, topo-sorted
   comp: (name: string) => CompInfo | undefined
@@ -179,14 +183,15 @@ export type Vocab = {
   indexes: (comp: string) => Index[]
   /** The columns this component's entities are IDENTIFIED by — the tuple the
    * id is derived from, in derivation order, or `[]` for the ordinary
-   * component whose entities take a minted id. @yaks/graph is what derives. */
+   * component whose entities take a minted id. @yaks/graph does the
+   * derivation. */
   identity: (comp: string) => Identity
   route: (prop: string) => { comp: string; prop: string }
-  /** A dotted path → the hops it names. `facet` says the predicate is the bare
-   * presence form (`.name!`), where a single segment naming a COMPONENT is that
-   * component's facet even if a same-named column would otherwise claim the
-   * bare spelling. A word no column claims names an undeclared component too;
-   * its presence needs no column schema. */
+  /** A dotted path → the hops it names. Pass `facet` when the predicate is the
+   * bare presence test (`.name!`): a single segment naming a COMPONENT is then
+   * a test for that component, even if a column of the same name would
+   * otherwise claim the bare name. A name no column claims is read as a
+   * component too, since a presence test needs no column schema. */
   aim: (path: string, facet?: boolean) => Hop[]
   assoc: (name: string) => Assoc | undefined
   kindOf: (has: Record<string, unknown>) => string
@@ -201,19 +206,20 @@ export type Vocab = {
 
 // The composite lists a component declares under one keyword, each entry read
 // to its columns and the columns it needs present. A boolean there is the
-// COLUMN spelling misplaced, and means nothing about the whole table, so it
-// reads as no list rather than a refusal the meta-schema already makes.
+// COLUMN form of the keyword misplaced, and means nothing about the whole
+// table, so it reads as no list rather than as an error the meta-schema
+// already raises.
 export let composite = (
   c: Composite,
 ): { cols: string[]; present?: string[] } => Array.isArray(c) ? { cols: c } : c
 let lists = (v: unknown): { cols: string[]; present?: string[] }[] =>
   Array.isArray(v) ? (v as Composite[]).map(composite) : []
 
-// The columns a component's entities are identified BY, from the two spellings
+// The columns a component's entities are identified BY, from the two forms
 // that declare them: a column's own `identity` flag, or the component's list
-// when the identity is spelled across several columns. The list wins when both
-// are there, because it is the one that says the ORDER, and the order is part
-// of the sentence the id is derived from.
+// when the identity spans several columns. The list wins when both are there,
+// because the list is what fixes the ORDER, and the order is part of the
+// string the id is derived from.
 //
 // One tuple per component and never a list of them — `unique` may hold several
 // because a row can be unique several ways, but an entity has ONE id.
@@ -226,11 +232,11 @@ let identityOf = (comp: PropSchema | undefined): Identity => {
     .map(([prop]) => prop)
 }
 
-// A component's indexes, from the two spellings that declare them: a column's
-// own `unique`/`index` flag is that one column's index, and the component's
-// lists are the composites. Column flags come first, in declaration order, then
+// A component's indexes, from the two forms that declare them: a column's own
+// `unique`/`index` flag is that one column's index, and the component's lists
+// are the composites. Column flags come first, in declaration order, then
 // the composites; a pair of columns declared twice is ONE index, unique if
-// either spelling asked for uniqueness. Every stored reference is indexed too,
+// either form asked for uniqueness. Every stored reference is indexed too,
 // unless it already leads a declared index (including a composite identity).
 let indexesOf = (
   comp: PropSchema | undefined,
@@ -243,8 +249,8 @@ let indexesOf = (
     let key = names.join(',')
     let had = out.get(key)
     let index: Index = { cols: names, unique: unique || !!had?.unique }
-    // The narrower spelling wins: an index asked for over present rows only
-    // stays partial even where the plain tuple was also declared.
+    // The narrower form wins: an index asked for over present rows only stays
+    // partial even where the plain tuple was also declared.
     let where = present ?? had?.present
     if (where) index.present = where
     out.set(key, index)
@@ -258,8 +264,8 @@ let indexesOf = (
   for (let c of lists(comp.unique)) add(c.cols, true, c.present)
   for (let c of lists(comp.index)) add(c.cols, false, c.present)
   // An identity is unique by construction — two rows sharing the value would
-  // be one entity — so the index says out loud what the derivation already
-  // guarantees, and a store that somehow held two says so at the row.
+  // be one entity — so the index states what the derivation already
+  // guarantees, and a store that somehow held two rejects the second one.
   add(identityOf(comp).filter((p) => cols(p)?.computed === false), true)
   let leading = new Set([...out.values()].map((i) => i.cols[0]))
   for (let prop of Object.keys(comp.properties ?? {})) {
@@ -271,18 +277,19 @@ let indexesOf = (
   return [...out.values()]
 }
 
-// The spine, and the identity column no vocabulary authors. A document declares
-// what `entity` STORES beside it (the number a store mints); the `eid` is the
-// model's — every entity has one — so the loader ROUTES it (`.eid=`,
-// `.entity.eid=`) rather than making each vocabulary re-declare it. It stays
-// out of `columns()` on purpose: identity is not prose and has no row of its
-// own, so it never reaches a text index, an embedding, or a component's DDL.
+// The spine component, and the identity column no vocabulary declares. A
+// document declares what `entity` STORES beside it (the number a store mints);
+// the `eid` is built in — every entity has one — so the loader ROUTES it
+// (`.eid=`, `.entity.eid=`) rather than making each vocabulary re-declare it.
+// It stays out of `columns()` on purpose: an id is not prose and has no column
+// of its own, so it never reaches a text index, an embedding, or a component's
+// DDL.
 let SPINE = 'entity'
 let EID = 'eid'
 
-// A component's whole shape in one line, for a refusal that teaches: `doc has
-// title (text), body (body)`. A refusal naming only what it failed to parse
-// teaches nothing.
+// A component's whole shape in one line, for an error message that teaches:
+// `doc has title (text), body (body)`. An error naming only what it failed to
+// parse teaches nothing.
 let shapeOf = (v: Vocab, comp: string): string => {
   let cols = v.columns(comp)
   if (!cols.length) return `${comp} has no columns`
@@ -299,9 +306,10 @@ let shapeOf = (v: Vocab, comp: string): string => {
 }
 
 /**
- * Who hears about a write to a component — `server` for a component this
- * vocabulary has never heard of, which is the same answer an undeclared one
- * gives, so a caller never has to special-case the unknown.
+ * Who is told about a write to a component — `server` for a component this
+ * vocabulary does not declare, which is the same answer a declared component
+ * with no `sync` keyword gives, so a caller never has to special-case the
+ * unknown.
  */
 export let syncOf = (v: Vocab, comp: string): Sync =>
   v.comp(comp)?.sync ?? 'server'
@@ -318,15 +326,16 @@ export let loadVocab = (
   let docs = Array.isArray(input) ? input : [input]
   let compWords = new Set(keywords.flatMap((k) => k.comp ?? []))
   let colWords = new Set(keywords.flatMap((k) => k.column ?? []))
-  // Merge every doc's COMPONENT entries into one table; a name declared twice
-  // is a conflict (a word has one home). `$defs` is JSON Schema's own reuse
-  // slot, so an entry says what it is: `component: true` is a component,
-  // `tool: true` is a tool declaration (tools.ts `toolsIn` reads those) and
-  // `rule: true` is a rule (rules.ts `rulesIn` does), both of which this
-  // loader passes over, and anything else is an ordinary subschema
-  // somebody `$ref`s. An entry with COLUMNS and no marker is the one case that
-  // refuses rather than being ignored: it is a component whose marker was
-  // forgotten, and planting nothing for it silently loses the word.
+  // Merge every document's COMPONENT entries into one table; a name declared
+  // twice is a conflict (one name, one home). `$defs` is JSON Schema's own
+  // reuse slot, so an entry carries a marker saying what it is:
+  // `component: true` is a component, `tool: true` is a tool declaration
+  // (tools.ts `toolsIn` reads those) and `rule: true` is a rule (rules.ts
+  // `rulesIn` reads those), both of which this loader skips, and anything else
+  // is an ordinary subschema somebody `$ref`s. An entry with COLUMNS and no
+  // marker is the one case that throws rather than being skipped: it is a
+  // component whose marker was forgotten, and creating no table for it would
+  // silently lose the component.
   let defs: Record<string, PropSchema> = {}
   for (let doc of docs) {
     for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
@@ -386,13 +395,14 @@ export let loadVocab = (
     }
   }
 
-  // The readable routing table: every component to its readable columns. A tag
-  // component routes with an empty list (`.about!` is a presence test).
+  // The readable routing table: every component to its readable columns. A
+  // component with no columns routes with an empty list (`.about!` is then a
+  // presence test).
   let routes = new Map<string, string[]>()
   for (let name of names) routes.set(name, Object.keys(props(name)))
 
   // Reverse index: a bare prop to the components that declare it. A column (or
-  // whole component) marked `bare: false` never claims a bare spelling — it is
+  // whole component) marked `bare: false` never claims a bare name — it is
   // reached qualified only — so it stays out of this index entirely.
   let owners = new Map<string, string[]>()
   for (let [comp, ps] of routes) {
@@ -413,7 +423,7 @@ export let loadVocab = (
   // component with one reference is named by its plural (`review.book` →
   // `.reviews`); several references disambiguate with the column (`loan.book`,
   // `loan.member` → `.loans_book`, `.loans_member`). A name a real column or
-  // component already routes is left alone — the forward spelling always wins —
+  // component already routes is left alone — the forward name always wins —
   // and where two components pluralize alike the alphabetically first keeps it.
   let assocs = new Map<string, Assoc>()
   for (let comp of names) {
@@ -442,14 +452,15 @@ export let loadVocab = (
     column: colFor,
     indexes: (comp) => indexesOf(defs[comp], (p) => colFor(comp, p)),
     identity: (comp) => identityOf(defs[comp]),
-    // Bare prop → its owning component. A stamped lifecycle column never steals
-    // a bare spelling from a live one (`.status` stays the task's even though
+    // Bare prop → its owning component. A stamped lifecycle column never takes
+    // a bare name from a writable one (`.status` stays the task's even though
     // sessions carry a stamped status), so non-stamped owners are preferred
-    // first. A unique owner wins; several owners that are all references are one
-    // read concept (comp '' — the filter scans every owner); any other collision
-    // throws {@link Ambiguous}, which NAMES the candidates so a caller holding
-    // the rest of the sentence can pick among them. A bare word that is itself
-    // a component name routes as that facet (presence).
+    // first. A single owner wins; several owners that are all references mean
+    // one thing to a reader (comp '' — the filter scans every owner); any other
+    // collision throws {@link Ambiguous}, which NAMES the candidates so a
+    // caller holding the rest of the query can pick among them. A bare name
+    // that is itself a component name routes as a presence test for that
+    // component.
     route: (prop) => {
       let own = owners.get(prop) ?? []
       if (own.length > 1) {
@@ -468,18 +479,20 @@ export let loadVocab = (
       throw new Unknown(prop)
     },
     // A dotted path → the hops it names, one rule per step: a segment naming a
-    // COMPONENT with another segment behind it is the explicit `comp.prop`
-    // spelling and eats two; anything else is a bare prop routed by name and
-    // eats one. Every non-final hop must be a reference for the deref to stand.
+    // COMPONENT with another segment after it is the explicit `comp.prop`
+    // form and consumes two segments; anything else is a bare prop routed by
+    // name and consumes one. Every non-final hop must be a reference for the
+    // dereference to stand.
     //
-    // `facet` is the one exception, and it belongs to the PRESENCE form alone
-    // (`.name!`): a bare bang completes a component sentence, so the component
-    // wins over a same-named column. It has to — a facet has no other spelling,
-    // while the column keeps its qualified one (`.camera.canvas!`). Without it
-    // `.canvas!` asks about camera's canvas reference and answers the wrong
-    // entities, or none. A word no column claims names a facet too: bundles can
-    // carry plugin components before their schemas are loaded. A store still
-    // decides whether it has a table for that component.
+    // `facet` is the one exception, and it belongs to the PRESENCE test alone
+    // (`.name!`): a trailing `!` tests for a component, so the component wins
+    // over a column of the same name. It has to — a presence test has no other
+    // form, while the column keeps its qualified one (`.camera.canvas!`).
+    // Without it, `.canvas!` would test camera's canvas reference and return
+    // the wrong entities, or none. A name no column claims is read as a
+    // component too: bundles can carry plugin components before their schemas
+    // are loaded. A store still decides whether it has a table for that
+    // component.
     aim: (path, facet) => {
       let segs = path.split('.')
       if (facet && segs.length == 1) {
@@ -505,14 +518,15 @@ export let loadVocab = (
       return out
     },
     // A plural name → the reverse association it names, or undefined when the
-    // name is no association (a caller then reads the word its own way).
+    // name is no association (a caller then reads the name its own way).
     assoc: (name) => assocs.get(name),
     // The most specific kind an entity carries names it — first present in
-    // kindOrder, else the bare spine.
+    // kindOrder, else the bare spine component.
     kindOf: (has) => kinds.find((k) => has[k]) ?? 'entity',
-    // The reaper's worklist: every WIRE-WRITABLE reference wearing a death word,
-    // as (comp, col) pairs. Stamped refs stay out — server rows die by server
-    // code, not the wire's cascade (types.ts deaths()).
+    // The cascading-delete worklist (@yaks/graph cascade.ts): every
+    // CLIENT-WRITABLE reference that declares a `death`, as (comp, col) pairs.
+    // Stamped refs stay out — server-owned rows are deleted by server code,
+    // never by a cascade a client set off (types.ts Death).
     deaths: (word) =>
       compNames.flatMap((comp) =>
         infoOf(comp)!.writable.flatMap((p) => {
@@ -522,8 +536,8 @@ export let loadVocab = (
             : []
         })
       ),
-    // Every reference column, wire-writable OR stamped — index derivation and
-    // reverse-hop grammar key off this one list.
+    // Every reference column, client-writable OR stamped — index derivation
+    // and reverse-hop grammar key off this one list.
     refCols: () =>
       names.flatMap((comp) =>
         Object.keys(props(comp)).flatMap((p) => {
@@ -532,8 +546,9 @@ export let loadVocab = (
         })
       ),
     // Ordinary well-formedness of an instance: a known component, an object of
-    // known columns (wire-writable unless stamped is allowed), each value a
-    // scalar the column can hold — no nesting or arrays a table cannot lower.
+    // known columns (client-writable unless stamped columns are allowed), each
+    // value a scalar the column can hold — no nesting or arrays a table cannot
+    // lower.
     check: (comp, value, opts) => {
       let errs: string[] = []
       let info = infoOf(comp)

@@ -1,42 +1,45 @@
 // The binding pass: an @yaks/query AST plus an @yaks/vocab schema, lowered to
-// the relational IR. This is where a raw, unrouted query becomes a statement
-// over real tables — every path routed through the vocab (`route`/`aim`), every
-// value coerced by its column's category, every directive turned into a
-// projection, a bound, or an ordering.
+// the relational representation. This is where an unrouted query becomes a
+// statement over actual tables — every path routed through the vocabulary
+// (`route`/`aim`), every value coerced according to its column's category,
+// every directive turned into a projected column, a LIMIT, or an ORDER BY.
 //
-// The binder is dialect-agnostic: it asks the injected `Dialect` for every
-// table name, join key and column expression, and composes them into the IR's
-// algebraic condition tree. Swap the dialect and the same AST binds against a
-// different store.
+// The binder is backend-independent: it asks the injected `Dialect` for every
+// table name, join key and column expression, and combines them into a
+// condition tree. Swap the dialect and the same AST binds against a different
+// database.
 //
-// A clause this compiler cannot answer alone may still be answered by another
+// A clause this compiler cannot handle alone may still be compiled by another
 // PACKAGE: an `Extension` (./extend.ts) claims a clause kind and lowers it to a
-// condition over the same IR. Extensions are consulted before the built-in
-// compilation, and a claimed directive stops declining.
+// condition over the same representation. Extensions are consulted before the
+// built-in compilation, and a directive an extension claims is no longer
+// refused.
 //
 // Scope. The COMMON query path is here and exact: predicates (every operator),
-// any-of lists, ranges, time phrases, boolean composition, reference-deref
-// paths, reverse hops (`.reviews!`, `.reviews>=5`, `.reviews.stars=5`),
-// full-text terms, the `.kind` scope, presence/absence, ordering,
-// `.limit`/`.after` windows (which page WITHIN an asked-for `.order`, by a
-// keyset on the anchor entity's own place in it),
-// `.count`/`.distinct`/`.tally` aggregates,
-// `.fields` projections, and the `.refs=` backlink union. A column the schema
-// marks computed (`computed: true`) reads through the DERIVED hook or, absent a
-// registration, DECLINES — the binder never invents a value it cannot read.
+// any-of lists, ranges, time phrases, boolean composition, paths that
+// dereference a reference column, reverse hops (`.reviews!`, `.reviews>=5`,
+// `.reviews.stars=5`), full-text terms, the `.kind` scope, presence and
+// absence, ordering, `.limit`/`.after` windows (which page WITHIN a requested
+// `.order`, by a keyset condition on the anchor entity's own place in it), the
+// `.count`/`.distinct`/`.tally` aggregates, `.fields` projections, and the
+// `.refs=` backlink union. A column the schema marks computed
+// (`computed: true`) is read through the DERIVED hook, or, if no expression was
+// registered for it, DECLINES — the binder never invents a value it cannot
+// read.
 //
 // The WALK (`.fork.from->S-7`) compiles here when its path is a reference
 // column, or a chain of them (`.fork.from.session->S-1`, one step across the
 // composed relation) — one recursive CTE over that step (./walk.ts). A path
-// naming a RELATION is @yaks/edge's: the extension seam is consulted first,
-// and that package owns the edge table and the tags an edge wears, which this
-// vocabulary does not carry.
+// naming a RELATION belongs to @yaks/edge: extensions are consulted first, and
+// that package owns the edge table and the types an edge can have, neither of
+// which is in this vocabulary.
 //
-// What is NOT here declines LOUDLY (an `Unsupported` throw, never a silent
-// wrong answer): the `.edges` rider (edge-typed, so @yaks/edge's), a walk over
-// neither a relation nor reference columns, and the `.near` KNN, which needs
-// vectors this package does not hold — `@yaks/embedding` registers as an
-// extension and answers it, ordering included.
+// What is NOT here fails loudly, by throwing `Unsupported` rather than
+// returning a silently wrong answer: the `.edges` rider (edge-typed, so
+// @yaks/edge's), a walk over neither a relation nor reference columns, and the
+// `.near` nearest-neighbour search, which needs vectors this package does not
+// hold — @yaks/embedding registers as an extension and compiles it, ordering
+// included.
 
 import type {
   After,
@@ -84,9 +87,9 @@ import type { ArchetypeSet } from './archetype.ts'
 
 // Thrown for a clause the binder cannot express EXACTLY. A caller catches it to
 // fall back to another evaluator, or to report the gap. `by` names the package
-// that declined, so another evaluator of the same grammar (@yaks/match compiles
-// the AST to an in-memory predicate) can refuse through this one class and
-// leave every caller with a single decline contract to catch.
+// that declined, so that another evaluator of the same grammar (@yaks/match
+// compiles the AST to an in-memory predicate) can refuse through this same
+// class, leaving every caller with one error type to catch.
 export class Unsupported extends Error {
   feature: string
   by: string
@@ -103,14 +106,15 @@ export type BindOpts = {
   derived?: Derived
   extend?: Extension[]
   now?: number
-  /** Plan-time matching against a current snapshot of the file's archetypes. */
+  /** Matching against a current snapshot of this database file's archetypes,
+   * done while the statement is being compiled. */
   archetypes?: ArchetypeSet
 }
 
-// The mutable knot a single bind threads: the schema, the dialect, the derived
-// registry, the contributed compilers, the reference moment, and the growing
-// set of component tables to LEFT JOIN. Everything else is a pure function of a
-// clause.
+// The mutable state one call to `bind` threads through: the schema, the
+// dialect, the derived-column registry, the registered extensions, the moment
+// time phrases resolve against, and the growing set of component tables to LEFT
+// JOIN. Everything else is a pure function of a clause.
 type Ctx = {
   v: Vocab
   d: Dialect
@@ -122,8 +126,9 @@ type Ctx = {
   archetypes?: ArchetypeSet
 }
 
-// Presence is ROW existence, never a non-null component value. Matching a
-// descriptor needs no join to any of the component tables it names.
+// Presence means the component row EXISTS, never that one of its columns is
+// non-null. Matching an archetype needs no join to any of the component tables
+// the test names.
 let byArchetype = (
   ctx: Ctx,
   predicate: Presence,
@@ -135,23 +140,25 @@ let byArchetype = (
   if (!ids) return null
   let key = ctx.d.archetype(owner)
   let sql = ids.length ? `${key} in (${ids.map(() => '?').join(', ')})` : '0'
-  // An absent dereference target wears nothing, so its negative facet test
-  // succeeds. Ordinary spine/child owners always exist.
+  // A dereference that resolved to no entity has no components, so a test for
+  // the ABSENCE of one succeeds. An ordinary owner — the row being selected, or
+  // a child row — always exists.
   if (missing) sql = `(${key} is null or ${sql})`
   return raw({ sql, params: [...ids] })
 }
 
-// The extension seam, both halves. `claims` answers whether any registered
-// extension speaks for a clause kind (so a directive that would decline stops
-// declining); `extended` runs them in registration order, first non-null wins.
+// The two halves of the extension point. `claims` reports whether any
+// registered extension handles a clause kind, so that a directive that would
+// otherwise be refused is not; `extended` runs them in registration order, and
+// the first non-null result wins.
 let claims = (ctx: Ctx, kind: Clause['kind']): boolean =>
   ctx.ext.some((e) => e.compile[kind])
 
-// `owner` names the row a contributed compiler speaks about. It defaults to the
-// selected row's spine id; a `.after` cursor hands the ANCHOR's id instead, so
-// an extension that spells an ordering spells the anchor's place in it through
-// the same hook — a ranking is a pure function of the owner, and a cursor into
-// one needs no second seam.
+// `owner` names the row a contributed compiler is being asked about. It
+// defaults to the selected row's integer id; a `.after` cursor passes the ANCHOR
+// row's id instead, so an extension that supplies an ORDER BY expression
+// supplies the anchor's place in that order through the same hook — a ranking
+// is a pure function of the owner, so paging into one needs no second API.
 let site = (ctx: Ctx, owner = ctx.owner ?? ctx.d.ownerKey('entity')): Site => ({
   vocab: ctx.v,
   dialect: ctx.d,
@@ -171,10 +178,11 @@ let extended = (ctx: Ctx, c: Clause): Cond | null => {
   return null
 }
 
-// A structured @yaks/query value flattened back to the one string the dialect's
-// lowering re-parses — a list to `a,b`, a range to `lo..hi` (inclusive) or
-// `lo...hi` (exclusive end). The dialect's `eq` splits it again exactly as the
-// JS matcher does, so a round trip through the string form is faithful.
+// A structured @yaks/query value flattened back into the single string the
+// dialect's lowering re-parses — a list into `a,b`, a range into `lo..hi`
+// (inclusive) or `lo...hi` (exclusive end). The dialect's `eq` splits it again
+// exactly as the JavaScript matcher does, so the round trip through the string
+// form loses nothing.
 let flat = (val: Value | null): string => {
   if (val == null) return ''
   if (val.kind == 'scalar' || val.kind == 'time') return val.raw
@@ -183,11 +191,12 @@ let flat = (val: Value | null): string => {
   return `${flat(r.lo)}..${r.exclusiveEnd ? '.' : ''}${flat(r.hi)}`
 }
 
-// The operator spelling a lowering switches on: '' equals (and, with an
-// empty operand, absence — the dialect's eq() reads them as one road), '!'
-// not-equals, '~' contains, the comparisons literal, 'exists' presence, 'want'
-// the value-less projection request. This is the one translation from the
-// @yaks/query operator set.
+// The operator name a lowering switches on: '' for equals (and, with an empty
+// operand, for absence — the dialect's eq() handles both in one branch), '!'
+// for not-equals, '~' for contains, the comparison operators unchanged,
+// 'exists' for presence, and 'want' for a request to project a value rather
+// than filter on one. This is the one place the @yaks/query operator set is
+// translated.
 let EXISTS = 'exists'
 let opOf = (p: Pred): string =>
   p.op == '!'
@@ -203,25 +212,27 @@ let opOf = (p: Pred): string =>
     : p.op
 
 // A qualified path names its COMPONENT as much as its column: `.session.status`
-// asks about sessions. Every read in this compiler answers NULL for a row that
-// does not wear the component — that is what the left join means, and what the
-// in-memory matcher reads off a bundle — and a DERIVED read is the one that
-// can forget: `session.status` is computed from the ENTRIES, so an entity with
-// none answered `empty` and `.session.status=empty` selected every such row in
-// the graph (T-37730). The guard is said ONCE, here, rather than copied into
-// every registration's expression. `present` is the SQL that holds when the
-// component is worn; `worn: false` is the read that ANSWERS for a row without
-// it — `updated.at` falling back to `created.at`, because being made is the
-// last time an untouched row changed.
+// asks about sessions. Every read in this compiler returns NULL for an entity
+// that does not have the component — that is what the LEFT JOIN means, and what
+// the in-memory matcher reads off a bundle — and a DERIVED read is the one that
+// can forget this: `session.status` is computed from the session's ENTRIES, so
+// an entity with none returned `empty`, and `.session.status=empty` selected
+// every such entity in the graph (T-37730). The condition is written ONCE,
+// here, rather than copied into every registered expression. `present` is the
+// SQL that holds when the entity has the component; `worn: false` marks the
+// read that returns a value without it — `updated.at` falling back to
+// `created.at`, because being created is the last time an untouched row
+// changed.
 let guarded = (dc: DerivedCol, present: string, expr: string): string =>
   dc.worn === false ? expr : `(case when ${present} then ${expr} end)`
 
-// One column's read expression and how a value types against it, resolved
-// through the derived hook first (a computed column or a read override), then
-// the dialect's storage lowering. `owner` is the SQL naming this entity's
-// integer id — the anchor a derived expression builds on, and the component's
-// own owner column, so its presence is that column being there. Declines
-// (null) a computed column with no registered expression.
+// One column's read expression, and the type a value is coerced to before it is
+// compared with it. The derived hook is consulted first (for a computed column
+// or a read override), then the dialect's own lowering. `owner` is the SQL
+// naming this entity's integer id — what a derived expression is built on, and
+// also the component table's own owner column, so the component is present
+// exactly when that column is non-null. Returns null, declining, for a computed
+// column with no registered expression.
 type Read = { expr: string; tag: Tag } | null
 let readCol = (ctx: Ctx, comp: string, prop: string, owner: string): Read => {
   let key = `${comp}.${prop}`
@@ -243,9 +254,9 @@ let readCol = (ctx: Ctx, comp: string, prop: string, owner: string): Read => {
   }
 }
 
-// A scalar predicate over a resolved column expression, lowered branch by
-// branch. Returns a Frag or null when it cannot be expressed with the matcher's
-// exact semantics.
+// A scalar predicate over an already-resolved column expression, lowered branch
+// by branch. Returns a fragment, or null when it cannot be expressed with
+// exactly the semantics the JavaScript matcher has.
 let lowerScalar = (
   ctx: Ctx,
   c: string,
@@ -270,9 +281,10 @@ let lowerScalar = (
   return null
 }
 
-// The spine's identity columns as one set lookup: `"entity"."eid" in (?, ?)`,
-// with a second arm for the numbers a `.num=` or a human id named. An operand
-// list naming nothing at all is a constant false.
+// The entity table's identity columns as one set lookup:
+// `"entity"."eid" in (?, ?)`, with a second term for the numbers a `.num=` or a
+// human-readable id named. An operand list that names nothing at all compiles
+// to a constant false.
 let inSet = (ctx: Ctx, set: Identity): Frag => {
   let arm = (prop: string, vals: Bind[]): Frag => ({
     sql: `${ctx.d.col('entity', prop, ctx.v)} in (${
@@ -291,16 +303,19 @@ let inSet = (ctx: Ctx, set: Identity): Frag => {
   }
 }
 
-// A single-hop predicate: a direct column, or a component facet (an empty leaf
-// prop — presence grammar). `.task!`/`.task~=` present, everything else absent.
+// A predicate one hop long: either a column of a component, or a presence test
+// on the component itself (the leaf has no column name). `.task!` and `.task~=`
+// test for presence; every other operator tests for absence.
 let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   let op = opOf(p)
-  if (op == 'want') return TRUE // a projection request; the door hydrates it
+  if (op == 'want') return TRUE // a request to project the value, not a filter
   if (!hop.prop) {
-    // A bundle matcher can inspect an undeclared facet; SQL needs its table.
-    // Nothing else can answer this one, so it is a REFUSAL and not a decline:
-    // the word is simply not in this vocabulary, and the sentence is the
-    // vocabulary's own — the same line `route()` prints, at every door.
+    // An in-memory matcher can test for a component the vocabulary never
+    // declared; SQL cannot, because it needs that component's table. Nothing
+    // else can compile this either, so it is a REFUSAL rather than a decline:
+    // the component name is simply not in this vocabulary. The error is the
+    // vocabulary's own — the same message `route()` produces, so the CLI, the
+    // HTTP endpoint and the MCP server all report it identically.
     if (!ctx.v.comp(hop.comp)) throw new Unknown(hop.comp)
     let present = op == '~' || op == EXISTS
     let shape = hop.comp == 'entity' ? null : byArchetype(
@@ -312,11 +327,13 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     let eid = ctx.d.col(hop.comp, 'eid', ctx.v)!
     return raw({ sql: `${eid} is ${present ? 'not ' : ''}null`, params: [] })
   }
-  // A column several components share as a reference (`.client=<eid>`: a
-  // cursor's, a camera's, a fold's) routes with no owner (vocab route(): comp
-  // ''), and there is no one table to read. Equality is still one indexed
-  // question per owner, so it compiles the way `.refs=` does — a union over the
-  // owners' reference columns — instead of declining to a scan of every row.
+  // A reference column that several components share (`.client=<eid>` is a
+  // column of `cursor`, of `camera` and of `fold`) routes with no owning
+  // component (@yaks/vocab's route() returns comp ''), so there is no single
+  // table to read it from. Equality is still one indexed lookup per owning
+  // component, so it compiles the way `.refs=` does — a union over those
+  // components' reference columns — rather than declining and falling back to a
+  // scan of every row.
   if (!hop.comp) {
     let value = flat(p.value)
     if (op != '' || !value || value.includes(',') || value.includes('..')) {
@@ -329,7 +346,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     )
   }
   if (hop.comp != 'entity') ctx.tables.add(hop.comp)
-  // On the spine, `=` NAMES entities instead of comparing a column.
+  // On the entity table, `=` NAMES entities instead of comparing a column.
   if (hop.comp == 'entity' && op == '') {
     let set = identity(hop.prop, flat(p.value))
     if (set) return raw(inSet(ctx, set))
@@ -359,14 +376,16 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   if (!frag) {
     throw new Unsupported('this predicate', `.${hop.comp}.${hop.prop} ${p.op}`)
   }
-  // A test that needs a VALUE can only hold on a row wearing the component —
-  // every read here is NULL without it, derived ones included (`guarded`) — and
-  // saying so lets the planner drive from that table instead of scanning the
-  // spine through a left join: `.board.query~=<id>` read every entity (243 ms)
-  // where the boards are 22 rows (4 ms). The same narrowing path() keeps; an
-  // absence (`=` empty) or a not-equals must still see the rows without it.
-  // The one read left out is the one that ANSWERS for a row wearing nothing
-  // (`worn: false`): `updated.at` falls back to `created.at`.
+  // A test that needs a VALUE can only hold for an entity that has the
+  // component — every read here is NULL without it, derived reads included
+  // (`guarded`) — and stating that lets the query planner drive from the
+  // component's table instead of scanning the entity table through a LEFT JOIN:
+  // `.board.query~=<id>` read every entity (243 ms) where the boards are 22
+  // rows (4 ms). path() applies the same narrowing. A test for absence (`=`
+  // with an empty operand) or a not-equals must still see the rows without the
+  // component. The one read left out is the one that returns a value for an
+  // entity without it (`worn: false`): `updated.at` falls back to
+  // `created.at`.
   let needsComp = hop.comp != 'entity' &&
     ctx.derived[`${hop.comp}.${hop.prop}`]?.worn !== false && (
       op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
@@ -380,20 +399,22 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   })
 }
 
-// A reference-deref path: a chain of one-to-one lookups through reference
-// columns, ending in a leaf column tested against op/value. Nested correlated
-// scalar subqueries walk the chain without widening the candidate set. Every
-// non-final hop must be a reference.
-// The table a subquery gives its OWN alias to: the storage name, never the
-// dialect's aliased source, since `as "__p1"` follows it.
-// The bare table a correlated subquery reads, through the dialect: a dialect
-// that renames or redirects a component's source (@yaks/sqlite's batch
-// overlay) is followed everywhere, not just at the top-level joins.
+// A path that dereferences references: a chain of one-to-one lookups through
+// reference columns, ending in a leaf column tested against an operator and a
+// value. Nested correlated scalar subqueries follow the chain without widening
+// the set of candidate rows. Every hop but the last must be a reference column.
+//
+// The bare table a correlated subquery reads, asked of the dialect: a dialect
+// that renames a component's table or reads it from somewhere else (the CTEs
+// @yaks/sqlite overlays a pending transaction with) is followed here too, not
+// only at the top-level joins. It must be the bare table expression with no
+// alias of its own, because `as "__p1"` follows it.
 let source = (ctx: Ctx, comp: string) => ctx.d.source?.(comp) ?? `"${comp}"`
 
-// A reference column's stored key, through the dialect — which is what lets a
-// dialect that renames its tables (a rule's per-pattern prefix, @yaks/sqlite
-// `prefixed`) reach the same column under the name it gave it.
+// A reference column's stored integer column, asked of the dialect — which is
+// what lets a dialect that renames its tables (the per-pattern prefix a rule
+// uses, @yaks/sqlite's `prefixed`) reach the same column under the name it gave
+// it.
 let refKey = (ctx: Ctx, comp: string, prop: string): string =>
   ctx.d.refCol?.(comp, prop) ?? `"${comp}"."${prop}"`
 let isRef = (v: Vocab, comp: string, prop: string) =>
@@ -421,16 +442,18 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
       ` where "__p${i}"."entity" = ${target})`
   }
   let leaf = hops[hops.length - 1]
-  // A leaf that several reference columns share answers to no one component
-  // (`route()`'s comp '' — the leaf of `.claim.session.actor`), so there is no
-  // table to read it from. Decline, as the same word declines on a single hop,
-  // and the matcher — which reads every owner — answers instead. Lowered
-  // anyway, `source('')` spelled the table `""` and SQLite refused the whole
-  // statement with `no such table:` (S-37088).
+  // A leaf column that several components share belongs to no one component
+  // (@yaks/vocab's route() returns comp '' — the leaf of
+  // `.claim.session.actor`), so there is no table to read it from. Decline,
+  // exactly as the same column name declines on a single hop, and let the
+  // in-memory matcher, which can read every owner, evaluate it instead.
+  // Lowered anyway, `source('')` wrote the table name as `""` and SQLite
+  // rejected the whole statement with `no such table:` (S-37088).
   if (!leaf.comp) {
     throw new Unsupported('a shared reference leaf', `.${leaf.prop}`)
   }
-  // A leaf facet: does the target wear this component?
+  // A presence test on the leaf: does the entity the path reached have this
+  // component?
   if (!leaf.prop) {
     let present = op == '~' || op == EXISTS
     let shape = leaf.comp == 'entity' ? null : byArchetype(
@@ -445,9 +468,10 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
       ` where ${owner} = ${target})`
     return raw({ sql: `${hit} is ${present ? 'not ' : ''}null`, params: [] })
   }
-  // The leaf column, read from the target owner. Derived reads (status,
-  // updated.at) build on `target` as their owner; a reference leaf projects to
-  // its eid; a plain column is a correlated scalar read.
+  // The leaf column, read from the entity the path reached. Derived reads
+  // (status, updated.at) are built on `target` as their owner; a leaf that is
+  // itself a reference column is projected to an eid; a plain column is a
+  // correlated scalar read.
   let read = leafRead(ctx, leaf, target)
   if (!read) {
     throw new Unsupported('a computed path leaf', `.${leaf.comp}.${leaf.prop}`)
@@ -459,8 +483,9 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
       `.${leaf.comp}.${leaf.prop} ${p.op}`,
     )
   }
-  // The narrowing a rooted path keeps: the row must wear the root component,
-  // which lets the planner drive from the root's table.
+  // The narrowing a rooted path keeps: the row must have the component the path
+  // starts from, which lets the query planner drive from that component's
+  // table.
   let needsRoot = op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
     ((op == '' || op == '~') && flat(p.value) != '')
   return needsRoot
@@ -471,12 +496,14 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
     : raw(frag)
 }
 
-// A path leaf's read expression, correlated on the target owner int.
+// A path leaf's read expression, correlated on the integer id the path
+// reached.
 let leafRead = (ctx: Ctx, leaf: Hop, target: string): Read => {
   let key = `${leaf.comp}.${leaf.prop}`
   let dc = ctx.derived[key]
-  // The same guard, over the TARGET: here the owner is another entity's id, so
-  // wearing the component is a row of its own, not a joined column.
+  // The same condition, applied to the TARGET: here the owner is another
+  // entity's id, so having the component means a row of its own exists, not
+  // that a joined column is non-null.
   if (dc) {
     let present = leaf.comp == 'entity' ? `${target} is not null` : `exists ` +
       `(select 1 from ${source(ctx, leaf.comp)} as "__pw"` +
@@ -511,9 +538,9 @@ let leafRead = (ctx: Ctx, leaf: Hop, target: string): Read => {
   }
 }
 
-// `.kind=K`: the entity wears K and every kind that sorts before it is absent —
-// the exact index-answerable form of "K is the most specific kind present".
-// Plural folds in (`.kind=tasks` reads as `.kind=task`).
+// `.kind=K`: the entity has the component K, and every kind that sorts before
+// it is absent — the exact, index-searchable form of "K is the most specific
+// kind present". A plural is accepted (`.kind=tasks` reads as `.kind=task`).
 let kindScope = (ctx: Ctx, value: string): Cond => {
   let kinds = ctx.v.kinds
   let k = kinds.includes(value)
@@ -534,15 +561,17 @@ let kindScope = (ctx: Ctx, value: string): Cond => {
   return and(...parts)
 }
 
-// The multi-column reverse-union: the backlinks of `value`, the union of every
-// reference column that equals it. Cleanly derivable from the vocab's ref-column
-// list. Only the positive `.refs=X` compiles; presence/absence decline.
+// The backlink union across every reference column: the entities that point at
+// `value`, taken as the union of every reference column equal to it. It follows
+// directly from the vocabulary's list of reference columns. Only the positive
+// `.refs=X` compiles; presence and absence decline.
 //
-// A union of every reference column in a wide vocabulary is a compound of more
-// terms than workerd will take (./compound.ts), so the columns are grouped by
-// table and cut into unions of {@link ARMS} — and the groups are OR'd, because
-// `or` has no ceiling and each `in` opens its own compound. A vocabulary that
-// references nothing has no backlink to find.
+// A union of every reference column in a wide vocabulary is a compound SELECT
+// with more terms than workerd allows (./compound.ts), so the columns are
+// grouped by table and cut into unions of {@link ARMS} terms — and the groups
+// are combined with OR, because OR has no such limit and each `in` starts its
+// own compound SELECT. A vocabulary with no reference columns has no backlinks
+// to find.
 let refsUnion = (ctx: Ctx, r: Refs): Cond => {
   if (r.op != '=' || !r.value) {
     throw new Unsupported('.refs', 'only .refs=<id> compiles')
@@ -550,9 +579,10 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
   return inRefs(ctx, ctx.v.refCols(), r.value)
 }
 
-// The rows some reference column among `cols` points at `value` from: one
-// `in` per group of arms, each arm a table's reference columns OR'd, cut to
-// what a compound may carry (compound.ts). No columns selects nothing.
+// The rows from which some reference column among `cols` points at `value`: one
+// `in` per group of terms, each term a table's reference columns combined with
+// OR, cut to what one compound SELECT may carry (compound.ts). An empty column
+// list selects nothing.
 let inRefs = (ctx: Ctx, cols: [string, string][], value: string): Cond => {
   if (!cols.length) return FALSE
   let at = `(select id from ${source(ctx, 'entity')} where eid = ?)`
@@ -571,24 +601,26 @@ let inRefs = (ctx: Ctx, cols: [string, string][], value: string): Cond => {
   )
 }
 
-// An OR is a UNION of selections, never a where-level disjunction. SQLite drives
-// an OR from indexes only when every term sits on the FROM table; a term on a
-// left-joined component (`.settled.at>=…`) makes the whole disjunction a scan
-// of the spine's joined rows (5,301 sessions, 8 ms for the tray's strip on the
-// live graph, T-37445). Each alternative compiled alone is one indexed selection
-// of spine ids, and the outer statement seeks those ids. The joins are the
-// tables touched so far, which after compiling the alternatives is every table
-// they name; an extra left join on the spine key is a probe, never a scan.
+// An OR compiles to a UNION of selections, never to a disjunction in the WHERE
+// clause. SQLite can use indexes for an OR only when every branch is on the
+// FROM table; a branch on a LEFT JOINed component (`.settled.at>=…`) turns the
+// whole disjunction into a scan of the joined rows (5,301 sessions, 8 ms for
+// one strip of the app on the live graph, T-37445). Each alternative compiled
+// on its own is one indexed selection of entity ids, and the outer statement
+// then seeks those ids. The joins are the tables touched so far, which after
+// the alternatives are compiled is every table they name; an extra LEFT JOIN on
+// the entity key is an index lookup, never a scan.
 //
-// Cut to {@link ARMS} and OR'd, the same way inRefs above is: workerd refuses a
-// sixth term (./compound.ts), and the tray's own seven-way OR is what asked for
-// this shape. Each group is still one indexed `in`, so the cut costs nothing
-// the scan it replaced did not.
+// Cut to {@link ARMS} terms and combined with OR, the same way inRefs above is:
+// workerd refuses a sixth term (./compound.ts), and a seven-way OR in the app
+// is what forced this shape. Each group is still one indexed `in`, so the cut
+// costs nothing that the scan it replaced did not.
 let union = (ctx: Ctx, alts: Clause[]): Cond => {
   let conds = alts.map((x) => clause(ctx, x))
   let joins = joinsOf(ctx)
-  // Over the spine alone (archetype facets, spine columns) a disjunction is
-  // already index-driven, and a presence tree keeps its boolean shape.
+  // Over the entity table alone (presence tests answered by the archetype
+  // column, and columns of the entity table itself) a disjunction can already
+  // use an index, and a tree of presence tests keeps its boolean shape.
   if (!joins.length) return or(...conds)
   let picks = conds.map((where) =>
     render(rel(ctx.d.spine, { cols: [ctx.d.ownerKey('entity')], joins, where }))
@@ -605,15 +637,16 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
   )
 }
 
-// The LEFT joins for the tables a bind touched, keyed on the row they hang off:
-// the spine for a membership, the child table inside a reverse hop's subquery
-// (which is the FROM there, so it is never re-joined).
+// The LEFT JOINs for the tables this bind touched, keyed on the row they hang
+// off: the entity table for an ordinary query, or the child table inside a
+// reverse hop's subquery (which is the FROM there, so it is never joined to
+// itself).
 let joinsOf = (ctx: Ctx, base = 'entity'): Join[] =>
   [...ctx.tables]
     .filter((t) => t != 'entity' && t != base)
     .map((t) => ({ source: ctx.d.table(t), on: ctx.d.joinOn(t, base) }))
 
-// The operators a cardinality test compares its count with.
+// The operators a count test may use.
 let COUNT_OPS: Record<string, string> = {
   '=': '=',
   '!=': '!=',
@@ -623,18 +656,19 @@ let COUNT_OPS: Record<string, string> = {
   '>=': '>=',
 }
 
-// A REVERSE HOP: the entities whose child rows point back at them, named by the
-// vocab's derived association (`.reviews` = the reviews whose `book` is this
-// row). `.reviews!` is presence, `.reviews=` absence, `.reviews>=5` a
-// cardinality test, and `.reviews.stars=5` an existential over a filtered child.
+// A REVERSE HOP: the entities that child rows point back at, named by the
+// association @yaks/vocab derives (`.reviews` is the reviews whose `book` is
+// this row). `.reviews!` tests presence, `.reviews=` absence, `.reviews>=5`
+// counts, and `.reviews.stars=5` tests that a matching child exists.
 //
 // Each compiles to a correlated EXISTS (or count) over the child's reference
-// column — an index search per candidate rather than a join that widens the
-// selection. A child filter rides the SAME clause compiler over the child row,
-// so anything that declines there declines the whole hop and exactness holds
-// across the correlation. A child predicate naming the spine declines outright:
-// inside the subquery `entity` is the correlation to the OUTER row, so binding
-// it there would silently ask a different question.
+// column — one index search per candidate row, rather than a join that widens
+// the result. A filter on the child runs through the SAME clause compiler over
+// the child row, so anything that declines there declines the whole hop, and
+// exactness holds across the correlation. A child predicate naming a column of
+// the entity table declines outright: inside the subquery, `entity` is the
+// correlation with the OUTER row, so compiling it there would silently ask a
+// different question.
 let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
   if (ctx.owner) throw new Unsupported('a nested reverse association')
   let child = ctx.d.table(a.comp)
@@ -688,20 +722,21 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
   })
 }
 
-// The column-shaped walk: `.fork.from->S-7` follows one reference column of one
+// The column walk: `.fork.from->S-7` follows one reference column of one
 // component, so the step is that component's own rows read as (owner, referent)
-// pairs. A path of SEVERAL references composes into one step — the hops joined
-// on each other (`.fork.from.session` is `fork` joined to the `entry` its
-// `from` names), so `from` is the first component's owner and `to` the last
-// hop's referent, and one rung of the CTE crosses the whole chain. A path that
-// is a relation name was an extension's to claim first; one with a hop that is
-// no reference is refused, never answered empty.
+// pairs. A path of SEVERAL reference columns composes into one step — the hops
+// joined to each other (`.fork.from.session` is `fork` joined to the `entry`
+// its `from` names) — so `from` is the first component's owner and `to` is the
+// last hop's referent, and one rung of the CTE crosses the whole chain. A path
+// that names a relation was an extension's to claim first; a path with a hop
+// that is not a reference column is refused, never answered with an empty
+// result.
 let walk = (ctx: Ctx, c: Walk): Cond => {
   let spelled = `.${c.path.join('.')}`
   let hops: Hop[] = []
   try {
     hops = ctx.v.aim(c.path.join('.'))
-  } catch { /* an unknown word: refused below */ }
+  } catch { /* a name this vocabulary does not have: refused below */ }
   let ref = (h: Hop) => h.prop && isRef(ctx.v, h.comp, h.prop)
   if (!hops.length || !hops.every(ref)) {
     throw new Unsupported(
@@ -722,9 +757,10 @@ let walk = (ctx: Ctx, c: Walk): Cond => {
   return walkSql(ctx.d.ownerKey('entity'), c, step)
 }
 
-// A spine facet the archetype index can answer, or null for every other
-// clause. The same reading `single()` gives a bare one-word predicate, so a
-// folded conjunction and a clause-by-clause one say the same thing.
+// A presence test the archetype column can answer, or null for every other
+// clause. It reads a bare one-name predicate the same way `single()` does, so
+// that folding several of them together and compiling them one at a time give
+// the same result.
 let facetOf = (
   ctx: Ctx,
   c: Clause,
@@ -739,17 +775,18 @@ let facetOf = (
   try {
     hop = c.facet ? { comp: name, prop: '' } : ctx.v.aim(name, bare(c))[0]
   } catch {
-    return null // an unrouted word: clause() owns the refusal
+    return null // a name that does not route: clause() owns the refusal
   }
   if (hop.prop || hop.comp == 'entity' || !ctx.v.comp(hop.comp)) return null
   return { comp: hop.comp, present: op == '~' || op == EXISTS }
 }
 
-// A conjunction of spine facets is ONE archetype question. Asked clause by
-// clause, `.kind=memory`'s expansion — the kind present and every earlier kind
-// absent — bound its own id list per facet: kinds × archetypes parameters,
-// past both SQLite's variable ceiling and V8's spread (`task list memory
-// yaks`, T-37437). Asked together it binds at most one id per archetype.
+// A conjunction of presence tests is ONE lookup on the archetype column.
+// Compiled one clause at a time, what `.kind=memory` expands to — the kind
+// present and every earlier kind absent — bound its own list of archetype ids
+// per test: kinds × archetypes parameters, past both SQLite's limit on bound
+// variables and V8's argument limit for a spread (`task list memory yaks`,
+// T-37437). Compiled together it binds at most one id per archetype.
 let conjuncts = (ctx: Ctx, cs: Clause[]): Cond[] => {
   let all: string[] = []
   let none: string[] = []
@@ -766,7 +803,8 @@ let conjuncts = (ctx: Ctx, cs: Clause[]): Cond[] => {
   return [shape, ...rest.map((x) => clause(ctx, x))]
 }
 
-// One filter clause to a condition. Directives are stripped before this runs.
+// One filter clause compiled to a condition. Directives are removed before this
+// runs.
 let clause = (ctx: Ctx, c: Clause): Cond => {
   if (
     ctx.owner && (c.kind == 'refs' || c.kind == 'walk' ||
@@ -785,18 +823,19 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
     if (c.path[0] == 'kind' && c.path.length == 1) {
       return kindScope(ctx, flat(c.value))
     }
-    // A REQUEST for a word this vocabulary never planted asks, and asking is
-    // not asserting: `.loan!` over an unknown word must refuse, because an
-    // empty answer would say there are none, but `.loan?` only asks for the
-    // component beside the filter — a store that has none gives none, and says
-    // so by leaving it off the row. That is what makes one line askable of
-    // every store in a fan-out (workers/yak/reach.ts) instead of one line per
-    // store. Only the bare one-word form is forgiven; a path or a column name
-    // still routes, and still refuses.
+    // A REQUEST to project a component this vocabulary does not declare is a
+    // question, not an assertion: `.loan!` over an unknown component name must
+    // be refused, because an empty result would state that there are none.
+    // `.loan?` only asks for the component to be returned beside the filtered
+    // rows — a database that has none returns none, and reports that by leaving
+    // it off the row. That is what lets one query be sent to every database in
+    // a fan-out (workers/yak/reach.ts) instead of writing one query per
+    // database. Only the bare one-name form is forgiven; a path or a column
+    // name still routes, and is still refused.
     let unplanted = opOf(c) == 'want' && c.path.length == 1 &&
       !ctx.v.all.includes(c.path[0])
-    // A plural leading the path is a reverse association, read from the far
-    // side; anything else routes forward through the vocab.
+    // A plural at the head of the path is a reverse association, read from the
+    // far side; anything else routes forward through the vocabulary.
     let assoc = ctx.v.assoc(c.path[0])
     if (assoc) return reverse(ctx, c.path[0], assoc, c)
     if (c.not || c.where) throw new Unsupported('a reverse hop', c.path[0])
@@ -822,10 +861,10 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
   throw new Unsupported(`the ${(c as Clause).kind} directive`)
 }
 
-// The directives, read off the top-level clause list. Order/limit/after ride a
-// membership; count/distinct/tally reshape it; fields/`*` project it;
-// near/edges decline unless an extension claims them, in which case they filter
-// like any clause.
+// The directives, read off the top-level clause list. order/limit/after modify
+// an ordinary query; count/distinct/tally change what it selects; fields and
+// `*` add projected columns; near/edges are refused unless an extension claims
+// them, in which case they filter like any other clause.
 let UNREACHED = new Set(['near', 'edges'])
 let DIRECTIVES = new Set([
   'order',
@@ -842,17 +881,17 @@ let DIRECTIVES = new Set([
 let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
   cs.find((c) => c.kind == kind) as T | undefined
 
-// The REST of the line, as a statement selecting the eids it admits — the
-// screen an extension that ranks is handed (./extend.ts `Screen`). Its own
-// clauses go, because they are the question being asked; the directives go,
-// because a window or an ordering shapes an answer rather than narrowing it.
-// What is left is every filter and every other package's clause, compiled
-// through the same extensions.
+// The REST of the query, as a statement selecting the eids it admits — what an
+// extension that ranks is given (./extend.ts `Screen`). This extension's own
+// clauses are left out, because they are what is being resolved; the directives
+// are left out, because a window or an ordering shapes an answer rather than
+// narrowing it. What is left is every filter and every other package's clause,
+// compiled through the same extensions.
 //
-// Those extensions are handed over WITHOUT their `begin`: a screen is a
-// question inside a question, and telling an extension a new one had begun
-// would wipe the memory of the outer one — and have it ask for a screen of a
-// screen.
+// Those extensions are passed on WITHOUT their `begin` hook: this statement is
+// a query inside a query, and telling an extension that a new one had begun
+// would wipe out what it remembered about the outer one — and have it ask for a
+// screen of a screen.
 let screen = (
   ast: And,
   vocab: Vocab,
@@ -870,7 +909,8 @@ let screen = (
   )
 }
 
-// A path resolved for a directive value (order, fields): its column expression.
+// A path resolved for a directive's value (order, fields): its column
+// expression.
 let resolveField = (
   ctx: Ctx,
   pathStr: string,
@@ -886,7 +926,8 @@ let resolveField = (
   return { expr: read.expr, comp: h.comp }
 }
 
-// AST → IR. The one function `compile` renders.
+// AST to relational representation. This is the one function `compile`
+// renders.
 export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
   let ctx: Ctx = {
     v: vocab,
@@ -897,11 +938,11 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
     tables: new Set(),
     archetypes: opts.archetypes,
   }
-  // A new question, and what the rest of it selects. An extension that
-  // remembers what it resolved for one query is told here, before any clause
-  // compiles, so the memory a long-lived extension keeps is always this
-  // query's; one that RANKS asks for the screen and ranks among the rows the
-  // other clauses admit (./extend.ts `Begin`, `Screen`).
+  // A new query, and what the rest of it selects. An extension that remembers
+  // what it resolved for one query is told here, before any clause compiles, so
+  // that what a long-lived extension remembers is always this query's; one that
+  // RANKS asks for the screen and ranks among the rows the other clauses admit
+  // (./extend.ts `Begin`, `Screen`).
   for (let e of ctx.ext) e.begin?.(() => screen(ast, vocab, opts, e))
   let cs = ast.clauses
   for (let c of cs) {
@@ -916,8 +957,8 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
   let distinct = find<Distinct>(cs, 'distinct')
   let tally = find<Tally>(cs, 'tally')
 
-  // `.count!`: how many entities the filter selects, under the empty key so
-  // every aggregate comes back as one value→count shape.
+  // `.count!`: how many entities the filter selects, returned under an empty
+  // key so that every aggregate comes back in the same value-and-count shape.
   if (count) {
     return rel(ctx.d.spine, {
       cols: [`'' as value`, 'count(*) as n'],
@@ -925,13 +966,14 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
       where,
     })
   }
-  // `.distinct`/`.tally`: the non-empty values of a column (a text/enum/eid
-  // column only — a numeric or time cast would disagree with the matcher), or a
-  // per-value count. Empties dropped.
+  // `.distinct`/`.tally`: the non-empty values of a column (only a text, enum
+  // or eid column — casting a numeric or time column would disagree with the
+  // JavaScript matcher), or a count per value. Empty values are dropped.
   if (distinct || tally) {
     let agg = (distinct ?? tally)!
     let { expr } = resolveField(ctx, agg.path.join('.'))
-    // decline a numeric/time/derived column: only text/enum/eid tally exactly
+    // decline a numeric, time or derived column: only text, enum and eid
+    // columns tally exactly
     let hop = ctx.v.aim(agg.path.join('.'))[0]
     let tag = ctx.derived[`${hop.comp}.${hop.prop}`]?.tag ??
       (hop.prop == 'eid'
@@ -965,7 +1007,7 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
       })
   }
 
-  // A membership or field-projected selection.
+  // An ordinary query, with projected columns if `.fields` asked for any.
   let fields = find<Fields>(cs, 'fields')
   let cols = [ctx.d.membership]
   if (fields) {
@@ -976,13 +1018,13 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
   }
   // Ordering, then the window WITHIN it. `.order=-field` is descending, and an
   // explicit order SURVIVES a `.limit`/`.after` window: a window states how much
-  // of a sequence to answer with, never which sequence — so a page of
+  // of a sequence to return, never which sequence — so a page of
   // `.order=price&.limit=5` is the five cheapest, not the five newest. With no
-  // `.order` the sequence is newest-first by spine num, as it always was.
-  // @yaks/match answers a window the same way (its parity_test pins it).
-  // The ordered column is resolved BEFORE the joins are read off: ordering by a
-  // column no filter mentions is what pulls its table in, and a join list taken
-  // any earlier would not have it.
+  // `.order` the sequence is newest first by entity num, as it has always been.
+  // @yaks/match applies a window the same way (its parity_test pins the two
+  // together). The ordered column is resolved BEFORE the joins are read off:
+  // ordering by a column no filter mentions is what pulls its table in, and a
+  // join list taken any earlier would not have it.
   let order = find<Order>(cs, 'order')
   let sort = order ? sortOf(ctx, order.value) : null
   let limit = find<Limit>(cs, 'limit')
@@ -993,28 +1035,28 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
     where: after ? and(where, raw(keyset(ctx, sort, after.n))) : where,
   })
   if (sort) out.order.push(`${sort.row}${sort.desc ? ' desc' : ''}`)
-  // A WINDOW is newest-first, which is what makes a prefix mean something and
-  // a `.after` cursor able to continue it. A whole answer is OLDEST-first: it
-  // is not a page of anything, and the order rows were written in is the one
-  // sequence a caller can predict — a list reads down the way it was made.
-  // Either way the sequence is stated, never left to the query plan: two
-  // engines, or one engine with a different index, must not answer a bare
+  // A WINDOW is newest first, which is what makes taking a prefix meaningful
+  // and lets a `.after` cursor continue it. A complete result is OLDEST first:
+  // it is not a page of anything, and the order the rows were written in is the
+  // one sequence a caller can predict — a list reads down in the order it was
+  // made. Either way the order is stated, never left to the query planner: two
+  // engines, or one engine with a different index, must not return a bare
   // `.doc!` in two different orders.
   out.order.push(`"entity"."num"${sort || limit || after ? ' desc' : ''}`)
   if (limit) out.limit = limit.n
   return out
 }
 
-// One order value, read two ways: over the SELECTED row (through the joins the
-// binder already made) and over the `.after` ANCHOR (a correlated read on its
-// owner id). Both come from one place so a cursor can never page down a
-// different sequence than the one being ordered.
+// One `.order=` value, read two ways: over the SELECTED row (through the joins
+// the binder already made) and over the `.after` ANCHOR row (a correlated read
+// on its owner id). Both come from one place, so a cursor can never page down a
+// different sequence from the one being ordered.
 //
-// A leading '-' is descending; the rest is offered to the extensions first — a
-// ranking (`.order=similar`) names no column, so only the package holding the
-// ranks can spell it — and routes to a column when none claims it. (An
-// in-memory matcher would sort these in JS; compiling them into the statement
-// is a capability this IR adds.)
+// A leading '-' means descending; the rest is offered to the extensions first —
+// a ranking (`.order=similar`) names no column, so only the package holding the
+// ranks can express it — and routes to a column when no extension claims it.
+// (An in-memory matcher would sort these in JavaScript; compiling them into the
+// statement is what this representation adds.)
 type Sort = { row: string; at: (owner: string) => string; desc: boolean }
 let sortOf = (ctx: Ctx, value: string): Sort => {
   let desc = value.startsWith('-')
@@ -1042,24 +1084,26 @@ let ranked = (ctx: Ctx, field: string, owner?: string): string | null => {
   return null
 }
 
-// The `.after` anchor as an owner id. The cursor names an ENTITY by its spine
-// num — the same spelling however the answer is ordered, so a client pages
+// The `.after` anchor as an owner id. The cursor names an ENTITY by its entity
+// num — written the same way however the results are ordered, so a client pages
 // without ever learning the order key — and the num is a whole number the
-// grammar already validated, spelled inline because an order expression carries
-// no bound params (Site.owner is a string, and the IR's ORDER BY holds none).
+// grammar has already validated, written into the SQL directly because an order
+// expression carries no bound parameters (Site.owner is a string, and the ORDER
+// BY in this representation holds none).
 let anchor = (ctx: Ctx, n: number) =>
   `(select "__cur"."id" from ${ctx.d.spine} as "__cur" where "__cur"."num" = ${n})`
 
-// `.after` as a KEYSET over the effective order: the rows strictly past the
-// anchor's own place in it, with the spine num breaking ties (descending, so an
-// unordered window still reads newest-first). Absent values sort first
-// ascending — SQLite's NULLs-first, which @yaks/match mirrors — and comparing
-// to NULL yields NULL rather than a boolean, so each null arm is spelled out.
+// `.after` as a KEYSET condition over the effective order: the rows strictly
+// past the anchor's own place in it, with the entity num breaking ties
+// (descending, so that an unordered window still reads newest first). Absent
+// values sort first when ascending — SQLite puts NULLs first, and @yaks/match
+// does the same — and comparing anything to NULL yields NULL rather than a
+// boolean, so each null case is written out.
 //
-// The fallbacks fall out of the keyset rather than being cased: an anchor that
-// no longer matches the query still has an order value to page from, one with
-// no value pages by its num alone (the tie arm), and one that never existed
-// leaves the guard true, which is the first page.
+// The fallbacks follow from the keyset rather than being special cases: an
+// anchor that no longer matches the query still has an order value to page
+// from, one with no value pages by its num alone (the tie branch), and one that
+// names no entity leaves the condition true, which is the first page.
 let keyset = (ctx: Ctx, sort: Sort | null, n: number): Frag => {
   let tie = { sql: `"entity"."num" < ?`, params: [n] as Bind[] }
   if (!sort) return tie

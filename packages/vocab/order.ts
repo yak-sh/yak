@@ -2,14 +2,14 @@
 // alphabetical; kindOrder is alphabetical refined by the local `before`
 // constraints each kind declares, topologically sorted into one total order.
 // This module owns that derivation so the runtime and any tool reproduce the
-// same order — the order is a function of the vocabulary, not a stored rank.
+// same order — the order is computed from the vocabulary, not stored as a rank.
 
 // A priority topological sort: emit the alphabetically-smallest kind whose
 // `before`-predecessors are all placed, so alphabetical is both the base order
 // and the tiebreak. `before[k]` lists the kinds k sorts BEFORE (k precedes them).
 // A `before` naming a kind this subset does not load is no constraint, so a
 // document (mail's `before: doc`, canvas's `layout before doc`) composes in any
-// subset. A cycle refuses — a stale order is silent corruption otherwise.
+// subset. A cycle throws — a stale order is silent corruption otherwise.
 export let kindOrder = (
   kinds: string[],
   before: (k: string) => string[],

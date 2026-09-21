@@ -1,12 +1,13 @@
 // The embedded driver itself — @db/sqlite, opened against a library that
-// works. This is the one door onto it: `import { Database } from
+// works. This is the only module that imports it: `import { Database } from
 // '@yaks/sqlite/db'`, never from '@db/sqlite' directly, so ./sqlitepath.ts has
 // already named the system library by the time the FFI initializes. Importing
-// the driver straight is a segfault on Linux with nothing on stderr
-// (src/store/sqlitepath_test.ts holds that line for the whole repo).
+// @db/sqlite directly segfaults on Linux with nothing on stderr
+// (src/store/sqlitepath_test.ts enforces that for the whole repo).
 //
-// ./mod.ts stays free of it on purpose: the adapter there speaks to any
-// `Driver`, and only a host that wants an in-process database needs this.
+// ./mod.ts stays free of it on purpose: the adapter there works against any
+// `Driver`, and only an application that wants an in-process database needs
+// this.
 
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
@@ -17,7 +18,7 @@ export * from '@db/sqlite'
 export { sqlitePath } from './sqlitepath.ts'
 
 /**
- * A {@link Driver} over an open embedded database — what a host binds
+ * A {@link Driver} over an open embedded database — what an application binds
  * `storage()` to.
  *
  * It keeps the statements it prepares. The adapter asks the same
@@ -25,9 +26,10 @@ export { sqlitePath } from './sqlitepath.ts'
  * preparing each one afresh costs a compile for nothing; the cache is bounded
  * and `Database.close()` finalizes what it holds.
  *
- * A database on DISK is a file other processes may have open too, so it says
- * so ({@link Driver.file}) and the outermost unit takes the write lock up
- * front. An in-memory one belongs to this process alone and says nothing.
+ * A database on DISK is a file other processes may have open too, so the
+ * driver reports that ({@link Driver.file}) and the outermost unit takes the
+ * write lock up front. An in-memory one belongs to this process alone and sets
+ * nothing.
  *
  * ```ts
  * import { Database, driver } from '@yaks/sqlite/db'

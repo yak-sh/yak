@@ -1,39 +1,40 @@
 /**
- * @yaks/match — evaluate a {@link https://jsr.io/@yaks/query | @yaks/query} AST
- * as a predicate over entity bundles held in memory. No database, no SQL: the
- * same query line a server answers from storage, answered from an array.
+ * @yaks/match — run a {@link https://jsr.io/@yaks/query | @yaks/query} AST as a
+ * predicate over entity bundles held in memory. No database, no SQL: the same
+ * query text a server answers from storage, answered from an array.
  *
  * ## Why
- * A query is one grammar with two evaluators. Where the data lives in a
- * database, {@link https://jsr.io/@yaks/sql | @yaks/sql} compiles the query into
- * a statement. Where the data is already in hand — a page's local state, a
- * cache, a test fixture, a worker holding a working set — there is nothing to
- * compile against, so this package evaluates the same AST directly. A saved
- * filter written once therefore selects the same entities on both sides.
+ * One query grammar has two evaluators. Where the data is in a database,
+ * {@link https://jsr.io/@yaks/sql | @yaks/sql} compiles the query into a SQL
+ * statement. Where the data is already in hand — a page's local state, a cache,
+ * a test fixture, a worker holding a working set — there is nothing to compile
+ * against, so this package runs the same AST directly. A saved filter written
+ * once therefore selects the same entities on both sides.
  *
  * ## Use
  * ```ts
  * import { matcher } from '@yaks/match'
  *
  * let live = matcher('.status=live&.price<20&.order=-price', vocab)
- * live(bundles) // the matching bundles, dearest first
+ * live(bundles) // the matching bundles, most expensive first
  * ```
  *
- * {@link matcher} compiles a query into a selection over a bundle SET (which
- * answers references, backlinks and reverse hops, and which the ordering and
- * window apply to). {@link filter} compiles the same query into a per-bundle
- * test, for a caller re-checking one bundle that changed.
+ * {@link matcher} compiles a query into a selection over an ARRAY of bundles,
+ * which is also where references, backlinks and reverse hops are looked up, and
+ * which the ordering and the `.limit`/`.after` window apply to. {@link filter}
+ * compiles the same query into a test on one bundle, for a caller re-checking
+ * the single entity that changed.
  *
  * A column a vocabulary declares but never stores (`computed: true`) is read
  * through `opts.computed` — `comp.prop` → the value for one bundle — the way
  * @yaks/sql reads it through its `derived` hook, so an application states the
- * rule once and both evaluators answer alike.
+ * rule once and both evaluators return the same rows.
  *
- * ## Declines
+ * ## Refusals
  * A question this package cannot answer EXACTLY throws
- * {@link https://jsr.io/@yaks/sql/doc/~/Unsupported | Unsupported} — the same
- * error @yaks/sql throws, so a caller with both has one decline contract and
- * one `catch`. What it declines and why is in the README.
+ * {@link https://jsr.io/@yaks/sql/doc/~/Unsupported | Unsupported} — the error
+ * @yaks/sql throws too, so a caller using both has one error type to catch.
+ * What it refuses, and why, is in the README.
  *
  * @module
  */
@@ -47,8 +48,9 @@ export {
   type Select,
 } from './match.ts'
 export { type Bundle, type Computed, type Eid, live } from './read.ts'
-// The value and text rules, on their own: the vocabulary the two doors above are
-// composed from, for a caller testing one value or one word by hand.
+// The value and text rules on their own: the pieces matcher() and filter() are
+// built from, exported for a caller testing one value or one search term by
+// hand.
 export {
   type Check,
   check,

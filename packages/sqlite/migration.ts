@@ -180,9 +180,10 @@ export function migrations(db: Driver): MigrationControl {
   }
 }
 
-/** One polling loop per host connection, no per-operation queries. A generation
- * change latches even if pending was missed. Callback runs once; caller owns
- * admission/drain/close policy. Poll errors also stop the monitor. */
+/** One polling loop per application connection, no per-operation queries. A
+ * generation change latches even if pending was missed. Callback runs once;
+ * caller owns admission/drain/close policy. Poll errors also stop the
+ * monitor. */
 export function watchMigrations(
   control: MigrationControl,
   changed: (reason: Error) => void,
