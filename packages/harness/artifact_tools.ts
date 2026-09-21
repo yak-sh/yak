@@ -5,11 +5,12 @@ import { type Tool, ToolError } from '@yaks/session'
 import { fileBlobs } from '@yaks/blob'
 import { type ImageOptions, images } from './images.ts'
 import { sessionCwd } from './workspace.ts'
+import { home } from './paths.ts'
 
 const MAX = 20 * 1024 * 1024
 const directory = (opts?: ImageOptions | false) =>
   (opts && opts.directory) || Deno.env.get('HARNESS_IMAGE_DIR') ||
-  Deno.env.get('HOME') + '/.harness/images'
+  `${home()}/images`
 
 /** Supported vision formats; SVG and unrecognized bytes are never image inputs. */
 export let imageType = (b: Uint8Array): string | undefined => {

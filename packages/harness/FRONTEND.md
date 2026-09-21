@@ -148,7 +148,7 @@ recover text that was already sent rather than lose it.
 `Ctrl+U` intentionally clears the draft and retains the yank. `Alt+p` inserts
 the local yank at the current draft cursor, including after restart.
 
-Default storage is `~/.harness/drafts/<profile>/`, with private directory/file
+Default storage is `~/.yak/drafts/<profile>/`, with private directory/file
 permissions (0700/0600). These are unencrypted JSON files: do not type secrets
 unless that local-at-rest policy is acceptable. `HARNESS_DRAFT_DIR` relocates
 the root. Profile identity combines the configured database path and

@@ -2,6 +2,7 @@
 import type { Saved, Vault } from '@yaks/client'
 import { join, resolve } from '@std/path'
 import { frontend } from './frontend.ts'
+import { home } from './paths.ts'
 import { dbPath } from './store.ts'
 
 export let draftVault = async (directory: string): Promise<Vault> => {
@@ -83,8 +84,7 @@ export let openDrafts = async () => {
     (n) => n.toString(16).padStart(2, '0'),
   ).join('')
   const directory = join(
-    Deno.env.get('HARNESS_DRAFT_DIR') ??
-      join(Deno.env.get('HOME')!, '.harness/drafts'),
+    Deno.env.get('HARNESS_DRAFT_DIR') ?? join(home(), 'drafts'),
     id,
   )
   const vault = await draftVault(directory)

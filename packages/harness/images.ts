@@ -1,6 +1,7 @@
 /** Host composition for native generated images. No image bytes enter graph prose. */
 import { artifactStore, fileBlobs } from '@yaks/blob'
 import type { ImageGeneration, Images } from '@yaks/openai'
+import { home } from './paths.ts'
 
 export type ImageOptions = {
   directory?: string
@@ -10,7 +11,7 @@ export type ImageOptions = {
 
 export let images = (options: ImageOptions): Images => {
   let directory = options.directory ?? Deno.env.get('HARNESS_IMAGE_DIR') ??
-    Deno.env.get('HOME') + '/.harness/images'
+    `${home()}/images`
   let store = artifactStore(fileBlobs(directory))
   return {
     tool: options.tool,
@@ -55,8 +56,7 @@ export let readImage = async (
     throw new Error('Not a displayable PNG artifact')
   }
   let directory = (options && options.directory) ||
-    Deno.env.get('HARNESS_IMAGE_DIR') ||
-    Deno.env.get('HOME') + '/.harness/images'
+    Deno.env.get('HARNESS_IMAGE_DIR') || `${home()}/images`
   let bytes = await fileBlobs(directory).get(artifact.address)
   if (!bytes || bytes.length != artifact.size) {
     throw new Error('Image artifact unavailable')
