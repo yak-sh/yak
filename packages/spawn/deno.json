@@ -8,7 +8,7 @@
     "./effects": "./effects.ts"
   },
   "license": "Apache-2.0",
-  "description": "Runs a session's provider as a detached command and reads its JSONL stdout back as that transcript's entries.",
+  "description": "Runs an agent CLI as a detached child process and reads its JSON-lines stdout back into the graph as a session transcript.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

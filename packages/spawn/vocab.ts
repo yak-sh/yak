@@ -1,15 +1,15 @@
-// The words this package declares, and only the words: the `vocab` facet a
-// host takes (`@yaks/spawn/vocab`). It is TOOLS and nothing else — a managed
-// session wears no component of this package's own, since a session is
-// @yaks/session's transcript, the run is @yaks/process's `process` and the
-// request is the `using` on the first entry. What is new here is the three
-// words a person types about one (./tools.ts).
+// What this package declares, and nothing more, exported as
+// `@yaks/spawn/vocab`. It declares three tools and no components at all: a
+// managed session uses nothing of this package's own, since the session belongs
+// to @yaks/session, the running child process is @yaks/process's `process`, and
+// the request is the `using` component on the first entry. All that is new here
+// is the three tools a person can call (./tools.ts).
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 
-/** The three verbs a managed session answers to. */
+/** The three tools a managed session answers to. */
 export let spawnDoc: VocabDoc = doc
 
-/** Every document this plugin declares. */
+/** Every vocabulary document this package declares. */
 export let docs: VocabDoc[] = [spawnDoc]

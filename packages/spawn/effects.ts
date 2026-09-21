@@ -1,46 +1,51 @@
-// What a commit MEANS about a managed session: the `effects` facet a host
-// takes (`@yaks/spawn/effects`).
+// The effect handlers this package exports as `@yaks/spawn/effects`. They run
+// after a transaction commits, and decide what that commit means for a managed
+// session. A server that lists `@yaks/spawn` in its `plugins` config loads
+// them.
 //
-// Three words, and all three are already in the vocabulary. A `using` written
-// on an entry is a REQUEST — this transcript wants that provider, that model,
-// that effort — and where the provider is a command, answering it is starting
-// the command. A `stop` written on the session's own entity, beside the
-// process it is running, is the brake. And a `process` born here, where it is
-// the one THIS RUN wrote for itself, is this host starting: the moment to pick
-// back up the agents a restart left going.
+// Three components, all defined elsewhere:
 //
-// Neither handler holds the effect open: a launch waits on systemd and a tail
-// runs for as long as the agent does, and an effect that waited on either
-// would be a commit waiting on an agent. So each reads what it needs, hands
-// the work to the run, and returns; a failure goes to `report`, never into the
-// batch, which is what @yaks/effects promises about every handler.
+// - a `using` written on an entry is a request — this session wants that
+//   provider, that model, that effort. When the provider is a command line,
+//   answering the request means running that command.
+// - a `stop` written on the session's own entity, next to the `process` it is
+//   running, kills the run.
+// - a `process` row written for the server's own process means the server is
+//   starting up: time to pick up the agents a restart left running.
 //
-// What the config says here is where the agent RUNS — its cwd, and the beat
-// its log is read on:
+// No handler stays open while the work runs. Launching waits on systemd and
+// tailing a log runs for as long as the agent does, so a handler that awaited
+// either would make a commit wait on an agent. Each one reads what it needs,
+// starts the work, and returns; failures go to `report` and never back into the
+// transaction, which is what @yaks/effects guarantees for every handler.
+//
+// Config sets the working directory the agent runs in and how often its log is
+// read:
 //
 // ```json
 // { "use": "@yaks/spawn", "with": { "cwd": "/srv/work", "poll": 250 } }
 // ```
 //
-// The providers themselves are not in it: an adapter is a function, and a
-// host with one of its own composes {@link spawning} in a module of its own.
+// Providers are not in it: an adapter is a function, so a server with one of
+// its own calls {@link spawning} from a module of its own.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { take, type Watch } from '@yaks/effects'
 import { EXIT, PROCESS } from '@yaks/process'
 import { down, type Opts, resume, start } from './run.ts'
 
-/** The duty of picking the agents a restart left running back up — one
- * process's at a time, so two starting together do not both tail one log. */
+/** Lease name for picking up the agents a restart left running — one server
+ * process at a time, so two starting together do not both tail the same
+ * log. */
 export let ADOPT = '@yaks/spawn'
 
-/** What the facet is handed: the graph, once it is open, and which process
- * this one is (@yaks/cli `Host.me`) — a `process` row born here is either this
- * run writing itself in or a child it just launched, and only the first is a
- * start-up. */
+/** What these handlers are given: the open graph, and the eid of the server's
+ * own process (@yaks/cli `Host.me`). A new `process` row is either the server
+ * recording itself or a child it just launched, and only the first means the
+ * server is starting up. */
 export type Host = { graph: Graph; me: Eid }
 
-/** What a config says to this plugin — the JSON half of {@link Opts}. */
+/** What config can set — the JSON-expressible half of {@link Opts}. */
 export type Options = {
   /** where an agent runs (default the server's own cwd) */
   cwd?: string
@@ -48,7 +53,7 @@ export type Options = {
   dir?: string
   /** how often a log and an ending are read (ms) */
   poll?: number
-  /** how long a stopped agent has after TERM before KILL (ms) */
+  /** how long a killed agent gets after SIGTERM before SIGKILL (ms) */
   grace?: number
 }
 
@@ -59,7 +64,7 @@ let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
   (await g.storage.tx((tx) => tx.get([eid])))[0]
 
 /**
- * The effects, with providers of your own.
+ * The same handlers, with providers of your own added.
  *
  * ```ts
  * import { spawning } from '@yaks/spawn/effects'
@@ -68,8 +73,9 @@ let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
  * export let effects = spawning({ adapters: { ...adapters, mine } })
  * ```
  *
- * A host that wants the package's own providers names the package in its
- * config and gets {@link effects}, which is this with nothing added.
+ * A server that wants only the providers this package ships names the
+ * package in its config and gets {@link effects}, which is this with nothing
+ * added.
  */
 export let spawning =
   (o: Opts = {}) => (host: Host, options: Options = {}): Watch[] => {
@@ -77,9 +83,9 @@ export let spawning =
     let report = o.report ?? ((err: unknown) => console.error('spawn —', err))
     return [{
       comp: 'using',
-      // The request. A `using` recorded on an ASK is what was served, not what
-      // is wanted, and a session already running was answered the first time:
-      // either way there is nothing to start.
+      // The request. A `using` recorded on an `ask` row says what was
+      // served, not what is wanted, and a session that is already running was
+      // started the first time round: either way there is nothing to start.
       created: async (e) => {
         let entry = await one(host.graph, e.entity.eid)
         if (!entry?.entry || entry.ask) return
@@ -91,8 +97,8 @@ export let spawning =
       },
     }, {
       comp: 'stop',
-      // The brake. A `stop` on an entry is a mark in a transcript; only one on
-      // the entity that is RUNNING something is an order to take it down.
+      // Kill. A `stop` on an entry only marks the end of a transcript; only
+      // a `stop` on the entity that is running a process means kill it.
       created: async (e) => {
         let row = await one(host.graph, e.entity.eid)
         if (!row?.[PROCESS] || row[EXIT] != null) return
@@ -100,21 +106,20 @@ export let spawning =
       },
     }, {
       comp: PROCESS,
-      // THIS PROCESS starting. The agent outlives whoever launched it on
-      // purpose, so a fresh process finds runs it has no memory of — a pid in
-      // a row, a log file with lines in it nobody has read — and one pass
-      // picks both back up: liveness from the pidfile, the transcript from
-      // where it stands.
+      // This server process starting up. An agent outlives whoever launched
+      // it, by design, so a fresh server finds runs it has no memory of — a pid
+      // in a row, a log file with unread lines in it — and one pass picks both
+      // back up: liveness from the pidfile, the transcript from where it
+      // stands.
       //
-      // It is an effect on the birth of the row this process wrote for ITSELF
-      // (@yaks/process `started`), which is why the comparison against
-      // `host.me` is the whole guard: every other `process` born here is a
-      // CHILD, and adopting a child we just launched would tail it twice.
+      // This fires on the birth of the row the server wrote for itself
+      // (@yaks/process `started`), which is why comparing against `host.me` is
+      // the whole guard: every other `process` row born here belongs to a
+      // child, and adopting a child we just launched would tail it twice.
       //
-      // The lease is what keeps two processes that started together from both
-      // adopting. It is taken and not released: whoever got it is following
-      // those runs now, and a second tail over one log would import every line
-      // twice.
+      // The lease keeps two servers that started together from both adopting.
+      // It is taken and never released: whoever got it is following those runs
+      // now, and a second tail over one log would import every line twice.
       created: async (e) => {
         if (e.entity.eid != host.me) return
         if (!await take(host.graph, ADOPT, { holder: host.me })) return
@@ -123,5 +128,5 @@ export let spawning =
     }]
   }
 
-/** The facet a host takes, with the providers this package ships. */
+/** The handlers, with the providers this package ships. */
 export let effects: (host: Host, options?: Options) => Watch[] = spawning()

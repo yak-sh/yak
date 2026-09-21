@@ -1,27 +1,25 @@
-// What anybody may ask about a managed session: the `tools` facet a host takes
-// (`@yaks/spawn/tools`) — the runs behind the `tool: true` declarations in
-// ./vocab.json. Three words: hand an agent a task, wait for what it came to,
-// and glance at what it has said so far.
+// The implementations of the three tools declared with `tool: true` in
+// ./vocab.json, exported as `@yaks/spawn/tools`: hand an agent a task, wait for
+// it to finish, and read what it has said so far.
 //
-// A SPAWN IS AN ACT, not a patch. Every other tool here answers with bundles
-// and lets the runner land them, but the agent does not exist until the
-// request has COMMITTED — ./effects.ts answers the commit, not the intention —
-// so a tool that only described the request could never watch what it started.
-// This one lands its own batch, signed as whoever asked, and then answers: the
-// session's id, or, with `wait`, the ending it watched. It is the shape
-// @yaks/process's `shell` already has, for the same reason.
+// SPAWN WRITES TO THE GRAPH ITSELF. Every other tool here returns rows and lets
+// the tool runner commit them, but the child process does not exist until the
+// transaction has committed, because ./effects.ts runs after the commit. So a
+// tool that only returned the rows could not then watch what it started. This
+// one calls `graph.apply()` itself, signed as whoever asked, and returns the
+// session's id — or, with `wait`, how the run ended. @yaks/process's `shell`
+// tool works the same way, for the same reason.
 //
-// WAITING IS READING, ON A BEAT. There is no second channel: the wait asks the
-// graph the same question a person would, on the poll this plugin already
-// reads its logs on, until the run is over. What "over" means depends on what
-// is behind the transcript — a session with a process ends when the PROCESS
-// ends (a provider prints its terminal event and can still linger, so its own
-// `stop` entry is not the run ending), and one with none ends when the
-// transcript does.
+// WAITING IS POLLING. There is no separate notification channel: the wait asks
+// the graph the same question a person would, on the same interval this package
+// already reads its logs on, until the run is over. Whether a run is over
+// depends on what is behind the session — one with a `process` component ends
+// when that process exits (a provider often prints its final event and then
+// lingers, so its own `stop` entry does not mean the run ended), and one with
+// no process ends when its transcript does.
 //
-// A timeout is not a kill. A run still going when the wait gives up is
-// answered as still going and left alone; ending it is `stop`'s job, which is
-// a different sentence.
+// A timeout is not a kill. A run still going when the wait gives up is reported
+// as still going and left alone; killing it is what `stop` is for.
 
 import {
   addressed,
@@ -46,18 +44,18 @@ import {
 } from '@yaks/session'
 import { render } from '@yaks/text'
 
-/** What a config says to these tools. */
+/** What config can set for these tools. */
 export type Options = {
   /** how often a wait re-reads the graph (ms, default 250 — the same beat
    * ./effects.ts reads a log on) */
   poll?: number
-  /** how long a wait runs before it answers "still going" (default `30m`) */
+  /** how long a wait runs before it reports "still going" (default `30m`) */
   timeout?: string
   /** how many entries a peek shows (default 40) */
   lines?: number
 }
 
-/** What the facet is handed: the graph, once it is open. */
+/** What these tools are given: the open graph. */
 export type Host = { graph: Graph }
 
 let uuid = () => crypto.randomUUID() as string
@@ -67,13 +65,14 @@ let sleep = (ms: number) => new Promise((go) => setTimeout(go, ms))
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
-// A transcript that is over: `stopped` is nothing more to do and `failed` is
-// nothing that can be done. `settled` is neither — a turn that returned prose
-// is a run between turns.
+// A transcript that is over: `stopped` means nothing more to do, `failed`
+// means nothing that can be done. `settled` is neither — a turn that returned
+// text is a run between turns.
 let ENDED = new Set(['stopped', 'failed'])
 
 /**
- * A duration as a person says it: `45m`, `2h`, or bare seconds.
+ * A duration written the way a person writes one: `45m`, `2h`, or bare
+ * seconds.
  *
  * ```ts
  * import { every } from '@yaks/spawn/tools'
@@ -111,16 +110,16 @@ let sessionAt = async (ctx: ToolCtx): Promise<Bundle> => {
   return row
 }
 
-// Prose, as the bundle that IS the answer: its own entity, saying which call
-// it came from — the shape a tool's words always take here.
+// A tool's text answer, as a row: its own entity, recording which call it came
+// from. Every tool here answers in this shape.
 let said = (ctx: ToolCtx, body: string): Bundle => ({
   entity: { eid: uuid() },
   content: { body },
   [OUTPUT]: { source: ctx.call },
 })
 
-/** What a session's own account of itself is, in this order: the brief it
- * wrote, else the last thing it said. */
+/** A session's own account of itself: the brief it wrote if there is one,
+ * otherwise the last thing it said. */
 export let briefOf = (row: Bundle | undefined, entries: Bundle[]): string => {
   let wrote = str(comp(row, 'brief')?.text)
   if (wrote) return wrote
@@ -128,9 +127,9 @@ export let briefOf = (row: Bundle | undefined, entries: Bundle[]): string => {
   return last ? textOf(last) : ''
 }
 
-// A run is over when the thing behind it is. A provider that prints its
-// terminal event and lingers has a `stop` entry and is still running, so a
-// transcript with a PROCESS is read by the process's ending and nothing else.
+// A run is over when whatever is behind it is over. A provider that prints its
+// final event and then lingers has a `stop` entry and is still running, so a
+// session with a `process` is judged by the process exiting and nothing else.
 let over = (row: Bundle | undefined, entries: Bundle[]): boolean =>
   row?.[PROCESS] ? comp(row, EXIT) != null : ENDED.has(statusOf(entries))
 
@@ -140,8 +139,8 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
     every(said, every(options.timeout, 30 * 60_000))
   let lines = (said: unknown) => Number(said ?? options.lines ?? 40)
 
-  // What a run came to, in the words a person reads: where it stands, the
-  // code it ended on, and its own account of itself.
+  // How a run ended, in a form a person reads: where it stands, the exit code
+  // it ended on, and its own account of itself.
   let ending = (ctx: ToolCtx, row: Bundle, entries: Bundle[]): string => {
     let code = comp(row, EXIT)?.code
     let head = `${human(ctx.graph.vocab)(row)} — ${statusOf(entries)}` +
@@ -176,9 +175,9 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
         str(ctx.args.provider),
         str(ctx.args.model),
       ])
-      // By eid, never by position: a read answers with what it FOUND, so an
-      // id that is not there would otherwise shift its neighbour into its
-      // place and refuse the wrong word.
+      // Match by eid, never by position: a read returns only the rows it
+      // found, so a missing id would otherwise shift its neighbour into its
+      // place and the error would name the wrong argument.
       let found = new Map(
         (await ctx.graph.storage.tx((tx) =>
           tx.get([task, provider, model].filter(Boolean))
@@ -196,14 +195,15 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
       }
       let effort = str(ctx.args.effort)
       let session = uuid()
-      // The instruction says which work it is, and no more: the session holds
-      // the claim, and every session here opens by reading what it holds.
+      // The instruction names the work and no more: the session holds the
+      // claim, and every session here starts by reading what it holds.
       let instruction = str(ctx.args.instruction) ||
         [human(ctx.graph.vocab)(on), str(comp(on, 'doc')?.title)]
           .filter(Boolean).join(' — ')
-      // The request, and the lease that says who is doing it. The lease is
-      // guarded, so handing an agent work somebody else holds refuses the
-      // whole batch rather than starting a second one on it.
+      // The request, plus the lease recording who is doing the work. The
+      // lease is guarded, so handing an agent work somebody else already holds
+      // rejects the whole transaction rather than starting a second run on
+      // it.
       await ctx.graph.apply(
         signed([
           { entity: { eid: session }, [SESSION]: {} },

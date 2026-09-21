@@ -1,55 +1,55 @@
-// The provider seam: what a managed session RUNS, and how to read back what it
-// prints. An adapter is its argv and the reader that turns one line of its
-// JSONL into the comps one transcript entry wears — code, and only code. WHICH
-// providers exist and which models each serves is graph data (@yaks/model's
-// `provider` and `model` entities), so adding a model is a write, not a
-// release.
+// What a managed session runs, and how to read back what it prints. An adapter
+// is a provider's argv plus the function that converts one line of its
+// JSON-lines output into the components of one transcript entry — code, and
+// only code. Which providers exist and which models each one serves is graph
+// data (@yaks/model's `provider` and `model` entities), so adding a model means
+// inserting a row, not cutting a release.
 //
 // Every provider prints one JSON object per event, so ./run.ts never learns a
-// vendor's dialect: it asks the adapter what a line says and appends whatever
-// comes back. A line no adapter recognizes is left where it is — the file is
-// still the durable log, and the graph carries the transcript rather than the
+// vendor's format: it asks the adapter what a line means and appends whatever
+// comes back. A line no adapter recognizes is left alone — the file is still
+// the durable log, and the graph stores the transcript rather than the raw
 // stream.
 //
-// What an adapter deliberately does NOT say is `call` and `result`. A
-// provider's tool use already happened, in its own process; written as a
-// `call` row it would be handed to THIS host's runner, which runs any call
-// naming a tool it has (@yaks/tools) — and the tools a fleet agent reaches are
-// exactly this host's. The word for "somebody else already ran this" is not in
-// the vocabulary yet, so a tool use stays in the file.
+// Adapters deliberately never produce `call` and `result` components. The
+// provider already ran its own tool calls, in its own process. Written into the
+// graph as a `call` row, the server's tool runner (@yaks/tools) would execute
+// any call naming a tool it has, running them a second time. No component yet
+// means "another process already ran this", so tool calls stay in the log file.
 //
-// Event shapes are the fleet's, copied from live probes of both CLIs rather
-// than from docs (src/adapters.ts).
+// The event shapes are the fleet's, copied from live runs of both CLIs rather
+// than from their docs (src/adapters.ts).
 
 /** One parsed line of a provider's stream. */
 export type Event = Record<string, unknown>
 
-/** The comps one entry wears, as an adapter states them: no eids, because an
- * adapter knows a dialect and never the graph it is read into. */
+/** The components of one entry, as an adapter reports them. No eids: an
+ * adapter knows a provider's output format and nothing about the graph its
+ * output is read into. */
 export type Comps = Record<string, Record<string, unknown>>
 
-/** What a run was asked for, as a command line is built from it. */
+/** What a run was asked for; the command line is built from it. */
 export type Job = {
-  /** the session entity — the transcript this run writes, and the name the
+  /** the session entity — the transcript this run writes, and the id the
    * provider is asked to give its own thread */
   session: string
   /** the model, by the name its provider knows it by */
   model?: string
-  /** how hard to think, where the provider takes such a word */
+  /** how hard to think, where the provider accepts such a setting */
   effort?: string
   /** what it was asked to do */
   instruction: string
 }
 
-/** A provider that is a command. */
+/** A provider that is run as a command. */
 export type Adapter = {
-  /** the command line to run it with, argv[0] first */
+  /** the command line to run it with, the program name first */
   argv: (job: Job) => string[]
-  /** what this line says, as the comps the entry it becomes wears; null when
-   * the line is not worth an entry */
+  /** what this line means, as the components the entry it becomes carries;
+   * null when the line does not become an entry */
   entry: (e: Event) => Comps | null
-  /** what this line says about the SESSION row itself — the provider's own
-   * name for the thread, and nothing else so far */
+  /** what this line means for the session row itself — the provider's own id
+   * for the thread, and nothing else so far */
   about?: (e: Event) => Comps | null
 }
 
@@ -64,7 +64,7 @@ let count = (v: unknown): number | undefined => {
 let put = (k: string, v?: number) => v == null ? {} : { [k]: v }
 
 // @yaks/model's `usage`, from the two shapes the two vendors report. Claude
-// splits cache reads out already; codex counts them inside `input_tokens`, and
+// reports cache reads separately; codex counts them inside `input_tokens`, and
 // that is the vendor's own arithmetic, kept rather than corrected.
 let anthropicUsage = (raw: unknown): Comps['usage'] | null => {
   if (!raw || typeof raw != 'object') return null
@@ -133,7 +133,7 @@ export let claude: Adapter = {
     if (e.type != 'result') return null
     // The turn is over either way; what differs is whether it ended well.
     // Claude reports an API refusal as subtype `success` with is_error set,
-    // and the result text carries the diagnosis.
+    // and the result text holds the diagnosis.
     let usage = anthropicUsage(e.usage)
     if (e.is_error) {
       return {
@@ -194,10 +194,10 @@ export let codex: Adapter = {
 }
 
 /**
- * The providers that are commands, by the name their `provider` entity wears.
- * A host with one of its own composes its own table
- * ({@link https://jsr.io/@yaks/spawn/doc/effects/~/spawning | spawning}); a
- * provider missing from it is one this package does not run, which is how an
- * `http` provider stays the in-process daemon's.
+ * The providers run as commands, keyed by the `name` on their `provider`
+ * entity. A server with a provider of its own builds its own table
+ * ({@link https://jsr.io/@yaks/spawn/doc/effects/~/spawning | spawning}). A
+ * provider missing from this table is one this package does not launch, which
+ * is how an `http` provider is left to the in-process daemon.
  */
 export let adapters: Record<string, Adapter> = { claude, codex }

@@ -1,30 +1,32 @@
-// A managed session: the provider started as a detached command, and its
-// stdout read back as the transcript.
+// A managed session: the provider run as a detached command, its stdout read
+// back into the graph as the transcript.
 //
-// Three facts hold it up, and two of them are already somebody else's.
+// Three facts hold it up, and two of them belong to other packages.
 //
-// 1. THE CHILD OUTLIVES US. @yaks/process owns that: a launcher that exits at
-//    birth, a `setsid` wrapper in its own `systemd-run --user --scope` unit, a
-//    pidfile and a code file that are enough to adopt the run back. The
-//    `process` row lands on the SESSION's own entity — one entity, one run —
-//    which is what @yaks/session means by "where it runs is @yaks/process
-//    `process`". Nothing here reaps anything.
-// 2. THE FILE IS THE LOG. The child's stdout is @yaks/process's `<eid>.out`,
-//    appended by the wrapper and durable across every restart of this process.
-//    What the graph holds is the TRANSCRIPT read out of it: one entry per line
-//    the adapter recognizes, wearing `imported{source, line}`. That stamp is
-//    the cursor too — the highest line already imported is where a resume
-//    starts — so importing is exactly-once without a column to keep current.
-// 3. THE REQUEST IS AN ENTRY. A session is asked for a provider, a model and
-//    an effort by the `using` on its first entry, and the prose beside it is
-//    the instruction. There is no launch route and no spawn column: the batch
-//    that writes that entry is the request, and ./effects.ts is what answers
-//    it.
+// 1. THE CHILD OUTLIVES US. @yaks/process owns that: a launcher that exits
+//    immediately, a `setsid` wrapper inside its own `systemd-run --user
+//    --scope` unit, a pidfile, and a file holding the exit code — enough to
+//    pick the run back up later. The `process` component is stored on the
+//    session's own entity: one entity, one run. Nothing here reaps child
+//    processes.
+// 2. THE FILE IS THE LOG. The child's stdout is written to @yaks/process's
+//    `<eid>.out` by the wrapper, and survives every restart of the server. The
+//    graph stores the transcript read out of it: one entry per line the adapter
+//    recognizes, each with an `imported` component recording the source file
+//    and the line number. That also serves as the read position — the highest
+//    line number already imported is where a resume begins — so every line is
+//    imported exactly once, with no cursor column to keep up to date.
+// 3. THE REQUEST IS AN ENTRY. A session asks for a provider, a model and an
+//    effort through the `using` component on its first entry, and the text next
+//    to it is the instruction. There is no HTTP endpoint that launches an agent
+//    and no `launch` column: the transaction that writes that entry is the
+//    request, and ./effects.ts is what answers it.
 //
-// A stop is a `stop` on the session's own entity, beside its process — the
-// same word @yaks/process reads beside a `service` row. A `stop` on an ENTRY
-// is the other thing that word means, a mark in the transcript, and the two
-// never collide because one rides a session and the other rides a line.
+// Killing a run means writing a `stop` component on the session's own entity,
+// next to its `process` — the same component @yaks/process reads next to a
+// `service` row. A `stop` on an ENTRY means something else: the end of a
+// transcript. The two never conflict, because one is written on a session and
+// the other on an entry.
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { SESSION } from '@yaks/session'
@@ -47,14 +49,15 @@ export type Opts = {
   adapters?: Record<string, Adapter>
   /** where the child runs (default this process's own cwd) */
   cwd?: string
-  /** the child's whole environment (default this process's own, since a
-   * provider's subscription auth rides `HOME` and its CLI rides `PATH`) */
+  /** the child's whole environment (default the server's own, since a
+   * provider's subscription credentials are found through `HOME` and its CLI
+   * through `PATH`) */
   env?: Record<string, string>
   /** where @yaks/process keeps its files (default its own rule) */
   dir?: string
   /** how often the log and the ending are read (ms, default 250) */
   poll?: number
-  /** how long the wrapper has to report for duty (ms, @yaks/process default) */
+  /** how long the wrapper has to report in (ms, @yaks/process default) */
   birth?: number
   /** how long a stopped run has after TERM before KILL (ms, default 10_000) */
   grace?: number
@@ -80,14 +83,14 @@ export type Asked = Job & {
   provider: string
 }
 
-// The efforts a model admits, space- or comma-separated. An empty allowlist
-// admits anything: a provider that never takes the word cannot refuse one.
+// The efforts a model accepts, space- or comma-separated. An empty list allows
+// anything: a provider with no effort setting cannot reject one.
 let levels = (efforts: unknown): string[] =>
   String(efforts ?? '').split(/[\s,]+/).filter(Boolean)
 
 /**
- * Read a session's request off its transcript: the `using` on its first entry
- * that carries one, and the prose that came with it.
+ * Read a session's request out of its transcript: the `using` component on the
+ * first entry that has one, and the instruction text stored with it.
  *
  * ```ts
  * import { asked } from '@yaks/spawn'
@@ -162,7 +165,7 @@ let after = (path: string, lines: number): number => {
 }
 
 // One stream, read forward from where it stands. The decoder streams, so a
-// multi-byte character split across two reads survives the seam.
+// multi-byte character split across two reads is reassembled correctly.
 type Tail = { path: string; at: number; rest: string; dec: TextDecoder }
 
 let sip = (t: Tail): string => {
@@ -170,7 +173,7 @@ let sip = (t: Tail): string => {
   try {
     f = Deno.openSync(t.path)
   } catch {
-    return '' // never written: the stream said nothing yet
+    return '' // never written: the stream has produced nothing yet
   }
   try {
     f.seekSync(t.at, Deno.SeekMode.Start)
@@ -196,9 +199,9 @@ let lines = (t: Tail, final: boolean): string[] => {
 }
 
 /**
- * One line of a provider's log, as the bundles it becomes: the entry it is,
- * and the patch it makes to the session row when it says something about the
- * run itself.
+ * One line of a provider's log, as the bundles it becomes: the entry it turns
+ * into, plus a patch to the session row when the line reports something about
+ * the run itself.
  *
  * A line the adapter does not recognize — and a line that is not JSON at all,
  * which every CLI prints sooner or later — becomes nothing. The file keeps it.
@@ -226,7 +229,7 @@ export let imported = (
       imported: { source, line },
       // Everything a provider prints is OUTPUT: the run produced it, and the
       // run is the session's own entity. Prose with no `output` beside it is
-      // an input, which is the one thing this stream never carries.
+      // an input, which is the one thing this stream never contains.
       ...(comps.content && !comps.output
         ? { output: { source: session } }
         : {}),
@@ -271,7 +274,8 @@ export let follow = async (
     let bundles = lines(tail, over)
       .flatMap((text) => imported(session, path, ++line, text, adapter, mint))
     // Trusted: `imported` is server-owned, and this IS the server reading its
-    // own file. One apply per pass, so a batch of lines lands as one commit.
+    // own file. One apply per pass, so a run of lines lands in one
+    // transaction.
     if (bundles.length) await g.apply(bundles, { trusted: true })
     if (over) return ended(g, session, o)
     await sleep(o.poll ?? 250)
@@ -279,7 +283,7 @@ export let follow = async (
 }
 
 /**
- * Start a session's provider and read what it says.
+ * Start a session's provider and read its output back into the transcript.
  *
  * ```ts
  * import { start } from '@yaks/spawn'
@@ -287,9 +291,10 @@ export let follow = async (
  * // let run = await start(graph, session)
  * ```
  *
- * `null` when this session asked for nothing, or for a provider that is not a
- * command here — an `http` provider is the in-process daemon's, not ours. The
- * tail runs on past this call: what it answers is the process, not the run.
+ * `null` when this session asked for nothing, or asked for a provider this
+ * package has no adapter for — an `http` provider belongs to the in-process
+ * daemon, not here. The tail keeps running after this call returns: what it
+ * returns is the started process, not the finished run.
  */
 export let start = async (
   g: Graph,
@@ -328,9 +333,9 @@ export let start = async (
  * ```
  */
 export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
-  // The narrowed store is the seam @yaks/process already offers: this host
-  // answers `running` with the SESSIONS that are running, so the shell's own
-  // processes stay the shell's to watch.
+  // Narrowing the store is the seam @yaks/process already offers: here
+  // `running` returns only the sessions that are running, so the shell's own
+  // child processes stay the shell's to watch.
   let mine = {
     ...store(g),
     running: () => g.read(`.${SESSION}&.${PROCESS}&.${EXIT}=`),

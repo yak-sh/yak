@@ -1,9 +1,10 @@
 // Shared test fixtures (not part of the published package — see deno.json).
 //
-// The store is @yaks/ram: a Map holding the bundles, the same `apply()` and
-// the same query grammar as a database, so a test needs no file and no schema.
-// The vocabulary is every word a managed session touches — the transcript's,
-// the process's, and the provider and model entities a request names.
+// The store is @yaks/ram: a Map holding the bundles, with the same `apply()`
+// and the same query grammar as a database, so a test needs no file and no
+// schema. The vocabulary is every component a managed session touches — the
+// session's, the process's, and the provider and model entities a request
+// names.
 
 import { type Graph, graph } from '@yaks/graph'
 import { loadVocab, type Vocab } from '@yaks/vocab'
@@ -16,11 +17,11 @@ import { processDoc, processes } from '@yaks/process'
 import { claude } from './adapters.ts'
 import type { Adapter } from './adapters.ts'
 
-/** Every word a managed session wears. */
+/** Every component a managed session uses. */
 export let host: Vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, processDoc])
 
-/** A graph over an empty store, with the transcript and process rules on it.
- * `fx` is the effects registry, for a test that composes the facet. */
+/** A graph over an empty store, with the session and process plugins loaded.
+ * `fx` is the effects registry, for a test that needs to add handlers. */
 export let tracked = (): { g: Graph; fx: ReturnType<typeof effects> } => {
   let fx = effects(host, { write: (b) => g.apply(b, { trusted: true }) })
   let g = graph({
@@ -31,8 +32,8 @@ export let tracked = (): { g: Graph; fx: ReturnType<typeof effects> } => {
   return { g, fx }
 }
 
-/** The fake provider, wearing claude's dialect: the shipped reader under test,
- * driven by a shell script that needs no model (./fake.sh). */
+/** The fake provider, printing claude's output format: the shipped reader
+ * under test, driven by a shell script that needs no model (./fake.sh). */
 export let fake: Adapter = {
   ...claude,
   argv: (j) => [
@@ -44,7 +45,7 @@ export let fake: Adapter = {
   ],
 }
 
-/** The bundles a request is: a session, and the entry that asks. */
+/** The rows that make up a request: a session, and the entry that asks. */
 export let asking = (
   session: string,
   entry: string,
@@ -65,8 +66,8 @@ export let asking = (
   },
 ]
 
-/** Wait for a fact by polling it, never by guessing a duration. The budget is
- * only there to fail instead of hang. */
+/** Wait for something to become true by polling, never by sleeping a guessed
+ * duration. The timeout is only there to fail instead of hang. */
 export let until = async <T>(
   fact: () => T | Promise<T>,
   label = 'it',
