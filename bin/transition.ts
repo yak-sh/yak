@@ -12,13 +12,18 @@
 // reads that table at run time and refuses to finish if a fleet component has
 // neither a move of its own nor a drop row in the doc, so the two cannot drift.
 //
-//   deno run -A bin/transition.ts --from ~/.tasks/snap.db --to /tmp/yak.db
+//   deno run -A bin/transition.ts --from ~/.tasks/snap.db --to ~/.yak/yak.db
 //
-// `--from` must be a COPY (`VACUUM INTO`), never the live file. `--limit N`
-// caps each component table for a quick pass over the shape.
+// `--from` must be a COPY (`VACUUM INTO`), never the live file. `--to` is a
+// db that already holds a graph — the harness's, which IS the new db — and
+// nothing in it is dropped: the fleet's rows land beside what is there, and
+// where a derived id already exists (a tool, an edge, a key) the fleet's row
+// merges onto that entity rather than minting a second one. `--limit N` caps
+// each component table for a quick pass over the shape.
 
 import { Database } from '@yaks/sqlite/db'
 import { mintSql } from '@yaks/sqlite'
+import { toolEid } from '@yaks/tools'
 import {
   compose,
   facet,
@@ -63,6 +68,9 @@ type Ctx = {
   pane: (target: string, of: string) => void
   /** the first entry of a session, when it has one */
   firstEntry: (session: string) => string | undefined
+  /** the session a transcript line belongs to — who made a call, whose stream
+   * an output came off */
+  sessionOf: (entry: string) => string | undefined
   /** the prose an artifact entity holds */
   body: (id: unknown) => string | undefined
   /** an extra bundle, for a row that says more than one thing */
@@ -124,15 +132,23 @@ let refs = (says: string, ref: string[], plain: string[] = []): Move => ({
   },
 })
 
-// The eleven typed facets the fleet grew per tool name, and the `tool_use`
-// block beside them: all of it is one `call{to, args}`. The tool is named by
+// The typed facets the fleet grew per tool name, and the `tool_use` block
+// beside them: all of it is one `call{to, args}`. The tool is named by
 // `tool_use.name` where the transcript kept it and by the facet's own word
 // where it did not, and the facet's columns ARE the arguments.
+//
+// AND EVERY IMPORTED CALL IS ALREADY CALLED: it was made, by a process on
+// another machine, years of transcript ago. `execution{by}` says whose it was
+// (@yaks/tools), so no runner here ever selects it — the boot redrive reads
+// past thirty thousand calls to tools this host has never had.
 let asCall = (facet: string, ...cols: string[]): Move => ({
   says: 'call',
   make: (row, ctx) => {
     let args: Record<string, unknown> = {}
     for (let c of cols) if (row[c] != null) args[c] = row[c]
+    let me = ctx.ref(row.entity)!
+    let ran = ctx.sessionOf(me)
+    if (ran) ctx.also({ entity: { eid: me }, execution: { by: ran } })
     return {
       to: ctx.tool(String(row.$tool ?? facet)),
       args: JSON.stringify(args),
@@ -636,7 +652,7 @@ let MOVES: Record<string, Move | null> = {
     },
   },
   graph_query: asCall('graph_query', 'query'),
-  headers: asCall('headers', 'data'),
+  headers: null, // a fetch's answer, and no fleet row ever wore one
   imported: same('imported', 'source', 'line'),
   lease: {
     says: 'effect',
@@ -662,7 +678,15 @@ let MOVES: Record<string, Move | null> = {
       return null
     },
   },
-  opaque: asCall('opaque', 'format', 'data'),
+  opaque: {
+    says: 'content',
+    // A transcript line the adapter could not decode — the line's own content,
+    // never a call: nobody ever invoked a tool named `opaque`.
+    make: (row, ctx) => {
+      if (row.format != null) ctx.lost('opaque.format')
+      return { body: String(row.data ?? '') }
+    },
+  },
   output: {
     says: 'output',
     make: (row, ctx) => ({
@@ -675,7 +699,7 @@ let MOVES: Record<string, Move | null> = {
   prompt: tag('prompt'),
   reasoning: tag('reasoning'),
   recalled: refs('recalled', ['source'], ['at']),
-  response: asCall('response', 'status'),
+  response: null, // a fetch's answer, and no fleet row ever wore one
   result: {
     says: 'result',
     make: (row, ctx) => ({ call: ctx.ref(row.call), ms: num(row.ms) }),
@@ -863,7 +887,19 @@ let MOVES: Record<string, Move | null> = {
       }
     },
   },
-  stderr: asCall('stderr', 'text'),
+  stderr: {
+    says: 'content',
+    // A process's stderr line: prose wearing the stream it came off, which is
+    // what `output{source}` says (@yaks/tools). Not a tool call.
+    make: (row, ctx) => {
+      let me = ctx.ref(row.entity)!
+      ctx.also({
+        entity: { eid: me },
+        output: { source: ctx.sessionOf(me) },
+      })
+      return { body: String(row.text ?? '') }
+    },
+  },
   stop_request: {
     says: 'stop',
     // A stop is an ENTRY, so the daemon reads it where it reads everything
@@ -872,7 +908,17 @@ let MOVES: Record<string, Move | null> = {
     make: () => ({}),
   },
   task_context: asCall('task_context'),
-  timeout: asCall('timeout', 'ms'),
+  timeout: {
+    says: 'stop',
+    // Why a run stopped, which is a mark in the transcript (@yaks/session
+    // `stop`): the daemon performs nothing after it. How long it had is not
+    // something the mark keeps.
+    make: (row, ctx) => {
+      if (row.ms != null) ctx.lost('timeout.ms')
+      void ctx
+      return {}
+    },
+  },
   tool_use: null, // the transcript's renamed log block; `call` already says it
   usage: same('usage', 'input', 'cached', 'output', 'reasoning'),
   worktree: {
@@ -959,18 +1005,16 @@ let NATURES = new Set([
 ])
 
 // The facets that are a tool call rather than a component of their own, in the
-// order a name is taken from them when a row wears more than one.
+// order a name is taken from them when a row wears more than one. The six that
+// are calls, and no more: `opaque` is a line the adapter could not decode,
+// `stderr` is a stream, `timeout` is why a run stopped, and `headers` and
+// `response` are a fetch's answer.
 let FACETS = [
   'bash',
   'fetch',
   'patch',
   'apply',
   'graph_query',
-  'headers',
-  'opaque',
-  'response',
-  'stderr',
-  'timeout',
   'task_context',
 ]
 
@@ -1098,6 +1142,15 @@ let main = async () => {
     if (s && e) firsts.set(s, e)
   }
 
+  // Whose transcript each line is in: who made a call, whose stream an output
+  // came off.
+  let ran = new Map<string, string>()
+  for (let r of all('select entity, session from entry')) {
+    let e = eidOf(r.entity)
+    let s = eidOf(r.session)
+    if (e && s) ran.set(e, s)
+  }
+
   let named = (table: string, col = 'name'): Map<string, string> => {
     let out = new Map<string, string>()
     for (let r of all(`select entity, "${col}" from "${table}"`)) {
@@ -1113,9 +1166,6 @@ let main = async () => {
   let cfg = read(config)
   say('read')
   console.log(`composing ${cfg.plugins?.length} plugins over ${to}`)
-  try {
-    Deno.removeSync(to)
-  } catch { /* a fresh file is the normal case */ }
   // The import writes the graph but NOT its log: the fleet's own three-table
   // journal is the history, and it is copied across whole at the end.
   let load: Load = async (plugin, name) => {
@@ -1174,7 +1224,9 @@ let main = async () => {
     tool: (name) => {
       let held = minted.get(`tool|${name}`)
       if (held) return held
-      let eid = derivedEid(`tool|${name}`)
+      // @yaks/tools' own derivation, so the `bash` the fleet called and the
+      // `bash` this store already has are ONE entity.
+      let eid = toolEid(name)
       minted.set(`tool|${name}`, eid)
       batch.push({ entity: { eid, num: null }, tool: { name } })
       return eid
@@ -1209,6 +1261,7 @@ let main = async () => {
       return eid
     },
     firstEntry: (session) => firsts.get(session),
+    sessionOf: (entry) => ran.get(entry),
     body: (id) => bodies.get(Number(id)),
     also: (b) => batch.push(b),
     lost: (column) => lost[column] = (lost[column] ?? 0) + 1,
@@ -1312,6 +1365,39 @@ let main = async () => {
   }
   say('components')
 
+  // ── pass 1b: the runs that ended while nobody was watching ──
+  // A restart adopts every `.session&.process&.exit=` it finds: 752 of these
+  // came over wearing a pid and no ending, because the fleet never wrote one.
+  // None of them is running — the pids belong to another machine and another
+  // year — so each gets the ending @yaks/process has a word for: witnessed,
+  // code unknown. Jeff, 2026-09-21: "add an `exit` but the code should be
+  // null; since we don't actually know the state of the exit."
+  let alive = (pid: number): boolean => {
+    try {
+      return Deno.statSync(`/proc/${pid}`).isDirectory
+    } catch {
+      return false
+    }
+  }
+  let ended: Bundle[] = []
+  for (
+    let r of sql.query(
+      `select e.eid as eid, p.pid as pid from "process" p
+         join entity e on e.id = p.entity
+         join "session" s on s.entity = p.entity
+         left join "exit" x on x.entity = p.entity
+        where x.entity is null`,
+      [],
+    )
+  ) {
+    if (r.pid != null && alive(Number(r.pid))) continue
+    ended.push({ entity: { eid: String(r.eid) }, exit: { code: null } })
+  }
+  for (let i = 0; i < ended.length; i += batchSize) {
+    await host.graph.apply(ended.slice(i, i + batchSize), { trusted: true })
+  }
+  say('endings')
+
   // What integer id this store keeps for a fleet reference — the same lookup
   // the log copy needs, so it is built once here.
   let here = new Map<string, number>()
@@ -1327,8 +1413,20 @@ let main = async () => {
   // Every patch above left an `updated` carrying the import's own clock, which
   // is true of the import and false of the graph. The fleet's own readings go
   // back under it: the stamp is the graph's to write, so nothing written
-  // THROUGH the graph could have said this.
-  sql.exec('delete from "updated"')
+  // THROUGH the graph could have said this. Only the entities this import
+  // touched — what was already in this store was last changed when it says.
+  sql.exec('create temp table imported_entity (id integer primary key)')
+  sql.exec('begin')
+  for (let [, sp] of spine) {
+    let id = here.get(renamed.get(sp.eid) ?? sp.eid)
+    if (id != null) {
+      sql.query('insert or ignore into imported_entity values (?)', [id])
+    }
+  }
+  sql.exec('commit')
+  sql.exec(
+    'delete from "updated" where entity in (select id from imported_entity)',
+  )
   let touched = 0
   sql.exec('begin')
   for (let r of all('select * from updated')) {
@@ -1374,6 +1472,17 @@ let main = async () => {
   // are read back through the eid each one named.
   let idOf = idAt
   let logged = { tx: 0, change: 0, field: 0 }
+  // The log this store already keeps owns its ids, so the fleet's start past
+  // the highest of them. `journal_change.tx` and `journal_field.change` name
+  // rows by id, so each moves by its own table's offset.
+  let past = (table: string): number =>
+    Number(
+      sql.query(`select coalesce(max(id), 0) as high from ${table}`, [])[0]
+        ?.high ?? 0,
+    )
+  let txAt = past('journal_tx')
+  let changeAt = past('journal_change')
+  let fieldAt = past('journal_field')
   // Three million rows go in as multi-row inserts rather than one statement
   // each: the same rows, two orders of magnitude fewer round trips.
   let CHUNK = 250
@@ -1405,7 +1514,7 @@ let main = async () => {
     all(
       'select * from journal_tx',
     ).map((r) => [
-      Number(r.id),
+      txAt + Number(r.id),
       String(r.ts),
       idOf(r.actor),
       idOf(r.via),
@@ -1422,8 +1531,8 @@ let main = async () => {
       if (entity == null) return null
       changes.add(Number(r.id))
       return [
-        Number(r.id),
-        Number(r.tx),
+        changeAt + Number(r.id),
+        txAt + Number(r.tx),
         Number(r.ordinal),
         entity,
         String(r.component),
@@ -1437,8 +1546,8 @@ let main = async () => {
     ['id', 'change', 'ordinal', 'field', 'present', 'value', 'ref'],
     all('select * from journal_field').map((r) =>
       !changes.has(Number(r.change)) ? null : [
-        Number(r.id),
-        Number(r.change),
+        fieldAt + Number(r.id),
+        changeAt + Number(r.change),
         Number(r.ordinal),
         String(r.field),
         Number(r.present),
@@ -1495,6 +1604,7 @@ let main = async () => {
   }
   console.log(
     `\n  spines ${spine.size} · bundles ${written} · graves ${graves.length}` +
+      ` · endings ${ended.length}` +
       ` · journal ${logged.tx}/${logged.change}/${logged.field}` +
       ` · ${seconds}s`,
   )
