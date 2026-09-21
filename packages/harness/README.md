@@ -786,7 +786,7 @@ to its configuration with `clientId`, `redirectUrl`, and optionally `scope` or
 and provider policies can restrict this copy-address-bar workflow.
 
 Tokens and client registrations are stored separately from the graph in
-`~/.yaks/mcp-auth.json` (0600), or `HARNESS_MCP_AUTH`. This private JSON file is
+`~/.yak/mcp-auth.json` (0600), or `HARNESS_MCP_AUTH`. This private JSON file is
 unencrypted and does not overwrite the existing yak bearer store. Back it up as
 credentials, not as app data. Pending logins do not survive restart. Existing
 `credential` bearer configuration remains a fallback. Successful OAuth connects
@@ -821,7 +821,7 @@ Choose a model identifier available to your OpenRouter account. Then press
 **Esc, A**, select **OpenRouter (model provider)**, open the authorization URL,
 and paste the full return URL into the private authorization input. No callback
 listener runs: a browser connection-error page is expected; copy its address
-bar. The API key goes to `~/.yaks/openrouter-auth.json` (or
+bar. The API key goes to `~/.yak/openrouter-auth.json` (or
 `OPENROUTER_AUTH_FILE`), not the graph, transcript, or draft. This is a separate
 account from MCP servers and OpenAI; existing credentials are never borrowed. No
 model request is sent merely by configuring or authorizing the provider.
