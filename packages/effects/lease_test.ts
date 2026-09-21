@@ -3,7 +3,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import { blogGraph, durableBlog } from './harness.ts'
-import { drop, held, LEASE, leaseEid, take } from './lease.ts'
+import { drop, held, holding, LEASE, leaseEid, take, until } from './lease.ts'
 
 let g = () => blogGraph([], durableBlog)
 
@@ -67,6 +67,70 @@ Deno.test('a graph with no lease word has nobody to contend with', async () => {
   assertEquals(await take(graph, 'sweep', { holder: 'p1' }), true)
   assertEquals(await take(graph, 'sweep', { holder: 'p2' }), true)
   assertEquals(await held(graph, 'sweep'), undefined)
+})
+
+// Doing a duty: the same call for a process that stays and one passing
+// through, and the only difference is what its signal already says.
+
+Deno.test('a signal already aborted is one pass, and the duty is handed back', async () => {
+  let graph = g()
+  let passes = 0
+  await holding(graph, 'sweep', { holder: 'p1' }, () => void passes++)
+  assertEquals(passes, 1)
+  assertEquals((await held(graph, 'sweep'))?.holder, null)
+})
+
+Deno.test('a line passing through leaves a duty somebody is already doing', async () => {
+  let graph = g()
+  await take(graph, 'sweep', { holder: 'p1', hold: 10_000 })
+  let passes = 0
+  await holding(graph, 'sweep', { holder: 'p2' }, () => void passes++)
+  assertEquals(passes, 0)
+  assertEquals((await held(graph, 'sweep'))?.holder, 'p1')
+})
+
+Deno.test('a process that stays holds the duty until it goes', async () => {
+  let graph = g()
+  let stop = new AbortController()
+  let holder: string | null = null
+  let running = holding(
+    graph,
+    'clock',
+    { holder: 'p1', signal: stop.signal },
+    (signal) => until(signal),
+  )
+  for (let i = 0; i < 200 && !holder; i++) {
+    holder = (await held(graph, 'clock'))?.holder ?? null
+    if (!holder) await new Promise((go) => setTimeout(go, 5))
+  }
+  assertEquals(holder, 'p1')
+  stop.abort()
+  await running
+  assertEquals((await held(graph, 'clock'))?.holder, null)
+})
+
+Deno.test('a second process waits, and takes over when the first lapses', async () => {
+  let graph = g()
+  // A holder that was killed: it never renews and never lets go.
+  await take(graph, 'clock', { holder: 'gone', hold: 30 })
+  let stop = new AbortController()
+  let took = false
+  let running = holding(
+    graph,
+    'clock',
+    { holder: 'p2', hold: 500, poll: 5, signal: stop.signal },
+    (signal) => {
+      took = true
+      return until(signal)
+    },
+  )
+  for (let i = 0; i < 200 && !took; i++) {
+    await new Promise((go) => setTimeout(go, 5))
+  }
+  assert(took, 'nobody took over a lease that lapsed')
+  assertEquals((await held(graph, 'clock'))?.holder, 'p2')
+  stop.abort()
+  await running
 })
 
 Deno.test('the take is a precondition, so two askers at one instant cannot both win', async () => {

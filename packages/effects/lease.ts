@@ -175,3 +175,85 @@ export let released = (
 /** Who holds a duty right now, if anybody — the read a check makes. */
 export let held = (g: Graph, name: string): Promise<Lease | undefined> =>
   contested(g) ? leaseOf(g, leaseEid(name)) : Promise.resolve(undefined)
+
+let sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((wake) => {
+    let done = () => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', done)
+      wake()
+    }
+    let timer = setTimeout(done, ms)
+    signal?.addEventListener('abort', done, { once: true })
+    if (signal?.aborted) done()
+  })
+
+/** How a duty is held for a while: {@link HoldOpts}, plus what says when we
+ * are done and how often a holder is asked again. */
+export type HoldingOpts = HoldOpts & {
+  /** abort to give the duty up. ALREADY ABORTED means one pass and out — the
+   * line does what nobody is doing and never queues for what somebody is. */
+  signal?: AbortSignal
+  /** how often to ask again while somebody else holds it (default a tenth of
+   * the hold) */
+  poll?: number
+}
+
+/**
+ * Do a duty for as long as this process is up: take it, renew it while the
+ * work runs, and let it go at the end.
+ *
+ * The same call serves a process of either shape, which is the point — nothing
+ * here assumes a separate one. A door or a TUI hands it a live signal and
+ * holds the duty until that aborts, waiting for a holder ahead of it to lapse;
+ * a one-shot line hands it a signal that has already aborted, does the pass if
+ * nobody else is, and releases on the way out.
+ *
+ * ```ts
+ * import { holding } from '@yaks/effects'
+ *
+ * // await holding(graph, '@yaks/wake', { holder: me, signal }, (s) => loop(g, { signal: s }))
+ * ```
+ */
+export let holding = async (
+  g: Graph,
+  name: string,
+  o: HoldingOpts,
+  work: (signal: AbortSignal) => void | Promise<void>,
+): Promise<void> => {
+  let signal = o.signal ?? AbortSignal.abort()
+  let hold = o.hold ?? HOLD
+  let ask = { ...o, hold }
+  while (!await take(g, name, ask)) {
+    // Somebody is doing it. A process that is staying waits them out — a
+    // holder that was killed lapses and this is what takes over — and one
+    // that is only passing through leaves it to them.
+    if (signal.aborted) return
+    await sleep(o.poll ?? Math.max(250, Math.floor(hold / 10)), signal)
+    if (signal.aborted) return
+  }
+  // Renewed on a beat while the work runs: a holder still at it never lapses,
+  // and one that stops existing does. A refused renewal is not worth throwing
+  // about — either we still hold it, or somebody has already taken over.
+  let beat = signal.aborted ? undefined : setInterval(() => {
+    take(g, name, ask).catch(() => {})
+  }, Math.max(50, Math.floor(hold / 3)))
+  try {
+    await work(signal)
+  } finally {
+    if (beat != null) clearInterval(beat)
+    await drop(g, name, { holder: o.holder })
+  }
+}
+
+/** A promise that keeps a duty held and does nothing else, until the signal
+ * says we are done — what a pass that is ALREADY complete waits on so the
+ * duty stays this process's while it is up. */
+export let until = (signal: AbortSignal): Promise<void> =>
+  signal.aborted
+    ? Promise.resolve()
+    : new Promise((done) =>
+      signal.addEventListener('abort', () => done(), {
+        once: true,
+      })
+    )

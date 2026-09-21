@@ -27,11 +27,23 @@ import { compose, type Served } from './serve.ts'
 // twice would be two writers in one process.
 let held = new Map<string, Promise<Served>>()
 
-/** The graph a config names, open. Composed once per path; {@link close}
- * lets it go when the line is done. */
+// On the way in, a line does what is overdue and nobody is doing: the effect
+// sweep a crash interrupted, the wakes that came due while nothing was
+// listening (@yaks/cli `Served.duties`). It is handed a signal that has
+// already aborted, so each duty is exactly one pass and the lease is let go
+// again — a line is not a lesser kind of process, it is the only one there is
+// on a box where nobody runs a door, and a graph must not need one.
+let drained = async (composing: Promise<Served>): Promise<Served> => {
+  let host = await composing
+  await host.duties(AbortSignal.abort())
+  return host
+}
+
+/** The graph a config names, open — and whatever was overdue on it, done.
+ * Composed once per path; {@link close} lets it go when the line is done. */
 export let opened = (path: string): Promise<Served> => {
   let host = held.get(path)
-  if (!host) held.set(path, host = compose(read(path)))
+  if (!host) held.set(path, host = drained(compose(read(path))))
   return host
 }
 

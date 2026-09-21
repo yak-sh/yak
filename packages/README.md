@@ -354,8 +354,21 @@ row appearing, and everything that reads the graph can see it.
 a sweep (`@yaks/wake/service` fires what has come due). Neither a request nor a
 post-commit observation, which is why neither `routes` nor `effects` could hold
 it: a wake reaching its instant and a mailbox that has to be asked are things
-nobody is calling about. It is handed an `AbortSignal`, returns when that
-aborts, and is started by `serve` and stopped by the host's `close`.
+nobody is calling about.
+
+It is handed an `AbortSignal`, does at least ONE PASS, and then keeps going
+until that aborts — which is what lets the same function serve a process of
+either shape. A service and the effect sweep are DUTIES (`@yaks/cli`
+`Served.duties`), each held under a `lease` named for the package that owns it
+(`@yaks/effects` `holding`): a door or a TUI takes the duty and holds it while
+it is up, renewing on a beat; a one-shot `yak` line hands its duties a signal
+that has already aborted, so each is one pass and the lease is handed straight
+back — it drains what is overdue on its way in and leaves alone what somebody is
+already doing. A second long-lived process waits for the duty and takes it over
+when a killed holder's lease lapses. NOTHING HERE ASSUMES A SEPARATE PROCESS: a
+box where the only thing anybody runs is `yak tui` still fires its wakes, and
+one that splits the doors, the clock and the sweep across three processes still
+fires each exactly once.
 
 A subpath a package does not export is a facet it does not have, and the host
 skips it; a subpath that exists and fails to import is an error, never a skip. A

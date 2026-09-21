@@ -623,7 +623,7 @@ Deno.test('a host reads the letter an id wears, which no plugin registers', asyn
   }
 })
 
-Deno.test('a service runs while the host is up and stops when it closes', async () => {
+Deno.test('a duty runs while the host is up and stops when it closes', async () => {
   let beats = 0
   let stopped = false
   let host = await compose(
@@ -644,19 +644,48 @@ Deno.test('a service runs while the host is up and stops when it closes', async 
       },
     }),
   )
-  // Composing is not starting: a one-shot command must not start a clock.
+  // Composing is not holding: nothing is doing a duty until somebody asks to.
   assertEquals(beats, 0)
-  host.start()
+  void host.duties()
   let deadline = Date.now() + 5000
   while (!beats && Date.now() < deadline) {
     await new Promise((go) => setTimeout(go, 5))
   }
-  assert(beats > 0, 'the service never ran')
-  host.close()
-  assert(stopped, 'closing the host did not stop its service')
+  assert(beats > 0, 'the duty never ran')
+  await host.close()
+  assert(stopped, 'closing the host did not let its duty go')
 })
 
-Deno.test('a service that throws is reported, and the host still serves', async () => {
+Deno.test('a signal that has already aborted is one pass and out', async () => {
+  let passes = 0
+  let host = await compose(
+    { db: ':memory:', plugins: ['once'] },
+    only({
+      once: {
+        // The shape every service promises: a pass first, then keep going
+        // until the signal says stop.
+        service: {
+          service: async (_h, _o, signal) => {
+            passes++
+            while (!signal.aborted) {
+              await new Promise((go) => setTimeout(go, 5))
+            }
+          },
+        },
+      },
+    }),
+  )
+  try {
+    // A one-shot line on its way in: it drains what is overdue and returns,
+    // rather than holding a clock nobody asked it to hold.
+    await host.duties(AbortSignal.abort())
+    assertEquals(passes, 1)
+  } finally {
+    await host.close()
+  }
+})
+
+Deno.test('a duty that throws is reported, and the host still serves', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop', 'broken'] },
     only({
@@ -671,13 +700,13 @@ Deno.test('a service that throws is reported, and the host still serves', async 
     }),
   )
   try {
-    host.start()
+    await host.duties(AbortSignal.abort())
     assertEquals(
       await (await host.handler(new Request('http://x/shop/a'))).text(),
       '/shop/a',
     )
   } finally {
-    host.close()
+    await host.close()
   }
 })
 

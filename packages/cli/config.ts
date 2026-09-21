@@ -46,6 +46,12 @@ export type Config = {
   adopt?: boolean
   /** what the MCP door calls itself (default `yak`) */
   name?: string
+  /** how long this process's hold on a DUTY stands before another process may
+   * take it, in milliseconds (default 30_000). A holder still doing the work
+   * pushes it out on a beat; one that was killed leaves a lease that lapses,
+   * which is how a second long-lived process takes over without anybody
+   * reaping anything. */
+  lease?: number
 }
 
 /** The config a line opens: what it said, else `$YAK_CONFIG`. */

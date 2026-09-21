@@ -214,6 +214,41 @@ skips one whose claim is somebody else's and has not expired.
 An application that wants none of this loads no `effect` component and stores
 nothing; the in-memory tier needs no component at all.
 
+## A duty, and the one process doing it
+
+Some work is nobody's request: the sweep above, a clock that fires what has come
+due, picking back up the children a restart left running. Every process that
+opens the graph could do it, and if they all did it would happen twice. So the
+duty is a row.
+
+```
+lease{name, holder, until}
+```
+
+Its id is derived from the NAME, the way an edge's is derived from its sentence,
+so two processes reaching for one duty reach for one row; the take is a `$was`
+write naming the holder and the moment it lapses as the taker READ them, so the
+loser is refused inside the transaction rather than overwriting the winner a
+moment later. Nothing here polls a lock table — the graph's own precondition is
+the lock, and a graph whose vocabulary has no `lease` word has nobody to contend
+with, so every take succeeds and nothing is written.
+
+```ts
+import { holding, until } from '@yaks/effects'
+
+// a process that stays: take it, renew it, let it go at the end
+await holding(graph, '@yaks/wake', { holder: me, signal }, (s) => clock(s))
+
+// a process passing through: one pass if nobody is on it, then hand it back
+await holding(graph, '@yaks/wake', { holder: me }, (s) => clock(s))
+```
+
+The only difference between the two is what the signal already says. `until` is
+what a pass that is already complete waits on, so the duty stays this process's
+while it is up. A holder still at it pushes `until` out on a beat; one that was
+killed leaves a row that lapses and the next process takes over, so nothing has
+to reap anything.
+
 ## Composition
 
 [@yaks/graph](../graph/README.md) supplies the write phases and committed

@@ -77,8 +77,11 @@ import { adopt, fields as searched, find, search } from '@yaks/fts'
 import {
   type Effects,
   effects,
+  HOLD,
+  holding,
   released,
   type SweepRows,
+  until,
   type Watch,
 } from '@yaks/effects'
 import { type Config, given, type Options, PORT, used } from './config.ts'
@@ -181,14 +184,31 @@ export type RoutesFacet = {
   authenticate?: (host: Host, options: Options) => Authenticate
 }
 
+/** The name of the duty this host owns rather than any plugin: the effect
+ * sweep, which finishes what a crash left between a commit and its handler. */
+export let SWEEP = '@yaks/effects'
+
+/** One thing a process may be the one doing: a name to hold it under, and the
+ * work. `run` does at least ONE PASS and then keeps going until the signal
+ * aborts — a clock that loops, or a pass that is already done and then waits,
+ * so the duty stays this process's while it is up. */
+export type Duty = {
+  /** the lease it is held under — the package that owns the work */
+  name: string
+  run: (signal: AbortSignal) => void | Promise<void>
+}
+
 /** `<plugin>/service` — the work this plugin KEEPS DOING while the host is up:
  * a clock, a poll, a sweep. Neither a request nor a post-commit observation,
  * which is why neither `routes` nor `effects` could hold it — a wake that
  * comes due and a mailbox that has to be asked are things nobody is calling
- * about. It is handed an `AbortSignal` and returns when that signal aborts;
- * `compose` imports it and {@link serve} is what starts it — a one-shot
- * command opens the same host to ask one question and must not start another
- * process's clock. */
+ * about.
+ *
+ * It does at least ONE PASS and then keeps going until the signal aborts, so
+ * the same function serves a process of either shape: a door holds it open for
+ * as long as it is up, and a one-shot line hands it a signal that has already
+ * aborted and gets the pass alone. Which process is doing it is settled by a
+ * lease ({@link Served.duties}), never by which program was started. */
 export type ServiceFacet = {
   service?: (
     host: Host,
@@ -248,8 +268,16 @@ export type Served = Host & {
   fx: Effects
   /** the doors, as one request handler */
   handler: Handler
-  /** start every plugin's long-running work; it stops with {@link Served.close} */
-  start: () => void
+  /** Every DUTY this process may hold: the effect sweep, and each plugin's
+   * `./service`. Each is taken under a lease named for the package that owns
+   * it (@yaks/effects `holding`), so of all the processes over one graph
+   * exactly one is doing each — a second long-lived one waits, and takes over
+   * when a killed holder's lease lapses.
+   *
+   * Runs until `signal` aborts; omitted, that is this host's own, so it stops
+   * with {@link Served.close}. Hand it an ALREADY-ABORTED signal for one pass
+   * each and no waiting, which is what a one-shot line does on its way in. */
+  duties: (signal?: AbortSignal) => Promise<void>
   /** let the graph go: every duty this process holds let go and its `exit`
    * stamped — the code it is handed, or none where nobody knows how it ended.
    * AWAIT IT where the process is about to end, or the last batch races the
@@ -324,7 +352,7 @@ export let writer = (vocab: Vocab): Actor | null =>
 // is the floor: a request no plugin claimed is the box's own writing, not
 // nobody's.
 let doorman = (
-  served: [RoutesFacet, Options][],
+  served: [RoutesFacet, Options, string][],
   host: Host,
   self: Actor | null,
 ): Authenticate => {
@@ -371,10 +399,17 @@ export let compose = async (
   }
   // A facet and the options it was named with travel together: what a host
   // runs is one plugin's module handed one plugin's config.
-  let taken = <F extends FacetName>(name: F): [Facets[F], Options][] =>
-    got.map(([, options, facets]) =>
-      [facets[FACETS.indexOf(name)] as Facets[F] | null, options] as const
-    ).filter((pair): pair is [Facets[F], Options] => !!pair[0])
+  // …and the plugin it came from, third, because a DUTY is named after the
+  // package that owns it: the lease `@yaks/wake` holds is the one every
+  // process reaching for that clock reaches for.
+  let taken = <F extends FacetName>(name: F): [Facets[F], Options, string][] =>
+    got.map(([plugin, options, facets]) =>
+      [
+        facets[FACETS.indexOf(name)] as Facets[F] | null,
+        options,
+        plugin,
+      ] as const
+    ).filter((t): t is [Facets[F], Options, string] => !!t[0])
 
   let vocabs = taken('vocab')
   let ruled = taken('rules')
@@ -557,6 +592,31 @@ export let compose = async (
       // `/apply`, `/query` and `/ws` and refuse the rest in the wire's shape.
       return route ? route.handle(request) : door(request)
     }
+    // The duties: the work that is nobody's request and everybody's to do,
+    // each named after the package that owns it. The SWEEP is this host's
+    // own — an effect is at-most-once and a crash between the commit and the
+    // handler is exactly what a registration's `sweep` is for — and the rest
+    // are the plugins' clocks. A pass then a wait is the shape they share: do
+    // what is overdue, then keep the duty until this process goes, so no
+    // second process is doing it at the same time.
+    let hold = config.lease ?? HOLD
+    let duties: Duty[] = [
+      {
+        name: SWEEP,
+        run: async (signal) => {
+          // Its query is the graph's own, so the rows are read the way
+          // everything else here reads — and a handler that declared a sweep
+          // promised to be idempotent, since this re-drives what may well
+          // have run.
+          await fx.relay(unfinished(host.graph))
+          await until(signal)
+        },
+      },
+      ...running.map(([mod, options, plugin]): Duty => ({
+        name: plugin,
+        run: (signal) => mod.service!(host, options, signal),
+      })),
+    ]
     // THIS PROCESS, written in. Last, because the birth of this row is what
     // start-up work now hangs off — a `created(process)` effect comparing the
     // entity against `host.me` is a plugin's one pass at start, and the
@@ -572,21 +632,22 @@ export let compose = async (
       runner: run,
       fx,
       handler,
-      // Started together and stopped together, by one signal: a host going
-      // down is one fact, and a service that outlived the database it reads
-      // would be a crash nobody asked for. A service that throws is reported
-      // and its plugin stops — the others keep running, the way a failing
-      // effect is telemetry rather than a broken host.
-      start: () => {
-        for (let [mod, options] of running) {
-          try {
-            let done = mod.service?.(host, options, stopping.signal)
-            if (done) done.catch((e) => console.error('service failed —', e))
-          } catch (e) {
-            console.error('service failed —', e)
-          }
-        }
-      },
+      // Held together and let go together, by one signal: a host going down is
+      // one fact, and a duty that outlived the database it reads would be a
+      // crash nobody asked for. One that throws is reported and its plugin
+      // stops — the others keep going, the way a failing effect is telemetry
+      // rather than a broken host.
+      duties: (signal) =>
+        Promise.all(
+          duties.map((d) =>
+            holding(
+              g!,
+              d.name,
+              { holder: selfEid(), hold, signal: signal ?? stopping.signal },
+              d.run,
+            ).catch((e) => console.error(`duty failed — ${d.name}`, e))
+          ),
+        ).then(() => {}),
       // The LAST batch, then the file: every duty this process holds let go,
       // and its ending stamped. One batch, because they are one fact — a
       // process that is over is not doing anything, and the next one to ask
@@ -653,17 +714,13 @@ export let serve = async (
   // reach into calls another process is running.
   await host.runner.ensure()
   await reconcile(host.runner)
-  // Then the effects that said what "still pending" LOOKS like: an effect is
-  // at-most-once, and a crash between the commit and the handler is exactly
-  // what the `sweep` on a registration is for. Its query is the graph's own,
-  // so the rows are read the way everything else here reads — and a handler
-  // that declared a sweep promised to be idempotent, since this re-drives what
-  // may well have run.
-  await host.fx.relay(unfinished(host.graph))
-  // And then the clocks: what a plugin keeps doing while this is up. Last, so
-  // a sweep never races the reconciliation that corrects what it is about to
-  // read.
-  host.start()
+  // And then the DUTIES: the effect sweep and the plugins' clocks, each taken
+  // under its own lease and held for as long as this process is up
+  // ({@link Served.duties}). The same call a one-shot line makes, with a live
+  // signal instead of an aborted one — a door is not a special kind of
+  // process, it is the one that stays. Not awaited: it returns when the host
+  // closes.
+  void host.duties()
   let server = Deno.serve({
     port: config.port ?? PORT,
     hostname: config.hostname,

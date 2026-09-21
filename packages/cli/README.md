@@ -89,6 +89,7 @@ One JSON file. `--config` names it, else `$YAK_CONFIG`.
 | `numbers`  | whether the store mints human numbers beside eids (default true)                                                         |
 | `adopt`    | take the `num` a batch's identity carries instead of minting one — what a store seeded from another store's export needs |
 | `name`     | what the MCP door calls itself                                                                                           |
+| `lease`    | how long this process's hold on a DUTY stands before another may take it, in ms (default 30_000)                         |
 
 ### What a config says to one plugin
 
@@ -275,10 +276,34 @@ and finally writes this process's own `process` row, whose birth is every
 plugin's start-up pass.
 
 It answers a `Served`: the host, its `me`, its `tools`, its `runner`, its `fx`,
-one `handler`, and `close`. `serve(config)` is that plus `Deno.serve`, plus the
-things a long-lived process does — the call reconciliation, the effect sweep,
-the services. Reading the config file is `./config.ts`, which imports nothing,
-so a line that only needs to know WHERE never drags a database in.
+one `handler`, its `duties` and `close`. `serve(config)` is that plus
+`Deno.serve` and the call reconciliation a door owes its own ledger. Reading the
+config file is `./config.ts`, which imports nothing, so a line that only needs
+to know WHERE never drags a database in.
+
+## Duties: the work nobody is asking for
+
+The effect sweep and every plugin's `./service` are DUTIES: functions any
+process may hold, one at a time, under a `lease` (@yaks/effects) named for the
+package that owns the work.
+
+```ts
+await host.duties() //                    hold them while this process is up
+await host.duties(AbortSignal.abort()) // one pass each, then hand them back
+```
+
+`serve` makes the first call and a `yak` line makes the second on its way in
+(local.ts), and that is the whole difference between them — nothing here assumes
+a separate process. A door or a TUI takes each duty and renews it on a beat; a
+line does what nobody is doing and leaves alone what somebody is; a second
+long-lived process waits, and takes a duty over when a killed holder's lease
+lapses. A box where the only thing anybody runs is `yak tui` still fires its
+wakes; a box that splits the doors, the clock and the sweep across three
+processes still fires each exactly once.
+
+A process lets go of every duty it holds in the same batch that stamps its
+`exit`, so an ordinary ending hands the work straight on and only a kill leaves
+a lease to lapse.
 
 ## The command line
 

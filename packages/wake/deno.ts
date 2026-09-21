@@ -37,6 +37,10 @@ let sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
  * refused on one pass stays due for the next; effects run through the graph.
  * Uses only web timers and AbortSignal, available in Deno and Node alike.
  *
+ * The first tick happens whatever the signal says, so a signal that has
+ * already aborted is exactly one pass — which is how a process that is only
+ * passing through fires what is overdue on its way in.
+ *
  * ```ts
  * import { loop } from '@yaks/wake/deno'
  *
@@ -54,7 +58,10 @@ export let loop = async (
   if (!Number.isFinite(cap) || cap <= 0 || cap > 2_147_483_647) {
     throw new RangeError('wake loop cap must be within setTimeout range')
   }
-  while (!opts.signal?.aborted) {
+  // ONE PASS FIRST, always: a signal that is already aborted is a process
+  // passing through — a one-shot command line draining what is overdue on its
+  // way in — and it still owes the graph the tick it came for.
+  do {
     let now = Date.now()
     let result = await tick(graph, now)
     await opts.onTick?.(result)
@@ -66,5 +73,5 @@ export let loop = async (
       Math.min(cap, Math.max(0, (at ?? Infinity) - Date.now())),
       opts.signal,
     )
-  }
+  } while (!opts.signal?.aborted)
 }
