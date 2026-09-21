@@ -545,6 +545,10 @@ export let compose = async (
     // host to ask one question and should not write to say hello.
     let run = runner(g, {
       tools,
+      // This host holds what it claims, so the boot pass re-drives its own
+      // interrupted calls and leaves another runner's — or a transcript
+      // imported already called — where they stand.
+      ...(self ? { owner: self.by } : {}),
       report: (err) => console.error('tool failed —', err),
     })
     for (let rule of run.rules) {

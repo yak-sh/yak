@@ -123,7 +123,7 @@
     "execution": {
       "component": true,
       "type": "object",
-      "description": "How a recorded call is going. `running` is the runner\u2019s claim on it \u2014 a second host, or a re-entry, leaves it alone; a row still `running` when a process starts is a run that was interrupted, and the boot pass re-drives it.",
+      "description": "How a recorded call is going, and whose it is. `running` is the runner\u2019s claim on it \u2014 a second host, or a re-entry, leaves it alone; a row still `running` when a process starts is a run that was interrupted, and the boot pass re-drives it. `by` names WHO runs it: a runner takes a call nobody holds, or one it holds itself, and never one held by somebody else \u2014 which is how a transcript imported from elsewhere arrives already called.",
       "properties": {
         "state": {
           "type": "string",
@@ -132,6 +132,12 @@
             "done",
             "failed"
           ]
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the host or process running it"
         }
       }
     },

@@ -418,7 +418,8 @@ Deno.test('a call wearing a wake waits for it, and answers when it fires', async
   assertEquals((await a.rows('.result.call=later')).length, 1)
   assertEquals(
     (await a.rows('.execution'))[0].execution,
-    { state: 'done' },
+    // Nobody named a runner here, so the claim is anonymous.
+    { state: 'done', by: null },
   )
 })
 

@@ -21,12 +21,15 @@
 // one registration each, nothing special here. `drive()` is the same two
 // queries asked once, which is what a boot sweep is.
 //
-// AT MOST ONCE, and how a crash is recovered: `execution{state}` on the call
-// is the claim. The runner writes `running` under a `$was` that the column was
-// absent, so a second host loses the race rather than running the tool again;
-// it writes `done` or `failed` when the answer lands. A call left `running` by
-// a process that died has no result, so the same rules still select it — and
-// `reconcile()` at boot re-drives it, claiming over `running` this time.
+// AT MOST ONCE, and how a crash is recovered: `execution{state, by}` on the
+// call is the claim. The runner writes `running` under a `$was` that the column
+// was absent, so a second host loses the race rather than running the tool
+// again; it writes `done` or `failed` when the answer lands. A call left
+// `running` by a process that died has no result, so the same rules still
+// select it — and `reconcile()` at boot re-drives it, claiming over `running`
+// this time. `by` says WHOSE claim it is: a runner re-drives its own and leaves
+// another holder's alone, which is what a transcript imported from another
+// machine needs — every call in it arrives already called.
 //
 // THE ACTOR IS THE CALLER'S. Whoever wrote the call is who the tool's bundles
 // are signed as, never the process running them, so authorization is decided
@@ -114,6 +117,12 @@ export type Opts = {
   report?: (err: unknown, call: Bundle) => void
   /** the clock the `ms` is measured with (default: `performance.now`) */
   now?: () => number
+  /** who this runner runs AS: its claims say so (`execution.by`), and a call
+   * somebody else holds is left alone — a transcript imported from elsewhere
+   * arrives already called, held by the process that made the calls, and no
+   * boot pass here re-drives it. Unsaid, this runner claims anonymously and
+   * takes any call nobody else holds. */
+  owner?: Eid
 }
 
 /** A live runner: the rules a sweep asks, and the doors a host calls through. */
@@ -253,6 +262,11 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   let woken = plans.find((p) => p.rule.name == WOKEN)
   let inflight = per(running, g)
   let landings = per(answers, g)
+  // Whose claim this is: nobody's, or this runner's own.
+  let mine = (call: Bundle): boolean => {
+    let by = (call.execution as Comp | undefined)?.by
+    return by == null || by == opts.owner
+  }
   // The last few answers, by call. Bounded: a memo is a convenience for the
   // caller that is about to ask, never a cache of the graph.
   let keep = (id: Eid, bundles: Bundle[]) => {
@@ -312,6 +326,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     }
     let held = await recalled(id)
     if (held.length) return held
+    // Somebody else's claim is not this runner's to take, redrive or not.
+    if (!mine(call)) return []
     if (call.execution && !o.redrive) throw new UnfinishedCall(id)
     let c = call.call as Comp
     let tool = by.get(String(c.to))
@@ -321,7 +337,10 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     if (!tool) return []
     await g.apply([{
       entity: call.entity,
-      execution: { state: 'running' },
+      execution: {
+        state: 'running',
+        ...(opts.owner ? { by: opts.owner } : {}),
+      },
       $was: {
         execution: { state: o.redrive ? token('running') : null },
         call: { to: token(c.to), args: token(c.args) },
@@ -409,6 +428,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       // Claimed and not this pass's to take: either it is running here (the
       // promise is the answer) or another process holds it.
       if (inflight.has(id)) continue
+      if (!mine(call)) continue
       if (call.execution && !o.redrive) continue
       try {
         out.push(...await run(id, o))

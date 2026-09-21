@@ -51,10 +51,10 @@ let words = (extra: Record<string, unknown> = {}) =>
     },
   }])
 
-let world = (tools: Tool[] = [echo]) => {
+let world = (tools: Tool[] = [echo], owner?: string) => {
   let vocab = words()
   let g = graph({ vocab, storage: ram(vocab) })
-  return { g, r: runner(g, { tools, report: () => {} }) }
+  return { g, r: runner(g, { tools, owner, report: () => {} }) }
 }
 
 // The same graph with the runner's rules registered as EFFECTS: one
@@ -119,6 +119,33 @@ Deno.test('a claim with no answer is unfinished, and the boot pass re-drives it'
     body((await r.drive({ redrive: true })).find((b) => b.result)),
     'late 2',
   )
+})
+
+Deno.test('a call somebody else holds is left alone, redrive and all', async () => {
+  // What an imported transcript looks like: every call in it was made by the
+  // process that recorded it, and it says so.
+  let { g, r } = world([echo], 'host1')
+  await r.ensure()
+  await g.apply([{
+    entity: { eid: 'theirs' },
+    call: { to: toolEid('example_echo'), args: '{"value":"elsewhere"}' },
+    execution: { state: 'running', by: 'host2' },
+  }, {
+    entity: { eid: 'mine' },
+    call: { to: toolEid('example_echo'), args: '{"value":"here"}' },
+    execution: { state: 'running', by: 'host1' },
+  }])
+  assertEquals(await r.run('theirs'), [])
+  assertEquals(
+    body((await r.drive({ redrive: true })).find((b) => b.result)),
+    'here 2',
+  )
+  assertEquals((await g.read('.result')).length, 1)
+  // And this runner's own claim says whose it is, still, once it is done.
+  assertEquals((await g.read('.execution.by=host1'))[0].execution, {
+    state: 'done',
+    by: 'host1',
+  })
 })
 
 Deno.test('a throw is an error entity, a result, and a failed execution', async () => {
