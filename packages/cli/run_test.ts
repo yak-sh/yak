@@ -18,6 +18,7 @@ import {
   unique,
   usage,
 } from './run.ts'
+import { commandOf } from './tool.ts'
 
 let asked: { name: string; arguments: Record<string, unknown> }[] = []
 let printed: string[] = []
@@ -79,6 +80,19 @@ Deno.test('a two-word tool answers to either order, and gives up both words', ()
   assertEquals(commandFor([t], ['session', 'list', '--all'])?.args, ['--all'])
   assertEquals(commandFor([t], ['list', 'session', '--all'])?.args, ['--all'])
   assertEquals(commandFor([t], ['list']), undefined)
+})
+
+Deno.test('a tool that said one word answers to that word, and eats one', () => {
+  let noun = { noun: 'history', description: '', run: () => 0 }
+  let verb = { verb: 'land', description: '', run: () => 0 }
+  assertEquals(commandOf(noun), 'history')
+  assertEquals(commandOf(verb), 'land')
+  assertEquals(commandFor([noun], ['history', 'T-5'])?.args, ['T-5'])
+  assertEquals(commandFor([verb], ['land', '--allow-revert=x'])?.args, [
+    '--allow-revert=x',
+  ])
+  unique([noun, verb])
+  assertThrows(() => unique([noun, noun]), Error, 'two tools answer to')
 })
 
 Deno.test('one usage draws every tool, one column throughout', async () => {

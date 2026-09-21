@@ -32,6 +32,21 @@ Deno.test('a declaration wears the run the module gives it', () => {
   assertEquals(loadTools(named, { book_shelve: () => ({}) })[0].name, 'shelve')
 })
 
+Deno.test('a tool that said one word is named by that word', () => {
+  let one = {
+    $defs: {
+      history: {
+        tool: true,
+        noun: 'history',
+        description: 'What happened to it.',
+        input: { entity: { type: 'string' } },
+      },
+    },
+  }
+  let [t] = loadTools(one, { history: () => ({}) })
+  assertEquals([t.name, t.noun, t.verb], ['history', 'history', undefined])
+})
+
 Deno.test('a declaration nobody implements is a load error', () => {
   assertThrows(
     () => loadTools(doc, {}),

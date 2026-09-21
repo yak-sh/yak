@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-// What `entity history` answers: one bundle per committed batch, newest first,
+// What `history` answers: one bundle per committed batch, newest first,
 // shaped like the write that made it and stamped with who made it. Plus the
 // two things only a log can say — a death comes back as `$delete`, and an
 // entity nothing ever touched has no history rather than an error.
@@ -36,7 +36,7 @@ let history = async (
   tools: ReturnType<typeof runs>,
   args: Record<string, unknown>,
   at: Record<string, string> = {},
-) => await tools.entity_history!([], ctx(args, at)) as Bundle[]
+) => await tools.history!([], ctx(args, at)) as Bundle[]
 
 let comp = (b: Bundle, name: string) => b[name] as Comp
 
@@ -47,7 +47,7 @@ Deno.test('the journal declares one tool and implements it', () => {
       t.noun,
       t.verb,
     ]),
-    [['entity_history', 'entity', 'history']],
+    [['history', 'history', undefined]],
   )
 })
 

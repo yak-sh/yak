@@ -1,5 +1,5 @@
 // What an agent may ASK the log: the `tools` facet a host takes
-// (`@yaks/journal/tools`) — the run behind the `entity_history` declaration in
+// (`@yaks/journal/tools`) — the run behind the `history` declaration in
 // ./vocab.json. One tool, because the log answers one question a person asks
 // out loud: what happened to this, and who did it.
 //
@@ -47,9 +47,9 @@ let said = (b: Batch): Bundle[] =>
 export let runs = (host: { sql: Driver }): Runs => {
   let j = logFor(host)
   return {
-    entity_history: async (_bundles, ctx: ToolCtx): Promise<Bundle[]> => {
+    history: async (_bundles, ctx: ToolCtx): Promise<Bundle[]> => {
       let asked = String(ctx.args.entity ?? '').trim()
-      if (!asked) throw new Refused('entity_history needs an entity')
+      if (!asked) throw new Refused('history needs an entity')
       let [eid] = await addressed(ctx.graph, [asked])
       let n = ctx.args.limit == null ? undefined : Number(ctx.args.limit)
       // Newest first: a history is read back from where the entity got to.

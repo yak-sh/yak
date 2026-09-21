@@ -1,6 +1,7 @@
 import { assertEquals, assertThrows } from '@std/assert'
 import {
   toolDefinition,
+  toolsIn,
   validateToolInput,
   validateToolOutput,
 } from './tools.ts'
@@ -123,6 +124,26 @@ Deno.test('a vocabulary carries tool declarations beside its components', async 
   assertEquals(validateToolInput(t, { scope: 'root' }), { scope: 'root' })
   assertThrows(
     () => validateToolInput(t, { scope: 'root', limit: 'lots' }),
+    Error,
+    'Invalid tool arguments',
+  )
+})
+
+Deno.test('a tool may be one word: a noun alone, or a verb alone', () => {
+  // Either word alone is a whole declaration — `history` is a noun nobody
+  // needs a verb for, `land` a verb nobody needs a noun for.
+  assertEquals(
+    toolsIn({
+      $defs: {
+        history: { tool: true, noun: 'history', description: 'What happened.' },
+        land: { tool: true, verb: 'land', description: 'Land the branch.' },
+      },
+    }).map((t) => [t.name, t.noun, t.verb]),
+    [['history', 'history', undefined], ['land', undefined, 'land']],
+  )
+  // And the word is still one lowercase word.
+  assertThrows(
+    () => toolDefinition({ noun: 'Two Words', description: 'No.' }),
     Error,
     'Invalid tool arguments',
   )

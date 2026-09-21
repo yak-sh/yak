@@ -46,9 +46,12 @@ Deno.test('a marked component is a component, an unmarked entry is nobody’s', 
 Deno.test('a tool declaration is checked as a tool', () => {
   assertEquals(ok(TOOL), [])
   assertEquals(ok({ ...TOOL, readOnly: true, options: { rest: 'words' } }), [])
-  // noun and verb are the words it answers to; description is what an agent
-  // reads. A tool without them lists as nothing anybody can use.
-  assert(ok({ ...TOOL, verb: undefined }).length)
+  // A noun and a verb are two words a line says in either order; either one
+  // alone is the whole word, and the entry's own name is the tool's.
+  assertEquals(ok({ ...TOOL, verb: undefined }), [])
+  assertEquals(ok({ ...TOOL, noun: undefined }), [])
+  assertEquals(ok({ ...TOOL, noun: undefined, verb: undefined }), [])
+  // Whichever it says is one lowercase word.
   assert(ok({ ...TOOL, noun: 'Session List' }).length)
   assert(ok({ ...TOOL, properties: { n: { type: 'number' } } }).length)
   // And an entry cannot be both: one $defs entry is one thing.

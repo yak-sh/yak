@@ -320,8 +320,9 @@ Apache-2.0
 ### JSON Schema tool input
 
 Tools may supply `noun`/`verb` and a complete `inputSchema` rather than a legacy
-name and per-argument Zod `input` bag. The server derives the MCP name (for
-example, `session_list`), advertises the original JSON Schema, and validates
+name and per-argument Zod `input` bag. The server derives the MCP name from the
+words — `session_list` from a pair, and the single word itself from a tool that
+said a noun or a verb alone — advertises the original JSON Schema, and validates
 arguments through `@yaks/vocab/tools` before calling the same `run` handler.
 Legacy tools retain their Zod validation. Security callbacks receive normalized
 names in either case.

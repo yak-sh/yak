@@ -47,17 +47,17 @@ rides forward on the batch. The host is one function wide — `rows(sql, params)
 
 `@yaks/journal/rules` is the facet a config-composed host takes: it raises the
 three tables through the host's own connection and returns the plugin that
-writes them. `./tools` is the other half — the run behind `entity history`,
-reading the tables `./rules` writes. `./vocab` declares no COMPONENT: the
-journal appears in no snapshot, it is the record OF the wire, not part of it.
-The one word it says is that tool.
+writes them. `./tools` is the other half — the run behind `history`, reading the
+tables `./rules` writes. `./vocab` declares no COMPONENT: the journal appears in
+no snapshot, it is the record OF the wire, not part of it. The one word it says
+is that tool.
 
 ```json
 { "plugins": ["@yaks/kernel", "@yaks/journal"] }
 ```
 
 ```sh
-yak entity history T-5 -n 10
+yak history T-5 -n 10
 ```
 
 Every batch that touched the entity, newest first, each as the patch it applied

@@ -30,17 +30,19 @@ export type NamedTool<C = ToolCtx, R = Bundle[]> = Tool<C, R> & {
   name: string
 }
 
+/** What a tool is called on the wire: its own name where it has one, else the
+ * words it declared — `noun_verb` for a pair, and the single word for a tool
+ * that declared one alone, where the line and the name are the same word. */
 export const toolName = (tool: ToolId): string => {
-  if (tool.noun != null || tool.verb != null) {
+  const said = [tool.noun, tool.verb].filter((w) => w != null)
+  if (said.length) {
     const word = /^[a-z][a-z0-9-]*$/
-    if (
-      !tool.noun || !tool.verb || !word.test(tool.noun) || !word.test(tool.verb)
-    ) {
-      throw new Error('Tool noun and verb must both be single lowercase words')
+    if (!said.every((w) => word.test(w))) {
+      throw new Error('A tool noun and verb are single lowercase words')
     }
-    return tool.name ?? `${tool.noun}_${tool.verb}`
+    return tool.name ?? said.join('_')
   }
-  if (!tool.name) throw new Error('Tool needs noun and verb, or a legacy name')
+  if (!tool.name) throw new Error('Tool needs a noun, a verb, or a legacy name')
   return tool.name
 }
 

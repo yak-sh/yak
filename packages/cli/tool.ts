@@ -90,10 +90,12 @@ export let typeOf = (p: Prop | undefined): string => {
   return said ?? 'string'
 }
 
-/** The word a person types for a tool: its two words where it has them, its
- * legacy name otherwise. `toolName` (@yaks/graph) answers the same question
- * for a transport, which spells the pair `noun_verb`; a command line has a
- * space to spare. */
+/** The words a person types for a tool: its two where it has them, the one
+ * word where it declared a noun or a verb alone, its name otherwise.
+ * `toolName` (@yaks/graph) answers the same question for a transport, which
+ * spells a pair `noun_verb`; a command line has a space to spare, and a single
+ * word is the same word in both places. */
 export let commandOf = (
   t: { name?: string; noun?: string; verb?: string },
-): string => t.noun && t.verb ? `${t.noun} ${t.verb}` : t.name ?? ''
+): string =>
+  t.noun && t.verb ? `${t.noun} ${t.verb}` : t.noun ?? t.verb ?? t.name ?? ''

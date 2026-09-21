@@ -21,7 +21,7 @@ yaks keyword vocabulary (declared via JSON Schema's own `$vocabulary` mechanism,
 | `component` | entry  | `true` = this entry is a component. Required; there is no default   |
 | `tool`      | entry  | `true` = this entry is a tool declaration, not a table              |
 | `noun`      | tool   | the resource word a CLI answers to (`session list`, `list session`) |
-| `verb`      | tool   | the operation word, always said with `noun`                         |
+| `verb`      | tool   | the operation word; either word alone is the whole command          |
 | `input`     | tool   | one schema per named argument, the way a component says columns     |
 | `ref`       | column | the entity kind a string references (`"project"`, `"entity"`)       |
 | `death`     | column | `cascade` \| `detach` \| `release` \| `keep` when the target dies   |
@@ -260,13 +260,20 @@ rejected. Local references work; remote references are not fetched.
 defaults, for adapters that need a reusable validator. Validators are cached per
 schema object. Treat registered schemas as immutable.
 
-Nouns and verbs are single lowercase words (hyphens and digits allowed).
-`options.positional` orders input property names; `options.short` maps single
-letter flags to property names. Long options derive from property names.
-Handlers remain code and receive the existing graph Tool context. The older
-opaque/Zod argument bag remains supported by existing adapters, but cannot be
-combined with `inputSchema` on the same tool. JSON output declarations and a
-uniform migration of legacy tools are not part of this first input pilot.
+Nouns and verbs are single lowercase words (hyphens and digits allowed). A tool
+may say both, or either one alone: two words are a line said in either order
+(`session list`, `list session`) and transported as `session_list`, while one
+word alone is the whole command and the whole transport name —
+`"noun":
+"history"` is `yak history T-5` and `history` over `/mcp`. The entry's
+own name is the tool's either way, so a tool that already has a name (`land`)
+may say neither. `options.positional` orders input property names;
+`options.short` maps single letter flags to property names. Long options derive
+from property names. Handlers remain code and receive the existing graph Tool
+context. The older opaque/Zod argument bag remains supported by existing
+adapters, but cannot be combined with `inputSchema` on the same tool. JSON
+output declarations and a uniform migration of legacy tools are not part of this
+first input pilot.
 
 ## Rules
 

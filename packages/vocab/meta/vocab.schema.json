@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yaks.sh/vocab/meta",
   "title": "yaks vocab file",
-  "description": "The meta-schema a vocab document validates against: a JSON Schema 2020-12 document whose $defs entries are DISCRIMINATED \u2014 an entry marked \"component\": true is a component (an object schema whose properties are storable columns: scalar, reference, or closed set; no nesting, no arrays), an entry marked \"tool\": true is a tool declaration (noun, verb, description, input), an entry marked \"rule\": true is a rule declaration (the query it matches, and the rules it runs before), and an entry marked neither is an ordinary reusable subschema this meta-model says nothing about. Only the CORE keyword shapes are inlined, so this file validates standalone; a file using an extension vocabulary's keywords validates against extendMeta([thoseKeywords]) instead.",
+  "description": "The meta-schema a vocab document validates against: a JSON Schema 2020-12 document whose $defs entries are DISCRIMINATED \u2014 an entry marked \"component\": true is a component (an object schema whose properties are storable columns: scalar, reference, or closed set; no nesting, no arrays), an entry marked \"tool\": true is a tool declaration (a noun, a verb, or both, plus description and input), an entry marked \"rule\": true is a rule declaration (the query it matches, and the rules it runs before), and an entry marked neither is an ordinary reusable subschema this meta-model says nothing about. Only the CORE keyword shapes are inlined, so this file validates standalone; a file using an extension vocabulary's keywords validates against extendMeta([thoseKeywords]) instead.",
   "$vocabulary": {
     "https://json-schema.org/draft/2020-12/vocab/core": true,
     "https://json-schema.org/draft/2020-12/vocab/applicator": true,
@@ -234,7 +234,7 @@
       ]
     },
     "tool": {
-      "description": "A tool declaration: what the tool is CALLED and what it takes. The run is the module's.",
+      "description": "A tool declaration: what the tool is CALLED and what it takes. A noun and a verb are two words a line says in either order; either one alone is the whole word. The entry's own name is the tool's either way, and the run is the module's.",
       "type": "object",
       "properties": {
         "tool": {
@@ -313,8 +313,6 @@
       },
       "required": [
         "tool",
-        "noun",
-        "verb",
         "description"
       ],
       "additionalProperties": false

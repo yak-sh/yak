@@ -4,10 +4,9 @@
   },
   "title": "journal",
   "$defs": {
-    "entity_history": {
+    "history": {
       "tool": true,
-      "noun": "entity",
-      "verb": "history",
+      "noun": "history",
       "title": "What happened to it",
       "description": "Every committed batch that touched one entity, newest first. Each answers as the patch that batch applied — the components it wrote, or `$delete` for the death it was — stamped with who wrote it, when, and through what instrument. The log is written inside the transaction that wrote, so this is blame and diff without a version table; it starts where this graph started journaling.",
       "input": {

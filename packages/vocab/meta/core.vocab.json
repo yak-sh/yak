@@ -22,11 +22,11 @@
       "type": "string"
     },
     "noun": {
-      "description": "A tool's resource word, one lowercase word \u2014 what it acts on. A CLI answers to either order (`session list`, `list session`).",
+      "description": "A tool's resource word, one lowercase word \u2014 what it acts on. Said beside a `verb` it is half of a two-word line a CLI answers to in either order (`session list`, `list session`); said alone it IS the word, on the line and on the wire (`history`).",
       "type": "string"
     },
     "verb": {
-      "description": "A tool's operation word, one lowercase word \u2014 what it does. Always written together with `noun`.",
+      "description": "A tool's operation word, one lowercase word \u2014 what it does. Said beside a `noun` it is the other half of the two-word line; said alone it IS the word, on the line and on the wire (`land`).",
       "type": "string"
     },
     "input": {

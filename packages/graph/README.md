@@ -168,9 +168,10 @@ Experimental live text projections are described in
 
 A `Tool` can declare `noun: 'session'` and `verb: 'list'` instead of a transport
 name. `toolName(tool)` derives `session_list`; `namedTool(tool)` normalizes a
-transport-facing copy. Existing `name`-only tools continue to work. The core
-stores this metadata but does not interpret CLI arguments or execute a different
-command framework.
+transport-facing copy. Either word may be said alone — `noun: 'history'` is the
+tool `history`, one word on a command line and the same word on the wire.
+Existing `name`-only tools continue to work. The core stores this metadata but
+does not interpret CLI arguments or execute a different command framework.
 
 `inputSchema` is a JSON Schema for the complete arguments object. Existing
 `input` bags remain available for legacy adapters; do not supply both. See

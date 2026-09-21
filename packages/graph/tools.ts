@@ -23,7 +23,8 @@ import type { Tool, ToolCtx } from './plugin.ts'
 import { type NamedTool, toolName } from './tool.ts'
 
 /** What a declaration is missing: the run. Keyed by the entry's own name, or
- * by `noun_verb` for a module that spells it that way. */
+ * by the words it declared for a module that spells it that way — `noun_verb`
+ * for a pair, the single word for a tool that declared one alone. */
 export type Runs<C = ToolCtx, R = Bundle[]> = Record<string, Tool<C, R>['run']>
 
 export let loadTools = <C = ToolCtx, R = Bundle[]>(
@@ -32,7 +33,8 @@ export let loadTools = <C = ToolCtx, R = Bundle[]>(
 ): NamedTool<C, R>[] =>
   toolsIn(docs).map((decl) => {
     let name = decl.name ?? toolName(decl)
-    let run = runs[name] ?? runs[`${decl.noun}_${decl.verb}`]
+    let run = runs[name] ??
+      runs[[decl.noun, decl.verb].filter(Boolean).join('_')]
     if (!run) {
       throw new Error(
         `tool '${name}' is declared and not implemented — give loadTools a ` +
