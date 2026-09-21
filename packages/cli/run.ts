@@ -214,9 +214,10 @@ export let globals = (
  * cannot open as a file; said together the two name two places, which is a
  * line that means two things.
  *
- * In order: `--config`, `--host`, `$YAKS_HOST`, `$YAK_CONFIG`, and the
- * platform this program came with. A door comes back either way, because it is
- * also the name a bearer is kept under.
+ * In order: `--config`, `--host`, `$YAKS_HOST`, `$YAK_CONFIG`, the config this
+ * box keeps for its own graph (`~/.yak/yak.json`), and the platform this
+ * program came with. A door comes back either way, because it is also the name
+ * a bearer is kept under.
  *
  * ```ts
  * aimed({ host: 'yaks.app' }) // { host: 'yaks.app' }

@@ -54,9 +54,29 @@ export type Config = {
   lease?: number
 }
 
-/** The config a line opens: what it said, else `$YAK_CONFIG`. */
-export let configPath = (said?: string): string | undefined =>
-  said ?? Deno.env.get('YAK_CONFIG') ?? undefined
+/** Where a box keeps the config for its own graph. */
+export let OWN_CONFIG = '.yak/yak.json'
+
+/** The config a line opens: what it said, else `$YAK_CONFIG`, else the one
+ * this box keeps for its own graph. A box that HAS a graph is the ordinary
+ * case, so a bare `yak task list` there answers from it rather than reaching
+ * for a door it was never told about. Nothing there is nothing said. */
+export let configPath = (
+  said?: string,
+  env: (name: string) => string | undefined = Deno.env.get,
+): string | undefined => {
+  let named = said ?? env('YAK_CONFIG')
+  if (named) return named
+  let home = env('HOME')
+  if (!home) return undefined
+  let own = `${home}/${OWN_CONFIG}`
+  // A line may be running without read permission at all; that is no config.
+  try {
+    return Deno.statSync(own).isFile ? own : undefined
+  } catch {
+    return undefined
+  }
+}
 
 // A specifier the config file owns — `./plugins/mail`, `/srv/mail` — is
 // resolved against the config, so a config is movable and a bare `@yaks/…` is

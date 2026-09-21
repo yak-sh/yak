@@ -11,12 +11,14 @@ type Call = { name: string; arguments: Record<string, unknown> }
 
 // One line aimed at a DOOR that lists `graph_apply` and answers anything.
 // `YAKS_HOME` is where the tool list is cached, so it points at a scratch
-// directory this test takes away with it; `YAK_CONFIG` is cleared so the line
-// opens no graph of its own whatever the box it runs on has set.
+// directory this test takes away with it; `YAK_CONFIG`, `YAKS_HOST` and `HOME`
+// are all moved off the box's own, so the line opens no graph of its own
+// whatever this box keeps.
 let ran = async (argv: string[]): Promise<Call[]> => {
   let home = Deno.makeTempDirSync()
   let was = { ...Deno.env.toObject() }
   Deno.env.set('YAKS_HOME', home)
+  Deno.env.set('HOME', home)
   Deno.env.delete('YAK_CONFIG')
   Deno.env.delete('YAKS_HOST')
   let calls: Call[] = []
@@ -41,7 +43,7 @@ let ran = async (argv: string[]): Promise<Call[]> => {
     })
     return calls
   } finally {
-    for (let name of ['YAKS_HOME', 'YAK_CONFIG', 'YAKS_HOST']) {
+    for (let name of ['YAKS_HOME', 'HOME', 'YAK_CONFIG', 'YAKS_HOST']) {
       was[name] == undefined
         ? Deno.env.delete(name)
         : Deno.env.set(name, was[name])
