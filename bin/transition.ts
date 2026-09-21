@@ -1400,7 +1400,7 @@ let main = async () => {
 
   // ── pass 1c: an imported transcript is OVER ──
   // A harness boot wakes every session whose entries read as pending, running
-  // or queued, and after the import 417 of them do — none of this box's to
+  // or queued, and after the import 699 of them do — none of this box's to
   // continue. They are the fleet's, and they ended when its server stopped
   // reading them. `stop` is the word @yaks/session has for exactly that (the
   // daemon performs nothing after this line), so each gets one as its last
