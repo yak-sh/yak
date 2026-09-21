@@ -334,3 +334,9 @@ Deno.exitCode = await cli([helpTool(opts), ...mine], opts)
 Globals lifted off every line: `--host`, `--config`, `--json`, `--timing`,
 `--help`. A value that is `@path` is that file and `-` is stdin. `$YAKS_TOKEN`
 is the bearer when set, otherwise the one `yak login` wrote.
+
+The usage page gathers a noun's verbs under it — `graph` holds `apply`, `query`,
+`show` and `schema` — and a tool that said one word alone stands above them. A
+noun on its own is that block by itself, so `yak graph`, `yak graph
+--help` and
+`yak help graph` all ask the same question: what can this word do.

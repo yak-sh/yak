@@ -24,7 +24,7 @@
 
 import type { Tool, ToolId } from '@yaks/graph'
 import { argsFor, type Grammar, type Reads, Usage } from './args.ts'
-import { lineOf, safe, toolHelp } from './show.ts'
+import { lineOf, safe, sketch, toolHelp } from './show.ts'
 import { commandOf, titleOf } from './tool.ts'
 import { doorUrl, type Rpc, rpc, timed } from './rpc.ts'
 import { configPath } from './config.ts'
@@ -152,21 +152,88 @@ export let commandFor = <T extends ToolId>(
 // pushes its own line out rather than every other line.
 let WIDE = 30
 
-/** Every tool, one line each, in the order they were given. */
+/** One tool per listed word, in the order they were given: where two answer to
+ * one line, the first said it. */
+let once = <T extends Grammar>(tools: readonly T[]): T[] => {
+  let seen = new Set<string>()
+  return tools.filter((t) => !seen.has(commandOf(t)) && seen.add(commandOf(t)))
+}
+
+/**
+ * The tools under the NOUN each is typed with: `graph` holds `apply`, `query`
+ * and the rest, and a tool that said one word alone — or none — stands under
+ * `''`, which is the page's own first block. Nouns come in the order they were
+ * first named, so the order of the list is still the order of the page.
+ *
+ * ```ts
+ * nouns([{ noun: 'graph', verb: 'apply', description: '', run: () => 0 }])
+ *   .map(([noun]) => noun) // ['graph']
+ * ```
+ */
+export let nouns = <T extends Grammar>(
+  tools: readonly T[],
+): [string, T[]][] => {
+  let by = new Map<string, T[]>([['', []]])
+  for (let t of once(tools)) {
+    let noun = t.noun && t.verb ? t.noun : ''
+    let said = by.get(noun) ?? []
+    by.set(noun, said)
+    said.push(t)
+  }
+  return [...by].filter(([, said]) => said.length)
+}
+
+type Listed = Grammar & { title?: string; description?: string }
+
+// The line to type, with the heading's own word left out: under `graph`, a
+// tool is its verb and its arguments.
+let lineIn = (noun: string, t: Listed): string =>
+  noun ? `${t.verb} ${sketch(t)}`.trimEnd() : lineOf(t)
+
+let block = (noun: string, said: Listed[], wide: number): string[] => [
+  ...(noun ? ['', noun] : []),
+  ...said.map((t) =>
+    `  ${lineIn(noun, t).padEnd(wide)}  ${titleOf(t)}`.trimEnd()
+  ),
+]
+
+// How wide the one column is across every block: the longest line it holds,
+// capped.
+let column = (groups: [string, Listed[]][]): number =>
+  Math.min(
+    WIDE,
+    Math.max(
+      0,
+      ...groups.flatMap(([noun, said]) =>
+        said.map((t) => lineIn(noun, t).length)
+      ),
+    ),
+  )
+
+/** Every tool, one line each, its verbs gathered under their noun. */
 export let usage = (
-  tools: readonly (Grammar & { title?: string; description?: string })[],
+  tools: readonly Listed[],
   opts: Opts = {},
 ): string => {
-  let seen = new Set<string>()
-  let shown = tools.filter((t) =>
-    !seen.has(commandOf(t)) && seen.add(commandOf(t))
-  )
-  let wide = Math.min(WIDE, Math.max(0, ...shown.map((t) => lineOf(t).length)))
+  let groups = nouns(tools)
+  let wide = column(groups)
   return [
     ...(opts.about ? [opts.about, ''] : []),
-    ...shown.map((t) => `  ${lineOf(t).padEnd(wide)}  ${titleOf(t)}`.trimEnd()),
+    ...groups.flatMap(([noun, said]) => block(noun, said, wide)),
     ...(opts.notes ? ['', opts.notes] : []),
   ].join('\n')
+}
+
+/** One noun's own page: its verbs, one line each, under the word itself —
+ * what `yak graph` and `yak graph --help` print. Nothing where no tool here is
+ * typed under that word. */
+export let nounUsage = (
+  tools: readonly Listed[],
+  word: string,
+): string | undefined => {
+  let said = nouns(tools).find(([noun]) => noun && noun == word)
+  if (!said) return undefined
+  return block(said[0], said[1], column([said])).slice(1).join('\n')
 }
 
 /** The flags a program keeps for itself, lifted off the line before a command
@@ -318,6 +385,14 @@ export let cli = async (
         return hit ? { verb: hit, args: rest.slice(1) } : undefined
       })()
     if (!found) {
+      // A NOUN on its own is a question, not a mistake: `yak graph` (and
+      // `yak graph --help`, which is the same line with the flag lifted off)
+      // asks what that word can do, and the answer is its verbs.
+      let page = nounUsage(await c.all(), rest[0])
+      if (page) {
+        out(page)
+        return 0
+      }
       throw new Usage(
         `${config ?? host} has nothing called ${rest[0]} — try \`${
           opts.name ?? 'yak'
@@ -356,8 +431,15 @@ export let helpTool = (opts: Opts = {}): Command => ({
       return 0
     }
     let found = commandFor(await c.all(), words)
-    if (!found) throw new Usage(`nothing here is called ${words[0]}`)
-    c.out(toolHelp(found.verb, opts.name))
+    if (found) {
+      c.out(toolHelp(found.verb, opts.name))
+      return 0
+    }
+    // `yak help graph` is the same question `yak graph` asks: the verbs that
+    // word holds.
+    let page = nounUsage(await c.all(), words[0])
+    if (!page) throw new Usage(`nothing here is called ${words[0]}`)
+    c.out(page)
     return 0
   },
 })

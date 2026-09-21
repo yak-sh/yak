@@ -14,6 +14,7 @@ import {
   cli,
   type Command,
   commandFor,
+  helpTool,
   type Opts,
   unique,
   usage,
@@ -267,4 +268,31 @@ Deno.test('declaration is JSON Schema validated without component association', 
 
 Deno.test('a usage page with no head or tail is only the tools', () => {
   assertEquals(usage(one), '  one   the one word\n  both  one’s both')
+})
+
+// The verbs of a noun read as one block under it, and a tool that said one
+// word alone stands above them — `search` is not a kind of `graph`.
+let tiered: Command[] = [
+  { name: 'search', verb: 'search', description: 'Search', run: () => 0 },
+  { noun: 'graph', verb: 'apply', description: 'Apply', run: () => 0 },
+  { noun: 'graph', verb: 'query', description: 'Query', run: () => 0 },
+]
+
+Deno.test('a usage page gathers a noun’s verbs under it', () => {
+  assertEquals(
+    usage(tiered),
+    '  search  Search\n\ngraph\n  apply   Apply\n  query   Query',
+  )
+})
+
+Deno.test('a noun alone is a page of its verbs, by either door', async () => {
+  assertEquals(await ran(tiered, ['graph']), 0)
+  assertEquals(printed, ['graph\n  apply  Apply\n  query  Query'])
+  assertEquals(await ran([helpTool(), ...tiered], ['help', 'graph']), 0)
+  assertEquals(printed, ['graph\n  apply  Apply\n  query  Query'])
+  // `yak graph --help` is the same line with the flag lifted off it.
+  assertEquals(await ran(tiered, ['graph', '--help']), 0)
+  assertEquals(printed, ['graph\n  apply  Apply\n  query  Query'])
+  // And a word nobody holds is still a usage error.
+  assertEquals(await ran(tiered, ['nonsense']), 2)
 })
