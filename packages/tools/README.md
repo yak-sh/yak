@@ -133,6 +133,12 @@ that died has no result, so the same rule still selects it — `reconcile(runner
 at boot re-drives it, claiming over `running` this time. That is the whole
 sweep: one query, the rule's own.
 
+`execution.by` says whose claim it is, and this runner leaves another holder's
+alone — an imported transcript arrives already called. Unless the holder is
+over: a process writes its `exit` row in the last batch it will ever write, so a
+call it left `running` is nobody's, and any drive takes it. That is why a crash
+is recoverable at all now that a restarted process is a new entity.
+
 There is no exactly-once. A process can fail after an external action succeeded
 and before its result commits; `run()` on a claimed call throws `UnfinishedCall`
 rather than repeating it, and the boot pass gives it one more attempt.

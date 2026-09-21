@@ -29,7 +29,12 @@
 // select it — and `reconcile()` at boot re-drives it, claiming over `running`
 // this time. `by` says WHOSE claim it is: a runner re-drives its own and leaves
 // another holder's alone, which is what a transcript imported from another
-// machine needs — every call in it arrives already called.
+// machine needs — every call in it arrives already called. Unless that holder
+// is OVER: a process writes its `exit` row in the last batch it will ever
+// write, so a call it left `running` has nobody coming back to finish it. That
+// claim lapsed, and the next drive takes it the way a re-drive takes one —
+// which is what makes a crash recoverable now that a restarted process is a
+// new entity rather than a name that comes back.
 //
 // THE ACTOR IS THE CALLER'S. Whoever wrote the call is who the tool's bundles
 // are signed as, never the process running them, so authorization is decided
@@ -120,8 +125,9 @@ export type Opts = {
   /** who this runner runs AS: its claims say so (`execution.by`), and a call
    * somebody else holds is left alone — a transcript imported from elsewhere
    * arrives already called, held by the process that made the calls, and no
-   * boot pass here re-drives it. Unsaid, this runner claims anonymously and
-   * takes any call nobody else holds. */
+   * boot pass here re-drives it. A holder wearing `exit` holds nothing: its
+   * calls are free. Unsaid, this runner claims anonymously and takes any call
+   * nobody else holds. */
   owner?: Eid
   /** where the process running these calls stands, for a tool that acts on the
    * BOX rather than the graph. The host says it; this package reaches no
@@ -266,10 +272,18 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   let woken = plans.find((p) => p.rule.name == WOKEN)
   let inflight = per(running, g)
   let landings = per(answers, g)
-  // Whose claim this is: nobody's, or this runner's own.
-  let mine = (call: Bundle): boolean => {
+  // Whose claim a call carries, as this runner reads it. Nobody's and its own
+  // are `free`. Another process's is `theirs` — unless that process wrote its
+  // `exit`, which makes the claim `lapsed`: nothing is coming back to finish
+  // the call, so it is taken the way a re-drive takes one, claiming OVER
+  // `running`. The holder is read WHOLE rather than asked for by `.exit`, so a
+  // graph that tracks no processes simply never finds one — this package names
+  // the row it reads and requires nothing of the vocabulary.
+  let whose = async (call: Bundle): Promise<'free' | 'lapsed' | 'theirs'> => {
     let by = (call.execution as Comp | undefined)?.by
-    return by == null || by == opts.owner
+    if (by == null || by == opts.owner) return 'free'
+    let [holder] = await g.storage.tx((tx) => tx.get([String(by)]))
+    return holder?.exit ? 'lapsed' : 'theirs'
   }
   // The last few answers, by call. Bounded: a memo is a convenience for the
   // caller that is about to ask, never a cache of the graph.
@@ -330,9 +344,12 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     }
     let held = await recalled(id)
     if (held.length) return held
-    // Somebody else's claim is not this runner's to take, redrive or not.
-    if (!mine(call)) return []
-    if (call.execution && !o.redrive) throw new UnfinishedCall(id)
+    // A live holder's claim is not this runner's to take, redrive or not; a
+    // lapsed one is taken here and now, without waiting for a boot pass.
+    let hold = await whose(call)
+    if (hold == 'theirs') return []
+    let redrive = o.redrive || hold == 'lapsed'
+    if (call.execution && !redrive) throw new UnfinishedCall(id)
     let c = call.call as Comp
     let tool = by.get(String(c.to))
     // The claim. A call this runner has no tool for is left alone: another
@@ -346,7 +363,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         ...(opts.owner ? { by: opts.owner } : {}),
       },
       $was: {
-        execution: { state: o.redrive ? token('running') : null },
+        execution: { state: redrive ? token('running') : null },
         call: { to: token(c.to), args: token(c.args) },
       },
     }])
@@ -433,10 +450,12 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       // Claimed and not this pass's to take: either it is running here (the
       // promise is the answer) or another process holds it.
       if (inflight.has(id)) continue
-      if (!mine(call)) continue
-      if (call.execution && !o.redrive) continue
+      let hold = await whose(call)
+      if (hold == 'theirs') continue
+      let redrive = o.redrive || hold == 'lapsed'
+      if (call.execution && !redrive) continue
       try {
-        out.push(...await run(id, o))
+        out.push(...await run(id, { redrive }))
       } catch (error) {
         opts.report?.(error, call)
       }

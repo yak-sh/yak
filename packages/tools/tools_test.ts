@@ -40,6 +40,9 @@ let words = (extra: Record<string, unknown> = {}) =>
   loadVocab([callDoc, toolDoc, {
     $defs: {
       person: { component: true, properties: {} },
+      // What a runner's owner is: a process, and its ending (@yaks/process).
+      process: { component: true, properties: { pid: { type: 'integer' } } },
+      exit: { component: true, properties: { code: { type: 'integer' } } },
       created: {
         component: true,
         properties: {
@@ -145,6 +148,41 @@ Deno.test('a call somebody else holds is left alone, redrive and all', async () 
   assertEquals((await g.read('.execution.by=host1'))[0].execution, {
     state: 'done',
     by: 'host1',
+  })
+})
+
+Deno.test('a claim whose holder has exited is free, and runs once', async () => {
+  // What a crash leaves now that a process is an entity: the holder is still
+  // named, and it wears the ending it wrote on the way out.
+  let { g, r } = world([echo], 'host1')
+  await r.ensure()
+  await g.apply([
+    { entity: { eid: 'crashed' }, process: { pid: 1 }, exit: { code: 1 } },
+    { entity: { eid: 'alive' }, process: { pid: 2 } },
+    {
+      entity: { eid: 'orphan' },
+      call: { to: toolEid('example_echo'), args: '{"value":"again"}' },
+      execution: { state: 'running', by: 'crashed' },
+    },
+    {
+      entity: { eid: 'theirs' },
+      call: { to: toolEid('example_echo'), args: '{"value":"elsewhere"}' },
+      execution: { state: 'running', by: 'alive' },
+    },
+  ])
+  // An ordinary drive — no boot pass, no redrive — takes the lapsed claim.
+  let ran = await r.drive()
+  assertEquals(ran.filter((b) => b.result).length, 1)
+  assertEquals(body(ran.find((b) => b.result)), 'again 2')
+  assertEquals((await g.read('.execution.by=host1'))[0].entity.eid, 'orphan')
+  // Once: the answer stands, and the next drive finds it rather than re-running.
+  assertEquals((await r.drive()).filter((b) => b.result).length, 0)
+  assertEquals((await g.read('.result')).length, 1)
+  // A live holder's call is still theirs.
+  assertEquals(await r.run('theirs'), [])
+  assertEquals((await g.read('.execution.by=alive'))[0].execution, {
+    state: 'running',
+    by: 'alive',
   })
 })
 
