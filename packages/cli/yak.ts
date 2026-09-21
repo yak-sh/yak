@@ -1,27 +1,29 @@
 // The `yak` command. It knows five words of its own — `help`, `login`,
-// `logout`, `serve`, `apply` — and everything else arrives as more TOOLS: the
-// packages' own WORDS ({@link here}) and the apps' commands (commands.ts) sit
-// beside them in the list, and the server's own tools (platform.ts) are the
-// table that costs a round trip, so run.ts asks for them only on a line that
-// reaches them.
+// `logout`, `serve`, `apply` — and everything else arrives as TOOLS: the ones
+// of the graph this line opens (local.ts) or the ones a door lists
+// (platform.ts), with the apps' commands (commands.ts) beside them. Either
+// table costs something to gather, so run.ts asks for it only on a line that
+// reaches past the five.
 //
 //   yak app_list
 //   yak app_files --app recipes --path index.html --content @index.html
 //   yak recipes add_recipe title='Lemon cake' serves=4
 //   cat bundles.ndjson | yak apply
 //
-//   yak serve --config yak.json       # the server that config describes
-//   yak --config yak.json task list   # and a line aimed at it
+//   yak --config yak.json task list   # opens that graph, runs it, exits
+//   yak land                          # the same, on the checkout you stand in
+//   yak serve --config yak.json       # the HTTP doors onto the same graph
 //
-// ONE CONFIG SAYS ONE ADDRESS. `serve` binds `hostname`/`port`; every other
-// line naming the same config talks to what is listening there (run.ts
-// `hostFor`). A config is not a second copy of the graph — opening the file a
-// server is holding would be a second writer, a second runner and a second
-// tool list, so there is no local path here and never will be.
+// THERE IS NO SERVER. A config names a GRAPH — a SQLite file and the plugins
+// that speak over it — and a `yak` line opens it, composes them, runs the tool
+// in this process and exits. WAL takes as many writers as there are lines, so
+// nothing waits on a process somebody had to start. `--host` is for a graph
+// this box cannot open as a file, and then the line talks to that door over
+// `/mcp`; `yak serve` is the process that answers one.
 //
-// The platform table is why there is no list of tools in this package: it
-// reads `tools/list` at run time, so the CLI cannot drift from the connector
-// an agent is talking to, and a tool a release adds is a subcommand the day it
+// The door's table is why there is no list of tools in this package: it reads
+// `tools/list` at run time, so the CLI cannot drift from the connector an
+// agent is talking to, and a tool a release adds is a subcommand the day it
 // ships without anybody publishing this package again.
 //
 // Exit codes are the contract a script reads: 0 said, 1 the tool or the door
@@ -30,64 +32,73 @@
 import { Usage } from './args.ts'
 import { bundlesIn, chunks } from './apply.ts'
 import { appStray, appTools } from './commands.ts'
-import { cli, type Ctx, helpTool, type Opts, type Word } from './run.ts'
+import { cli, type Command, type Ctx, helpTool, type Opts } from './run.ts'
 import { configPath } from './config.ts'
-import { listed, printed, rosterOf } from './platform.ts'
-import type { Result } from './roster.ts'
+import { listed } from './platform.ts'
 import { forgetToken, saveToken } from './store.ts'
-import { words as git } from '@yaks/git/words'
 
-/** The platform this command talks to unless told otherwise. */
+/** The platform this command talks to where it opens no graph of its own. */
 export let HOST = 'yaks.app'
 
-let HEAD = 'yak — the tools this server lists, and the words this box adds'
+let HEAD = 'yak — the tools of the graph this line runs against'
 
-let TAIL = `  --host <host>   which server (default $YAKS_HOST, the address
-                  --config describes, else ${HOST})
-  --config <path> the config a \`yak serve\` is running — its hostname and
-                  port are where this line is aimed (default $YAK_CONFIG)
+let TAIL =
+  `  --config <path> the config naming the graph to OPEN — its db and its
+                  plugins, composed in this process (default $YAK_CONFIG)
+  --host <host>   a graph to talk to over /mcp instead, for one this box
+                  cannot open as a file (default $YAKS_HOST, else ${HOST})
   --json          print the structured result instead of the words
   --timing        a line on stderr per answer, with its Server-Timing
                   (or YAKS_TIMING=1)
-  --help          this, or a word's own
+  --help          this, or one command's own
 
 A value that is @path is that file, and - is stdin. $YAKS_TOKEN is the
 bearer when it is set; otherwise the one \`yak login\` wrote.`
 
 // `apply` is graph_apply with a door for a stream: a batch is atomic, and a
 // file of bundles is a load rather than one batch, so it goes over in chunks.
+// It runs the SAME `graph_apply` every other line runs — the one the graph
+// this line opened implements, or the one the door it named lists — so a load
+// goes wherever the rest of the session went.
 let applied = async (
   args: Record<string, unknown>,
   c: Ctx,
 ): Promise<number> => {
-  let roster = await rosterOf(c.host, c.ask)
-  let tool = roster.tools.find((t) => t.name == 'graph_apply')
-  if (!tool) throw new Usage(`${c.host} lists no graph_apply to apply through`)
-  // A dry run is the tool's `check`: every phase runs on the far side and the
-  // transaction is rolled back, so the answer is what would have landed.
+  let tool = (await c.all()).find((t) => t.name == 'graph_apply')
+  if (!tool) {
+    throw new Usage(`${c.config ?? c.host} has no graph_apply to apply through`)
+  }
+  // A dry run is the tool's `check`: every phase runs and the transaction is
+  // rolled back, so the answer is what would have landed.
   let dry = args['dry-run'] === true
   let asked = (change: unknown) =>
-    c.ask('tools/call', {
-      name: tool.name,
-      arguments: { change, ...(dry ? { check: true } : {}) },
-    }) as Promise<Result>
-  if (args.change) {
-    return printed(c, roster, tool.name, await asked(args.change))
-  }
+    tool.run({ change, ...(dry ? { check: true } : {}) }, c)
+  if (args.change) return await asked(args.change)
   let source = typeof args.file == 'string' ? args.file : '-'
   let body = source == '-' || source == '@-'
     ? await c.reads.stdin()
     : await c.reads.file(source.replace(/^@/, ''))
   let code = 0
   for (let change of chunks(bundlesIn(body))) {
-    code = printed(c, roster, tool.name, await asked(change)) || code
+    code = await asked(change) || code
     if (code) break
   }
   return code
 }
 
-// `serve` is the whole server: one config, the plugins it names, and the doors
-// @yaks/api and @yaks/mcp mount over the graph they compose.
+// The graph this line opened, where it opened one. Imported only on a line
+// that named a config, because importing it drags in a database driver and
+// every plugin the config names — `yak login` on a box with no graph at all
+// must not pay for that, and neither must a line aimed at a door.
+let local: typeof import('./local.ts') | undefined
+
+// The table this line's tools come from: the graph a config names, opened
+// here, or the door the line named.
+let table = async (c: Ctx): Promise<Command[]> =>
+  c.config ? (local ??= await import('./local.ts')).commands(c) : listed(c)
+
+// `serve` is the HTTP doors and nothing else: one config, the plugins it
+// names, and what @yaks/api and @yaks/mcp mount over the graph they compose.
 let served = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
   let { read, serve } = await import('./serve.ts')
   let path = configPath(
@@ -115,12 +126,12 @@ export let YAK: Opts = {
   about: HEAD,
   notes: TAIL,
   host: HOST,
-  more: listed,
+  more: table,
   stray: appStray,
 }
 
-/** The command's own four words, which shadow a tool any table names. */
-export let own: Word[] = [
+/** The command's own five words, which shadow a tool any table names. */
+export let own: Command[] = [
   helpTool(YAK),
   {
     name: 'login',
@@ -190,29 +201,24 @@ export let own: Word[] = [
   },
 ]
 
-/**
- * The packages' own WORDS: a `./words` facet is what a package adds to a
- * command line, run on the box that typed it rather than sent to a server.
- * `yak land` fast-forwards THIS checkout, so it cannot be a tool — a tool runs
- * where the graph is. They are imported, not configured: a word must work with
- * no config and no server in sight, which is the state a checkout is usually
- * in. A package's words are `Word`s and nothing more, so each literal is
- * checked against that type here and the package depends on nothing of ours.
- */
-export let here: Word[] = [...git]
-
-/** What a plain install carries, in precedence order. The packages' words come
- * after this command's own, and the apps' commands after those and before the
- * server's tools, because one of those tools is `command` itself: the raw one
- * takes the app's arguments as a JSON object, and the word here takes them the
- * way a person types them. */
-export let TOOLS: Word[] = [...own, ...here, ...appTools]
+/** What a plain install carries, in precedence order. The apps' commands come
+ * after this command's own and before the graph's tools, because one of those
+ * tools is `command` itself: the raw one takes the app's arguments as a JSON
+ * object, and the one here takes them the way a person types them. */
+export let TOOLS: Command[] = [...own, ...appTools]
 
 /** One line, from argv to an exit code — the refusal printed on the way. A
- * box with words of its own passes them, and they shadow everything here. */
-export let main = (
+ * box with commands of its own passes them, and they shadow everything here.
+ * Whatever graph the line opened is let go when it is done. */
+export let main = async (
   argv: string[],
-  extra: readonly Word[] = [],
-): Promise<number> => cli([...extra, ...TOOLS], { ...YAK, argv })
+  extra: readonly Command[] = [],
+): Promise<number> => {
+  try {
+    return await cli([...extra, ...TOOLS], { ...YAK, argv })
+  } finally {
+    await local?.close()
+  }
+}
 
 if (import.meta.main) Deno.exit(await main(Deno.args))

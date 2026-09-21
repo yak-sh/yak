@@ -246,6 +246,18 @@
         }
       },
       "description": "a promise about source: the paths and sha a document was written against, so freshness is re-derived from git rather than stored"
+    },
+    "land": {
+      "tool": true,
+      "title": "Land this branch",
+      "description": "Land the branch the caller is standing on. Fast-forwards it into the base — the branch the shared checkout holds — and pushes if the base has an upstream. If the base moved, rebases onto it and returns WITHOUT merging, printing what it pulled in, so the caller can re-gate and land again; that is a refusal, because nothing landed. Refuses a landing whose files carry content no commit on the branch wrote unless allow-revert names them. Runs no gate and reads no graph: every coordinate comes from git, and the checkout is the one the process running this call stands in.",
+      "input": {
+        "allow-revert": {
+          "type": "string",
+          "description": "comma-separated files whose rewind is deliberate, landed with a warning"
+        }
+      },
+      "destructive": true
     }
   }
 }

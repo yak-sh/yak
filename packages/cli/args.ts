@@ -16,7 +16,7 @@
 // worth a sentence here rather than a refusal one round trip away.
 
 import { validateToolInput } from '@yaks/vocab/tools'
-import { type Prop, type Schema, typeOf, wordOf } from './tool.ts'
+import { commandOf, type Prop, type Schema, typeOf } from './tool.ts'
 
 /** As much of a tool as a command line reads: what it is called, the schema
  * its arguments must satisfy, and how it likes them typed. A tool a server
@@ -198,7 +198,7 @@ export let argsFor = async (
     let p = props[name]
     if (!p) {
       throw new Usage(
-        `Unknown option: ${flag} — ${wordOf(tool)} takes ${
+        `Unknown option: ${flag} — ${commandOf(tool)} takes ${
           listed(Object.keys(props))
         }`,
       )
@@ -249,7 +249,7 @@ export let argsFor = async (
     else if (rest) spare.push(word)
     else {
       throw new Usage(
-        `${wordOf(tool)} takes ${listed(Object.keys(props))}, not ${word}`,
+        `${commandOf(tool)} takes ${listed(Object.keys(props))}, not ${word}`,
       )
     }
   }
@@ -264,7 +264,7 @@ export let argsFor = async (
 
   if (!tool.inputSchema) {
     if (Object.keys(out).length) {
-      throw new Usage(`${wordOf(tool)} takes no arguments`)
+      throw new Usage(`${commandOf(tool)} takes no arguments`)
     }
     return out
   }

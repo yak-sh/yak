@@ -29,7 +29,7 @@
 // `codeFor`). Both are this repo, and neither is something a `deno install`
 // off jsr could reach.
 import { fileURLToPath } from 'node:url'
-import { forgetToken, main, saveToken, Usage, type Word } from '@yaks/cli'
+import { type Command, forgetToken, main, saveToken, Usage } from '@yaks/cli'
 import {
   type Account,
   accountsIn,
@@ -254,7 +254,7 @@ let takes = (props: Record<string, unknown> = {}, required?: string[]) => ({
   properties: { ...NAMED, ...props },
 })
 
-let verbs: Word[] = [
+let verbs: Command[] = [
   {
     name: 'deploys',
     title: 'yaks.app versions, commits, live times, and data boundaries',

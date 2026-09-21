@@ -154,10 +154,6 @@ Deno.test('a session that exists is handed back what it was in the middle of', a
       },
       'claim.session',
     ),
-    row(
-      { entity: { eid: 's0' }, brief: { text: 'landed the thing' } },
-      'brief!',
-    ),
   ]
   let said = await tools.session_context!(
     [],
@@ -166,15 +162,7 @@ Deno.test('a session that exists is handed back what it was in the middle of', a
   assertEquals(said[0].entity.eid, 's1')
   assertEquals(
     comp(said[1], 'content').body,
-    [
-      '# S-3',
-      '',
-      '## previously',
-      'landed the thing',
-      '',
-      '## claimed',
-      '- T-7 — ship it',
-    ].join('\n'),
+    ['# S-3', '', '## claimed', '- T-7 — ship it'].join('\n'),
   )
 })
 

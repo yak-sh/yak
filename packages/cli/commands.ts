@@ -18,7 +18,7 @@
 // `--json` and `--host` unambiguous beside them: everything before the `=` is
 // somebody else's vocabulary.
 
-import type { Ctx, Word } from './run.ts'
+import type { Command, Ctx } from './run.ts'
 import { printed } from './platform.ts'
 import type { Result } from './roster.ts'
 
@@ -59,7 +59,7 @@ let schema = (app: boolean): Record<string, unknown> => ({
   },
 })
 
-let verb: Word = {
+let verb: Command = {
   name: 'command',
   title: 'run one of an app’s own commands',
   description: ABOUT,
@@ -75,14 +75,14 @@ let verb: Word = {
 }
 
 /** The apps' commands, as tools of this command. */
-export let appTools: Word[] = [verb]
+export let appTools: Command[] = [verb]
 
 /** `yak <app> <command>`: only ever reached when no table named the word, so a
  * tool of the same name always wins and a typo says what it says today. */
 export let appStray = (
   app: string,
   args: string[],
-): Word | undefined => {
+): Command | undefined => {
   let name = args[0]
   if (!name || name.startsWith('-')) return undefined
   return {

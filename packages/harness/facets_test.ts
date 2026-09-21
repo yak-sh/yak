@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from '@std/assert'
-import { argsFor, unique, wordFor } from '@yaks/cli'
+import { argsFor, commandFor, unique } from '@yaks/cli'
 import { loadTools } from '@yaks/graph/tools'
 import { namedTool } from '@yaks/graph'
 import { answerOf, runner, toolEid, worded } from '@yaks/tools'
@@ -45,10 +45,10 @@ Deno.test('the facet subpaths say the harness once, and one declaration reaches 
   const results: unknown[] = []
   // The same declaration reaches a command line and a transport: @yaks/cli
   // resolves either word order and reads the line through its input schema.
-  const found = wordFor(declarations, ['session', 'list'])!
+  const found = commandFor(declarations, ['session', 'list'])!
   assertEquals(found.verb, declarations[0])
   assertEquals(
-    wordFor(declarations, ['list', 'session'])?.verb,
+    commandFor(declarations, ['list', 'session'])?.verb,
     declarations[0],
   )
   assertEquals(await argsFor(found.verb, found.args, reads), {})
@@ -84,9 +84,9 @@ Deno.test('the facet subpaths say the harness once, and one declaration reaches 
 Deno.test('noun and verb traversal is automatic and collision checked', () => {
   const c = declared[0]
   assertEquals(namedTool(c).name, 'session_list')
-  assertEquals(wordFor([c], ['session', 'list', 'extra'])?.args, ['extra'])
-  assertEquals(wordFor([c], ['list', 'session'])?.verb, c)
-  assertEquals(wordFor([c], ['list']), undefined)
+  assertEquals(commandFor([c], ['session', 'list', 'extra'])?.args, ['extra'])
+  assertEquals(commandFor([c], ['list', 'session'])?.verb, c)
+  assertEquals(commandFor([c], ['list']), undefined)
   assertThrows(() => unique([c, c]), Error, 'two tools answer to')
   assertThrows(
     () => unique([c, { ...c, noun: 'list', verb: 'session' }]),

@@ -12,7 +12,7 @@ import { tools as declared } from './declared.ts'
 
 import type { Comp, Eid } from '@yaks/graph'
 import { answerOf, runner, toolEid, worded } from '@yaks/tools'
-import { type Ctx, type Word } from '@yaks/cli'
+import { type Command, type Ctx } from '@yaks/cli'
 import { codexPaths, fromCodex, fromEnv } from '@yaks/openai'
 import { type Agent, agent, titleOf } from './run.ts'
 import { open } from './store.ts'
@@ -183,7 +183,7 @@ let howto = (props: Record<string, unknown>) => ({
 })
 
 /** The harness's own words, for a `yak` (or a `harness`) that carries them. */
-export let own: Word[] = [
+export let own: Command[] = [
   {
     name: 'new',
     description: 'start a transcript and run it until it settles',
@@ -248,7 +248,7 @@ export let own: Word[] = [
 // than a command line, so a line typed here becomes a CALL in that graph and
 // what answered it is printed. The word order and the arguments are @yaks/cli's
 // either way — nothing about a graph tool is spelled twice.
-let overGraph = (tool: typeof declared[number]): Word => ({
+let overGraph = (tool: typeof declared[number]): Command => ({
   ...tool,
   run: async (args, c) => {
     let h = open()
@@ -269,4 +269,4 @@ let overGraph = (tool: typeof declared[number]): Word => ({
 })
 
 /** Every word `harness` answers to: the graph's tools, then its own. */
-export let tools: Word[] = [...declared.map(overGraph), ...own]
+export let tools: Command[] = [...declared.map(overGraph), ...own]

@@ -5,11 +5,13 @@
 // needed except the two publish cases, which wire a real bare upstream.
 //
 // Every case that builds a repository costs git processes and a temp directory,
-// so it runs under TASKS_SLOW; the guard's own two questions and the word's
-// exit codes are stubbed and stay in the fast tier.
+// so it runs under TASKS_SLOW; the guard's own two questions are stubbed and
+// stay in the fast tier.
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { land, reverts } from './land.ts'
-import { words } from './words.ts'
+import { runs } from './tools.ts'
+import { CallError } from '@yaks/tools'
+import type { ToolCtx } from '@yaks/graph'
 
 let slow = (name: string, fn: () => Promise<void>) =>
   Deno.test({ name, fn, ignore: !Deno.env.get('TASKS_SLOW') })
@@ -131,27 +133,24 @@ slow(
 )
 
 slow(
-  'the `land` word prints the sha and answers 0; a divergence answers 1',
+  'the `land` tool answers the sha; a divergence is a refusal',
   async () => {
     let r = await setup()
-    let at = Deno.cwd()
     try {
-      let out: string[] = []
-      let note: string[] = []
-      let say = {
-        out: (l: string) => out.push(l),
-        note: (l: string) => note.push(l),
-      }
-      Deno.chdir(r.tree)
+      // The tool acts on the checkout its CALL stands in — `ctx.cwd`, which a
+      // command line fills with where the person typed.
+      let ctx = { args: {}, cwd: r.tree } as unknown as ToolCtx
       await rivalLands(r, 'rival.txt', 'rival\n')
-      assertEquals(await words[0].run({}, say), 1)
-      assert(out.join('\n').includes('moved'), out.join('\n'))
-      out.length = 0
-      assertEquals(await words[0].run({}, say), 0)
+      let refused = await assertRejects(
+        () => Promise.resolve(runs().land([], ctx)),
+        CallError,
+      )
+      assert(refused.message.includes('moved'), refused.message)
+      let [said] = await runs().land([], ctx)
       let landed = await command(r.repo, 'rev-parse', 'main')
-      assert(out.join('\n').includes(`landed ${landed}`), out.join('\n'))
+      let body = String((said.content as { body?: unknown })?.body ?? '')
+      assert(body.includes(`landed ${landed}`), body)
     } finally {
-      Deno.chdir(at)
       Deno.removeSync(r.root, { recursive: true })
     }
   },

@@ -96,8 +96,11 @@ export const validateToolOutput = (
 
 /** Serializable tool metadata; independent of component declarations. */
 export type ToolDefinition = {
-  noun: string
-  verb: string
+  /** the two words a command line spells it as — together or not at all. A
+   * tool whose name is already one word (`land`) says neither, and is typed
+   * and transported under that one name (@yaks/graph `toolName`). */
+  noun?: string
+  verb?: string
   description: string
   name?: string
   title?: string
@@ -117,7 +120,10 @@ export type ToolDefinition = {
 export const toolDefinitionSchema: Record<string, unknown> = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   type: 'object',
-  required: ['noun', 'verb', 'description'],
+  required: ['description'],
+  // Two words or none: a pair is how a line spells one tool, and half a pair
+  // spells nothing. The entry's own key is the name either way.
+  dependentRequired: { noun: ['verb'], verb: ['noun'] },
   additionalProperties: false,
   properties: {
     noun: { type: 'string', pattern: '^[a-z][a-z0-9-]*$' },

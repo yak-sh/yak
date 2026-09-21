@@ -39,15 +39,3 @@ export let snapshot = async (
 }
 
 export { OUTPUT_LIMIT, outputView } from './output.ts'
-
-export {
-  composed,
-  type Digest,
-  type Part,
-  type Reading,
-  type Section,
-  type Sections,
-  snip,
-  type Subject,
-  written,
-} from './digest.ts'

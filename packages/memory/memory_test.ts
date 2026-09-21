@@ -76,13 +76,6 @@ Deno.test('the filter line names what a row must carry', () => {
     'doc how do they like it&.memory.space=s1&.doc?&.created?' +
       '&.order=-entity.num&.limit=3',
   )
-  // `any`: one group, each word quoted so nothing in it reads as grammar,
-  // and a repeated word said once.
-  assertEquals(
-    line({ limit: 3, said: 'Recall the work, the whole work', any: true }),
-    '("recall"|"the"|"work"|"whole")&.memory&.doc?&.created?' +
-      '&.order=-entity.num&.limit=3',
-  )
   // A ranker answered with ids: the store is asked for those, and the space
   // still bounds it, so one space cannot rank another's memories in.
   assertEquals(

@@ -15,9 +15,9 @@
 // A shell's completion hook hands over its words; the harness's `:` line hands
 // over the line. Both are the same question, so both are this one function.
 
-import { type Prop, type Schema, typeOf, wordOf } from './tool.ts'
+import { commandOf, type Prop, type Schema, typeOf } from './tool.ts'
 import { type Grammar, saidIn } from './args.ts'
-import { wordFor } from './run.ts'
+import { commandFor } from './run.ts'
 
 /** The two answers only a graph has. Left out, a `ref` or a searched text
  * argument simply offers nothing, which is what a client with no connection
@@ -44,7 +44,7 @@ let props = (t: Grammar): Record<string, Prop> =>
 // Every word a tool answers to as its FIRST: a two-word tool answers to both
 // of its words, because a line may arrive in either order.
 let firsts = (tools: readonly Grammar[]): string[] =>
-  tools.flatMap((t) => t.noun && t.verb ? [t.noun, t.verb] : [wordOf(t)])
+  tools.flatMap((t) => t.noun && t.verb ? [t.noun, t.verb] : [commandOf(t)])
 
 // The other word of a pair, given one of them.
 let seconds = (tools: readonly Grammar[], said: string): string[] =>
@@ -102,7 +102,7 @@ export let complete = async (
   let partial = words.at(-1) ?? ''
   let head = words.slice(0, -1)
   if (!head.length) return kept(firsts(tools), partial)
-  let found = wordFor(tools, head)
+  let found = commandFor(tools, head)
   // One word in and no tool yet: it is half of a pair, and what may follow it
   // is the other half.
   if (!found) {

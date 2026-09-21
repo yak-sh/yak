@@ -118,7 +118,6 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
     tools: ['runs'],
     effects: ['effects'],
     routes: ['routes', 'authenticate'],
-    digest: ['digest'],
     boot: ['boot'],
     service: ['service'],
     views: ['views'],
@@ -161,7 +160,6 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
   }
   assertEquals([...seen].sort(), [
     'boot',
-    'digest',
     'effects',
     'routes',
     'rules',

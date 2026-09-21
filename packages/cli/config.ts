@@ -1,12 +1,16 @@
-// The config file, read. It is the one statement of where a graph is, and it
-// says it ONCE: `yak serve` binds the address, and every other `yak` line
-// aimed at the same config talks to whatever is listening there.
+// The config file, read. It is the one statement of where a graph IS: the
+// SQLite file, the plugins that speak over it, and who the box writes as.
 //
-// That is why this is its own module. A line that only needs the ADDRESS must
-// not import the host — serve.ts opens a database and pulls in every plugin a
-// config names, which is a second copy of the graph a person did not ask for
-// and, on a live file, a second writer. So the config is read here, by a
-// module that imports nothing.
+// A config names a GRAPH, not a server. `yak --config yak.json task list`
+// opens that file, composes those plugins and runs the tool in this process —
+// SQLite in WAL mode takes as many writers as there are `yak` lines, so
+// nothing has to be listening for a command line to work. `yak serve` is one
+// more process over the same file, the one that answers HTTP.
+//
+// That is why this is its own module. A line that only needs to know WHERE
+// must not import the host — serve.ts pulls in every plugin a config names,
+// which is a cost a `yak login` should not pay. So the config is read here, by
+// a module that imports nothing.
 
 /** What a config says TO one plugin: its own options, handed to each facet
  * factory beside the host. A value written `{"env": "NAME"}` is read out of
@@ -25,11 +29,9 @@ export type Config = {
   /** the plugin modules, by import specifier. A relative one is resolved
    * against the config file itself; `{use, with}` names one with options. */
   plugins?: Plug[]
-  /** what to listen on, and so where a client aimed at this config talks
-   * (default 8787) */
+  /** what `yak serve` listens on (default 8787) */
   port?: number
-  /** which interface (default Deno's own; a client reads it as the host to
-   * talk to, and 127.0.0.1 where it is unsaid or means "everything") */
+  /** which interface it binds (default Deno's own) */
   hostname?: string
   /** who this host writes as, where no door named a caller — its rules, its
    * effects, the pass each plugin makes at boot. A NAME is the host's own
@@ -53,7 +55,7 @@ export type Config = {
   name?: string
 }
 
-/** Where a LOCAL host's config is: what the line said, else `$YAK_CONFIG`. */
+/** The config a line opens: what it said, else `$YAK_CONFIG`. */
 export let configPath = (said?: string): string | undefined =>
   said ?? Deno.env.get('YAK_CONFIG') ?? undefined
 
@@ -119,25 +121,5 @@ export let read = (path: string): Config => {
   }
 }
 
-/** The default port a host binds and a client talks to. */
+/** The default port `yak serve` binds. */
 export let PORT = 8787
-
-/**
- * Where the server this config describes is listening. A `hostname` a host
- * binds may be an interface rather than a name — `0.0.0.0` and `::` mean
- * "everything here", which as an address to TALK to is this box.
- */
-export let doorOf = (config: Config): string => {
-  let at = config.hostname ?? ''
-  let host = !at || at == '0.0.0.0' || at == '::' ? '127.0.0.1' : at
-  return `http://${host.includes(':') ? `[${host}]` : host}:${
-    config.port ?? PORT
-  }`
-}
-
-/** The server a line aimed at a config talks to, where the line named no host
- * of its own: the config's address, and nothing when there is no config. */
-export let hostOf = (said?: string): string | undefined => {
-  let path = configPath(said)
-  return path ? doorOf(read(path)) : undefined
-}

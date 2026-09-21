@@ -1,35 +1,43 @@
-// One command line, run. `cli(tools, opts)` is the whole seam: hand it the
-// tools and it reads the line — the word, either order of a two-word tool, the
-// arguments through that tool's own input schema — runs the one it found, and
-// answers the exit code.
+// One command line, run. `cli(commands, opts)` is the whole seam: hand it the
+// commands and it reads the line — the word, either order of a two-word tool,
+// the arguments through that tool's own input schema — runs the one it found,
+// and answers the exit code.
 //
-// A tool is a @yaks/graph `Tool` and nothing else. There is no registration
-// shape between a tool and the command that runs it: a program that wants more
-// words passes more tools, and the FIRST tool to name a word wins, so the
-// order of the list IS the precedence.
+// A command is a @yaks/graph `Tool` declaration and nothing else. There is no
+// registration shape between a tool and the line that runs it: a program that
+// wants more words passes more commands, and the FIRST to name a word wins, so
+// the order of the list IS the precedence.
 //
-// Two things cost more than a list does, and both are opts rather than tools.
-// `more` is a table that has to be fetched — a server's `tools/list` — asked
-// only when the tools in hand did not name the word, so `yak login` still
-// works with no server in sight, and drawn into the page as a reason when it
-// cannot be had. `stray` is the other half: a first word nobody named. `yak
-// recipes add_recipe` is an app and its command, and only something that knows
-// about apps can say so, so it is asked last and only when nothing matched.
+// WHERE A LINE RUNS what it was asked is {@link aimed}: the graph a config
+// FILE names, opened in this process, or a door to talk to over `/mcp`. The
+// file is the ordinary case — a graph this box can open needs nobody listening
+// — and a door is for a graph it cannot open.
+//
+// Two things cost more than a list does, and both are opts rather than
+// commands. `more` is a table that has to be gathered — the tools of the graph
+// this line opens, or a server's `tools/list` — asked only when the commands
+// in hand did not name the word, so `yak login` still works with no graph in
+// sight, and drawn into the page as a reason when it cannot be had. `stray` is
+// the other half: a first word nobody named. `yak recipes add_recipe` is an
+// app and its command, and only something that knows about apps can say so, so
+// it is asked last and only when nothing matched.
 
 import type { Tool, ToolId } from '@yaks/graph'
 import { argsFor, type Grammar, type Reads, Usage } from './args.ts'
 import { lineOf, safe, toolHelp } from './show.ts'
-import { titleOf, wordOf } from './tool.ts'
+import { commandOf, titleOf } from './tool.ts'
 import { doorUrl, type Rpc, rpc, timed } from './rpc.ts'
-import { hostOf } from './config.ts'
+import { configPath } from './config.ts'
 import { tokenFor } from './store.ts'
 
-/** What a tool is handed: the door, where to print, and the line's globals. */
+/** What a command is handed: where the line runs, where to print, and the
+ * line's globals. */
 export type Ctx = {
-  /** The server this line is aimed at. */
+  /** The door this line talks to, where it talks to one — and the name a
+   * bearer is kept under either way. */
   host: string
-  /** The config file naming a LOCAL host, where the line is aimed at one:
-   * `--config`, else `$YAK_CONFIG` (serve.ts). */
+  /** The config naming the graph this line OPENS, in this process. Absent
+   * where the line named a door instead ({@link aimed}). */
   config?: string
   json: boolean
   help: boolean
@@ -37,24 +45,26 @@ export type Ctx = {
   reads: Reads
   out: (line: string) => void
   note: (line: string) => void
-  /** Every word this run can reach, the ones that cost a round trip included.
-   * Asked once; a table that cannot be had is simply absent. */
-  all: () => Promise<Word[]>
+  /** Every command this run can reach, the ones that cost a composition or a
+   * round trip included. Asked once; a table that cannot be had is absent. */
+  all: () => Promise<Command[]>
   /** The usage page — every tool one line each, and why a table is missing. */
   page: () => Promise<string>
 }
 
 /**
- * A word this command runs: a tool's DECLARATION — its name, its schema, how
- * the line spells it — with a run of its own.
+ * One command this line can run: a tool's DECLARATION — its name, its schema,
+ * how the line spells it — with a run of its own.
  *
  * A graph tool is `(bundles, ctx) => bundles` and only @yaks/tools' runner
- * calls one. A word is the other end of the wire: it takes the arguments a
- * line parsed into, prints, and answers an exit code. Same declaration, so a
- * word is still listed, completed and helped from the one schema; different
- * run, because a command line is not a call.
+ * calls one. A command is the other end: it takes the arguments a line parsed
+ * into, prints, and answers an exit code. Same declaration, so a command is
+ * listed, completed and helped from the one schema; different run, because a
+ * command line is not a call. `yak <tool>` is a command wrapping a call —
+ * local.ts writes one against the graph this line opened, platform.ts sends
+ * one to the door it named.
  */
-export type Word = Omit<Tool<Ctx, number>, 'run'> & {
+export type Command = Omit<Tool<Ctx, number>, 'run'> & {
   run: (
     args: Record<string, unknown>,
     c: Ctx,
@@ -71,16 +81,16 @@ export type Opts = {
   about?: string
   /** The notes it closes with. */
   notes?: string
-  /** The server a line is aimed at unless `--host` says otherwise. */
+  /** The door a line talks to where it names neither a config nor a host. */
   host?: string
-  /** A table that costs a round trip. */
-  more?: (c: Ctx) => Word[] | Promise<Word[]>
+  /** A table that costs a composition or a round trip. */
+  more?: (c: Ctx) => Command[] | Promise<Command[]>
   /** A tool for a first word nobody named. */
   stray?: (
     word: string,
     args: string[],
     c: Ctx,
-  ) => Word | undefined | Promise<Word | undefined>
+  ) => Command | undefined | Promise<Command | undefined>
   /** The door, where a program has one of its own — a test hands over a
    * function that records what it was asked. */
   ask?: Rpc
@@ -104,7 +114,7 @@ export let unique = <T extends ToolId>(tools: readonly T[]): readonly T[] => {
   for (let t of tools) {
     let words = t.noun && t.verb
       ? [`${t.noun} ${t.verb}`, `${t.verb} ${t.noun}`]
-      : [wordOf(t)]
+      : [commandOf(t)]
     if (!words[0]) throw new Error('a tool needs a name, or a noun and a verb')
     for (let w of new Set(words)) {
       if (said.has(w)) throw new Error(`two tools answer to: ${w}`)
@@ -119,11 +129,11 @@ export let unique = <T extends ToolId>(tools: readonly T[]): readonly T[] => {
  * takes the word after it in either order; a one-word tool takes none.
  *
  * ```ts
- * wordFor([{noun: 'session', verb: 'list', description: '', run: () => 0}],
+ * commandFor([{noun: 'session', verb: 'list', description: '', run: () => 0}],
  *   ['list', 'session', '--all'])?.args // ['--all']
  * ```
  */
-export let wordFor = <T extends ToolId>(
+export let commandFor = <T extends ToolId>(
   tools: readonly T[],
   argv: readonly string[],
 ): { verb: T; args: string[] } | undefined => {
@@ -134,7 +144,7 @@ export let wordFor = <T extends ToolId>(
       if (
         (t.noun == word && t.verb == next) || (t.verb == word && t.noun == next)
       ) return { verb: t, args: argv.slice(2) }
-    } else if (wordOf(t) == word) return { verb: t, args: argv.slice(1) }
+    } else if (commandOf(t) == word) return { verb: t, args: argv.slice(1) }
   }
 }
 
@@ -148,7 +158,9 @@ export let usage = (
   opts: Opts = {},
 ): string => {
   let seen = new Set<string>()
-  let shown = tools.filter((t) => !seen.has(wordOf(t)) && seen.add(wordOf(t)))
+  let shown = tools.filter((t) =>
+    !seen.has(commandOf(t)) && seen.add(commandOf(t))
+  )
   let wide = Math.min(WIDE, Math.max(0, ...shown.map((t) => lineOf(t).length)))
   return [
     ...(opts.about ? [opts.about, ''] : []),
@@ -157,9 +169,9 @@ export let usage = (
   ].join('\n')
 }
 
-/** The flags a program keeps for itself, lifted off the line before a tool
- * ever sees it. `host` is what the LINE said and nothing else — where a line
- * is aimed when it says nothing is {@link hostFor}'s answer. */
+/** The flags a program keeps for itself, lifted off the line before a command
+ * ever sees it. `host` and `config` are what the LINE said and nothing else —
+ * where it runs when it says neither is {@link aimed}'s answer. */
 export let globals = (
   argv: readonly string[],
 ): {
@@ -193,19 +205,36 @@ export let globals = (
 }
 
 /**
- * Where a line is aimed. In order: what the line said, `$YAKS_HOST`, the
- * address the config file describes, and the platform this program came with.
+ * Where this line runs what it was asked: the graph a config FILE names, which
+ * it OPENS in this process, or a door it talks to over `/mcp`.
  *
- * A CONFIG NAMES A SERVER, not a second copy of the graph. `yak serve
- * --config yak.json` binds that address and every other line aimed at the same
- * config talks to what is listening there — one graph, one writer, one tool
- * list, whether the caller is a person, a hook or an agent.
+ * A CONFIG NAMES A GRAPH. `yak --config yak.json task list` reads that file,
+ * composes its plugins over the SQLite file it names, runs the tool here and
+ * exits — no server, and nothing to wait for. `--host` is for a graph this box
+ * cannot open as a file; said together the two name two places, which is a
+ * line that means two things.
+ *
+ * In order: `--config`, `--host`, `$YAKS_HOST`, `$YAK_CONFIG`, and the
+ * platform this program came with. A door comes back either way, because it is
+ * also the name a bearer is kept under.
+ *
+ * ```ts
+ * aimed({ host: 'yaks.app' }) // { host: 'yaks.app' }
+ * ```
  */
-export let hostFor = (
+export let aimed = (
   said: { host?: string; config?: string },
   dflt = 'yaks.app',
-): string =>
-  said.host ?? Deno.env.get('YAKS_HOST') ?? hostOf(said.config) ?? dflt
+): { config?: string; host: string } => {
+  if (said.host && said.config) {
+    throw new Usage('--host and --config name two places — a line names one')
+  }
+  if (said.config) return { config: said.config, host: dflt }
+  let door = said.host ?? Deno.env.get('YAKS_HOST')
+  if (door) return { host: door }
+  let path = configPath()
+  return path ? { config: path, host: dflt } : { host: dflt }
+}
 
 /**
  * The run this command line is part of, as the environment names it: a
@@ -233,61 +262,63 @@ let disk: Reads = {
  * tool or the door refused, 2 the line was wrong.
  */
 export let cli = async (
-  tools: readonly Word[],
+  tools: readonly Command[],
   opts: Opts = {},
 ): Promise<number> => {
   let out = opts.out ?? ((line: string) => console.log(safe(line)))
   let note = opts.note ?? ((line: string) => console.error(safe(line)))
   let said = globals(opts.argv ?? Deno.args)
-  let { config, json, help, timing, rest } = said
-  let host = hostFor(said, opts.host ?? 'yaks.app')
-  // A table that cannot be had is a reason on the page, not a page nobody
-  // gets: `yak` with no argument is what a person types when nothing works.
-  let extra: Word[] | undefined
-  let why: string | undefined
-  let fetched = async (): Promise<Word[]> => {
-    if (extra || !opts.more) return extra ?? []
-    try {
-      extra = [...await opts.more(c)]
-    } catch (e) {
-      extra = []
-      why = (e as Error).message
-    }
-    return extra
-  }
-  let c: Ctx = {
-    host,
-    config,
-    json,
-    help,
-    ask: opts.ask ?? rpc({
-      url: doorUrl(host),
-      token: tokenFor(host),
-      via: via(),
-      fetch: timing ? timed(note) : undefined,
-    }),
-    reads: opts.reads ?? disk,
-    out,
-    note,
-    all: async () => [...tools, ...await fetched()],
-    page: async () =>
-      usage(await c.all(), opts) + (why ? `\n\n  (${why})` : ''),
-  }
+  let { json, help, timing, rest } = said
   try {
+    // Where this line runs: a file it opens, or a door it talks to. A line
+    // naming both is refused here, like any other line that means two things.
+    let { config, host } = aimed(said, opts.host ?? 'yaks.app')
+    // A table that cannot be had is a reason on the page, not a page nobody
+    // gets: `yak` with no argument is what a person types when nothing works.
+    let extra: Command[] | undefined
+    let why: string | undefined
+    let fetched = async (): Promise<Command[]> => {
+      if (extra || !opts.more) return extra ?? []
+      try {
+        extra = [...await opts.more(c)]
+      } catch (e) {
+        extra = []
+        why = (e as Error).message
+      }
+      return extra
+    }
+    let c: Ctx = {
+      host,
+      config,
+      json,
+      help,
+      ask: opts.ask ?? rpc({
+        url: doorUrl(host),
+        token: tokenFor(host),
+        via: via(),
+        fetch: timing ? timed(note) : undefined,
+      }),
+      reads: opts.reads ?? disk,
+      out,
+      note,
+      all: async () => [...tools, ...await fetched()],
+      page: async () =>
+        usage(await c.all(), opts) + (why ? `\n\n  (${why})` : ''),
+    }
     // The one thing that must work with no network and nobody signed in.
     if (!rest.length) {
       out(await c.page())
       return 0
     }
-    let found = wordFor(tools, rest) ??
-      wordFor(await fetched(), rest) ??
+    let found = commandFor(tools, rest) ??
+      commandFor(await fetched(), rest) ??
       await (async () => {
         let hit = await opts.stray?.(rest[0], rest.slice(1), c)
         return hit ? { verb: hit, args: rest.slice(1) } : undefined
       })()
     if (!found) {
       throw new Usage(
-        `${host} has nothing called ${rest[0]} — try \`${
+        `${config ?? host} has nothing called ${rest[0]} — try \`${
           opts.name ?? 'yak'
         } help\``,
       )
@@ -307,7 +338,7 @@ export let cli = async (
 }
 
 /** The `help` tool every program here carries: the page, or one word's own. */
-export let helpTool = (opts: Opts = {}): Word => ({
+export let helpTool = (opts: Opts = {}): Command => ({
   name: 'help',
   description: 'every word, one line each — or one word’s own page',
   inputSchema: {
@@ -323,7 +354,7 @@ export let helpTool = (opts: Opts = {}): Word => ({
       c.out(await c.page())
       return 0
     }
-    let found = wordFor(await c.all(), words)
+    let found = commandFor(await c.all(), words)
     if (!found) throw new Usage(`nothing here is called ${words[0]}`)
     c.out(toolHelp(found.verb, opts.name))
     return 0

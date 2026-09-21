@@ -3,8 +3,9 @@
  *
  * The command itself is the other export — `deno install -gAf jsr:@yaks/cli/yak`
  * — and this one is what it is built from, for anybody wrapping the same idea:
- * an MCP server's `tools/list` read at run time, every tool a subcommand, and
- * a command line mapped through each tool's own input schema.
+ * the tools of the graph a config names, or the ones an MCP server lists, read
+ * at run time, every tool a subcommand, and a command line mapped through each
+ * tool's own input schema.
  *
  * ```ts
  * import { argsFor, doorUrl, rpc } from '@yaks/cli'
@@ -13,7 +14,7 @@
  * let { tools } = await ask('tools/list') as { tools: [] }
  * ```
  *
- * A box with words of its own hands them over and runs the same command:
+ * A box with commands of its own hands them over and runs the same program:
  *
  * ```ts
  * import { main } from '@yaks/cli/yak'
@@ -21,8 +22,8 @@
  * Deno.exit(await main(Deno.args, mine))
  * ```
  *
- * A command that is not `yak` at all is `cli(tools, opts)` — the tools, and
- * what the program calls itself.
+ * A program that is not `yak` at all is `cli(commands, opts)` — the commands,
+ * and what it calls itself.
  *
  * @module
  */
@@ -64,33 +65,26 @@ export {
   tokenFor,
 } from './store.ts'
 export {
+  commandOf,
   type Listed,
   type Prop,
   type Schema,
   titleOf,
   typeOf,
-  wordOf,
 } from './tool.ts'
 export {
+  aimed,
   cli,
+  type Command,
+  commandFor,
   type Ctx,
   globals,
   helpTool,
-  hostFor,
   type Opts,
   unique,
   usage,
-  type Word,
-  wordFor,
 } from './run.ts'
-export {
-  type Config,
-  configPath,
-  doorOf,
-  hostOf,
-  PORT,
-  read,
-} from './config.ts'
+export { type Config, configPath, PORT, read } from './config.ts'
 export { listed, printed, rosterOf } from './platform.ts'
 export { appStray, appTools } from './commands.ts'
-export { here, HOST, main, own, TOOLS, YAK } from './yak.ts'
+export { HOST, main, own, TOOLS, YAK } from './yak.ts'

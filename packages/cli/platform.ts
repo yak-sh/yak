@@ -9,7 +9,7 @@
 // way back through is read here too — `printed` is the one place a tool's
 // answer becomes stdout, an exit code, and a cache that is still true.
 
-import type { Ctx, Word } from './run.ts'
+import type { Command, Ctx } from './run.ts'
 import { initialize, type Rpc } from './rpc.ts'
 import { type Result, rosterAfter, saidBy } from './roster.ts'
 import { cached, forget, remember, type Roster } from './store.ts'
@@ -68,7 +68,7 @@ export let printed = (
 // a spelling ride beside it where the tool declared them (tool.ts `spelling`),
 // so `yak task new 'ship it'` is typed the way the vocabulary said and a
 // server that says neither still lists as one flat name.
-let toolOf = (roster: Roster, t: Listed): Word => ({
+let toolOf = (roster: Roster, t: Listed): Command => ({
   name: t.name,
   ...spelling(t),
   ...(t.title ?? t.annotations?.title
@@ -92,7 +92,7 @@ let toolOf = (roster: Roster, t: Listed): Word => ({
 
 /** Every tool this server lists, as a subcommand. The table that costs a
  * round trip (run.ts `more`), so a line that never reaches it pays nothing. */
-export let listed = async (c: Ctx): Promise<Word[]> => {
+export let listed = async (c: Ctx): Promise<Command[]> => {
   let roster = await rosterOf(c.host, c.ask)
   return roster.tools.map((t) => toolOf(roster, t))
 }

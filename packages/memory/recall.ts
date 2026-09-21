@@ -69,9 +69,9 @@ export let heard = (b: Bundle): Memory => {
   }
 }
 
-/** The words a filter line can carry: the line's own punctuation (`&`, `=`,
- * `.`) would be read as grammar, and a full-text index matches words anyway. */
-export let words = (said: string): string =>
+// A word the filter line can carry: the line's own punctuation (`&`, `=`, `.`)
+// would be read as grammar, and a full-text index matches words anyway.
+let words = (said: string) =>
   said.replace(/[^\p{L}\p{N}\s'-]+/gu, ' ').trim().replace(/\s+/g, ' ')
 
 /** What a recall is looking for: which memories, and what ranks them. */
@@ -86,27 +86,15 @@ export type Asked = {
   feedback?: boolean
   /** the words to select by — the store's own index over `doc` */
   said?: string
-  /** whether ANY one of those words is enough. A search means all of them, and
-   * is asked exactly (@yaks/fts ANDs a string's words); somebody asking what
-   * is worth recalling about a subject means any, and ranks what comes back */
-  any?: boolean
   /** an entity to rank by MEANING instead, where the host embeds */
   near?: Eid
   /** particular ones, by id */
   eids?: Eid[]
 }
 
-// The words as ALTERNATIVES: a parenthesised group, which @yaks/query reads as
-// one term whose `|` binds inside it, each word quoted so nothing in it is
-// read as grammar. A lone quoted word still prefix-matches (@yaks/fts `term`).
-let any = (said: string): string =>
-  `(${
-    [...new Set(said.toLowerCase().split(' '))].map((w) => `"${w}"`).join('|')
-  })`
-
 /**
- * The filter line that finds memories: with words, the ones saying them — all
- * of them, or any one where the caller said `any`; with a `near`, ranked by
+ * The filter line that finds memories: with words, the ones saying every one
+ * of them, which is what somebody searching means; with a `near`, ranked by
  * meaning; otherwise newest first. WORDS DO NOT RANK: @yaks/fts compiles a
  * word to a condition and keeps its bm25 for the search door, so a line
  * carrying words is a filter and the newest still lead. The components are
@@ -121,7 +109,7 @@ export let line = (asked: Asked): string => {
   let said = words(asked.said ?? '')
   let ranked = !!(asked.eids?.length || asked.near)
   return [
-    ...(said ? [asked.any ? any(said) : said] : []),
+    ...(said ? [said] : []),
     ...(asked.eids?.length ? [`.eid=${asked.eids.join(',')}`] : []),
     ...(asked.near ? [`.near=${asked.near}`] : []),
     // A memory is what is being asked for, so the word is always on the line;

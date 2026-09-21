@@ -10,14 +10,21 @@ import type { Tool } from '@yaks/graph'
 import { toolDefinition } from '@yaks/vocab/tools'
 import { argsFor, type Reads, Usage } from './args.ts'
 import { appStray, appTools } from './commands.ts'
-import { cli, type Opts, unique, usage, type Word, wordFor } from './run.ts'
+import {
+  cli,
+  type Command,
+  commandFor,
+  type Opts,
+  unique,
+  usage,
+} from './run.ts'
 
 let asked: { name: string; arguments: Record<string, unknown> }[] = []
 let printed: string[] = []
 
 let reads: Reads = { file: () => 'FILE', stdin: () => 'STDIN' }
 
-let ran = (tools: Word[], argv: string[], opts: Opts = {}) => {
+let ran = (tools: Command[], argv: string[], opts: Opts = {}) => {
   asked = []
   printed = []
   return cli(tools, {
@@ -34,7 +41,7 @@ let ran = (tools: Word[], argv: string[], opts: Opts = {}) => {
   })
 }
 
-let saying = (name: string): Word[] => [
+let saying = (name: string): Command[] => [
   { name, description: `the ${name} word`, run: () => 0 },
   {
     name: 'both',
@@ -69,9 +76,9 @@ Deno.test('two tools that answer to one line are refused, either order', () => {
 
 Deno.test('a two-word tool answers to either order, and gives up both words', () => {
   let t = { noun: 'session', verb: 'list', description: '', run: () => 0 }
-  assertEquals(wordFor([t], ['session', 'list', '--all'])?.args, ['--all'])
-  assertEquals(wordFor([t], ['list', 'session', '--all'])?.args, ['--all'])
-  assertEquals(wordFor([t], ['list']), undefined)
+  assertEquals(commandFor([t], ['session', 'list', '--all'])?.args, ['--all'])
+  assertEquals(commandFor([t], ['list', 'session', '--all'])?.args, ['--all'])
+  assertEquals(commandFor([t], ['list']), undefined)
 })
 
 Deno.test('one usage draws every tool, one column throughout', async () => {

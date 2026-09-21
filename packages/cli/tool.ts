@@ -52,10 +52,10 @@ export type Listed = {
   _meta?: Record<string, unknown>
 }
 
-/** The `_meta` key the command-line grammar rides under (@yaks/mcp `WORD`).
+/** The `_meta` key the command-line grammar rides under (@yaks/mcp `COMMAND`).
  * Spelled here rather than imported: a client that reads a listing should not
  * have to depend on the server that wrote it. */
-export let WORD = 'yaks.sh/word'
+export let COMMAND = 'yaks.sh/command'
 
 /**
  * The two words a tool is typed as, and how it spells its arguments — what the
@@ -65,7 +65,7 @@ export let WORD = 'yaks.sh/word'
 export let spelling = (
   t: Listed,
 ): { noun?: string; verb?: string; options?: Spelling } => {
-  let said = t._meta?.[WORD]
+  let said = t._meta?.[COMMAND]
   return said && typeof said == 'object'
     ? said as { noun?: string; verb?: string; options?: Spelling }
     : {}
@@ -94,6 +94,6 @@ export let typeOf = (p: Prop | undefined): string => {
  * legacy name otherwise. `toolName` (@yaks/graph) answers the same question
  * for a transport, which spells the pair `noun_verb`; a command line has a
  * space to spare. */
-export let wordOf = (
+export let commandOf = (
   t: { name?: string; noun?: string; verb?: string },
 ): string => t.noun && t.verb ? `${t.noun} ${t.verb}` : t.name ?? ''

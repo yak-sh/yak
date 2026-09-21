@@ -123,6 +123,10 @@ export type Opts = {
    * boot pass here re-drives it. Unsaid, this runner claims anonymously and
    * takes any call nobody else holds. */
   owner?: Eid
+  /** where the process running these calls stands, for a tool that acts on the
+   * BOX rather than the graph. The host says it; this package reaches no
+   * runtime and never asks one. */
+  cwd?: string
 }
 
 /** A live runner: the rules a sweep asks, and the doors a host calls through. */
@@ -390,6 +394,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         read: (query, readOpts) => host.read(query, readOpts),
         args,
         call: id,
+        ...(opts.cwd ? { cwd: opts.cwd } : {}),
       }
       return await land(signed(await tool.run([call], ctx), ctx.actor), 'done')
     } catch (error) {

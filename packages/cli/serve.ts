@@ -1,16 +1,23 @@
 /**
- * `yak serve` — the whole server, composed from one config file.
+ * `yak serve` — the HTTP doors onto the graph a config composes, and the
+ * composition every `yak` line shares.
+ *
+ * THERE IS NO SERVER. A config names a GRAPH, and {@link compose} is what
+ * opens it: a command line composes it to run one tool in its own process
+ * (local.ts) and exits, and `yak serve` composes the same thing and puts
+ * `/apply`, `/query`, `/ws`, `/mcp` and the plugins' own routes over it. One
+ * SQLite file in WAL mode takes both at once, so serving is one more process
+ * rather than the process everything waits on.
  *
  * A host is not written; it is COMPOSED. This module reads a config naming
  * plugin packages and imports, from each, the FACETS it runs — one subpath
  * apiece: the words it speaks (`@yaks/mail/vocab`), what a batch means
  * (`/rules`), what an agent may call (`/tools`), what happens after a commit
- * (`/effects`), the HTTP it adds (`/routes`), what it says at the start of a
- * transcript (`/digest`), and the one pass it makes at start-up (`/boot`) and
- * what it keeps doing while the host is up (`/service`). A subpath a package does not
- * export is a facet it does not have, and is skipped; a subpath that exists
- * and fails to import is an error, never a skip. Over that it opens one SQLite
- * file and mounts the doors —
+ * (`/effects`), the HTTP it adds (`/routes`), the one pass it makes at
+ * start-up (`/boot`) and what it keeps doing while the host is up
+ * (`/service`). A subpath a package does not export is a facet it does not
+ * have, and is skipped; a subpath that exists and fails to import is an error,
+ * never a skip. Over that it opens one SQLite file and mounts the doors —
  * {@link https://jsr.io/@yaks/api | @yaks/api} at `/apply`, `/query` and
  * `/ws`, {@link https://jsr.io/@yaks/mcp | @yaks/mcp} at `/mcp`. There is no
  * other wiring: a server is a config file and a list of modules.
@@ -63,7 +70,6 @@ import {
   routed,
 } from '@yaks/api'
 import { mcp, type Search } from '@yaks/mcp'
-import { composed, type Digest, type Sections } from '@yaks/context'
 import { adopt, fields as searched, find, search } from '@yaks/fts'
 import {
   type Effects,
@@ -76,7 +82,6 @@ import { type Config, given, type Options, PORT, used } from './config.ts'
 export {
   type Config,
   configPath,
-  doorOf,
   given,
   type Options,
   type Plug,
@@ -100,23 +105,16 @@ export type Host = {
    * nobody. One plugin may say it; where it says nobody, the answer is this
    * host itself ({@link writer}). */
   who: Authenticate
-  /** what a session is told at its start: every plugin's sections, in weight
-   * order (@yaks/context `composed`). Live from the moment the plugins are
-   * imported — a factory may keep it, and may not call it before it returns. */
-  digest: Digest
 }
 
 /** The facets a host takes from a plugin, one subpath each. `views` is not
- * among them: a renderer is the WEB door's to import, never a server's. Nor is
- * `words`: a word runs on the box that typed it, against the checkout it
- * stands in, so the `yak` command carries those (yak.ts `here`). */
+ * among them: a renderer is the WEB door's to import, never a host's. */
 export let FACETS = [
   'vocab',
   'rules',
   'tools',
   'effects',
   'routes',
-  'digest',
   'boot',
   'service',
 ] as const
@@ -176,18 +174,6 @@ export type RoutesFacet = {
   authenticate?: (host: Host, options: Options) => Authenticate
 }
 
-/** `<plugin>/digest` — what this plugin says at the START of a transcript: a
- * factory answering the sections it contributes to the prose a session reads
- * before its first turn (@yaks/context `Section`). `weight` is where they sit
- * — lower leads, and the config's order breaks a tie — so the owner's words
- * come before what the work is FOR whatever order the plugins were named in.
- * A section is written from the transcript and the graph alone, never from
- * another section, so no contributor has to know what any other one says. */
-export type DigestFacet = {
-  digest?: (host: Host, options: Options) => Sections
-  weight?: number
-}
-
 /** `<plugin>/boot` — the one pass this plugin makes at start-up, before
  * anything is served: the leases a dead holder left, the processes a restart
  * has to adopt back. A MOMENT rather than an observation, which is why it is
@@ -222,7 +208,6 @@ export type Facets = {
   tools: ToolsFacet
   effects: EffectsFacet
   routes: RoutesFacet
-  digest: DigestFacet
   boot: BootFacet
   service: ServiceFacet
 }
@@ -401,7 +386,6 @@ export let compose = async (
   let tooled = taken('tools')
   let watched = taken('effects')
   let served = taken('routes')
-  let telling = taken('digest')
   let booted = taken('boot')
   let running = taken('service')
 
@@ -452,16 +436,11 @@ export let compose = async (
     // later — `who` reads the binding rather than a copy of it.
     let self = writer(config)
     let authenticate: Authenticate = () => self
-    let told: Digest | undefined
     let host: Host = {
       config,
       vocab,
       sql,
       who: (request) => authenticate(request),
-      get digest(): Digest {
-        if (!told) throw new Error('the digest is not composed yet')
-        return told
-      },
       get storage(): Store {
         if (!store) throw new Error('the store is not open yet')
         return store
@@ -472,18 +451,6 @@ export let compose = async (
       },
     }
     authenticate = doorman(served, host, self)
-    // What a session is told, settled here for the reason authentication is:
-    // the tool that answers it (@yaks/session's `session_context`) reads it off
-    // the host, and a factory built later would have nothing to read. Each
-    // plugin's sections keep the weight its own module declared; the config's
-    // order breaks a tie.
-    told = composed(
-      telling.flatMap(([d, options]) =>
-        d.digest
-          ? [{ sections: d.digest(host, options), weight: d.weight }]
-          : []
-      ),
-    )
     // The clause compilers ride the STORE, so they are gathered before it is
     // built: what a query may SAY is settled once, at compose, and every door
     // that reads — `/query`, `/ws`, a tool, the command line — asks through
@@ -549,6 +516,12 @@ export let compose = async (
       // interrupted calls and leaves another runner's — or a transcript
       // imported already called — where they stand.
       ...(self ? { owner: self.by } : {}),
+      // Where this process stands, for a tool that acts on the BOX: `yak land`
+      // fast-forwards the checkout the person typed in, because the tool runs
+      // in the same process that read the line (local.ts). A host answering
+      // HTTP says its own, which is the honest answer — a call arriving over a
+      // wire acts on the box that took it.
+      cwd: Deno.cwd(),
       report: (err) => console.error('tool failed —', err),
     })
     for (let rule of run.rules) {

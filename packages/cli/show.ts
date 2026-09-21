@@ -7,7 +7,7 @@
 // content, never an escape sequence.
 
 import { type Grammar } from './args.ts'
-import { type Prop, type Schema, titleOf, typeOf, wordOf } from './tool.ts'
+import { commandOf, type Prop, type Schema, titleOf, typeOf } from './tool.ts'
 
 // deno-lint-ignore no-control-regex -- the control class IS the subject
 let ctrl = /[\x00-\x1f\x7f-\x9f]/g
@@ -22,9 +22,9 @@ let pad = (s: string, n: number): string => s.padEnd(n)
 export let toolLines = (
   tools: (Grammar & { title?: string; description?: string })[],
 ): string => {
-  let wide = Math.max(0, ...tools.map((t) => wordOf(t).length))
+  let wide = Math.max(0, ...tools.map((t) => commandOf(t).length))
   return tools
-    .map((t) => `  ${pad(wordOf(t), wide)}  ${titleOf(t)}`.trimEnd())
+    .map((t) => `  ${pad(commandOf(t), wide)}  ${titleOf(t)}`.trimEnd())
     .join('\n')
 }
 
@@ -61,7 +61,7 @@ export let sketch = (t: Grammar): string => {
 
 /** The whole line to type, without the program's own name. */
 export let lineOf = (t: Grammar): string =>
-  `${wordOf(t)} ${sketch(t)}`.trimEnd()
+  `${commandOf(t)} ${sketch(t)}`.trimEnd()
 
 /** One tool's help: the line to type, what it is for, and a row per argument
  * with its type, whether it is required, and what the schema says it means. */

@@ -238,9 +238,10 @@ clients for credentials; token validation belongs to the host.
 
 ## Landing a branch
 
-`@yaks/git/land` is a pure git primitive, and `@yaks/git/words` is that
-primitive as a command-line word, so `yak land` works in any checkout — no
-graph, no server, no config:
+`@yaks/git/land` is a pure git primitive, and `@yaks/git/tools` is that
+primitive as a tool, so `yak land` works in any checkout — the line opens the
+graph its config names, runs `land` in that same process, and lands where the
+person is standing:
 
 ```sh
 yak land                            # fast-forward this branch into the base
@@ -262,8 +263,10 @@ already held earlier in the base's history? Either is a revert nobody wrote, and
 the landing is refused, naming the files, the diff to read, and the flag that
 lands anyway.
 
-`land` is a [word](https://jsr.io/@yaks/cli), not a tool: a tool runs where the
-graph is, and landing runs where the checkout is.
+`land` acts on the BOX rather than the graph: the checkout standing at
+`ctx.cwd`, which the host says and a command line's is where the person typed. A
+divergence comes back as a refusal, so the exit code says whether anything
+landed.
 
 ## What is not here
 

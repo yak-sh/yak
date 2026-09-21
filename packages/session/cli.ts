@@ -24,7 +24,7 @@ import { credential, openaiDoc, responses } from '@yaks/openai'
 import { ram } from '@yaks/ram'
 import { render } from '@yaks/text'
 import { loadVocab } from '@yaks/vocab'
-import { cli, type Ctx, type Word } from '@yaks/cli'
+import { cli, type Command, type Ctx } from '@yaks/cli'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
 import { daemon } from './daemon.ts'
@@ -147,7 +147,7 @@ let spike = async (
 }
 
 /** The tool, for a `yak` that carries it. */
-export let tools: Word[] = [{
+export let tools: Command[] = [{
   name: 'spike',
   description: 'run one transcript against the model and print it',
   inputSchema: {

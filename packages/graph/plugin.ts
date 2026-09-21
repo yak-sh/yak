@@ -147,6 +147,12 @@ export type ToolCtx = {
   /** the call entity being answered — what a bundle the tool makes says it
    * came from (`output.source`) */
   call: Eid
+  /** the directory the process running this call stands in, where the host
+   * knows one. A tool that acts on the BOX rather than the graph needs it —
+   * `land` fast-forwards the checkout its caller is standing in, which on a
+   * command line is where the person typed. A graph in a browser tab or a
+   * worker has none, and a tool that wants one says so itself. */
+  cwd?: string
 }
 
 /**

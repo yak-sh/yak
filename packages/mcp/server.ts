@@ -209,7 +209,7 @@ let metaOf = (
 }
 
 /** Where the command-line grammar rides on the wire. */
-export let WORD = 'yaks.sh/word'
+export let COMMAND = 'yaks.sh/command'
 
 // A tool's two words, and how a line spells its arguments. The protocol has
 // one flat `name` and no place for either, so they ride in `_meta` — which is
@@ -221,7 +221,7 @@ let spelling = (tool: NamedTool): Record<string, unknown> | undefined => {
     ...(tool.noun && tool.verb ? { noun: tool.noun, verb: tool.verb } : {}),
     ...(tool.options ? { options: tool.options } : {}),
   }
-  return Object.keys(said).length ? { [WORD]: said } : undefined
+  return Object.keys(said).length ? { [COMMAND]: said } : undefined
 }
 
 /**
