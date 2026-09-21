@@ -1,8 +1,9 @@
-/** Defect receipts are not transcript entries: recording one must not wake a model.
- * The independent JSONL journal is written FIRST, even if SQLite is broken.
+/** Defect receipts are not transcript entries: recording one must not wake a
+ * model. An exception a process catches is an `exception` entity in the graph
+ * where it matters — and where there is no graph to take it, or the graph is
+ * the thing that broke, it is stderr. There is no second journal.
  */
 import type { Bundle, Graph } from '@yaks/graph'
-import { errorPath } from './paths.ts'
 
 export type FailureContext = { phase: string; session?: string }
 export let describeFailure = (error: unknown): string => {
@@ -18,15 +19,13 @@ export let describeFailure = (error: unknown): string => {
 }
 
 export let createDiagnostics = (opts: {
-  path: string
-  write?: (line: string) => void
   warn?: (text: string) => void
   secrets?: string[]
-}) => {
+} = {}) => {
   let seen = new WeakSet<object>()
   let pending = new Set<Promise<void>>()
   let sinks: ((row: Bundle) => unknown)[] = []
-  let warn = opts.warn ?? ((text) => console.error(text))
+  let warn = opts.warn ?? ((text: string) => console.error(text))
   let redact = (text: string) => {
     for (let secret of opts.secrets ?? []) {
       if (secret.length >= 8) text = text.split(secret).join('[redacted]')
@@ -34,30 +33,6 @@ export let createDiagnostics = (opts: {
     return text.replace(/\bBearer\s+[^\s"']+/gi, 'Bearer [redacted]')
       .replace(/\bsk-[a-zA-Z0-9_-]{12,}/g, '[redacted]')
   }
-  let write = opts.write ?? ((line: string) => {
-    let slash = opts.path.lastIndexOf('/')
-    if (slash > 0) {
-      Deno.mkdirSync(opts.path.slice(0, slash), {
-        recursive: true,
-        mode: 0o700,
-      })
-    }
-    let file = Deno.openSync(opts.path, {
-      create: true,
-      append: true,
-      write: true,
-      mode: 0o600,
-    })
-    try {
-      let bytes = new TextEncoder().encode(line)
-      for (let at = 0; at < bytes.length;) {
-        at += file.writeSync(bytes.subarray(at))
-      }
-      file.syncSync()
-    } finally {
-      file.close()
-    }
-  })
   let report = (error: unknown, context: FailureContext) => {
     if (
       error !== null && (typeof error == 'object' || typeof error == 'function')
@@ -74,35 +49,26 @@ export let createDiagnostics = (opts: {
       ...context,
       body,
     }
-    try {
-      write(JSON.stringify(record) + '\n')
-    } catch (failure) {
+    let save = sinks.at(-1)
+    // Nowhere to write it is not nowhere to say it: the terminal is the floor.
+    if (!save) return warn(JSON.stringify(record))
+    let job = Promise.resolve().then(() =>
+      save({
+        entity: { eid: id },
+        exception: {},
+        content: { body: JSON.stringify(record, null, 2) },
+      })
+    ).then(() => {}, (failure) => {
+      // Never recursively try to write a database failure to that database.
       warn(
-        'Exception journal failed: ' + redact(describeFailure(failure)) +
+        'Exception graph write failed: ' + redact(describeFailure(failure)) +
           '\nOriginal exception: ' + body,
       )
-    }
-    let save = sinks.at(-1)
-    if (save) {
-      let job = Promise.resolve().then(() =>
-        save({
-          entity: { eid: id },
-          exception: {},
-          content: { body: JSON.stringify(record, null, 2) },
-        })
-      ).then(() => {}, (failure) => {
-        // Never recursively try to write a database failure to that database.
-        warn(
-          'Exception graph write failed; original preserved at ' + opts.path +
-            ': ' + redact(describeFailure(failure)),
-        )
-      })
-      pending.add(job)
-      void job.finally(() => pending.delete(job))
-    }
+    })
+    pending.add(job)
+    void job.finally(() => pending.delete(job))
   }
   return {
-    path: opts.path,
     report,
     attach: (g: Pick<Graph, 'apply'>) => {
       let save = (row: Bundle) => g.apply([row], { trusted: true })
@@ -119,9 +85,7 @@ export let createDiagnostics = (opts: {
         new Promise<void>((done) => timer = setTimeout(done, timeout)),
       ])
       clearTimeout(timer)
-      if (pending.size) {
-        warn('Exception graph writes still pending; journal: ' + opts.path)
-      }
+      if (pending.size) warn('Exception graph writes still pending')
     },
   }
 }
@@ -129,14 +93,13 @@ export let createDiagnostics = (opts: {
 let shared: ReturnType<typeof createDiagnostics> | undefined
 export let diagnostics = () =>
   shared ??= createDiagnostics({
-    path: errorPath(),
     secrets: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY'].map((k) =>
       Deno.env.get(k) ?? ''
     ),
   })
 
-/** Observe fatal runtime events, without preventDefault: runtime exit semantics
- * remain intact. The synchronous journal survives even when no async drain can.
+/** Observe fatal runtime events, without preventDefault: runtime exit
+ * semantics remain intact.
  */
 export let uncaught = (
   reporter: Pick<ReturnType<typeof createDiagnostics>, 'report'>,

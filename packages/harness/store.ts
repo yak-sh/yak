@@ -3,7 +3,7 @@ import { diagnostics } from './diagnostics.ts'
 import { home } from './paths.ts'
 // The harness's own graph: one SQLite file, the vocabulary it speaks, and the
 // plugins that decide what a batch means. Nothing here reaches a server — the
-// harness holds its whole world in `~/.harness/harness.db` (or wherever
+// harness holds its whole world in `~/.yak/yak.db` (or wherever
 // `HARNESS_DB` points, `:memory:` for a test), so an agent runs with the
 // tasks daemon down and the same bundles move into the fleet's graph later.
 //
@@ -41,10 +41,10 @@ import { vocab } from './vocab.ts'
 export { harnessDoc, vocab } from './vocab.ts'
 
 /** Where the graph lives when nobody says: `$HARNESS_DB`, else
- * `$HARNESS_HOME/harness.db` (home defaults to `~/.harness`). */
+ * `$HARNESS_HOME/yak.db` (home defaults to `~/.yak`). */
 export let dbPath = (
   env: (name: string) => string | undefined = Deno.env.get,
-): string => env('HARNESS_DB') || `${home(env)}/harness.db`
+): string => env('HARNESS_DB') || `${home(env)}/yak.db`
 
 /** An open harness graph: the file it is, the store under it, the graph over
  * it, and the effects registry the daemon hangs on. */

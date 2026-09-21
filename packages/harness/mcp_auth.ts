@@ -10,6 +10,7 @@ import { fileAuthorizationStore } from '@yaks/mcp-client/host'
 import { tokenFor } from '@yaks/cli'
 import type { Tool } from '@yaks/graph'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+import { home } from './paths.ts'
 
 /** A remote tool wearing the connection that listed it: `reply` is that
  * server's own door, captured, so an issued call never moves to a transport
@@ -27,8 +28,7 @@ export type MCPAuthReply = {
 }
 export const authorizedMCP = (
   servers: Server[],
-  path = Deno.env.get('HARNESS_MCP_AUTH') ??
-    `${Deno.env.get('HOME')}/.yaks/mcp-auth.json`,
+  path = Deno.env.get('HARNESS_MCP_AUTH') ?? `${home()}/mcp-auth.json`,
 ) => {
   const store = fileAuthorizationStore(path)
   const auths = new Map<string, Authorization>()

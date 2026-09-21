@@ -103,14 +103,14 @@ deno task harness models
 ```
 
 `$HARNESS_HOME` moves harness state without changing `HOME`: the defaults are
-`$HARNESS_HOME/harness.db`, `$HARNESS_HOME/exceptions.jsonl` and the task
-children's checkouts under `$HARNESS_HOME/worktrees`, with `~/.harness` as the
-state directory when unset. `$HARNESS_DB` (including `:memory:`),
-`$HARNESS_ERROR_LOG` and `$HARNESS_WORKTREE_DIR` override the individual places.
-For probes, set `HARNESS_HOME` and `TASKS_HOME` to scratch directories and clean
-them up; `TASKS_HOME` moves the process supervisor's files (unless `PROCESS_DIR`
-is set). Keep `HOME` unchanged so Deno reuses its module cache. If a probe must
-move `HOME`, export the invoking `DENO_DIR` before moving it.
+`$HARNESS_HOME/yak.db` and the task children's checkouts under
+`$HARNESS_HOME/worktrees`, with `~/.yak` as the state directory when unset.
+`$HARNESS_DB` (including `:memory:`) and `$HARNESS_WORKTREE_DIR` override the
+individual places. For probes, set `HARNESS_HOME` and `TASKS_HOME` to scratch
+directories and clean them up; `TASKS_HOME` moves the process supervisor's files
+(unless `PROCESS_DIR` is set). Keep `HOME` unchanged so Deno reuses its module
+cache. If a probe must move `HOME`, export the invoking `DENO_DIR` before moving
+it.
 
 The model is `gpt-6-astra` unless `--model` says otherwise, reached with
 `$OPENAI_API_KEY` or the Codex CLI's sign-in (@yaks/openai).
@@ -362,20 +362,17 @@ projection adapter remains a performance interface, documented in
 
 Unexpected failures at the executable boundary (including global errors and
 unhandled rejections), daemon steps, effects, and frontend
-projections/submissions are journaled **before** attempting a graph write.
-Inspect `.exception` through the graph tools. These diagnostic entities have no
-`entry`: they neither enter a conversation nor wake a model. Their
-`content.body` contains JSON with the stack, recursive cause chain, timestamp,
-process ID, phase, and session when known. Expected tool refusals retain the
-existing `error` semantics.
+projections/submissions become an `exception` entity in the graph. Inspect
+`.exception` through the graph tools. These diagnostic entities have no `entry`:
+they neither enter a conversation nor wake a model. Their `content.body`
+contains JSON with the stack, recursive cause chain, timestamp, process ID,
+phase, and session when known. Expected tool refusals retain the existing
+`error` semantics.
 
-The independent append-only fallback is `~/.harness/exceptions.jsonl`,
-overridden by `HARNESS_ERROR_LOG`. It is synchronously appended and fsynced so a
-broken SQLite connection or fatal event cannot erase the original failure. Files
-are created mode 0600. If writing the journal itself fails, stderr receives the
-original failure and journal error; graph persistence failures do not recurse.
-Graph writes drain for at most 250ms at executable shutdown. Late graph failures
-remain in the journal; automatic journal replay is not implemented.
+There is no second journal. Where no graph is attached to take a defect, or
+where the graph is the thing that broke, the record goes to stderr as one JSON
+line — a graph write that fails prints the original failure beside it and never
+recurses. Graph writes drain for at most 250ms at executable shutdown.
 
 Global handlers observe rather than suppress fatal runtime defaults, restoring
 the terminal on the fatal path. Embedded users of `agent()` get daemon
@@ -439,8 +436,8 @@ Current provider errors do not reliably distinguish unsupported image tools from
 other invalid requests, so there is no negative capability cache or speculative
 fallback. Disable images explicitly if your endpoint rejects them.
 
-Binary bytes use `@yaks/blob`'s external file backend under `~/.harness/images`,
-or `HARNESS_IMAGE_DIR`. This directory is made private. Keep it with database
+Binary bytes use `@yaks/blob`'s external file backend under `~/.yak/images`, or
+`HARNESS_IMAGE_DIR`. This directory is made private. Keep it with database
 backups. Do not point it at an unrelated shared directory: the harness enforces
 mode 0700 on it.
 
@@ -588,11 +585,10 @@ or model. `Ctrl+U` cuts to the clipboard and saved local yank; `Alt+p` restores
 that yank. Failed or interrupted admissions restore editable text rather than
 automatically resending it.
 
-Local unencrypted recovery files use private permissions under
-`~/.harness/drafts`. Set `HARNESS_FRONTEND` for a stable named profile and
-`HARNESS_DRAFT_DIR` to relocate storage. See
-[frontend state](FRONTEND.md#local-draft-recovery) for isolation, retention, and
-crash-recovery limits.
+Local unencrypted recovery files use private permissions under `~/.yak/drafts`.
+Set `HARNESS_FRONTEND` for a stable named profile and `HARNESS_DRAFT_DIR` to
+relocate storage. See [frontend state](FRONTEND.md#local-draft-recovery) for
+isolation, retention, and crash-recovery limits.
 
 The CLI and terminal frontend do not add a built-in agent description or style
 instruction. Instruction files are admitted through `@yaks/context`; callers can

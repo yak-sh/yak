@@ -2,6 +2,7 @@
 import type { Saved, Vault } from '@yaks/client'
 import { join, resolve } from '@std/path'
 import { frontend } from './frontend.ts'
+import { dbPath } from './store.ts'
 
 export let draftVault = async (directory: string): Promise<Vault> => {
   await Deno.mkdir(directory, { recursive: true, mode: 0o700 })
@@ -72,8 +73,7 @@ export let openDrafts = async () => {
       terminal = 'default'
     }
   }
-  const database = Deno.env.get('HARNESS_DB') ??
-    join(Deno.env.get('HOME')!, '.harness/harness.db')
+  const database = dbPath()
   const hash = await crypto.subtle.digest(
     'SHA-256',
     new TextEncoder().encode(resolve(database) + '\n' + terminal),

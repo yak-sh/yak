@@ -2,14 +2,9 @@ import { assert, assertEquals, assertMatch } from '@std/assert'
 import { createDiagnostics, uncaught } from './diagnostics.ts'
 import { open } from './store.ts'
 
-Deno.test('defect journal preserves stack/cause, redacts secrets, and graph receipt never becomes input', async () => {
+Deno.test('a defect is an exception entity, stack and cause kept, secrets redacted, and never an entry', async () => {
   let h = open(':memory:')
-  let lines: string[] = []
-  let reporter = createDiagnostics({
-    path: 'unused',
-    write: (s) => lines.push(s),
-    secrets: ['secret-key-123'],
-  })
+  let reporter = createDiagnostics({ secrets: ['secret-key-123'] })
   let detach = reporter.attach(h.g)
   let error = new Error('savepoint failed secret-key-123', {
     cause: new Error('statement busy'),
@@ -19,24 +14,31 @@ Deno.test('defect journal preserves stack/cause, redacts secrets, and graph rece
   await reporter.drain()
   let rows = await h.g.read('.exception')
   assertEquals(rows.length, 1)
-  assertEquals(lines.length, 1)
   assert(!rows[0].entry)
   assertEquals(await h.g.read('.entry'), [])
-  assertMatch(lines[0], /Caused by:/)
-  assertMatch(lines[0], /statement busy/)
-  assertMatch(lines[0], /diagnostics_test.ts/)
-  assert(!lines[0].includes('secret-key-123'))
-  assertEquals(JSON.parse(lines[0]).session, 'selected')
+  let said = JSON.parse(String((rows[0].content as { body: string }).body))
+  assertMatch(said.body, /Caused by:/)
+  assertMatch(said.body, /statement busy/)
+  assertMatch(said.body, /diagnostics_test.ts/)
+  assert(!said.body.includes('secret-key-123'))
+  assertEquals(said.session, 'selected')
   detach()
   h.close()
 })
 
-Deno.test('database failure cannot recurse and original survives independent journal reopen', async () => {
-  let dir = Deno.makeTempDirSync()
-  let path = dir + '/exceptions.jsonl'
+Deno.test('a defect nobody can take is said on the terminal, not lost', async () => {
+  let warnings: string[] = []
+  let reporter = createDiagnostics({ warn: (s) => warnings.push(s) })
+  reporter.report(new Error('nowhere to write this'), { phase: 'startup' })
+  await reporter.drain()
+  assertEquals(warnings.length, 1)
+  assertMatch(JSON.parse(warnings[0]).body, /nowhere to write this/)
+})
+
+Deno.test('a database failure cannot recurse: the original is printed instead', async () => {
   let warnings: string[] = []
   let attempts = 0
-  let reporter = createDiagnostics({ path, warn: (s) => warnings.push(s) })
+  let reporter = createDiagnostics({ warn: (s) => warnings.push(s) })
   reporter.attach({
     apply: () => {
       attempts++
@@ -47,20 +49,13 @@ Deno.test('database failure cannot recurse and original survives independent jou
   await reporter.drain()
   assertEquals(attempts, 1)
   assertEquals(warnings.length, 1)
-  let record = JSON.parse(Deno.readTextFileSync(path))
-  assertMatch(record.body, /original failure/)
-  let again = createDiagnostics({ path })
-  again.report('second', { phase: 'startup' })
-  assertEquals(Deno.readTextFileSync(path).trim().split('\n').length, 2)
-  Deno.removeSync(dir, { recursive: true })
+  assertMatch(warnings[0], /database broken/)
+  assertMatch(warnings[0], /Original exception:[\s\S]*original failure/)
 })
 
 Deno.test('global error hooks preserve fatal default, clean up, deduplicate, and uninstall', () => {
-  let lines: string[] = []
-  let reporter = createDiagnostics({
-    path: 'unused',
-    write: (s) => lines.push(s),
-  })
+  let said: string[] = []
+  let reporter = createDiagnostics({ warn: (s) => said.push(s) })
   let target = new EventTarget()
   let cleaned = 0
   let remove = uncaught(reporter, target, () => {
@@ -74,49 +69,34 @@ Deno.test('global error hooks preserve fatal default, clean up, deduplicate, and
   Object.defineProperty(rejection, 'reason', { value: error })
   target.dispatchEvent(rejection)
   assertEquals(cleaned, 2)
-  assertEquals(lines.length, 1)
+  assertEquals(said.length, 1)
   remove()
   target.dispatchEvent(new ErrorEvent('error', { error: new Error('later') }))
-  assertEquals(lines.length, 1)
+  assertEquals(said.length, 1)
 })
 
-Deno.test('journal failure prints original and graph shutdown drain is bounded', async () => {
+Deno.test('a graph shutdown drain is bounded', async () => {
   let warnings: string[] = []
-  let reporter = createDiagnostics({
-    path: 'unused',
-    write: () => {
-      throw new Error('disk full')
-    },
-    warn: (s) => warnings.push(s),
-  })
+  let reporter = createDiagnostics({ warn: (s) => warnings.push(s) })
   reporter.attach({ apply: () => new Promise(() => {}) })
   reporter.report(new Error('original'), { phase: 'shutdown' })
   await reporter.drain(1)
-  assertMatch(warnings[0], /disk full/)
-  assertMatch(warnings[0], /Original exception:.*original/)
-  assertMatch(warnings[1], /still pending/)
+  assertMatch(warnings[0], /still pending/)
 })
 
-Deno.test('fatal unhandled rejection really exits subprocess but leaves durable stack', async () => {
-  let dir = Deno.makeTempDirSync()
-  let path = dir + '/fatal.jsonl'
+Deno.test('a fatal unhandled rejection really exits the subprocess, saying what it was', async () => {
   let module = new URL('./diagnostics.ts', import.meta.url).href
   let script = 'import {createDiagnostics,uncaught} from ' +
     JSON.stringify(module) + ';' +
-    'uncaught(createDiagnostics({path:' + JSON.stringify(path) + '}));' +
+    'uncaught(createDiagnostics());' +
     'Promise.reject(new Error("fatal-test", {cause:new Error("root-test")}));'
-  try {
-    let child = await new Deno.Command(Deno.execPath(), {
-      args: ['eval', script],
-      stdout: 'null',
-      stderr: 'piped',
-    }).output()
-    assert(!child.success)
-    let record = JSON.parse(Deno.readTextFileSync(path))
-    assertEquals(record.phase, 'unhandledrejection')
-    assertMatch(record.body, /fatal-test/)
-    assertMatch(record.body, /root-test/)
-  } finally {
-    Deno.removeSync(dir, { recursive: true })
-  }
+  let child = await new Deno.Command(Deno.execPath(), {
+    args: ['eval', script],
+    stdout: 'null',
+    stderr: 'piped',
+  }).output()
+  assert(!child.success)
+  let said = new TextDecoder().decode(child.stderr)
+  assertMatch(said, /fatal-test/)
+  assertMatch(said, /root-test/)
 })

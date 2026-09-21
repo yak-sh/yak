@@ -18,16 +18,15 @@ Deno.test('HARNESS_HOME isolates default storage and diagnostics without moving 
          let h = open(); h.close();
          diagnostics().report(new Error('isolated probe'), { phase: 'test' });`,
       ],
-      env: { HARNESS_HOME: home, HARNESS_DB: '', HARNESS_ERROR_LOG: '' },
+      env: { HARNESS_HOME: home, HARNESS_DB: '' },
       stdout: 'piped',
       stderr: 'piped',
     }).output()
     assertEquals(result.code, 0, new TextDecoder().decode(result.stderr))
-    assert(Deno.statSync(home + '/harness.db').isFile)
+    assert(Deno.statSync(home + '/yak.db').isFile)
+    // Nothing was attached to take it, so it went to the terminal.
     assert(
-      Deno.readTextFileSync(home + '/exceptions.jsonl').includes(
-        'isolated probe',
-      ),
+      new TextDecoder().decode(result.stderr).includes('isolated probe'),
     )
     assert(
       !Array.from(Deno.readDirSync(home)).some((entry) =>
@@ -69,7 +68,6 @@ Deno.test('prompt admission tests never open the environment database', async ()
         HARNESS_HOME: home,
         TASKS_HOME: home,
         HARNESS_DB: path,
-        HARNESS_ERROR_LOG: '',
       },
       stdout: 'piped',
       stderr: 'piped',

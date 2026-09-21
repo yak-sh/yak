@@ -2,10 +2,11 @@
 import { fileAuthorization } from '@yaks/openrouter/host'
 import type { Graph } from '@yaks/graph'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
+import { home } from './paths.ts'
 export const OPENROUTER_AUTH = 'OpenRouter (model provider)'
 export const providerAuthorization = (g: Graph) => {
   const path = Deno.env.get('OPENROUTER_AUTH_FILE') ??
-    `${Deno.env.get('HOME')}/.yaks/openrouter-auth.json`
+    `${home()}/openrouter-auth.json`
   const auth = fileAuthorization(path)
   return {
     cancel: auth.cancel,
