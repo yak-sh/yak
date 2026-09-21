@@ -18,7 +18,7 @@ Two forms, and the difference is what you name:
 - **One app.** `herbusiness.com` serves that app at the root of it, and nothing
   else is there.
 
-A space can have both at once, and an app of it can still take a domain of its
+A space can have both at once, and an app of it can still have a domain of its
 own — at that domain the app is the root, at the space's domain it is a
 directory.
 
@@ -52,9 +52,9 @@ existing `.yaks.app` address in the meantime.
 
 ## The three tools
 
-- `domain_attach(app?, hostname)` — provisions the hostname and answers with the
-  DNS record that has to be added, as data: `records: [{type, name, value}]`.
-  Name an `app` and the domain is that app's; leave it out and the domain is the
+- `domain_attach(app?, hostname)` — provisions the hostname and returns the DNS
+  record that has to be added, as data: `records: [{type, name, value}]`. Name
+  an `app` and the domain is that app's; leave it out and the domain is the
   space's. Only the space owner may attach one.
 - `domain_status(hostname?)` — what each domain points at, and where
   provisioning has got to, split into the three things that can be outstanding.
@@ -72,12 +72,12 @@ Always the same shape, whatever the registrar calls the fields:
 
     CNAME   herbusiness.com   →   origin.saas.yaks.app
 
-`domain_attach` answers with exactly that, as data. Read it out of `records`
-rather than out of the sentence — the value is the one thing that must be typed
+`domain_attach` returns exactly that, as data. Read it out of `records` rather
+than out of the message — the value is the one thing that must be typed
 character for character.
 
 Nothing serves at the domain until that record resolves. Until then the hostname
-answers whatever it answered before.
+serves whatever it served before.
 
 ## The panels
 
@@ -87,14 +87,14 @@ is a prefix, and the panel adds the domain itself.** Typing
 in doubt, type `www`, and check the record's full name after saving.
 
 **GoDaddy** — Domain Portfolio → the domain → **DNS** → **Add New Record**.
-Fields are Type, Name, Value, TTL. Name takes the prefix (`www`), not the whole
-hostname. GoDaddy has no apex answer at all: see below.
+Fields are Type, Name, Value, TTL. Name is the prefix (`www`), not the whole
+hostname. GoDaddy has no apex option at all: see below.
 
 **Namecheap** — Domain List → **Manage** → **Advanced DNS** → Host Records →
 **Add New Record**. Fields are Type, Host, Value, TTL. Host is a prefix and
 Namecheap appends the domain, so `www`, never `www.herbusiness.com`. Namecheap
 refuses a CNAME at `@` — it offers a URL Redirect record instead, which is the
-`www` answer below.
+`www` approach below.
 
 **Squarespace** (which is also where Google Domains ended up — the migration is
 finished, and the panel is Squarespace's) — account.squarespace.com/domains →
@@ -112,18 +112,18 @@ the root domain. It also only manages DNS while the domain still uses Hover's
 nameservers.
 
 **Shopify** — admin → **Settings → Domains** → the domain → DNS settings →
-**Manage** → **Add custom record**. Host takes `www`. No apex answer for an
-outside target.
+**Manage** → **Add custom record**. Host is `www`. No apex option for an outside
+target.
 
 **Porkbun** — Domain Management → **DNS** → **Add Record**. Fields are Type,
 Host, Answer, TTL. Porkbun is the one consumer registrar in this list with a
-real apex answer: pick the record type **ALIAS – CNAME flattening**, leave Host
-blank, and put `origin.saas.yaks.app` in Answer.
+working apex option: pick the record type **ALIAS – CNAME flattening**, leave
+Host blank, and put `origin.saas.yaks.app` in Answer.
 
 **Cloudflare** — the zone → **DNS** → **Add record**. Type CNAME, Name `www` or
 `@`, Target `origin.saas.yaks.app`. Set **Proxy status** to **DNS only** (the
-grey cloud). Proxied, Cloudflare answers with its own address in the person's
-own zone and the hostname never reaches us.
+grey cloud). Proxied, Cloudflare serves its own address in the person's own zone
+and the request never reaches us.
 
 ## The apex
 
@@ -131,7 +131,7 @@ DNS does not allow a CNAME at a domain's apex — the bare `herbusiness.com`, wi
 nothing in front of it. This is where a non-technical person gives up, so have
 the answer ready before they hit it. Three ways through:
 
-**Move their DNS to Cloudflare.** The best answer, and the one to lead with.
+**Move their DNS to Cloudflare.** The best option, and the one to lead with.
 Cloudflare's DNS flattens a CNAME at the apex — it resolves the target and
 serves the addresses — so `herbusiness.com` simply works. It is free, it does
 not move the domain's registration, and it takes about ten minutes:
@@ -157,8 +157,8 @@ Shopify do not.
 **Attach `www` instead.** `domain_attach(app, hostname: 'www.herbusiness.com')`,
 a CNAME at `www`, and a forwarding rule at the apex sending `herbusiness.com` to
 `www.herbusiness.com`. Every registrar above has domain forwarding under some
-name. It works and people accept it, but the address they say out loud is still
-the bare one, so offer Cloudflare first.
+name. It works and people accept it, but the address they give out is still the
+bare one, so offer Cloudflare first.
 
 While they are moving DNS, it is worth saying that Cloudflare's registrar
 charges what the registry charges, with no markup added — so transferring the
@@ -170,7 +170,7 @@ will ask about once their DNS is on Cloudflare.
 
 ## Reading the status
 
-`domain_status` answers three steps, each with `done`, `waiting` or `error`,
+`domain_status` reports three steps, each with `done`, `waiting` or `error`,
 because each one waits on somebody different:
 
 - **dns** — whether the record resolves here. Waiting means the person has not
@@ -183,9 +183,9 @@ because each one waits on somebody different:
   anybody.
 
 So "your CNAME hasn't propagated yet" and "the certificate is still issuing" are
-different answers, and the tool tells you which one is true. Say the one it
-says. A step in `error` carries the reason in its own words, and those words are
-Cloudflare's, not a paraphrase.
+different answers, and the tool tells you which one is true. Tell them the one
+it reports. A step in `error` carries the reason as it was given, and those
+words are Cloudflare's, not a paraphrase.
 
 Timing: DNS is usually minutes and can be a day, depending on what the old
 record's TTL was. The certificate is usually minutes after that. Nothing needs
@@ -195,7 +195,7 @@ doing in between — check again in five minutes rather than changing anything.
 
 - **A CAA record on their domain.** If they have one, it lists which certificate
   authorities may issue for the domain, and ours has to be on the list. The
-  certificate step says so.
+  certificate step reports that.
 - **Another record at the same name.** DNS forbids a CNAME sitting beside an A,
   AAAA or another CNAME at one name. An old A record at `www` pointing at a site
   they replaced years ago has to be deleted, not left alongside.

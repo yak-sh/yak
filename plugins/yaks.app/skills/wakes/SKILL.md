@@ -1,16 +1,16 @@
 ---
 name: wakes
-description: "Coming back later (yaks.app). Schedules as data: a `wake` on any entity says when to return to it, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares says what the firing MEANS. Recurrence in durations, cron lines and zones; pausing and resuming; a command asked for later; an idle world advancing offline on a five-minute cadence and catching a missed stretch up in one firing; where a firing runs and what it may spend; why there is no cron trigger, no `scheduled()` and no queue to ask for."
+description: "Coming back later (yaks.app). Schedules as data: a `wake` on any entity records when to return to it, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares decides what the firing MEANS. Recurrence in durations, cron lines and zones; pausing and resuming; a command asked for later; an idle world advancing offline on a five-minute cadence and catching a missed stretch up in one firing; where a firing runs and what it may spend; why there is no cron trigger, no `scheduled()` and no queue to ask for."
 ---
 
 # Coming back later
 
 The map is at <https://yaks.app/guide.md>. This page is the whole of scheduling:
-the row that says when, the moment it goes off, and the rule that says what that
-means.
+the row that records when, the moment it goes off, and the rule that decides
+what it means.
 
 An app has no cron and no worker sitting awake. What it has is a component:
-anything in its store can wear a `wake`, and the store comes back for it.
+anything in its store can carry a `wake`, and the store comes back for it.
 
 ## A wake is a row
 
@@ -21,7 +21,7 @@ anything in its store can wear a `wake`, and the store comes back for it.
       wake: { at: '2026-09-20T09:00:00Z', note: 'water me' },
     })
 
-That is the whole of asking. `wake` has four columns and every one is optional
+That is the whole request. `wake` has four columns and every one is optional
 except the moment:
 
 - **`at`** — when to come back, as an instant. Absent means nothing is owed: a
@@ -31,9 +31,9 @@ except the moment:
 - **`target`** — another entity this wake is ABOUT, when it is not about the one
   carrying it.
 
-Any entity may wear one. A plant, a lease, an invoice, a draft nobody has sent —
-the wake goes on the thing itself, so there is no separate table of jobs to keep
-in step with your data.
+Any entity may carry one. A plant, a lease, an invoice, a draft nobody has sent
+— the wake goes on the thing itself, so there is no separate table of jobs to
+keep in step with your data.
 
 ## The moment it goes off
 
@@ -44,8 +44,8 @@ At `at`, the app's own store writes two things on that row, in one transaction:
   next one.
 
 So a one-shot fires once and leaves `wake.at` empty; a recurring wake fires and
-is already owed again. `fired` is the row's word for "this has gone off", and it
-is what your rules watch.
+is already owed again. `fired` is the component that records "this has gone
+off", and it is what your rules watch.
 
 Nothing polls. The store asks the platform to wake IT at the earliest instant it
 owes, so an app with no schedules costs nothing and an app with one is woken for
@@ -69,7 +69,7 @@ no code, nowhere to deploy it:
           "match": ".plant, .wake, .fired, +!watered, +watered.by=wake"
         } } }
 
-The `match` is a filter line with two extra marks:
+The `match` is a filter with two extra marks:
 
 - **`+comp`** writes that component (`+watered.by=wake` writes
   `watered { by: "wake" }`).
@@ -79,7 +79,7 @@ The `match` is a filter line with two extra marks:
 
 Everything else — `.plant`, `.wake`, `.fired` — reads the way it reads in any
 query. The rule runs inside the transaction the firing is part of, so the row
-comes back out of `apply` already wearing what the rule wrote, and a page
+comes back out of `apply` already carrying what the rule wrote, and a page
 watching that row sees one change and not two.
 
 A rule can watch anything, not only a firing. `.invoice, .paid, +!receipt` is
@@ -87,7 +87,7 @@ the same shape about a different moment.
 
 ## Repeating
 
-`every` says how, in three spellings:
+`every` sets how, in three forms:
 
     30s   2m   90m   2h   1d   3d   1w        a duration, from the last one
     0 9 * * 1-5                               five cron fields
@@ -125,8 +125,8 @@ history, not state.
 ## A command, later
 
 An app's own commands (the `tools.json` at its root) are things the store can
-run itself, and asking is a row like everything else. A `call` names the command
-and its arguments; a `wake` on that same row says when:
+run itself, and asking for one is a row like everything else. A `call` names the
+command and its arguments; a `wake` on that same row records when:
 
     let [digest] = await query('.tool.name=send_digest')
 
@@ -137,28 +137,28 @@ and its arguments; a `wake` on that same row says when:
     })
 
 `call.to` is a command's own ROW. A deploy plants one per declared command,
-wearing `tool { name, description }`, so the name is what you look it up by —
+carrying `tool { name, description }`, so the name is what you look it up by —
 and a `to` naming no command this store knows is left where it is rather than
 refused, since another runner may own it. A mistyped name is a call that never
 runs.
 
-A call with no wake runs the moment it is written. One wearing a wake waits, and
-the firing is what runs it — so the answer lands beside the ask: a `result`
-pointing back at the call, an `execution` saying `done` or `failed`, and
+A call with no wake runs the moment it is written. One with a wake waits, and
+the firing is what runs it — so the result lands beside the request: a `result`
+pointing back at the call, an `execution` recording `done` or `failed`, and
 whatever the command itself wrote. Nothing is lost if the app was quiet: the
 call is a row, and so is the moment it is owed.
 
-A call wearing `every` is a STANDING ask and is never answered itself. Each
-firing writes its own call — `call { to, args, source }`, the `source` naming
-the schedule — so a weekly digest is fifty-two calls and fifty-two answers,
-never one result re-run. The same instant twice is the same call, so a
-re-delivered alarm changes nothing.
+A call with `every` is a STANDING request and is never run itself. Each firing
+writes its own call — `call { to, args, source }`, the `source` naming the
+schedule — so a weekly digest is fifty-two calls and fifty-two answers, never
+one result re-run. The same instant twice is the same call, so a re-delivered
+alarm changes nothing.
 
 ## A world that keeps going
 
-An idle game is the hardest version of the ask: a few minutes between ticks, and
+An idle game is the hardest version of this: a few minutes between ticks, and
 the world has to go on while nobody has the page open. It is one row — the world
-wears the ask and the cadence together:
+carries the request and the cadence together:
 
     let [advance] = await query('.tool.name=advance')
 
@@ -194,10 +194,10 @@ rows, and neither multiplies. Fold the span where code runs — the page as it
 draws, or the app's own `worker.js`. Which is the other reason the catch-up is
 cheap: one firing, one span, one fold, instead of a thousand replayed minutes.
 
-The repeating ask is the `call` and not a rule. A declared rule that writes onto
-the row it matched has to gate itself (`+!comp` above), and a gate is what makes
-a rule fire ONCE per thing — so "every five minutes" belongs to the schedule,
-and a rule is for what one firing MEANS about that row.
+The repeating request is the `call`, not a rule. A declared rule that writes
+onto the row it matched has to gate itself (`+!comp` above), and a gate is what
+makes a rule fire ONCE per thing — so "every five minutes" belongs to the
+schedule, and a rule is for what one firing MEANS about that row.
 
 ## Where a firing runs
 
@@ -206,8 +206,8 @@ and a rule is for what one firing MEANS about that row.
   page. Nothing of the app's own JavaScript runs on a firing: what a tick can do
   is what a rule and a declared command can do, which is write rows. There is no
   background `env` to reach from it, and so no secret it could carry.
-- **On the app's own words.** The rules in its `vocab.json` and the commands in
-  its `tools.json`, as the last deploy left them.
+- **On the app's own declarations.** The rules in its `vocab.json` and the
+  commands in its `tools.json`, as the last deploy left them.
 - **Under the Durable Object alarm's budget**, which is what a store object's
   own clock is. Cloudflare gives an alarm handler a maximum wall time of 15
   minutes, and the object 30 seconds of active CPU per invocation, raisable to

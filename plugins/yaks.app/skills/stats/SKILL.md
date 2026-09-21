@@ -1,6 +1,6 @@
 ---
 name: stats
-description: "Who visited (yaks.app). Visitor counts for an app: what one page view records and the six things it never does — no address, no visitor id, not even the browser's own string — app_stats and the window it takes, the block on their space page, the door a page reads its own numbers at, and why a small number is usually crawlers."
+description: "Who visited (yaks.app). Visitor counts for an app: what one page view records and the six things it never does — no address, no visitor id, not even the browser's own string — app_stats and the window it covers, the block on their space page, the endpoint a page reads its own numbers from, and why a small number is usually crawlers."
 ---
 
 # Who visited
@@ -18,7 +18,7 @@ back 200 — `index.html`, a pretty path like `/about`, a page an app's own
 - a stylesheet, a script, an image, a font, a JSON file
 - anything under `./api/` — a store read, a write, a socket, an upload
 - a redirect, a refusal, a 404
-- the platform's own pages: the space's front door, a sign-in, the trash
+- the platform's own pages: the space's index, a sign-in, the trash
 
 So the number is "how many times somebody opened something", not "how many
 requests the app served". An app whose page fetches its rows twenty times still
@@ -32,17 +32,17 @@ Six things, and this list is the whole of it:
 - the space and the app's slug
 - the path that was opened
 - the country the request came from, as Cloudflare's own two letters
-- the **host** of the site that linked them here, and nothing else of the
+- the **hostname** of the site that linked them here, and nothing else of the
   referrer — no path, no query, so a search term somebody arrived on is gone
   before it is written down
-- one of three words for the kind of client: `browser`, `bot` or `agent` (an AI
+- one of three labels for the kind of client: `browser`, `bot` or `agent` (an AI
   assistant fetching the page)
 
 ## What is never recorded
 
 - **no IP address**, ever, in any form
 - **no visitor id**, no cookie, no session, no fingerprint
-- **not the user-agent string** — a UA is a fingerprint, and only the one word
+- **not the user-agent string** — a UA is a fingerprint, and only the one label
   above survives it
 - nothing that could be joined back to a person, here or anywhere else
 
@@ -58,7 +58,7 @@ Counts are kept for about three months and then gone.
     app_stats(app: 'recipes')
     app_stats(app: 'recipes', days: 7)
 
-It answers, for the window:
+It returns, for the window:
 
 - **total** visits, and **daily** — one entry per day, oldest first, including
   the days nobody came
@@ -70,7 +70,7 @@ It answers, for the window:
 kept. Only the app's own people may ask: being able to read a public app's pages
 is not being able to read its numbers.
 
-## Reading it: the page, and the door
+## Reading it: the page, and the endpoint
 
 The **Visits** page in their app manager shows each app's count, daily chart,
 and the same three lists.
@@ -80,10 +80,11 @@ And the app's own page can read its numbers, for a member:
     let seen = await (await fetch('./api/stats')).json()
     if (seen.on) show(seen.total, seen.daily)
 
-Add `?days=7` for a shorter window. It answers `{on: false}` with a sentence
-when the platform has no analytics reader configured, which is the one thing to
-handle: say the sentence, do not treat it as a failure. Nothing about this door
-is per-visitor either — a member reading it learns exactly what you learn.
+Add `?days=7` for a shorter window. It returns `{on: false}` with a message when
+the platform has no analytics reader configured, which is the one thing to
+handle: show that message, do not treat it as a failure. Nothing about this
+endpoint is per-visitor either — a member reading it learns exactly what you
+learn.
 
 ## What the numbers mean, and do not
 

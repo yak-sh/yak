@@ -3,28 +3,28 @@ doc:
   title: 'Components: the platform''s, and your own'
 guide:
   slug: components
-  brief: the platform's words, and your own
+  brief: the platform's components, and your own
   description: >-
     Every component an app already has, column by column, and vocab.json for
-    words of your own: the column types, what a later deploy may change, the
-    names already taken, and when a column beats doc.body.
+    components of your own: the column types, what a later deploy may change,
+    the names already taken, and when a column beats doc.body.
 ---
 
 # Components: the platform's, and your own
 
-Every app's store speaks the same small vocabulary, and every app may add words
-of its own. This page is that vocabulary column by column — what each holds and
-when to reach for it — then `vocab.json`, what a later deploy may and may not
-change, the names already taken, and how to choose between a column of your own
-and text in `doc.body`.
+Every app's store shares the same small vocabulary, and every app can add
+components of its own. This page is that vocabulary column by column — what each
+holds and when to reach for it — then `vocab.json`, what a later deploy may and
+may not change, the names already taken, and how to choose between a column of
+your own and text in `doc.body`.
 
 ## What a component is
 
 A component is one named set of fields describing ONE aspect of an entity. An
-entity is nothing but the components it wears: there is no `kind` column, no
-table of types, no class to pick at creation. A row that wears `doc` has words a
-person reads; the same row wearing `task` as well has a state; wearing `recipe`
-too, it is a recipe. Take `task` off and it stops being work without stopping
+entity is nothing but the components it has: there is no `kind` column, no table
+of types, no class to pick at creation. A row with `doc` has words a person
+reads; give the same row `task` as well and it has a state; give it `recipe` too
+and it is a recipe. Take `task` off and it stops being work without stopping
 being anything else.
 
     await apply({
@@ -33,11 +33,11 @@ being anything else.
       recipe: { serves: 8, minutes: 50 },
     })
 
-That is one entity, two sentences, one call. `kind` on the row you read back is
-derived from what it wears — your own word wins, being the most specific thing
-said about the row — and nothing in the store branches on it. Every component is
-a PATCH: send the columns you are changing and the rest are left alone;
-`column: null` clears one; `comp: null` takes the whole component off;
+That is one entity, two components, one call. `kind` on the row you read back is
+derived from the components it has — your own component wins, being the most
+specific thing on the row — and nothing in the store branches on it. Every
+component is a PATCH: send the columns you are changing and the rest are left
+alone; `column: null` clears one; `comp: null` takes the whole component off;
 `{entity: {eid}, tombstone: {}}` kills the entity.
 
     await apply({ entity: { eid }, recipe: { minutes: 45 } })   // one column
@@ -46,20 +46,20 @@ a PATCH: send the columns you are changing and the rest are left alone;
 
 ## The platform's vocabulary
 
-These words mean the same thing in every store on the platform. Each heading
-gives the columns you may WRITE; a few carry server-set columns you can read but
-never write, and those are named beneath.
+These components mean the same thing in every store on the platform. Each
+heading gives the columns you may WRITE; a few carry server-set columns you can
+read but never write, and those are named beneath.
 
 **`doc`** — `title` (text), `body` (text). The words a person reads, and what
-`search` searches unless a column of your own says otherwise (below). Nearly
-every entity your app saves should wear one: a row with no `doc` has nothing to
-draw.
+`search` searches unless a column of your own is marked searchable (below).
+Nearly every entity your app saves should have one: a row with no `doc` has
+nothing to draw.
 
     await apply({ entity: { eid: '$c' }, doc: { title: 'Chana masala' } })
 
 A body is stored content-addressed: the row keeps the SHA-256 of the text and
 the text itself is kept once, however many rows quote it. None of that is a row
-of the graph — there is no second entity beside your doc — so `.doc!` answers
+of the graph — there is no second entity beside your doc — so `.doc!` returns
 your docs and a body reads back as the text you wrote.
 
 **`filed`** — `priority` (number), `project` (eid), `assignee` (eid), `domain`
@@ -71,8 +71,8 @@ suggestion waiting on someone. Reach for it rather than inventing a `status`
 column of your own, and the platform's own status grammar works on your rows.
 
 `status` is READ, never written — `open`, `wip`, `done` or `cancelled`, derived
-from what the entity wears: `cancelled` if it wears `cancelled`, else `done` if
-it wears `completed`, else `wip` if it wears a live `claim`, else `open`.
+from the components the entity has: `cancelled` if it has `cancelled`, else
+`done` if it has `completed`, else `wip` if it has a live `claim`, else `open`.
 
     await apply({ entity: { eid: '$t' },
       doc: { title: 'Water the plants' }, task: {}, filed: { priority: 1 } })
@@ -128,29 +128,29 @@ than a pile.
       comment: { target: 'recipe:lemon-cakes' } })
 
 A name stands wherever an eid does — in a reference column, as a bundle's own
-`entity.eid`, in `id=`, in `graph_show` — and an eid always wins over a name
-that spells it. One name, one entity: a second entity claiming a name somebody
+`entity.eid`, in `id=`, in `graph_show` — and an eid always wins over a name for
+the same entity. One name, one entity: a second entity claiming a name somebody
 holds is refused, naming the holder. Delete the entity and the name is free
 again. An entity may answer to as many names as you give it; each is a row of
-its own (`key{of, value}` wearing `alias`), which is what `.alias!` lists.
+its own (`key{of, value}` with `alias`), which is what `.alias!` lists.
 
 **`person`** — no columns. Whoever wrote a row. The store mints one for each
-writer it meets, titled with what to call them, so `person` rows wear a `doc`
+writer it meets, titled with what to call them, so `person` rows have a `doc`
 too. You read them for a byline. They are screened out of an ordinary listing,
 so ask for them by name: `query('.person!&.doc?')` lists everyone this store has
 met.
 
 **`archived`** — no writable columns; the store sets `at` (time), `by` (eid) and
 `via` (eid). The stamp that takes something out of the open list. Reach for it
-rather than a `hidden` column of your own — every door knows it, and
-`.archived=` is "everything not archived".
+rather than a `hidden` column of your own — every part of the platform knows it,
+and `.archived=` is "everything not archived".
 
     await apply({ entity: { eid }, archived: {} })
     let open = await query('.recipe!&.archived=')
 
-**`favorite`** — no writable columns; the store sets `at` (time). A one-word
-star, one stamp per ENTITY rather than one per person: it says "this app has
-starred this", not "you have".
+**`favorite`** — no writable columns; the store sets `at` (time). A plain star,
+one stamp per ENTITY rather than one per person: it means "this app has starred
+this", not "you have".
 
 **`web`** — `url` (url). An address out on the web: a bookmark, a source, the
 page a recipe was copied from. Also carries a server-set `frozen_at`.
@@ -193,22 +193,22 @@ exactly when it matters — an import.
       { doc: { body: 'Beans in, back bed.' },
         jotting: { written: '2026-04-11T12:00:00Z' } } ] }
 
-Seed a fortnight of a guestbook and every `created.at` says today, truthfully:
+Seed a fortnight of a guestbook and every `created.at` reads today, truthfully:
 today is when you wrote them here. Draw `jotting.written`.
 
 **`exception`** — `at`, `message`, `stack`, `request`, `version`, all
-server-set. **`failed`** — `at`, `message`, server-set. The kernel's own rows
+server-set. **`failed`** — `at`, `message`, server-set. The platform's own rows
 about your app: what a route threw, what a page reported. Nothing you write.
 They stay out of every listing unless the filter names one (`.exception!`), and
-`app_errors` is the door meant for them.
+`app_errors` is the tool meant for them.
 
-Not listed: `edge`, which is a sentence and not a row on either end — last
-section.
+Not listed: `edge`, which is a relation between two entities rather than a
+component on either one — last section.
 
 ## The column types
 
-A column is one of these, and a `vocab.json` spells it with the JSON Schema
-beside it:
+A column is one of these, and a `vocab.json` declares it with the JSON Schema
+shown beside it:
 
 - `text` — `{"type": "string"}`. One line, or many. The catch-all.
 - `number` — `{"type": "number"}`, stored as a SQLite real, so integers and
@@ -222,9 +222,9 @@ beside it:
   (`.jotting.written>=2026-04-01`).
 - `url` — `{"type": "string", "format": "uri"}`, an address out on the web; text
   with a link's face.
-- `eid` — a reference to another entity. The platform's own words have these; a
-  `vocab.json` cannot declare one (below).
-- a closed set of words — the platform's alone; a refusal spells the set,
+- `eid` — a reference to another entity. The platform's own components have
+  these; a `vocab.json` cannot declare one (below).
+- a closed set of values — the platform's alone; a refusal lists the set,
   `open|wip|done|cancelled`.
 
 **Noon for a date.** When a `time` column really holds a DAY — the plants went
@@ -233,22 +233,23 @@ is the day before for everyone west of Greenwich, so a diary written at
 `T00:00:00Z` renders a day early in California, and the page has to correct for
 a zone it should never have had to think about.
 
-The first five are the ones a `vocab.json` may spell. References, closed sets
-and content-addressed bodies each carry machinery a store cannot plant from one
-word — a foreign key, a set to enforce, a hash.
+The first five are the ones a `vocab.json` may declare. References, closed sets
+and content-addressed bodies each need machinery a store cannot plant from a
+name alone — a foreign key, a set to enforce, a hash.
 
 **No eid column of your own**, then: a component of yours cannot point at
 another entity by declaring one. Where a row of yours needs to be ABOUT another
-row, the platform already has the word for it — `comment.target` is an eid aimed
-at any entity, and an edge is the other way to say it. A history component (a
-chore's ticks, a diary's plantings) is the case that wants this; until it can be
-declared, hang the ticks off `comment.target` or make each tick its own entity
-carrying the parent's eid in `comment.target`.
+row, the platform already has a component for it — `comment.target` is an eid
+aimed at any entity, and an edge is the other way to record it. A history
+component (a chore's ticks, a diary's plantings) is the case that wants this;
+until it can be declared, hang the ticks off `comment.target` or make each tick
+its own entity carrying the parent's eid in `comment.target`.
 
 ## What a refusal tells you
 
-Name a column that is not there and the refusal spells the WHOLE shape, at both
-doors, so one look ends the guessing:
+Name a column that is not there and the refusal lists the whole component — from
+a page's `./api/` endpoints and from an agent's tools alike — so one look ends
+the guessing:
 
     unknown column: recipe.calories — recipe has title (text),
       serves (number), minutes (number)
@@ -256,8 +257,8 @@ doors, so one look ends the guessing:
     no such prop: .recipe.mins — recipe has title (text), serves (number),
       minutes (number)
 
-Name a component nobody declared and the refusal says where a new word comes
-from, never what some other graph has:
+Name a component nobody declared and the refusal tells you where a new component
+comes from, never what some other store has:
 
     unknown component: dayline — a component of your own is declared in
       vocab.json and planted by app_deploy:
@@ -281,15 +282,15 @@ true either way and is the wrong test; the value is the right one.
     if ('mood' in row.jotting) …     // always true
 
 That holds for the platform's own columns too, `doc.title` included: a doc
-nobody titled answers null, not `''`. `doc.body` is kept as a content-addressed
-artifact and answers null when there is none.
+nobody titled reads back as null, not `''`. `doc.body` is kept as a
+content-addressed artifact and reads back as null when there is none.
 
 ## Components of your own
 
 An app names its own components in a `vocab.json` at its root, and `app_deploy`
-plants them in that app's store. It is a JSON Schema document, which is what the
-platform speaks underneath: one `$defs` entry per component, one `properties`
-entry per column — nothing around it:
+plants them in that app's store. It is a JSON Schema document, which is the
+format the platform uses underneath: one `$defs` entry per component, one
+`properties` entry per column — nothing around it:
 
     { "$defs": {
         "recipe": { "properties": {
@@ -324,13 +325,13 @@ the `.yml`:
           again: { type: boolean }
 
 A component name is `a-z`, then `a-z0-9_`, up to 40 characters, and may not be
-one of the platform's words. A COLUMN name follows the same spelling and is
-checked against nothing else — only `entity` and `eid` are refused, since those
-name the row itself. So `recipe.doc` is a legal column; it just reads like a
-component, and `.recipe.doc` addresses it rather than the doc beside it.
+one of the platform's own component names. A COLUMN name follows the same rules
+and is checked against nothing else — only `entity` and `eid` are refused, since
+those name the row itself. So `recipe.doc` is a legal column; it just reads like
+a component, and `.recipe.doc` addresses it rather than the doc beside it.
 
 **A chore board.** The state is the platform's, so declare only what the
-platform has no word for:
+platform has no component for:
 
     { "$defs": {
         "chore": { "properties": {
@@ -368,7 +369,8 @@ two aspects — one is true of the book forever, the other is yours and changes:
 
 `.reading=` asks for the component's absence — every book you have not begun.
 
-**A recipe box with pictures.** Your word points at the platform's:
+**A recipe box with pictures.** A component of your own points at the
+platform's:
 
     { "$defs": {
         "recipe": { "properties": {
@@ -382,10 +384,10 @@ two aspects — one is true of the book forever, the other is yours and changes:
 reference. It costs nothing here: it holds the eid `upload` answered with, and
 `./api/blob/<eid>` serves the bytes.
 
-**A searched column.** A column says more than its type when it carries a
-keyword. `"search": true` is the one to know: it puts that column's words in the
-search index, so `search` finds a row by what is written there, the way it
-already finds one by its title or its body.
+**A searched column.** A column can declare more than its type. `"search": true`
+is the one to know: it puts that column's text in the search index, so `search`
+finds a row by what is written there, the way it already finds one by its title
+or its body.
 
     { "$defs": {
         "recipe": { "properties": {
@@ -394,24 +396,24 @@ already finds one by its title or its body.
 
 Only prose can be searched — a number, a date and a URL are matched by their
 value, not read — so `"search": true` anywhere else is refused at deploy, in a
-sentence naming the column. A column that says nothing is stored and readable
-and simply never searched.
+message naming the column. A column that declares nothing extra is stored and
+readable and simply never searched.
 
-Your words are yours. No other app's store has heard of them, and no other app's
-rows can collide with them — unless a sibling app of the same person names the
-same word, which is the next page.
+Your components are yours. No other app's store has heard of them, and no other
+app's rows can collide with them — unless a sibling app of the same person
+declares the same name, which is the next page.
 
 ## How a vocabulary evolves
 
-The rule is one sentence: **columns only ever arrive.**
+The rule is short: **columns only ever arrive.**
 
-- **Adding a column** is a deploy. The answer says `added: recipe.source`.
+- **Adding a column** is a deploy. It reports `added: recipe.source`.
 - **A column that already exists is never retyped.** Declare `pages` as `text`
   where it was `number` and the deploy is refused:
   `vocab.json: book.pages is
   already number — a column keeps the type its rows were written under`.
 - **A column the new manifest stops naming does not go away.** Its rows are
-  still there, and the deploy says so:
+  still there, and the deploy reports it:
 
       kept, not in vocab.json (the rows are there): note.text — name it in
       vocab.json again to keep writing it, or move its rows to the new word
@@ -420,23 +422,23 @@ The rule is one sentence: **columns only ever arrive.**
 
   That line is what makes a RENAME visible. Change `minutes` to `mins` and you
   have two columns: the new one arrives empty, the old one keeps every row
-  already written, and rows read back say `"minutes": 46, "mins": null` until
-  you move them yourself.
+  already written, and rows read back as `"minutes": 46, "mins": null` until you
+  move them yourself.
 
 - **A whole component the manifest stops naming is dropped if it holds no rows
   and kept if it holds any.** `dropped (no rows): jot` — the table goes with the
-  word, so a name you tried once does not stay in the app forever. A component
-  with rows stays declared and stays writable.
+  component, so a name you tried once does not stay in the app forever. A
+  component with rows stays declared and stays writable.
 
 - **The whole manifest is read before anything is planted.** A refusal names
   every collision at once and leaves the store as it was, so probing for a free
   name costs one deploy and leaves nothing behind.
 
-Everything a deploy did to the vocabulary is in its answer: `components:` then
-`added:` then `kept:` then `dropped:`. Read it — it is the only place a
+Everything a deploy did to the vocabulary is in what it reports: `components:`
+then `added:` then `kept:` then `dropped:`. Read it — it is the only place a
 half-finished rename is ever mentioned.
 
-## The words already taken
+## The names already taken
 
 The platform's own vocabulary is refused in a `vocab.json`, so that `doc` means
 `doc` in every store on the platform. A manifest reaching for one is refused
@@ -465,10 +467,10 @@ These are the names, all of them:
     supervises task task_context timeout tool tool_use updated usage venture
     verifier wake wants web worked worktree yield
 
-When your first choice is taken, ask what the word is FOR and name that: the
-taken word is the general one, yours is the specific one. Not `card` but
+When your first choice is taken, ask what the component is FOR and name that:
+the taken name is the general one, yours is the specific one. Not `card` but
 `flashcard`, not `entry` but `weigh_in`, not `plan` but `menu`, not `board` but
-`standings`. A prefix works too — `book_note` — but a word of its own reads
+`standings`. A prefix works too — `book_note` — but a name of its own reads
 better in a filter, and the filter is where you meet it most.
 
 ## A column, or `doc.body`?
@@ -494,7 +496,7 @@ copy in a column of your own only drifts.
 
 The exception is a DATE the row itself has. `created.at` is when the store saw
 the row, which is the right answer for a page someone is typing into and the
-wrong one for anything imported or seeded, where it says today about something
+wrong one for anything imported or seeded, where it reads today for something
 that happened in April. When the date is part of what the row IS, it is a `time`
 column of yours.
 
@@ -508,15 +510,15 @@ The reading list above is the case. `book` is what the book IS — it never
 changes, and two people would agree on it. `reading` is what happened between
 you and it: it arrives later, changes often, and might never arrive. Splitting
 them buys `.book!&.reading=` for the unread, spares an unstarted book a row of
-nulls, and leaves room for a lending app to add a third sentence.
+nulls, and leaves room for a lending app to add a third component.
 
 Split when either half can be true without the other. Keep one component when
 the columns are born together and die together — `image` is `w` and `h`.
 
-## Edges are sentences, not columns
+## Edges are relations, not columns
 
 A relation between two entities is not a column on either. It is an EDGE — a
-whole sentence naming its verb and its far end:
+record of its own, naming the relation and the entity at the far end:
 
     await apply({ entity: { eid: menu },
       edges: { type: 'contains', child: recipe } })
@@ -526,8 +528,8 @@ whole sentence naming its verb and its far end:
       { type: 'contains', child: pudding },
     ] })
 
-The sentence reads parent first: the entity you addressed `contains` the child.
-Both ends must already exist, or arrive in the same batch — an edge naming a
+It reads parent first: the entity you addressed `contains` the child. Both ends
+must already exist, or be written in the same `apply` call — an edge naming a
 missing endpoint is dropped on its own rather than refusing your write, and so
 is an edge whose type is not one of these:
 
@@ -540,11 +542,11 @@ for a note aimed at a subject, `referenced` for a mention, and `supersedes` for
 a version replacing the one before it. The rest are the platform's own
 machinery.
 
-Note the spelling: the type is `referenced`, not `references`. A type the store
-does not know is no refusal — the edge is simply never made — so a misspelling
-is silence, and you notice by nothing coming back.
+Note the exact name: the type is `referenced`, not `references`. A type the
+store does not know is not refused — the edge is simply never made — so a typo
+is silent, and you notice only when nothing comes back.
 
-A listing does not carry edges — a filter answers components — so an app that
+A listing does not carry edges — a filter returns components — so an app that
 draws a relation keeps the far end where it can read it back: the child's own
 row, or an eid in a `text` column of your own. Delete an entity and every edge
 touching it goes with it.

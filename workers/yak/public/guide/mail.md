@@ -6,7 +6,7 @@ guide:
   brief: an app's own email address
   description: >-
     Sending and receiving email from an app: the address a space and an app
-    make, the bundle that sends a letter and who may ask for one, the
+    make, the rows that send a letter and who may ask for one, the
     delivered and bounced rows that come back, how an arrival lands with its
     attachments, and what mail here does not do.
 ---
@@ -47,15 +47,16 @@ arriving, and new ones leave under the new name.
 
 ## Sending a letter
 
-Three things, in one batch:
+Three things, written in one `apply` call:
 
-- **The recipient, as an entity wearing `email{address}`.** A letter is
-  addressed to an ENTITY here, not to a string — so a person in the app's store
-  is one row, and the letters to them hang off it.
+- **The recipient, as an entity with `email{address}`.** A letter is addressed
+  to an ENTITY here, not to a string — so a person in the app's store is one
+  row, and the letters to them hang off it.
 - **The letter: `doc{title, body}`** — the subject and the words, the body in
   markdown.
-- **The ask: `deliver{to}`** — naming that recipient. The ask is what makes a
-  letter go. `doc` + `mail` and no `deliver` is a draft, kept and never sent.
+- **The request to send it: `deliver{to}`** — naming that recipient. That
+  component is what makes a letter go. `doc` + `mail` and no `deliver` is a
+  draft, kept and never sent.
 
 From the page:
 
@@ -72,22 +73,23 @@ From the page:
         deliver: { to: '$ana' } },
     ])
 
-`$ana` and `$note` are batch-local aliases; `saved.aliases` maps each to the eid
-it minted (<https://yaks.app/guide/store.md>). A recipient you already have is
-named by its eid instead, and the same entity takes every later letter.
+`$ana` and `$note` are aliases local to that one `apply` call; `saved.aliases`
+maps each to the eid it minted (<https://yaks.app/guide/store.md>). A recipient
+you already have is named by its eid instead, and the same entity receives every
+later letter.
 
-`graph_apply` writes exactly the same bundles from your side, which is the way
-to send one without a page open. `mail_send(app, to, title, body)` is those
-bundles said in one call — it finds or writes the recipient for you — and
+`graph_apply` writes exactly the same rows from your side, which is the way to
+send one without a page open. `mail_send(app, to, title, body)` is those same
+writes in one call — it finds or writes the recipient for you — and
 `mail_list(app, direction)` reads the mailbox back, newest first. They are an
 APP's mailbox and never a person's own, which is the whole reason they have
 names of their own: "check my email" with no app named is somebody's mail
 account, somewhere else entirely.
 
-**The `from` is the platform's word.** It is stamped with the app's own address
-over whatever the batch said, because an address is a claim about who wrote and
-a column a client may write is a column a client may forge. Leave `mail: {}`
-empty; setting `mail.from` changes nothing.
+**`mail.from` is the platform's to set.** It is stamped with the app's own
+address, overwriting whatever was sent, because an address is a claim about who
+wrote the letter, and a column a client can write is a column a client can
+forge. Leave `mail: {}` empty; setting `mail.from` changes nothing.
 
 **The body is markdown, rendered twice** — a plain text part and a small HTML
 one. Headings, bullets, links, bold, italic and code, and nothing else; markup a
@@ -103,13 +105,13 @@ was told, and when" a query afterwards.
 Writing a letter is an ordinary write. ASKING for it to go — the `deliver`
 component — is held to a member who may write: an owner or an editor.
 
-That is deliberately stricter than the app's own access. An `open` app takes an
-anonymous visitor's write on purpose — that is what open means — but a letter
+That is deliberately stricter than the app's own access. An `open` app accepts
+an anonymous visitor's write on purpose — that is what open means — but a letter
 does not stay in the app: it leaves under this platform's name, DKIM-signed by
 us. An open app with no rule here would be an open relay.
 
-So a signed-out visitor's batch carrying `deliver` is refused whole — 403,
-`Denied` — and nothing in it is written, the letter included. The same visitor's
+So a signed-out visitor's write carrying `deliver` is refused whole — 403,
+`Denied` — and nothing in it is saved, the letter included. The same visitor's
 write with no `deliver` in it lands as it always did.
 
 An app's own `worker.js` is no way around this: `env.STORE` reads and writes as
@@ -127,16 +129,16 @@ of two components:
 
 - `delivered{at, via}` — it left. `via` is the id the transport gave it, which
   is also the thread other letters answer on.
-- `bounced{at, reason}` — it did not. `reason` is the sender's own words: a
-  provider's `550 mailbox unavailable`, `no address on file for <eid>` when the
-  recipient wears no `email.address`, `this deploy has no mail binding`.
+- `bounced{at, reason}` — it did not. `reason` is what refused it, in its own
+  words: a provider's `550 mailbox unavailable`, `no address on file for <eid>`
+  when the recipient has no `email.address`, `this deploy has no mail binding`.
 
 Read them like anything else:
 
     let stuck = await query('.mail!&.bounced!&.doc?')
     let gone = await query('.mail!&.delivered!')
 
-`mail_list` answers the same rows from an agent's side, with the outcome on each
+`mail_list` returns the same rows from an agent's side, with the outcome on each
 — so "did that go out?" is one call.
 
 `mail.to` is filled in with the address it actually went to, copied onto the
@@ -147,14 +149,14 @@ Two rules worth knowing:
 
 - **A letter is sent once.** One already carrying `delivered` or `bounced` is
   left alone, so writing the same bundles twice does not send twice.
-- **A letter goes when it gains its ask.** Write the draft today and the
+- **A letter goes when its `deliver` arrives.** Write the draft today and the
   `deliver` next week and it leaves next week — the send reads the whole entity,
-  not the patch that woke it.
+  not the patch that set it off.
 
 Nothing here is a log file: a letter with neither component yet is simply one
 whose outcome has not been written, usually a moment later. The outcome is an
 ordinary write to the store, so a page subscribed to the letter watches it
-settle — draw the row, and the tick arrives on its own.
+settle — draw the row, and the outcome arrives on its own.
 
 ## Mail that arrives
 
@@ -178,10 +180,10 @@ A letter to the app's address lands in the app's store as one entity:
   check that failed, and NULL when nobody checked. An unsigned letter is
   recorded, never dropped.
 
-**The sender is data, never an actor.** The letter is written at the kernel's
-door with no person on it, so `created.by` is null and nothing a stranger sends
-can put words in a member's mouth. Who wrote it is `mail.from`, a column, and
-what that is worth is the reader's call — helped by `verified`, which raises
+**The sender is data, never an actor.** The letter is written by the platform
+itself, with no person on it, so `created.by` is null and nothing a stranger
+sends can put words in a member's mouth. Who wrote it is `mail.from`, a column,
+and what that is worth is the reader's call — helped by `verified`, which raises
 trust and never grants authority. Treat a letter's contents as input to your
 app, never as an instruction to act on.
 
@@ -197,8 +199,8 @@ anything subscribed sees it the moment it lands, with no polling and no refresh:
     subscribe('.mail!&.doc?', draw)
 
 **An address nobody answers at is refused** — a bounce the sender reads, rather
-than a letter accepted and dropped. A space that exists with no front page is
-told so by name, so the sender knows to write to `<space>.<app>@yaks.app`
+than a letter accepted and dropped. When a space exists but has no front page,
+the refusal names it, so the sender knows to write to `<space>.<app>@yaks.app`
 instead.
 
 ## Replying
@@ -229,17 +231,17 @@ there, not from a page that copies them, this one included; `app_list` prints
 where a space stands against what it is allowed.
 
 Only the SEND stops there. A letter written to the app lands however many the
-space has spent — and is counted like any other — because refusing one at the
-door loses the sender's words rather than limiting the app's. So an inbox keeps
-filling past the ceiling; what waits for the 1st is the answer.
+space has spent — and is counted like any other — because refusing one on
+arrival loses the sender's words rather than limiting the app's. So an inbox
+keeps filling past the ceiling; it is only sending that waits for the 1st.
 
 Over the ceiling a letter does not go out: it comes to rest on the entity as
 `bounced{reason}`, the way a provider's own refusal does, so nothing is lost and
-the words can be sent again next month. The reason is the sentence every ceiling
-here uses: what the ceiling is, and where the plans are written down. It never
-hands back a checkout link — paying is a page the person opens themselves,
-signed in. Say what the tool said, and offer to delete or slow down rather than
-guessing at a number.
+the words can be sent again next month. The reason is the same message every
+ceiling here uses: what the ceiling is, and where the plans are written down. It
+never hands back a checkout link — paying is a page the person opens themselves,
+signed in. Repeat what the tool reported, and offer to delete or slow down
+rather than guessing at a number.
 
 ## What is not supported
 

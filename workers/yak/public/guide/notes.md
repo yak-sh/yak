@@ -7,8 +7,8 @@ guide:
   description: >-
     NOTES.md beside index.html, where an app keeps what its person wants
     written down about how it is kept — where the file goes, what belongs in
-    it and what does not, the size ceiling, how about and the prompt of the
-    app's own name hand it over, and what an installed copy carries.
+    it and what does not, the size ceiling, how about and a prompt named
+    after the app give it to an agent, and what an installed copy carries.
 ---
 
 # The notes an app keeps
@@ -20,7 +20,7 @@ prose, it is the app's own, and every agent who can reach the app can be handed
 it.
 
 This page is that file: where it goes, what belongs in it, what does not, the
-ceiling on it, and the three places it is handed over.
+ceiling on it, and the three places an agent is given it.
 
 The map is at <https://yaks.app/guide.md>.
 
@@ -30,9 +30,9 @@ The map is at <https://yaks.app/guide.md>.
 
     app_files { app: 'recipes', path: 'NOTES.md', content: '…' }
 
-It is the app's INSIDE, not one of its pages. `GET /recipes/NOTES.md` is a 404
-on the web, the same as `vocab.json`, `tools.json` and `worker.js`; a member
-reads it back with `app_files`:
+It is part of the app's source, not one of its pages. `GET /recipes/NOTES.md` is
+a 404 on the web, the same as `vocab.json`, `tools.json` and `worker.js`; a
+member reads it back with `app_files`:
 
     app_files { app: 'recipes', op: 'read', path: 'NOTES.md' }
 
@@ -64,14 +64,15 @@ The whole shape, for the app this platform gets asked for more than any other:
 Four things make that a good one, and they are the whole test:
 
 - **Every line is a rule somebody could break.** "Weights in grams" is a rule.
-  "This app holds recipes" is not — the door already says that.
-- **It is about the DATA, not the code.** How a recipe is written down outlives
+  "This app holds recipes" is not — the connector's own listing states that
+  already.
+- **It is about the data, not the code.** How a recipe is written down outlives
   whatever the page looks like this month.
 - **No reasoning.** The person knows why they want grams. An agent that reads
   the rule does not need the argument for it.
 - **Nothing the graph already holds.** The components, the commands, the address
-  and what the app holds are all said for you (below). A rule that restates them
-  is a second copy that will drift.
+  and what the app holds are all listed for you (below). A rule that restates
+  them is a second copy that will drift.
 
 ## What it is not
 
@@ -95,12 +96,12 @@ asks for it. A page of rules is plenty; a document is a sign the rules want to
 be a `vocab.json` instead — a column an app declares is a rule the store itself
 enforces, and no agent can forget it.
 
-## Where it is handed over
+## Where an agent is given it
 
-**Three doors, one text.**
+**Three places, one text.**
 
-At the connector, `initialize` hands the model a passage naming every app the
-person can reach, one heading each, with what the app holds and its own
+When an agent connects, `initialize` gives the model a passage naming every app
+the person can reach, one heading each, with what the app holds and its own
 commands, and a line where the app keeps notes:
 
     ## kitchen/recipes
@@ -110,24 +111,24 @@ commands, and a line where the app keeps notes:
     ## kitchen/chores
     https://kitchen.yaks.app/chores/ — Chores, holds chores.
 
-The passage says how to use those names, too: an app's own verbs are commands
-rather than tools of the connector's list, run with the `command` tool and read
-with `commands`.
+The passage also explains how to use those names: an app's own actions are
+commands rather than tools in the connector's list, run with the `command` tool
+and listed with `commands`.
 
 That passage is why an agent asked to "add this recipe" knows there is a recipe
 app to add it to, rather than making a second one. It is made fresh at every
 connection, and it names the apps but never quotes what their people wrote.
 
-The notes themselves are what `about` hands over — the same roster with each
-app's own words underneath it, and anything the person has said in the space
+The notes themselves are what `about` returns — the same list of apps with each
+app's own notes underneath it, and anything the person has said in the space
 along with them. Ask for it before you build on an app or add to one. It is also
 how a conversation that has run long enough for the apps to have moved under it
 catches up: an app made this morning is news `about` carries, not news the tool
 list does.
 
-Second, a person can invoke one by name. It is offered as a prompt called after
-the app — `recipes`, or `recipes__notes` where that word is already spoken for —
-titled "Recipes: notes", so somebody picking from a menu can pull the app's
+Second, a person can invoke one by name. It is offered as an MCP prompt named
+after the app — `recipes`, or `recipes__notes` where that name is already taken
+— titled "Recipes: notes", so somebody picking from a menu can pull the app's
 rules into a conversation deliberately.
 
 Third, the builder here reads them before it builds on an app that has some.
@@ -151,7 +152,7 @@ lines already there are theirs.
 
 ---
 
-Back to the map: <https://yaks.app/guide.md>. Nearby: the app's own words in
-<https://yaks.app/guide/components.md>, its own commands in
+Back to the map: <https://yaks.app/guide.md>. Nearby: the app's own components
+in <https://yaks.app/guide/components.md>, its own commands in
 <https://yaks.app/guide/tools.md>, and its files in
 <https://yaks.app/guide/files.md>.

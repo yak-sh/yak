@@ -1,6 +1,6 @@
 ---
 name: memory
-description: "What the person said (yaks.app). memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, how a memory differs from the notes an app keeps, and where a document YOU wrote goes instead: project documents, written into the app's store as entities and found again with search."
+description: "What the person said (yaks.app). memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, how a memory differs from the notes an app keeps, and where a document you wrote goes instead: project documents, written into the app's store as entities and found again with search."
 ---
 
 # What the person said
@@ -52,12 +52,13 @@ and not what you took from it:
     said: 'user prefers approachable UI copy'      ← no
 
 The second one reads like a decision somebody made. Nobody made it. It is your
-paraphrase wearing the person's authority, and the next agent cannot tell.
+paraphrase carrying the person's authority, and the next agent cannot tell the
+difference.
 
 ## What context is for, and what it is not
 
-Context is a handle, not a record. It says what was on the screen, not what was
-concluded:
+Context is a handle, not a record. It names what was being worked on, not what
+was concluded:
 
     said: 'never on a Sunday'
     context: 'about the app mailing the volunteer list'      ← yes
@@ -74,15 +75,15 @@ the words stand on their own, leave it out.
 
 Save the moment they state a preference, a standard, a taste, a way of working,
 or something they never want done again. The tell is that they are talking about
-HOW rather than what: "always show me the link", "keep the pages plain", "don't
-ask me before you deploy", "put the newest at the top".
+_how_ rather than _what_: "always show me the link", "keep the pages plain",
+"don't ask me before you deploy", "put the newest at the top".
 
 Recall before you build or change anything, and whenever a choice is one they
 might already have made:
 
     memory_recall { words: 'how should the pages look' }
 
-The words are what you are about to do, in a few words. They are ranked by
+Give it a few words describing what you are about to do. Results are ranked by
 meaning where this platform can — the memories nearest to what you are asking
 about, whatever wording either of you used — and by the words themselves
 otherwise. With no `words` at all you get the newest.
@@ -92,24 +93,24 @@ Never a snippet — half of what somebody said is worse than none of it.
 
 ## They come back with `about`
 
-The newest few ride on `about`, under a heading of their own, beside the notes
-of every app in reach — so one call at the top of a conversation is usually the
-whole of it. `memory_recall` is for the rest, and for the moment a particular
-question comes up.
+The newest few come back with `about`, under a heading of their own, beside the
+notes of every app you can reach — so one call at the top of a conversation is
+usually the whole of it. `memory_recall` is for the rest, and for the moment a
+particular question comes up.
 
-They belong to the SPACE, not to an app. Everyone in the space reads them and
+They belong to the space, not to an app. Everyone in the space reads them and
 everyone who may write there can save one, so a thing said to one agent about
 one app is known to every agent working anywhere in that space.
 
 ## Against a NOTES.md
 
-`about` hands over both, and they hold different things:
+`about` returns both, and they hold different things:
 
-- **`NOTES.md`** is the rules for ONE app, written by an agent, in whatever
+- **`NOTES.md`** is the rules for one app, written by an agent, in whatever
   words make them followable — "every ingredient's amount is repeated in the
   step that uses it". It lives beside that app's `index.html`. See
   <https://yaks.app/guide/notes.md>.
-- **A memory** is what the PERSON said, in their words, across the whole space —
+- **A memory** is what the person said, in their words, across the whole space —
   "use grams, never cups".
 
 When they state a rule for one app, both are right: keep their sentence with
@@ -118,7 +119,7 @@ When they state a rule for one app, both are right: keep their sentence with
 ## Project documents
 
 A memory is the person's sentence. A `NOTES.md` is how one app is kept, in their
-terms, in four kilobytes. Neither is the place for a document YOU wrote — how
+terms, in four kilobytes. Neither is the place for a document you wrote — how
 the game's combat resolves, the shape a page expects its rows in, why the
 schedule is generated a month ahead, the overview somebody asked you to write
 down. That is not a sentence to preserve and it is not house rules.
@@ -141,26 +142,26 @@ moment it is written — by anyone, in any conversation, including you next week
     graph_query({ app: 'idler-rpg', query: '.note!&.doc?' })
     graph_show({ ids: ['combat'] })
 
-Give `search` the WORDS that are in the document, not the question you want
+Give `search` the words that are in the document, not the question you want
 answered: it matches the text as a phrase, ranked, where `memory_recall` ranks
 by meaning. A trailing `*` prefix-matches the last word.
 
 Two small things make that work, and both are ordinary:
 
 - **A component of its own.** `note: {}` — declared in the app's `vocab.json`
-  with no columns at all — is what tells your documents from the app's data,
-  which wears `doc` too. Then `.note!` is the whole reading list.
-- **A name.** `alias: {name: 'combat'}` makes the write IDEMPOTENT: writing
+  with no columns at all — is what separates your documents from the app's own
+  data, which has `doc` on it too. Then `.note!` is the whole reading list.
+- **A name.** `alias: {name: 'combat'}` makes the write idempotent: writing
   "combat" again patches the document that already holds that name instead of
-  leaving two, and a name stands wherever an eid does, so `graph_show` reads it
-  back without a lookup.
+  leaving two, and a name can be used wherever an eid can, so `graph_show` reads
+  it back without a lookup.
 
 They are rows in the app's store like any other, so they travel with the app, a
-member reads them, and what they said an hour ago can be put back for thirty
+member reads them, and whatever they held an hour ago can be put back for thirty
 days.
 
-What they must not be is a memory. `memory_save` takes the person's words and
-nothing else, and a document of yours saved there is your prose wearing their
+What they must not be is a memory. `memory_save` is for the person's words and
+nothing else, and a document of yours saved there is your prose carrying their
 authority — handed to the next agent as something they said. When they ask for
 an overview to be kept, both halves are right: keep their sentence with
 `memory_save`, and write the document into the store.

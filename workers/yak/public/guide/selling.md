@@ -6,8 +6,8 @@ guide:
   brief: taking money for something an app sells
   description: >-
     Taking money for something: how a seller connects their own Stripe
-    account to a space, the ./api/pay/checkout door a page posts a cart to
-    and what it answers, why a page never posts a price, the order row and
+    account to a space, the ./api/pay/checkout endpoint a page posts a cart
+    to and what it returns, why a page never posts a price, the order row and
     the buyer's letter that land when the money moves, who can read an order
     afterwards, and why a card number never reaches your app.
 ---
@@ -16,13 +16,13 @@ guide:
 
 Apps on Plus can take payments. The seller connects a Stripe account of their
 own to their space, once. After that any app in that space can post a cart to
-`./api/pay/checkout`, and the door answers the address of a Stripe payment page
-to send the buyer to. When the money moves, an `order` row appears in that app's
-store and the buyer gets a letter from the app's own address.
+`./api/pay/checkout`, and that endpoint returns the address of a Stripe payment
+page to send the buyer to. When the money moves, an `order` row appears in that
+app's store and the buyer gets a letter from the app's own address.
 
 There is no key to set, no webhook to receive and no `worker.js` to write. The
 charge is made ON the seller's Stripe account, in the seller's name — this
-platform passes the ask along and takes a fee out of it, the way an app store
+platform passes the charge along and takes a fee out of it, the way an app store
 does; what that fee is, is on the <https://yaks.app/pricing> page. The rest
 settles into the seller's own balance, on their own payout schedule, and refunds
 and disputes are theirs to handle in their own Stripe dashboard.
@@ -43,13 +43,13 @@ writing an `<input>` for a card number, the design has gone wrong.
 
 Two more, and both are load-bearing:
 
-- **A page never posts a price.** It posts which product and how many; the door
-  reads `price_cents` off the row itself. A price posted from a browser is a
-  price the buyer can edit, and the whole of the defence is that the number
+- **A page never posts a price.** It posts which product and how many; the
+  endpoint reads `price_cents` off the row itself. A price posted from a browser
+  is a price the buyer can edit, and the whole of the defence is that the number
   never travels.
 - **No order is written by the page**, and none by the address Stripe sends the
   buyer back to. A buyer who closes that tab has still paid. The order is
-  written when Stripe says the money moved, and by nothing else.
+  written when Stripe reports that the money moved, and by nothing else.
 
 ## The seller connects an account
 
@@ -62,8 +62,8 @@ page. It opens Stripe's own onboarding — their business details, their bank
 account — and hands them back when it is done. Stripe decides when they are
 ready, and the space knows it as `stripe.charges_enabled`.
 
-Until then the checkout door refuses by name, so a page can say "this shop is
-not open yet" instead of failing at the moment somebody tries to buy. Nothing
+Until then the checkout endpoint refuses by name, so a page can show "this shop
+is not open yet" instead of failing at the moment somebody tries to buy. Nothing
 about the app has to change when they finish; the same page starts working.
 
 What the seller keeps: their account, their money, their customer relationship,
@@ -73,10 +73,11 @@ their refunds. What they never do: paste a secret key anywhere. There is no
 ## What the app sells
 
 A product is an entity like any other: `doc` for the words, and `product` for
-the rest. **`product` is one of the platform's own words** — like `task` and
-`comment` — so every app already has it and no `vocab.json` declares it. It has
-to be the platform's: the checkout door reads `price_cents` off this row, and a
-word the platform charges money against is a word the platform defines.
+the rest. **`product` is one of the platform's own components** — like `task`
+and `comment` — so every app already has it and no `vocab.json` declares it. It
+has to be the platform's: the checkout endpoint reads `price_cents` off this
+row, and a component the platform charges money against is one the platform
+defines.
 
     product { price_cents, sizes, stock, image }
 
@@ -101,7 +102,7 @@ The page draws them out of the store like anything else:
 
     subscribe('.product!&.doc?', draw)
 
-## The checkout door
+## The checkout endpoint
 
     POST ./api/pay/checkout
     { "items": [ { "product": "<eid>", "qty": 2, "options": "M" } ],
@@ -114,21 +115,22 @@ The page draws them out of the store like anything else:
 Same origin, under the app's own `/api/`, so a page reaches it with an ordinary
 `fetch` and an app's `worker.js` reaches it through `env.STORE`. It is callable
 by a GUEST — the person buying has no account here and never will — which is the
-whole point of it being the platform's door and not something an app has to be
-trusted with.
+whole point of it being the platform's endpoint and not something an app has to
+be trusted with.
 
 - **`items`** is what to sell: the product's eid, how many, and `options` for a
   variant — a size, a colour — which is appended to the line the buyer reads on
-  Stripe's page. The door reads the title and the price off each row. A product
-  it cannot find, or one priced at zero, is refused before Stripe is asked. An
-  order runs to about ten different lines: the cart rides one Stripe metadata
-  value on its way to the webhook, and those hold 500 characters. A bigger cart
-  is refused saying how many fit, rather than truncated.
+  Stripe's page. The endpoint reads the title and the price off each row. A
+  product it cannot find, or one priced at zero, is refused before Stripe is
+  asked. An order runs to about ten different lines: the cart travels as one
+  Stripe metadata value on its way to the webhook, and those hold 500
+  characters. A bigger cart is refused, with how many fit, rather than
+  truncated.
 - **`email`** is optional and only fills the field in for them.
 - **`success`** and **`cancel`** are relative to the app's own root, so nothing
-  in your page spells the app's name and an installed copy sends its buyers back
-  to itself. `{CHECKOUT_SESSION_ID}` is a literal Stripe substitutes for the
-  session id on the way back. Leave both out and the app's root is used.
+  in your page hard-codes the app's name and an installed copy sends its buyers
+  back to itself. `{CHECKOUT_SESSION_ID}` is a literal Stripe substitutes for
+  the session id on the way back. Leave both out and the app's root is used.
 
 From a page, the whole of it:
 
@@ -147,7 +149,7 @@ From a page, the whole of it:
 
 A refusal comes back the way every refusal here does —
 `{"error": {"code": …, "message": …}}` — so showing `out.error.message` gives
-the person the sentence rather than a status code. The one worth handling by
+the person an explanation rather than a status code. The one worth handling by
 name is the space that has not connected an account yet.
 
 ## What lands when they pay
@@ -157,8 +159,8 @@ store:
 
     order { session, account, items, total_cents, fee_cents, email, status }
 
-`order` is one of the platform's own words, so every app already has it and no
-`vocab.json` declares it. `status` is `paid`, and becomes `refunded` or
+`order` is one of the platform's own components, so every app already has it and
+no `vocab.json` declares it. `status` is `paid`, and becomes `refunded` or
 `disputed` if it ever does. The buyer gets a confirmation from the app's own
 address, `<space>.<app>@yaks.app`, with the items and the total on it
 (<https://yaks.app/guide/mail.md>), and a reply to it lands back in the app's
@@ -172,9 +174,9 @@ It is a row, so the seller's own view is a query:
     if (mine.writes) draw(await query('.order!&.doc?'))
 
 `.order.status=paid`, `.order.total_cents>=5000`, a bare word for full text —
-the whole filter line works on them (<https://yaks.app/guide/querying.md>). From
-an agent's side it is the same line through `graph_query`, so "what sold this
-week" is one call with no page open.
+the whole filter grammar works on them (<https://yaks.app/guide/querying.md>).
+From an agent's side it is the same filter through `graph_query`, so "what sold
+this week" is one call with no page open.
 
 **Who else can read them is the app's `access`, not the page's `if`.** An order
 carries a buyer's email address, and an app anyone can read is an app where
@@ -182,7 +184,7 @@ anyone can read the orders. If that is not wanted, set the app `private` and let
 a `worker.js` hand the product list to strangers — the shape is the RSVP pattern
 in <https://yaks.app/guide/code.md>.
 
-## Trying it before it is real
+## Trying it before you go live
 
 Stripe's test mode is a whole parallel world: the seller onboards a test
 account, and card `4242 4242 4242 4242` with any future expiry pays with it. Buy

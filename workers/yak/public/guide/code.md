@@ -6,20 +6,21 @@ guide:
   brief: worker.js in front of an app's files
   description: >-
     worker.js in front of an app's files: which routes are yours, what env
-    holds (STORE, FILES, and the secrets you set), what a request says about
-    who is asking, the CPU and subrequest limits, and whole workers to copy.
+    holds (STORE, FILES, and the secrets you set), what the request reports
+    about who is asking, the CPU and subrequest limits, and whole workers to
+    copy.
 ---
 
 # Code of your own
 
 An app is pages until you give it a `worker.js`. This page is what that file
-gets: which requests reach it, what `env` holds, what the request says about who
-is asking, the limits it runs under, and three workers written out whole.
+gets: which requests reach it, what `env` holds, what the request reports about
+who is asking, the limits it runs under, and three workers written out whole.
 
 ## When an app needs one, and when it does not
 
 Most apps never need one. A page reads and writes the app's own graph through
-`./api/client.js`, and that door already knows who is looking and already
+`./api/client.js`, and that client already knows who is looking and already
 enforces the app's `access`. A worker adds nothing there.
 
 Write one when the app has to do something a page cannot be trusted with, or
@@ -54,22 +55,22 @@ write is what runs:
       },
     }
 
-`req` is the visitor's own request, `env` holds the app's doors, secrets and
-bindings, `ctx` is the runtime's. There is no build step: the file is uploaded
-as-is at `app_deploy` and run as-is.
+`req` is the visitor's own request, `env` holds the bindings for the app's store
+and files along with any secrets you have set, and `ctx` is the runtime's. There
+is no build step: the file is uploaded as-is at `app_deploy` and run as-is.
 
 To use a different server output, put `wrangler.jsonc` (or `wrangler.json`) at
 the app root with `{"main":"dist/server.mjs"}`. `main` is the app-relative
 server source path, defaulting to `worker.js`; directories and a leading `./`
-are allowed. Deploy follows that source's relative imports. The platform upload
-wrapper has an internal name the app never configures. The server source is not
-served publicly. Use JavaScript ES modules (`.js` or `.mjs`); compile TypeScript
-before uploading.
+are allowed. Deploy follows that source's relative imports. The platform's
+upload wrapper uses an internal script name the app never configures. The server
+source is not served publicly. Use JavaScript ES modules (`.js` or `.mjs`);
+compile TypeScript before uploading.
 
 ### More than one file
 
 `worker.js` may import the files beside it, and the deploy carries every module
-it names and every module those name. Nothing else goes up: the app's page
+it imports and every module those import. Nothing else goes up: the app's page
 scripts stay pages.
 
 That is also how a worker compiled from another language runs here. A `.wasm`
@@ -91,21 +92,21 @@ Bytes are not text, so a `.wasm` is written with `base64` in place of `content`:
 ## The fall-through rule
 
 Every request for the app that is not under `/api/` reaches the worker first,
-and **anything it answers 404 falls through to the app's files.**
+and **anything it answers with a 404 falls through to the app's files.**
 
     return new Response('not found', { status: 404 })   // → the files
 
 So a worker owns the routes it names and leaves everything else alone. You never
 serve your own `index.html`, your own stylesheet or your own pictures: answer
 404 for anything you did not mean to handle and the platform serves it — with
-the app's `<base href>` written in, the reporter injected, and the pretty-path
-fallback still working.
+the app's `<base href>` written in, the error reporter injected, and the
+pretty-path fallback still working.
 
 A 404 you meant as an answer is indistinguishable from one you meant as a pass,
-because the platform reads it as a pass. If a route of yours must say "no such
-recipe", say it with a status that means it — 404 sends the caller to
-`index.html` instead. Use 400, or answer 200 with a body that says so, or serve
-your own not-found page.
+because the platform reads it as a pass. If a route of yours must report "no
+such recipe", use a status that means it — 404 sends the caller to `index.html`
+instead. Use 400, or answer 200 with a body that explains, or serve your own
+not-found page.
 
 ## Which paths are yours
 
@@ -119,15 +120,15 @@ Two consequences worth building around:
   whatever address the installer took it at, so a worker that tests
   `pathname == '/recipes/mine'` stops matching in every copy. Test
   `pathname.endsWith('/mine')`, or read the app's own slug off the `x-yak-app`
-  header the kernel sets.
-- `/api/*` is never yours. That segment is the platform's doors — apply, query,
-  me, graph, ws, blob, files/`<path>`, report, plus `client.js` and `report.js`
-  — and a request for one is answered by the kernel without the worker being
-  called at all. Your routes live beside it.
+  header the platform sets.
+- `/api/*` is never yours. That segment is the platform's own endpoints — apply,
+  query, me, graph, ws, blob, files/`<path>`, report, plus `client.js` and
+  `report.js` — and a request for one is answered by the platform without the
+  worker being called at all. Your routes live beside it.
 
 These files are never served to the web at all, worker or no worker:
 `worker.js`, `vocab.json`, `tools.json`, `wrangler.jsonc` and `wrangler.json`.
-Those are the app's inside. `GET /<app>/worker.js` answers the platform's 404
+Those are the app's inside. `GET /<app>/worker.js` serves the platform's 404
 page — the test is on the decoded path, so `/%77orker.js` is the same file and
 the same 404 — and a member reads them back through `app_files` read. Nothing
 you write in `worker.js` is visible to a visitor.
@@ -137,23 +138,23 @@ you write in `worker.js` is visible to a visitor.
     let r = await env.STORE.fetch('/query?.recipe!&.doc?')
     let rows = await r.json()
 
-`env.STORE.fetch(path, init)` is the same set of doors `client.js` wraps, at the
-app's own `/api/`. Two things about it:
+`env.STORE.fetch(path, init)` reaches the same HTTP endpoints `client.js` wraps,
+at the app's own `/api/`. Two things about it:
 
-- **It is a path, not a URL.** `'/query?...'` is the app's query door, not the
-  hostname's. A leading slash is optional and stripped either way, so
+- **It is a path, not a URL.** `'/query?...'` is the app's query endpoint, not
+  the hostname's. A leading slash is optional and stripped either way, so
   `'query?...'` is the same call. The query string rides along.
-- **It acts as the person looking.** The kernel seals a grant naming this store,
-  this visitor and their role, good for a minute, and the shim adds it to every
-  call the worker makes through `STORE` and `FILES`. So the app's `access`
-  decides what your worker can do exactly as it decides what their page can do.
-  Reaching past it is `env.APP`, the next section, and it is a deliberate door
-  with a rule of its own — not something `env.STORE` will do for you by
-  accident. A grant minted for one app's store is refused by any other, and app
-  code never sees the grant itself: the shim takes the header off before your
-  module is called.
+- **It acts as the person looking.** The platform mints a grant naming this
+  store, this visitor and their role, good for a minute, and the binding adds it
+  to every call the worker makes through `STORE` and `FILES`. So the app's
+  `access` decides what your worker can do exactly as it decides what their page
+  can do. Reaching past it is `env.APP`, the next section, and it is a
+  deliberate exception with a rule of its own — not something `env.STORE` will
+  do for you by accident. A grant minted for one app's store is refused by any
+  other, and app code never sees the grant itself: the binding strips that
+  header before your module is called.
 
-It answers a `Response`, not parsed rows, so read the status yourself:
+It returns a `Response`, not parsed rows, so read the status yourself:
 
     let r = await env.STORE.fetch('/apply', {
       method: 'POST',
@@ -164,45 +165,46 @@ It answers a `Response`, not parsed rows, so read the status yourself:
 
 A refusal comes back the way it comes back to a page —
 `{"error": {"code": "not_a_writer", "message": "sign in to change this app"}}`
-with a 401 or 403 — so passing it straight through gives the page the sentence
-it already knows how to show.
+with a 401 or 403 — so passing it straight through gives the page a message it
+already knows how to show.
 
-The whole filter grammar works here, because it is the same door: `.doc!`,
-`.recipe.minutes<=30`, `id=<eid>`, `limit=`, `.count!`, a bare word for full
-text. Ask for the components you will use.
+The whole filter grammar works here, because these are the same endpoints:
+`.doc!`, `.recipe.minutes<=30`, `id=<eid>`, `limit=`, `.count!`, a bare word for
+full text. Ask for the components you will use.
 
 ## env.APP — the app's graph, as the app itself
 
     let r = await env.APP.fetch('/query?.household.code=' + hash)
 
-`env.APP.fetch(path, init)` is the same doors at the same addresses as
+`env.APP.fetch(path, init)` reaches the same endpoints at the same addresses as
 `env.STORE`, with one difference: it acts as the APP, at `editor`, on the app's
-own store. It reads and writes whatever the app's `access` says — `private`
+own store. It reads and writes whatever the app's `access` allows — `private`
 included — and a write through it is signed by the app, so `created.by` is the
 app's own entity and not a guest.
 
 It exists for one shape of app: **the worker is the gatekeeper.** `access` is
-one word about the whole store, so it cannot say "each household edits its own
-row and nobody else's". That rule is code, and code needs a door that is not
-already refusing. `env.APP` is that door.
+one setting covering the whole store, so it cannot express "each household edits
+its own row and nobody else's". That rule is code, and the code needs a way in
+that is not already refusing. `env.APP` is that way in.
 
 **A private app's worker runs anyway.** `private` sends a stranger to the login
 page — but not before your worker has had the request, and not for the calls
 your worker makes back through `env.FILES`. So the guest holding an invitation
 card reaches your route, and your route can hand them a page. Everything else
-about `private` holds: they cannot reach the store doors, and they cannot ask
-for a file directly.
+about `private` holds: they cannot reach the store endpoints, and they cannot
+ask for a file directly.
 
 Everything true of `env.STORE` is true of this one. It is a path, not a URL. The
 grant naming your store is refused by every other store. Your code never sees
-it: the kernel mints it per request and the shim keeps it in a closure, so there
-is no header a caller can send you that turns into one.
+it: the platform mints it per request and the binding keeps it in a closure, so
+there is no header a caller can send you that turns into one.
 
 Two things it is not:
 
 - **Not the owner.** An editor writes the app's data and never its roster. A
-  batch touching `member`, `grant` or `access` is refused through this door the
-  same as any other, so a worker cannot promote anyone, itself included.
+  batch — everything written in one `apply` call — touching `member`, `grant` or
+  `access` is refused through this binding the same as any other, so a worker
+  cannot promote anyone, itself included.
 - **Not for the whole worker.** Use `env.STORE` for everything the visitor is
   allowed to do, and `env.APP` only on the path where you have checked
   something. A worker that reaches for `env.APP` everywhere has an `open` app
@@ -224,8 +226,8 @@ shoulder, and a code that leaks is a household's row.
       doc: { title: 'The Okonkwos' },
       household: { code: '<sha-256 of the code>', seats: 2 } }
 
-The route takes the code, hashes it, finds the one row that matches, and touches
-only that row:
+The route accepts the code, hashes it, finds the one row that matches, and
+touches only that row:
 
     let hashed = async (code) => {
       let bytes = new TextEncoder().encode(code.trim().toUpperCase())
@@ -269,14 +271,14 @@ only that row:
       },
     }
 
-**This is the one place where your own check IS the permission.** Everywhere
+**This is the one place where your own check is the permission.** Everywhere
 else the store is behind you: you can write a check, forget a case, and the
 store still refuses. Through `env.APP` there is nothing behind you. So:
 
 - **The check comes first**, before the first `env.APP` call on that path, with
   nothing between the two.
-- **The refusal is 403**, and it says nothing more. Not 404, not "no such
-  household", not a different sentence for a wrong code than for a missing one —
+- **The refusal is 403**, and it reveals nothing more. Not 404, not "no such
+  household", not a different message for a wrong code than for a missing one —
   a difference is a way to read the guest list.
 - **The eid comes from the row the check found**, never from the request body.
   Taking an eid from the caller and writing it is the whole rule handed back to
@@ -293,9 +295,9 @@ thousand tries — or make it long enough not to be worth guessing.
     let page = await env.FILES.fetch('/index.html')
     let html = await page.text()
 
-The same door the web gets, under the app's root. Useful for reading a template,
-or for handing a page back yourself with a header of your own. Three things
-follow from it being the same door:
+The same files the web gets, under the app's root, served the same way. Useful
+for reading a template, or for handing a page back yourself with a header of
+your own. Three things follow from it being served the same way:
 
 - An HTML page comes back **already transformed** — the `<base href>` is in it
   and the reporter script is injected. You are reading what a visitor would have
@@ -312,49 +314,51 @@ A request from your worker never re-enters your worker, so
 
 Every secret you set is on `env` under the name you gave it — `env.WEATHER_KEY`,
 `env.STRIPE`. The service binding the platform uses to build `STORE`, `APP` and
-`FILES` is there too, as `env.KERNEL`; it is plumbing, it wants absolute URLs
-and a grant header it will not give you, and the three doors are what it is for.
-Reach for those.
+`FILES` is there too, as `env.KERNEL`; it is plumbing — it wants absolute URLs
+and a grant header it will not hand you — and those three bindings are what it
+is for. Reach for those.
 
 An app may also declare variables, D1, R2, local Durable Objects, Workers AI and
 Vectorize bindings in `wrangler.jsonc` or `wrangler.json` beside `worker.js`.
 The [guide's server section](https://yaks.app/guide.md#code-of-your-own)
 describes the supported settings. A declared binding keeps its name, including
-`STORE`, `FILES` or `APP`; otherwise those names are the convenience doors
-above.
+`STORE`, `FILES` or `APP`; otherwise those names are the convenience bindings
+described above.
 
 ### Taking money is not one of your secrets
 
 A worker that charges somebody does **not** hold a Stripe key. Selling is a
-platform door — `POST ./api/pay/checkout`, which your worker reaches through
-`env.STORE` exactly as a page reaches it — and the seller's own connected
-account is what the charge lands on. You post a cart of product eids and
-quantities; the price is read off each `product` row in the app's own store, so
-nothing about money crosses the wire and there is no key for your worker to
-leak. <https://yaks.app/guide/selling.md> is the whole of it.
+platform endpoint — `POST ./api/pay/checkout`, which your worker calls through
+`env.STORE` exactly as a page calls it — and the seller's own connected account
+is what the charge lands on. You post a cart of product eids and quantities; the
+price is read off each `product` row in the app's own store, so no amount of
+money is ever part of the request and there is no key for your worker to leak.
+<https://yaks.app/guide/selling.md> is the whole of it.
 
 ## Who is asking
 
-The kernel sets three headers on the request it hands you, and strips any a
+The platform sets three headers on the request it hands you, and strips any a
 client tried to send under the same names:
 
 - `x-yak-person` — the visitor's eid. **Absent** when nobody is signed in.
 - `x-yak-role` — `owner`, `editor` or `viewer`. Absent when they have no role in
   the space, which includes every signed-out visitor and every signed-in
   stranger.
-- `x-yak-app` — the app's own slug, so a worker can spell its own addresses
+- `x-yak-app` — the app's own slug, so a worker can build its own addresses
   without being told its name.
 
-  let person = req.headers.get('x-yak-person') // null for a guest let role =
-  req.headers.get('x-yak-role')
+Reading them is ordinary:
 
-What they prove: the kernel wrote them, this request came through the kernel,
-and nobody upstream can forge them — a client's own `x-yak-person` is deleted
-before your code runs.
+    let person = req.headers.get('x-yak-person')   // null for a guest
+    let role = req.headers.get('x-yak-role')
+
+What they prove: the platform wrote them, this request came through the
+platform, and nobody upstream can forge them — a client's own `x-yak-person` is
+deleted before your code runs.
 
 What they do not prove:
 
-- **Not permission.** The role is membership in the SPACE. What this visitor may
+- **Not permission.** The role is membership in the space. What this visitor may
   do to this app's data is the app's `access` on top of that, and `env.STORE`
   already applies it. Do not write your own check and assume it matches; let the
   store refuse and pass the refusal on.
@@ -373,19 +377,19 @@ What they do not prove:
 
 The value goes onto the app's own script and nowhere else. It is not in the
 app's data, not in its history, not in any version, and **no tool can read it
-back** — `app_secret_list` answers names only, and does so by reading the name
+back** — `app_secret_list` returns names only, and does so by reading the name
 off each row and dropping everything else, so no future API that decided to echo
 a value could leak one through it. Ask the person for the value. Never invent
 one.
 
-The name is a binding your code spells as `env.NAME`, so it must be a JavaScript
+The name is a binding your code writes as `env.NAME`, so it must be a JavaScript
 identifier: letters, digits and underscores, not starting with a digit, up to 64
 characters. Setting a name that is already there replaces it.
 
 Order matters a little. A secret lives on the script, so there must be a script:
-set one before the app has ever deployed a `worker.js` and the refusal says so
-and tells you to write one first. `app_secret_list` on an app with no script
-answers that it has no secrets rather than failing. Secrets survive later
+set one before the app has ever deployed a `worker.js` and the refusal explains
+that and tells you to write one first. `app_secret_list` on an app with no
+script reports that it has no secrets rather than failing. Secrets survive later
 deploys — the upload keeps them explicitly — so you set a key once and redeploy
 as often as you like.
 
@@ -399,7 +403,7 @@ Two things secrets are not:
 
 Without the platform's Cloudflare token configured, the three secret tools
 refuse outright — there is nowhere to put a value — while a deploy still puts
-the app's files out and tells you the worker was not uploaded.
+the app's files out and reports that the worker was not uploaded.
 
 ## The limits
 
@@ -411,7 +415,7 @@ spends it. A store read, an outside call, and shaping the answer fit with room
 over. What does not fit is a loop: a fetch per row of a listing will find the
 subrequest ceiling, and parsing a large body repeatedly will find the CPU one.
 If you need many rows, ask the store for them in one filter — that is one
-subrequest whatever it answers.
+subrequest whatever it returns.
 
 ## When it throws
 
@@ -423,7 +427,7 @@ and nothing is swallowed here:
   stack — and the visitor gets the platform's soft "Something went wrong. Your
   assistant has been told." page with a 500.
 - **A 5xx you return** is filed the same way, since nobody chose it: the entity
-  says `the app's worker answered 503` and names the route.
+  records `the app's worker answered 503` and names the route.
 - **A 4xx you return is not a break** and files nothing. That is your deliberate
   no — "no city by that name", or the 401 an outside service gave you for a
   mistyped key — and the rule is the status, so an outside service's refusal
@@ -433,7 +437,7 @@ Either way `app_errors` lists what is open and the person's agent hears about it
 once, on its next reply.
 
 The one thing worth catching is an outside call, so you can answer the page
-something better than a stack: catch it, and return a 4xx with a sentence.
+something better than a stack: catch it, and return a 4xx with a message.
 
 ## Three workers
 
@@ -453,9 +457,9 @@ something better than a stack: catch it, and return a 4xx with a sentence.
     }
 
 **A paid API with a key.** The key is on the script; the page asks the worker,
-never the service. Note the outside failure is answered as a sentence with a 502
-— filed, since nobody chose it — while a bad ask from the page is a 400, which
-is not:
+never the service. Note the outside failure is answered as a message with a 502
+— filed, since nobody chose it — while a bad request from the page is a 400,
+which is not:
 
     export default {
       async fetch(req, env) {
@@ -523,7 +527,7 @@ checked against a secret of yours.
       },
     }
 
-(`ticket` is the app's own component, declared in its `vocab.json` and planted
+(`ticket` is the app's own component, declared in its `vocab.json` and installed
 by `app_deploy`.)
 
 ## Putting one in front
@@ -533,13 +537,12 @@ A worker is a file, so it is written and released like every other file:
     app_files(app, files: [{path: 'worker.js', content: '<the module>'}])
     app_deploy(app)
 
-The deploy answers
-`worker: worker.js answers first; a 404 from it serves
-the files` when the
-script went up. Delete `worker.js` and the next deploy takes the script away
-with it, so what serves is always what the files say. A deploy is also what a
-rollback replays: `app_rollback` re-uploads the `worker.js` that version pinned,
-so putting an app back puts its code back too.
+When the script went up, the deploy reports
+`worker: worker.js answers first; a 404 from it serves the files`. Delete
+`worker.js` and the next deploy removes the script with it, so what serves is
+always what the files describe. A deploy is also what a rollback replays:
+`app_rollback` re-uploads the `worker.js` that version pinned, so putting an app
+back puts its code back too.
 
 ## The build sandbox is signed in as you
 
@@ -556,7 +559,7 @@ container of the space's own. Already in it:
 
 `zig cc -target wasm32-freestanding -nostdlib -Wl,--no-entry` is the shortest
 road from C to a module a browser instantiates with no glue; the `wasm32-wasi`
-target gives one a WASI shim runs. C++ takes the same flags, with
+target gives you one that a WASI shim runs. C++ takes the same flags, with
 `-fno-exceptions`.
 
 **Anything else installs for the session.** Commands run as root, so
@@ -577,10 +580,10 @@ So a build script reaches the same tools your agent has, as you:
     yak graph query '.recipe!'
     yak apply @rows.ndjson
 
-`yak <tool>` is every tool this connector lists — it reads the list at run time,
+`yak <tool>` runs any tool this connector lists — it reads the list at run time,
 so it cannot drift — and `yak apply` streams a file of NDJSON bundles into the
-graph 50 at a time. `curl` reaches the same door if you would rather write the
-JSON-RPC yourself:
+graph 50 at a time. `curl` reaches the same MCP endpoint if you would rather
+write the JSON-RPC yourself:
 
     curl -sS "$YAKS_HOST/mcp" \
       -H "authorization: Bearer $YAKS_TOKEN" \

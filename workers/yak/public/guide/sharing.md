@@ -5,7 +5,7 @@ guide:
   slug: sharing
   brief: publishing and installing an app
   description: >-
-    Who may read and write an app, how somebody is invited to ONE app rather
+    Who may read and write an app, how somebody is invited to one app rather
     than the whole space, and how an app travels: app_publish, app_install
     and app_update, what an installed copy shares (the code, and nothing
     else), what pinning means, and what an update does to what people saved.
@@ -13,16 +13,16 @@ guide:
 
 # Publishing and installing an app
 
-Two different questions get answered here. Who may read and write ONE app — its
+Two different questions get answered here. Who may read and write one app — its
 `access`, and its guest list. And how an app becomes a plugin anybody can take a
 copy of — `app_publish`, `app_install`, `app_update`, what a copy shares, and
 what an update does to what people already saved.
 
 ## Access: what a stranger with the link can do
 
-Every app carries one of three words. `app_new(access:)` sets it at birth,
-`app_set(access:)` changes it later, and both answer with what it means in the
-person's own terms, so you can repeat it back to them.
+Every app has one of three access settings. `app_new(access:)` sets it when the
+app is made, `app_set(access:)` changes it later, and both report what it means
+in the person's own terms, so you can repeat it back to them.
 
 **`public`** — the default. Anyone with the link reads the app and its data.
 Only members write. A stranger's write is refused 401 with `not_a_writer` and a
@@ -42,22 +42,22 @@ and save it in its own row.
 
 Ask on load, not on refusal — that is the whole reason `me()` exists.
 
-**`private`** — members only, either way. The PAGE is part of what only they
-see: a signed-out stranger asking for it is sent to the login page (303) holding
-that page as its return address, and someone signed in who is nobody here gets
-the same "Nothing here yet." a wrong address gets — whether the app exists at
-all is its owner's to tell. The `/api/` doors answer `not_a_reader` rather than
-pretending.
+**`private`** — members only, either way. The page itself is part of what only
+they see: a signed-out stranger asking for it is sent to the login page (303)
+holding that page as its return address, and someone signed in who is not a
+member here gets the same "Nothing here yet." a wrong address gets — whether the
+app exists at all is its owner's to tell. The app's `/api/` endpoints answer
+`not_a_reader` rather than pretending.
 
-The app's own `worker.js` is the exception, and the only one: it runs ahead of
-that bounce, so a private app with a worker is an app whose gatekeeper is its
-own code. That is how a rule finer than one word gets written — an invitation
-code that opens one household's row and no other. See `env.APP` in
+The app's own `worker.js` is the exception, and the only one: it runs before
+that redirect, so a private app with a worker is an app whose gatekeeper is its
+own code. That is how a rule finer than one of the three settings gets written —
+an invitation code that opens one household's row and no other. See `env.APP` in
 [Code of your own](./code.md).
 
-One rule sits above all three: **the file door is never widened.** Writing an
-app's bytes is always a member's act, whatever the app lets its visitors save
-into its store. An `open` app takes a guest's rows and never a guest's deploy.
+One rule sits above all three: **writing an app's files is always a member's
+act**, whatever the app lets its visitors save into its store. An `open` app
+accepts a guest's rows and never a guest's deploy.
 
 ## The guest list
 
@@ -69,40 +69,41 @@ but does not hand out keys.
 
 `role` is `editor` (the default: reads and writes), `viewer` (reads only), or
 `owner` (may also invite). Inviting an address that is already a member changes
-their role, and the answer says what it was.
+their role, and the answer reports what it was before.
 
 ## One app, or the space
 
-`app` is the whole of the difference, and it is a difference in what they GET:
+`app` is the whole of the difference, and it is a difference in what they get:
 
 **Name it** and they are a guest of that one app. They open its page and read
 and write its data exactly as a member does, and the rest of the space is not
 theirs — its private apps are a wrong address to them, its public ones are what
 a stranger with the link sees. This is how a player joins one game, a household
-opens one list, a client sees one project. They are not on the roster at all, so
-they have no space to list and nothing of yours to browse.
+opens one list, a client sees one project. They are not on the space's member
+list at all, so they have no space to list and nothing of yours to browse.
 
     member_add(email: 'player@example.com', app: 'idler-rpg', role: 'editor')
     member_remove(email: 'player@example.com', app: 'idler-rpg')
 
-**Leave it out** and they take a seat on the SPACE, which reaches every app in
-it, now and every one you make later. That is a collaborator, not a guest.
+**Leave it out** and they take a seat on the whole space, which reaches every
+app in it, now and every one you make later. That is a collaborator, not a
+guest.
 
-Two things a guest never gets, whatever level the invitation gave them. The
-app's FILES — writing an app's bytes stays a member's act, so an app takes a
-guest's rows and never a guest's deploy. And a reach for their agent: a guest is
+Two things a guest never gets, whatever role the invitation gave them. The app's
+files — writing an app's files stays a member's act, so an app accepts a guest's
+rows and never a guest's deploy. And a way in for their agent: a guest is
 somebody who opens a page, not somebody whose connector lists your apps.
 
 Inviting a member to one app is refused rather than quietly demoting them: take
 the seat back with `member_remove` first, and then the invitation is that app
 alone.
 
-Those three words are the roster's, and a guest's grant is written in the same
-three. What `me()` answers as `role` is what the caller holds on THE APP they
-are looking at — their seat where they have one, their grant where they do not.
-Inside an app's own store `member` is a different word again: two seats, `owner`
-and `member`, saying whether someone belongs. Write both with `member_add`,
-never by hand.
+Those three roles come from the space's member list, and a guest's grant uses
+the same three. What `me()` returns as `role` is what the caller holds on the
+app they are looking at — their seat on the space where they have one, their
+grant on that app where they do not. Inside an app's own store, `member` is a
+different thing again: two roles, `owner` and `member`, recording whether
+someone belongs. Write both with `member_add`, never by hand.
 
 The letter follows `app` too: name it and the invitation carries that app's own
 link, leave it out and it carries the space's own address, which is its front
@@ -118,19 +119,20 @@ two — 500 characters is the cap, and past it the call is refused rather than
 sending half a sentence in somebody's name. Read it back to the person before
 you send it: it is going out over their name.
 
-The letter says who invited them, what they were invited to, the link, and that
-signing in there with that address is all it takes — there is nothing to install
-and no account to make first. They land on the page the link names.
+The letter names who invited them, what they were invited to and the link, and
+explains that signing in there with that address is all it takes — there is
+nothing to install and no account to make first. They land on the page the link
+names.
 
 The membership stands whatever the mail does. If the letter cannot go — the
-platform's mail is misconfigured — the answer hands you the link to relay by
-hand and says why. Never re-invite to "retry"; give them the link.
+platform's mail is misconfigured — the answer gives you the link to pass on by
+hand, and the reason it could not be sent. Never re-invite to "retry"; give them
+the link.
 
-`member_remove` refuses to remove the last owner: a space with nobody to say who
-belongs is one nobody can open again. Removing someone leaves their sign-in
-intact — they lose this space, not the platform — and
-`member_remove(email,
-app)` takes one app back and leaves the rest.
+`member_remove` refuses to remove the last owner: a space with nobody to decide
+who belongs is one nobody can open again. Removing someone leaves their sign-in
+intact — they lose this space, not the platform. Naming an app,
+`member_remove(email, app)`, takes back that one app and leaves the rest.
 
 ## Publishing
 
@@ -142,11 +144,11 @@ serving now.
 
 - The app must have been deployed. An app at v0 serves nothing an installer
   could copy, and publishing it is refused.
-- `name` is the address the whole platform installs by. On a FIRST publish it
+- `name` is the address the whole platform installs by. On a first publish it
   defaults to the app's own slug. On a republish it defaults to **the name the
   offer already has** — a republish never quietly renames — and passing an
   explicit `name` moves it, which leaves the old name resolving to nothing for
-  everyone who was told to install it. The answer says which of the three
+  everyone who was told to install it. The answer reports which of the three
   happened, in those terms, because a rename is the half nobody can see.
 - A name taken by somebody else's app is refused, naming the app that holds it.
   One name, one app, platform-wide.
@@ -157,9 +159,9 @@ serving now.
 - **A later `app_deploy` does not move the offer.** The offer stays pinned to
   the version you published, so installers keep getting that code until you
   `app_publish` again. That is deliberate — an editor's deploy must not change
-  what the whole platform installs — and the deploy that leaves the offer
-  trailing says so in its answer. `app_versions` marks which version is `(live)`
-  and which is `(offered)`.
+  what the whole platform installs — and the deploy that leaves the offer behind
+  reports it in its answer. `app_versions` marks which version is `(live)` and
+  which is `(offered)`.
 
 **`app_unpublish(app, space?)`** — withdraw the offer. The app is untouched,
 every copy anyone took is untouched and keeps working, and the name is free
@@ -176,23 +178,23 @@ Read it before you build something somebody may already have made.
 
 - `name` is the published name from `app_published`.
 - The address the copy lands at is, in order: `as` if you passed it; else the
-  SOURCE app's own slug, if nothing here holds that address; else the published
+  source app's own slug, if nothing here holds that address; else the published
   name. The source's slug goes first on purpose — an app is written at its own
   address, and a copy that reads like the app is easier to reason about. (A page
-  written relatively works either way; the kernel gives every page a
-  `<base href>` at the app's own address.)
-- An address already taken here — by an app, or by an address an app has LEFT
-  and still redirects from — is refused, telling you to pass `as`.
+  written relatively works either way; the platform gives every page a
+  `<base href>` pointing at the app's own address.)
+- An address already taken here — by an app, or by an address an app has moved
+  away from and still redirects from — is refused, telling you to pass `as`.
 - An installed app counts against the space's app ceiling like any other (the
   free tier allows five, Plus allows 50; trashed apps do not count).
-- The copy takes the published app's `access` with it: an app written to be
-  voted on has to stay votable. `app_set` changes it after.
+- The copy keeps the published app's `access`: an app written to be voted on has
+  to stay votable. `app_set` changes it afterwards.
 - The copy is not made the front page: `<space>.yaks.app/` lists what is here
-  until somebody says which app opens there (`app_set(app, home: true)`).
-- The install ends in a release of the copy: its `vocab.json` planted in ITS
-  store, its `tools.json` listed under ITS slug, its `worker.js` uploaded as ITS
-  own script. So the answer carries the deploy's own lines — components, tools,
-  worker — under the install's.
+  until somebody sets which app opens there (`app_set(app, home: true)`).
+- The install ends in a release of the copy: its `vocab.json` installed in its
+  own store, its `tools.json` listed under its own slug, its `worker.js`
+  uploaded as its own script. So the answer carries the deploy's own lines —
+  components, tools, worker — under the install's.
 
 The answer names the address, the file count, and the pin:
 
@@ -205,11 +207,11 @@ offers now. Below.
 
 ## The gallery: being shown
 
-Publishing makes an app installable. The GALLERY is the other half — being
-SHOWN, on <https://yaks.app/gallery>, a public page of what people have made
-here. They are deliberately two acts: an offer is between whoever made the app
-and whoever goes looking for one, and a listing is yaks.app putting somebody's
-app on its own front door.
+Publishing makes an app installable. The gallery is the other half — being
+shown, on <https://yaks.app/gallery>, a public page of what people have made
+here. They are deliberately two separate acts: an offer is between whoever made
+the app and whoever goes looking for one, and a listing is yaks.app putting
+somebody's app on its own front page.
 
 **`app_publish(app, gallery: true)`**, or **`app_set(app, gallery: true)`**
 later, puts a published app forward. Only when the person has said they want it
@@ -217,14 +219,14 @@ shown: it is their app, their name and their address on a public page, so it is
 never something to assume. The app must be published — a gallery entry nobody
 can install is a picture of an app.
 
-It is not listed on the spot. The ask sends a letter to yaks.app carrying the
+It is not listed on the spot. Asking sends a letter to yaks.app carrying the
 app's title, its address, the line its owner wrote about it and who made it,
-with the two links that answer. Nothing appears anywhere until somebody opens
-the one that says yes. That is the whole design and it does not have a faster
-path: the page is ours, under our name.
+with two links to answer by. Nothing appears anywhere until somebody here opens
+the link that approves it. That is the whole design and it does not have a
+faster path: the page is ours, under our name.
 
-The tool answers with where it stands, and so does the app's pill on the space's
-own page:
+The tool reports where it stands, and so does the app's pill on the space's own
+page:
 
     not in the gallery
     waiting on us: it is not listed until we say yes, and a letter is on its
@@ -240,7 +242,7 @@ nothing is written. A trashed app — and every app in a trashed space — simpl
 stops being shown, and `app_restore` puts the listing back exactly as it was,
 with nobody asked twice.
 
-**`gallery_search(words, limit?)`** answers the listings by words, matched
+**`gallery_search(words, limit?)`** searches the listings, matching your words
 against each one's name and the line its maker wrote. It needs no account —
 signed out, it is one of the few tools this connector answers at all — and each
 result carries the `app_install` line that gives the person their own copy. Read
@@ -268,15 +270,15 @@ What travels is the app's own files — the pages, the stylesheets, the
 - **Secrets.** They live on the script, and the copy's script is new. An app
   that needs a key should say so in its `about`, and the installer sets their
   own with `app_secret_set`.
-- **Members.** The copy answers the installer's space and its guest list.
+- **Members.** The copy belongs to the installer's space and its guest list.
 
 ## What pinning means
 
-A copy is PINNED to the version it took. Publishing again does not move anybody:
-the installer's copy keeps serving exactly what it served yesterday until
-someone calls `app_update`. That is the whole point — a publisher cannot change
-an app out from under the people using it, and an app someone is relying on does
-not change while they sleep.
+A copy is **pinned** to the version it took. Publishing again does not move
+anybody: the installer's copy keeps serving exactly what it served yesterday
+until someone calls `app_update`. That is the whole point — a publisher cannot
+change an app out from under the people using it, and an app someone is relying
+on does not change while they sleep.
 
 `app_published` shows the version on offer; the copy's own `app_list` line shows
 the version it is at.
@@ -286,9 +288,9 @@ the version it is at.
 `app_update` replaces the code and keeps the data.
 
 **Before a byte moves**, the publisher's `vocab.json` is checked against the
-copy's store. A vocabulary that only GREW is applied additively. One that would
+copy's store. A vocabulary that only grew is applied additively. One that would
 retype a column the copy's rows were written under is refused with the same
-sentence a deploy gives — `vote.count is already number` — and nothing moves at
+message a deploy gives — `vote.count is already number` — and nothing moves at
 all: not the files, not the pin. The copy is exactly as it was.
 
 Then every file of the publisher's version is written over the copy, and **every
@@ -296,13 +298,13 @@ file the copy has that the publisher does not is deleted.** That includes
 anything you wrote into the copy yourself — a tweak to its stylesheet, a page
 you added. What serves after is what the publisher wrote.
 
-Then the copy is released like any deploy: components planted, tools handed
-over, `worker.js` uploaded, a new version recorded, and breaks from earlier
-versions closed. Then the pin moves.
+Then the copy is released like any deploy: components installed, commands
+registered, `worker.js` uploaded, a new version recorded, and breaks from
+earlier versions closed. Then the pin moves.
 
-What survives, always: every row they saved, every byte they uploaded, and
-anything the store learned along the way. The answer says so, and says how many
-files were written and how many removed.
+What survives, always: every row they saved, every file they uploaded, and
+anything the store learned along the way. The answer confirms that, and reports
+how many files were written and how many removed.
 
 Three refusals worth knowing:
 

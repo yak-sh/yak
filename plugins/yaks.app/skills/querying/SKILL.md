@@ -1,16 +1,16 @@
 ---
 name: querying
-description: 'Querying: the filter line (yaks.app). The filter grammar every door here speaks, with worked examples: presence and absence, contains, comparisons, ranges, time phrases, walking a reference, counting, paging, full text — and why a row carries only the components its filter named.'
+description: 'Querying: the filter grammar (yaks.app). The one filter grammar, used everywhere a store is read, with worked examples: presence and absence, contains, comparisons, ranges, time phrases, walking a reference, counting, paging, full text — and why a row carries only the components its filter named.'
 ---
 
-# Querying: the filter line
+# Querying: the filter grammar
 
-One grammar reads an app's store, and every door speaks it: `query()` and
-`subscribe()` on the page, `GET ./api/query` underneath them, `graph_query` at
-the connector, a `query` in the app's own `tools.json`, and `env.STORE.fetch`
-from a worker. This page is that grammar with its examples — what selects rows,
-what a row comes back carrying, and the handful of things this store will not
-do.
+One grammar reads an app's store, and everything that reads one uses it:
+`query()` and `subscribe()` on a page, `GET ./api/query` underneath them,
+`graph_query` in an agent's tools, a `query` in the app's own `tools.json`, and
+`env.STORE.fetch` from a worker. This page is that grammar with its examples —
+what selects rows, what a row comes back carrying, and the handful of things
+this store will not do.
 
 The examples are a kitchen app: a `vocab.json` declaring
 
@@ -26,13 +26,13 @@ The examples are a kitchen app: a `vocab.json` declaring
           "started": { "type": "string", "format": "date-time" },
           "done":    { "type": "boolean" } } } } }
 
-beside the platform's own words — `doc`, `task`, `comment`, `archived`,
+beside the platform's own components — `doc`, `task`, `comment`, `archived`,
 `created` and the rest.
 
-## The shape of a line
+## The shape of a filter
 
-A filter line is predicates joined by `&`. Each one is a dot, a component, a
-column, an operator, a value:
+A filter is predicates joined by `&`. Each one is a dot, a component, a column,
+an operator, a value:
 
     .recipe.minutes<=30
      ^      ^       ^ ^
@@ -47,20 +47,22 @@ column, an operator, a value:
 
 Every predicate must hold — `&` is an intersection, never an "or". (Any-of lives
 inside one predicate, below.) A predicate ends where the next `&` begins, so two
-of them run together is not a longer filter, it is a mistake the store names:
+of them run together is not a longer filter but a mistake, and the store tells
+you so:
 
     .recipe!.doc!
     → presence filters end at !: .recipe! — join filters with &:
       .recipe!&.doc!
 
-Your own words route QUALIFIED only — `.recipe.serves`, never `.serves` — so a
-word you invent can never change what `.title` means in somebody else's store.
-The platform's columns do route bare (`.title~=lemon` is `.doc.title~=lemon`),
-but write the component anyway: it reads better, and it never becomes ambiguous.
+Your own components must be written QUALIFIED — `.recipe.serves`, never
+`.serves` — so a component you invent can never change what `.title` means in
+somebody else's store. The platform's columns do work bare (`.title~=lemon` is
+`.doc.title~=lemon`), but write the component anyway: it reads better, and it
+never becomes ambiguous.
 
-An EMPTY line selects nothing. There is no "everything" — `query('')` and a bare
-`query('limit=50')` both answer `[]`. To list what you saved, name the component
-it wears: `.doc!`, `.recipe!`.
+An EMPTY filter selects nothing. There is no "everything" — `query('')` and a
+bare `query('limit=50')` both return `[]`. To list what you saved, name a
+component those rows have: `.doc!`, `.recipe!`.
 
 ## Asking for a component
 
@@ -72,23 +74,24 @@ Four ways to name a component rather than one of its columns:
     *             every component this store holds (the debugging form)
 
 `!` and `=` SELECT. `?` selects nothing and screens nothing — it only asks for
-the component to ride along on whatever the rest of the line selected:
+the component to come back with whatever the rest of the filter selected:
 
     await query('.chore!&.completed=&.doc?')   // chores not yet done
     await query('.recipe!&.doc?')              // recipes, with their titles
 
-`?` is safe over a word this store never planted: a request is not an assertion,
-so `.recipe!&.loan?` answers the recipes and simply leaves the loan off.
-`.loan!` over an unplanted word is refused instead, because an empty answer
-would lie about what is there.
+`?` is safe for a component this store never planted: asking for one is not
+claiming it exists, so `.recipe!&.loan?` returns the recipes and simply leaves
+the loan off. `.loan!` for a component that was never planted is refused
+instead, because an empty answer would lie about what is there.
 
-`*` answers every component of every row it selected. Use it when you are
+`*` returns every component of every row it selected. Use it when you are
 looking rather than drawing:
 
     await query('.doc.title~=drizzle&*')
 
-It is part of the line, so it rides wherever a line goes: `subscribe()` keeps
-answering the same query, and its frames carry the same whole rows.
+It is part of the filter, so it works wherever a filter does: `subscribe()`
+keeps running the same query, and the updates it sends carry the same whole
+rows.
 
 ## What an answer carries
 
@@ -115,29 +118,29 @@ and this is the right one:
          doc: {title: 'Pancakes', body: 'flour, milk, eggs'},
          recipe: {serves: 4, minutes: 20, cuisine: 'american'} }]
 
-Anything a predicate mentions counts as naming it, whichever operator it wears:
+Anything a predicate mentions counts as naming it, whichever operator it uses:
 `.doc.title~=cake` carries the doc, `.task.status=open` carries the task,
 `.created.at=today` carries the stamp. Three things do NOT name one: an absence
 (`.archived=` asks for rows without one — there is nothing to carry), the `*`
-form, which asks for all of them, and a bare WORD, which searches the docs
-without naming anything to leave out — so a line that is only words answers
+form, which asks for all of them, and a bare word, which searches the docs
+without naming anything to leave out — so a filter that is only words returns
 whole entities, like `id=`.
 
 A column of yours that nothing has written is on the row with the value `null`,
-not missing from it, so test the value and not `in`. The platform's `doc.title`
-has a default and answers `''` instead.
+not missing from it, so test the value and not `in`. The platform's own columns
+read back the same way, `doc.title` included.
 
-`entity` and `kind` ride every row: `entity.eid` is the address to write back
+`entity` and `kind` are on every row: `entity.eid` is the address to write back
 to, `entity.num` is the number the store minted in order, and `kind` is what the
-entity is — the first component it wears, your own word included.
+entity is — the first component it has, one of your own included.
 
 Three kinds of row are left out of a listing unless the filter names them: the
 platform's stamps (`.created!`, `.updated!`), the platform's own error rows
 (`.exception!`, `.error!`), and the `person` rows the store keeps so a byline
 has a name (`.person!`). What comes back is what your app saved.
 
-`subscribe(filter, cb)` answers the same rows through the same rule, so a page
-swaps one for the other and nothing else changes.
+`subscribe(filter, cb)` returns the same rows by the same rule, so a page swaps
+one for the other and nothing else changes.
 
 ## The operators
 
@@ -156,13 +159,13 @@ swaps one for the other and nothing else changes.
 
 A number column compares numerically and every other column as text, which is
 why an ISO stamp compares correctly as text. A comparison a column's type cannot
-answer — `.recipe.serves>many` — is refused rather than guessed at.
+make — `.recipe.serves>many` — is refused rather than guessed at.
 
 A list and a range are values, not extra syntax: `.recipe.cuisine!=thai,indian`
 is "neither", and `.recipe.minutes!=20..35` is "outside that band".
 
 **`!=` also matches a row that lacks the column entirely** — nothing there is
-not `thai`. When you mean "has a cuisine, and it is not thai", say both:
+not `thai`. When you mean "has a cuisine, and it is not thai", write both:
 
     await query('.recipe!&.recipe.cuisine!=thai&.doc?')
 
@@ -185,7 +188,8 @@ loudly rather than quietly matching nothing:
 - **text** — as typed. `.doc.title~=cake`
 - **number** — `.recipe.serves>=4`, decimals fine.
 - **enum** — `task.status` is `open`, `wip`, `done` or `cancelled`. It is read,
-  never written: `.task.status=done` is the entity wearing a `completed`.
+  never written: `.task.status=done` selects the entities that have a
+  `completed`.
 - **priority** — a number, and `P` is optional: `.filed.priority<=2` and
   `.filed.priority<=P2` ask the same thing.
 - **time** — a stamp or a phrase; the next section is only about those.
@@ -194,17 +198,17 @@ loudly rather than quietly matching nothing:
 - **eid** — a reference to another entity, by its eid: `.comment.target=940d…`,
   `.filed.assignee=dc5e…`, `.created.by=<who.person>`.
 
-Your OWN columns are a different bargain: they are stored as given and compared
-as text, with no parsing on either side. Two consequences worth knowing before
-you design a component:
+Your OWN columns work differently: they are stored as given and compared as
+text, with no parsing on either side. Two consequences worth knowing before you
+design a component:
 
 - A `bool` of yours lands in the store as `1` or `0`, so filter it that way —
   `.reading.done=1` finds the finished ones, `.reading.done=true` finds nothing.
 - A `time` of yours is kept verbatim and compared as text, so write ISO stamps
   (`new Date().toISOString()`) and compare with ISO:
   `.reading.started>=2026-01-01` works, while `.reading.started=today` matches
-  only a row that literally says "today". Time PHRASES are for the platform's
-  stamps.
+  only a row whose value is the literal text `today`. Time PHRASES are for the
+  platform's stamps.
 
 Numbers of yours still compare as numbers — `.recipe.serves>=4` — because both
 sides read as numbers.
@@ -229,7 +233,7 @@ The phrases:
     2026-07-04                a whole day
     2026-07-25T09:00          a minute; with seconds, a second
 
-Whitespace splits a filter line, so glue a phrase with `-` or `_`, or quote it:
+Whitespace separates predicates, so join a phrase with `-` or `_`, or quote it:
 
     await query('.doc!&.created.at>=1-hour-ago')
     await query('.doc!&.created.at>="1 hour ago"')
@@ -257,10 +261,10 @@ listing that does not name them:
                    at: '2026-09-03T12:59:27.876Z', via: null},
          recipe: {serves: 8} }]
 
-A reference to somebody this store has met answers `{eid, name}`, so one query
-draws a list with its bylines. Anything else stays the bare eid.
+A reference to somebody this store has met reads back as `{eid, name}`, so one
+query draws a list with its bylines. Anything else stays the bare eid.
 
-`at` and `by` are shared by several components, so spell out which one you mean:
+`at` and `by` are shared by several components, so write out which one you mean:
 `.created.at`, `.updated.by`, `.completed.at`, `.archived.at`. Some lines that
 come up:
 
@@ -277,14 +281,13 @@ Quotes hold a value together against both separators — whitespace and `&`:
     await query('.web.url="https://x.test/p?a=1&b=2"&.web?')
 
 Unquoted, the `&` in that URL would end the predicate and start a second one.
-Quoting is the mechanism here; percent-encoding a value with an `&` in it does
-not survive the trip, because the door decodes each segment before the grammar
-reads the line. Quote it.
+Quoting is how you avoid that; percent-encoding a value with an `&` in it does
+not survive the trip, because the HTTP endpoint decodes each part of the query
+string before the grammar reads it. Quote it.
 
-A value with a space but no `&` survives on its own (`.doc.title~=Lemon
-drizzle`
-is one predicate), but only until something else joins the line. Quoting always
-works, so quote.
+A value with a space but no `&` survives on its own —
+`.doc.title~=Lemon drizzle` is one predicate — but only until something else is
+added to the filter. Quoting always works, so quote.
 
 ## Walking a reference
 
@@ -312,7 +315,7 @@ The PLURAL form walks the other way — the entities pointing back at this one:
 
 The name is the component's plural — `.comments` are the entities whose
 `comment.target` names this row. When a component has two reference columns the
-name says which one: `.tasks_project` are the projects that have tasks,
+name picks which one: `.tasks_project` are the projects that have tasks,
 `.tasks_assignee` the people who do; `.attachments` are the blobs a file row
 points at.
 
@@ -330,7 +333,7 @@ whichever column:
 
 ## Counting and tallying
 
-Three directives answer a VALUE instead of rows. They ride beside the filters
+Three directives return a VALUE instead of rows. They sit beside the filters
 that select what they reduce, and they read from the index — a page that wants a
 number asks for the number, never for the rows to count.
 
@@ -343,13 +346,14 @@ number asks for the number, never for the rows to count.
     await query('.recipe!&.distinct=recipe.cuisine')
     → {distinct: ['american', 'british', 'thai']}
 
-`.count!` counts what the rest of the line selects. `.tally=` counts each value
-of one column; `.distinct=` answers those values themselves, sorted. Both name
-one column, never a path, and your own columns must be spelled with their
+`.count!` counts what the rest of the filter selects. `.tally=` counts each
+value of one column; `.distinct=` returns those values themselves, sorted. Both
+name one column, never a path, and your own columns must be written with their
 component — `.tally=recipe.cuisine`, not `.tally=cuisine`.
 
 The answer is an object, not an array, so a page has to branch on which it asked
-for. Ask one aggregate per line: two in one line and only the first answers.
+for. Ask for one aggregate at a time: with two in one filter, only the first is
+used.
 
     let { count } = await query('.chore!&.completed=&.count!')
     badge.textContent = `${count} to do`
@@ -370,27 +374,27 @@ themselves. So `limit` is the front page of a feed, and paging walks backwards:
     let older = await query(`.doc!&limit=20&after=${oldest}`)
 
 `after` means "older than this num", so the cursor is the SMALLEST num you hold,
-not the largest. Both spellings work — `limit=20` and `.limit=20` are the same
+not the largest. Both forms work — `limit=20` and `.limit=20` are the same
 window — and a bad bound is refused rather than dropped:
 
     .limit=abc
     → .limit takes a whole number: .limit=200
 
-Remember that a window without a filter is nothing: `limit=50` alone answers
-`[]`, because an empty line selects nothing.
+Remember that a window without a filter is nothing: `limit=50` alone returns
+`[]`, because an empty filter selects nothing.
 
 ## One entity, whole
 
     await query(`id=${eid}`)
 
 `id=` addresses instead of selecting, and an address names no component to leave
-out — so it answers the whole bundle, stamps and all. Several at once is a comma
+out — so it returns the whole bundle, stamps and all. Several at once is a comma
 list, or a repeat:
 
     await query(`id=${a},${b}`)
 
 Name a component beside it and you are back to the ordinary rule:
-`id=<eid>&.doc?` answers that entity's doc alone. Anything the store minted an
+`id=<eid>&.doc?` returns that entity's doc alone. Anything the store minted an
 eid for is addressable this way, including a blob you uploaded.
 
 ## Words
@@ -399,7 +403,7 @@ A bare word is a full-text term over every doc — title and body — and the an
 comes back ranked, best first:
 
     await query('lemon')
-    await search('lemon')                  // the same door
+    await search('lemon')                  // the same search
     await query('lemon&.recipe!&.doc?')    // ranked, and only recipes
 
     → [{ kind: 'recipe', entity: {…},
@@ -408,15 +412,15 @@ comes back ranked, best first:
          rank: {title: 'Lemon drizzle', snip: '3 \x01lemons\x02, 200g butter',
                 score: 2.0000017} }]
 
-A word names no component to leave out, so — like `id=` above — a line that is
-only words answers the WHOLE entity, the app's own components included. That is
+A word names no component to leave out, so — like `id=` above — a filter that is
+only words returns the WHOLE entity, the app's own components included. That is
 what lets a page draw cards straight from a search. Name a component beside the
-word and you are back to the ordinary rule: `lemon&.recipe!` answers recipes
-with no titles, `lemon&.recipe!&.doc?` answers both.
+word and you are back to the ordinary rule: `lemon&.recipe!` returns recipes
+with no titles, `lemon&.recipe!&.doc?` returns both.
 
-`rank` rides the row for a text query and is never stored. Its `snip` marks the
-hit with `\x01` and `\x02` so a page can wrap them in whatever it likes — never
-HTML from the store.
+`rank` is added to the row for a text query and is never stored. Its `snip`
+marks the hit with `\x01` and `\x02` so a page can wrap them in whatever it
+likes — never HTML from the store.
 
 Terms match whole tokens: `lemon` does not find `lemons`. A trailing `*`
 prefix-matches, and quotes make a phrase:
@@ -424,13 +428,13 @@ prefix-matches, and quotes make a phrase:
     await query('lemo*')
     await query('"coconut milk"')
 
-Words and filters mix freely in one line, which is why a search box can hand its
-whole string to `query()` and a saved filter is a valid search.
+Words and filters mix freely in one filter, which is why a search box can hand
+its whole string to `query()` and a saved filter is a valid search.
 
 ## What this store will not do
 
 Two pieces of the wider platform grammar are refused here, by name, rather than
-answered some other way:
+quietly doing something else:
 
     .doc!&work=build       → work lanes are not served by this store
     .doc!&.order=similar   → semantic ranking is not served by this store
@@ -439,13 +443,14 @@ There is no vector search in an app's store, so `.near=<eid>` alone changes
 nothing about the answer — do not reach for it. Ranking is what a text term
 gives you.
 
-`.kind=` knows the platform's words only (`.kind=task`, `.kind=comment`); your
-own word is not a kind to it, and `.kind=recipe` is refused. Ask for the
-component instead — `.recipe!` — which is what you meant.
+`.kind=` knows the platform's own components only (`.kind=task`,
+`.kind=comment`); a component of your own is not a kind to it, and
+`.kind=recipe` is refused. Ask for the component instead — `.recipe!` — which is
+what you meant.
 
 Everything else the grammar has, this store serves.
 
-## A dozen lines that answer something
+## A dozen filters that answer something
 
     .recipe!&.doc?
       every recipe, with its title and body
@@ -457,7 +462,7 @@ Everything else the grammar has, this store serves.
       two cuisines at once
 
     .doc.title~=lemon&.recipe!
-      recipes whose title says lemon — a substring, not a search, and the
+      recipes whose title contains lemon — a substring, not a search, and the
       title predicate already asked for the doc
 
     .chore!&.completed=&.doc?
@@ -483,6 +488,6 @@ Everything else the grammar has, this store serves.
       the newest twenty things this person saved, with their stamps
 
     id=<eid>
-      one entity, whole, however many components it wears
+      one entity, whole, however many components it has
 
 The whole guide is at <https://yaks.app/guide.md>.

@@ -17,22 +17,22 @@ export let PAGES: Record<string, Page> = {
     'slug': 'clipping',
     'title': 'Saving from another site',
     'description':
-      "Clipping a page somebody is reading into the app's store: a worker route that fetches it and reads its JSON-LD, Open Graph and title, a bookmarklet that launches it, why a script on another site cannot write here, and what to say when a site refuses a robot.",
+      "Clipping a page somebody is reading into the app's store: a worker route that fetches it and reads its JSON-LD, Open Graph and title, a bookmarklet that opens it, why a script on another site cannot write here, and what to tell the person when a site refuses a robot.",
     'brief': 'saving a page from another site',
   },
   'code': {
     'slug': 'code',
     'title': 'Code of your own',
     'description':
-      "worker.js in front of an app's files: which routes are yours, what env holds (STORE, FILES, and the secrets you set), what a request says about who is asking, the CPU and subrequest limits, and whole workers to copy.",
+      "worker.js in front of an app's files: which routes are yours, what env holds (STORE, FILES, and the secrets you set), what the request reports about who is asking, the CPU and subrequest limits, and whole workers to copy.",
     'brief': "worker.js in front of an app's files",
   },
   'components': {
     'slug': 'components',
     'title': "Components: the platform's, and your own",
     'description':
-      'Every component an app already has, column by column, and vocab.json for words of your own: the column types, what a later deploy may change, the names already taken, and when a column beats doc.body.',
-    'brief': "the platform's words, and your own",
+      'Every component an app already has, column by column, and vocab.json for components of your own: the column types, what a later deploy may change, the names already taken, and when a column beats doc.body.',
+    'brief': "the platform's components, and your own",
   },
   'domains': {
     'slug': 'domains',
@@ -52,92 +52,92 @@ export let PAGES: Record<string, Page> = {
     'slug': 'errors',
     'title': 'When something breaks',
     'description':
-      'What a refused call answers and how a page shows it, where a break is filed and how the agent hears about it once, app_errors, app_versions and app_rollback, the 30-day trash app_delete and space_delete put a thing in and app_restore and space_restore take it out of, and feedback for anything you or the person have to say about the platform itself.',
+      'What a refused call returns and how a page shows it, where a break is filed and how the agent hears about it once, app_errors, app_versions and app_rollback, the 30-day trash app_delete and space_delete put a thing in and app_restore and space_restore take it out of, and feedback for anything you or the person have to say about the platform itself.',
     'brief': 'what broke, and rolling back',
   },
   'files': {
     'slug': 'files',
     'title': 'Files and pictures',
     'description':
-      "app_files for the app's own files — what a write answers, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.png that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, the 20 MB ceiling and the downscale under it, and a gallery that never shows one picture twice.",
+      "app_files for the app's own files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.png that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, the 20 MB ceiling and the downscale under it, and a gallery that never shows one picture twice.",
     'brief': "the app's files, its icon, uploads, pictures",
   },
   'home': {
     'slug': 'home',
     'title': 'The front page, and routing the space',
     'description':
-      "The app served at <space>.yaks.app/ and how it routes the space: the five rungs a request is answered in, app_set home, the first globs that send another app's paths to it, why a broken router fails open, and where the space's own mail lands.",
+      "The app served at <space>.yaks.app/ and how it routes the space: the five steps a request goes through, app_set home, the first globs that send another app's paths to it, why a broken router fails open, and where the space's own mail lands.",
     'brief': 'the front page, and routing a space',
   },
   'mail': {
     'slug': 'mail',
     'title': "Mail: an app's own address",
     'description':
-      'Sending and receiving email from an app: the address a space and an app make, the bundle that sends a letter and who may ask for one, the delivered and bounced rows that come back, how an arrival lands with its attachments, and what mail here does not do.',
+      'Sending and receiving email from an app: the address a space and an app make, the rows that send a letter and who may ask for one, the delivered and bounced rows that come back, how an arrival lands with its attachments, and what mail here does not do.',
     'brief': "an app's own email address",
   },
   'memory': {
     'slug': 'memory',
     'title': 'What the person said',
     'description':
-      "memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, how a memory differs from the notes an app keeps, and where a document YOU wrote goes instead: project documents, written into the app's store as entities and found again with search.",
+      "memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, how a memory differs from the notes an app keeps, and where a document you wrote goes instead: project documents, written into the app's store as entities and found again with search.",
     'brief': 'the words a person wants remembered',
   },
   'notes': {
     'slug': 'notes',
     'title': 'The notes an app keeps',
     'description':
-      "NOTES.md beside index.html, where an app keeps what its person wants written down about how it is kept — where the file goes, what belongs in it and what does not, the size ceiling, how about and the prompt of the app's own name hand it over, and what an installed copy carries.",
+      'NOTES.md beside index.html, where an app keeps what its person wants written down about how it is kept — where the file goes, what belongs in it and what does not, the size ceiling, how about and a prompt named after the app give it to an agent, and what an installed copy carries.',
     'brief': 'the notes an app keeps',
   },
   'querying': {
     'slug': 'querying',
-    'title': 'Querying: the filter line',
+    'title': 'Querying: the filter grammar',
     'description':
-      'The filter grammar every door here speaks, with worked examples: presence and absence, contains, comparisons, ranges, time phrases, walking a reference, counting, paging, full text — and why a row carries only the components its filter named.',
-    'brief': 'the filter line, with examples',
+      'The one filter grammar, used everywhere a store is read, with worked examples: presence and absence, contains, comparisons, ranges, time phrases, walking a reference, counting, paging, full text — and why a row carries only the components its filter named.',
+    'brief': 'the filter grammar, with examples',
   },
   'selling': {
     'slug': 'selling',
     'title': 'Selling things',
     'description':
-      "Taking money for something: how a seller connects their own Stripe account to a space, the ./api/pay/checkout door a page posts a cart to and what it answers, why a page never posts a price, the order row and the buyer's letter that land when the money moves, who can read an order afterwards, and why a card number never reaches your app.",
+      "Taking money for something: how a seller connects their own Stripe account to a space, the ./api/pay/checkout endpoint a page posts a cart to and what it returns, why a page never posts a price, the order row and the buyer's letter that land when the money moves, who can read an order afterwards, and why a card number never reaches your app.",
     'brief': 'taking money for something an app sells',
   },
   'sharing': {
     'slug': 'sharing',
     'title': 'Publishing and installing an app',
     'description':
-      'Who may read and write an app, how somebody is invited to ONE app rather than the whole space, and how an app travels: app_publish, app_install and app_update, what an installed copy shares (the code, and nothing else), what pinning means, and what an update does to what people saved.',
+      'Who may read and write an app, how somebody is invited to one app rather than the whole space, and how an app travels: app_publish, app_install and app_update, what an installed copy shares (the code, and nothing else), what pinning means, and what an update does to what people saved.',
     'brief': 'publishing and installing an app',
   },
   'stats': {
     'slug': 'stats',
     'title': 'Who visited',
     'description':
-      "Visitor counts for an app: what one page view records and the six things it never does — no address, no visitor id, not even the browser's own string — app_stats and the window it takes, the block on their space page, the door a page reads its own numbers at, and why a small number is usually crawlers.",
+      "Visitor counts for an app: what one page view records and the six things it never does — no address, no visitor id, not even the browser's own string — app_stats and the window it covers, the block on their space page, the endpoint a page reads its own numbers from, and why a small number is usually crawlers.",
     'brief': 'who opened an app, and from where',
   },
   'store': {
     'slug': 'store',
     'title': 'The store, from a page',
     'description':
-      './api/client.js in full — apply, query, search, subscribe, upload and me — the shape of an entity bundle, patching and deleting, compare-and-set with $was so two writers cannot both spend one value, who may read and write, the byline on a row, seed.json for the data an app comes with, and the HTTP doors underneath.',
+      './api/client.js in full — apply, query, search, subscribe, upload and me — what a bundle of components looks like going in, patching and deleting, compare-and-set with $was so two writers cannot both spend one value, who may read and write, the byline on a row, seed.json for the data an app comes with, and the HTTP endpoints underneath.',
     'brief': 'reading and writing from a page',
   },
   'tools': {
     'slug': 'tools',
     'title': 'Commands of your own',
     'description':
-      "tools.json, so the person's agent can act on an app with no page open: an entry's description, its input types and $var bindings, the apply and query acts, what a deploy refuses, the view an answer draws itself in, and how commands and command carry them.",
+      "tools.json, so the person's agent can act on an app with no page open: an entry's description, its input types and $var bindings, the apply and query actions, what a deploy refuses, the page an answer is drawn in, and how the commands and command tools carry them.",
     'brief': 'commands of the app, for an agent',
   },
   'wakes': {
     'slug': 'wakes',
     'title': 'Coming back later',
     'description':
-      "Schedules as data: a `wake` on any entity says when to return to it, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares says what the firing MEANS. Recurrence in durations, cron lines and zones; pausing and resuming; a command asked for later; an idle world advancing offline on a five-minute cadence and catching a missed stretch up in one firing; where a firing runs and what it may spend; why there is no cron trigger, no `scheduled()` and no queue to ask for.",
-    'brief': 'a row that says when to come back, and what happens when it does',
+      "Schedules as data: a `wake` on any entity records when to return to it, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares decides what the firing MEANS. Recurrence in durations, cron lines and zones; pausing and resuming; a command asked for later; an idle world advancing offline on a five-minute cadence and catching a missed stretch up in one firing; where a firing runs and what it may spend; why there is no cron trigger, no `scheduled()` and no queue to ask for.",
+    'brief': 'a row that records when to come back, and what happens then',
   },
 }
 
@@ -261,7 +261,7 @@ export let WORDS: Record<string, Words> = {
   'app_files': {
     'title': "The app's files",
     'description':
-      "Write the app's files — index.html and any css, js or images beside it — or list them, read one back, or delete one. Write a whole app in ONE call with files: [{path, content}, …] — a files batch IS the write, so leave op out; path and content write a single file, and base64 in place of content writes one that is not text — a picture, or the .wasm a worker.js imports. They serve live at <space>.yaks.app/<app>/<path>; index.html answers the directory. Keep what the app remembers in its own store, never localStorage: the page reads and writes it with `import { apply, query, search } from './api/client.js'`, which is served beside the app. Write every address relative: the kernel gives each page a `<base>` at the app's own address, so nothing in an app names the app, and a copy someone installs at another address still works. Every write answers what it stored — the byte count and the sha256, and for a .json file whether it parses, naming the position when it does not — so a miscounted bracket is caught in the call that made it. NOTES.md beside index.html holds the app's own notes — how this one is kept, in the person's words, up to 4 KB — and the about tool hands them back. It is the app's inside, like vocab.json: never served on the web, read back here. op: patch with path, find and replace edits one file in place: find is exact and must match exactly once. op: fetch with path and url writes an https response body to path, which is how a library is vendored without transcribing it, and answers an integrity hash for it. Nothing a write or a delete takes away is lost: each keeps the bytes it replaced for 30 days, op: history with path lists them newest first — sha256, size, when it was replaced and by whom — and op: restore with path puts one back, the newest by default or the one sha or at names. A restore is itself a write, so it too can be undone. Call guide for the whole of it, in a page (https://yaks.app/guide.md). The way back from any write, patch, fetch or delete here: op: history, then op: restore.",
+      "Write the app's files — index.html and any css, js or images beside it — or list them, read one back, or delete one. Write a whole app in ONE call with files: [{path, content}, …] — a files list IS the write, so leave op out; path and content write a single file, and base64 in place of content writes one that is not text — a picture, or the .wasm a worker.js imports. They serve live at <space>.yaks.app/<app>/<path>; index.html answers the directory. Keep what the app remembers in its own store, never localStorage: the page reads and writes it with `import { apply, query, search } from './api/client.js'`, which is served beside the app. Write every address relative: the platform gives each page a `<base>` at the app's own address, so nothing in an app names the app, and a copy someone installs at another address still works. Every write reports what it stored — the byte count and the sha256, and for a .json file whether it parses, naming the position when it does not — so a miscounted bracket is caught in the call that made it. NOTES.md beside index.html holds the app's own notes — how this one is kept, in the person's words, up to 4 KB — and the about tool hands them back. It is the app's inside, like vocab.json: never served on the web, read back here. op: patch with path, find and replace edits one file in place: find is exact and must match exactly once. op: fetch with path and url writes an https response body to path, which is how a library is vendored without transcribing it, and answers an integrity hash for it. Nothing a write or a delete takes away is lost: each keeps the bytes it replaced for 30 days, op: history with path lists them newest first — sha256, size, when it was replaced and by whom — and op: restore with path puts one back, the newest by default or the one sha or at names. A restore is itself a write, so it too can be undone. Call guide for the whole of it, in a page (https://yaks.app/guide.md). The way back from any write, patch, fetch or delete here: op: history, then op: restore.",
   },
   'sandbox_exec': {
     'title': 'Run a build command',
@@ -286,12 +286,12 @@ export let WORDS: Record<string, Words> = {
   'app_deploy': {
     'title': 'Release a version',
     'description':
-      "Release what you have written: the files are already live, so this is the mark that they are one version — the one an error will name. Do it when the app is ready to show, then give the person the URL. It also plants the components the app's vocab.json declares — {{vocab}} — so the app gets typed components of its own. A word the platform already says is refused, the whole manifest at once and before anything is planted; one this manifest stops naming, and that holds no rows, goes. It answers the columns it ADDED and the ones the store still has that this manifest did not name — a column is never renamed or retyped, so a new spelling arrives beside the old one, which keeps every row already written under it. A seed.json beside index.html — a list of bundles, or a seed/ folder of *.json files when there is a lot of them — is written into the app's store here, once per store and after the components, so the app opens with data in it; deploy again and nothing is seeded. A tools.json beside it gives the app commands of its own — {{tools}} — which everyone who can reach the app runs with the command tool, so the person and their agent act on the app through its own words. And a worker.js beside index.html becomes the app's own server code: it answers every request that is not /api/ before the files do, and whatever it answers 404 falls through to them. Every deploy is kept, so app_rollback can put this one back later. If the app is published, the offer does NOT move with it — what strangers install stays the version you published until you app_publish again, and this says so when it starts trailing. The way back: app_rollback, which puts an earlier deploy back as a new version.",
+      "Release what you have written: the files are already live, so this is the mark that they are one version — the one an error will name. Do it when the app is ready to show, then give the person the URL. It also plants the components the app's vocab.json declares — {{vocab}} — so the app gets typed components of its own. A component name the platform already uses is refused — the whole manifest at once, before anything is planted; one this manifest stops naming, and that holds no rows, goes. It reports the columns it ADDED and the ones the store still has that this manifest did not name — a column is never renamed or retyped, so a new name arrives beside the old one, which keeps every row already written under it. A seed.json beside index.html — a list of bundles, or a seed/ folder of *.json files when there is a lot of them — is written into the app's store here, once per store and after the components, so the app opens with data in it; deploy again and nothing is seeded. A tools.json beside it gives the app commands of its own — {{tools}} — which everyone who can reach the app runs with the command tool, so the person and their agent act on the app through its own commands. And a worker.js beside index.html becomes the app's own server code: it answers every request that is not /api/ before the files do, and whatever it answers 404 falls through to them. Every deploy is kept, so app_rollback can put this one back later. If the app is published, the offer does NOT move with it — what strangers install stays the version you published until you app_publish again, and this says so when it starts trailing. The way back: app_rollback, which puts an earlier deploy back as a new version.",
   },
   'store_load': {
     'title': 'Load a data file into the store',
     'description':
-      'Write a data file the app already carries into the app\'s store, now. path is one file — data/cities.json — or a folder, and then every *.json and *.csv under it goes in. A JSON file holds the same list of bundles a seed.json does and graph_apply takes: [{"entity": {"eid": "$a"}, "doc": {"title": "…"}}]. A CSV is a spreadsheet, and `as` names the component ONE ROW becomes — as: "city" with headers name,country writes city{name, country} per row, values coerced to the column types the vocabulary declares; `title` and `body` land in the row\'s doc, an `id` (or `alias`) column is the row\'s NAME — alias{name}, which lands on the entity already holding it, so loading the file again patches those rows instead of duplicating them and the name stands wherever an eid does, and map {"Serves how many": "serves"} renames a header that does not match a column. A header naming nothing is refused, as is a cell that will not coerce, both naming the row and the header. Together the files are ONE batch, read in filename order, so an alias minted in one file resolves in the next; if the store refuses a bundle nothing is written and the refusal names the file and the entry that caused it. This is how a big dataset arrives without being typed into a call: app_files(op: fetch) writes the https body into the app, store_load puts it in the store — two calls. Unlike a seed it is not once-only: call it whenever, and it patches and adds as the caller, so the rows carry your byline. It applies whatever the file says, deletes included — a bundle with $delete: true (or tombstone: {}) deletes that entity, and the store is the judge of whether you may. A bundle naming an eid patches that row; one naming a $alias mints a new entity each run — unless it carries alias: {name: "…"}, which lands on the entity already holding that name, so a file loaded twice is a patch and not a second copy.',
+      'Write a data file the app already carries into the app\'s store, now. path is one file — data/cities.json — or a folder, and then every *.json and *.csv under it goes in. A JSON file holds the same list of bundles a seed.json does and graph_apply takes: [{"entity": {"eid": "$a"}, "doc": {"title": "…"}}]. A CSV is a spreadsheet, and `as` names the component ONE ROW becomes — as: "city" with headers name,country writes city{name, country} per row, values coerced to the column types the vocabulary declares; `title` and `body` land in the row\'s doc, an `id` (or `alias`) column is the row\'s NAME — alias{name}, which lands on the entity already holding it, so loading the file again patches those rows instead of duplicating them and the name stands wherever an eid does, and map {"Serves how many": "serves"} renames a header that does not match a column. A header naming nothing is refused, as is a cell that will not coerce, both naming the row and the header. Together the files are ONE transaction, read in filename order, so an alias minted in one file resolves in the next; if the store refuses a bundle nothing is written and the refusal names the file and the entry that caused it. This is how a big dataset arrives without being typed into a call: app_files(op: fetch) writes the https body into the app, store_load puts it in the store — two calls. Unlike a seed it is not once-only: call it whenever, and it patches and adds as the caller, so the rows carry your byline. It applies whatever the file contains, deletes included — a bundle with $delete: true (or tombstone: {}) deletes that entity, and the store is the judge of whether you may. A bundle naming an eid patches that row; one naming a $alias mints a new entity each run — unless it carries alias: {name: "…"}, which lands on the entity already holding that name, so a file loaded twice is a patch and not a second copy.',
   },
   'app_versions': {
     'title': 'Deploy history',
@@ -306,7 +306,7 @@ export let WORDS: Record<string, Words> = {
   'store_restore': {
     'title': 'Put a store back to a moment',
     'description':
-      "Put everything the app has saved back to how it was at a moment — the whole store, every row of it, as of that time. This is the answer when a write went wrong and the person wants their data back: a bad import, rows deleted that should not have been, a change that turned out to be the wrong one. Cloudflare keeps the last 30 days of the store, so any moment in those 30 days can be asked for; at is that moment, as a time (2026-09-06T14:20:00Z). Call it with no at first: it says the oldest moment still available and every restore already made. It is REVERSIBLE — where the store stood before is written down before anything moves, so a restore is undone by restoring again to a moment just before it, and the answer hands you that exact sentence. What it costs is what was written since the moment asked for, so name the moment as late as it can be. The app is briefly restarted to pick the recovery up. The app's FILES are not part of this — app_rollback and app_files restore put those back. The way back: another store_restore, to the moment just before this one, which the answer hands you.",
+      "Put everything the app has saved back to how it was at a moment — the whole store, every row of it, as of that time. This is the answer when a write went wrong and the person wants their data back: a bad import, rows deleted that should not have been, a change that turned out to be the wrong one. Cloudflare keeps the last 30 days of the store, so any moment in those 30 days can be asked for; at is that moment, as a time (2026-09-06T14:20:00Z). Call it with no at first: it reports the oldest moment still available and every restore already made. It is REVERSIBLE — where the store stood before is written down before anything moves, so a restore is undone by restoring again to a moment just before it, and the answer hands you that exact sentence. What it costs is what was written since the moment asked for, so name the moment as late as it can be. The app is briefly restarted to pick the recovery up. The app's FILES are not part of this — app_rollback and app_files restore put those back. The way back: another store_restore, to the moment just before this one, which the answer hands you.",
   },
   'app_set': {
     'title': 'Rename or reshare an app',
@@ -316,12 +316,12 @@ export let WORDS: Record<string, Words> = {
   'app_secret_set': {
     'title': 'Set a worker key',
     'description':
-      "Give the app's worker a key for an outside service — an API key, a token — without the page ever holding it. The value goes onto the app's own script and NOWHERE else: it is not saved in the app's data, not in its history, and no tool, this one included, can ever read it back. Only the worker can, as env.NAME, so name it the way its code will spell it: app_secret_set(app, name: 'WEATHER_KEY', value) and then `fetch(url, {headers: {authorization: env.WEATHER_KEY}})` in worker.js. Ask the person for the value; never invent one. Setting a name that is already there replaces it. The app needs a worker.js (app_deploy uploads it) for the secret to reach any code.",
+      "Give the app's worker a key for an outside service — an API key, a token — without the page ever holding it. The value goes onto the app's own script and NOWHERE else: it is not saved in the app's data, not in its history, and no tool, this one included, can ever read it back. Only the worker can, as env.NAME, so name it the way its code will refer to it: app_secret_set(app, name: 'WEATHER_KEY', value) and then `fetch(url, {headers: {authorization: env.WEATHER_KEY}})` in worker.js. Ask the person for the value; never invent one. Setting a name that is already there replaces it. The app needs a worker.js (app_deploy uploads it) for the secret to reach any code.",
   },
   'app_secret_list': {
     'title': 'The worker keys',
     'description':
-      "The names of the keys the app's worker can read. Values are never answered — by this tool or any other. Use it to see what a worker.js may spell as env.NAME.",
+      "The names of the keys the app's worker can read. Values are never returned — by this tool or any other. Use it to see what a worker.js may read as env.NAME.",
   },
   'app_secret_remove': {
     'title': 'Remove a worker key',
@@ -351,12 +351,12 @@ export let WORDS: Record<string, Words> = {
   'commands': {
     'title': 'What the apps can do',
     'description':
-      "The commands the apps here declare, with the arguments each one takes. An app's own verbs — the ones its tools.json spells and the two every word it holds is worth, like add_recipe and find_recipe — live here rather than in this tool list, which is the same for everybody. Read it when an ask sounds like something an app of theirs already does, then run one with command.",
+      "The commands the apps here declare, with the arguments each one accepts. An app's own commands — the ones its tools.json declares and the two every component it holds gets, like add_recipe and find_recipe — live here rather than in this tool list, which is the same for everybody. Read it when an ask sounds like something an app of theirs already does, then run one with command.",
   },
   'command': {
     'title': 'Run an app command',
     'description':
-      "One of an app's own commands, run: name it and pass its arguments as args, exactly as commands says it takes them. The app is only needed when two apps here spell the same command. It goes through the app's ordinary doors as the person calling it, so it can do what they could do on the page and never more. The way back: store_restore, to the moment just before it ran, for whatever it wrote.",
+      "One of an app's own commands, run: name it and pass its arguments as args, exactly as commands lists them. The app is only needed when two apps here declare the same command name. It goes through the app's ordinary endpoints as the person calling it, so it can do what they could do on the page and never more. The way back: store_restore, to the moment just before it ran, for whatever it wrote.",
   },
   'domain_attach': {
     'title': 'Attach a domain',
@@ -366,7 +366,7 @@ export let WORDS: Record<string, Words> = {
   'domain_status': {
     'title': 'Domain progress',
     'description':
-      'How far a domain has come, and what it points at — the space, or one app of it. Whether the DNS record has arrived, whether Cloudflare has accepted the hostname, and whether the certificate is issued — each said specifically enough to tell the person what is still waiting on them. Read from Cloudflare, not from what we last wrote down. Leave hostname out for every domain in the space. Call it after domain_attach, and again a few minutes later; nothing needs doing between.',
+      'How far a domain has come, and what it points at — the space, or one app of it. Whether the DNS record has arrived, whether Cloudflare has accepted the hostname, and whether the certificate is issued — each reported specifically enough to tell the person what is still waiting on them. Read from Cloudflare, not from what we last wrote down. Leave hostname out for every domain in the space. Call it after domain_attach, and again a few minutes later; nothing needs doing between.',
   },
   'domain_detach': {
     'title': 'Detach a domain',
@@ -386,7 +386,7 @@ export let WORDS: Record<string, Words> = {
   'app_published': {
     'title': 'Published apps',
     'description':
-      'What other people have published here, newest first: the name to install by, what it is, and which space it came from. Read it when the person asks for something somebody may already have made — installing one is app_install, and gives them their own copy with their own data. With words, only the offers whose name, title or description say them. It needs no account: a published app is offered to everybody, and its own pages are readable at the address printed here.',
+      'What other people have published here, newest first: the name to install by, what it is, and which space it came from. Read it when the person asks for something somebody may already have made — installing one is app_install, and gives them their own copy with their own data. With words, only the offers whose name, title or description contain them. It needs no account: a published app is offered to everybody, and its own pages are readable at the address printed here.',
   },
   'app_install': {
     'title': 'Install a published app',
@@ -411,22 +411,22 @@ export let WORDS: Record<string, Words> = {
   'grant': {
     'title': 'A token for the CLI',
     'description':
-      'A short-lived token that signs the `yak` CLI in as this person — the same identity and exactly the same access they have here, never more. Reach for it when someone wants to work from their own terminal, or wants a script to reach their apps: the answer is the one line they paste. It lasts an hour unless `hours` says otherwise (24 at most), and `space` narrows it to one space, which is what to do when it is going somewhere less careful than a laptop. Show them the answer as it is: the token is said ONCE and kept nowhere it can be read back. `revoke` takes one back before it expires, by the id the minting answer named.',
+      'A short-lived token that signs the `yak` CLI in as this person — the same identity and exactly the same access they have here, never more. Reach for it when someone wants to work from their own terminal, or wants a script to reach their apps: the answer is the one line they paste. It lasts an hour unless `hours` gives another (24 at most), and `space` narrows it to one space, which is what to do when it is going somewhere less careful than a laptop. Show them the answer as it is: the token is shown ONCE and kept nowhere it can be read back. `revoke` takes one back before it expires, by the id the minting answer named.',
   },
   'feedback': {
     'title': 'Send feedback',
     'description':
-      "The door for ALL feedback about yaks.app itself — this connector, its tools, its guide, the way an app is built or served here. A bug, a rough edge, a step that took three tries, a confusing answer, a wish, a feature idea, a thing that went well: all of it is wanted, from what YOU ran into working here or in the PERSON's own words. Not the app you are building for the person: a break inside their own app is theirs and yours to fix (app_errors lists those). Reach for this the moment it comes up — a tool that refused for no reason you could find, a door that does not exist, an answer that disagreed with what was documented, a step the person found baffling, something they wished this place did, a sentence they said about any of it. Where something is broken, go on and work around it: nobody sees the workaround, and this is what they see instead. Say what the PERSON said, in their own words, and what YOU tried and what happened — those two are the whole report. Who they are, their space, the app if you name one, and the versions ride along on their own; do not repeat them. It reaches a person by mail, and they can write back. It works signed out too — the report then says it came from someone signed out, and there is no address to answer, so put one in the words if a reply is wanted.",
+      "The tool for ALL feedback about yaks.app itself — this connector, its tools, its guide, the way an app is built or served here. A bug, a rough edge, a step that took three tries, a confusing answer, a wish, a feature idea, a thing that went well: all of it is wanted, from what YOU ran into working here or in the PERSON's own words. Not the app you are building for the person: a break inside their own app is theirs and yours to fix (app_errors lists those). Reach for this the moment it comes up — a tool that refused for no reason you could find, a page or tool that does not exist, an answer that disagreed with the guide, a step the person found baffling, something they wished this place did, a sentence they said about any of it. Where something is broken, go on and work around it: nobody sees the workaround, and this is what they see instead. Say what the PERSON said, in their own words, and what YOU tried and what happened — those two are the whole report. Who they are, their space, the app if you name one, and the versions ride along on their own; do not repeat them. It reaches a person by mail, and they can write back. It works signed out too — the report then records that it came from someone signed out, and there is no address to answer, so put one in the words if a reply is wanted.",
   },
   'guide': {
     'title': 'The guide',
     'description':
-      'The guide, read here instead of fetched off the web. With no page: the map — what an app is, how its pages read and write its store, and a passage on every feature there is. Read that first. With a page: the whole of one subject. The pages are {{pages}}. A name that is none of them answers the map, which lists them all. The same words are served to a person at https://yaks.app/guide.md.',
+      'The guide, read here instead of fetched off the web. With no page: the map — what an app is, how its pages read and write its store, and a passage on every feature there is. Read that first. With a page: the whole of one subject. The pages are {{pages}}. A name that is none of them returns the map, which lists them all. The same pages are served to a person at https://yaks.app/guide.md.',
   },
   'about': {
     'title': 'What yaks.app is',
     'description':
-      'What yaks.app is and what gets made here. Call it when someone asks what this place is, or when you have not signed in and want to know what works signed out and what signing in would add — it answers in a paragraph and says where to sign in. Signed in, it also says WHO you are signed in as, how (a browser, a connector, a CLI grant) and until when, the tools this door is listing right now, and every app you can reach — its address, what it holds, the notes it keeps and whatever the person has said in that space. Signed out it reads nothing about anybody: the same words for everyone.',
+      'What yaks.app is and what gets made here. Call it when someone asks what this place is, or when you have not signed in and want to know what works signed out and what signing in would add — it answers in a paragraph and says where to sign in. Signed in, it also reports WHO you are signed in as, how (a browser, a connector, a CLI grant) and until when, the tools this connector is listing right now, and every app you can reach — its address, what it holds, the notes it keeps and whatever the person has said in that space. Signed out it reads nothing about anybody: the same answer for everyone.',
   },
   'gallery_search': {
     'title': 'Search the gallery',
@@ -441,7 +441,7 @@ export let WORDS: Record<string, Words> = {
   'memory_recall': {
     'title': 'What they have said',
     'description':
-      'What the person has said about how they want things done, in their own words, ranked by what your words are about. Ask BEFORE building or changing an app, and whenever a choice is theirs to have made — how a page should look, what a thing should be called, how they want to be told about something. The newest few ride on every connection already; this is how the rest are found. Answers each memory whole, with the line of context saved beside it.',
+      'What the person has said about how they want things done, in their own words, ranked against the words you give it. Ask BEFORE building or changing an app, and whenever a choice is theirs to have made — how a page should look, what a thing should be called, how they want to be told about something. The newest few come with every connection already; this is how the rest are found. Returns each memory whole, with the line of context saved beside it.',
   },
   'app_stats': {
     'title': 'Who visited an app',
