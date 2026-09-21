@@ -48,7 +48,6 @@
     "@yaks/member"
   ],
   "numbers": { "except": ["archetype", "key"] },
-  "actor": "yak",
   "port": 5273,
   "name": "yak"
 }

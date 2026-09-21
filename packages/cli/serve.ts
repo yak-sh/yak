@@ -13,11 +13,11 @@
  * plugin packages and imports, from each, the FACETS it runs — one subpath
  * apiece: the words it speaks (`@yaks/mail/vocab`), what a batch means
  * (`/rules`), what an agent may call (`/tools`), what happens after a commit
- * (`/effects`), the HTTP it adds (`/routes`), the one pass it makes at
- * start-up (`/boot`) and what it keeps doing while the host is up
- * (`/service`). A subpath a package does not export is a facet it does not
- * have, and is skipped; a subpath that exists and fails to import is an error,
- * never a skip. Over that it opens one SQLite file and mounts the doors —
+ * (`/effects`), the HTTP it adds (`/routes`) and what it keeps doing while the
+ * host is up (`/service`). A subpath a package does not export is a facet it
+ * does not have, and is skipped; a subpath that exists and fails to import is
+ * an error, never a skip. Over that it opens one SQLite file and mounts the
+ * doors —
  * {@link https://jsr.io/@yaks/api | @yaks/api} at `/apply`, `/query` and
  * `/ws`, {@link https://jsr.io/@yaks/mcp | @yaks/mcp} at `/mcp`. There is no
  * other wiring: a server is a config file and a list of modules.
@@ -42,8 +42,10 @@ import {
   type Actor,
   type Bundle,
   detached,
+  type Eid,
   type Graph,
   graph,
+  isPromise,
   type NamedTool,
   namedTool,
   type Plugin,
@@ -57,9 +59,9 @@ import {
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
-import { idKeywords, minted } from '@yaks/id'
+import { idKeywords } from '@yaks/id'
 import { nameKeywords } from '@yaks/names'
-import { HOST, hosted, hostEid } from '@yaks/kernel'
+import { ended, PROCESS, selfEid, started } from '@yaks/process'
 import type { Derived, Extension } from '@yaks/sql'
 import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
 import { Database, driver } from '@yaks/sqlite/db'
@@ -75,6 +77,7 @@ import { adopt, fields as searched, find, search } from '@yaks/fts'
 import {
   type Effects,
   effects,
+  released,
   type SweepRows,
   type Watch,
 } from '@yaks/effects'
@@ -101,6 +104,10 @@ export type Host = {
   storage: Store
   sql: Driver
   graph: Graph
+  /** THIS PROCESS, as an entity (@yaks/process `started`): the row it wrote on
+   * the way in, what everything it writes is signed with, and what a start-up
+   * effect compares against to tell its own birth from a child's. */
+  me: Eid
   /** who is calling — the same answer the graph's own doors get, so a route
    * signs what it writes (`signed` in @yaks/api) rather than writing as
    * nobody. One plugin may say it; where it says nobody, the answer is this
@@ -116,7 +123,6 @@ export let FACETS = [
   'tools',
   'effects',
   'routes',
-  'boot',
   'service',
 ] as const
 
@@ -175,24 +181,14 @@ export type RoutesFacet = {
   authenticate?: (host: Host, options: Options) => Authenticate
 }
 
-/** `<plugin>/boot` — the one pass this plugin makes at start-up, before
- * anything is served: the leases a dead holder left, the processes a restart
- * has to adopt back. A MOMENT rather than an observation, which is why it is
- * not an effect — and why `compose` only imports it while {@link serve} is
- * what runs it: a one-shot command opens the same host to ask one question and
- * must not reconcile another process's world. */
-export type BootFacet = {
-  boot?: (host: Host, options: Options) => void | Promise<void>
-}
-
 /** `<plugin>/service` — the work this plugin KEEPS DOING while the host is up:
  * a clock, a poll, a sweep. Neither a request nor a post-commit observation,
  * which is why neither `routes` nor `effects` could hold it — a wake that
  * comes due and a mailbox that has to be asked are things nobody is calling
  * about. It is handed an `AbortSignal` and returns when that signal aborts;
- * `compose` imports it and {@link serve} is what starts it, for the reason
- * `boot` has: a one-shot command opens the same host to ask one question and
- * must not start another process's clock. */
+ * `compose` imports it and {@link serve} is what starts it — a one-shot
+ * command opens the same host to ask one question and must not start another
+ * process's clock. */
 export type ServiceFacet = {
   service?: (
     host: Host,
@@ -209,7 +205,6 @@ export type Facets = {
   tools: ToolsFacet
   effects: EffectsFacet
   routes: RoutesFacet
-  boot: BootFacet
   service: ServiceFacet
 }
 
@@ -253,12 +248,13 @@ export type Served = Host & {
   fx: Effects
   /** the doors, as one request handler */
   handler: Handler
-  /** each plugin's start-up pass, in config order — run by {@link serve}
-   * before it listens, and by nobody else */
-  boot: () => Promise<void>
   /** start every plugin's long-running work; it stops with {@link Served.close} */
   start: () => void
-  close: () => void
+  /** let the graph go: every duty this process holds let go and its `exit`
+   * stamped — the code it is handed, or none where nobody knows how it ended.
+   * AWAIT IT where the process is about to end, or the last batch races the
+   * exit and the row reads as still running forever. */
+  close: (code?: number) => void | Promise<void>
 }
 
 // The database a config names. `DB_PATH` is the other spelling, for a service
@@ -307,27 +303,25 @@ let understood = (brought: Keywords[]): Keywords[] => {
 }
 
 /**
- * Who a host writes as where no door named a caller: the entity its config's
- * `actor` names, acting for itself through itself.
+ * Who a host writes as where no door named a caller: THIS PROCESS, acting for
+ * itself through itself.
  *
- * A NAME is the host's own identity — it mints that row at start-up
- * (@yaks/kernel `hosted`) and its id is derived from the name, so nothing is
- * looked up and no uuid is pasted into a config. An id this family minted
- * names something somebody else made, and is signed with as it stands.
+ * There is no configured name. A run of a program is not a singleton and never
+ * was — two `yak` lines and a `yak serve` over one file are three writers — so
+ * the identity is the `process` row this run wrote on the way in
+ * (@yaks/process `started`), which makes `created.by` the answer to *which
+ * run* wrote a thing, and a child's row, written by its parent, say whose
+ * child it is without a column for it.
  *
- * ```ts
- * writer({ actor: 'yak' })?.by == writer({ actor: 'yak' })?.by // true
- * ```
+ * A graph whose vocabulary has no `process` word has no such row, and nothing
+ * is signed rather than signed with an id nothing minted.
  */
-export let writer = (config: Config): Actor | null => {
-  if (!config.actor) return null
-  let eid = minted(config.actor) ? config.actor : hostEid(config.actor)
-  return { by: eid, via: eid }
-}
+export let writer = (vocab: Vocab): Actor | null =>
+  vocab.comp(PROCESS) ? { by: selfEid(), via: selfEid() } : null
 
 // Exactly one plugin may say who is calling; two would mean the door's answer
-// depends on import order, which is not an answer. Whoever it is, the HOST is
-// the floor: a request no plugin claimed is the box's own writing, not
+// depends on import order, which is not an answer. Whoever it is, this PROCESS
+// is the floor: a request no plugin claimed is the box's own writing, not
 // nobody's.
 let doorman = (
   served: [RoutesFacet, Options][],
@@ -387,7 +381,6 @@ export let compose = async (
   let tooled = taken('tools')
   let watched = taken('effects')
   let served = taken('routes')
-  let booted = taken('boot')
   let running = taken('service')
 
   // The words an invocation is written in come with the HOST, not with
@@ -435,12 +428,13 @@ export let compose = async (
     // to nobody while `/apply` beside it is attributed correctly. The host
     // itself is that answer until the plugins are asked, which is a moment
     // later — `who` reads the binding rather than a copy of it.
-    let self = writer(config)
+    let self = writer(vocab)
     let authenticate: Authenticate = () => self
     let host: Host = {
       config,
       vocab,
       sql,
+      me: selfEid(),
       who: (request) => authenticate(request),
       get storage(): Store {
         if (!store) throw new Error('the store is not open yet')
@@ -563,6 +557,14 @@ export let compose = async (
       // `/apply`, `/query` and `/ws` and refuse the rest in the wire's shape.
       return route ? route.handle(request) : door(request)
     }
+    // THIS PROCESS, written in. Last, because the birth of this row is what
+    // start-up work now hangs off — a `created(process)` effect comparing the
+    // entity against `host.me` is a plugin's one pass at start, and the
+    // registrations above have to be in place before it fires. First among the
+    // writes, because everything below is signed with it and `created.by` is a
+    // reference: a process signing with an entity nothing minted would write a
+    // dangling id on its first breath.
+    if (self) await g.apply([started()])
     return {
       ...host,
       graph: g,
@@ -570,11 +572,6 @@ export let compose = async (
       runner: run,
       fx,
       handler,
-      // In config order, one after another: a plugin's pass may well be about
-      // rows another plugin's pass just corrected.
-      boot: async () => {
-        for (let [mod, options] of booted) await mod.boot?.(host, options)
-      },
       // Started together and stopped together, by one signal: a host going
       // down is one fact, and a service that outlived the database it reads
       // would be a crash nobody asked for. A service that throws is reported
@@ -590,9 +587,30 @@ export let compose = async (
           }
         }
       },
-      close: () => {
+      // The LAST batch, then the file: every duty this process holds let go,
+      // and its ending stamped. One batch, because they are one fact — a
+      // process that is over is not doing anything, and the next one to ask
+      // should not wait out a lapse nobody is using. Last, because `exit`
+      // ABSENT is what running means, so a process that closed without
+      // stamping one reads as still going forever.
+      close: (code?: number) => {
         stopping.abort()
-        db.close()
+        let shut = () => {
+          try {
+            db.close()
+          } catch { /* already let go */ }
+        }
+        if (!self) return shut()
+        try {
+          let done = then(
+            released(g!, selfEid()),
+            (lets: Bundle[]) => g!.apply([...lets, ended(code)]),
+          )
+          if (!isPromise(done)) return shut()
+          return done.then(shut, shut)
+        } catch {
+          shut()
+        }
       },
     }
   } catch (error) {
@@ -617,39 +635,24 @@ export let unfinished = (g: Graph): SweepRows => (comp, pending) =>
       })),
   )
 
-/**
- * The host's own row, written before anything it signs points at it:
- * `created.by` is a REFERENCE, so a server signing with an entity nothing
- * minted would write a dangling id on its first breath. Idempotent — the id is
- * derived from the name, so every start says the same thing.
- *
- * A config that signs with an id this family minted names something somebody
- * else made, and nothing is written for it: that entity is not this host's.
- */
-export let own = async (host: Served): Promise<void> => {
-  let said = host.config.actor
-  if (!said || minted(said) || !host.vocab.comp(HOST)) return
-  await host.graph.apply([hosted(said)])
-}
-
 /** Serve a config: compose it, and listen. `onListen` is told the address and
- * the host it belongs to — the composition is done before anything binds. */
+ * the host it belongs to — the composition is done before anything binds.
+ *
+ * What a plugin owes its own start-up is not here: `compose` wrote this
+ * process's row, and the `created(process)` effects on it are that pass, so
+ * the agents a restart left running are picked back up whichever program
+ * opened the graph. */
 export let serve = async (
   config: Config,
   onListen?: (addr: Deno.NetAddr, host: Served) => void,
 ): Promise<{ host: Served; server: Deno.HttpServer }> => {
   let host = await compose(config)
-  // Whose server this is, first of all: everything below is signed with it.
-  await own(host)
-  // Boot: the `tool` rows a call points at, and then what a crash left
-  // claimed and unanswered, finished. Here rather than in `compose`, because
-  // BOOT is the server starting — a one-shot command composes the same host
-  // and must not reach into calls another process is running.
+  // The `tool` rows a call points at, and then what a crash left claimed and
+  // unanswered, finished. Here rather than in `compose`, because this is the
+  // SERVER starting — a one-shot command composes the same host and must not
+  // reach into calls another process is running.
   await host.runner.ensure()
   await reconcile(host.runner)
-  // And each plugin's own: the locks a dead holder left, the agents still
-  // running that this process has no memory of.
-  await host.boot()
   // Then the effects that said what "still pending" LOOKS like: an effect is
   // at-most-once, and a crash between the commit and the handler is exactly
   // what the `sweep` on a registration is for. Its query is the graph's own,
@@ -657,9 +660,9 @@ export let serve = async (
   // that declared a sweep promised to be idempotent, since this re-drives what
   // may well have run.
   await host.fx.relay(unfinished(host.graph))
-  // And then the clocks: what a plugin keeps doing while this is up. After
-  // boot, so a sweep never races the reconciliation that corrects what it is
-  // about to read.
+  // And then the clocks: what a plugin keeps doing while this is up. Last, so
+  // a sweep never races the reconciliation that corrects what it is about to
+  // read.
   host.start()
   let server = Deno.serve({
     port: config.port ?? PORT,

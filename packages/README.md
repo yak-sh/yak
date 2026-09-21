@@ -109,7 +109,10 @@ In dependency order:
   ledger. Registered on a component and one of the three things that happen to
   it (`created`/`changed`/`removed`), or on a PATTERN — any query, run wherever
   the batch just made it hold, so nothing has to be derived into the graph to
-  trigger an effect. The mechanism — it ships no effect of its own.
+  trigger an effect. The mechanism — it ships no effect of its own. Beside the
+  ledger it holds `lease{name, holder, until}`: one duty, one row, its id
+  derived from the name and the take settled by the graph's own precondition, so
+  every process could do a thing and exactly one does.
 - **[@yaks/journal](./journal)** — who wrote what, when: every committed batch
   recorded inside its own transaction, in three append-only tables off the
   spine, after-images only — and the three things that fall out: the history of
@@ -141,9 +144,11 @@ In dependency order:
   the one that should be, `exit{code}`, and its output as @yaks/session's
   `content{body}` + `output{source}`. Four entry points over one loop — launch a
   child detached, adopt one by pid, re-adopt every unfinished row at boot, and
-  supervise the wanted ones from a host's tick — plus the same rows as a
-  session's `shell`, `wait` and `stop` tools, so a long tool call answers with
-  the process instead of blocking on it.
+  supervise the wanted ones from a host's tick. The program doing the launching
+  is one too: `started()`/`ended()` are the rows a process writes about ITSELF,
+  which is what a host signs with and what a start-up effect fires on — plus the
+  same rows as a session's `shell`, `wait` and `stop` tools, so a long tool call
+  answers with the process instead of blocking on it.
 - **[@yaks/spawn](./spawn)** — the three of those meeting: a session whose
   provider is a COMMAND. The `using` on a transcript's first entry is the
   request, a provider that is a command line (`claude`, `codex`) is started
@@ -297,7 +302,6 @@ and takes the ones it runs (`@yaks/cli` `compose`, `packages/cli`):
 | `./tools`   | `runs: (host, options) => Runs`, behind its `tool: true` words | ajv, SQL, anything  |
 | `./effects` | `effects: (host, options) => Watch[]`                          | anything            |
 | `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`          | anything            |
-| `./boot`    | `boot: (host, options) => void \| Promise<void>`               | anything            |
 | `./service` | `service: (host, options, signal) => void \| Promise<void>`    | anything            |
 | `./views`   | `views` — `@yaks/render` renderers                             | nothing server-side |
 | `.`         | types, and the pure functions the package offers as a library  |                     |
@@ -336,21 +340,22 @@ session reads before its first turn. It is gone (T-37707). What a session should
 be told is undecided, and `session_context` now answers only what a lifecycle
 hook needs: the transcript's own id, and the work it holds a lock on.
 
-`./boot` is the one pass a plugin makes at start-up, before anything is served:
-the leases a dead holder left (`@yaks/session/boot`), the agents still running
-that a restarted server has no memory of (`@yaks/spawn/boot`). It is a MOMENT
-rather than an observation, which is why it is not an effect — and `compose`
-only imports it while `serve` is what runs it, because a one-shot command opens
-the same host to ask one question and must not reconcile another process's
-world.
+There was a `./boot` facet, the one pass a plugin made at start-up. It is gone
+(T-37703), and what it did is an ordinary effect: every `yak` process — a line,
+a door, a TUI — writes its own `process` row when it opens a graph
+(`@yaks/process` `started`), so a plugin's start-up pass is `created(process)`
+where the process is this one (`@yaks/session/effects` frees the locks a dead
+holder left, `@yaks/spawn/effects` picks the agents a restart left running back
+up). Each takes a `lease` (`@yaks/effects`) so two processes starting together
+do not both do it. A start is not a special moment a host has to offer; it is a
+row appearing, and everything that reads the graph can see it.
 
-`./service` is the other half of that: what a plugin KEEPS DOING while the host
-is up — a clock, a poll, a sweep (`@yaks/wake/service` fires what has come due).
-Neither a request nor a post-commit observation, which is why neither `routes`
-nor `effects` could hold it: a wake reaching its instant and a mailbox that has
-to be asked are things nobody is calling about. It is handed an `AbortSignal`,
-returns when that aborts, and is started by `serve` after `boot` and stopped by
-the host's `close`.
+`./service` is what a plugin KEEPS DOING while the host is up — a clock, a poll,
+a sweep (`@yaks/wake/service` fires what has come due). Neither a request nor a
+post-commit observation, which is why neither `routes` nor `effects` could hold
+it: a wake reaching its instant and a mailbox that has to be asked are things
+nobody is calling about. It is handed an `AbortSignal`, returns when that
+aborts, and is started by `serve` and stopped by the host's `close`.
 
 A subpath a package does not export is a facet it does not have, and the host
 skips it; a subpath that exists and fails to import is an error, never a skip. A

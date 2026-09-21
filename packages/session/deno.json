@@ -6,7 +6,7 @@
     "./vocab": "./vocab.ts",
     "./rules": "./rules.ts",
     "./tools": "./tools.ts",
-    "./boot": "./boot.ts",
+    "./effects": "./effects.ts",
     "./routes": "./routes.ts",
     "./views": "./views.ts"
   },

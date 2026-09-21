@@ -116,7 +116,7 @@ let served = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
       ),
   )
   await server.finished
-  host.close()
+  await host.close(0)
   return 0
 }
 
@@ -209,15 +209,17 @@ export let TOOLS: Command[] = [...own, ...appTools]
 
 /** One line, from argv to an exit code — the refusal printed on the way. A
  * box with commands of its own passes them, and they shadow everything here.
- * Whatever graph the line opened is let go when it is done. */
+ * Whatever graph the line opened is let go when it is done, and the code the
+ * line answers is what its `process` row records as its ending. */
 export let main = async (
   argv: string[],
   extra: readonly Command[] = [],
 ): Promise<number> => {
+  let code = 1
   try {
-    return await cli([...extra, ...TOOLS], { ...YAK, argv })
+    return code = await cli([...extra, ...TOOLS], { ...YAK, argv })
   } finally {
-    await local?.close()
+    await local?.close(code)
   }
 }
 

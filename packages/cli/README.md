@@ -76,8 +76,7 @@ One JSON file. `--config` names it, else `$YAK_CONFIG`.
       }
     }
   ],
-  "port": 8787,
-  "actor": "me"
+  "port": 8787
 }
 ```
 
@@ -87,7 +86,6 @@ One JSON file. `--config` names it, else `$YAK_CONFIG`.
 | `plugins`  | the packages, by import specifier; a relative one resolves against the config                                            |
 | `port`     | what `serve` listens on (default 8787)                                                                                   |
 | `hostname` | which interface `serve` binds                                                                                            |
-| `actor`    | the eid every request is signed with, where no plugin authenticates                                                      |
 | `numbers`  | whether the store mints human numbers beside eids (default true)                                                         |
 | `adopt`    | take the `num` a batch's identity carries instead of minting one — what a store seeded from another store's export needs |
 | `name`     | what the MCP door calls itself                                                                                           |
@@ -146,7 +144,6 @@ says so.
 | `./tools`   | `runs: (host, options) => Runs` — behind its `tool: true` words | ajv, SQL, anything  |
 | `./effects` | `effects: (host, options) => Watch[]`                           | anything            |
 | `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`           | anything            |
-| `./boot`    | `boot: (host, options)` — the one pass made at start-up         | anything            |
 | `./service` | `service: (host, options, signal)` — what keeps running         | anything            |
 | `./views`   | `views` — @yaks/render renderers for the web door and a TUI     | nothing server-side |
 | `.`         | types, and the pure functions the package offers as a library   |                     |
@@ -228,19 +225,29 @@ it is attributed. One plugin may say who is calling (`authenticate` on its
 `./routes`, a factory like every facet, so it can read the graph to say it);
 where it says nobody, the answer is the host itself.
 
-## Who the host writes as
+## Who a process writes as, and what a start IS
 
-`actor` in the config is one sentence about every process that composes it: who
-its own writing is by. A NAME is the host's own identity — it mints that entity
-at start-up and derives its id from the name (@yaks/kernel `hosted`), so
-`"actor": "yak"` is `yak` in every graph it writes to and nothing has to be
-looked up. An id this family minted (a uuid, a content hash) names something
-somebody else made, and is signed with as it stands.
+There is no configured actor, because a run of a program is not a singleton: two
+`yak` lines and a `yak serve` over one file are three writers. Every `yak`
+process — a line, a door, a TUI — writes its own row when it opens a graph
+(@yaks/process `started`):
 
-It is not only the doors. A batch that reaches `apply()` with no `$actor` at all
-— a rule's effect, a plugin's boot pass, a load poured in through `yak apply` —
-is the host's own writing and lands signed with it, so there is no such thing
-here as a row nobody wrote. A door that authenticated somebody signs over it.
+```
+process{pid, command, cwd}   …and exit{code} when it is over
+```
+
+That row is what its own writing is signed by. A batch reaching `apply()` with
+no `$actor` at all — a rule's effect, a load poured in through `yak apply` — is
+this process's writing and lands signed with it, so `created.by` answers _which
+run wrote this_ and a child's row, written by its parent, says whose child it is
+without a column for it. A door that authenticated somebody signs over it.
+
+A START is that row appearing, so start-up work is an ordinary effect: a plugin
+registers `created(process)` and compares the entity against `host.me`
+(`@yaks/spawn/effects` re-adopts the agents a restart left running,
+`@yaks/session/effects` frees the locks a dead holder left). Each takes a
+`lease` (@yaks/effects) named for the duty, so two processes starting together
+do not both do it. There is no `./boot` facet and no moment a host has to offer.
 
 ## What `compose` does
 
@@ -264,12 +271,14 @@ here as a row nobody wrote. A door that authenticated somebody signs over it.
 7. mounts the doors: @yaks/api at `/apply`, `/query` and `/ws`, @yaks/mcp at
    `/mcp`, then the `./routes`.
 
-It answers a `Served`: the host, its `tools`, its `runner`, its `fx`, one
-`handler`, and `close`. `serve(config)` is that plus `Deno.serve`, plus the
-things only a long-lived process does — the boot passes, the effect sweep, the
-services. A one-shot line composes the same host and starts none of them.
-Reading the config file is `./config.ts`, which imports nothing, so a line that
-only needs to know WHERE never drags a database in.
+and finally writes this process's own `process` row, whose birth is every
+plugin's start-up pass.
+
+It answers a `Served`: the host, its `me`, its `tools`, its `runner`, its `fx`,
+one `handler`, and `close`. `serve(config)` is that plus `Deno.serve`, plus the
+things a long-lived process does — the call reconciliation, the effect sweep,
+the services. Reading the config file is `./config.ts`, which imports nothing,
+so a line that only needs to know WHERE never drags a database in.
 
 ## The command line
 

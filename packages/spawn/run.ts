@@ -337,6 +337,10 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
   }
   let runs = await watch(mine, o)
   for (let run of runs) {
+    // The watch's own loop outlives this call and nobody awaits it, so its
+    // failure is told rather than thrown at nobody — a process that let the
+    // graph go while a tail was still polling is the ordinary way this ends.
+    run.done.catch(told(o))
     let job = await asked(g, run.eid).catch(() => null)
     let adapter = job && (o.adapters ?? known)[job.provider]
     if (adapter) follow(g, run.eid, adapter, o).catch(told(o))

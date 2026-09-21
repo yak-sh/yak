@@ -13,7 +13,7 @@ import { taskDoc } from '@yaks/task'
 import { modelDoc } from '@yaks/model'
 import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
-import { processDoc, processes } from '@yaks/process'
+import { processDoc, processes, selfEid } from '@yaks/process'
 import { spawning } from './effects.ts'
 import { fake, slow, until } from './harness.ts'
 import { every, runs } from './tools.ts'
@@ -212,7 +212,7 @@ slow('spawn --wait runs the provider and answers what it came to', async () => {
       adapters: { fake },
       dir: where,
       poll: 20,
-    })({ graph: g })
+    })({ graph: g, me: selfEid() })
   ) fx.on(comp, watch)
   try {
     await g.apply(shelf)

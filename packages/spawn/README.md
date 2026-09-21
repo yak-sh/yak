@@ -82,8 +82,8 @@ durable across every restart. What the graph holds is the transcript read out of
 it: one entry per line the adapter recognizes, wearing `imported{source, line}`.
 That stamp is the cursor too — the highest line already imported is where the
 next read starts — so importing is exactly-once with no column to keep current,
-and `@yaks/spawn/boot` picks a run back up after a restart by watching its pid
-again and reading its log on.
+and the `created(process)` effect picks a run back up when a fresh process opens
+the graph, watching its pid again and reading its log on.
 
 A line the adapter does not recognize, and a line that is not JSON at all,
 becomes nothing: the file keeps it.

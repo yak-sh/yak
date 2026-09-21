@@ -11,6 +11,11 @@
  * - output is `content{body}` + `output{source}` (@yaks/session), `source`
  *   the process.
  *
+ * The program doing the launching is one too: {@link started} and
+ * {@link ended} are the rows a process writes about ITSELF on the way in and
+ * the way out (./self.ts), which is what a host signs with and what a
+ * start-up effect fires on.
+ *
  * ```ts
  * import { launch, store, supervise, watch } from '@yaks/process'
  *
@@ -38,6 +43,7 @@
  */
 
 export * from './comp.ts'
+export * from './self.ts'
 export * from './store.ts'
 export * from './plugin.ts'
 export * from './run.ts'

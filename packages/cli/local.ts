@@ -35,9 +35,12 @@ export let opened = (path: string): Promise<Served> => {
   return host
 }
 
-/** Let go of every graph this process opened. */
-export let close = async (): Promise<void> => {
-  for (let host of held.values()) (await host).close()
+/** Let go of every graph this process opened, stamping how the line ended on
+ * the `process` row each of them holds. */
+export let close = async (code?: number): Promise<void> => {
+  // Awaited, because the last batch is a WRITE: a line that let the file go
+  // without waiting leaves its own row saying it is still running.
+  for (let host of held.values()) await (await host).close(code)
   held.clear()
 }
 
@@ -63,7 +66,6 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
       let landed = await host.runner.call([{
         entity: { eid: '$call' },
         call: { to: toolEid(declared.name), args: JSON.stringify(args ?? {}) },
-        ...(host.config.actor ? { $actor: { by: host.config.actor } } : {}),
       }])
       c.out(
         c.json

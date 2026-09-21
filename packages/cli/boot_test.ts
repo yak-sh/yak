@@ -28,7 +28,6 @@ slow(
         db: 'graph.db',
         plugins: ['@yaks/harness'],
         numbers: false,
-        actor: 'boot',
         port,
       }),
     )
@@ -64,8 +63,9 @@ slow(
           session: { id: 'one' },
         }]),
       }).then((r) => r.json())
-      // The door signs the batch with the identity it authenticated.
-      assertEquals(applied[0].created.by, 'boot')
+      // The door signs the batch with this PROCESS, which is the floor where
+      // no plugin named a caller.
+      assertEquals(applied[0].created.by, host.me)
 
       let found = await fetch(`${at}/query?q=.session`).then((r) => r.json())
       assertEquals(found[0].entity.eid, 'boot-session')

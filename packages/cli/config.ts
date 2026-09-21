@@ -33,13 +33,6 @@ export type Config = {
   port?: number
   /** which interface it binds (default Deno's own) */
   hostname?: string
-  /** who this host writes as, where no door named a caller — its rules, its
-   * effects, the pass each plugin makes at boot. A NAME is the host's own
-   * identity: it mints that entity at start-up and derives its id from the
-   * name (@yaks/kernel `hosted`), so nothing is looked up. An id this family
-   * minted (a uuid, a content hash) names something somebody else made, and
-   * is signed with as it stands — a box that writes as a person. */
-  actor?: string
   /** whether the store mints human numbers beside eids. OPT-IN: unsaid, no
    * entity gets one, because a number is for a person to type and most hosts
    * have nobody typing. `{ except: [comp, …] }` turns them on while keeping a

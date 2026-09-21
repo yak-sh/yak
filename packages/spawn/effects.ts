@@ -1,11 +1,13 @@
 // What a commit MEANS about a managed session: the `effects` facet a host
 // takes (`@yaks/spawn/effects`).
 //
-// Two words, and both are already in the vocabulary. A `using` written on an
-// entry is a REQUEST — this transcript wants that provider, that model, that
-// effort — and where the provider is a command, answering it is starting the
-// command. A `stop` written on the session's own entity, beside the process it
-// is running, is the brake.
+// Three words, and all three are already in the vocabulary. A `using` written
+// on an entry is a REQUEST — this transcript wants that provider, that model,
+// that effort — and where the provider is a command, answering it is starting
+// the command. A `stop` written on the session's own entity, beside the
+// process it is running, is the brake. And a `process` born here, where it is
+// the one THIS RUN wrote for itself, is this host starting: the moment to pick
+// back up the agents a restart left going.
 //
 // Neither handler holds the effect open: a launch waits on systemd and a tail
 // runs for as long as the agent does, and an effect that waited on either
@@ -23,13 +25,20 @@
 // The providers themselves are not in it: an adapter is a function, and a
 // host with one of its own composes {@link spawning} in a module of its own.
 
-import type { Bundle, Comp, Graph } from '@yaks/graph'
-import type { Watch } from '@yaks/effects'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { take, type Watch } from '@yaks/effects'
 import { EXIT, PROCESS } from '@yaks/process'
-import { down, type Opts, start } from './run.ts'
+import { down, type Opts, resume, start } from './run.ts'
 
-/** What the facet is handed: the graph, once it is open. */
-export type Host = { graph: Graph }
+/** The duty of picking the agents a restart left running back up — one
+ * process's at a time, so two starting together do not both tail one log. */
+export let ADOPT = '@yaks/spawn'
+
+/** What the facet is handed: the graph, once it is open, and which process
+ * this one is (@yaks/cli `Host.me`) — a `process` row born here is either this
+ * run writing itself in or a child it just launched, and only the first is a
+ * start-up. */
+export type Host = { graph: Graph; me: Eid }
 
 /** What a config says to this plugin — the JSON half of {@link Opts}. */
 export type Options = {
@@ -88,6 +97,28 @@ export let spawning =
         let row = await one(host.graph, e.entity.eid)
         if (!row?.[PROCESS] || row[EXIT] != null) return
         down(host.graph, e.entity.eid, opts).catch(report)
+      },
+    }, {
+      comp: PROCESS,
+      // THIS PROCESS starting. The agent outlives whoever launched it on
+      // purpose, so a fresh process finds runs it has no memory of — a pid in
+      // a row, a log file with lines in it nobody has read — and one pass
+      // picks both back up: liveness from the pidfile, the transcript from
+      // where it stands.
+      //
+      // It is an effect on the birth of the row this process wrote for ITSELF
+      // (@yaks/process `started`), which is why the comparison against
+      // `host.me` is the whole guard: every other `process` born here is a
+      // CHILD, and adopting a child we just launched would tail it twice.
+      //
+      // The lease is what keeps two processes that started together from both
+      // adopting. It is taken and not released: whoever got it is following
+      // those runs now, and a second tail over one log would import every line
+      // twice.
+      created: async (e) => {
+        if (e.entity.eid != host.me) return
+        if (!await take(host.graph, ADOPT, { holder: host.me })) return
+        await resume(host.graph, opts).catch(report)
       },
     }]
   }

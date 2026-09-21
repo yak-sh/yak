@@ -5,19 +5,19 @@ import type { VocabDoc } from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
 import { blobKeywords, blobRead } from '@yaks/blob'
 import { rules as blobRules } from '@yaks/blob/rules'
+import { processDoc, selfEid } from '@yaks/process'
 import {
   compose,
   FACETS,
   type Facets,
-  own,
   read,
   unfinished,
   writer,
 } from './serve.ts'
 
-// The host of these tests, as its own writes are signed: a config's `actor`
-// is a NAME, and the entity it mints for itself is derived from it.
-let me = writer({ actor: 'me' })!.by
+// The host of these tests, as its own writes are signed: THIS PROCESS, whose
+// row every composition here writes on the way in.
+let me = selfEid()
 
 let doc: VocabDoc = {
   title: 'shop',
@@ -86,7 +86,9 @@ let doc: VocabDoc = {
 type Plugged = Partial<Facets>
 
 let shop: Plugged = {
-  vocab: { docs: [doc] },
+  // …and the process words, because a host signs with the row it writes for
+  // ITSELF: a graph that cannot say what a process is has nobody to sign as.
+  vocab: { docs: [doc, processDoc] },
   tools: {
     // A factory, like every facet: what a run needs from the host, it takes
     // here.
@@ -174,7 +176,7 @@ Deno.test('a host without a database refuses rather than guessing one', async ()
 
 Deno.test('compose takes each facet from its own subpath, and mounts the doors', async () => {
   let host = await compose(
-    { db: ':memory:', plugins: ['shop'], actor: 'me' },
+    { db: ':memory:', plugins: ['shop'] },
     only({ shop }),
   )
   try {
@@ -273,7 +275,7 @@ Deno.test('a host that names itself writes as itself, and a plugin may say who e
     },
   }
   let host = await compose(
-    { db: ':memory:', plugins: ['shop', 'told'], actor: 'me' },
+    { db: ':memory:', plugins: ['shop', 'told'] },
     only({ shop, told }),
   )
   try {
@@ -303,22 +305,39 @@ Deno.test('a host that names itself writes as itself, and a plugin may say who e
   }
 })
 
-Deno.test('the host mints the identity it signs with, once', async () => {
+Deno.test('a process writes itself in, signs with that row, and stamps its exit', async () => {
   let host = await compose(
-    { db: ':memory:', plugins: ['shop'], actor: 'me' },
+    { db: ':memory:', plugins: ['shop'] },
     only({ shop }),
   )
   try {
-    await own(host)
-    await own(host)
-    // `host` is not a word this vocabulary speaks, so there is nothing to
-    // mint — the entity its writes point at is still its own derived id.
-    assertEquals(host.vocab.comp('host'), undefined)
-    assertEquals(writer({ actor: 'me' })?.via, me)
-    // An id somebody else minted is signed with as it stands.
-    let uuid = '6a1f7e0c-2b3d-4f5a-8c9e-0d1a2b3c4d5e'
-    assertEquals(writer({ actor: uuid })?.by, uuid)
-    assertEquals(writer({}), null)
+    assertEquals(host.me, me)
+    assertEquals(writer(host.vocab)?.via, me)
+    let [row] = await host.graph.read(`.process`)
+    assertEquals(row.entity.eid, me)
+    assertEquals((row.process as Comp).pid, Deno.pid)
+    // …and the row is its own author: a process signs everything it writes,
+    // itself first, so `created.by` is never an id nothing minted.
+    assertEquals((row.created as Comp).by, me)
+    assertEquals(row.exit, undefined)
+  } finally {
+    host.close(7)
+  }
+  // Closed: the ending is stamped before the file is let go. A fresh host over
+  // the same file would read it — this one is :memory:, so the assertion that
+  // matters is that `close` took the code without throwing.
+})
+
+Deno.test('a graph with no `process` word signs nothing', async () => {
+  let host = await compose(
+    { db: ':memory:', plugins: ['bare'] },
+    only({ bare: { ...shop, vocab: { docs: [doc] } } }),
+  )
+  try {
+    assertEquals(host.vocab.comp('process'), undefined)
+    assertEquals(writer(host.vocab), null)
+    let [made] = await host.graph.apply([{ entity: { eid: 'b1' }, book: {} }])
+    assertEquals((made.created as Comp | undefined)?.by, undefined)
   } finally {
     host.close()
   }
@@ -400,20 +419,29 @@ Deno.test('a rule sees the graph it is part of, and an effect fires on a commit'
   }
 })
 
-Deno.test('a boot pass runs when a host is SERVED, never when one is composed', async () => {
+Deno.test('a start-up pass is an effect on this process being born', async () => {
   let booted: string[] = []
   let mod: Plugged = {
-    vocab: { docs: [doc] },
-    tools: { runs: () => ({ book_list: () => [], book_add: () => [] }) },
-    boot: { boot: (host) => void booted.push(typeof host.graph.apply) },
+    ...shop,
+    effects: {
+      effects: (host) => [{
+        comp: 'process',
+        // A `process` born here is either this run writing itself in or a
+        // child it launched, and only the first is a start-up.
+        created: (e) => {
+          if (e.entity.eid == host.me) booted.push(host.me)
+        },
+      }],
+    },
   }
   let host = await compose({ db: ':memory:', plugins: ['m'] }, only({ m: mod }))
   try {
-    // A one-shot command opens the same host to ask one question, and must
-    // not reconcile another process's world on the way in.
-    assertEquals(booted, [])
-    await host.boot()
-    assertEquals(booted, ['function'])
+    // It has already run: composing the host IS the start, and the pass ran
+    // inside the batch that wrote the row.
+    assertEquals(booted, [me])
+    // A child's row wakes the same effect and is left alone.
+    await host.graph.apply([{ entity: { eid: 'kid' }, process: { pid: 1 } }])
+    assertEquals(booted, [me])
   } finally {
     host.close()
   }
@@ -425,7 +453,7 @@ Deno.test('a boot pass runs when a host is SERVED, never when one is composed', 
 
 Deno.test('the door calls the tool, and the call is the transcript', async () => {
   let host = await compose(
-    { db: ':memory:', plugins: ['shop'], actor: 'me' },
+    { db: ':memory:', plugins: ['shop'] },
     only({ shop }),
   )
   try {
@@ -469,7 +497,7 @@ Deno.test('the door calls the tool, and the call is the transcript', async () =>
 
 Deno.test('a call written through the door is run by the effect', async () => {
   let host = await compose(
-    { db: ':memory:', plugins: ['shop'], actor: 'me' },
+    { db: ':memory:', plugins: ['shop'] },
     only({ shop }),
   )
   try {
@@ -508,7 +536,6 @@ Deno.test('a plugin named with options gets them, beside the host', async () => 
     {
       db: ':memory:',
       plugins: [{ use: 'shop', with: { open: 'tuesdays' } }, 'quiet'],
-      actor: 'me',
     },
     only({
       shop: {
@@ -656,7 +683,7 @@ Deno.test('a service that throws is reported, and the host still serves', async 
 
 Deno.test('a column that declares its words searched is indexed, and ranked', async () => {
   let host = await compose(
-    { db: ':memory:', plugins: ['shop'], actor: 'me' },
+    { db: ':memory:', plugins: ['shop'] },
     only({ shop }),
   )
   try {

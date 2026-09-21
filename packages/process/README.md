@@ -31,6 +31,28 @@ for "nothing is performed after this", written on the service row itself. No
 second entity to reap, no reference to type, and the row stays — the wanting is
 recorded as over rather than forgotten.
 
+## The process you are in
+
+The program doing the launching is a program too. `started()` is the bundle a
+process writes for ITSELF when it opens a graph, and `ended(code)` the one it
+writes on the way out; `selfEid()` is the entity both land on, minted once per
+process.
+
+```ts
+import { ended, selfEid, started } from '@yaks/process'
+
+await graph.apply([started()]) // …and, at the end:
+await graph.apply([ended(0)])
+```
+
+Two things fall out of that row, and they are why it is worth writing. It is
+what a host SIGNS with ([@yaks/cli](../cli)), so `created.by` answers _which run
+wrote this_ and a child's row — written by its parent — says whose child it is
+without a column for it. And a process starting is an EVENT: `created(process)`
+where the entity is this process's own is the moment a host picks up what a
+restart left behind, which is why there is no start-up facet anywhere in this
+family.
+
 Output is not a component of this package. A line a process wrote is
 `content{body}` + `output{source}` from [@yaks/session](../session), `source`
 naming the process — the same words a tool result and a model's own words wear,

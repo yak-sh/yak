@@ -41,9 +41,10 @@ import type { Around, Effects } from './registry.ts'
 import type { Kind } from './trace.ts'
 
 /**
- * The `effect` component as a vocabulary document, to load beside your own
- * when you want durable effects: `loadVocab([effectDoc, ...mine])`. Every
- * column is server-owned — a client never writes a run's bookkeeping.
+ * This package's words, to load beside your own when you want durable effects:
+ * `loadVocab([effectDoc, ...mine])`. Two components, one document — `effect`,
+ * whose every column is server-owned because a client never writes a run's
+ * bookkeeping, and `lease` (./lease.ts), the duty one process holds at a time.
  */
 export let effectDoc: VocabDoc = doc
 

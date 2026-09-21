@@ -26,8 +26,9 @@
 // The third thing here is the two CHECKS — tools whose verb is `check`, which
 // is the whole of what a "doctor" is (@yaks/tools ./check.ts).
 //
-// A LOCK OUTLIVES ITS HOLDER. ./boot.ts frees the locks whose holder is not a
-// session in this graph, at the one moment there is an honest answer — so one
+// A LOCK OUTLIVES ITS HOLDER. ./effects.ts frees the locks whose holder is not
+// a session in this graph, at the one moment there is an honest answer — this
+// process starting — so one
 // found here appeared since, and the board is lying about who is working. The
 // other half is the lock held by a transcript that ENDED: `stopped` or
 // `failed` is a run nothing will resume, and its lock is a document nobody is

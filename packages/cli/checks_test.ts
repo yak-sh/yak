@@ -21,7 +21,6 @@ let host = () =>
   compose({
     db: ':memory:',
     plugins: ['@yaks/harness', '@yaks/sqlite'],
-    actor: 'tester',
     // A person reads these reports and types the ids back, so this host is
     // one that opts into the human number line.
     numbers: true,
@@ -87,12 +86,12 @@ Deno.test('a composed host finds exactly the two states we broke', async () => {
     )
 
     let claim = await ask(h, 'claim_check')
-    assert(claim.includes('T-2 is locked by S-3'), claim)
+    assert(claim.includes('T-3 is locked by S-4'), claim)
     assert(claim.includes('whose transcript stopped'), claim)
 
     let board = await ask(h, 'board_check')
-    // B-7, not B-6: the host's own identity is an entity too, minted the
-    // first time a batch is signed with it.
+    // The numbers start at 2, not 1: this PROCESS is an entity too, and its
+    // row is the first thing composing the host writes.
     assert(board.includes('B-7 no longer routes'), board)
     assert(board.includes('.staus=open'), board)
 

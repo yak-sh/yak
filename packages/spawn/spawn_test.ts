@@ -5,7 +5,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
-import { launch, store } from '@yaks/process'
+import { launch, selfEid, store } from '@yaks/process'
 import { spawning } from './effects.ts'
 import { down, resume } from './run.ts'
 import { asking, fake, tracked, until } from './harness.ts'
@@ -20,6 +20,7 @@ let watching = (g: ReturnType<typeof tracked>, o: Record<string, unknown>) => {
   for (
     let { comp, ...watch } of spawning({ adapters: { fake }, ...o })({
       graph: g.g,
+      me: selfEid(),
     })
   ) g.fx.on(comp, watch)
 }

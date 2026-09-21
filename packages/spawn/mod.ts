@@ -37,8 +37,10 @@
  * // ])
  * ```
  *
- * `@yaks/spawn/effects` answers that batch and `@yaks/spawn/boot` survives a
- * restart, so a host composes the two and writes no code at all.
+ * `@yaks/spawn/effects` answers that batch, and the same facet survives a
+ * restart — a `process` row born for the process itself is this host starting,
+ * and the effect on it re-adopts every run still going. A host composes the
+ * one facet and writes no code at all.
  *
  * @module
  */

@@ -74,6 +74,29 @@
         }
       }
     },
+    "lease": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "description": "a duty one process holds at a time — its id is derived from `name`, so two processes reaching for one duty reach for one row and the take is settled by the graph's own precondition",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "what is held — a sweep, a clock, a start-up pass; the id is derived from it, so the same duty is the same row in every graph"
+        },
+        "holder": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "the process doing it — absent means nobody is, and the next process to ask gets it"
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when the take lapses; a holder still at it pushes this out on a beat, and one that was killed leaves a row that expires without anybody reaping it"
+        }
+      }
+    },
     "effect_check": {
       "tool": true,
       "noun": "effect",

@@ -5,8 +5,7 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./tools": "./tools.ts",
-    "./effects": "./effects.ts",
-    "./boot": "./boot.ts"
+    "./effects": "./effects.ts"
   },
   "license": "Apache-2.0",
   "description": "Runs a session's provider as a detached command and reads its JSONL stdout back as that transcript's entries.",

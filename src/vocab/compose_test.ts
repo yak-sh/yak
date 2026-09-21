@@ -124,6 +124,7 @@ let SHARED = [
   'installed',
   'knock',
   'layout',
+  'lease',
   'mail',
   'member',
   'memory',

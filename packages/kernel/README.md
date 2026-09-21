@@ -8,14 +8,15 @@ keywords — no machinery.
   who touched a thing and when.
 - **what was decided**: `proposed`, `decided`, `quarantined`, `redaction`.
 - **what is attached**: `comment`, `image`, `favorite`.
-- **the server itself**: `host{name}` — a write with no door behind it is the
-  host's own, and this is the entity that signs it. Its id is derived from the
-  name (`hostEid`, `hosted`), so the same name is the same host in every graph
-  it writes to and a config can name its own writer without a uuid in it.
 - **the relation tags** an edge says: `about`, `contains`, `delegates`, `reads`,
   `recalled`, `references`, `requires`, `satisfies`, `supersedes`, `supervises`,
   `wants`, `worked` — each an ordinary component an `edge` entity wears (see
   [@yaks/edge](../edge)).
+
+A write with no door behind it is signed by the PROCESS that made it — the
+`process` row a run writes on the way in ([@yaks/process](../process)), not a
+name in a config. A run of a program is not a singleton, and two `yak` lines
+over one file are two writers.
 
 ## The keywords
 
