@@ -2,12 +2,20 @@
 import { checkoutAt, createWorktree, discover } from '@yaks/git/host'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { ChildLimits } from '@yaks/session'
-import { cutFor } from './worktrees.ts'
+import { cutFor, restore } from './worktrees.ts'
 
 export { workspaceDoc } from './vocab.ts'
 
 let row = async (g: Graph, eid: string) =>
   (await g.storage.tx((tx) => tx.get([eid])))[0]
+/** Where a worktree entity stands — the ONE door anything here asks through,
+ * so a checkout collected while its session was over is cut again before
+ * anything runs in it (worktrees.ts `restore`). */
+let treeAt = async (g: Graph, eid: string): Promise<string> => {
+  let tree = await row(g, eid)
+  if (!tree?.worktree) throw new Error('not a worktree entity: ' + eid)
+  return restore(g, tree)
+}
 export let homeAt = async (g: Graph, cwd: string): Promise<Comp> => {
   let tree = await checkoutAt(g, cwd)
   return { ...(tree ? { worktree: tree.entity.eid } : {}), cwd }
@@ -21,22 +29,16 @@ export let sessionCwd = async (g: Graph, session: string, fallback: string) => {
     await g.apply([{ entity: owner.entity, home }])
   }
   if (home?.cwd) return String(home.cwd)
-  if (home?.worktree) {
-    let tree = (await row(g, String(home.worktree)))?.worktree as
-      | Comp
-      | undefined
-    if (!tree?.path) throw new Error('session home worktree is missing')
-    return String(tree.path)
-  }
+  if (home?.worktree) return treeAt(g, String(home.worktree))
   return fallback
 }
 export let workspace = (g: Graph, cwd = Deno.cwd()): ChildLimits => ({
   taskDefaults: async (parent, child) => {
     let inherited = (await row(g, parent))?.home as Comp | undefined
-    let tree = inherited?.worktree
-      ? await row(g, String(inherited.worktree))
-      : await checkoutAt(g, await sessionCwd(g, parent, cwd))
-    let path = (tree?.worktree as Comp | undefined)?.path
+    let path = inherited?.worktree
+      ? await treeAt(g, String(inherited.worktree))
+      : ((await checkoutAt(g, await sessionCwd(g, parent, cwd)))
+        ?.worktree as Comp | undefined)?.path
     if (!path) {
       throw new Error(
         'Task worktree requires a Git repository; start the parent in a checkout',
@@ -95,9 +97,7 @@ export let workspace = (g: Graph, cwd = Deno.cwd()): ChildLimits => ({
       await homeAt(g, cwd)
     let home: Comp = { ...inherited }
     if (args.home != null) {
-      let tree = (await row(g, String(args.home)))?.worktree as Comp | undefined
-      if (!tree?.path) throw new Error('home must name a worktree entity')
-      let observed = await discover(g, String(tree.path))
+      let observed = await discover(g, await treeAt(g, String(args.home)))
       if (observed.entity.eid != args.home) {
         throw new Error('home checkout identity changed')
       }
@@ -113,14 +113,9 @@ export let workspace = (g: Graph, cwd = Deno.cwd()): ChildLimits => ({
         request.base != null && typeof request.base != 'string' ||
         request.branch != null && typeof request.branch != 'string'
       ) throw new Error('base and branch must be strings')
-      let source = await sessionCwd(g, parent, cwd)
-      if (inherited.worktree) {
-        let tree = (await row(g, String(inherited.worktree)))?.worktree as
-          | Comp
-          | undefined
-        if (!tree?.path) throw new Error('parent worktree missing')
-        source = String(tree.path)
-      }
+      let source = inherited.worktree
+        ? await treeAt(g, String(inherited.worktree))
+        : await sessionCwd(g, parent, cwd)
       let tree = await createWorktree(g, source, {
         path: request.path,
         base: request.base as string | undefined,

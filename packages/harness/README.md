@@ -272,10 +272,19 @@ preparation hook; it knows no Git.
 A new worktree defaults to detached committed HEAD, not the parent's dirty
 files. Its root becomes the default cwd unless explicitly overridden. Shell
 resolution is per call → persisted session cwd → home worktree root → harness
-directory; it inherits the harness environment. This is not sandboxing. No
-checkout is merged or deleted automatically. Failed Git preparation remains as
-`checkout` intent/error and as the failed tool result; retrying reconciles the
-same path.
+directory; it inherits the harness environment. This is not sandboxing. Failed
+Git preparation remains as `checkout` intent/error and as the failed tool
+result; retrying reconciles the same path.
+
+A checkout the harness cut for a child is COLLECTED when that child's session is
+over and the checkout holds nothing — a clean tree whose HEAD already exists on
+another branch (`worktrees.ts`). Over is read off the transcript, not off the
+pool: a `stop` line, an exception, the exit of the process behind it, or a turn
+that asked for nothing; a dispatch settling alone collects nothing. Nothing is
+merged, and anything dirty or unlanded is kept and named. Before the bytes go
+the `worktree` row is made true, so a session RESUMED after collection gets its
+checkout cut again at the same path, on the same branch, at the commit it stood
+on — before anything runs in it.
 
 ### Prompt context pilot
 

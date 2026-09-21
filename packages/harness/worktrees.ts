@@ -1,39 +1,72 @@
-// The checkouts a child session leaves behind, and the one place they are
-// taken back. workspace.ts cuts `<root>/<child id>` per delegated session and
-// nothing ever reclaimed it: 412 of them at 167M each filled the root disk
-// twice in one day (T-37640). A checkout is garbage the moment its session
-// ends AND it holds nothing — a clean working tree whose HEAD already exists
-// on some other branch, the base it was cut from, the parent's branch, main.
-// Its own branch never counts; that is what "unlanded" means. Anything dirty
-// or ahead is KEPT and named in the answer, so a leak has nowhere to hide but
-// that list. Nothing here passes `--force`, so Git's own refusal is the second
-// guard behind our first.
+// A checkout's whole life: handed to a session, taken back when that session
+// is over, and cut again where it stood when the session comes back.
+// workspace.ts cuts `<root>/<child id>` per delegated session and nothing ever
+// reclaimed it: 412 of them at 167M each filled the root disk twice in one day
+// (T-37640). A checkout is garbage when its session is OVER and it holds
+// nothing — a clean working tree whose HEAD already exists on some other
+// branch, the base it was cut from, the parent's branch, main. Its own branch
+// never counts; that is what "unlanded" means. Anything dirty or ahead is KEPT
+// and named in the answer, so a leak has nowhere to hide but that list.
+// Nothing here passes `--force`, so Git's own refusal is the second guard
+// behind our first.
 //
-// Two ends meet here, both in run.ts: one child's checkout goes when its
-// dispatch settles, and the whole root is swept at boot. Boot also removes the
-// checkouts Git has already forgotten — a `.git` file naming a gitdir that is
-// gone — because the CI runner recreates its repository between jobs and left
-// 281 of those behind.
+// Over is read off the graph, never off the pool: a dispatch settling is the
+// pool letting go of a child, while the transcript ends with a `stop` line, an
+// exception, an exit of the process behind it, or a turn that asked for
+// nothing. `collecting()` wires every one of those endings to the same test.
 //
-// The graph keeps its record of what a session had; the bytes are what this
-// file reclaims.
+// A session that is over can still be RESUMED, and then it wants its work
+// back. So the row is made true before the bytes go — `discover` records the
+// commit the checkout stands on — and `restore()` cuts it again at that
+// commit, on the same branch, at the same path. Nothing new had to be
+// recorded for that: `worktree{path, head, branch}` already said it, it had
+// only gone stale since the day the checkout was cut.
+//
+// Boot sweeps the whole root the same way, and also removes the checkouts Git
+// has already forgotten — a `.git` file naming a gitdir that is gone —
+// because the CI runner recreates its repository between jobs and left 281 of
+// those behind.
 
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import type { Effects } from '@yaks/effects'
+import { discover } from '@yaks/git/host'
 import { worktrees } from './paths.ts'
 
 /** Why a checkout was kept: uncommitted files, commits that are nowhere else,
  * or a removal that did not succeed. */
 export type Held = 'dirty' | 'unlanded' | 'failed'
 
-let git = async (cwd: string, args: string[]): Promise<string | undefined> => {
+let run = async (cwd: string, args: string[]) => {
   let p = await new Deno.Command('git', {
     cwd,
     args,
     stdout: 'piped',
-    stderr: 'null',
+    stderr: 'piped',
   }).output().catch(() => undefined)
-  return p?.success ? new TextDecoder().decode(p.stdout).trimEnd() : undefined
+  let say = (bytes?: Uint8Array) =>
+    bytes ? new TextDecoder().decode(bytes).trimEnd() : ''
+  return {
+    ok: !!p?.success,
+    out: say(p?.stdout),
+    err: say(p?.stderr).trim() || 'git did not run',
+  }
 }
+
+/** What a git command said, or nothing where it failed. */
+let git = async (cwd: string, args: string[]): Promise<string | undefined> => {
+  let said = await run(cwd, args)
+  return said.ok ? said.out : undefined
+}
+
+/** The same, loud: a checkout that cannot be cut again has to say why. */
+let must = async (cwd: string, args: string[]): Promise<string> => {
+  let said = await run(cwd, args)
+  if (!said.ok) throw new Error('git ' + args.join(' ') + ': ' + said.err)
+  return said.out
+}
+
+let row = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
+  (await g.storage.tx((tx) => tx.get([eid])))[0]
 
 /** A checkout Git has already lost: the gitdir its `.git` file names is gone,
  * so nothing can be committed from it and nothing read out of it. */
@@ -90,6 +123,114 @@ export let reclaim = async (path: string): Promise<Held | undefined> => {
 export let cutFor = (session: string, dir = worktrees()): string =>
   `${dir}/${session.replaceAll(':', '-')}`
 
+/** What a transcript reads as once nothing is owed in it. */
+export let ENDED = ['settled', 'stopped', 'failed']
+
+/** A session nothing will be performed in again: its transcript has ended —
+ * a `stop` line, an exception, or a turn that asked for nothing — and where
+ * the session IS a host process, that process has exited. A settled
+ * transcript counts: it can be resumed, and a resume cuts its checkout
+ * again. */
+export let over = (b: Bundle): boolean =>
+  ENDED.includes(String((b.session as Comp | undefined)?.status)) &&
+  !(b.process && !b.exit)
+
+/** The sessions a sweep must leave alone: every one not yet over. Read
+ * through the status index and the running-process query rather than the
+ * whole table — a graph holding years of transcripts is swept at every boot.
+ * A transcript with no lines at all is not asked for: it is a session still
+ * being started, which the sweep already leaves alone by its birthtime. */
+export let going = async (g: Graph): Promise<Bundle[]> => [
+  ...await g.read('.session.status=pending,running,queued'),
+  ...await g.read('.session&.process&.exit='),
+]
+
+/** Take one checkout back, its row made true first: where it stands is all a
+ * resume has to cut it again from, and Git is the only one who knows. A path
+ * Git has lost answers nothing and is removed outright. */
+let take = async (g: Graph, path: string): Promise<Held | undefined> => {
+  await discover(g, path).catch(() => {})
+  return reclaim(path)
+}
+
+/** Hand back the checkout this session was given, if the session is over and
+ * the checkout holds nothing. Answers what kept it, or nothing — including
+ * for a session that never had a checkout of its own. */
+export let collect = async (
+  g: Graph,
+  session: Eid,
+  dir = worktrees(),
+): Promise<Held | undefined> => {
+  let path = cutFor(session, dir)
+  if (!await Deno.stat(path).then(() => true, () => false)) return undefined
+  let b = await row(g, session)
+  if (!b?.session || !over(b)) return undefined
+  return take(g, path)
+}
+
+/** Wire collection to the graph: a checkout comes back the moment its session
+ * is over, however that ending landed — a `stop` line in the transcript, the
+ * exit of the process behind it, or the pool letting go of a child. Three
+ * doors, one test, so no door can collect a session that is still going. */
+export let collecting = (
+  g: Graph,
+  fx: Effects,
+  report: (error: unknown, session: Eid) => void,
+  dir = worktrees(),
+): void => {
+  // Never awaited: a `git worktree remove` must not hold the batch that
+  // ended the session, and what a crash leaves is the boot sweep's to find.
+  let at = (session: Eid) =>
+    void collect(g, session, dir).catch((error) => report(error, session))
+  fx.created('stop', async (e) => {
+    let session = ((await row(g, e.entity.eid))?.entry as Comp | undefined)
+      ?.session
+    // `stop` is also how @yaks/process says a service is wanted down.
+    if (typeof session == 'string') at(session)
+  })
+  fx.created('exit', (e) => at(e.entity.eid))
+  fx.changed('dispatch', 'state', (e) => {
+    if (e.comp?.state == 'settled') at(e.entity.eid)
+  })
+}
+
+/** Where this checkout stands, standing. One that was collected is cut again
+ * exactly where it was — same path, same branch, at the commit it held when
+ * its bytes were handed back, which is on a landed branch or it would never
+ * have been handed back — so a session picked up again picks up its work. */
+export let restore = async (g: Graph, tree: Bundle): Promise<string> => {
+  let w = tree.worktree as Comp | undefined
+  if (!w?.path) throw new Error('worktree ' + tree.entity.eid + ' has no path')
+  let path = String(w.path)
+  if (await Deno.stat(path).then(() => true, () => false)) return path
+  let common =
+    ((await row(g, String(w.repository)))?.repository as Comp | undefined)
+      ?.common
+  let head = w.head
+  if (typeof common != 'string' || typeof head != 'string') {
+    throw new Error('nothing recorded to cut ' + path + ' again from')
+  }
+  let name = w.branch
+    ? String(
+      ((await row(g, String(w.branch)))?.ref as Comp | undefined)?.name ?? '',
+    )
+    : ''
+  let branch = name.replace(/^refs\/heads\//, '')
+  // Collection deletes the branch with the checkout, but a branch somebody
+  // kept is the truth about where that work stands, not our stale copy of it.
+  let standing = !!branch &&
+    await git(common, ['rev-parse', '--verify', '--quiet', name]) != null
+  await must(common, [
+    'worktree',
+    'add',
+    ...branch ? standing ? [] : ['-b', branch] : ['--detach'],
+    path,
+    standing ? branch : head,
+  ])
+  await discover(g, path)
+  return path
+}
+
 /** The checkouts these sessions still call home — never swept. Both halves
  * are needed: the name covers a child whose checkout is being cut right now
  * and has no `home` row yet, the row covers a descendant that INHERITED an
@@ -119,6 +260,7 @@ export let homes = async (
  * after it began is never its business: that is a session still starting, and
  * its fresh checkout reads as clean and landed exactly like garbage does. */
 export let sweep = async (
+  g: Graph,
   dir = worktrees(),
   live: Set<string> = new Set(),
 ): Promise<Record<string, Held>> => {
@@ -139,7 +281,7 @@ export let sweep = async (
       () => 0,
     )
     if (cut > began) continue
-    let held = await reclaim(path).catch(() => 'failed' as Held)
+    let held = await take(g, path).catch(() => 'failed' as Held)
     if (held) kept[path] = held
   }
   return kept
