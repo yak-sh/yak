@@ -11,6 +11,7 @@ import { subscriptions } from '@yaks/api'
 import { type Agent, agent } from './run.ts'
 import { open } from './store.ts'
 import { diagnostics, uncaught } from './diagnostics.ts'
+import type { Bundle } from '@yaks/graph'
 const removeErrors = uncaught(diagnostics(), self)
 let closing = false
 let a: Agent | undefined
@@ -132,6 +133,10 @@ async function handle(method: string, value: unknown): Promise<unknown> {
   }
   // Narrow command/projection API: never evaluate caller-provided code.
   switch (method) {
+    case 'exception':
+      // The frontend owns the terminal: a defect it catches is written
+      // into the graph here rather than over the pane it is painting.
+      return await a.h.g.apply(args[0] as Bundle[], { trusted: true })
     case 'runtime':
       return a.runtime(String(args[0]))
     case 'control':

@@ -127,6 +127,11 @@ export let remote = async (
     replica.close()
     throw e
   }
+  // The TUI paints this terminal, so its defects must not be spoken to it: the
+  // backend owns the graph, and it takes them.
+  let detachDiagnostics = diagnostics().attach({
+    apply: (change) => request('exception', [change]) as Promise<Bundle[]>,
+  })
   let rows = (id: string) =>
     (members.get(id) ?? []).flatMap((id) => {
       let b = replica.ent(id)
@@ -156,6 +161,7 @@ export let remote = async (
     await listen('sessions', `.session&.order=-created.at&.limit=${LISTED}`)
     await listen('tasks', `.task&.order=-created.at&.limit=${LISTED}`)
   } catch (error) {
+    detachDiagnostics()
     link.close()
     worker.terminate()
     replica.close()
@@ -357,6 +363,7 @@ export let remote = async (
     force: () => {
       closing = true
       forceExit()
+      detachDiagnostics()
       worker.terminate()
       link.close()
     },
@@ -385,6 +392,7 @@ export let remote = async (
           worker.terminate()
           await queued
           replica.close()
+          detachDiagnostics()
           listeners.clear()
         }
       })(),
