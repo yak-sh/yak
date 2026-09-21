@@ -81,6 +81,54 @@ states them is ignored.
 g.apply([{ entity: { eid: 't2' }, completed: {}, $actor: { by: dana } }])
 ```
 
+## A plan is bundles
+
+Work of three steps or more is a TREE — the outcome, what it needs, what it
+contains — and a tree is not a tool. It is tasks under `$alias` ids, the links
+that place them, and one atomic batch: a link's id is DERIVED from the sentence
+it states ([@yaks/edge](https://jsr.io/@yaks/edge)), so its ends may be entities
+this very batch is minting. That is why each link is written under an alias of
+its own rather than through `link()` — `link()` names the entity from the ids
+you hand it, and `$goal` is not an id yet.
+
+```ts
+let plan = [
+  {
+    entity: { eid: '$goal' },
+    task: {},
+    doc: { title: 'The outcome' },
+    filed: { project: 'p19' },
+  },
+  {
+    entity: { eid: '$link~goal' },
+    edge: { from: 'p19', to: '$goal' },
+    contains: {},
+  },
+  {
+    entity: { eid: '$gate' },
+    task: {},
+    doc: { title: 'First' },
+    filed: { project: 'p19' },
+  },
+  {
+    entity: { eid: '$link~gate' },
+    edge: { from: '$goal', to: '$gate' },
+    requires: {},
+  },
+]
+
+g.apply(plan, { check: true }) // what WOULD land, and none of it kept
+g.apply(plan) // the whole tree, or none of it
+```
+
+A dry run runs every phase — admission, the preconditions, the rules — and then
+rolls the transaction back, so the answer is the batch as it would have landed,
+every alias resolved to the id it would be given and every link named by its
+sentence, while nothing is written, no journal row kept and no effect run. A
+refusal is still a refusal, which is the whole reason to ask. The same rehearsal
+over the wire is `POST /apply?check=1` ([@yaks/api](https://jsr.io/@yaks/api)),
+and on the command line `yak apply --dry-run`.
+
 ## The status rule is said once
 
 `task.status` is declared `computed: true` — no column holds it. Its value is

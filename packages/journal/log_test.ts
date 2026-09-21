@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
 // What the log holds: a create, a patch and a death, in the order they
 // happened, each with the actor that wrote it — and nothing about the batches
-// that were refused. Plus the two things only an after-image log has to prove:
+// that were refused, or rehearsed. Plus the two things only an after-image log has to prove:
 // that the before-side comes back right although it was never stored, and that
 // a content-addressed column is recorded by its address rather than its bytes.
 
@@ -114,6 +114,17 @@ Deno.test('a refused batch leaves no record', () => {
       $was: { page: { title: null } },
     }])
   } catch { /* the guard refused it, which is the point */ }
+  assertEquals(f.j.history('p1').length, 1)
+})
+
+Deno.test('a dry run leaves no record either', () => {
+  let f = fixture()
+  f.apply([{ entity: { eid: 'p1' }, page: { title: 'One' } }])
+  // Every phase runs, the journal hook included — and then the transaction is
+  // rolled back, so a rehearsal is not a line of history.
+  sync(f.g.apply([{ entity: { eid: 'p1' }, page: { title: 'Two' } }], {
+    check: true,
+  }))
   assertEquals(f.j.history('p1').length, 1)
 })
 

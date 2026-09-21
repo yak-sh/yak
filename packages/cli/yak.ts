@@ -63,12 +63,16 @@ let applied = async (
   let roster = await rosterOf(c.host, c.ask)
   let tool = roster.tools.find((t) => t.name == 'graph_apply')
   if (!tool) throw new Usage(`${c.host} lists no graph_apply to apply through`)
-  if (args.change) {
-    let said = await c.ask('tools/call', {
+  // A dry run is the tool's `check`: every phase runs on the far side and the
+  // transaction is rolled back, so the answer is what would have landed.
+  let dry = args['dry-run'] === true
+  let asked = (change: unknown) =>
+    c.ask('tools/call', {
       name: tool.name,
-      arguments: { change: args.change },
-    }) as Result
-    return printed(c, roster, tool.name, said)
+      arguments: { change, ...(dry ? { check: true } : {}) },
+    }) as Promise<Result>
+  if (args.change) {
+    return printed(c, roster, tool.name, await asked(args.change))
   }
   let source = typeof args.file == 'string' ? args.file : '-'
   let body = source == '-' || source == '@-'
@@ -76,11 +80,7 @@ let applied = async (
     : await c.reads.file(source.replace(/^@/, ''))
   let code = 0
   for (let change of chunks(bundlesIn(body))) {
-    let said = await c.ask('tools/call', {
-      name: tool.name,
-      arguments: { change },
-    }) as Result
-    code = printed(c, roster, tool.name, said) || code
+    code = printed(c, roster, tool.name, await asked(change)) || code
     if (code) break
   }
   return code
@@ -169,13 +169,19 @@ export let own: Word[] = [
   },
   {
     name: 'apply',
-    description: 'bundles as NDJSON, in batches of 50',
+    description:
+      'bundles as NDJSON, in batches of 50; --dry-run says what would land ' +
+      'and writes none of it',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
       properties: {
         file: { type: 'string', description: '@file, or - for stdin' },
         change: { type: 'array', description: 'one batch, inline' },
+        'dry-run': {
+          type: 'boolean',
+          description: 'answer what would land, and write none of it',
+        },
       },
     },
     options: { positional: ['file'] },

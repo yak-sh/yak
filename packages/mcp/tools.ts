@@ -23,6 +23,7 @@ import {
   detached,
   Refused,
   type Schema,
+  signed,
   type Tool,
   type ToolCtx,
 } from '@yaks/graph'
@@ -205,15 +206,40 @@ export let core = (opts: CoreOpts): Tool[] => {
         `and every type — and graph_schema says the same thing at length. ` +
         `The schema describes and the server decides: it is open, so a word ` +
         `learned since you connected still reaches the graph, and a column ` +
-        `nobody declared is refused here with the ones that are.` +
+        `nobody declared is refused here with the ones that are. ` +
+        `check: true REHEARSES the batch instead of keeping it: every check ` +
+        `this tool makes is made, and then the whole thing is rolled back, so ` +
+        `the answer is what WOULD land — every '$name' resolved to the id it ` +
+        `would be given — or the refusal, said the same way it would be said ` +
+        `for real. That is how a plan of several entities and the links ` +
+        `between them is proven before any of it is written.` +
         (opts.undo ? ` ${opts.undo}` : ''),
       input: {
         change: writes.describe('the bundles to apply, atomically'),
+        check: z.boolean().optional().describe(
+          'a dry run: answer what would land, and write none of it',
+        ),
       },
       // The tool does not write: the bundles it answers ARE the write, landed
       // by the runner signed as the caller, and the batch as applied is what
       // comes back.
-      run: (_, ctx) => batch(ctx.args.change),
+      //
+      // A DRY RUN is the exception, and it has to be: bundles answered here
+      // are landed, so a rehearsal that answered them would be the write it
+      // was rehearsing. So the check is made HERE — `apply({check})` runs every
+      // phase and rolls the transaction back (@yaks/graph) — and what it would
+      // have landed is said as prose, the way every other question about a
+      // graph is answered in this tier.
+      run: async (_, ctx) => {
+        let change = batch(ctx.args.change)
+        if (ctx.args.check !== true) return change
+        return told(
+          ctx,
+          await ctx.graph.apply(signed(change, ctx.actor), {
+            check: true,
+          }),
+        )
+      },
     },
     {
       name: 'graph_query',

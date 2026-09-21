@@ -137,6 +137,31 @@ Deno.test('a batch applied comes back as it landed, and reads back', async () =>
   assertEquals(found[0].doc, { title: 'The Left Hand of Spring' })
 })
 
+Deno.test('a checked batch says what would land and keeps none of it', async () => {
+  let g = shopGraph()
+  let client = await connect({ graph: g, actor: ada })
+  let out = await called(client, 'graph_apply', {
+    change: [{ entity: { eid: '$new' }, doc: { title: 'Emma' } }],
+    check: true,
+  })
+  assertEquals(out.isError, undefined)
+  // A rehearsal cannot answer bundles — the runner lands what a tool answers
+  // — so it answers what WOULD have landed, in words.
+  let said = JSON.parse(
+    String(comp(bundles(result(out))[0], 'content').body),
+  ) as Bundle[]
+  assertEquals(said[0].$alias, '$new')
+  assert(said[0].entity.eid != '$new')
+  assertEquals(await g.read('.doc.title="Emma"'), [])
+  // And a batch it would refuse is refused, rehearsal or not.
+  let no = await called(client, 'graph_apply', {
+    change: [{ entity: { eid: 'b1' }, book: { colour: 'red' } }],
+    check: true,
+  })
+  assertEquals(no.isError, true)
+  assert(text(no).includes('colour'))
+})
+
 Deno.test('an applied batch may drop a component, and says so', async () => {
   let client = await connect()
   await called(client, 'graph_apply', { change: [spring] })
