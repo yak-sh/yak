@@ -75,11 +75,15 @@ import {
 import { core, mcp, type Search } from '@yaks/mcp'
 import { adopt, fields as searched, find, search } from '@yaks/fts'
 import {
+  EFFECT,
   type Effects,
   effects,
   HOLD,
   holding,
+  type Ledger,
+  ledger,
   released,
+  sleep,
   type SweepRows,
   until,
   type Watch,
@@ -185,8 +189,14 @@ export type RoutesFacet = {
 }
 
 /** The name of the duty this host owns rather than any plugin: the effect
- * sweep, which finishes what a crash left between a commit and its handler. */
+ * sweep, which finishes what a crash left between a commit and its handler
+ * and runs again what a handler could not do the first time. */
 export let SWEEP = '@yaks/effects'
+
+/** The longest the sweep sleeps between passes (ms). Nothing is due that it
+ * does not already know the instant of; this is only so a row written by
+ * ANOTHER process is picked up without waiting for a batch here. */
+let CAP = 60_000
 
 /** One thing a process may be the one doing: a name to hold it under, and the
  * work. `run` does at least ONE PASS and then keeps going until the signal
@@ -497,10 +507,19 @@ export let compose = async (
     })
     store.install()
 
+    // The LEDGER, where this vocabulary carries the word for one: every run
+    // written down before it happens and marked after, so a crash between the
+    // commit and the handler is a row the sweep finds, and a handler that
+    // threw is tried again on its registration's terms. A graph with no
+    // `effect` component keeps at-most-once effects and stores nothing.
+    let log: Ledger | undefined = vocab.comp(EFFECT)
+      ? ledger({ owner: host.me })
+      : undefined
     // An effect writes through the graph's own door, trusted: what it writes
     // is the host's word, never a client's.
     let fx = effects(vocab, {
       write: (b) => host.graph.apply(b, { trusted: true }),
+      ...(log ? { around: log.around } : {}),
     })
     g = graph({
       storage: host.storage,
@@ -594,11 +613,11 @@ export let compose = async (
     }
     // The duties: the work that is nobody's request and everybody's to do,
     // each named after the package that owns it. The SWEEP is this host's
-    // own — an effect is at-most-once and a crash between the commit and the
-    // handler is exactly what a registration's `sweep` is for — and the rest
-    // are the plugins' clocks. A pass then a wait is the shape they share: do
-    // what is overdue, then keep the duty until this process goes, so no
-    // second process is doing it at the same time.
+    // own — a crash between the commit and the handler, and a handler that
+    // threw, are exactly what the ledger and a registration's `sweep` are for
+    // — and the rest are the plugins' clocks. A pass then a wait is the shape
+    // they share: do what is overdue, then keep the duty until this process
+    // goes, so no second process is doing it at the same time.
     let hold = config.lease ?? HOLD
     let duties: Duty[] = [
       {
@@ -609,7 +628,21 @@ export let compose = async (
           // promised to be idempotent, since this re-drives what may well
           // have run.
           await fx.relay(unfinished(host.graph))
-          await until(signal)
+          if (!log) return await until(signal)
+          // Then the LEDGER: what a crash left between a commit and its
+          // handler, and every failure whose backoff has come up. A pass,
+          // then a sleep until the soonest of them is due — so an aborted
+          // signal is one pass including the retries that are owed, and a
+          // host that stays finishes what its handlers could not.
+          for (;;) {
+            await log.reconcile(fx, detached(host.storage))
+            if (signal.aborted) return
+            let at = await log.due(detached(host.storage))
+            await sleep(
+              Math.min(CAP, Math.max(0, (at ?? Infinity) - Date.now())),
+              signal,
+            )
+          }
         },
       },
       ...running.map(([mod, options, plugin]): Duty => ({

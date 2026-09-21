@@ -1,11 +1,13 @@
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
-import type { Bundle, Comp } from '@yaks/graph'
+import { type Bundle, type Comp, detached } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
 import { blobKeywords, blobRead } from '@yaks/blob'
 import { rules as blobRules } from '@yaks/blob/rules'
 import { processDoc, selfEid } from '@yaks/process'
+import { effectDoc } from '@yaks/effects'
+import { runs as effectRuns } from '@yaks/effects/tools'
 import {
   compose,
   FACETS,
@@ -606,6 +608,73 @@ Deno.test('an effect that said what pending looks like is re-driven at boot', as
     assertEquals(ran, ['b2'])
   } finally {
     host.close()
+  }
+})
+
+Deno.test('the sweep a one-shot line makes runs the retries that are due', async () => {
+  let ran: string[] = []
+  let mod: Plugged = {
+    // The `effect` word, which is what makes this host keep a ledger at all.
+    vocab: { docs: [doc, processDoc, effectDoc] },
+    // Its check comes with the word: a host that declares `effect_check` and
+    // implements nothing is a host that refuses to start.
+    tools: {
+      runs: (host, options) => ({
+        ...shop.tools?.runs?.(host, options),
+        ...effectRuns(host, options),
+      }),
+    },
+    effects: {
+      effects: () => [{
+        comp: 'book',
+        created: (event) => {
+          ran.push(String(event.entity.eid))
+        },
+      }],
+    },
+  }
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'] },
+    only({
+      shop: mod,
+    }),
+  )
+  try {
+    await host.graph.apply([{ entity: { eid: 'b1' }, book: { title: 'One' } }])
+    assertEquals(ran, ['b1'])
+    // The run, written down and marked — no handler asked for any of this.
+    let rows = await host.graph.read('.effect!')
+    assertEquals(
+      rows.map((b) => (b.effect as Comp).state),
+      ['done'],
+    )
+    // A failure that reported, whose backoff has come up. Written as the
+    // ledger would have written it, so the pass below is the only thing
+    // under test.
+    await detached(host.storage).patch([{
+      entity: { eid: 'r1' },
+      effect: {
+        handler: 'book.created',
+        target: 'b1',
+        comp: 'book',
+        kind: 'created',
+        state: 'pending',
+        attempts: 1,
+        error: 'boom',
+        next: new Date(Date.now() - 1).toISOString(),
+      },
+    }])
+    ran.length = 0
+    // One pass and out: a line passing through does what nobody is doing,
+    // and what is owed is part of it.
+    await host.duties(AbortSignal.abort())
+    assertEquals(ran, ['b1'])
+    assertEquals(
+      ((await detached(host.storage).get(['r1']))[0].effect as Comp).state,
+      'done',
+    )
+  } finally {
+    await host.close()
   }
 })
 

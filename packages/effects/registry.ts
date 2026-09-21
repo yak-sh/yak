@@ -106,6 +106,10 @@ export type Job = {
   handler: string
   /** the committed change it is running for */
   event: Event
+  /** the registration itself, where there is one — what it DECLARED is how a
+   * wrapper knows how often to try it and whether trying twice is safe
+   * ({@link Policy}). Absent on a report about a slot nobody registered. */
+  slot?: Slot
 }
 
 /** Where a failing handler goes. A report is telemetry: it is called instead
@@ -441,7 +445,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     write: Write,
     reportFailure: Report = report,
   ): boolean | Promise<boolean> => {
-    let job: Job = { handler: s.id, event }
+    let job: Job = { handler: s.id, event, slot: s }
     let failed = (err: unknown) => {
       reportFailure(err, job)
       return false
@@ -494,6 +498,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
             // batch (it committed).
             report(err, {
               handler: s.id,
+              slot: s,
               event: { kind: 'matched', entity: { eid: '' }, name: s.comp },
             })
             return null
@@ -559,6 +564,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
         let failed = (err: unknown): unknown[] => {
           reportFailure(err, {
             handler: s.id,
+            slot: s,
             event: {
               kind: 'created',
               entity: { eid: '' },

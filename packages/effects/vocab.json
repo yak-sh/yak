@@ -56,6 +56,17 @@
           "stamped": true,
           "description": "when the run was recorded"
         },
+        "error": {
+          "type": "string",
+          "stamped": true,
+          "description": "what the last attempt threw — kept beside a run that rested failed, so the verdict says why"
+        },
+        "next": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the next attempt falls due; set means a failure that REPORTED and is waiting out its backoff, absent means a run that is going (or one nobody has picked up)"
+        },
         "lease_owner": {
           "type": "string",
           "stamped": true,
@@ -102,7 +113,7 @@
       "noun": "effect",
       "verb": "check",
       "title": "Check the effect ledger",
-      "description": "Every effect run reached an end somebody would hear about: a run that spent its one retry is marked failed and left for a person, and a run still pending long after it was written means nothing is dispatching at all.",
+      "description": "Every effect run reached an end somebody would hear about: a run that spent its attempts is marked failed and left for a person, and a run still pending long after it came due means nothing is dispatching at all.",
       "input": {},
       "readOnly": true
     }

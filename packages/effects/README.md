@@ -183,8 +183,10 @@ let fx = effects(vocab, { write, depth: 0 }) // an effect's write wakes no one
 ## The durable tier (optional)
 
 Load the `effect` component and wrap the runs, and every run is written down
-before it happens and marked after. A row still `pending` when a process starts
-is a run a crash interrupted; `reconcile()` gives it **one** more attempt.
+before it happens and marked after. A run that did not land is **tried again** —
+`tries` attempts in all, a backoff between them — and `reconcile()` is the pass
+that does what is owed: the runs a crash interrupted, and the failures whose
+backoff has come up.
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
@@ -198,18 +200,35 @@ let g = graph({ storage, vocab, plugins: [fx] })
 
 fx.created('order', receipt) // …and the rest of the handlers
 
-await log.reconcile(fx, detached(storage)) // at boot
+await log.reconcile(fx, detached(storage)) // at boot, and on a beat after
 ```
 
 ```
-effect{handler, target, comp, kind, state, attempts, lease_owner, …}
+effect{handler, target, comp, kind, state, attempts, error, next, lease_*}
 ```
 
-One more attempt, not a retry loop: a handler that ran, reached the world, and
-died before its row was marked must not reach it twice, so a row that has spent
-its retry is marked `failed` and left for a person. The lease keeps two
-processes off the same row — a reconciler claims a row before running it and
-skips one whose claim is somebody else's and has not expired.
+The retry is the LEDGER's, so no handler anywhere carries one. How often to try
+is the registration's to say and never one call's:
+
+```ts
+fx.created('order', receipt, { tries: 5 })
+fx.created('agent', launch, { idempotent: false })
+```
+
+Two ways a run does not land, and they are not the same thing. It **reported** —
+the handler threw, so it got to say so before doing anything — and the row keeps
+the error and `next`, the instant its backoff is up. Or it was **interrupted**:
+the process died mid-run, or its lease lapsed while it held it, and nobody knows
+how far it got. A row with no `next` is one of those, and it is tried again too,
+unless its registration said `idempotent: false` — a handler that reached the
+world and died before its row was marked must not reach it twice. After the last
+attempt the row rests `failed` with the last error beside it, for a person
+(`effect_check` is what tells them).
+
+The lease keeps two processes off the same row — a reconciler claims a row
+before running it and skips one whose claim is somebody else's and has not
+expired. `due()` says when the soonest waiting retry falls due, so a sweep
+sleeps until then rather than beating.
 
 An application that wants none of this loads no `effect` component and stores
 nothing; the in-memory tier needs no component at all.

@@ -3,16 +3,15 @@
 // ./vocab.json. One tool, and it is a CHECK: a tool whose verb is `check`,
 // which is the whole of what a "doctor" is (@yaks/tools ./check.ts).
 //
-// The ledger is written for exactly this. ./durable.ts marks a row `failed`
-// when its one retry is spent and LEAVES IT FOR A HUMAN rather than looping
-// over it — deliberately, because a handler that reached the world and died
-// before its row was marked must not reach it twice. Nothing in that sentence
-// tells the human. This does.
+// The ledger is written for exactly this. ./durable.ts tries a run that did
+// not land again, backing off between attempts, and when its last one is
+// spent marks the row `failed` with the error beside it and LEAVES IT FOR A
+// HUMAN. Nothing in that sentence tells the human. This does.
 //
 // The other half is a row that never got that far: `pending` is written before
-// the handler runs and marked after, so a pending row older than a couple of
-// dispatch cycles means nobody is running effects at all — the registry's
-// process died, or a host was composed with a ledger and no reconciler. That
+// the handler runs and marked after, so a row that has been waiting since long
+// before it came due means nobody is running effects at all — the registry's
+// process died, or a host was composed with a ledger and no sweep. That
 // failure is silent from every other angle: the writes commit, the graph looks
 // normal, the mail just never leaves.
 //
@@ -30,8 +29,8 @@ import { EFFECT } from './durable.ts'
 
 /** What a config says to `@yaks/effects`'s check. */
 export type Options = {
-  /** how long a run may sit pending before that means nothing is dispatching,
-   * in minutes (default 10) */
+  /** how long a run may sit pending PAST ITS DUE INSTANT before that means
+   * nothing is dispatching, in minutes (default 10) */
   minutes?: number
   /** how many of the failed runs to name (default 5) */
   sample?: number
@@ -68,14 +67,18 @@ export let runs = (
     let failed = await ctx.read(and(eq(`${EFFECT}.state`, 'failed')))
     let stuck = (await ctx.read(and(eq(`${EFFECT}.state`, 'pending'))))
       .filter((b) => {
-        let at = Date.parse(String(comp(b)?.at ?? ''))
+        // Since WHEN it has been waiting: a failure that reported is owed its
+        // run at `next`, not at the instant the run was first written down —
+        // a backoff is not a symptom.
+        let row = comp(b)
+        let at = Date.parse(String(row?.next ?? row?.at ?? ''))
         return !isNaN(at) && at < cutoff
       })
     let found: Finding[] = []
     if (failed.length) {
       found.push({
         level: 'fail',
-        text: `${failed.length} effect run(s) spent their one retry and were ` +
+        text: `${failed.length} effect run(s) spent their attempts and were ` +
           `left for a person: ${some(failed, id, sample)}`,
       })
     }

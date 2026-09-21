@@ -11,6 +11,16 @@ export type Policy = {
   sweep?: { pending: string }
   /** What this observer does, available from registry introspection. */
   doc?: string
+  /** The most attempts a run of this handler gets before it rests `failed`,
+   * where the durable tier is keeping a ledger (default `TRIES`). Said HERE,
+   * beside the handler, because how often a thing may be tried is a property
+   * of the thing — never of the one call that happens to be failing. */
+  tries?: number
+  /** `false` where running this handler twice is not the same as running it
+   * once. A run whose lease lapsed mid-flight may already have reached the
+   * world, so it is not tried again; only a failure it REPORTED, which it did
+   * before any side effect, is. Default `true`. */
+  idempotent?: boolean
   /** Additional reads to gather for this observer in graph-plugin mode. */
   wants?: Plugin['wants']
 }

@@ -189,10 +189,11 @@ Deno.test("the journal carries an effect's own write", () => {
   assertEquals(j.tip(), 2)
 })
 
-// At-most-once is the ledger's promise, and the write door does not change it:
-// a run that was interrupted gets ONE retry, and a run that already wrote is
-// not run again just because its write went through apply().
-Deno.test('at-most-once holds when the effect writes through the door', async () => {
+// A bounded number of attempts is the ledger's promise, and the write door
+// does not change it: a run that was interrupted is tried again up to the
+// count, and a run that already wrote is not run again just because its write
+// went through apply().
+Deno.test('the attempt count holds when the effect writes through the door', async () => {
   let runs: string[] = []
   let log = ledger({
     owner: 'w1',
@@ -220,19 +221,21 @@ Deno.test('at-most-once holds when the effect writes through the door', async ()
   assertEquals(await log.reconcile(fx, detached(g.storage)), 0)
   assertEquals(runs, ['p1'])
 
-  // A run the ledger thinks was interrupted gets its one retry, and then is
-  // spent — never a loop, however many times boot comes round.
-  await g.apply([{ entity: { eid: 'fx1' }, effect: { state: 'pending' } }], {
-    trusted: true,
-  })
+  // A run the ledger thinks was interrupted is tried again, up to the count
+  // and no further — never a loop, however many times boot comes round.
+  let interrupt = () =>
+    g.apply([{ entity: { eid: 'fx1' }, effect: { state: 'pending' } }], {
+      trusted: true,
+    })
+  await interrupt()
   assertEquals(await log.reconcile(fx, detached(g.storage)), 1)
-  assertEquals(runs, ['p1', 'p1'])
-  await g.apply([{ entity: { eid: 'fx1' }, effect: { state: 'pending' } }], {
-    trusted: true,
-  })
+  await interrupt()
+  assertEquals(await log.reconcile(fx, detached(g.storage)), 1)
+  assertEquals(runs, ['p1', 'p1', 'p1'])
+  await interrupt()
   assertEquals(await log.reconcile(fx, detached(g.storage)), 0)
-  assertEquals(runs, ['p1', 'p1'])
-  // Two runs, two write-backs, one row: the writes were idempotent by eid, and
-  // the retry is spent rather than looping.
+  assertEquals(runs, ['p1', 'p1', 'p1'])
+  // Three runs, three write-backs, one row: the writes were idempotent by eid,
+  // and the attempts are spent rather than looping.
   assertEquals((g.read('.subscriber!') as Bundle[]).length, 1)
 })

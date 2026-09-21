@@ -1,12 +1,14 @@
 /// <reference lib="deno.ns" />
 // The durability tier: a run is written down before it happens and marked
-// after, and what a crash left `pending` gets exactly one more attempt.
+// after, what a crash left `pending` is picked back up, and a run that did not
+// land is tried again — its registration's count of attempts, a backoff
+// between them, and the last error beside it when they are spent.
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Tx } from '@yaks/graph'
 import { detached, isPromise } from '@yaks/graph'
 import { effects } from './registry.ts'
-import { ledger } from './durable.ts'
+import { EFFECT, ledger } from './durable.ts'
 import { blogGraph, durableBlog } from './harness.ts'
 
 let sync = <T>(out: T | Promise<T>): T => {
@@ -31,7 +33,8 @@ let fixture = (owner = 'worker-1', now = clock()) => {
   let g = blogGraph([fx], durableBlog)
   let tx: Tx = detached(g.storage)
   let rows = () => (g.read('.effect!') as Bundle[]).map((b) => b.effect as Comp)
-  return { fx, g, log, tx, seen, oops, rows, now }
+  let row = (eid: string) => sync(tx.get([eid]))[0][EFFECT] as Comp
+  return { fx, g, log, tx, seen, oops, rows, row, now }
 }
 
 let post = (eid: string, comp: Record<string, unknown> = { title: 'One' }) => ({
@@ -52,14 +55,143 @@ Deno.test('a run is recorded and marked done', () => {
   assertEquals(row.attempts, 1)
 })
 
-Deno.test('a failing run is recorded as failed, and still reported', () => {
-  let f = fixture()
+Deno.test('a failing run keeps its error and comes back due, not failed', () => {
+  let now = clock()
+  let f = fixture('worker-1', now)
   f.fx.created('post', () => {
     throw new Error('boom')
   })
   sync(f.g.apply([post('p1')]))
   assertEquals(f.oops, ['post.created'])
-  assertEquals(f.rows().map((r) => r.state), ['failed'])
+  let [row] = f.rows()
+  // Still pending: it has attempts left, so it is owed another one — with
+  // what it threw beside it and the instant its backoff is up.
+  assertEquals(row.state, 'pending')
+  assertEquals(row.error, 'boom')
+  assertEquals(row.attempts, 1)
+  assertEquals(row.next, new Date(now() + 1000).toISOString())
+  // And it is not due yet: a sweep now finds nothing to do.
+  assertEquals(sync(f.log.reconcile(f.fx, f.tx)), 0)
+})
+
+Deno.test('a handler that throws twice lands on the third', () => {
+  let now = clock()
+  let f = fixture('worker-1', now)
+  let thrown = 0
+  f.fx.created('post', () => {
+    if (++thrown <= 2) throw new Error(`boom ${thrown}`)
+    f.seen.push('landed')
+  })
+  sync(f.g.apply([post('p1')]))
+  assertEquals(f.rows().map((r) => r.error), ['boom 1'])
+  // The second attempt, once its backoff is up.
+  now.tick(1000)
+  assertEquals(sync(f.log.reconcile(f.fx, f.tx)), 1)
+  let [second] = f.rows()
+  assertEquals([second.state, second.attempts, second.error], [
+    'pending',
+    2,
+    'boom 2',
+  ])
+  // The third lands, and the row says so — one row throughout, because a
+  // retry is the same run, not a new one.
+  now.tick(2000)
+  assertEquals(sync(f.log.reconcile(f.fx, f.tx)), 1)
+  assertEquals(f.seen, ['landed'])
+  assertEquals(f.rows().length, 1)
+  let [done] = f.rows()
+  assertEquals([done.state, done.attempts, done.error, done.next], [
+    'done',
+    3,
+    null,
+    null,
+  ])
+  // Nothing left owed.
+  now.tick(60_000)
+  assertEquals(sync(f.log.reconcile(f.fx, f.tx)), 0)
+})
+
+Deno.test('a handler that always throws rests failed with the last error', () => {
+  let now = clock()
+  let f = fixture('worker-1', now)
+  let thrown = 0
+  f.fx.created('post', () => {
+    throw new Error(`boom ${++thrown}`)
+  })
+  sync(f.g.apply([post('p1')]))
+  for (let i = 0; i < 4; i++) {
+    now.tick(60_000)
+    f.log.reconcile(f.fx, f.tx)
+  }
+  assertEquals(thrown, 3)
+  let [row] = f.rows()
+  assertEquals([row.state, row.attempts, row.error, row.next], [
+    'failed',
+    3,
+    'boom 3',
+    null,
+  ])
+})
+
+Deno.test('a registration says how many attempts its runs get', () => {
+  let now = clock()
+  let f = fixture('worker-1', now)
+  let thrown = 0
+  f.fx.created('post', () => {
+    throw new Error(`boom ${++thrown}`)
+  }, { tries: 1 })
+  sync(f.g.apply([post('p1')]))
+  // One attempt was all it asked for: no backoff, no second go.
+  assertEquals(f.rows().map((r) => [r.state, r.error]), [['failed', 'boom 1']])
+  now.tick(60_000)
+  assertEquals(sync(f.log.reconcile(f.fx, f.tx)), 0)
+  assertEquals(thrown, 1)
+})
+
+Deno.test('a handler that is not idempotent is retried for a failure, never a lapse', () => {
+  let now = clock()
+  let f = fixture('worker-1', now)
+  f.fx.created('post', () => f.seen.push('ran'), { idempotent: false })
+  sync(f.g.apply([post('p1')]))
+  f.seen.length = 0
+  // A run whose lease lapsed mid-flight: nobody knows what it did, so this
+  // one is not run again — it rests, and says why.
+  f.tx.patch([{
+    entity: { eid: 'r1' },
+    effect: {
+      handler: 'post.created',
+      target: 'p1',
+      comp: 'post',
+      kind: 'created',
+      state: 'pending',
+      attempts: 1,
+      lease_owner: 'worker-2',
+      lease_token: 'tok',
+      lease_expiry: new Date(now() - 1).toISOString(),
+    },
+  }])
+  assertEquals(sync(f.log.reconcile(f.fx, f.tx)), 0)
+  assertEquals(f.seen, [])
+  let row = f.row('r1')
+  assertEquals(row.state, 'failed')
+  assert(String(row.error).includes('not idempotent'), String(row.error))
+  // A failure it REPORTED is another matter: it threw before doing anything,
+  // so that one is tried again.
+  f.tx.patch([{
+    entity: { eid: 'r2' },
+    effect: {
+      handler: 'post.created',
+      target: 'p1',
+      comp: 'post',
+      kind: 'created',
+      state: 'pending',
+      attempts: 1,
+      error: 'boom',
+      next: new Date(now() - 1).toISOString(),
+    },
+  }])
+  assertEquals(sync(f.log.reconcile(f.fx, f.tx)), 1)
+  assertEquals(f.seen, ['ran'])
 })
 
 Deno.test('reconcile finishes what a crash interrupted, once', () => {
@@ -92,7 +224,7 @@ Deno.test('reconcile finishes what a crash interrupted, once', () => {
   assertEquals(f.seen.length, 1)
 })
 
-Deno.test('a run that has spent its retry is given up on, not looped', () => {
+Deno.test('a run that has spent its attempts is given up on, not looped', () => {
   let f = fixture()
   f.fx.created('post', () => f.seen.push('ran'))
   sync(f.g.apply([post('p1')]))
@@ -105,13 +237,26 @@ Deno.test('a run that has spent its retry is given up on, not looped', () => {
       comp: 'post',
       kind: 'created',
       state: 'pending',
-      attempts: 2,
+      attempts: 3,
+      error: 'boom 3',
     },
   }])
   assertEquals(sync(f.log.reconcile(f.fx, f.tx)), 0)
   assertEquals(f.seen, [])
-  let [row] = f.rows().filter((r) => r.attempts == 2)
-  assertEquals(row.state, 'failed')
+  let [row] = f.rows().filter((r) => r.attempts == 3)
+  // The verdict a person reads, with what it last threw beside it.
+  assertEquals([row.state, row.error], ['failed', 'boom 3'])
+})
+
+Deno.test('the soonest waiting retry is what a sweep sleeps until', () => {
+  let now = clock()
+  let f = fixture('worker-1', now)
+  assertEquals(sync(f.log.due(f.tx)), undefined)
+  f.fx.created('post', () => {
+    throw new Error('boom')
+  })
+  sync(f.g.apply([post('p1')]))
+  assertEquals(sync(f.log.due(f.tx)), now() + 1000)
 })
 
 Deno.test('a row another process holds is left alone until the lease lapses', () => {
@@ -206,7 +351,7 @@ Deno.test('split reconciliation never claims or settles another process class', 
   assertEquals(
     sync(tx.get(['r1'])),
     before,
-    'the sibling keeps its retry and pending state',
+    'the sibling keeps its attempt and pending state',
   )
   assertEquals(ran, 0)
 })

@@ -37,7 +37,7 @@ Deno.test('a ledger whose runs all landed is nothing to report', async () => {
   assertEquals((await checkup(g, durableBlog)).level, undefined)
 })
 
-Deno.test('a run that spent its retry is a fail', async () => {
+Deno.test('a run that spent its attempts is a fail', async () => {
   let g = await ledgered({ state: 'failed', at: ago(90) })
   let said = await checkup(g, durableBlog)
   assertEquals(said.level, 'fail')

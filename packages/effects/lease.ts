@@ -176,7 +176,9 @@ export let released = (
 export let held = (g: Graph, name: string): Promise<Lease | undefined> =>
   contested(g) ? leaseOf(g, leaseEid(name)) : Promise.resolve(undefined)
 
-let sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
+/** Wait, unless we are done waiting: a sleep the signal cuts short, so a pass
+ * that is between beats gives the duty up the moment it is asked to. */
+export let sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
   new Promise((wake) => {
     let done = () => {
       clearTimeout(timer)
