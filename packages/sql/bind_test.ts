@@ -102,6 +102,56 @@ Deno.test('a computed column with no registration declines loudly', () => {
   )
 })
 
+// A derived read builds on rows of its OWN choosing — @yaks/session's
+// `session.status` is computed from the entries a session has, and answers
+// `empty` for an owner with none. Every entity in a graph has none, so
+// `.session.status=empty` selected all of them (T-37730). A qualified path
+// names its component as much as its column, so the read is NULL without it,
+// the way every stored column reads through the left join.
+Deno.test('a derived read is NULL where the component is not worn', () => {
+  let blind: Derived = {
+    'task.status': {
+      tag: 'enum',
+      values: ['open', 'empty'],
+      expr: () => `'x'`,
+    },
+  }
+  let { sql } = compile(parse('.status=empty'), v, { derived: blind })
+  assert(
+    sql.includes(`(case when "task"."entity" is not null then 'x' end)`),
+    sql,
+  )
+  // and the narrowing a value test keeps, now that the read can carry it
+  assert(sql.includes('("task"."entity" is not null and '), sql)
+  // over a dereferenced leaf the component is a row of its own, not a column
+  let deref = compile(parse('.note.about.status=empty'), v, { derived: blind })
+  assert(
+    deref.sql.includes(
+      `(case when exists (select 1 from "task" as "__pw" where` +
+        ` "__pw"."entity" = `,
+    ),
+    deref.sql,
+  )
+})
+
+// The read that ANSWERS for a row wearing nothing says so: the fleet's
+// `updated.at` coalesces to `created.at`, because being made is the last time
+// an untouched row changed, and 1,656 of 10,767 entities were invisible to
+// `.updated.at>=…` before it did.
+Deno.test('a read marked worn: false keeps its value without the component', () => {
+  let fallback: Derived = {
+    'task.status': {
+      tag: 'enum',
+      values: ['open'],
+      worn: false,
+      expr: () => `coalesce("task"."priority", 'open')`,
+    },
+  }
+  let { sql } = compile(parse('.status=open'), v, { derived: fallback })
+  assert(!sql.includes('case when'), sql)
+  assert(!sql.includes('("task"."entity" is not null and '), sql)
+})
+
 Deno.test('the .kind scope expands to present-and-earlier-absent', () => {
   // task sorts before doc, so `.kind=doc` is doc present AND task absent.
   let { sql } = compile(parse('.kind=doc'), v)
@@ -425,11 +475,18 @@ Deno.test('reference equality compares indexed keys, not projected eids', () => 
     let { sql } = compile(parse(query), v)
     assert(sql.includes('__re'), sql)
   }
-  // A derived override is authoritative even if the column is stored.
+  // A derived override is authoritative even if the column is stored, and it
+  // reads through the guard that says the component is worn.
   let { sql } = compile(parse('.note.about=target'), v, {
     derived: { 'note.about': { tag: 'eid', expr: () => "'override'" } },
   })
-  assert(sql.includes("cast('override' as text) = ?"), sql)
+  assert(
+    sql.includes(
+      `cast((case when "note"."entity" is not null then 'override' end)` +
+        ` as text) = ?`,
+    ),
+    sql,
+  )
 })
 
 Deno.test('reverse NONE and compound child conditions bind without outer-owner leakage', () => {

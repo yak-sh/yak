@@ -30,10 +30,13 @@ export let derived: Derived = {
   },
   // A row never touched since it was made reads its created.at as its
   // updated.at — being made IS the last time it changed. Both tables are
-  // joined; the expression is owner-free, reading the aliases directly.
+  // joined; the expression is owner-free, reading the aliases directly. The
+  // fallback IS the answer for an entity wearing no `updated` row at all, so
+  // this is the read that opts out of the comp a qualified path implies.
   'updated.at': {
     tag: 'time',
     deps: ['created'],
+    worn: false,
     expr: () => `coalesce("updated"."at", "created"."at")`,
   },
 }

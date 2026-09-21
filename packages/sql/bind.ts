@@ -76,7 +76,7 @@ import {
 } from './ir.ts'
 import { type Arm, ARMS, arms, cut } from './compound.ts'
 import { type Dialect, sqlite, type Tag, tagOf } from './sqlite.ts'
-import type { Derived } from './derived.ts'
+import type { Derived, DerivedCol } from './derived.ts'
 import type { Extension, Site } from './extend.ts'
 import { type Identity, identity } from './ident.ts'
 import { walkSql } from './walk.ts'
@@ -202,18 +202,36 @@ let opOf = (p: Pred): string =>
     ? '~'
     : p.op
 
+// A qualified path names its COMPONENT as much as its column: `.session.status`
+// asks about sessions. Every read in this compiler answers NULL for a row that
+// does not wear the component — that is what the left join means, and what the
+// in-memory matcher reads off a bundle — and a DERIVED read is the one that
+// can forget: `session.status` is computed from the ENTRIES, so an entity with
+// none answered `empty` and `.session.status=empty` selected every such row in
+// the graph (T-37730). The guard is said ONCE, here, rather than copied into
+// every registration's expression. `present` is the SQL that holds when the
+// component is worn; `worn: false` is the read that ANSWERS for a row without
+// it — `updated.at` falling back to `created.at`, because being made is the
+// last time an untouched row changed.
+let guarded = (dc: DerivedCol, present: string, expr: string): string =>
+  dc.worn === false ? expr : `(case when ${present} then ${expr} end)`
+
 // One column's read expression and how a value types against it, resolved
 // through the derived hook first (a computed column or a read override), then
 // the dialect's storage lowering. `owner` is the SQL naming this entity's
-// integer id — the anchor a derived expression builds on. Declines (null) a
-// computed column with no registered expression.
+// integer id — the anchor a derived expression builds on, and the component's
+// own owner column, so its presence is that column being there. Declines
+// (null) a computed column with no registered expression.
 type Read = { expr: string; tag: Tag } | null
 let readCol = (ctx: Ctx, comp: string, prop: string, owner: string): Read => {
   let key = `${comp}.${prop}`
   let dc = ctx.derived[key]
   if (dc) {
     for (let dep of dc.deps ?? []) ctx.tables.add(dep)
-    return { expr: dc.expr(owner), tag: dc.tag }
+    return {
+      expr: guarded(dc, `${owner} is not null`, dc.expr(owner)),
+      tag: dc.tag,
+    }
   }
   let col = ctx.v.column(comp, prop)
   if (col?.computed) return null // computed, no expression to read it
@@ -341,15 +359,16 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   if (!frag) {
     throw new Unsupported('this predicate', `.${hop.comp}.${hop.prop} ${p.op}`)
   }
-  // A test that needs a VALUE can only hold on a row wearing the component, and
+  // A test that needs a VALUE can only hold on a row wearing the component —
+  // every read here is NULL without it, derived ones included (`guarded`) — and
   // saying so lets the planner drive from that table instead of scanning the
   // spine through a left join: `.board.query~=<id>` read every entity (243 ms)
   // where the boards are 22 rows (4 ms). The same narrowing path() keeps; an
   // absence (`=` empty) or a not-equals must still see the rows without it.
-  // A derived column carries its own null handling (updated.at reads the
-  // journal, not a table row), so only a stored column says it.
-  let needsComp = hop.comp != 'entity' && col?.computed === false &&
-    !ctx.derived[`${hop.comp}.${hop.prop}`] && (
+  // The one read left out is the one that ANSWERS for a row wearing nothing
+  // (`worn: false`): `updated.at` falls back to `created.at`.
+  let needsComp = hop.comp != 'entity' &&
+    ctx.derived[`${hop.comp}.${hop.prop}`]?.worn !== false && (
       op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
       ((op == '' || op == '~') && flat(p.value) != '')
     )
@@ -456,7 +475,14 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
 let leafRead = (ctx: Ctx, leaf: Hop, target: string): Read => {
   let key = `${leaf.comp}.${leaf.prop}`
   let dc = ctx.derived[key]
-  if (dc) return { expr: dc.expr(target), tag: dc.tag }
+  // The same guard, over the TARGET: here the owner is another entity's id, so
+  // wearing the component is a row of its own, not a joined column.
+  if (dc) {
+    let present = leaf.comp == 'entity' ? `${target} is not null` : `exists ` +
+      `(select 1 from ${source(ctx, leaf.comp)} as "__pw"` +
+      ` where "__pw"."entity" = ${target})`
+    return { expr: guarded(dc, present, dc.expr(target)), tag: dc.tag }
+  }
   let col = ctx.v.column(leaf.comp, leaf.prop)
   if (col?.computed) return null
   if (leaf.comp == 'entity') {

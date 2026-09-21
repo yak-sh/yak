@@ -204,6 +204,24 @@ Deno.test('the SQL view answers the same word as the rule', () => {
   }
 })
 
+// The status is computed from the ENTRIES, and an entity that is not a session
+// at all has none: the model and the tool rows read `empty` too, so
+// `.session.status=empty` answered with the whole graph (T-37730). A qualified
+// path names the component as much as the column, and @yaks/sql says so for
+// every derived read.
+Deno.test('a status filter answers only the entities wearing session', () => {
+  let g = store()
+  let eids = (q: string) => (g.read(q) as Bundle[]).map((b) => b.entity.eid)
+  assertEquals(eids('.session.status=empty'), [S])
+  // and a session that HAS entries leaves the empty answer, without the
+  // model and the tool ever joining it
+  g.apply([input(1)], { trusted: true })
+  assertEquals(eids('.session.status=empty'), [])
+  assertEquals(eids('.session.status=pending'), [S])
+  // `!over`, the way the harness asks for the sessions still going
+  assertEquals(eids('.session&.session.status!=settled,stopped,failed'), [S])
+})
+
 Deno.test('usingBefore is the newest using at or before a seq', () => {
   let entries = [
     entry(1, { content: { body: 'a' }, using: { model: 'a' } }),

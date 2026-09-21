@@ -74,6 +74,12 @@ let derived: Derived = {
 compile(ast, vocab, { derived })
 ```
 
+A qualified path names its component as much as its column, so such a read is
+NULL for a row that does not wear it — the way every stored column reads through
+the left join — whatever rows the expression itself builds on. A read that
+ANSWERS for a row wearing nothing says `worn: false` (a `updated.at` that falls
+back to `created.at`), and only then.
+
 ## SQL extensions
 
 Some clauses need machinery this package does not own — a full-text term needs a

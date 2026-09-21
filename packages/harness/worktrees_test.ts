@@ -206,9 +206,11 @@ Deno.test('over: a transcript that ended, and a process that exited with it', as
     assertEquals(await saw('halted'), true)
     // A settled transcript whose agent is still running is not over.
     assertEquals(await saw('agent'), false)
+    // going() is over() said as queries, so it answers exactly the sessions
+    // over() calls unfinished — the empty transcript among them.
     assertEquals(
       (await going(h.g)).map((b) => b.entity.eid).toSorted(),
-      ['agent', 'busy'],
+      ['agent', 'busy', 'empty'],
     )
     await h.g.apply([{ entity: { eid: 'agent' }, exit: { code: 0 } }])
     assertEquals(await saw('agent'), true)

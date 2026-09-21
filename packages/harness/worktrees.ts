@@ -135,13 +135,13 @@ export let over = (b: Bundle): boolean =>
   ENDED.includes(String((b.session as Comp | undefined)?.status)) &&
   !(b.process && !b.exit)
 
-/** The sessions a sweep must leave alone: every one not yet over. Read
- * through the status index and the running-process query rather than the
- * whole table — a graph holding years of transcripts is swept at every boot.
- * A transcript with no lines at all is not asked for: it is a session still
- * being started, which the sweep already leaves alone by its birthtime. */
+/** The sessions a sweep must leave alone: every one not yet over — `over()`
+ * said as two queries, the ENDED list and the running process, rather than
+ * read off the whole table: a graph holding years of transcripts is swept at
+ * every boot. A session still being started, with no lines in it at all, is
+ * one of these: nothing is owed in it yet, but nothing has ended either. */
 export let going = async (g: Graph): Promise<Bundle[]> => [
-  ...await g.read('.session.status=pending,running,queued'),
+  ...await g.read(`.session&.session.status!=${ENDED.join(',')}`),
   ...await g.read('.session&.process&.exit='),
 ]
 

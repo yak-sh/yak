@@ -39,6 +39,13 @@ export type DerivedCol = {
   // must read old/new values (the owner may already be changed or deleted),
   // so an owner-based expression alone cannot safely maintain their index.
   text?: (stored: string) => string
+  // Whether the component must be WORN for this expression to answer. A
+  // qualified path names its component as much as its column, so by default
+  // the binder reads this column as NULL for a row without it — the way every
+  // stored column reads through the left join. `false` says this read answers
+  // for such a row too: `updated.at` coalescing to `created.at`, because being
+  // made is the last time an untouched row changed. Default true.
+  worn?: boolean
 }
 
 // The registry a caller supplies to `compile`, keyed `comp.prop`. `compile`
