@@ -72,22 +72,23 @@ export let similarRows = async (
   // no persistent entity. No fake entity/vector is written into the graph.
   let anchor = eid ?? '@fleet/query-text'
   let bytes = new Uint8Array(vec.buffer, vec.byteOffset, vec.byteLength)
-  let ranked = semantic({
-    query: (sql, params) =>
-      driver.query(
-        `with entity as (select 0 as id, ? as eid),
+  let ranked = semantic(
+    {
+      query: (sql, params) =>
+        driver.query(
+          `with entity as (select 0 as id, ? as eid),
        embedding as (select 0 as entity, ? as model, ? as vec) ${sql}`,
-        [anchor, provider.model, bytes, ...params],
-      ),
-    exec: () => {
-      throw new Error('a similarity anchor is read-only')
+          [anchor, provider.model, bytes, ...params],
+        ),
+      exec: () => {
+        throw new Error('a similarity anchor is read-only')
+      },
+      // The SPACE, which is all compiling a query needs: @yaks/embedding's
+      // extension reads the vector an entity already has and never embeds.
     },
-  }, {
-    model: provider.model,
-    embed: () => {
-      throw new Error('semantic compilation never embeds')
-    },
-  }, { limit, floor: FLOOR, rank })
+    { model: provider.model },
+    { limit, floor: FLOOR, rank },
+  )
   let filters = asked.filter((p) => p.op != TEXT && p.op != NEAR)
   let exact = where(db, filters)
   let screen = toSql(exact ?? whereSome(db, filters))

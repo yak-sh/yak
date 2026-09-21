@@ -70,14 +70,21 @@ of them is a fact about the graph:
 ```
 
 `embedder` is `{"via": "hash"}` (offline, deterministic — a development box and
-every test), `{"via": "ollama"}` or `{"via": "openai"}`; a config that composes
-this plugin and names none refuses at boot rather than answering every search
-with nothing forever. `text` narrows which columns feed a vector (the default is
-every stored text column the vocabulary declares); `neighbours` and `floor`
-bound what `.near` selects; `after` is how long a burst of writes settles before
-one sweep answers all of it. `{"env": "NAME"}` anywhere in there is read from
-the environment when the config is read, so a config names a secret without
-holding one.
+every test), `{"via": "ollama"}` or `{"via": "openai"}`. `text` narrows which
+columns feed a vector (the default is every stored text column the vocabulary
+declares); `neighbours` and `floor` bound what `.near` selects; `after` is how
+long a burst of writes settles before one sweep answers all of it.
+`{"env":
+"NAME"}` anywhere in there is read from the environment every time it
+is asked for, so a config names a secret without holding one — and a key
+exported after the host booted is picked up by the next pass.
+
+**Missing config never prevents boot.** A host composing this plugin with no
+embedder named, or with a key the environment has not got yet, comes up: it
+keeps no vectors, `vector_check` answers what it is waiting for, and the first
+pass after the config appears is the one that embeds. Nothing is restarted. A
+`via` nothing here implements is still a refusal — it will never become an
+embedder — but it is said where it is read rather than taking the host with it.
 
 **There is no `vocab.json` here, and there should not be.** A vector is not a
 word anybody writes: it is derived from text another package's vocabulary

@@ -14,8 +14,9 @@
 
 /** What a config says TO one plugin: its own options, handed to each facet
  * factory beside the host. A value written `{"env": "NAME"}` is read out of
- * the environment when the file is read, so a config names a secret without
- * holding one. */
+ * the environment every time it is asked for, so a config names a secret
+ * without holding one — and a facet that re-reads its options sees a key
+ * exported after the host booted. */
 export type Options = Record<string, unknown>
 
 /** A plugin a config names: a bare specifier, or one with options. */
@@ -93,20 +94,40 @@ export let used = (plug: Plug): string =>
 export let given = (plug: Plug): Options =>
   typeof plug == 'string' ? {} : plug.with ?? {}
 
+// The name `{"env": "NAME"}` says, and nothing else said in that object.
+let named = (value: unknown): string | undefined => {
+  let said = value as Record<string, unknown> | null
+  return said && typeof said == 'object' && typeof said.env == 'string' &&
+      Object.keys(said).length == 1
+    ? said.env
+    : undefined
+}
+
 // `{"env": "NAME"}` anywhere in an options object is the environment's value
-// at the moment the config is read — the one thing a config file cannot hold
-// in the open. A name nothing exports reads as undefined rather than as a
-// guess, so the plugin refuses in its own words about what it wanted.
+// AT THE MOMENT IT IS ASKED FOR — the one thing a config file cannot hold in
+// the open, and the one thing that can arrive after the host is already up. A
+// facet that re-reads its options on each pass therefore starts the moment a
+// key is exported, rather than needing the process restarted for a config that
+// never changed. A name nothing exports reads as undefined rather than as a
+// guess, so the plugin says in its own words what it is waiting for.
 let sourced = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(sourced)
+  let name = named(value)
+  // A whole options object written `{"env": …}` has no parent to hang the
+  // reading off, so it is read here and once.
+  if (name) return Deno.env.get(name)
   if (!value || typeof value != 'object') return value
-  let said = value as Record<string, unknown>
-  if (typeof said.env == 'string' && Object.keys(said).length == 1) {
-    return Deno.env.get(said.env)
+  let out = (Array.isArray(value) ? [] : {}) as Record<string, unknown>
+  for (let [k, v] of Object.entries(value)) {
+    let said = named(v)
+    if (said) {
+      Object.defineProperty(out, k, {
+        get: () => Deno.env.get(said),
+        enumerable: true,
+        configurable: true,
+      })
+    } else out[k] = sourced(v)
   }
-  return Object.fromEntries(
-    Object.entries(said).map(([k, v]) => [k, sourced(v)]),
-  )
+  return out
 }
 
 let resolved = (plug: Plug, base: URL): Plug =>

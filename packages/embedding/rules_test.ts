@@ -39,8 +39,34 @@ Deno.test('the neighbourhood the config bounded is the one it gets', async () =>
   assertEquals(db.query(tight.sql, tight.params).length, 0)
 })
 
-Deno.test('a plugin composed with no embedder refuses to build one', () => {
-  assertThrows(() => extend({ sql: mem() }, {}), Error, 'name an `embedder`')
+Deno.test('no embedder named is no space to rank in, and no extension', () => {
+  // The host still comes up: `.near` gets the compiler's own refusal, which is
+  // the same answer a host that never composed this plugin gives.
+  assertEquals(extend({ sql: mem() }, {}), [])
+  assertThrows(
+    () => compile(parse('.near=book-1'), shop, { extend: [] }),
+    Error,
+  )
+})
+
+Deno.test('a key that has not arrived still names the space it will fill', async () => {
+  // Waiting for a key is the SWEEP's problem: what a query needs is the model
+  // name, and the config says that whether or not the environment has a token.
+  let db = await stocked()
+  let [near] = extend({ sql: db }, {
+    embedder: {
+      via: 'ollama',
+      model: 'hash-64',
+      base: 'https://box',
+      key: undefined,
+    },
+  })
+  let { sql, params } = compile(
+    parse('.near=book-1&.order=similar'),
+    shop,
+    { extend: [near] },
+  )
+  assertEquals(db.query(sql, params).map((r) => String(r.eid))[0], 'book-2')
 })
 
 Deno.test('the mark starts dirty: an index never built is owed one', () => {

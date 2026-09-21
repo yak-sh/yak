@@ -4,6 +4,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Actor, Bundle, Comp, Graph, ToolCtx } from '@yaks/graph'
 import { clubhouse } from './harness.ts'
+import type { Options } from './options.ts'
 import { reSubject, runs } from './tools.ts'
 
 let ask = (
@@ -11,9 +12,10 @@ let ask = (
   tool: string,
   args: Record<string, unknown> = {},
   actor: Actor | null = null,
+  options: Options = {},
 ): Promise<Bundle[]> =>
   Promise.resolve(
-    runs(undefined, { domain: 'books.example' })[tool]([], {
+    runs(undefined, { domain: 'books.example', ...options })[tool]([], {
       graph: g,
       actor,
       read: (q) => g.read(q),
@@ -263,8 +265,8 @@ Deno.test('Re: piles no higher than one', () => {
 
 // ---- the check ----
 
-let checkup = async (g: Graph) => {
-  let [said] = await ask(g, 'mail_check')
+let checkup = async (g: Graph, options: Options = {}) => {
+  let [said] = await ask(g, 'mail_check', {}, null, options)
   return {
     body: String(comp(said, 'content').body),
     level: comp(said, 'error').code,
@@ -297,4 +299,19 @@ Deno.test('a letter nobody received is not the check’s business', async () => 
   // No Message-ID: composed here, and ./send.ts is what refuses it a sender.
   let said = await checkup(await posted({ to: 'ana@books.example' }))
   assertEquals(said.level, undefined)
+})
+
+Deno.test('a sender this host cannot build is what the check says out loud', async () => {
+  // Missing config never stops the boot (./effects.ts), so the check is where
+  // a graph whose letters are going nowhere finds out.
+  let said = await checkup(await posted({ to: 'ana@books.example' }), {
+    sender: { via: 'cloudflare', account: 'a', token: undefined as never },
+  })
+  assertEquals(said.level, 'warn')
+  assert(said.body.includes('waiting for credentials'), said.body)
+  // one that CAN be built is nothing to report
+  let fine = await checkup(await posted({ to: 'ana@books.example' }), {
+    sender: { via: 'stash' },
+  })
+  assertEquals(fine.level, undefined)
 })

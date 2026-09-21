@@ -24,7 +24,10 @@
 //
 // `rest` is read at compose time on purpose: a recurrence this box cannot
 // read would otherwise be a dream that never rests, one desk per stir, and the
-// place to find that out is the boot rather than the bill.
+// place to find that out is the boot rather than the bill. It is SAID at the
+// boot rather than thrown there — config that is missing or malformed never
+// stops a host coming up — and this plugin then does nothing, which is what a
+// desk that would open on every stir must not do.
 
 import type { Watch } from '@yaks/effects'
 import { next } from '@yaks/wake'
@@ -43,7 +46,11 @@ export let effects = (_host: unknown, options: Options = {}): Watch[] => {
   let { desk, rest } = options
   if (!desk) return []
   if (rest && next(rest, Date.now()) == null) {
-    throw new Error(`@yaks/dreaming: ${JSON.stringify(rest)} is no rest`)
+    console.warn(
+      `@yaks/dreaming: ${JSON.stringify(rest)} is no rest — no desk opens ` +
+        `until the config says how long a dream rests`,
+    )
+    return []
   }
   return watches({ desk, rest })
 }

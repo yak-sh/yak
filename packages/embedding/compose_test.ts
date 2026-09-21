@@ -81,3 +81,77 @@ Deno.test('a config composes the vectors, and asking the door ranks by them', as
     yak.close()
   }
 })
+
+// T-37699: a host whose key has not arrived comes up anyway. It keeps no
+// vectors, its check says what it is waiting for, and `.near` still compiles —
+// the config names the SPACE even where it cannot reach the model yet.
+Deno.test('a config with no key composes, and nothing about the boot is different', async () => {
+  let warn = console.warn
+  console.warn = () => {}
+  let yak = await compose({
+    db: ':memory:',
+    numbers: false,
+    plugins: [
+      '@yaks/doc',
+      {
+        use: '@yaks/embedding',
+        with: {
+          embedder: {
+            via: 'ollama',
+            model: 'qwen3',
+            base: 'https://box',
+            key: undefined,
+          },
+          text: ['doc.title', 'doc.body'],
+          after: 5,
+        },
+      },
+    ],
+  })
+  try {
+    await yak.graph.apply(shelf)
+    let res = await yak.handler(
+      new Request(
+        `http://host/query?q=${encodeURIComponent('.near=d1&.order=similar')}`,
+      ),
+    )
+    assertEquals(res.status, 200, await res.text())
+    await new Promise((go) => setTimeout(go, 30))
+    assertEquals(
+      Number(yak.sql.query('select count(*) as n from embedding', [])[0].n),
+      0,
+      'a host with no key embeds nothing',
+    )
+  } finally {
+    await yak.close()
+    console.warn = warn
+  }
+})
+
+// T-37726: open, write, close — and nothing fires afterwards. The settle timer
+// the write armed is cancelled by the ending rather than waking over a
+// database that is gone.
+Deno.test('a host that closes takes its pending sweep with it', async () => {
+  let late: unknown[] = []
+  let warn = console.warn
+  console.warn = (...said: unknown[]) => late.push(said)
+  try {
+    let yak = await compose({
+      db: ':memory:',
+      numbers: false,
+      plugins: [
+        '@yaks/doc',
+        {
+          use: '@yaks/embedding',
+          with: { embedder: { via: 'hash' }, after: 30 },
+        },
+      ],
+    })
+    await yak.graph.apply(shelf)
+    await yak.close()
+    await new Promise((go) => setTimeout(go, 80))
+    assertEquals(late, [], 'the sweep fired after the store was closed')
+  } finally {
+    console.warn = warn
+  }
+})

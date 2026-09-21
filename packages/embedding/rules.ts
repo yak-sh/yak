@@ -33,13 +33,22 @@ export let rules = (host: { sql: Driver }): Plugin[] => {
 /** The `.near` and `.order=similar` compiler, over the vectors this host
  * keeps. One extension serves every query: it is told when a new one begins
  * (@yaks/sql `Begin`), so a neighbourhood never outlives the question that
- * resolved it. */
+ * resolved it.
+ *
+ * What it needs is the SPACE, never the function — compiling a query reads the
+ * vector an entity already has and never embeds — so a host still waiting for
+ * a key answers `.near` over whatever is stored, and only a config that names
+ * no embedder at all has no space to rank in. That one contributes no
+ * extension, and `.near` gets the compiler's own refusal. */
 export let extend = (
   host: { sql: Driver },
   options: Options = {},
-): Extension[] => [
-  semantic(host.sql, embedderOf(options), {
-    limit: options.neighbours,
-    floor: options.floor,
-  }),
-]
+): Extension[] => {
+  let { model } = embedderOf(options)
+  return model
+    ? [semantic(host.sql, { model }, {
+      limit: options.neighbours,
+      floor: options.floor,
+    })]
+    : []
+}

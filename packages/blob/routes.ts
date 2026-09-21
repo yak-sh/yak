@@ -70,24 +70,30 @@ export type Backend =
     prefix?: string
   }
 
-/** A named store, built. An unknown `via` is a refusal: a host that thinks it
- * is keeping uploads somewhere and is not is worse than one that will not
- * boot. */
-export let backend = (said: Backend, host: { sql: Driver }): Blobs => {
-  if (said.via == 'sqlite') return sqliteBlobs(host.sql)
+/** A named store, built — or the sentence saying why there is none. A host
+ * that thinks it is keeping uploads somewhere and is not is worse than one
+ * that will not boot, so it is SAID rather than kept quiet; it is said rather
+ * than thrown, because missing config never stops a host coming up. A door
+ * with nowhere to put bytes is not mounted at all, so an upload is refused
+ * where it is attempted instead of answering into nothing. */
+export let backend = (
+  said: Backend,
+  host: { sql: Driver },
+): { store?: Blobs; waiting?: string } => {
+  if (said.via == 'sqlite') return { store: sqliteBlobs(host.sql) }
   if (said.via == 'file') {
-    if (!said.dir) throw new Error('@yaks/blob: a file store needs `dir`')
-    return fileBlobs(said.dir)
+    return said.dir
+      ? { store: fileBlobs(said.dir) }
+      : { waiting: 'a file store needs `dir`' }
   }
   if (said.via == 'object') {
-    if (!said.bucket) {
-      throw new Error('@yaks/blob: an object store needs `bucket`')
-    }
-    return objectBlobs(said.bucket, said.prefix)
+    return said.bucket
+      ? { store: objectBlobs(said.bucket, said.prefix) }
+      : { waiting: 'an object store needs `bucket`' }
   }
-  throw new Error(
-    `@yaks/blob: no store called ${JSON.stringify((said as Backend).via)}`,
-  )
+  return {
+    waiting: `no store called ${JSON.stringify((said as Backend).via)}`,
+  }
 }
 
 // An address is 64 lowercase hex characters; anything else never named an
@@ -145,7 +151,11 @@ export let routes = (
   host: { sql: Driver; graph: Graph; who?: Authenticate },
   options: Options = {},
 ): Route[] => {
-  let store = backend(options.store ?? { via: 'sqlite' }, host)
+  let { store, waiting } = backend(options.store ?? { via: 'sqlite' }, host)
+  if (!store) {
+    console.warn(`@yaks/blob: no door — ${waiting}`)
+    return []
+  }
   let limit = options.limit ?? LIMIT
 
   // What the row says this object is. The bytes are the truth about

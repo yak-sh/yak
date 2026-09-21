@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import { type Graph, graph } from '@yaks/graph'
 import { type Authenticate, type Route, routed } from '@yaks/api'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -203,17 +203,27 @@ Deno.test('the bound is on the bytes, not on what a header claimed', async () =>
   assertEquals((await ask(streamed)).status, 413)
 })
 
-Deno.test('a store nobody can build refuses at compose, not at a request', () => {
+Deno.test('a store nobody can build mounts no door, and says why', () => {
   let h = host()
-  assertThrows(
-    () => routes(h, { store: { via: 'file' } as Backend }),
-    Error,
-    'needs `dir`',
-  )
-  assertThrows(
-    () => routes(h, { store: { via: 'bucket' } as unknown as Backend }),
-    Error,
-    'no store called "bucket"',
+  let warned: unknown[] = []
+  let warn = console.warn
+  console.warn = (...said: unknown[]) => warned.push(said[0])
+  try {
+    // Missing config never stops the host: there is simply no door, so an
+    // upload is refused where it is attempted rather than answered into
+    // nothing.
+    assertEquals(routes(h, { store: { via: 'file' } as Backend }), [])
+    assertEquals(
+      routes(h, { store: { via: 'bucket' } as unknown as Backend }),
+      [],
+    )
+  } finally {
+    console.warn = warn
+  }
+  assert(String(warned[0]).includes('needs `dir`'), String(warned[0]))
+  assert(
+    String(warned[1]).includes('no store called "bucket"'),
+    String(warned[1]),
   )
 })
 

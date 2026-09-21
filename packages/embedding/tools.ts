@@ -17,18 +17,19 @@
 //
 // A host that composed no vector table has no index to be behind on, and says
 // so rather than passing: asking the question is what tells the two apart.
+//
+// The other invisible failure is a host that is WAITING: missing config never
+// prevents boot (./options.ts), so a graph with no key comes up perfectly well
+// and quietly embeds nothing. This is where that is said out loud, and it is
+// said every time it is asked rather than once into a log nobody kept.
 
 import type { Runs } from '@yaks/graph/tools'
 import { checked, type Finding } from '@yaks/tools'
 import type { Driver } from './driver.ts'
 import { state } from './mark.ts'
+import { embedderOf, type Options } from './options.ts'
 
-/** What a config says to `@yaks/embedding`'s check. */
-export type Options = {
-  /** how long the mark may stand before that means nobody is rebuilding, in
-   * minutes (default 30 — the sweep settles a burst in seconds) */
-  stale?: number
-}
+export type { Options }
 
 let STALE = 30
 
@@ -41,6 +42,16 @@ export let runs = (
   vector_check: (_bundles, ctx) => {
     let about = 'the vector index is being rebuilt by the sweep that owns it'
     let minutes = options.stale ?? STALE
+    // What this host is waiting for, if anything: a sweep that cannot embed
+    // is not behind on a rebuild, it has not started.
+    let { waiting } = embedderOf(options)
+    if (waiting) {
+      return checked(ctx.call, about, [{
+        level: 'warn',
+        text: `nothing is being embedded — ${waiting}. The sweep starts on ` +
+          `its own once the config is there; nothing has to be restarted`,
+      }])
+    }
     let said
     try {
       said = state(host.sql)

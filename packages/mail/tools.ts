@@ -70,6 +70,7 @@ import {
 import { checked, type Finding } from '@yaks/tools'
 import type { Runs } from '@yaks/graph/tools'
 import { wearer } from './arrive.ts'
+import { post } from './effects.ts'
 import { DELIVER, EMAIL, MAIL } from './comp.ts'
 import type { Options } from './options.ts'
 
@@ -356,9 +357,22 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
       level: 'fail',
       text: `${id(b)} arrived with no sender — a reply has nowhere to go`,
     }))
+    // And the other direction: a transport this host could not build is a
+    // graph whose outbound letters sit there. Missing config never stops the
+    // boot (./effects.ts), so this is where it is said.
+    let { waiting } = options.sender
+      ? post(options.sender)
+      : { waiting: undefined }
+    if (waiting) {
+      found.push({
+        level: 'warn',
+        text: `nothing is being sent — ${waiting}. What is written meanwhile ` +
+          `waits in the graph`,
+      })
+    }
     return checked(
       ctx.call,
-      'every letter that arrived carries a sender',
+      'every letter that arrived carries a sender, and this host can send',
       found,
     )
   },

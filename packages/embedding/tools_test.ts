@@ -9,8 +9,16 @@ import { TABLE } from './ddl.ts'
 import { clean } from './mark.ts'
 import { type Options, runs } from './tools.ts'
 
-let checkup = async (sql: Driver, options: Options = {}) => {
-  let [said] = await runs({ sql }, options).vector_check([], {
+// The offline embedder stands in for a host whose config is complete: what
+// these cases are about is the MARK, not what is missing.
+let checkup = async (
+  sql: Driver,
+  options: Options = {},
+) => {
+  let [said] = await runs({ sql }, {
+    embedder: { via: 'hash' },
+    ...options,
+  }).vector_check([], {
     args: {},
     call: 'c1',
   } as ToolCtx) as Bundle[]
@@ -48,6 +56,22 @@ Deno.test('a mark set moments ago is the sweep having its turn', async () => {
 
 Deno.test('an empty index is not a stalled one', async () => {
   assertEquals((await checkup(shelf())).level, undefined)
+})
+
+Deno.test('a host still waiting for its config says what it is waiting for', async () => {
+  let said = await checkup(shelf(), { embedder: undefined })
+  assertEquals(said.level, 'warn')
+  assert(said.body.includes('no `embedder` is named'), said.body)
+  let key = await checkup(shelf(), {
+    embedder: {
+      via: 'ollama',
+      model: 'qwen3',
+      base: 'https://box',
+      key: undefined,
+    },
+  })
+  assertEquals(key.level, 'warn')
+  assert(key.body.includes('waiting for a key'), key.body)
 })
 
 Deno.test('a host with no vector table says so rather than passing', async () => {

@@ -108,9 +108,16 @@ the config names it and `@yaks/mail/effects` builds it. Name no sender and there
 is no outbound watch, which is what a graph that only receives mail wants.
 
 **A secret is named, not held.** An option written `{"env": "NAME"}` — at any
-depth — is the environment's value at the moment the config is read, so a config
-file is committable and the token is not in it. A name nothing exports reads as
-undefined and the plugin refuses in its own words.
+depth — is the environment's value at the moment it is ASKED FOR, so a config
+file is committable, the token is not in it, and a key exported after the host
+booted is read by the next pass that wants one. A name nothing exports reads as
+undefined and the plugin says, in its own words, what it is waiting for.
+
+**Missing config never prevents boot.** A facet factory does not throw over
+config that has not arrived or cannot be used: it contributes nothing, says why
+once, and its `check` tool keeps answering the question. A host comes up with
+its mail unsent, its uploads unmounted or its vectors unbuilt, and starts doing
+each the moment its config is there — rather than refusing to start at all.
 
 **There is no default database.** `db`, or `DB_PATH` in the environment, or the
 host refuses to start: the path anybody would pick as a default is somebody's
@@ -304,6 +311,11 @@ processes still fires each exactly once.
 A process lets go of every duty it holds in the same batch that stamps its
 `exit`, so an ordinary ending hands the work straight on and only a kill leaves
 a lease to lapse.
+
+`close()` aborts `host.stopping` FIRST — before that last batch and before the
+database is let go — so a facet that armed a timer of its own hangs it off that
+signal and nothing is left pending over a store that is gone. A host ending is
+one fact, and everything this process was doing on its own stops on it.
 
 ## The command line
 

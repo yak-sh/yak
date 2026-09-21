@@ -5,7 +5,8 @@
 // .price<20` — and @yaks/query parses `.near` as a directive @yaks/sql declines
 // on its own, because the vectors are here and not there. This module is the
 // @yaks/sql EXTENSION that answers it, registered through
-// `compile(ast, vocab, { extend: [semantic(db, embedder)] })`.
+// `compile(ast, vocab, { extend: [semantic(db, embedder)] })` — the embedder
+// for the space its model NAMES, which is all a query needs of one.
 //
 // It compiles in three moves. The anchor's stored vector is read; the ranking
 // answers the nearest entities; and that list becomes `owner in (?, ?, ?)` for
@@ -40,7 +41,6 @@ import {
   Unsupported,
 } from '@yaks/sql'
 import type { Driver } from './driver.ts'
-import type { Embedder } from './embedder.ts'
 import { type Near, nearest, type Rank, vectorOf } from './near.ts'
 
 /** The `.order=` value that means "nearest first". */
@@ -73,14 +73,15 @@ export type Semantic = Extension & {
 /**
  * A semantic query extension over a database's stored vectors.
  *
- * The embedder is here for the space it NAMES, not for its function: a `.near`
- * anchor reads the vector already stored for it, never the network, because
- * compiling a query is synchronous. Embedding text that has no entity yet is
- * the sweep's job.
+ * What it takes is the SPACE, not the embedder: a `.near` anchor reads the
+ * vector already stored for it, never the network, because compiling a query
+ * is synchronous. Embedding text that has no entity yet is the sweep's job —
+ * which is why a host whose embedder is still waiting for a key ranks
+ * perfectly well over what it has.
  */
 export let semantic = (
   db: Driver,
-  embedder: Embedder,
+  space: { model: string },
   opts: SemanticOpts = {},
 ): Semantic => {
   let held: Near[] | null = null
@@ -88,10 +89,10 @@ export let semantic = (
   let asked: Screen | null = null
   let rank: Rank = opts.rank ??
     ((query, limit, within) =>
-      nearest(db, query, { model: embedder.model, limit, within }))
+      nearest(db, query, { model: space.model, limit, within }))
 
   let near = (anchor: string, owner: string): Cond => {
-    let vec = vectorOf(db, anchor, embedder.model)
+    let vec = vectorOf(db, anchor, space.model)
     let limit = opts.limit ?? 8
     let within = asked?.() ?? undefined
     // An anchor with no vector has no neighbourhood, and saying so as a

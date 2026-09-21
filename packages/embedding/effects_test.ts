@@ -118,3 +118,60 @@ Deno.test('an embedder that cannot be reached leaves the vectors stale, not the 
   }
   assertEquals(count(db), 0)
 })
+
+// A host whose key has not arrived: the write lands, the vectors wait, and the
+// pass after the key appears is the one that embeds. The config is a live
+// reading — @yaks/cli reads `{"env": …}` when it is asked — so the same object
+// answers differently once the key is exported.
+Deno.test('a key that arrives late starts the sweep, without anybody restarting', async () => {
+  let db = shelf()
+  let key: string | undefined
+  let model = counted()
+  let warned: unknown[] = []
+  let warn = console.warn
+  console.warn = (...said: unknown[]) => warned.push(said[1])
+  let stopping = new AbortController()
+  try {
+    let [book] = effects({ vocab: shop, sql: db, stopping: stopping.signal }, {
+      after: 1,
+      embedder: {
+        ...model.embedder,
+        get key() {
+          return key
+        },
+      },
+    })
+    fire(book)
+    await until(() => warned.length > 0)
+    assertEquals(count(db), 0, 'nothing is embedded without a key')
+    key = 'hunter2'
+    await until(() => count(db) == 4)
+    // and it is said once, however many passes went by waiting
+    assertEquals(warned.length, 1)
+  } finally {
+    stopping.abort()
+    console.warn = warn
+  }
+})
+
+// T-37726: the settle timer is the host's, and the host ending cancels it. A
+// callback that fires after the store is closed is a stack trace about
+// nothing — and a timer nobody cancelled holds the process open.
+Deno.test('the host going down cancels the settle: nothing fires afterwards', async () => {
+  let db = shelf()
+  let stopping = new AbortController()
+  let [book] = effects({ vocab: shop, sql: db, stopping: stopping.signal }, {
+    ...now,
+    after: 1,
+  })
+  fire(book)
+  stopping.abort()
+  // the store is gone the moment the host lets it go
+  db.exec('drop table book')
+  await new Promise((go) => setTimeout(go, 20))
+  assertEquals(count(db), 0, 'the pass never ran')
+  // and a nudge after the ending arms nothing
+  fire(book)
+  await new Promise((go) => setTimeout(go, 20))
+  assertEquals(count(db), 0)
+})

@@ -12,6 +12,7 @@ import {
   compose,
   FACETS,
   type Facets,
+  given,
   read,
   unfinished,
   writer,
@@ -824,6 +825,32 @@ Deno.test('a column that declares its words searched is indexed, and ranked', as
   }
 })
 
+// T-37726: a settle timer that outlived its host fired into a closed store
+// and printed a stack about nothing. The host's ending is one fact, and a
+// facet that arms a timer hangs it off that fact.
+Deno.test('a facet hangs its timer off the host ending, and closing cancels it', async () => {
+  let late = 0
+  let host = await compose(
+    { db: ':memory:', plugins: ['settle'] },
+    only({
+      settle: {
+        effects: {
+          effects: (h) => {
+            let timer = setTimeout(() => late++, 5)
+            h.stopping.addEventListener('abort', () => clearTimeout(timer))
+            return []
+          },
+        },
+      },
+    }),
+  )
+  assert(!host.stopping.aborted, 'a host that is up is not stopping')
+  await host.close()
+  assert(host.stopping.aborted, 'closing the host did not say so')
+  await new Promise((go) => setTimeout(go, 25))
+  assertEquals(late, 0, 'a timer fired after the database was let go')
+})
+
 Deno.test('an option written {env} is read from the environment', () => {
   let dir = Deno.makeTempDirSync()
   Deno.env.set('YAK_TEST_TOKEN', 'hunter2')
@@ -835,10 +862,20 @@ Deno.test('an option written {env} is read from the environment', () => {
         with: { sender: { token: { env: 'YAK_TEST_TOKEN' } }, keep: [1, 2] },
       }],
     })
-    assertEquals(read(`${dir}/yak.json`).plugins, [{
+    let said = read(`${dir}/yak.json`).plugins
+    assertEquals(said, [{
       use: `file://${dir}/plugins/mail`,
       with: { sender: { token: 'hunter2' }, keep: [1, 2] },
     }])
+    // And it is read EVERY time it is asked for, not once: a key exported
+    // after the host booted is a facet that starts on its next pass rather
+    // than one that has to be restarted (T-37699).
+    let token = () =>
+      (given(said![0]).sender as { token?: string } | undefined)?.token
+    Deno.env.set('YAK_TEST_TOKEN', 'hunter3')
+    assertEquals(token(), 'hunter3')
+    Deno.env.delete('YAK_TEST_TOKEN')
+    assertEquals(token(), undefined)
   } finally {
     Deno.env.delete('YAK_TEST_TOKEN')
     Deno.removeSync(dir, { recursive: true })

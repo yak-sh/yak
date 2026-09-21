@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import { counter, ids, noon, notes } from './harness.ts'
@@ -159,12 +159,18 @@ Deno.test('the facet is the watch list, and nothing without a desk', () => {
   assert(said.every((w) => !!w.created && !!w.doc))
 })
 
-Deno.test('a rest this box cannot read is refused at compose', () => {
-  assertThrows(
-    () => effects(null, { desk: scribe, rest: 'whenever' }),
-    Error,
-    'is no rest',
-  )
+Deno.test('a rest this box cannot read opens no desk, and says so', () => {
+  let warned: unknown[] = []
+  let warn = console.warn
+  console.warn = (...said: unknown[]) => warned.push(said[0])
+  try {
+    // Nothing composes a desk it would open on every stir — and nothing takes
+    // the host down over it either.
+    assertEquals(effects(null, { desk: scribe, rest: 'whenever' }), [])
+  } finally {
+    console.warn = warn
+  }
+  assert(String(warned[0]).includes('is no rest'), String(warned[0]))
 })
 
 Deno.test('the watch list is the same one the facet hands a host', () => {

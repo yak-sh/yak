@@ -120,6 +120,13 @@ export type Host = {
    * nobody. One plugin may say it; where it says nobody, the answer is this
    * host itself ({@link writer}). */
   who: Authenticate
+  /** THIS HOST ENDING, as one fact: aborted by {@link Served.close} before the
+   * last batch and before the database is let go. A facet that arms a timer —
+   * a settle, a retry, a poll — hangs it off this, or its callback fires into
+   * a closed store and the process is held open by a timer nobody owns. The
+   * duties run under it too, so one abort stops everything this process was
+   * doing on its own. */
+  stopping: AbortSignal
 }
 
 /** The facets a host takes from a plugin, one subpath each. `views` is not
@@ -481,6 +488,7 @@ export let compose = async (
       sql,
       me: selfEid(),
       who: (request) => authenticate(request),
+      stopping: stopping.signal,
       get storage(): Store {
         if (!store) throw new Error('the store is not open yet')
         return store
@@ -687,6 +695,10 @@ export let compose = async (
       // should not wait out a lapse nobody is using. Last, because `exit`
       // ABSENT is what running means, so a process that closed without
       // stamping one reads as still going forever.
+      //
+      // FIRST of all, the abort: the duties stop and every timer a facet hung
+      // off {@link Host.stopping} is cancelled, so nothing is still pending
+      // over a database that is about to be let go.
       close: (code?: number) => {
         stopping.abort()
         let shut = () => {
