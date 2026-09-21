@@ -1398,6 +1398,40 @@ let main = async () => {
   }
   say('endings')
 
+  // ── pass 1c: an imported transcript is OVER ──
+  // A harness boot wakes every session whose entries read as pending, running
+  // or queued, and after the import 417 of them do — none of this box's to
+  // continue. They are the fleet's, and they ended when its server stopped
+  // reading them. `stop` is the word @yaks/session has for exactly that (the
+  // daemon performs nothing after this line), so each gets one as its last
+  // entry: the panels show them stopped, and nothing asks a model about a
+  // transcript from last year.
+  let imported = new Set<string>()
+  for (let [, sp] of spine) imported.add(renamed.get(sp.eid) ?? sp.eid)
+  let lastSeq = new Map<string, number>()
+  for (
+    let r of all('select session, max(seq) as seq from entry group by session')
+  ) {
+    let s = eidOf(r.session)
+    if (s) lastSeq.set(s, Number(r.seq))
+  }
+  let stopped: Bundle[] = []
+  for (
+    let b of await host.graph.read('.session.status=pending,running,queued')
+  ) {
+    let s = b.entity.eid
+    if (!imported.has(s)) continue
+    stopped.push({
+      entity: { eid: derivedEid(`stopped|${s}`), num: null },
+      entry: { session: s, seq: (lastSeq.get(s) ?? 0) + 1 },
+      stop: {},
+    })
+  }
+  for (let i = 0; i < stopped.length; i += batchSize) {
+    await host.graph.apply(stopped.slice(i, i + batchSize), { trusted: true })
+  }
+  say('stops')
+
   // What integer id this store keeps for a fleet reference — the same lookup
   // the log copy needs, so it is built once here.
   let here = new Map<string, number>()
@@ -1604,7 +1638,7 @@ let main = async () => {
   }
   console.log(
     `\n  spines ${spine.size} · bundles ${written} · graves ${graves.length}` +
-      ` · endings ${ended.length}` +
+      ` · endings ${ended.length} · stops ${stopped.length}` +
       ` · journal ${logged.tx}/${logged.change}/${logged.field}` +
       ` · ${seconds}s`,
   )
