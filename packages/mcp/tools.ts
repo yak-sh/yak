@@ -1,46 +1,30 @@
-// The generic graph tier: five tools, and every one of them speaks bundles —
-// in and out. What a tool is HANDED is the call's own bundle (its arguments
-// ride on `ctx.args`, parsed and checked by the runner); what it answers is
-// bundles, which for the reads here are the entities they found. The two
-// answers that are not entities — the schema and the batch a write asks for —
-// say so in their own way: `graph_schema` answers one `content{body}` entity
-// carrying the schema as JSON, and `graph_apply` answers the batch it landed,
-// which the runner lands as the caller.
+// The generic graph tier, shaped for one host. The WORDS are @yaks/graph's —
+// `graph apply`, `graph query`, `graph show`, `graph schema` and `search` are
+// declared in its vocab.json and run from `@yaks/graph/tools` — and this file
+// says them in the dialect this transport speaks, plus everything a
+// declaration cannot know because it is written before there is a host: the
+// bundles THIS vocabulary takes, the way back out of a delete this store
+// offers, the arguments a door scopes its reads by, and whether the write is
+// listed at all.
 //
-// There is no sugar here for any particular domain — no `book_shelve`, no
-// `task_done`. A bundle already says everything such a tool would say, and an
-// agent that knows the bundle wire can write anything the vocabulary declares
-// without a tool per component. Sugar belongs in a plugin, which contributes
-// its tools the same way it contributes components (@yaks/graph's `Tool`).
+// So a line and a tool list say the same sentence, and a description is
+// written in one place.
 //
-// The one concession to typing by hand is the query line: `.status=shelved` is
-// the grammar @yaks/query owns, so `graph_query` takes it as a string and the
-// optional `filters` list is joined onto it with `&`.
+// The arguments are carried as ZOD rather than as the JSON Schema the
+// declaration wrote, because that is the one dialect every host here can
+// check: the MCP SDK takes Zod, `inputSchemaOf` says the same thing back as
+// JSON Schema for a listing, and nothing has to compile a schema at call time
+// — which a Cloudflare Worker cannot do at all (no building a function from a
+// string, which is how ajv validates).
 
 import { z } from 'zod'
-import {
-  type Bundle,
-  detached,
-  Refused,
-  type Schema,
-  signed,
-  type Tool,
-  type ToolCtx,
-} from '@yaks/graph'
+import { type Schema, type Tool } from '@yaks/graph'
+import type { Guide } from '@yaks/graph'
+import { type Search, tier } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'
 import { type BundleOpts, bundleSchema, type Depth } from './schema.ts'
-import { detail, type Guide, index, ofKind } from './words.ts'
 
-/**
- * Ranked full-text search, when the host has it. Compose
- * {@link https://jsr.io/@yaks/fts | @yaks/fts} into your storage and a bare
- * word already filters inside `graph_query`; pass this and the ranked door gets
- * a tool of its own.
- */
-export type Search = (
-  words: string,
-  opts?: { limit?: number },
-) => Bundle[] | Promise<Bundle[]>
+export type { Search }
 
 /** What the generic tier needs to know to describe itself. */
 export type CoreOpts = {
@@ -77,39 +61,6 @@ export type CoreOpts = {
   scope?: Record<string, Schema>
 }
 
-// An answer that is not entities, as the one entity it CAN be: prose (here,
-// JSON) that says it came from this call. The schema is the only such answer
-// in this tier — a vocabulary is not rows in the store it describes.
-let told = (ctx: ToolCtx, value: unknown): Bundle[] => [{
-  entity: { eid: '$said' },
-  content: { body: JSON.stringify(value, null, 2) },
-  output: { source: ctx.call },
-}]
-
-let str = (v: unknown): string => typeof v == 'string' ? v : ''
-let num = (v: unknown): number | undefined =>
-  typeof v == 'number' && Number.isFinite(v) ? v : undefined
-let strings = (v: unknown): string[] =>
-  Array.isArray(v) ? v.filter((x) => typeof x == 'string') : []
-
-// A batch, checked at the door. The input SCHEMA is the vocabulary itself
-// (schema.ts `bundleSchema` at `write`), so a client knows every component,
-// every writable column and every type before it writes one — this is the
-// check the schema cannot make, the identity every bundle must carry.
-let batch = (v: unknown): Bundle[] => {
-  if (!Array.isArray(v)) throw new Refused('change must be an array of bundles')
-  return v.map((b, i) => {
-    let eid = b && typeof b == 'object' ? b.entity?.eid : undefined
-    if (typeof eid != 'string' || !eid) {
-      throw new Refused(
-        `bundle ${i} needs an entity: {entity: {eid}} — an eid you mint, or ` +
-          `'$name' to have the graph mint one`,
-      )
-    }
-    return b
-  })
-}
-
 /**
  * A refusal for a word this graph does not know, pointed at the door that has
  * the words. The input schema is OPEN (schema.ts) precisely so a client's
@@ -128,35 +79,56 @@ export let pointing = (said: string): string =>
       'graph_schema says what this graph knows right now.'
     : said
 
-// The entities, then everything pointing at them, each one whole and each one
-// once. `.refs=<id>` is the query grammar's backlink union, so the incoming
-// references cost one query, not one per reference column.
-let gather = async (
-  ctx: ToolCtx,
-  said: string[],
-  backrefs: boolean,
-): Promise<Bundle[]> => {
-  // What the caller typed, as the eids it names: an id that is an entity is
-  // itself, and anything else is whatever a plugin says it addresses — a name,
-  // where @yaks/alias is composed in. Nothing composed, nothing to resolve.
-  let at = await ctx.graph.address(said)
-  let ids = said.map((id) => at.get(id) ?? id)
-  let found = await detached(ctx.graph.storage).get(ids)
-  let seen = new Map<string, Bundle>()
-  for (let b of found) seen.set(b.entity.eid, b)
-  if (backrefs) {
-    for (let id of ids) {
-      for (let b of await ctx.read(`.refs=${id}`)) {
-        if (!seen.has(b.entity.eid)) seen.set(b.entity.eid, b)
-      }
-    }
+// One declared argument, in Zod. Not a general JSON Schema reader: what it
+// ever sees is the tier's own declaration, so it knows the shapes that file
+// uses and says so plainly rather than pretending to cover the dialect.
+type Arg = {
+  type?: string
+  items?: Arg
+  anyOf?: Arg[]
+  enum?: readonly string[]
+  description?: string
+}
+
+let zodArg = (arg: Arg): z.ZodTypeAny => {
+  if (arg.anyOf?.length) {
+    let [one, two, ...rest] = arg.anyOf.map(zodArg)
+    return two ? z.union([one, two, ...rest]) : one
   }
-  return [...seen.values()]
+  if (arg.enum?.length) {
+    return z.enum([...arg.enum] as [string, ...string[]])
+  }
+  return arg.type == 'number' || arg.type == 'integer'
+    ? z.number()
+    : arg.type == 'boolean'
+    ? z.boolean()
+    : arg.type == 'array'
+    ? z.array(arg.items ? zodArg(arg.items) : z.unknown())
+    : arg.type == 'object'
+    ? z.record(z.unknown())
+    : z.string()
+}
+
+// A declaration's whole `input` map, in Zod: optional unless the declaration
+// said it was required, and whatever it says each argument MEANS carried
+// through — a description is the sentence an agent reads before it types.
+let zodInput = (
+  schema: { properties?: Record<string, Arg>; required?: string[] } = {},
+): Record<string, z.ZodTypeAny> => {
+  let need = new Set(schema.required ?? [])
+  return Object.fromEntries(
+    Object.entries(schema.properties ?? {}).map(([name, arg]) => {
+      let said: z.ZodTypeAny = zodArg(arg)
+      if (!need.has(name)) said = said.optional()
+      return [name, arg.description ? said.describe(arg.description) : said]
+    }),
+  )
 }
 
 /**
  * The generic graph tier, as tools: `graph_apply`, `graph_query`, `graph_show`,
- * `graph_schema`, and `search` when a {@link Search} was passed.
+ * `graph_schema`, and `search` when a {@link Search} was passed — @yaks/graph's
+ * own declarations wearing its runs, said in Zod and shaped for this host.
  *
  * ```ts
  * let tools = core({ vocab: shop, depth: 'full' })
@@ -170,213 +142,42 @@ export let core = (opts: CoreOpts): Tool[] => {
   let writes = z.array(
     bundleSchema(vocab, { depth: 'full', nulls: true, write: true, column }),
   )
-
-  let tools: Tool[] = [
-    {
-      name: 'graph_apply',
-      title: 'Apply a batch',
-      // The one write here, and it can delete: a null component drops one, a
-      // null entity tombstones the whole row. Nothing else in this tier
-      // writes at all.
-      destructive: true,
-      description:
-        `Apply entity bundles to this store: create, patch or delete ` +
-        `entities and their components, atomically. A batch is an array of ` +
-        `BUNDLES — {entity: {eid}, <component>: {<columns>}}, the same shape ` +
-        `a client's apply() takes: an omitted column is untouched, a ` +
-        `null column is cleared, a null component is dropped, and ` +
-        `$delete: true kills the entity. Mint an id yourself, or write ` +
-        `'$name' as the eid and read back what the graph named it. Where this ` +
-        `store keeps names, alias: {name: '<your name>'} beside a '$name' eid ` +
-        `makes the write IDEMPOTENT — the same name written again patches the ` +
-        `entity that already holds it instead of making a second one, and a ` +
-        `name stands wherever an eid does. A read-modify-write says what it ` +
-        `was based on: $was names, per component and column, the SHA-256 of ` +
-        `the value you READ (null for "it held none"), and the batch is ` +
-        `refused WHOLE — naming the column and what it holds now — if it has ` +
-        `moved since. That is compare-and-set: two callers spending the same ` +
-        `balance or claiming the same reward, and only one of them lands. ` +
-        `The answer ` +
-        `is the batch AS APPLIED, one bundle per entity: {entity: {eid, num}}, ` +
-        `every component as written, the stamps the graph made (created, ` +
-        `updated), and the '$alias' you named it by. Anything that died — ` +
-        `what you deleted, and whatever fell with it — answers as ` +
-        `{entity, tombstone: {}} and nothing else. This tool's ` +
-        `own input schema is the vocabulary — every component, every column ` +
-        `and every type — and graph_schema says the same thing at length. ` +
-        `The schema describes and the server decides: it is open, so a word ` +
-        `learned since you connected still reaches the graph, and a column ` +
-        `nobody declared is refused here with the ones that are. ` +
-        `check: true REHEARSES the batch instead of keeping it: every check ` +
-        `this tool makes is made, and then the whole thing is rolled back, so ` +
-        `the answer is what WOULD land — every '$name' resolved to the id it ` +
-        `would be given — or the refusal, said the same way it would be said ` +
-        `for real. That is how a plan of several entities and the links ` +
-        `between them is proven before any of it is written.` +
-        (opts.undo ? ` ${opts.undo}` : ''),
-      input: {
-        change: writes.describe('the bundles to apply, atomically'),
-        check: z.boolean().optional().describe(
-          'a dry run: answer what would land, and write none of it',
-        ),
-      },
-      // The tool does not write: the bundles it answers ARE the write, landed
-      // by the runner signed as the caller, and the batch as applied is what
-      // comes back.
-      //
-      // A DRY RUN is the exception, and it has to be: bundles answered here
-      // are landed, so a rehearsal that answered them would be the write it
-      // was rehearsing. So the check is made HERE — `apply({check})` runs every
-      // phase and rolls the transaction back (@yaks/graph) — and what it would
-      // have landed is said as prose, the way every other question about a
-      // graph is answered in this tier.
-      run: async (_, ctx) => {
-        let change = batch(ctx.args.change)
-        if (ctx.args.check !== true) return change
-        return told(
-          ctx,
-          await ctx.graph.apply(signed(change, ctx.actor), {
-            check: true,
-          }),
-        )
-      },
-    },
-    {
-      name: 'graph_query',
-      readOnly: true,
-      title: 'Read a query',
-      description:
-        `Find entities in this store by filtering their components and ` +
-        `columns, answered as whole bundles. A query LINE selects them: ` +
-        `'.status=shelved&.price<20' — dot-params joined with &, ` +
-        `with lists (a,b), ranges (1..9), !=, ~=, comparisons, '.prop!' for ` +
-        `present and '.prop=' for absent. Directives ride the same line: ` +
-        `.order=, .limit=, .refs=<id> for everything pointing at an entity. ` +
-        `filters, if you pass any, are joined onto q with &.`,
-      input: {
-        q: z.string().describe('the query line'),
-        filters: z.array(z.string()).optional().describe(
-          'extra dot-params, joined onto q with &',
-        ),
-        limit: z.number().optional().describe('at most this many entities'),
-      },
-      run: async (_, ctx) => {
-        let line = [str(ctx.args.q), ...strings(ctx.args.filters)]
-          .map((s) => s.trim()).filter(Boolean)
-        let n = num(ctx.args.limit)
-        if (n) line.push(`.limit=${n}`)
-        if (!line.length) throw new Refused('graph_query needs a query line')
-        return await ctx.read(line.join('&'))
-      },
-    },
-    {
-      name: 'graph_show',
-      readOnly: true,
-      title: 'Show entities whole',
-      description:
-        `Read entities out of this store by eid, whole: one or several, ` +
-        `every component each one carries, plus ` +
-        `everything that points AT it, each as its own bundle in {bundles}. ` +
-        `Edge entities are ordinary bundles too. This is identity, not search — ` +
-        `pass eids, or the name an entity answers to where this store keeps ` +
-        `names (an eid wins over a name that spells it). Set backrefs false ` +
-        `when you only want the entities themselves.`,
-      input: {
-        ids: z.array(z.string()).describe('the eids or names to show'),
-        backrefs: z.boolean().optional().describe(
-          'also gather what points at them (default: true)',
-        ),
-      },
-      run: async (_, ctx) => {
-        let ids = strings(ctx.args.ids)
-        if (!ids.length) throw new Refused('graph_show needs at least one id')
-        return await gather(ctx, ids, ctx.args.backrefs !== false)
-      },
-    },
-    {
-      name: 'graph_schema',
-      readOnly: true,
-      title: 'The schema',
-      description:
-        `Read this store's vocabulary — every component, its columns and ` +
-        `their types — in three sizes. Bare: the INDEX — every ` +
-        `component, what it means in a line, and its column names. With ` +
-        `component (one name or several): that component in full — each ` +
-        `column's type and meaning, what is server-owned or unique, what ` +
-        `points at it and what it points at, and a bundle that writes it. ` +
-        `With kind: what an entity of that kind is made of. Read the index ` +
-        `first and ask for the word you are about to write.`,
-      input: {
-        component: z.union([z.string(), z.array(z.string())]).optional()
-          .describe('a component to read in full, or several'),
-        kind: z.string().optional().describe(
-          'a display kind, answered as the words an entity of it wears',
-        ),
-      },
-      run: (_, ctx) => {
-        let v = ctx.graph.vocab
-        let named = [
-          ...(typeof ctx.args.component == 'string'
-            ? [ctx.args.component]
-            : []),
-          ...strings(ctx.args.component),
-        ]
-        let kind = str(ctx.args.kind)
-        for (let name of [...named, ...(kind ? [kind] : [])]) {
-          if (v.comp(name)) continue
-          throw new Refused(
-            `no component '${name}' — call graph_schema with no arguments ` +
-              `for the index of every word this graph knows`,
-          )
-        }
-        if (kind && !v.comp(kind)!.kind) {
-          throw new Refused(
-            `'${kind}' is a component, not a kind — the kinds are ` +
-              `${v.kinds.join(', ')}; ask for it as component instead`,
-          )
-        }
-        return told(
-          ctx,
-          kind
-            ? ofKind(v, kind, opts.guide)
-            : named.length
-            ? { comps: named.map((name) => detail(v, name, opts.guide)) }
-            : index(v),
-        )
-      },
-    },
-  ]
-
-  if (opts.search) {
-    let find = opts.search
-    tools.push({
-      name: 'search',
-      readOnly: true,
-      title: 'Search the text',
-      description:
-        `Search the text of this store's entities: the ones whose words ` +
-        `match, ranked best first, as whole ` +
-        `bundles. Use graph_query when you know what you are filtering on and ` +
-        `this when you only know what it says.`,
-      input: {
-        words: z.string().describe('what to search for'),
-        limit: z.number().optional().describe('at most this many entities'),
-      },
-      run: async (_, ctx) => {
-        let words = str(ctx.args.words).trim()
-        if (!words) throw new Refused('search needs words')
-        return await find(words, { limit: num(ctx.args.limit) })
-      },
-    })
-  }
-  // What this door is, said once over the whole tier: a door that only reads
-  // does not list the write at all, and a door whose reads are scoped by
-  // something of its own says so on every one of them.
-  return tools
+  return tier({ search: opts.search, guide: opts.guide })
+    // What this door is, said once over the whole tier: a door that only reads
+    // does not list the write at all — where the write is not a tool that
+    // refuses but a tool that is not there.
     .filter((t) => t.readOnly || !opts.readOnly)
-    .map((t) =>
-      t.readOnly && opts.scope
-        ? { ...t, input: { ...opts.scope, ...t.input } }
-        : t
-    )
+    .map((t) => {
+      let said = (t.inputSchema ?? {}) as {
+        properties?: Record<string, Arg>
+        required?: string[]
+      }
+      let input = zodInput(said)
+      if (t.name == 'graph_apply') {
+        // The bundles a write takes are THIS graph's, so the declaration says
+        // an array of bundles and the vocabulary fills in what one IS — every
+        // component, every writable column and every type (T-34153). No static
+        // schema could say it: the shape is a host's own words, and a
+        // declaration is written before there is a host.
+        let about = said.properties?.change?.description
+        input.change = about ? writes.describe(about) : writes
+      }
+      return {
+        ...t,
+        // The declaration's JSON Schema goes: a tool says its arguments ONCE,
+        // and here that is the Zod above. Saying both is refused outright
+        // (@yaks/vocab `validateToolInput`), and rightly.
+        inputSchema: undefined,
+        // A host whose reads are scoped by something of its own says so on
+        // every one of them — yaks.app's signed-out door names which app to
+        // read, and those arguments come first, where a caller reads them.
+        input: t.readOnly && opts.scope ? { ...opts.scope, ...input } : input,
+        // This host's way back out of a delete, in its own words, ending the
+        // write's description — because that is where an agent reads it at the
+        // moment it is deciding whether to dare.
+        ...(opts.undo && t.name == 'graph_apply'
+          ? { description: `${t.description} ${opts.undo}` }
+          : {}),
+      }
+    })
 }

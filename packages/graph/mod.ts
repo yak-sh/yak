@@ -102,3 +102,6 @@ export {
 
 export * from './join.ts'
 export * from './declared.ts'
+// The vocabulary said in words: what `graph_schema` answers out of. No runtime
+// of its own, so a browser tab that wants the index pays nothing for it.
+export * from './words.ts'

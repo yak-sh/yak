@@ -445,13 +445,16 @@ shape proposed for it.
   prefix is a vocabulary fact. The two should be one statement. The proposal:
   the store mints a number for a component whose schema declares a `prefix`, and
   the config field goes.
-- **`./tools` is a reserved name that two core packages already use.**
-  `@yaks/graph/tools` and `@yaks/vocab/tools` are the tool MECHANISM — loading a
-  declaration, checking its input — not a plugin's runs, and they predate the
-  facets. Nobody composes either as a plugin, so nothing breaks; the facet check
-  in `packages/facets_test.ts` reserves facet names on plugin-shaped packages
-  only. The proposal, if it ever bites: those two become `./tool`, singular —
-  one declaration, not a table of runs.
+- **`./tools` is a reserved name one core package still uses for something
+  else.** `@yaks/vocab/tools` is the tool MECHANISM — checking a declaration's
+  input — not a plugin's runs, and it predates the facets. Nobody composes it as
+  a plugin, so nothing breaks; the facet check in `packages/facets_test.ts`
+  reserves facet names on packages that have words of their own.
+  `@yaks/graph/tools` was the same until the generic tier moved into that
+  package's own `vocab.json`: it now carries `loadTools` AND the `runs` behind
+  `graph apply` and the rest, which is what the facet name means. The proposal,
+  if it ever bites: the one left becomes `./tool`, singular — one declaration,
+  not a table of runs.
 - **A tool call somebody else already ran.** A provider CLI's transcript is full
   of them, and `call{to, args}` + `result{call}` are exactly the words for what
   it did — except that a `call` in this graph is an ORDER: @yaks/tools registers

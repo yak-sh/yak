@@ -403,6 +403,10 @@
             "array"
           ]
         },
+        "anyOf": {
+          "type": "array",
+          "items": true
+        },
         "format": {
           "type": "string"
         },
@@ -461,7 +465,7 @@
         "items": true
       },
       "additionalProperties": false,
-      "description": "One tool argument: the same declaration a column takes, so a completion reads an argument the way it reads a column \u2014 an enum offers its members, a `ref` offers the entities of that kind, a text argument marked `search` offers what the index finds."
+      "description": "One tool argument: the same declaration a column takes, so a completion reads an argument the way it reads a column \u2014 an enum offers its members, a `ref` offers the entities of that kind, a text argument marked `search` offers what the index finds. An argument that takes either of two shapes \u2014 one name, or a list of them \u2014 says `anyOf`, which a stored column never needs."
     },
     "rule": {
       "description": "A rule declaration: the QUERY it matches, and nothing else. `match` is one or more ordinary query patterns separated by `;`, one per entity \u2014 the sigils say the rest (`+comp` ensures, `+!comp` gates so it fires once, `*comp` is its write set, `$name` names an entity, a `$name` value is that same variable). `before` names the rules this one runs before, so order among rules touching one entity is declared rather than registration-incidental.",

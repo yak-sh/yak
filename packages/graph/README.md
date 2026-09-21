@@ -179,6 +179,16 @@ does not interpret CLI arguments or execute a different command framework.
 for shared validation and optional positional/short-flag presentation. Tool
 nouns are independent of graph component names.
 
+### The generic tier's own words
+
+`@yaks/graph/vocab` carries this package's `vocab.json`: the five tools every
+graph answers — `graph apply`, `graph query`, `graph show`, `graph schema`, and
+`search` — declared like any other package's, so one file says what they are
+called, what they take and what they mean. The runs behind them are
+[@yaks/mcp](https://jsr.io/@yaks/mcp)'s `core`, which joins the two and shapes
+the tier for one host. No component is declared there: the tier describes a
+store, it does not add anything to one.
+
 ## Multi-entity rules
 
 A rule about more than one entity is written as several ordinary query patterns

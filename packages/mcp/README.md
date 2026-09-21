@@ -48,6 +48,13 @@ Tools operate on bundles: objects containing `entity: {eid}` and component
 objects. The graph vocabulary defines accepted components, columns and types.
 There is no separate tool for each application component.
 
+The five are declared in [@yaks/graph](https://jsr.io/@yaks/graph)'s own
+`vocab.json` — `graph apply`, `graph query`, `graph show`, `graph schema` and
+`search`, two words on a command line and `graph_apply` on the wire — and `core`
+here is the runs behind them, shaped for one host: the vocabulary fills in the
+bundles `graph_apply` takes, `readOnly` drops the write, `scope` adds a host's
+own arguments to every read.
+
 | tool           | what it does                                                 |
 | -------------- | ------------------------------------------------------------ |
 | `graph_apply`  | bundles in, the batch as applied out — one bundle per entity |

@@ -87,16 +87,13 @@ export {
 } from './server.ts'
 export { rosterLine, rosterVersion } from './roster.ts'
 export { core, type CoreOpts, type Search } from './tools.ts'
-export { type BundleOpts, bundleSchema, type Depth } from './schema.ts'
 export {
-  type Col,
-  detail as compDetail,
-  type Guide,
-  index as compIndex,
-  ofKind,
-  type Said,
+  type BundleOpts,
+  bundleSchema,
+  type Depth,
   schemaSchema,
-  summary as compSummary,
-  type Word,
-} from './words.ts'
+} from './schema.ts'
+// The vocabulary said in words is @yaks/graph's — `graph_schema` answers out
+// of there — and a host that sets `guide` says its type from the same place.
+export type { Guide } from '@yaks/graph'
 export type { Handler } from '@yaks/api'

@@ -506,10 +506,16 @@ Deno.test('a host with more than tools registers them on the same server', async
 
 Deno.test('every tool says how a client signs in for it', async () => {
   // Nothing said, nothing declared: a server whose tools need no sign-in
-  // leaves the field off rather than guessing at one.
+  // leaves the field off rather than guessing at one. The words the tier
+  // declared still ride there — `_meta` is where a spelling lives too.
   let plain = await connect()
-  let quiet = (await plain.listTools()).tools as { _meta?: unknown }[]
-  assertEquals(quiet.map((t) => t._meta), quiet.map(() => undefined))
+  let quiet = (await plain.listTools()).tools as {
+    _meta?: { securitySchemes?: unknown }
+  }[]
+  assertEquals(
+    quiet.map((t) => t._meta?.securitySchemes),
+    quiet.map(() => undefined),
+  )
   await plain.close()
 
   // A door that needs signing in says so on EVERY tool it lists — the generic

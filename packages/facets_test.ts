@@ -128,9 +128,10 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
     // declares no COMPONENT at all — the only word in its vocabulary is its
     // check. So every package's facets are walked. The one exemption is
     // `./tools` on a package with no words:
-    // the core's `@yaks/graph/tools` and `@yaks/vocab/tools` are the tool
-    // MECHANISM under that name and predate the facets, and nobody composes
-    // either as a plugin. See packages/README.md, the misfit list.
+    // the core's `@yaks/vocab/tools` is the tool MECHANISM under that name and
+    // predates the facets, and nobody composes it as a plugin. (`@yaks/graph`
+    // has words now — the generic tier — so its `./tools` carries the runs
+    // behind them like any other.) See packages/README.md, the misfit list.
     let words = true
     try {
       Deno.statSync(new URL(`${p.dir}/vocab.json`, here))

@@ -5,7 +5,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { connect, text } from './harness.ts'
-import { detail } from './words.ts'
+import { detail } from '@yaks/graph'
 
 type Word = {
   name: string

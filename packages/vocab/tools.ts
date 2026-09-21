@@ -208,16 +208,23 @@ let HINTS = [
 ] as const
 
 /**
- * The tool declarations one or more vocab documents carry: every `$defs` entry
- * marked `tool: true`, validated, with its `input` map lowered to the one
- * object schema everything downstream reads. The entry's NAME is the tool's,
- * so an implementation is looked up by the word the vocabulary used.
+ * The tool declarations one or more vocab documents carry, READ: every `$defs`
+ * entry marked `tool: true`, with its `input` map lowered to the one object
+ * schema everything downstream reads. The entry's NAME is the tool's, so an
+ * implementation is looked up by the word the vocabulary used.
+ *
+ * Nothing is validated here. {@link toolsIn} is the same reading with the
+ * check, and it is what a host composing somebody else's plugin wants; this is
+ * for a document whose declarations are checked where they are AUTHORED (a
+ * package's own vocab.json, against the meta-schema, in its tests) — and it is
+ * the only reading that works where code generation from strings is forbidden,
+ * since ajv compiles a schema by building a function (a Cloudflare Worker).
  *
  * `loadVocab` passes over these; this passes over everything else. A document
  * is read once for its components and once for its tools, and neither reading
  * has to know about the other.
  */
-export let toolsIn = (input: VocabDoc | VocabDoc[]): ToolDefinition[] => {
+export let toolsSaid = (input: VocabDoc | VocabDoc[]): ToolDefinition[] => {
   let docs = Array.isArray(input) ? input : [input]
   let out: ToolDefinition[] = []
   let seen = new Set<string>()
@@ -234,8 +241,15 @@ export let toolsIn = (input: VocabDoc | VocabDoc[]): ToolDefinition[] => {
         inputSchema: inputOf(entry),
       }
       for (let k of HINTS) if (entry[k] !== undefined) said[k] = entry[k]
-      out.push(toolDefinition(said))
+      out.push(said as unknown as ToolDefinition)
     }
   }
   return out
 }
+
+/** The tool declarations one or more vocab documents carry, CHECKED: every
+ * entry {@link toolsSaid} read, put through {@link toolDefinition} — the
+ * meta-schema, the dialect of each argument schema, and the options naming
+ * properties that exist. */
+export let toolsIn = (input: VocabDoc | VocabDoc[]): ToolDefinition[] =>
+  toolsSaid(input).map((said) => toolDefinition(said))

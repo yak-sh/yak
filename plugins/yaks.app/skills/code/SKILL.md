@@ -567,7 +567,7 @@ environment, and the `yak` CLI is installed:
 So a build script reaches the same tools your agent has, as you:
 
     yak app_list
-    yak graph_query --q '.recipe!'
+    yak graph query '.recipe!'
     yak apply @rows.ndjson
 
 `yak <tool>` is every tool this connector lists — it reads the list at run time,

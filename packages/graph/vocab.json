@@ -1,0 +1,158 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true
+  },
+  "title": "graph",
+  "$defs": {
+    "graph_apply": {
+      "tool": true,
+      "noun": "graph",
+      "verb": "apply",
+      "title": "Apply a batch",
+      "description": "Apply entity bundles to this store: create, patch or delete entities and their components, atomically. A batch is an array of BUNDLES — {entity: {eid}, <component>: {<columns>}}, the same shape a client's apply() takes: an omitted column is untouched, a null column is cleared, a null component is dropped, and $delete: true kills the entity. Mint an id yourself, or write '$name' as the eid and read back what the graph named it. Where this store keeps names, alias: {name: '<your name>'} beside a '$name' eid makes the write IDEMPOTENT — the same name written again patches the entity that already holds it instead of making a second one, and a name stands wherever an eid does. A read-modify-write says what it was based on: $was names, per component and column, the SHA-256 of the value you READ (null for \"it held none\"), and the batch is refused WHOLE — naming the column and what it holds now — if it has moved since. That is compare-and-set: two callers spending the same balance or claiming the same reward, and only one of them lands. The answer is the batch AS APPLIED, one bundle per entity: {entity: {eid, num}}, every component as written, the stamps the graph made (created, updated), and the '$alias' you named it by. Anything that died — what you deleted, and whatever fell with it — answers as {entity, tombstone: {}} and nothing else. This tool's own input schema is the vocabulary — every component, every column and every type — and graph_schema says the same thing at length. The schema describes and the server decides: it is open, so a word learned since you connected still reaches the graph, and a column nobody declared is refused here with the ones that are. check: true REHEARSES the batch instead of keeping it: every check this tool makes is made, and then the whole thing is rolled back, so the answer is what WOULD land — every '$name' resolved to the id it would be given — or the refusal, said the same way it would be said for real. That is how a plan of several entities and the links between them is proven before any of it is written.",
+      "input": {
+        "change": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "the bundles to apply, atomically"
+        },
+        "check": {
+          "type": "boolean",
+          "description": "a dry run: answer what would land, and write none of it"
+        }
+      },
+      "required": [
+        "change"
+      ],
+      "destructive": true
+    },
+    "graph_query": {
+      "tool": true,
+      "noun": "graph",
+      "verb": "query",
+      "title": "Read a query",
+      "description": "Find entities in this store by filtering their components and columns, answered as whole bundles. A query LINE selects them: '.status=shelved&.price<20' — dot-params joined with &, with lists (a,b), ranges (1..9), !=, ~=, comparisons, '.prop!' for present and '.prop=' for absent. Directives ride the same line: .order=, .limit=, .refs=<id> for everything pointing at an entity. filters, if you pass any, are joined onto q with &.",
+      "input": {
+        "q": {
+          "type": "string",
+          "description": "the query line"
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "extra dot-params, joined onto q with &"
+        },
+        "limit": {
+          "type": "number",
+          "description": "at most this many entities"
+        }
+      },
+      "required": [
+        "q"
+      ],
+      "options": {
+        "positional": [
+          "q"
+        ],
+        "short": {
+          "n": "limit"
+        }
+      },
+      "readOnly": true
+    },
+    "graph_show": {
+      "tool": true,
+      "noun": "graph",
+      "verb": "show",
+      "title": "Show entities whole",
+      "description": "Read entities out of this store by eid, whole: one or several, every component each one carries, plus everything that points AT it, each as its own bundle in {bundles}. Edge entities are ordinary bundles too. This is identity, not search — pass eids, or the name an entity answers to where this store keeps names (an eid wins over a name that spells it). Set backrefs false when you only want the entities themselves.",
+      "input": {
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "ref": "entity",
+          "description": "the eids or names to show"
+        },
+        "backrefs": {
+          "type": "boolean",
+          "description": "also gather what points at them (default: true)"
+        }
+      },
+      "required": [
+        "ids"
+      ],
+      "options": {
+        "rest": "ids"
+      },
+      "readOnly": true
+    },
+    "graph_schema": {
+      "tool": true,
+      "noun": "graph",
+      "verb": "schema",
+      "title": "The schema",
+      "description": "Read this store's vocabulary — every component, its columns and their types — in three sizes. Bare: the INDEX — every component, what it means in a line, and its column names. With component (one name or several): that component in full — each column's type and meaning, what is server-owned or unique, what points at it and what it points at, and a bundle that writes it. With kind: what an entity of that kind is made of. Read the index first and ask for the word you are about to write.",
+      "input": {
+        "component": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ],
+          "description": "a component to read in full, or several"
+        },
+        "kind": {
+          "type": "string",
+          "description": "a display kind, answered as the words an entity of it wears"
+        }
+      },
+      "options": {
+        "positional": [
+          "component"
+        ]
+      },
+      "readOnly": true
+    },
+    "search": {
+      "tool": true,
+      "verb": "search",
+      "title": "Search the text",
+      "description": "Search the text of this store's entities: the ones whose words match, ranked best first, as whole bundles. Use graph_query when you know what you are filtering on and this when you only know what it says.",
+      "input": {
+        "words": {
+          "type": "string",
+          "search": true,
+          "description": "what to search for"
+        },
+        "limit": {
+          "type": "number",
+          "description": "at most this many entities"
+        }
+      },
+      "required": [
+        "words"
+      ],
+      "options": {
+        "positional": [
+          "words"
+        ],
+        "short": {
+          "n": "limit"
+        }
+      },
+      "readOnly": true
+    }
+  }
+}

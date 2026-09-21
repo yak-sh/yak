@@ -16,7 +16,6 @@
 // the one the vocab.json carries, and a column with none is answered without
 // one rather than with a sentence somebody invented here.
 
-import { z } from 'zod'
 import type { Column, Vocab } from '@yaks/vocab'
 
 /** Where a component is documented at length, when its host has such a page —
@@ -176,40 +175,4 @@ export let ofKind = (vocab: Vocab, kind: string, guide?: Guide): Said => ({
       .filter((n) => vocab.comp(n))
       .map((n) => summary(vocab, n)),
   ],
-})
-
-/**
- * What `graph_schema` promises: components — a line each in the index, all of
- * it when one was asked for — plus the kind list, or the kind asked about.
- */
-export let schemaSchema: z.ZodTypeAny = z.object({
-  comps: z.array(
-    z.object({
-      name: z.string(),
-      description: z.string().optional(),
-      kind: z.boolean().describe('whether this component names a display kind'),
-      columns: z.union([
-        z.array(z.string()),
-        z.array(
-          z.object({
-            prop: z.string(),
-            type: z.string(),
-            description: z.string().optional(),
-            values: z.array(z.string()).optional(),
-            ref: z.string().optional(),
-            notes: z.array(z.string()).optional(),
-          }).passthrough(),
-        ),
-      ]),
-      worn_with: z.array(z.string()).optional(),
-      references: z.object({
-        out: z.array(z.object({ prop: z.string(), to: z.string() })),
-        in: z.array(z.object({ comp: z.string(), prop: z.string() })),
-      }).optional(),
-      example: z.record(z.unknown()).optional(),
-      guide: z.string().optional(),
-    }).passthrough(),
-  ),
-  kinds: z.array(z.string()).optional(),
-  kind: z.string().optional(),
 })

@@ -38,7 +38,7 @@ import {
 } from '@yaks/tools'
 import type { BundleOpts, Depth } from './schema.ts'
 import { core, type CoreOpts, pointing, type Search } from './tools.ts'
-import type { Guide } from './words.ts'
+import type { Guide } from '@yaks/graph'
 
 /**
  * How a client signs in to call a tool: `noauth` is callable by anybody,
