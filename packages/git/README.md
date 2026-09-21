@@ -258,10 +258,11 @@ no gate is run or known about here.
 
 Before the fast-forward, `reverts` asks the two questions that catch a rebase
 which quietly rewinds the base: which files does `base...HEAD` change that no
-commit on the branch touched, and does the landing blob equal content that path
-already held earlier in the base's history? Either is a revert nobody wrote, and
-the landing is refused, naming the files, the diff to read, and the flag that
-lands anyway.
+commit on the branch touched, and which files does it ADD lines to that land at
+content the path already held earlier in the base's history? Either is a revert
+nobody wrote, and the landing is refused, naming the files, the diff to read,
+and the flag that lands anyway. Only added lines can put content back, so a hunk
+that only takes lines away is a deletion however far back its result matches.
 
 `land` acts on the BOX rather than the graph: the checkout standing at
 `ctx.cwd`, which the host says and a command line's is where the person typed. A

@@ -84,6 +84,14 @@ let rivalLands = async (r: Repo, file: string, body: string) => {
   await command(r.repo, 'merge', '--ff-only', 'rival')
 }
 
+// main moves on its own, the way it does when anyone else lands: a commit made
+// in the shared checkout itself.
+let mainCommits = async (r: Repo, file: string, body: string, msg: string) => {
+  Deno.writeTextFileSync(`${r.repo}/${file}`, body)
+  await command(r.repo, 'add', file)
+  await command(r.repo, 'commit', '-m', msg)
+}
+
 // A bare remote wired as `main`'s real upstream — a genuine push establishes
 // both the tracking config `@{u}` reads AND the remote-tracking ref, which a
 // config-only stub cannot fake. `reachable: false` then breaks the remote's URL
@@ -405,9 +413,12 @@ slow('a transiently failing push publishes on the retry', async () => {
 
 // The guard's two questions, asked of a stubbed git so the fast tier can own
 // them: what the branch's commits touch, and what the base's history held.
-// `reverts` takes its git as an argument for exactly this seam.
+// `reverts` takes its git as an argument for exactly this seam. A `changed`
+// entry is a path the landing diff adds a line to, or `[path, added]` to say
+// how many — `0` being the pure deletion that adds nothing, `-` how git counts
+// a binary file.
 let asking = (r: {
-  changed: string[]
+  changed: (string | [string, number | '-'])[]
   touched: string[]
   past: [string, string][]
   head: [string, string][]
@@ -415,7 +426,12 @@ let asking = (r: {
 (args: string[]) => {
   let said = args.join(' ')
   let out = (ls: string[]) => Promise.resolve(ls.map((l) => `${l}\n`).join(''))
-  if (said.startsWith('diff --name-only')) return out(r.changed)
+  if (said.startsWith('diff --numstat')) {
+    return out(r.changed.map((c) => {
+      let [file, added] = typeof c == 'string' ? [c, 1] : c
+      return `${added}\t${added == '-' ? '-' : 1}\t${file}`
+    }))
+  }
   if (said.startsWith('log --format= --name-only')) return out(r.touched)
   if (said.includes('--raw')) {
     let nil = '0'.repeat(40)
@@ -465,6 +481,39 @@ Deno.test('a blob the base already moved past is a rewind', async () => {
   )
   assertEquals(found, [{ file: 'a.ts', rewound: true }])
 })
+
+// The same blob, reached by taking lines away: deleting what the base added
+// lands the file at what it held before, and adds back nothing.
+Deno.test('a diff that adds no line is a deletion, not a rewind', async () => {
+  let found = await reverts(
+    asking({
+      changed: [['a.ts', 0]],
+      touched: ['a.ts'],
+      past: [['a.ts', 'one'], ['a.ts', 'two']],
+      head: [['a.ts', 'one']],
+    }),
+    'main',
+  )
+  assertEquals(found, [])
+})
+
+// A binary file's added lines are unknowable (`-`), so the guard keeps reading
+// it as content added: a rewind refused is recoverable, a rewind landed is not.
+Deno.test(
+  'a binary file that lands at an old blob is still a rewind',
+  async () => {
+    let found = await reverts(
+      asking({
+        changed: [['a.png', '-']],
+        touched: ['a.png'],
+        past: [['a.png', 'one'], ['a.png', 'two']],
+        head: [['a.png', 'one']],
+      }),
+      'main',
+    )
+    assertEquals(found, [{ file: 'a.png', rewound: true }])
+  },
+)
 
 // A stale branch conflicts with a base that moved, and the conflict is resolved
 // by taking the branch's side wholesale — which puts the file back to its
@@ -529,6 +578,62 @@ slow('a clean rebase still lands', async () => {
       await command(r.repo, 'show', 'main:candidate.txt'),
       'candidate',
     )
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
+// main grew a gadget after this branch forked, and the branch DELETES it. The
+// file lands at the content it held before the gadget — a blob the base moved
+// past — but the branch's diff adds not one line, and a hunk that only takes
+// lines away reintroduces nothing. Deleting is the whole point of some
+// branches; the guard must not read one as a revert.
+slow('a pure deletion of content main added still lands', async () => {
+  let r = await setup()
+  try {
+    await mainCommits(r, 'tools.txt', 'core\n', 'the tools')
+    await mainCommits(r, 'tools.txt', 'core\ngadget\n', 'add the gadget')
+    assertEquals(await land({ cwd: r.tree, ...quiet }), {
+      diverged: true,
+      conflict: false,
+    })
+    Deno.writeTextFileSync(`${r.tree}/tools.txt`, 'core\n')
+    await command(r.tree, 'commit', '-am', 'delete the gadget')
+    let outcome = await land({ cwd: r.tree, ...quiet })
+    assert('landed' in outcome, JSON.stringify(outcome))
+    assertEquals(await command(r.repo, 'show', 'main:tools.txt'), 'core')
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
+
+// The other side of that coin: main REMOVED a line after the branch forked,
+// and a stale rebase's resolution puts it back. Those are added lines matching
+// content the base deleted — the revert the guard exists for.
+slow('a rebase that re-adds a line main removed is still refused', async () => {
+  let r = await setup()
+  try {
+    await mainCommits(r, 'list.txt', 'keep\ndrop\n', 'the list')
+    assertEquals(await land({ cwd: r.tree, ...quiet }), {
+      diverged: true,
+      conflict: false,
+    })
+    // Both sides rewrite the same line, so the rebase cannot replay cleanly.
+    Deno.writeTextFileSync(`${r.tree}/list.txt`, 'keep\ndrop edited\n')
+    await command(r.tree, 'commit', '-am', 'the branch edits the list too')
+    await mainCommits(r, 'list.txt', 'keep\n', 'drop the line')
+    assertEquals(await land({ cwd: r.tree, write: () => {} }), {
+      diverged: true,
+      conflict: true,
+    })
+    // The resolution that does the damage: the branch's side, wholesale.
+    Deno.writeTextFileSync(`${r.tree}/list.txt`, 'keep\ndrop\n')
+    await command(r.tree, 'add', 'list.txt')
+    await command(r.tree, '-c', 'core.editor=true', 'rebase', '--continue')
+    let e = await assertRejects(() => land({ cwd: r.tree, write: () => {} }))
+    let said = (e as Error).message
+    assert(said.includes('list.txt'), said)
+    assertEquals(await command(r.repo, 'show', 'main:list.txt'), 'keep')
   } finally {
     Deno.removeSync(r.root, { recursive: true })
   }

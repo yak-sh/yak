@@ -126,9 +126,12 @@ let same = (a: string, b: string) =>
 //   - which files does `base..HEAD` change that NO commit on the branch
 //     touches? After a clean rebase that set is empty; anything in it is the
 //     rebase's own doing.
-//   - for the rest, does the landing blob equal a blob that path already HELD
-//     earlier in the base's history? Content the base moved past and the branch
-//     moves back is a revert nobody wrote.
+//   - for the rest, does the landing diff ADD lines, and does the landing blob
+//     equal a blob that path already HELD earlier in the base's history?
+//     Content the base moved past and the branch puts back is a revert nobody
+//     wrote — but only lines the branch ADDS can put anything back. A hunk that
+//     only takes lines away reintroduces nothing, so a pure deletion is a
+//     deletion however far back its result happens to match.
 //
 // The second question exists because a rebase rewrites the branch's commits:
 // afterwards a reverting resolution sits INSIDE a branch commit's file list,
@@ -159,6 +162,20 @@ let held = (log: string) => {
   return past
 }
 
+// path → whether the landing diff ADDS anything there. `--numstat` answers
+// added and deleted counts per path in the same walk that names the paths, so
+// the guard learns both from one question. A binary file answers `-`: its added
+// lines are unknowable, which a guard reads as content added. `--no-renames`
+// keeps every path plain, so a rename reads as the deletion and the addition it
+// is rather than an `old => new` name nothing else here would match.
+let adding = (out: string) =>
+  new Map(
+    lines(out).flatMap((l) => {
+      let m = /^(\d+|-)\t(?:\d+|-)\t(.+)$/.exec(l)
+      return m ? [[m[2], m[1] != '0'] as [string, boolean]] : []
+    }),
+  )
+
 // path → blob for the whole landing tree, in one `ls-tree -r`: cheaper than a
 // `rev-parse` per file, and immune to a pathspec longer than argv allows.
 let blobs = (out: string) =>
@@ -177,8 +194,11 @@ export let reverts = async (
   ask: (args: string[]) => Promise<string>,
   base: string,
 ): Promise<Revert[]> => {
-  let changed = lines(await ask(['diff', '--name-only', `${base}...HEAD`]))
-  if (!changed.length) return []
+  let adds = adding(
+    await ask(['diff', '--numstat', '--no-renames', `${base}...HEAD`]),
+  )
+  if (!adds.size) return []
+  let changed = [...adds.keys()]
   let touched = new Set(
     lines(await ask(['log', '--format=', '--name-only', `${base}..HEAD`])),
   )
@@ -202,8 +222,11 @@ export let reverts = async (
   let now = blobs(await ask(['ls-tree', '-r', 'HEAD']))
   for (let file of rest) {
     let blob = now.get(file)
-    // A file the branch DELETES has no landing blob and nothing to rewind to.
-    if (blob && past.get(file)?.has(blob)) found.push({ file, rewound: true })
+    // A file the branch DELETES has no landing blob and nothing to rewind to,
+    // and a diff that adds no line put nothing back to rewind to it.
+    if (blob && adds.get(file) && past.get(file)?.has(blob)) {
+      found.push({ file, rewound: true })
+    }
   }
   return found
 }
