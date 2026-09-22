@@ -62,7 +62,7 @@ import {
   type Tool,
   type ToolCtx,
 } from '@yaks/graph'
-import { derivedEid } from '@yaks/graph'
+import { derivedEid, identityEid } from '@yaks/graph'
 import { rulesIn } from '@yaks/vocab'
 import { validateToolInput } from '@yaks/vocab/tools'
 import { toolsDoc } from './vocab.ts'
@@ -112,10 +112,10 @@ export let READY = 'call_ready'
 /** The rule that selects a deferred call once its wake has fired. */
 export let WOKEN = 'call_woken'
 
-/** The entity id a call points at for a tool of this name. It is derived from
- * the name, so a graph's tool rows are the same rows every time a runner is
- * built. */
-export let toolEid = (name: string): Eid => derivedEid(`tool:${name}`)
+/** The entity id a call points at for a tool of this name: the id the
+ * vocabulary's `identity` on `tool.name` derives, so a graph's tool rows are
+ * the same rows every time a runner is built. */
+export let toolEid = (name: string): Eid => identityEid('tool', [name])
 
 /** What a runner is built with. */
 export type Opts = {
@@ -129,6 +129,9 @@ export type Opts = {
    * already committed. A refusal (`CallError`) is never reported. A report
    * that answers a promise is awaited before the call's answer is. */
   report?: (err: unknown, call: Bundle, tool?: string) => unknown
+  /** what answers a call naming a tool this runner does not have. Omitted,
+   * nothing does: the call is left for whichever runner has that tool. */
+  otherwise?: Tool
   /** the clock `result.ms` is measured with (default: `performance.now`) */
   now?: () => number
   /** which entity this runner runs as: its claims record it in
@@ -270,7 +273,8 @@ let checked = (
  */
 export let runner = (g: Graph, opts: Opts): Runner => {
   let tools = opts.tools.map(namedTool)
-  let by = new Map(tools.map((t) => [t.eid ?? toolEid(t.name), t]))
+  let by = new Map(tools.map((t) => [toolEid(t.name), t]))
+  let otherwise = opts.otherwise && namedTool(opts.otherwise)
   let now = opts.now ?? (() => performance.now())
   let host = opts.host ?? g
   // The rules as this graph can query them (@yaks/graph `asked`). A graph that
@@ -365,7 +369,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let redrive = o.redrive || hold == 'lapsed'
     if (call.execution && !redrive) throw new UnfinishedCall(id)
     let c = call.call as Comp
-    let tool = by.get(String(c.to))
+    let tool = by.get(String(c.to)) ?? otherwise
     // The claim. A call naming a tool this runner does not have is left alone:
     // another runner may have that tool, and failing the call here would be
     // this runner's verdict on somebody else's work.
@@ -491,7 +495,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     ensure: () =>
       ensured ??= Promise.resolve(g.apply(
         tools.map((t) => ({
-          entity: { eid: t.eid ?? toolEid(t.name) },
+          entity: { eid: toolEid(t.name) },
           tool: { name: t.name, description: t.description },
         })),
       )),

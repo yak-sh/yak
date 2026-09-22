@@ -4,6 +4,7 @@ import { assert, assertEquals } from '@std/assert'
 import { render } from '@yaks/preact'
 import { vocab } from './store.ts'
 import type { Bundle, Comp } from '@yaks/graph'
+import { toolEid } from '@yaks/tools'
 import { mount } from '../tui/harness.ts'
 import { transcriptViews } from './transcript.ts'
 
@@ -349,7 +350,7 @@ Deno.test('shell call shows command arguments and malformed args remain safe', a
     const entry: Bundle = {
       entity: { eid: 'shell-call' },
       entry: { session: 's', seq: 2 },
-      call: { to: 'tool:shell', args },
+      call: { to: toolEid('shell'), args },
     }
     const ui = await mount(
       () => render(transcriptViews, entry, 'Transcript', vocab),
@@ -360,7 +361,7 @@ Deno.test('shell call shows command arguments and malformed args remain safe', a
       if (args != '{') {
         assert(ui.text().includes('$ printf hello'), ui.text())
         assert(ui.text().includes('pwd'))
-      } else assert(ui.text().includes('tool:shell'))
+      } else assert(ui.text().includes(toolEid('shell')))
       assertEquals((entry.call as Comp).args, args)
     } finally {
       ui.free()

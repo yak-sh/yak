@@ -1,5 +1,5 @@
 /** Persisted MCP server definitions. Connections and credentials are not graph data. */
-import { type Bundle, type Comp, derivedEid } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import { nameOf, namespaceOf, type Server } from './mod.ts'
 
@@ -67,21 +67,3 @@ export const graphToolName = (
   server: Server,
   remote: string,
 ): string => nameOf(server.namespace ?? server.name, remote)
-
-/** A distinct entity per server/configuration/name revision, not a provider name. */
-export const graphToolEid = (
-  id: string,
-  server: Server,
-  remote: string,
-): string =>
-  derivedEid(
-    'mcp-tool|' + JSON.stringify([
-      id,
-      server.namespace ?? server.name,
-      server.url,
-      server.credential ?? null,
-      server.allow ?? null,
-      server.oauth ?? null,
-      remote,
-    ]),
-  )

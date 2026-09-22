@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { Database, driver } from '@yaks/sqlite/db'
-import type { Comp } from '@yaks/graph'
+import { type Comp, identityEid } from '@yaks/graph'
 import type { Model } from '@yaks/model'
 import { react, statusOf, transcript } from '@yaks/session'
 import { open } from './store.ts'
@@ -29,17 +29,21 @@ let fake: Model = (req) =>
     items: [{ kind: 'assistant', text: 'pong' }],
   })
 
+let P = identityEid('provider', ['openai'])
+let M = identityEid('model', ['gpt-6-astra'])
+let A = identityEid('model', ['astra'])
+
 let seeded = () => {
   let h = open(':memory:')
   h.g.apply([
-    { entity: { eid: 'p' }, provider: { name: 'openai' } },
-    { entity: { eid: 'm' }, model: { name: 'gpt-6-astra', provider: 'p' } },
+    { entity: { eid: P }, provider: { name: 'openai' } },
+    { entity: { eid: M }, model: { name: 'gpt-6-astra' } },
     { entity: { eid: 's' }, session: { id: 'one' } },
     {
       entity: { eid: 'in1' },
       entry: { session: 's', seq: 1 },
       content: { body: 'ping' },
-      using: { provider: 'p', model: 'm' },
+      using: { provider: P, model: M },
     },
   ])
   return h
@@ -167,19 +171,19 @@ Deno.test('a deleted provider leaves past entries saying what answered', () => {
   let h = open(dir + '/history.db')
   try {
     h.g.apply([
-      { entity: { eid: 'p' }, provider: { name: 'openai' } },
-      { entity: { eid: 'm' }, model: { name: 'astra', provider: 'p' } },
+      { entity: { eid: P }, provider: { name: 'openai' } },
+      { entity: { eid: A }, model: { name: 'astra' } },
       { entity: { eid: 's' }, session: {} },
       {
         entity: { eid: 'e' },
         entry: { session: 's' },
-        using: { provider: 'p', model: 'm' },
+        using: { provider: P, model: A },
       },
     ])
-    h.g.apply([{ entity: { eid: 'p' }, tombstone: {} }])
+    h.g.apply([{ entity: { eid: P }, tombstone: {} }])
     assertEquals(h.store.read('.entry')[0].using, {
-      provider: 'p',
-      model: 'm',
+      provider: P,
+      model: A,
       effort: null,
       instructions: null,
     })

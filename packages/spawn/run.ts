@@ -29,6 +29,7 @@
 // the other on an entry.
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { edgeEid } from '@yaks/edge'
 import { SESSION } from '@yaks/session'
 import {
   EXIT,
@@ -88,6 +89,20 @@ export type Asked = Job & {
 let levels = (efforts: unknown): string[] =>
   String(efforts ?? '').split(/[\s,]+/).filter(Boolean)
 
+/** What `provider` calls `model`: the name on its `serves` edge, or nothing
+ * when the provider does not serve that model. */
+export let spelling = async (
+  g: Graph,
+  provider: string,
+  model: string,
+): Promise<string | undefined> => {
+  let [edge] = await g.storage.tx((tx) =>
+    tx.get([edgeEid(provider, 'serves', model)])
+  )
+  let name = comp(edge, 'serves')?.name
+  return name == null ? undefined : String(name)
+}
+
 /**
  * Read a session's request out of its transcript: the `using` component on the
  * first entry that has one, and the instruction text stored with it.
@@ -116,6 +131,12 @@ export let asked = async (
   let name = String(comp(provider, 'provider')?.name ?? '')
   if (!name) return null
   let served = comp(model, 'model')
+  let spelled = served
+    ? await spelling(g, String(using.provider), String(using.model))
+    : undefined
+  if (served && spelled == null) {
+    throw new Error(`${name} does not serve ${String(served.name)}`)
+  }
   let effort = String(using.effort ?? served?.effort ?? '')
   let admits = levels(served?.efforts)
   if (effort && admits.length && !admits.includes(effort)) {
@@ -130,7 +151,7 @@ export let asked = async (
   return {
     provider: name,
     session,
-    model: served ? String(served.name ?? '') : undefined,
+    model: spelled,
     effort: effort || undefined,
     instruction: String(said?.body ?? ''),
   }

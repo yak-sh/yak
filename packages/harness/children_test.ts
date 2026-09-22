@@ -52,14 +52,14 @@ for (let kind of ['fork', 'spawn']) {
         return Promise.resolve(call(kind, {
           prompt: 'child work',
           instructions: 'child instructions',
-          model: 'other',
+          model: 'alternate',
           effort: 'high',
         }))
       }
       return Promise.resolve(reply('parent reacted'))
     }
     let h = open(':memory:')
-    h.g.apply([{ entity: { eid: 'other' }, model: { name: 'alternate' } }])
+    h.g.apply([{ entity: { eid: '$other' }, model: { name: 'alternate' } }])
     let a = agent({ h, model, cwd: directory, tools: sessionTools(h.g) })
     let parent = await a.start('parent context')
     let req = await childAsked.promise

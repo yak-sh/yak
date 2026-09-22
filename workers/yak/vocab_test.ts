@@ -313,7 +313,11 @@ Deno.test('the platform declares the uniques its races are decided by', () => {
     )
   }
   // An app's own store declares none of them — they are the directory's words.
-  assert(!schema(appVocab()).some((s) => s.includes('unique index')))
+  // Its one unique is a tool's name, which is the tool's identity.
+  assertEquals(
+    schema(appVocab()).filter((s) => s.includes('unique index')),
+    ['create unique index if not exists tool_name on "tool" ("name")'],
+  )
   // And an address is no longer one of them (T-34657): `former` is history, so
   // two apps may hold one address a year apart. Which app answers at an address
   // now is the tools' word, not an index's.

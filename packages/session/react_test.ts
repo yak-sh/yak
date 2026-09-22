@@ -6,7 +6,7 @@ import type { Comp } from '@yaks/graph'
 
 import { assertEquals } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
-import { graph } from '@yaks/graph'
+import { graph, identityEid } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
@@ -18,6 +18,7 @@ import {
   type Request,
 } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { toolEid } from '@yaks/tools'
 import { sessionDoc } from './comp.ts'
 import { kindOf, statusOf } from './status.ts'
 import { sessions } from './plugin.ts'
@@ -38,7 +39,13 @@ let fakeDoc: VocabDoc = {
 }
 let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, fakeDoc])
 
-let ids = { s: 'sess', m: 'model', p: 'prov', t: 'tool', f: 'fork' }
+let ids = {
+  s: 'sess',
+  m: identityEid('model', ['fake-1']),
+  p: identityEid('provider', ['fake']),
+  t: toolEid('echo'),
+  f: 'fork',
+}
 
 // A scripted model: each ask pops the next reply; the requests are kept for the
 // assertions about what travelled. `kept` makes it a provider that keeps
@@ -74,7 +81,7 @@ let mint = () => `x${++n}`
 let seed = (g: Graph) =>
   g.apply([
     { entity: { eid: ids.p }, provider: { name: 'fake' } },
-    { entity: { eid: ids.m }, model: { name: 'fake-1', provider: ids.p } },
+    { entity: { eid: ids.m }, model: { name: 'fake-1' } },
     {
       entity: { eid: ids.t },
       tool: { name: 'echo', description: 'say it back' },

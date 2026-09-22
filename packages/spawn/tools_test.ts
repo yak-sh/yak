@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle, Comp, Graph, ToolCtx } from '@yaks/graph'
-import { graph } from '@yaks/graph'
+import { graph, identityEid } from '@yaks/graph'
+import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { loadTools } from '@yaks/graph/tools'
 import { loadVocab } from '@yaks/vocab'
 import { idDoc, idKeywords } from '@yaks/id'
@@ -38,8 +39,9 @@ let host = () => {
       docDoc,
       taskDoc,
       spawnDoc,
+      edgeDoc,
     ],
-    [kernelKeywords, idKeywords, nameKeywords],
+    [kernelKeywords, idKeywords, nameKeywords, edgeKeywords],
   )
   let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
   let g: Graph = graph({
@@ -50,11 +52,15 @@ let host = () => {
   return { g, fx }
 }
 
+let P = identityEid('provider', ['fake'])
+let M = identityEid('model', ['fake-1'])
+
 // The shelf a request names: who runs it, what it serves, and the work.
 let shelf = [
-  { entity: { eid: 'p-fake' }, provider: { name: 'fake' } },
-  { entity: { eid: 'm-fake' }, model: { name: 'fake-1', provider: 'p-fake' } },
+  { entity: { eid: P }, provider: { name: 'fake' } },
+  { entity: { eid: M }, model: { name: 'fake-1' } },
   { entity: { eid: 'the-task' }, task: {}, doc: { title: 'ship it' } },
+  { ...link(P, 'serves', M), serves: { name: 'fake-1' } },
 ]
 
 let ctx = (g: Graph, args: Record<string, unknown>): ToolCtx => ({
@@ -93,8 +99,8 @@ Deno.test('a spawn lands the session, the request and the lease', async () => {
     [],
     ctx(g, {
       task: 'T-3',
-      provider: 'p-fake',
-      model: 'm-fake',
+      provider: P,
+      model: M,
       effort: 'high',
     }),
   ) as Bundle[]
@@ -105,8 +111,8 @@ Deno.test('a spawn lands the session, the request and the lease', async () => {
   // instruction says which work it is.
   let [entry] = await g.read('.using')
   assertEquals(comp(entry, 'using'), {
-    provider: 'p-fake',
-    model: 'm-fake',
+    provider: P,
+    model: M,
     effort: 'high',
   })
   assertEquals(comp(entry, 'entry')?.session, session.entity.eid)
@@ -129,16 +135,25 @@ Deno.test('a spawn refuses what is not a provider, and work that is not there', 
     return ''
   }
   assertStringIncludes(
-    await refused({ task: 'the-task', provider: 'm-fake' }),
+    await refused({ task: 'the-task', provider: M }),
     'not a provider',
   )
   assertStringIncludes(
-    await refused({ task: 'T-404', provider: 'p-fake' }),
+    await refused({ task: 'T-404', provider: P }),
     'no such task',
   )
   assertStringIncludes(
-    await refused({ task: 'the-task', provider: 'p-fake', model: 'p-fake' }),
+    await refused({ task: 'the-task', provider: P, model: P }),
     'not a model',
+  )
+  await g.apply([{ entity: { eid: '$other' }, model: { name: 'other' } }])
+  assertStringIncludes(
+    await refused({
+      task: 'the-task',
+      provider: P,
+      model: identityEid('model', ['other']),
+    }),
+    'does not serve',
   )
 })
 
@@ -223,8 +238,8 @@ slow('spawn --wait runs the provider and answers what it came to', async () => {
         [],
         ctx(g, {
           task: 'the-task',
-          provider: 'p-fake',
-          model: 'm-fake',
+          provider: P,
+          model: M,
           wait: true,
           timeout: '30',
         }),

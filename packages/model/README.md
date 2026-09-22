@@ -23,10 +23,16 @@ Three things, and no transport:
   `mark` (the component to write on the record of a reply), `anchor` (reads an
   anchor back off that record, or returns nothing) and `vocab` (the component
   `mark` writes).
-- **`provider`, `model`** — graph components describing providers and available
-  models, exported as the JSON Schema document `modelDoc`. The `tool` component
-  belongs to [@yaks/tools](../tools), not this vocabulary. `Tool` here is the
-  provider-neutral TypeScript type for a callable tool description.
+- **`provider`, `model`, `serves`** — graph components describing providers,
+  models, and which provider serves which model, exported as the JSON Schema
+  document `modelDoc`. A provider and a model are each identified by `name` (the
+  vocabulary's `identity` keyword), so the same name is the same entity in every
+  graph. A model is the model itself, whoever serves it. A provider's offering
+  of a model is an edge, provider `serves` model, carrying `serves.name`: what
+  that provider calls the model, sent as the model of every request it serves.
+  The `tool` component belongs to [@yaks/tools](../tools), not this vocabulary.
+  `Tool` here is the provider-neutral TypeScript type for a callable tool
+  description.
 
 A provider package implements `Model`: [@yaks/openai](../openai) does it over
 the Responses API; an Ollama or a Workers AI package would sit beside it. A

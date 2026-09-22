@@ -1,8 +1,8 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Comp } from '@yaks/graph'
+import { type Comp, identityEid } from '@yaks/graph'
 import type { Model } from '@yaks/model'
 import { react, statusOf, transcript, UnknownSession } from '@yaks/session'
-import { agent, idOf, seed, sessionTitle, titleOf } from './run.ts'
+import { agent, seed, sessionTitle, titleOf } from './run.ts'
 import { open } from './store.ts'
 
 // A model that answers with whatever it was last told, so a test can see the
@@ -27,8 +27,11 @@ Deno.test('the seed is the same rows however many times it is applied', async ()
   h.g.apply(seed(), { trusted: true })
   h.g.apply(seed(), { trusted: true })
   assertEquals((await h.g.read('.provider')).length, 1)
+  assertEquals((await h.g.read('.serves')).length, 1)
   let models = await h.g.read('.model')
-  assertEquals(models.map((b) => b.entity.eid), [idOf('model', 'gpt-6-astra')])
+  assertEquals(models.map((b) => b.entity.eid), [
+    identityEid('model', ['gpt-6-astra']),
+  ])
   h.close()
 })
 

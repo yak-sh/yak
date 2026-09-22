@@ -2,7 +2,8 @@
   "$vocabulary": {
     "https://yaks.sh/vocab/core": true,
     "https://yaks.sh/vocab/id": true,
-    "https://yaks.sh/vocab/names": true
+    "https://yaks.sh/vocab/names": true,
+    "https://yaks.sh/vocab/edge": true
   },
   "title": "model",
   "$defs": {
@@ -15,7 +16,9 @@
       "description": "a service that runs models",
       "properties": {
         "name": {
-          "type": "string"
+          "type": "string",
+          "identity": true,
+          "description": "what the provider is called; the entity id is derived from it"
         },
         "transport": {
           "enum": [
@@ -29,11 +32,6 @@
         "fallback": {
           "type": "boolean"
         },
-        "serves": {
-          "type": "string",
-          "ref": "provider",
-          "death": "cascade"
-        },
         "offered": {
           "type": "boolean"
         }
@@ -45,11 +43,12 @@
       "kind": true,
       "prefix": "O",
       "by_name": true,
-      "description": "a model a provider serves",
+      "description": "a model, whoever serves it",
       "properties": {
         "name": {
           "type": "string",
-          "description": "the name the provider knows it by"
+          "identity": true,
+          "description": "the model's own name; the entity id is derived from it"
         },
         "vendor": {
           "type": "string"
@@ -60,13 +59,6 @@
             "mid",
             "small"
           ]
-        },
-        "provider": {
-          "type": "string",
-          "ref": "provider",
-          "death": "keep",
-          "bare": false,
-          "description": "which provider serves it — kept when the provider entity is deleted, because every past request names this model, and a model with no provider still records which one served it"
         },
         "label": {
           "type": "string"
@@ -81,6 +73,18 @@
         },
         "offered": {
           "type": "boolean"
+        }
+      }
+    },
+    "serves": {
+      "component": true,
+      "type": "object",
+      "relation": "serves",
+      "description": "an edge relation: this provider serves that model",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "what the provider calls the model, sent as the model of every request it serves"
         }
       }
     },

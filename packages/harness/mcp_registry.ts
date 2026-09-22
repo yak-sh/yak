@@ -2,7 +2,7 @@
 import type { Graph } from '@yaks/graph'
 import { checkNamespaces, checkToolNames, type Server } from '@yaks/mcp-client'
 import type { Remote } from './mcp_auth.ts'
-import { graphToolEid, graphToolName, serverOf } from '@yaks/mcp-client/graph'
+import { graphToolName, serverOf } from '@yaks/mcp-client/graph'
 import {
   authorizedMCP,
   type MCPAuthAction,
@@ -89,10 +89,6 @@ export const graphMCP = (g: Graph) => {
           errors.delete(id)
           return await Promise.all(tools.map(async (tool) => ({
             ...tool,
-            meta: {
-              ...tool.meta,
-              eid: graphToolEid(id, item.server, String(tool.meta?.remoteName)),
-            },
             name: await graphToolName(
               id,
               item.server,

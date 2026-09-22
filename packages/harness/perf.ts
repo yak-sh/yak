@@ -1,6 +1,6 @@
 // Reproducible hot-path probe, outside the fast test tier:
 // deno run -A packages/harness/perf.ts
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, identityEid } from '@yaks/graph'
 import { daemon } from '@yaks/session'
 import { open } from './store.ts'
 import { seed } from './run.ts'
@@ -11,7 +11,7 @@ let prefix: Bundle[] = Array.from({ length: 1000 }, (_, i) => ({
   entity: { eid: `e${i}` },
   entry: { session: 's', seq: i + 1 },
   content: { body: `entry ${i}` },
-  ...i == 0 ? { using: { model: 'model:fake' } } : {},
+  ...i == 0 ? { using: { model: identityEid('model', ['fake']) } } : {},
 }))
 h.g.apply(prefix)
 let apply: number[] = [], overhead: number[] = []

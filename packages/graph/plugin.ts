@@ -178,10 +178,6 @@ export type Tool<C = ToolCtx, R = Bundle[]> = {
   /** The older flat tool name. A tool declaring `noun`/`verb` derives it from
    * those instead. */
   name?: string
-  /** the entity a call references this tool by, where the graph stores tool
-   * rows of its own. Derived from the name otherwise (@yaks/tools
-   * `toolEid`). */
-  eid?: Eid
   /** The thing the tool acts on, independent of CLI argument order or graph
    * component names. */
   noun?: string

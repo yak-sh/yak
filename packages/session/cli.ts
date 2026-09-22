@@ -18,7 +18,7 @@
 // Nothing here touches a file except the credential it reads.
 
 import { effects } from '@yaks/effects'
-import { type Bundle, type Comp, graph } from '@yaks/graph'
+import { type Bundle, type Comp, graph, identityEid } from '@yaks/graph'
 import { modelDoc } from '@yaks/model'
 import { credential, openaiDoc, responses } from '@yaks/openai'
 import { ram } from '@yaks/ram'
@@ -26,6 +26,7 @@ import { render } from '@yaks/text'
 import { loadVocab } from '@yaks/vocab'
 import { cli, type Command, type Ctx } from '@yaks/cli'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { toolEid } from '@yaks/tools'
 import { sessionDoc } from './comp.ts'
 import { daemon } from './daemon.ts'
 import { sessions } from './plugin.ts'
@@ -69,10 +70,15 @@ let spike = async (
     store: env('STORE') == '1',
   })
 
-  let ids = { p: 'openai', m: MODEL, s: 'S1', f: 'S2' }
+  let ids = {
+    p: identityEid('provider', ['openai']),
+    m: identityEid('model', [MODEL]),
+    s: 'S1',
+    f: 'S2',
+  }
   let names = {
     [ids.m]: MODEL,
-    ...Object.fromEntries(kit.map((t) => [`tool:${t.name}`, t.name])),
+    ...Object.fromEntries(kit.map((t) => [toolEid(t.name), t.name])),
   }
   let ctx = { names, anchor: model.anchor }
   let show = (b: Bundle) =>
@@ -92,9 +98,9 @@ let spike = async (
   c.out(`session ${ids.s}, ${MODEL}:`)
   g.apply([
     { entity: { eid: ids.p }, provider: { name: 'openai' } },
-    { entity: { eid: ids.m }, model: { name: MODEL, provider: ids.p } },
+    { entity: { eid: ids.m }, model: { name: MODEL } },
     ...kit.map((t) => ({
-      entity: { eid: `tool:${t.name}` },
+      entity: { eid: toolEid(t.name) },
       tool: { name: t.name, description: t.description },
     })),
     { entity: { eid: ids.s }, session: { id: 'spike' } },

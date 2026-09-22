@@ -1,6 +1,8 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Comp, graph, type Plugin, type Tool } from '@yaks/graph'
-import { runner, UnfinishedCall } from '@yaks/tools'
+import { runner, toolEid, UnfinishedCall } from '@yaks/tools'
+
+const TOOL = toolEid('echo')
 import { open } from './store.ts'
 
 // The claim is durable, so a call that ran once is answered from the graph
@@ -12,7 +14,6 @@ Deno.test('recorded execution survives SQLite reopen and needs no session', asyn
   let h = open(path)
   let runs = 0
   const echo: Tool = {
-    eid: 'tool',
     name: 'echo',
     description: 'say hello',
     run: (_bundles, ctx) => {
@@ -26,11 +27,11 @@ Deno.test('recorded execution survives SQLite reopen and needs no session', asyn
   }
   try {
     await h.g.apply([
-      { entity: { eid: 'tool' }, tool: { name: 'echo' } },
-      { entity: { eid: 'call' }, call: { to: 'tool', args: '{}' } },
+      { entity: { eid: TOOL }, tool: { name: 'echo' } },
+      { entity: { eid: 'call' }, call: { to: TOOL, args: '{}' } },
       {
         entity: { eid: 'unfinished' },
-        call: { to: 'tool' },
+        call: { to: TOOL },
         execution: { state: 'running' },
       },
     ])
@@ -71,12 +72,11 @@ Deno.test('failed result commit leaves the claim and never repeats side effects'
   let runs = 0
   try {
     await g.apply([
-      { entity: { eid: 'tool' }, tool: { name: 'echo' } },
-      { entity: { eid: 'call' }, call: { to: 'tool', args: '{}' } },
+      { entity: { eid: TOOL }, tool: { name: 'echo' } },
+      { entity: { eid: 'call' }, call: { to: TOOL, args: '{}' } },
     ])
     const r = runner(g, {
       tools: [{
-        eid: 'tool',
         name: 'echo',
         description: 'do the irreversible thing',
         run: () => {

@@ -1,7 +1,10 @@
 import { assert, assertEquals } from '@std/assert'
 import { open } from './store.ts'
+import { identityEid } from '@yaks/graph'
 import { remote } from './remote.ts'
 import { transcriptWindow } from '@yaks/session'
+
+let M = identityEid('model', ['test'])
 
 Deno.test('SQLite fork window reads limited bodies and projects position metadata', async () => {
   let h = open(':memory:')
@@ -192,7 +195,7 @@ Deno.test('usage panel reads latest inherited ask metadata without transcript bo
   try {
     await store.g.apply([
       { entity: { eid: 'p' }, session: {} },
-      { entity: { eid: 'm' }, model: { name: 'test' } },
+      { entity: { eid: M }, model: { name: 'test' } },
       {
         entity: { eid: 'input' },
         entry: { session: 'p', seq: 1 },
@@ -201,14 +204,14 @@ Deno.test('usage panel reads latest inherited ask metadata without transcript bo
       {
         entity: { eid: 'ask' },
         entry: { session: 'p', seq: 2 },
-        ask: { to: 'm', through: 'input' },
+        ask: { to: M, through: 'input' },
         usage: { input_tokens: 42 },
       },
       { entity: { eid: 'c' }, session: {}, fork: { from: 'ask' } },
       {
         entity: { eid: 'later' },
         entry: { session: 'p', seq: 3 },
-        ask: { to: 'm', through: 'ask' },
+        ask: { to: M, through: 'ask' },
         usage: { input_tokens: 99 },
       },
     ])

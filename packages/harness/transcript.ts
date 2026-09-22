@@ -1,5 +1,6 @@
 /** Terminal transcript trees selected by query specificity, not a kind switch. */
 import type { Comp } from '@yaks/graph'
+import { toolEid } from '@yaks/tools'
 import { parse } from '@yaks/query'
 import { define, type Renderer } from '@yaks/render'
 import { views } from '@yaks/session'
@@ -163,7 +164,7 @@ export let transcriptViews = define([
   row('.entry&.notice&.content', 'notice', 'Muted', true),
   row('.entry&.result', 'result', 'Muted', true, false, false, resultPreview),
   row(
-    '.entry&.call&.call.to=tool:shell',
+    `.entry&.call&.call.to=${toolEid('shell')}`,
     'call',
     'Key',
     false,

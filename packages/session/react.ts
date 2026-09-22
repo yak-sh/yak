@@ -73,13 +73,15 @@ import { took } from './timing.ts'
 
 /** A tool the model may call: its declaration, and how to run it. */
 export type Tool = Declared & {
-  /** Optional stable entity identity, independent of the displayed/provider name. */
-  eid?: Eid
   run: (
     args: Record<string, unknown>,
     ctx?: ToolContext,
   ) => Promise<string> | string
 }
+
+/** A model as one provider serves it: the adapter that asks, and the name
+ * that provider knows the model by (`serves.name`). */
+export type Served = { model: Model; name: string }
 
 /** What `react` is handed beside the graph. */
 export type Deps = {
@@ -88,11 +90,11 @@ export type Deps = {
   /** Minimum interval between durable stream checkpoints; zero disables. */
   checkpointMs?: number
   model: Model
-  /** Choose a provider adapter from the model and request configuration. */
-  resolveModel?: (using: Comp | undefined, model: Bundle) => Promise<Model>
+  /** Choose the provider that serves the model, and what it calls the model. */
+  resolveModel?: (using: Comp | undefined, model: Bundle) => Promise<Served>
   tools: Tool[]
   /** Resolve a stable tool registry for one execution step. */
-  toolSnapshot?: (phase: 'ask' | 'call') => Promise<Tool[]>
+  toolSnapshot?: (phase: 'ask' | 'call', session: Eid) => Promise<Tool[]>
   signal?: AbortSignal
   instructions?: string
   /** Resolve inherited base instructions for future asks without rewriting history. */
@@ -230,13 +232,14 @@ export let react = async (
     ])
   }
   const tools = deps.toolSnapshot
-    ? await deps.toolSnapshot(openCalls(entries).length ? 'call' : 'ask')
+    ? await deps.toolSnapshot(
+      openCalls(entries).length ? 'call' : 'ask',
+      session,
+    )
     : deps.tools
   let toolEntities = new Map<Eid, Tool>()
   for (let b of await g.read(`.${TOOL}`)) {
-    let t = tools.find((t) =>
-      t.eid ? t.eid == b.entity.eid : t.name == comp(b, TOOL)?.name
-    )
+    let t = tools.find((t) => t.name == comp(b, TOOL)?.name)
     if (t) toolEntities.set(b.entity.eid, t)
   }
 
@@ -277,8 +280,7 @@ export let react = async (
     // carries
     // `content` and `output{source}`, so the answer names the call it came
     // from and the runner lands it like any other.
-    const served = (eid: Eid, tool: Tool): GraphTool => ({
-      eid,
+    const served = (tool: Tool): GraphTool => ({
       name: tool.name,
       description: tool.description ?? '',
       inputSchema: tool.parameters,
@@ -299,24 +301,20 @@ export let react = async (
     // A call naming a tool this session does not serve is answered by a tool
     // that refuses. The runner leaves a call it has no word for alone —
     // another runner may own it — and here nobody else does, so the refusal is
-    // an entry in this table and lands like every other result does.
-    const unserved = (to: Eid): GraphTool => ({
-      eid: to,
-      name: to,
+    // the runner's `otherwise` and lands like every other result does.
+    const unserved: GraphTool = {
+      name: 'unserved',
       description: 'a tool this session does not serve',
-      run: () => {
-        throw new CallError('tool', 'no such tool: ' + to)
+      run: (bundles, ctx) => {
+        throw new CallError(
+          'tool',
+          'no such tool: ' + comp(at.get(ctx.call) ?? bundles[0], CALL)?.to,
+        )
       },
-    })
-    const table: GraphTool[] = [
-      ...open
-        .map((b) => String(comp(b, CALL)?.to))
-        .filter((to) => !toolEntities.has(to))
-        .map(unserved),
-      ...[...toolEntities].map(([eid, tool]) => served(eid, tool)),
-    ]
+    }
     const run = runner(g, {
-      tools: table,
+      tools: [...toolEntities.values()].map(served),
+      otherwise: unserved,
       report: (error) => deps.report?.(error, session, 'tool'),
     })
     for (const pending of open) {
@@ -350,9 +348,9 @@ export let react = async (
       line({ [ERROR]: { code: 'no_model' } }, 'no model in force'),
     ])
   }
-  const providerModel = deps.resolveModel
+  const { model: providerModel, name: spelled } = deps.resolveModel
     ? await deps.resolveModel(using, modelEntity!)
-    : deps.model
+    : { model: deps.model, name: modelName }
   // Only completed responses can supply provider continuation state. A partial
   // response remains ordinary visible history after the last completed anchor.
   asked = newestAsk(
@@ -388,7 +386,7 @@ export let react = async (
     : undefined
   let req: Request = {
     signal: deps.signal,
-    model: modelName,
+    model: spelled,
     effort: effort == null ? undefined : String(effort),
     instructions: deps.resolveInstructions
       ? deps.resolveInstructions(

@@ -43,6 +43,7 @@ import {
   views,
 } from '@yaks/session'
 import { render } from '@yaks/text'
+import { spelling } from './run.ts'
 
 /** What config can set for these tools. */
 export type Options = {
@@ -192,6 +193,11 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
       }
       if (model && !served?.model) {
         throw new Error(`not a model: ${str(ctx.args.model)}`)
+      }
+      if (model && await spelling(ctx.graph, provider, model) == null) {
+        throw new Error(
+          `${str(ctx.args.provider)} does not serve ${str(ctx.args.model)}`,
+        )
       }
       let effort = str(ctx.args.effort)
       let session = uuid()

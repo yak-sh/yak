@@ -148,7 +148,9 @@
       "description": "A registered tool that callers can invoke.",
       "properties": {
         "name": {
-          "type": "string"
+          "type": "string",
+          "identity": true,
+          "description": "what callers call it; the entity id is derived from it"
         },
         "description": {
           "type": "string"

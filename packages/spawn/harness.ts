@@ -6,7 +6,8 @@
 // session's, the process's, and the provider and model entities a request
 // names.
 
-import { type Graph, graph } from '@yaks/graph'
+import { type Graph, graph, identityEid } from '@yaks/graph'
+import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
@@ -18,7 +19,16 @@ import { claude } from './adapters.ts'
 import type { Adapter } from './adapters.ts'
 
 /** Every component a managed session uses. */
-export let host: Vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, processDoc])
+export let host: Vocab = loadVocab(
+  [sessionDoc, toolsDoc, modelDoc, processDoc, edgeDoc],
+  [edgeKeywords],
+)
+
+/** The provider and the model a request names. */
+export let FAKE = {
+  provider: identityEid('provider', ['fake']),
+  model: identityEid('model', ['fake-1']),
+}
 
 /** A graph over an empty store, with the session and process plugins loaded.
  * `fx` is the effects registry, for a test that needs to add handlers. */
@@ -52,17 +62,15 @@ export let asking = (
   instruction: string,
   using: Record<string, unknown> = {},
 ) => [
-  { entity: { eid: 'provider-fake' }, provider: { name: 'fake' } },
-  {
-    entity: { eid: 'model-fake' },
-    model: { name: 'fake-1', provider: 'provider-fake' },
-  },
+  { entity: { eid: FAKE.provider }, provider: { name: 'fake' } },
+  { entity: { eid: FAKE.model }, model: { name: 'fake-1' } },
+  { ...link(FAKE.provider, 'serves', FAKE.model), serves: { name: 'fake-1' } },
   { entity: { eid: session }, session: {} },
   {
     entity: { eid: entry },
     entry: { session },
     content: { body: instruction },
-    using: { provider: 'provider-fake', model: 'model-fake', ...using },
+    using: { ...FAKE, ...using },
   },
 ]
 

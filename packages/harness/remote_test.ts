@@ -1,6 +1,8 @@
 import { assert, assertEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { remote } from './remote.ts'
+import { identityEid } from '@yaks/graph'
+import { edgeEid } from '@yaks/edge'
 Deno.test('worker owns an isolated database; selected entries replicate and commands stay explicit', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({ db: ':memory:', cwd: dir, fake: true })
@@ -381,20 +383,20 @@ Deno.test('worker model selection is database-backed, passive, and forwarded on 
   const dir = await Deno.makeTempDir()
   const { open } = await import('./store.ts')
   const { seed } = await import('./run.ts')
-  const { modelEid } = await import('./providers.ts')
   const path = dir + '/model-picker.db'
   const h = open(path)
   await h.g.apply(seed({ provider: 'openrouter', model: 'test/model' }))
   h.close()
   const r = await remote({ db: path, cwd: dir, fake: true })
   try {
-    const id = modelEid('openrouter', 'test/model')
+    const model = identityEid('model', ['test/model'])
+    const id = edgeEid(identityEid('provider', ['openrouter']), 'serves', model)
     assert((await r.agent.models!()).choices.some((b) => b.entity.eid == id))
     const s = await r.agent.start('selected', { model: id })
     const initial = await r.agent.transcript(s)
     assertEquals(
       (initial.find((b) => b.using)?.using as { model: string }).model,
-      id,
+      model,
     )
     await r.agent.selectModel!(s, id)
     assertEquals((await r.agent.models!(s)).current, id)

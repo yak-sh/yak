@@ -4,17 +4,18 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { modelDoc } from '@yaks/model'
 import { effects } from '@yaks/effects'
-import { runner } from '@yaks/tools'
+import { runner, toolEid } from '@yaks/tools'
 import type { Bundle, Graph } from '@yaks/graph'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
 import { sessions } from './plugin.ts'
 
+let T = toolEid('echo')
+
 // One tool, answering the words it was told to, at the entity a call names.
-let saying = (g: Graph, at: string, say: () => unknown) =>
+let saying = (g: Graph, say: () => unknown) =>
   runner(g, {
     tools: [{
-      eid: at,
       name: 'echo',
       description: 'say it back',
       run: async (_: Bundle[], ctx): Promise<Bundle[]> => [{
@@ -35,14 +36,14 @@ Deno.test('result membership is joined before sequence allocation and observers'
   })
   await g.apply([
     { entity: { eid: 's' }, session: {} },
-    { entity: { eid: 't' }, tool: { name: 'echo' } },
+    { entity: { eid: T }, tool: { name: 'echo' } },
     {
       entity: { eid: 'c' },
       entry: { session: 's' },
-      call: { to: 't', args: '{}' },
+      call: { to: T, args: '{}' },
     },
   ])
-  await saying(g, 't', () => 'hello').run('c')
+  await saying(g, () => 'hello').run('c')
   const [result] = await g.read('.result')
   assertEquals(result.entry, { session: 's', seq: 2 })
   assertEquals(observed, [result.entity.eid])
@@ -56,15 +57,15 @@ Deno.test('same-batch call/result join respects the absence gate and detached ca
   const g = graph({ vocab, storage: ram(vocab), plugins: [sessions()] })
   await g.apply([
     { entity: { eid: 's' }, session: {} },
-    { entity: { eid: 't' }, tool: { name: 'echo' } },
-    { entity: { eid: 'c' }, entry: { session: 's' }, call: { to: 't' } },
+    { entity: { eid: T }, tool: { name: 'echo' } },
+    { entity: { eid: 'c' }, entry: { session: 's' }, call: { to: T } },
     { entity: { eid: 'r' }, result: { call: 'c' }, content: { body: 'ok' } },
     {
       entity: { eid: 'explicit' },
       entry: { session: 's' },
       result: { call: 'c' },
     },
-    { entity: { eid: 'detached' }, call: { to: 't' } },
+    { entity: { eid: 'detached' }, call: { to: T } },
     { entity: { eid: 'detached-r' }, result: { call: 'detached' } },
   ])
   const rows = await g.read('.result')
@@ -84,25 +85,25 @@ Deno.test('independent callers can complete out of order without losing transcri
   const g = graph({ vocab, storage: ram(vocab), plugins: [sessions()] })
   await g.apply([
     { entity: { eid: 's' }, session: {} },
-    { entity: { eid: 't' }, tool: { name: 'echo' } },
+    { entity: { eid: T }, tool: { name: 'echo' } },
     {
       entity: { eid: 'a' },
       entry: { session: 's' },
-      call: { to: 't', args: '{}' },
+      call: { to: T, args: '{}' },
     },
     {
       entity: { eid: 'b' },
       entry: { session: 's' },
-      call: { to: 't', args: '{}' },
+      call: { to: T, args: '{}' },
     },
   ])
   let release!: () => void
   const gate = new Promise<void>((resolve) => release = resolve)
-  const slow = saying(g, 't', async () => {
+  const slow = saying(g, async () => {
     await gate
     return 'a'
   }).run('a')
-  await saying(g, 't', () => 'b').run('b')
+  await saying(g, () => 'b').run('b')
   release()
   await slow
   const results = await g.read('.result .order=entry.seq')

@@ -17,7 +17,8 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { blobSchema } from '@yaks/blob'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, derivedEid } from '@yaks/graph'
+import { toolEid } from '@yaks/tools'
 import { reserved, type Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
 import { edgeEid } from '@yaks/edge'
@@ -36,6 +37,7 @@ import {
   Refused as Unreconciled,
   type Report,
   SERVES,
+  TOOLED,
 } from './migrate.ts'
 import {
   mutate,
@@ -587,7 +589,7 @@ slow(
       },
     )
     // Every pass in the same breath, so none of them has anything to do.
-    assertEquals(marker(ctx), FILED)
+    assertEquals(marker(ctx), TOOLED)
   },
 )
 
@@ -737,7 +739,7 @@ slow('a store carrying now arrives with the addresses moved', async () => {
   // so nothing was copied into it on the way past.
   assertEquals(count(ctx, 'alias'), 0)
   // Every pass in the same breath, so none of the later ones has anything left.
-  assertEquals(marker(ctx), FILED)
+  assertEquals(marker(ctx), TOOLED)
 })
 
 slow('a directory that already carried moves them on next touch', async () => {
@@ -922,7 +924,7 @@ slow('an app named by its birth address is named by a handle', async () => {
   let third = bucket()
   newer(ctx, PLATFORM_STORE, { EXPORTS: third.r2 })
   assertEquals(third.held.size, 0)
-  assertEquals(marker(ctx), FILED)
+  assertEquals(marker(ctx), TOOLED)
 })
 
 slow('two apps may hold one address, and be two stores', async () => {
@@ -1011,7 +1013,7 @@ for (let source of ['former', 'fallback']) {
       let report = reportIn(files.held)
       assert(report.ok, report.message)
       disambiguated(report)
-      assertEquals(marker(ctx), FILED)
+      assertEquals(marker(ctx), TOOLED)
       assertEquals(rowsIn(files.held).app.length, 3)
       let next = bucket()
       assertEquals(
@@ -1211,7 +1213,7 @@ Deno.test('boot leaves a populated table constraint for its preparing pass', asy
   assertEquals(created, false)
   assertEquals((await now.door('/query?q=.app!')).status, 200)
   assertEquals(created, true)
-  assertEquals(marker(ctx), FILED)
+  assertEquals(marker(ctx), TOOLED)
   assertThrows(() => exec("update app set store = 'same'"), Error, 'UNIQUE')
 })
 
@@ -1647,7 +1649,7 @@ Deno.test('app filing exports, preserves every value and never resurrects a clea
   assertEquals(filing.assignee, ADA)
   assertEquals(rowsIn(files.held).task.length, 1)
   assertEquals(reportIn(files.held).mark, FILED)
-  assertEquals(marker(ctx), FILED)
+  assertEquals(marker(ctx), TOOLED)
   let r = await now.door('/apply', {
     method: 'POST',
     headers: { 'x-yak-kernel': '1' },
@@ -1714,6 +1716,32 @@ slow(
     assertEquals((row.filed as { priority: number }).priority, 2)
     assertEquals((row.filed as { domain: string }).domain, 'Garden')
     assertEquals(rowsIn(files.held).task.length, 1)
-    assertEquals(marker(ctx), FILED)
+    assertEquals(marker(ctx), TOOLED)
   },
 )
+
+Deno.test('a tool standing at its old id takes the id its name derives', async () => {
+  let ctx = state()
+  await newer(ctx, 'ada/cookbook').query('.tool!')
+  let sql = ctx.storage.sql
+  let old = derivedEid('tool:add_chore')
+  sql.exec('insert into entity (eid) values (?), (?)', old, 'c1')
+  sql.exec(
+    "insert into tool (entity, name) select id, 'add_chore' from entity" +
+      ' where eid = ?',
+    old,
+  )
+  sql.exec(
+    'insert into call (entity, "to") select c.id, t.id from entity c, entity t' +
+      " where c.eid = 'c1' and t.eid = ?",
+    old,
+  )
+  sql.exec("update yak_kv set v = ? where k = 'migrated'", FILED)
+  let files = bucket()
+  let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+  let [call] = await now.query('.call!')
+  assertEquals((call.call as { to: string }).to, toolEid('add_chore'))
+  assertEquals(rowsIn(files.held).tool.length, 1)
+  assertEquals(reportIn(files.held).mark, TOOLED)
+  assertEquals(marker(ctx), TOOLED)
+})

@@ -1,8 +1,13 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Mark, Model, Request } from '@yaks/model'
-import { agent, idOf, seed } from './run.ts'
-import { modelEid, providerEid } from './providers.ts'
+import { type Comp, identityEid } from '@yaks/graph'
+import { link } from '@yaks/edge'
+import { toolEid } from '@yaks/tools'
+import { agent, seed } from './run.ts'
 import { open } from './store.ts'
+
+const P = (name: string) => identityEid('provider', [name])
+const M = (name: string) => identityEid('model', [name])
 Deno.test('OpenRouter provider uses UUIDs and is selected per session/ask, including switched context', async () => {
   const h = open(':memory:')
   const seen: [string, Request][] = []
@@ -28,18 +33,13 @@ Deno.test('OpenRouter provider uses UUIDs and is selected per session/ask, inclu
   })
   try {
     await h.g.apply(seed({ provider: 'openrouter', model: 'vendor/model' }))
-    assert(/^[0-9a-f-]{36}$/.test(providerEid('openrouter')))
-    assert(/^[0-9a-f-]{36}$/.test(modelEid('openrouter', 'vendor/model')))
     const s = await a.start('initial')
     await a.idle(s)
     await h.g.apply([{
       entity: { eid: crypto.randomUUID() },
       entry: { session: s },
       content: { body: 'switch' },
-      using: {
-        provider: providerEid('openrouter'),
-        model: modelEid('openrouter', 'vendor/model'),
-      },
+      using: { provider: P('openrouter'), model: M('vendor/model') },
     }])
     await a.idle(s)
     assertEquals(seen.map(([p]) => p), ['openai', 'openrouter'])
@@ -53,10 +53,7 @@ Deno.test('OpenRouter provider uses UUIDs and is selected per session/ask, inclu
       entity: { eid: crypto.randomUUID() },
       entry: { session: s },
       content: { body: 'mismatch' },
-      using: {
-        provider: idOf('provider', 'openai'),
-        model: modelEid('openrouter', 'vendor/model'),
-      },
+      using: { provider: P('openai'), model: M('vendor/model') },
     }])
     await a.idle(s)
     assertEquals(seen.length, 2)
@@ -77,14 +74,14 @@ Deno.test('explicit default provider seeds correctly and custom model override r
     const entries = await a.transcript(s)
     assertEquals(
       (entries.find((b) => b.ask)?.ask as { to: string }).to,
-      modelEid('openrouter', 'vendor/model'),
+      M('vendor/model'),
     )
   } finally {
     await a.close()
   }
 })
 
-Deno.test('fork and spawn selecting an existing model inherit that model provider', async () => {
+Deno.test('fork and spawn selecting an existing model are served by a provider that serves it', async () => {
   const h = open(':memory:')
   const seen: string[] = []
   const a = agent({
@@ -119,22 +116,21 @@ Deno.test('fork and spawn selecting an existing model inherit that model provide
       await h.g.apply([{
         entity: { eid },
         entry: { session: parent },
-        call: { to: idOf('tool', kind), id: eid, args: '{}' },
+        call: { to: toolEid(kind), id: eid, args: '{}' },
       }])
       const child = await tool.run({
         prompt: 'child task',
-        model: modelEid('openrouter', 'vendor/child'),
+        model: M('vendor/child'),
       }, { session: parent, entries, call: { entity: { eid } } })
       await a.idle(String(child))
       const input = (await a.transcript(String(child))).find((b) =>
         (b.content as { body?: string })?.body === 'child task'
       )!
-      assertEquals(
-        (input.using as { provider: string }).provider,
-        providerEid('openrouter'),
-      )
+      // openai does not serve the child's model, so the provider is left to
+      // the one that does
+      assertEquals((input.using as Comp).provider, null)
     }
-    assert(seen.includes('openrouter'))
+    assertEquals(seen.filter((p) => p == 'openrouter').length, 2)
   } finally {
     await a.close()
   }
@@ -164,5 +160,45 @@ Deno.test('worker authorization panel offers graph-configured OpenRouter without
   } finally {
     await r.close()
     await Deno.remove(dir, { recursive: true })
+  }
+})
+
+Deno.test('a model two providers serve is asked by the named one, in its spelling', async () => {
+  const h = open(':memory:')
+  const seen: [string, string][] = []
+  const fake = (provider: string): Model => (req) => {
+    seen.push([provider, req.model])
+    return Promise.resolve({ id: 'r', model: req.model, items: [] })
+  }
+  const a = agent({
+    h,
+    providers: { openai: fake('openai'), openrouter: fake('openrouter') },
+  })
+  const ask = async (using: Comp) => {
+    const s = await a.start('go')
+    await a.idle(s)
+    await h.g.apply([{
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: s },
+      content: { body: 'again' },
+      using,
+    }])
+    await a.idle(s)
+  }
+  try {
+    await h.g.apply([{
+      ...link(P('openrouter'), 'serves', M('gpt-6-astra')),
+      serves: { name: 'openai/gpt-6-astra' },
+    }, { entity: { eid: '$p' }, provider: { name: 'openrouter' } }])
+    await ask({ provider: P('openrouter'), model: M('gpt-6-astra') })
+    // two reachable providers serve it and none is named: refused, not asked
+    await ask({ model: M('gpt-6-astra') })
+    assertEquals(seen, [
+      ['openai', 'gpt-6-astra'],
+      ['openrouter', 'openai/gpt-6-astra'],
+      ['openai', 'gpt-6-astra'],
+    ])
+  } finally {
+    await a.close()
   }
 })

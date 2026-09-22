@@ -1,20 +1,22 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Comp } from '@yaks/graph'
+import { type Comp, identityEid } from '@yaks/graph'
 import { taskEntry, transcript } from '@yaks/session'
 import { agent } from './run.ts'
 import { open } from './store.ts'
+
+let M = identityEid('model', ['fake'])
 
 Deno.test('taskEntry atomically mints bare work, contains it, and spawns with inherited settings', async () => {
   let h = open(':memory:')
   try {
     await h.g.apply([
       { entity: { eid: 'p' }, session: { id: 'parent' } },
-      { entity: { eid: 'm' }, model: { name: 'fake' } },
+      { entity: { eid: M }, model: { name: 'fake' } },
       {
         entity: { eid: 'input' },
         entry: { session: 'p', seq: 1 },
         content: { body: 'parent' },
-        using: { model: 'm', effort: 'high' },
+        using: { model: M, effort: 'high' },
       },
     ])
     let first = await taskEntry(h.g, 'p', 'Title\n\nComplete body')
@@ -35,7 +37,7 @@ Deno.test('taskEntry atomically mints bare work, contains it, and spawns with in
     let input = (await h.g.read(`.entry.session=${first.child}`)).find((b) =>
       b.using
     )!
-    assertEquals((input.using as Comp).model, 'm')
+    assertEquals((input.using as Comp).model, M)
     assertEquals((input.using as Comp).effort, 'high')
     assertEquals(
       (input.content as Comp).body,

@@ -71,7 +71,7 @@
 import { fields, schema as ftsSchema } from '@yaks/fts'
 import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
 import { edgeEid } from '@yaks/edge'
-import { sha256 } from '@yaks/graph'
+import { identityEid, sha256 } from '@yaks/graph'
 import { backfill, grown, indexed, tabled, type Text } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { handle } from './directory.ts'
@@ -198,13 +198,17 @@ export let HANDLED = 'yak/store/handle/5'
 /** The sixth pass: portfolio fields move off task into optional filed. */
 export let FILED = 'yak/store/filed/6'
 
+/** The seventh pass (D-37943): a tool is its name. `tool.name` is the tool's
+ * identity, so its entity takes the id the name derives. */
+export let TOOLED = 'yak/store/tool/7'
+
 /** Every marker in order, so "is this object caught up" is one comparison and
  * a new pass is one line here. */
-export let MARKS = [MARK, HOMED, FORMER, SERVES, HANDLED, FILED]
+export let MARKS = [MARK, HOMED, FORMER, SERVES, HANDLED, FILED, TOOLED]
 
 /** Passes that change stored shape, read per commit by `yak deploys`.
  * A refused pass leaves stored data and its marker unchanged, so adds no boundary. */
-export let BOUNDARIES = [MARK, HOMED, FORMER, SERVES, HANDLED, FILED]
+export let BOUNDARIES = [MARK, HOMED, FORMER, SERVES, HANDLED, FILED, TOOLED]
 
 /** The two tables the two layouts spell identically, and so never move. */
 let SPINE = ['entity', 'tombstone']
@@ -605,6 +609,106 @@ export let filed = (
     }],
     dropped: [],
   }
+}
+
+// ---- a tool is its name (D-37943) ------------------------------------------
+//
+// A call points at a `tool` entity, and the id of one was the hash of
+// `tool:<name>`. The vocabulary now declares `tool.name` its identity, so the
+// id is the one @yaks/graph derives from the name, and a tool row standing at
+// the old id would refuse the runner's next planting of the same name. The
+// integer id stays, so every call keeps pointing at its tool; only the eid it
+// is called by moves.
+
+// Each tool row, with the eid it stands at and the one its name derives.
+let toolIds = (d: Drive) =>
+  stands(d, 'tool')
+    ? d.query(
+      `select e.id, e.eid, t.name from ${q('tool')} t` +
+        ' join entity e on e.id = t.entity where t.name is not null',
+      [],
+    ).map((r) => ({
+      id: Number(r.id),
+      eid: String(r.eid),
+      named: identityEid('tool', [String(r.name)]),
+    }))
+    : []
+
+/** Whether a tool row still stands at an id its name does not derive. */
+export let mistooled = (storage: DurableStorage): boolean =>
+  toolIds(driver(storage)).some((t) => t.eid != t.named)
+
+/** Which rows the pass is about, read out before one moves. */
+export let tools = (storage: DurableStorage): Taken => {
+  let d = driver(storage)
+  return {
+    store: '',
+    at: new Date().toISOString(),
+    slots: {},
+    tables: [{
+      name: 'tool',
+      rows: d.query(
+        `select e.eid, t.* from ${
+          q('tool')
+        } t join entity e on e.id = t.entity`,
+        [],
+      ),
+    }],
+  }
+}
+
+/**
+ * Each tool onto the id its name derives, synchronously, inside
+ * `transactionSync` like every numbered pass. It refuses, moving nothing, when
+ * the derived id is already another entity's, or when a link touches a tool —
+ * a link's id is derived from its ends, and no store has one to a tool.
+ */
+export let tooled = (
+  storage: DurableStorage,
+  o: { store: string; app: string | null; export: string },
+): Report => {
+  let d = driver(storage)
+  let rows = toolIds(d)
+  let report = (ok: boolean, moved: number, message?: string): Report => ({
+    ...o,
+    at: new Date().toISOString(),
+    ok,
+    message,
+    mark: TOOLED,
+    moved: [{
+      table: 'tool',
+      from: rows.length,
+      to: rows.length,
+      note: `${moved} tools called by the id their name derives`,
+    }],
+    dropped: [],
+  })
+  let moving = rows.filter((t) => t.eid != t.named)
+  let linked = stands(d, 'edge') && moving.length
+    ? Number(
+      d.query(
+        `select count(*) as n from ${q('edge')} where "from" in` +
+          ' (select value from json_each(?1)) or "to" in' +
+          ' (select value from json_each(?1))',
+        [JSON.stringify(moving.map((t) => t.id))],
+      )[0]?.n ?? 0,
+    )
+    : 0
+  if (linked) {
+    throw new Refused(report(false, 0, `${linked} links touch a tool`))
+  }
+  for (let t of moving) {
+    if (d.query('select 1 from entity where eid = ?', [t.named]).length) {
+      throw new Refused(
+        report(false, 0, `${t.named} is already another entity's id`),
+      )
+    }
+    d.query('update entity set eid = ? where id = ?', [t.named, t.id])
+  }
+  if (mistooled(storage)) {
+    throw new Refused(report(false, 0, 'a tool still stands at an old id'))
+  }
+  return report(true, moving.length)
 }
 
 // ---- `space.home` → `home{}` (T-34227) -------------------------------------

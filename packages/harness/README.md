@@ -24,13 +24,13 @@ input.
 
 ## Exports
 
-| Import                | Main exports                                                                                                                                                   |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/harness`       | `open`, `dbPath`, `agent`, `seed`, `idOf`, `harnessTools`, `graphTools`, `parametersOf`, CLI `tools`/`own`, `App`, `tui`, `changes`, `panels`, and their types |
-| `@yaks/harness/bin`   | Command-line entry point                                                                                                                                       |
-| `@yaks/harness/vocab` | Vocabulary documents, `vocab`, schema `keywords`, and computed columns via `derived`                                                                           |
-| `@yaks/harness/rules` | `rules({vocab, sql})`, the graph plugins used by the harness                                                                                                   |
-| `@yaks/harness/tools` | `runs(host)`, implementations of the declared graph tools                                                                                                      |
+| Import                | Main exports                                                                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@yaks/harness`       | `open`, `dbPath`, `agent`, `seed`, `harnessTools`, `graphTools`, `parametersOf`, CLI `tools`/`own`, `App`, `tui`, `changes`, `panels`, and their types |
+| `@yaks/harness/bin`   | Command-line entry point                                                                                                                               |
+| `@yaks/harness/vocab` | Vocabulary documents, `vocab`, schema `keywords`, and computed columns via `derived`                                                                   |
+| `@yaks/harness/rules` | `rules({vocab, sql})`, the graph plugins used by the harness                                                                                           |
+| `@yaks/harness/tools` | `runs(host)`, implementations of the declared graph tools                                                                                              |
 
 ## Use
 
@@ -218,8 +218,10 @@ The default tool table includes `fork`, `spawn`, and `wait`:
   Unanswered calls are not inherited. It returns a concurrent child session id.
 - `spawn({prompt, instructions?, model?, effort?})` returns a fresh child
   session id. It inherits the serving configuration, not the transcript. `model`
-  accepts a model name (using the inherited provider) or an existing model
-  entity id.
+  accepts a model name or an existing model entity id; the inherited provider
+  stays while it serves that model, and otherwise the provider that serves it
+  answers. A name no model has yet becomes a model the inherited provider serves
+  under that name.
 - `spawn({task, instructions?, model?, effort?})` instead accepts a task eid or
   `T-<number>`. The child's first input records its title and body when
   submitted; its claim commits with the child, so the task is wip as soon as it
@@ -888,12 +890,19 @@ ordinary graph model configuration, with its own credentials. Add configuration
 ```json
 [
   { "entity": { "eid": "$router" }, "provider": { "name": "openrouter" } },
+  { "entity": { "eid": "$model" }, "model": { "name": "claude-sonnet-4" } },
   {
-    "entity": { "eid": "$model" },
-    "model": { "name": "anthropic/claude-sonnet-4", "provider": "$router" }
+    "entity": { "eid": "$offer" },
+    "edge": { "from": "$router", "to": "$model" },
+    "serves": { "name": "anthropic/claude-sonnet-4" }
   }
 ]
 ```
+
+A provider and a model are each their name: the ids are derived from it, so
+writing this twice writes it once. The `serves` edge is the provider's offering
+of the model, and its `name` is what OpenRouter calls the model — what every
+request it serves asks for.
 
 Choose a model identifier available to your OpenRouter account. Then press
 **Esc, A**, select **OpenRouter (model provider)**, open the authorization URL,
@@ -916,13 +925,15 @@ returned provider/model EIDs. This selects the next request intentionally:
 }
 ```
 
-An existing model entity ID (EID) can also be passed to `fork` or `spawn`; its
-provider is inherited with it. A bare model name retains the parent's provider.
-The command `harness new --provider openrouter --model vendor/model 'message'`
-creates a new session under that provider; authorize beforehand in the TUI.
-Embedding applications can use
-`agent({provider: 'openrouter', name: 'vendor/model'})`; configuration is
-recorded in the graph. Tests can inject `providers: {openrouter: fakeModel}`.
+An existing model entity ID (EID) can also be passed to `fork` or `spawn`. The
+parent's provider stays while it serves that model; otherwise the one provider
+this harness can reach that serves it answers, and a model two reachable
+providers serve needs the provider named in `using`. The command
+`harness new --provider openrouter --model vendor/model 'message'` creates a new
+session under that provider; authorize beforehand in the TUI. Embedding
+applications can use `agent({provider: 'openrouter', name: 'vendor/model'})`;
+configuration is recorded in the graph. Tests can inject
+`providers: {openrouter: fakeModel}`.
 
 OpenRouter Responses is stateless: full applicable context is sent on every
 request, including forks. Provider/model switches don't reuse another model's
@@ -938,10 +949,10 @@ mocks, not a live account.
 
 ### Choosing a model in the TUI
 
-Press **Esc, m** to open the model selector. It lists configured graph models,
-with their provider displayed for clarity. Use **j/k** or arrows and **Enter**,
-or click a row. **Esc** cancels without changing the draft. Provider selection
-is automatic from the chosen model's `provider` reference.
+Press **Esc, m** to open the model selector. It lists every offering in the
+graph — each `serves` edge, shown as model and provider. Use **j/k** or arrows
+and **Enter**, or click a row. **Esc** cancels without changing the draft. The
+choice records both the model and the provider that serves it.
 
 With **New session** selected, the choice applies when that draft is submitted;
 it does not change the harness default or another session. For an existing

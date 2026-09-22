@@ -59,6 +59,8 @@ type Ctx = {
   model: (name: string) => string | undefined
   /** the entity a provider of this name is */
   provider: (name: string) => string | undefined
+  /** the fallback transports that run every model of this provider */
+  fallbacks: (provider: unknown) => string[]
   /** the entity a repository at this path or url is */
   repository: (name: string) => string
   /** the git ref a branch name is — @yaks/git's `worktree.branch` points at
@@ -458,17 +460,43 @@ let MOVES: Record<string, Move | null> = {
   // ── identity ──
   feedback: refs('feedback', ['by']),
   memory: refs('memory', ['scope'], ['last_confirmed_at']),
-  model: refs(
-    'model',
-    ['provider'],
-    ['name', 'vendor', 'grade', 'label', 'efforts', 'effort', 'offered'],
-  ),
+  // A model is the model; the provider that served it, and each fallback
+  // transport that runs that provider's models, says so with a `serves` edge
+  // carrying the name it asks by.
+  model: {
+    says: 'model',
+    make: (row, ctx) => {
+      let self = ctx.ref(row.entity)!
+      let from = ctx.ref(row.provider)
+      if (from && row.name != null) {
+        for (let p of [from, ...ctx.fallbacks(row.provider)]) {
+          ctx.also({
+            ...link(p, 'serves', self),
+            serves: { name: String(row.name) },
+          })
+        }
+      }
+      return same(
+        'model',
+        'name',
+        'vendor',
+        'grade',
+        'label',
+        'efforts',
+        'effort',
+        'offered',
+      ).make!(row, ctx)
+    },
+  },
   person: tag('person'),
   persona: refs('persona', ['home']),
-  provider: refs(
+  provider: same(
     'provider',
-    ['serves'],
-    ['name', 'transport', 'credential', 'fallback', 'offered'],
+    'name',
+    'transport',
+    'credential',
+    'fallback',
+    'offered',
   ),
 
   // ── roles: what is left of a job is what a job is ──
@@ -1049,7 +1077,7 @@ let link = (from: Eid, relation: string, to: Eid): Bundle => ({
 // — an entry's session, a claim's session — cannot be written before the thing
 // it names exists, so those few go first; the rest are order-free, because a
 // reference mints the spine it points at.
-let FIRST = ['model', 'provider', 'person', 'persona', 'project', 'session']
+let FIRST = ['provider', 'model', 'person', 'persona', 'project', 'session']
 
 // And what has to be written after everything else. `updated` is stamped by
 // the graph on every patch to an entity that already existed — which the whole
@@ -1190,6 +1218,15 @@ let main = async () => {
     let s = spine.get(Number(r.entity))
     if (s) renamed.set(s.eid, identityEid('web', [String(r.url)]))
   }
+  // The same for a provider and a model: each is its name (@yaks/model).
+  for (let comp of ['provider', 'model']) {
+    for (
+      let r of all(`select entity, name from ${comp} where name is not null`)
+    ) {
+      let s = spine.get(Number(r.entity))
+      if (s) renamed.set(s.eid, identityEid(comp, [String(r.name)]))
+    }
+  }
   let eidOf = (id: unknown): string | undefined => {
     let s = spine.get(Number(id))
     if (!s) return undefined
@@ -1329,6 +1366,9 @@ let main = async () => {
     },
     model: (name) => models.get(name),
     provider: (name) => providers.get(name),
+    fallbacks: (provider) =>
+      all('select entity from provider where serves = ?', Number(provider))
+        .map((r) => eidOf(r.entity)!),
     branch: (name) => {
       let eid = derivedEid(`ref|${name}`)
       if (!minted.has(`ref|${name}`)) {

@@ -1,29 +1,31 @@
-/** Model choices are graph records; the provider always comes from the model. */
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+/** Model choices are graph records: a choice is one provider's offering of a
+ * model, its `serves` edge. */
+import { type Bundle, type Comp, type Graph } from '@yaks/graph'
+import { edgeEid } from '@yaks/edge'
 import type { Model } from '@yaks/model'
+import { offerFor, offers } from './providers.ts'
 
 export type ModelSelection = { choices: Bundle[]; current?: string }
 
+/** The `using` a choice records. `id` is an offering (a `serves` edge), which
+ * names the provider as well, or a model, whose provider is resolved from the
+ * offerings this host can reach. A configured provider is never refused here,
+ * and an unconfigured one fails before it is recorded. */
 export const modelUsing = async (
   g: Graph,
   id: string,
   implementations: Readonly<Record<string, Model>>,
 ): Promise<Comp> => {
   const [row] = await g.storage.tx((tx) => tx.get([id]))
-  const model = row?.model as Comp | undefined
-  if (!model || typeof model.provider != 'string') {
-    throw new Error('Unknown model or missing provider')
-  }
-  const [provider] = await g.storage.tx((tx) =>
-    tx.get([model.provider as string])
+  const edge = row?.serves ? row.edge as Comp : undefined
+  const model = edge ? String(edge.to) : row?.model ? id : undefined
+  if (!model) throw new Error('Unknown model')
+  const found = offerFor(
+    await offers(g, model, implementations),
+    edge?.from,
   )
-  const name = (provider?.provider as Comp | undefined)?.name
-  // The same record the resolver dispatches on, so a configured provider is
-  // never refused here and an unconfigured one fails before it is recorded.
-  if (typeof name != 'string' || !Object.hasOwn(implementations, name)) {
-    throw new Error('No implementation configured for the selected provider')
-  }
-  return { model: id, provider: model.provider }
+  if (typeof found == 'string') throw new Error(found)
+  return { model, provider: found.provider }
 }
 
 /** Read configuration metadata only, following a fork's bounded prefix. */
@@ -51,28 +53,33 @@ export const selectedUsing = async (
     : undefined
 }
 
+/** Every offering, each as its edge's id wearing the model and the provider's
+ * name, and the one in force: the session's, else `fallback`. */
 export const modelSelection = async (
   g: Graph,
   session: string | undefined,
-  fallback: string,
+  fallback: Comp,
 ): Promise<ModelSelection> => {
-  const providers = new Map(
-    (await g.read('.provider')).map((
+  const named = new Map(
+    [...await g.read('.provider'), ...await g.read('.model')].map((b) => [
+      b.entity.eid,
       b,
-    ) => [b.entity.eid, (b.provider as Comp).name]),
+    ]),
   )
-  const choices = (await g.read('.model')).map((b): Bundle => ({
-    ...b,
-    provider: {
-      name: providers.get(String((b.model as Comp).provider)) ?? 'unknown',
-    },
-  })).sort((a, b) =>
+  const choices = (await g.read('.serves')).flatMap((b): Bundle[] => {
+    const { from, to } = b.edge as Comp
+    const model = named.get(String(to))?.model
+    const provider = named.get(String(from))?.provider
+    return model && provider
+      ? [{ entity: b.entity, edge: b.edge, serves: b.serves, model, provider }]
+      : []
+  }).sort((a, b) =>
     String((a.model as Comp).name).localeCompare(String((b.model as Comp).name))
   )
-  return {
-    choices,
-    current: session
-      ? String((await selectedUsing(g, session))?.model ?? fallback)
-      : fallback,
-  }
+  const using = (session ? await selectedUsing(g, session) : undefined) ??
+    fallback
+  const current = using.provider
+    ? edgeEid(String(using.provider), 'serves', String(using.model))
+    : choices.find((c) => (c.edge as Comp).to == using.model)?.entity.eid
+  return { choices, current }
 }

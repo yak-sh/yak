@@ -1,9 +1,12 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Model, Request } from '@yaks/model'
 import { agent, seed } from './run.ts'
-import { modelEid } from './providers.ts'
+import { identityEid } from '@yaks/graph'
+import { edgeEid } from '@yaks/edge'
 import { open } from './store.ts'
 import { sessionTools, usingBefore } from '@yaks/session'
+
+const M = (name: string) => identityEid('model', [name])
 
 Deno.test('model selection derives provider, does not ask, and applies only to selected session', async () => {
   const h = open(':memory:')
@@ -22,7 +25,7 @@ Deno.test('model selection derives provider, does not ask, and applies only to s
   })
   try {
     await h.g.apply(seed({ provider: 'openrouter', model: 'vendor/model' }))
-    const model = modelEid('openrouter', 'vendor/model')
+    const model = M('vendor/model')
     const first = await a.start('first', { model })
     await a.idle(first)
     const other = await a.start('other')
@@ -31,7 +34,10 @@ Deno.test('model selection derives provider, does not ask, and applies only to s
     await a.selectModel(other, model)
     await a.idle(other)
     assertEquals(seen.length, 2)
-    assertEquals((await a.models(other)).current, model)
+    assertEquals(
+      (await a.models(other)).current,
+      edgeEid(identityEid('provider', ['openrouter']), 'serves', model),
+    )
     await a.send(other, 'next')
     await a.idle(other)
     assertEquals(seen.map(([p]) => p), ['openrouter', 'openai', 'openrouter'])
@@ -85,7 +91,7 @@ Deno.test('inflight model is unchanged; a passive selection survives its complet
     await h.g.apply(seed({ provider: 'openrouter', model: 'vendor/new' }))
     const session = await a.start('initial')
     await begun
-    const model = modelEid('openrouter', 'vendor/new')
+    const model = M('vendor/new')
     await a.selectModel(session, model)
     assertEquals(seen.length, 1)
     release()
@@ -119,7 +125,7 @@ Deno.test('passive model controls do not add invented user text to the next requ
     const s = await a.start('first')
     await a.idle(s)
     await h.g.apply(seed({ provider: 'openrouter', model: 'another/model' }))
-    await a.selectModel(s, modelEid('openrouter', 'another/model'))
+    await a.selectModel(s, M('another/model'))
     await a.send(s, 'second')
     await a.idle(s)
     assertEquals(
@@ -153,7 +159,7 @@ Deno.test('late nonstream ask does not override an explicitly selected model', a
     await h.g.apply(seed({ provider: 'openrouter', model: 'next/model' }))
     const s = await a.start('start')
     await begun
-    const chosen = modelEid('openrouter', 'next/model')
+    const chosen = M('next/model')
     await a.selectModel(s, chosen)
     release()
     await a.idle(s)

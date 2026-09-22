@@ -6,7 +6,7 @@ import {
 } from './model_selection.ts'
 import { responses as openrouter } from '@yaks/openrouter'
 import { OPENROUTER_AUTH, providerAuthorization } from './provider_auth.ts'
-import { modelEid, providerEid, providerResolver } from './providers.ts'
+import { providerResolver } from './providers.ts'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 import { type EntrySource, entrySource, type SourceRequest } from './detail.ts'
 import { mcpTools } from './mcp.ts'
@@ -45,15 +45,17 @@ import { transcriptViews } from './transcript.ts'
 // in memory is the daemon's queue, which is a position in a queue rather than
 // state.
 //
-// Seeding is idempotent because the ids are derived from the names — a provider
-// is `provider:openai`, a model `model:gpt-6-astra`, a tool `tool:shell` — so a
-// second startup patches the rows the first one wrote instead of creating a
-// second set. That is what makes `using{model}` on an entry mean the same thing
-// across restarts.
+// Seeding is idempotent because the ids are derived from the names — the
+// vocabulary declares `name` the identity of a provider, a model and a tool,
+// and a provider's offering of a model is a `serves` edge, whose id is derived
+// from its two ends — so a second startup patches the rows the first one wrote
+// instead of creating a second set. That is what makes `using{model}` on an
+// entry mean the same thing across restarts.
 
-import type { Bundle, Comp, Eid } from '@yaks/graph'
+import { type Bundle, type Comp, type Eid, identityEid } from '@yaks/graph'
 import { MODEL, type Model, PROVIDER, TOOL } from '@yaks/model'
 import { credential, responses } from '@yaks/openai'
+import { toolEid } from '@yaks/tools'
 import {
   admit,
   type ChildLimits,
@@ -78,27 +80,26 @@ export let ASTRA = 'gpt-6-astra'
 
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
-/** The eid a name is seeded under — the same one on every startup. */
-export let idOf = (comp: string, name: string): Eid => `${comp}:${name}`
-
 /** The provider, model and tool rows a transcript is served from, as one
- * idempotent batch. */
+ * idempotent batch written under `$alias`es: the graph derives every id from a
+ * name, and the provider's offering of the model is a `serves` edge. */
 export let seed = (
   o: { provider?: string; model?: string; tools?: Tool[] } = {},
 ): Bundle[] => {
-  let provider = o.provider ?? 'openai'
   let model = o.model ?? ASTRA
   return [
     {
-      entity: { eid: providerEid(provider) },
-      [PROVIDER]: { name: provider },
+      entity: { eid: '$provider' },
+      [PROVIDER]: { name: o.provider ?? 'openai' },
     },
+    { entity: { eid: '$model' }, [MODEL]: { name: model } },
     {
-      entity: { eid: modelEid(provider, model) },
-      [MODEL]: { name: model, provider: providerEid(provider) },
+      entity: { eid: '$serves' },
+      edge: { from: '$provider', to: '$model' },
+      serves: { name: model },
     },
-    ...(o.tools ?? []).map((t) => ({
-      entity: { eid: t.eid ?? idOf(TOOL, t.name) },
+    ...(o.tools ?? []).map((t, i) => ({
+      entity: { eid: `$tool${i}` },
       [TOOL]: { name: t.name, description: t.description },
     })),
   ]
@@ -260,7 +261,10 @@ export let agent = (opts: Opts = {}): Agent => {
   const resolveModel = providerResolver(h.g, implementations, opts.model)
   let tools = opts.tools ?? harnessTools(h.g, opts)
   let remoteSignature = ''
-  const remoteHandlers = new Map<string, Tool>()
+  // The remote tools each session's newest ask was offered. A tool is its
+  // name, and a server reconfigured mid-ask serves that name from somewhere
+  // else: the calls an ask issued run on the handlers it was offered.
+  const offered = new Map<Eid, Tool[]>()
   const mcp = mcpTools(h.g)
   h.fx.created('mcp_server', mcp.refresh).changed('mcp_server', mcp.refresh)
     .removed('mcp_server', mcp.refresh)
@@ -284,23 +288,17 @@ export let agent = (opts: Opts = {}): Agent => {
       model,
       resolveModel,
       tools,
-      toolSnapshot: async (phase) => {
-        if (phase === 'call' && remoteHandlers.size) {
-          return [
-            ...tools,
-            ...remoteHandlers.values(),
-          ]
-        }
+      toolSnapshot: async (phase, session) => {
+        const held = phase === 'call' && offered.get(session)
+        if (held) return [...tools, ...held]
         const remote = await mcp.snapshot()
-        for (const tool of remote) {
-          remoteHandlers.set(tool.eid ?? tool.name, tool)
-        }
+        offered.set(session, remote)
         const all = [...tools, ...remote]
         if (
           new Set(all.map((t) => t.name)).size !== all.length
         ) throw new Error('Duplicate local/MCP tool name')
         const signature = JSON.stringify(
-          remote.map((t) => [t.eid, t.name, t.description, t.parameters]),
+          remote.map((t) => [t.name, t.description, t.parameters]),
         )
         if (signature !== remoteSignature) {
           await h.g.apply(seed({ provider, model: name, tools: remote }), {
@@ -329,13 +327,13 @@ export let agent = (opts: Opts = {}): Agent => {
     h.path == ':memory:' ? undefined : stepLock(h.path),
   )
 
-  let names: Record<string, string> = {
-    [modelEid(provider, name)]: name,
-    ...Object.fromEntries(tools.map((t) => [idOf(TOOL, t.name), t.name])),
-  }
   let using = {
-    provider: providerEid(provider),
-    model: modelEid(provider, name),
+    provider: identityEid(PROVIDER, [provider]),
+    model: identityEid(MODEL, [name]),
+  }
+  let names: Record<string, string> = {
+    [using.model]: name,
+    ...Object.fromEntries(tools.map((t) => [toolEid(t.name), t.name])),
   }
   let entries = (session: Eid) => transcript(h.g, session)
   // What attributes a write made here: the transcript it is about. The harness
@@ -354,8 +352,8 @@ export let agent = (opts: Opts = {}): Agent => {
     d,
     tools,
     names,
-    model: modelEid(provider, name),
-    models: (session) => modelSelection(h.g, session, modelEid(provider, name)),
+    model: using.model,
+    models: (session) => modelSelection(h.g, session, using),
     selectModel: async (session, model) => {
       const [owner] = await h.g.storage.tx((tx) => tx.get([session]))
       if (!owner?.session) throw new Error('Unknown session')

@@ -9,11 +9,11 @@
 // rows a server would hand to whatever runs sessions.
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { type Graph, graph } from '@yaks/graph'
+import { type Graph, graph, identityEid } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { type Effects, effects } from '@yaks/effects'
 import { docDoc, docs } from '@yaks/doc'
-import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
+import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
 import { modelDoc } from '@yaks/model'
 import { wakeDoc } from '@yaks/wake'
 import { sessionDoc, sessions } from '@yaks/session'
@@ -82,8 +82,8 @@ export let ids = {
   work: 'p-work', // the project a dream is filed under
   voice: 'n-scribe', // the persona a desk runs with
   dream: 'z-writeup', // the standing intention
-  house: 'y-house', // the provider this machine has
-  mind: 'o-mind', // the model it serves
+  house: identityEid('provider', ['house']), // the provider this machine has
+  mind: identityEid('model', ['mind']), // the model it serves
 }
 
 /** The whole rig: a graph over a fresh Map, and the effects watching it. */
@@ -115,7 +115,8 @@ export let notes = async (o: Open): Promise<Notebook> => {
     { entity: { eid: ids.work }, project: { name: 'Work' } },
     { entity: { eid: ids.voice }, persona: { name: 'Scribe' } },
     { entity: { eid: ids.house }, provider: { name: 'house' } },
-    { entity: { eid: ids.mind }, model: { name: 'mind', provider: ids.house } },
+    { entity: { eid: ids.mind }, model: { name: 'mind' } },
+    { ...link(ids.house, 'serves', ids.mind), serves: { name: 'mind' } },
   ])
   return { g, fx, failed }
 }

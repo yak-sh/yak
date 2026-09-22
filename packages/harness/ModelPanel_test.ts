@@ -7,7 +7,8 @@ import { App, changes } from './app.ts'
 import { frontend } from './frontend.ts'
 import { open } from './store.ts'
 import { agent, seed } from './run.ts'
-import { modelEid } from './providers.ts'
+import { edgeEid } from '@yaks/edge'
+import { identityEid } from '@yaks/graph'
 import type { Request } from '@yaks/model'
 
 Deno.test('m chooses a model for a new draft; existing choice is passive, Esc preserves draft', async () => {
@@ -45,7 +46,11 @@ Deno.test('m chooses a model for a new draft; existing choice is passive, Esc pr
     )
     assertEquals(
       (ui.client.ent('view')!.frontend as Comp).newModel,
-      modelEid('openrouter', 'a/model'),
+      edgeEid(
+        identityEid('provider', ['openrouter']),
+        'serves',
+        identityEid('model', ['a/model']),
+      ),
     )
     assertEquals(requests.length, 0)
     await terminal.send('i')

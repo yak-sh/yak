@@ -5,7 +5,13 @@ import { configurePool, pool } from './pool.ts'
 // Submission is serialized per graph (across parents and tool tables). The
 // durable queue order and fork prefix commit with the child. Replays find
 // that same child; preparation is deferred until a daemon admits it.
-import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  type Eid,
+  type Graph,
+  identityEid,
+} from '@yaks/graph'
 import { link } from '@yaks/edge'
 import { done, MARKS, statusOf as taskStatus } from '@yaks/task'
 import { type Tool, type ToolContext, ToolError, transcript } from './react.ts'
@@ -165,21 +171,27 @@ let delegation = (
       let using = { ...usingBefore(ctx.entries) }
       let models: Bundle[] = []
       if (args.model != null) {
-        let name = String(args.model)
-        let existing = await row(g, name)
-        if (existing?.model) {
-          using.model = existing.entity.eid
-          const provider = comp(existing, 'model')?.provider
-          if (provider != null) using.provider = provider
+        // A model is named by its id or by its own name. The provider in force
+        // stays only while it serves the model; otherwise the resolver picks
+        // one of the model's providers. A name nothing knows yet becomes a
+        // model the provider in force serves under that name.
+        let said = String(args.model)
+        let known = await row(g, said)
+        let model = known?.model ? said : identityEid('model', [said])
+        using.model = model
+        if (known?.model || await row(g, model)) {
+          let offers = await g.read(`.serves .edge.to=${model}`)
+          if (!offers.some((o) => comp(o, 'edge')?.from == using.provider)) {
+            delete using.provider
+          }
         } else {
-          using.model = `model:${name}`
-          models.push({
-            entity: { eid: String(using.model) },
-            model: {
-              name,
-              ...using.provider ? { provider: using.provider } : {},
-            },
-          })
+          models.push({ entity: { eid: model }, model: { name: said } })
+          if (using.provider) {
+            models.push({
+              ...link(String(using.provider), 'serves', model),
+              serves: { name: said },
+            })
+          }
         }
       }
       // Legacy base instructions are inherited; child guidance is additive.

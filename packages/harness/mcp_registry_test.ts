@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { open } from './store.ts'
 import { agent } from './run.ts'
 import { graphMCP } from './mcp_registry.ts'
@@ -32,10 +32,6 @@ Deno.test('graph MCP definitions persist; rename keeps identity, edits and remov
       }, 'publish_mockup'),
     )
     assert(original.description.includes('Website'))
-    assertMatch(
-      String(original.meta?.eid),
-      /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/,
-    )
     await h.g.apply([{
       entity: { eid: '0c300000-0000-4000-8000-000000000001' },
       mcp_server: { name: 'Renamed' },
@@ -207,7 +203,6 @@ Deno.test('reconfiguration changes tool identity without retargeting previously 
     }])
     const [next] = await registry.tools()
     assertEquals(old.name, next.name)
-    assert(old.meta?.eid !== next.meta?.eid)
     await old.reply({ html: 'old' })
     await next.reply({ html: 'new' })
     assertEquals(a.calls.filter((c) => c.method === 'tools/call').length, 1)
@@ -238,7 +233,7 @@ Deno.test('graph MCP namespace collisions fail explicitly without opening duplic
   }
 })
 
-Deno.test('issued calls keep their UUID handler when another ask refreshes the same public name', async () => {
+Deno.test('issued calls keep their handler when another ask refreshes the same public name', async () => {
   const first = fixture(), second = fixture()
   const one = Deno.serve(
     { port: 0, hostname: '127.0.0.1', onListen() {} },
@@ -298,11 +293,6 @@ Deno.test('issued calls keep their UUID handler when another ask refreshes the s
     assertEquals(
       second.calls.filter((c) => c.method === 'tools/call').length,
       0,
-    )
-    const entry = (await a.transcript(original)).find((b) => b.call)!
-    assertMatch(
-      String((entry.call as { to: string }).to),
-      /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/,
     )
   } finally {
     release.resolve()

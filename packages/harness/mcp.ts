@@ -103,7 +103,6 @@ export const mcpTools = (g: Graph) => {
     refresh: connections.refresh,
     snapshot: async (): Promise<Tool[]> =>
       (await connections.tools()).map((t) => ({
-        eid: String(t.meta?.eid),
         name: toolName(t),
         description: t.description,
         parameters: t.inputSchema!,

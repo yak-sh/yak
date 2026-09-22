@@ -2,7 +2,7 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { claude } from './adapters.ts'
 import { asked, follow } from './run.ts'
-import { asking, tracked } from './harness.ts'
+import { asking, FAKE, tracked } from './harness.ts'
 
 // A log file and the run that wrote it, both already over: `follow` then does
 // one pass and returns, which is the whole importer without a process.
@@ -47,7 +47,7 @@ Deno.test('an effort the model does not serve is refused, not launched', async (
   let { g } = tracked()
   await g.apply(asking('S1', 'E1', 'fix it', { effort: 'extreme' }))
   await g.apply([{
-    entity: { eid: 'model-fake' },
+    entity: { eid: FAKE.model },
     model: { efforts: 'low medium high' },
   }])
   let said = await asked(g, 'S1').catch((e: Error) => e.message)

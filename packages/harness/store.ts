@@ -36,6 +36,7 @@ import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
 import { type Vocab } from '@yaks/vocab'
 
 import { derived } from './vocab.ts'
+import { named, renamed } from './named.ts'
 import { rules } from './rules.ts'
 import { vocab } from './vocab.ts'
 export { harnessDoc, vocab } from './vocab.ts'
@@ -143,6 +144,12 @@ export let open = (path: string = dbPath()): Harness => {
     number: false,
     derived: derived(vocab),
   })
+  try {
+    renamed(sql, vocab)
+  } catch (error) {
+    db.close()
+    throw error
+  }
   store.install()
   // The short-lived `completed.actor` column duplicated the completion author.
   // Preserve that author (including anonymous nulls), not the old
@@ -249,6 +256,12 @@ export let open = (path: string = dbPath()): Harness => {
         '(' + Number(ties[0]?.n ?? 0) + ' tied positions)',
       )
     }
+  }
+  try {
+    named(sql, store)
+  } catch (error) {
+    db.close()
+    throw error
   }
   // The effects registry writes through the graph's own `apply()`, trusted:
   // what an effect writes is the harness's own data, never a client's.

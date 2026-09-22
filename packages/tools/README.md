@@ -47,8 +47,9 @@ caller.
 The graph is the durable store for calls and their outcomes. `toolsDoc` declares
 these components:
 
-- `tool{name, description}` identifies a registered tool. `toolEid(name)`
-  derives a stable entity id from the tool name.
+- `tool{name, description}` identifies a registered tool. `name` is its identity
+  (the vocabulary's `identity` keyword): the entity id is derived from it, and
+  `toolEid(name)` computes that id for a call to point at.
 - `call{to, args, id?, source?}` records an invocation. `to` refers to a `tool`
   entity, `args` is a JSON string, `id` can preserve a transport's correlation
   id, and `source` can refer to the request or schedule that created the call.
@@ -127,8 +128,10 @@ lets a process keep invocation records in one graph while tools operate on
 another.
 
 Other runner options are `owner`, the process entity written to `execution.by`;
-`cwd`, passed to tools as `ctx.cwd`; `report`, called for unexpected errors; and
-`now`, an injectable clock used to measure `result.ms`.
+`cwd`, passed to tools as `ctx.cwd`; `report`, called for unexpected errors;
+`otherwise`, the tool that answers a call naming none of the runner's tools
+(left out, such a call is left for the runner that has its tool); and `now`, an
+injectable clock used to measure `result.ms`.
 
 <a id="the-two-rules"></a>
 

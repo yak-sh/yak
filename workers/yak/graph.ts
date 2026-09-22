@@ -172,6 +172,7 @@ import {
   lines,
   MARK,
   MARKS,
+  mistooled,
   rebuild,
   recut,
   Refused as Unreconciled,
@@ -183,6 +184,9 @@ import {
   stale,
   type Taken,
   taken,
+  TOOLED,
+  tooled,
+  tools as toolRows,
   unfiled,
   unhandled,
 } from './migrate.ts'
@@ -510,10 +514,10 @@ export class Store {
     // that stopped at an older marker because it had nothing to move for it
     // still has to be asked about the ones added since.
     this.#behind = this.#pending ||
-      (this.#get('migrated') != FILED &&
+      (this.#get('migrated') != TOOLED &&
         (housed(ctx.storage) || slugged(ctx.storage) ||
           aimedOld(ctx.storage) || unhandled(ctx.storage) ||
-          unfiled(ctx.storage)))
+          unfiled(ctx.storage) || mistooled(ctx.storage)))
   }
 
   // The vocabulary an object keeps is the document (T-37546). A store that
@@ -1277,6 +1281,10 @@ export class Store {
     }
     if (!this.#refused) {
       await this.#after(request, FILED, unfiled, filings, filed)
+    }
+    // The seventh (D-37943): a tool takes the id its name derives.
+    if (!this.#refused) {
+      await this.#after(request, TOOLED, mistooled, toolRows, tooled)
     }
     this.#behind = false
   }

@@ -158,8 +158,8 @@ OAuth package.
 ## Graph server definitions
 
 `@yaks/mcp-client/graph` is an optional adapter. It exports `mcpDoc`,
-`serverOf`, `graphToolName`, and `graphToolEid`. Connections and credentials
-remain outside graph storage.
+`serverOf`, and `graphToolName`. Connections and credentials remain outside
+graph storage.
 
 ```ts
 await graph.apply([{
@@ -175,9 +175,9 @@ contains JSON text for an array of exact remote names. OAuth fields are
 `redirect_url`, `client_id`, `client_metadata_url`, and `scope`. `credential` is
 an application-defined reference, never a bearer token.
 
-`graphToolName` creates the displayed tool name. `graphToolEid` derives a UUID
-from the server entity, configuration, and remote name; use it for retained
-handler dispatch. Renaming the label changes future exposed tool names.
+`graphToolName` creates the displayed tool name, which is also the tool's
+identity in a graph: a `tool` entity's id is derived from its name. Renaming the
+label changes future exposed tool names.
 
 Low-level `connect` and `clients` work without a graph. Consumer adapters may
 validate tool input. The MCP SDK's output validation uses the shared

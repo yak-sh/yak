@@ -3,12 +3,13 @@
 
 import { assertEquals } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
-import { graph } from '@yaks/graph'
+import { graph, identityEid } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/harness.ts'
 import { modelDoc } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { toolEid } from '@yaks/tools'
 import { sessionDoc } from './comp.ts'
 import {
   kindOf,
@@ -19,6 +20,8 @@ import {
 } from './status.ts'
 
 let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
+let M = identityEid('model', ['fake'])
+let T = toolEid('echo')
 
 let S = 'sess'
 let entry = (n: number, kind: Record<string, unknown>): Bundle => ({
@@ -81,50 +84,50 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
 
   ['input arriving during ask remains pending after response', [
     input(1),
-    entry(2, { ask: { to: 'm', through: 'e1' } }),
+    entry(2, { ask: { to: M, through: 'e1' } }),
     input(3),
     said(4, 'e2'),
   ], 'pending'],
   ['subsequent ask acknowledges new input', [
     input(1),
-    entry(2, { ask: { to: 'm', through: 'e1' } }),
+    entry(2, { ask: { to: M, through: 'e1' } }),
     input(3),
     said(4, 'e2'),
-    entry(5, { ask: { to: 'm', through: 'e4' } }),
+    entry(5, { ask: { to: M, through: 'e4' } }),
     said(6, 'e5'),
   ], 'settled'],
   ['nothing', [], 'empty'],
   ['an input', [input(1)], 'pending'],
-  ['an ask open', [input(1), entry(2, { ask: { to: 'm' } })], 'running'],
+  ['an ask open', [input(1), entry(2, { ask: { to: M } })], 'running'],
   ['a tool call open', [
     input(1),
-    entry(2, { ask: { to: 'm' } }),
-    entry(3, { call: { to: 't', id: 'c1', source: 'e2' } }),
+    entry(2, { ask: { to: M } }),
+    entry(3, { call: { to: T, id: 'c1', source: 'e2' } }),
   ], 'running'],
   ['a result', [
     input(1),
-    entry(2, { ask: { to: 'm' } }),
-    entry(3, { call: { to: 't', id: 'c1', source: 'e2' } }),
+    entry(2, { ask: { to: M } }),
+    entry(3, { call: { to: T, id: 'c1', source: 'e2' } }),
     entry(4, { result: { call: 'e3' }, content: { body: 'echo' } }),
   ], 'pending'],
   [
     'an output',
-    [input(1), entry(2, { ask: { to: 'm' } }), said(3, 'e2')],
+    [input(1), entry(2, { ask: { to: M } }), said(3, 'e2')],
     'settled',
   ],
   // The model said something and then asked for a tool: the prose is the
   // newest entry, and the run is not over (T-35230).
   ['prose beside an open call', [
     input(1),
-    entry(2, { ask: { to: 'm' } }),
+    entry(2, { ask: { to: M } }),
     said(3, 'e2'),
-    entry(4, { call: { to: 't', id: 'c1', source: 'e2' } }),
+    entry(4, { call: { to: T, id: 'c1', source: 'e2' } }),
   ], 'running'],
   ['prose beside an answered call', [
     input(1),
-    entry(2, { ask: { to: 'm' } }),
+    entry(2, { ask: { to: M } }),
     said(3, 'e2'),
-    entry(4, { call: { to: 't', id: 'c1', source: 'e2' } }),
+    entry(4, { call: { to: T, id: 'c1', source: 'e2' } }),
     entry(5, { result: { call: 'e4' }, content: { body: 'echo' } }),
   ], 'pending'],
   ['a stop', [input(1), entry(2, { stop: {} })], 'stopped'],
@@ -151,11 +154,11 @@ Deno.test('statusOf reads the newest entry', () => {
 Deno.test('a turn that uses a tool is running until its last output', () => {
   let turn = [
     input(1),
-    entry(2, { ask: { to: 'm' } }),
+    entry(2, { ask: { to: M } }),
     said(3, 'e2'), // the model's prose, before its call
-    entry(4, { call: { to: 't', id: 'c1', source: 'e2' } }),
+    entry(4, { call: { to: T, id: 'c1', source: 'e2' } }),
     entry(5, { result: { call: 'e4' }, content: { body: 'echo' } }),
-    entry(6, { ask: { to: 'm' } }),
+    entry(6, { ask: { to: M } }),
     said(7, 'e6'),
   ]
   let want: TranscriptStatus[] = ['pending', 'running', 'pending', 'settled']
@@ -184,8 +187,8 @@ let store = (): Graph => {
   let g = graph({ storage: s, vocab })
   g.apply([
     { entity: { eid: S }, session: { id: 'one' } },
-    { entity: { eid: 'm' }, model: { name: 'fake' } },
-    { entity: { eid: 't' }, tool: { name: 'echo' } },
+    { entity: { eid: M }, model: { name: 'fake' } },
+    { entity: { eid: T }, tool: { name: 'echo' } },
   ])
   return g
 }
