@@ -169,7 +169,7 @@ slow('a hostname finds its app, and only one app', async () => {
 // space exactly as `<space>.yaks.app` does — the front page at `/`, every app
 // at `/<app>/` — because the request is carried to that hostname and routed by
 // the same rungs, not by a second copy of them (route.ts `aimedAt`). An app of
-// that space may still hold a domain of its own, and there it is the root.
+// that space may still hold a custom domain, and there it is the root.
 slow('a domain on the space opens the space, apps and all', async () => {
   let k = await kernel()
   try {

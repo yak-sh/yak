@@ -442,7 +442,7 @@ export let held = (all: Wrote[], at: number): Wrote | null => {
  * while a sweep that reads the referrers heals whatever the last one got
  * wrong. Three things name a blob, and all three are asked here — every deploy
  * manifest, every entry in a path's history, and every sha a plugin still
- * points at (plugin.ts `pins`), which is the one a domain of its own could
+ * points at (plugin.ts `pins`), which is the one a custom domain could
  * hold and neither of the others could say. A plugin that throws takes the
  * sweep with it: not knowing what is named is never a reason to delete.
  *

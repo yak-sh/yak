@@ -1,6 +1,6 @@
 ---
 doc:
-  title: A domain of their own
+  title: A custom domain
 guide:
   slug: domains
   brief: pointing a domain at a space or an app
@@ -11,7 +11,7 @@ guide:
     it, what each pending state means, and why a domain stays stuck.
 ---
 
-# A domain of their own
+# A custom domain
 
 A space here answers at `<space>.yaks.app` and each of its apps at
 `<space>.yaks.app/<app>/`. Either can also answer at a domain the person already

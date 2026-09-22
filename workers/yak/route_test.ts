@@ -138,7 +138,7 @@ Deno.test('onZone: our own https hostnames, and nothing else', () => {
 
 // Whose `/.well-known/` it is (route.ts `platform`): the place a site grants
 // authority over its own name, so it belongs to whoever owns the name — us
-// on `<space>.yaks.app`, the app on a domain of its own.
+// on `<space>.yaks.app`, the app on a custom domain.
 Deno.test("platform: a grant on our name is not an app's to make", () => {
   let owned: [string, string, boolean][] = [
     // Our own hostnames: the whole prefix, because a list of the names that

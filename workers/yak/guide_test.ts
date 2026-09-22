@@ -311,7 +311,7 @@ Deno.test('the guide prints every column of every component it lists', () => {
 // tell the difference between that and waiting. The three tools have to be
 // named too: a verb nobody is pointed at is a verb nobody finds.
 Deno.test('the guide and its page point a domain where the code does', () => {
-  let section = guide.split('## A domain of their own')[1]
+  let section = guide.split('## A custom domain')[1]
     ?.split('\n## ')[0] ?? ''
   assert(section, 'the guide never teaches a custom domain')
   for (let tool of TOOLS.map((t) => t.name).filter((n) => /^domain_/.test(n))) {

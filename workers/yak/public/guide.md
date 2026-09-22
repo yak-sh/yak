@@ -934,7 +934,7 @@ travels through the browser is a price the buyer can edit; and an order is never
 written by the page Stripe sends the buyer back to, because a buyer who closes
 that tab has still paid.
 
-## A domain of their own
+## A custom domain
 
 Deeper: <https://yaks.app/guide/domains.md> — the record to add and where to
 type it at each registrar, the apex, moving DNS to Cloudflare, and what each

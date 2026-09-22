@@ -36,7 +36,7 @@ export let PAGES: Record<string, Page> = {
   },
   'domains': {
     'slug': 'domains',
-    'title': 'A domain of their own',
+    'title': 'A custom domain',
     'description':
       'Pointing a domain the person already owns at their space or at one app of it: the CNAME to add and where to type it at GoDaddy, Namecheap, Squarespace and the rest, the apex problem and the three ways through it, what each pending state means, and why a domain stays stuck.',
     'brief': 'pointing a domain at a space or an app',

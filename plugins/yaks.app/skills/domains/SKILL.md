@@ -1,9 +1,9 @@
 ---
 name: domains
-description: 'A domain of their own (yaks.app). Pointing a domain the person already owns at their space or at one app of it: the CNAME to add and where to type it at GoDaddy, Namecheap, Squarespace and the rest, the apex problem and the three ways through it, what each pending state means, and why a domain stays stuck.'
+description: 'A custom domain (yaks.app). Pointing a domain the person already owns at their space or at one app of it: the CNAME to add and where to type it at GoDaddy, Namecheap, Squarespace and the rest, the apex problem and the three ways through it, what each pending state means, and why a domain stays stuck.'
 ---
 
-# A domain of their own
+# A custom domain
 
 A space here answers at `<space>.yaks.app` and each of its apps at
 `<space>.yaks.app/<app>/`. Either can also answer at a domain the person already
