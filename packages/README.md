@@ -323,8 +323,8 @@ grouped approximately by function, **not** by dependency order.
   package has neither.
 - **[@yaks/mcp](./mcp)** — the same graph exposed to an agent: an MCP server of
   five generic tools that accept and return bundles, served either as a portable
-  `fetch` handler or over stdio, with each tool's output schema generated from
-  the vocabulary. Its `./routes` is that handler at `/mcp`, one route on
+  `fetch` handler or over stdio, with one output schema on every tool: the
+  bundle answer itself. Its `./routes` is that handler at `/mcp`, one route on
   whatever is serving the host's routes.
 - **[@yaks/mcp-client](./mcp-client)** — the client side of MCP: a remote MCP
   server's tools reached over Streamable HTTP and presented as the same `Tool`
@@ -703,9 +703,9 @@ differ in supported queries, rules and transaction guarantees:
   Cloudflare Worker.
 - `@yaks/mcp` serves the same graph to an agent instead of to a program: it uses
   `@yaks/api`'s `Authenticate` and its signing, so the HTTP and MCP servers
-  agree about who is writing, and it returns the same bundles — described by an
-  output schema generated from `@yaks/vocab`, so an agent reads typed values
-  instead of parsing text.
+  agree about who is writing, and it returns the same bundles — described by the
+  one output schema every tool declares, so an agent reads structure instead of
+  parsing text, and asks `graph_schema` what a component holds.
 - `@yaks/workerd` is the last step of that on Cloudflare: the three things a
   Worker does differently — create a WebSocket, export a `fetch` handler,
   identify the writer — so a graph can be served from Cloudflare without
