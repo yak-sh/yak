@@ -4,7 +4,7 @@
 // working. The root that made most of them reachable is the platform's shape:
 // yaks.app is not on the Public Suffix List, so every `<space>.yaks.app` app is
 // same-site with the apex, and anybody can serve code from a free space.
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { COOKIE } from '../../src/token.ts'
 import { allowed, type Kernel, kernel, mailed, signIn } from './probe.ts'
@@ -125,6 +125,24 @@ slow(
     }
   },
 )
+
+slow('the consent card says where the connection goes (T-37877)', async () => {
+  let k = await kernel()
+  try {
+    let me = await signIn(k)
+    let q = await authorizing(k)
+    // Registered as "Claude", sent to the attacker: both are on the card,
+    // signed in or not.
+    for (let cookie of [me.cookie, '']) {
+      let page = await (await k.at('yaks.app', `/oauth/authorize?${q}`, {
+        headers: { cookie },
+      })).text()
+      assertStringIncludes(page, 'Claude (attacker.invalid)')
+    }
+  } finally {
+    await k.stop()
+  }
+})
 
 slow('a page in another space forges no signed-in form (T-37874)', async () => {
   let k = await kernel()

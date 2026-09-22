@@ -694,9 +694,14 @@ let consented = async (
 }
 
 // The name a person sees on the consent card: what the client called itself
-// when it registered, or its bare id.
+// when it registered, or its bare id, and beside it the host the connection
+// is sent to. The name is the client's own choice, so anybody can register as
+// "Claude"; the host of its redirect is the one thing on the card it cannot
+// borrow from somebody else (T-37877).
 let clientName = async (env: Env, ask: AuthRequest) =>
-  (await api(env).lookupClient(ask.clientId))?.clientName ?? ask.clientId
+  `${
+    (await api(env).lookupClient(ask.clientId))?.clientName ?? ask.clientId
+  } (${new URL(ask.redirectUri).host})`
 
 // Everything the provider does not own: the sign-in cards and the consent
 // page. It is the provider's `defaultHandler`, so it sees a request only
