@@ -60,6 +60,13 @@ invocation_logs = true
 [dev]
 host = "127.0.0.1"
 
+# No Cron Trigger: every store keeps its own clock (a Durable Object alarm),
+# and the Worker exports no `scheduled`. Empty rather than absent, because a
+# deploy leaves the Worker's existing crons in place when `crons` is absent —
+# which is how the old five-minute trigger outlived its handler.
+[triggers]
+crons = []
+
 # The account whose analytics the meter reads, and whose dispatch namespace an
 # app's worker is uploaded into — the same tag as `account_id` above, which the
 # runtime is never handed. Not a secret: it is in this file.
@@ -439,6 +446,9 @@ routes = [
   { pattern = "yaks.fyi/*", zone_name = "yaks.fyi" },
   { pattern = "*.yaks.fyi/*", zone_name = "yaks.fyi" },
 ]
+
+[env.staging.triggers]
+crons = []
 
 [env.staging.vars]
 APEX = "yaks.fyi"

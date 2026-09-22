@@ -214,7 +214,8 @@ Deno.test('the trash wake names 04:20 UTC and nothing coarser rounds it off', as
   let conf = parse(
     await Deno.readTextFile(new URL('./wrangler.toml', import.meta.url)),
   ) as { triggers?: unknown }
-  assertEquals(conf.triggers, undefined)
+  // Empty, not absent: a deploy leaves a Worker's crons alone when absent.
+  assertEquals(conf.triggers, { crons: [] })
   assertEquals(trashPlugin.wakes?.[0].wake.every, DAILY)
   let before = Date.parse('2026-09-07T04:19:00Z')
   assertEquals(next(DAILY, before), '2026-09-07T04:20:00.000Z')
