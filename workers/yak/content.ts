@@ -94,7 +94,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'querying',
     'title': 'Querying: the filter grammar',
     'description':
-      'The one filter grammar, used everywhere a store is read, with worked examples: presence and absence, contains, comparisons, ranges, time phrases, walking a reference, counting, paging, full text — and why a row carries only the components its filter named.',
+      'The one filter grammar, used everywhere a store is read, with worked examples: presence and absence, contains, comparisons, ranges, time phrases, walking a reference, counting, windows, full text — and why a row carries only the components its filter named.',
     'brief': 'the filter grammar, with examples',
   },
   'selling': {

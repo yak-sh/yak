@@ -494,16 +494,13 @@ let ins = (d: Drive, sql: string, params: unknown[]) =>
 
 // The integer id of an eid, minting the spine row when there is none. Only the
 // split grant needs this: every other row the pass writes rides an id the old
-// store already had.
+// store already had. The spine takes no number — this pass runs on an app's
+// store, and an app's entities are not numbered (vocab.ts) — so what it mints
+// is the eid and nothing else.
 let idOf = (d: Drive, eid: string, minted: { n: number }): number => {
   let [row] = d.query('select id from entity where eid = ?', [eid])
   if (row) return Number(row.id)
-  ins(
-    d,
-    'insert into entity (eid, num) select ?, ' +
-      '(select coalesce(max(num), 0) + 1 from entity)',
-    [eid],
-  )
+  ins(d, 'insert into entity (eid) values (?)', [eid])
   minted.n++
   return Number(d.query('select id from entity where eid = ?', [eid])[0].id)
 }
@@ -1231,7 +1228,10 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
 
   // The base tables, moved aside. The spine is NOT one of them: `entity` and
   // `tombstone` are spelled identically in both layouts, so every integer id,
-  // every `num` and every death survives by not being touched.
+  // every `num` and every death survives by not being touched. A store that
+  // was numbered before numbers became @yaks/id's keeps the numbers it was
+  // given, in a column its vocabulary no longer names (T-37831): nothing reads
+  // them, and taking them away would be a write the migration does not need.
   let before = { entity: count(d, 'entity'), tombstone: count(d, 'tombstone') }
   let old: string[] = []
   for (let t of named(d, 'table')) {

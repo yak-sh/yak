@@ -205,7 +205,7 @@ state means.
 
 One grammar everywhere: `.doc!` selects rows that have a component, `.doc?` asks
 for one beside the rows selected, `.recipe.minutes<=30` filters a column, `&`
-joins, `id=<eid>` fetches one entity whole, `limit=` and `after=` page, and a
+joins, `id=<eid>` fetches one entity whole, `limit=` windows the answer, and a
 bare word is a full-text search. A row comes back with the components the filter
 names, so ask for what you will draw.
 

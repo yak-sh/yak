@@ -388,7 +388,9 @@ export let signedIn = async (k: Kernel, person: string) =>
     k.secret,
   )}`
 
-type Row = { entity: { eid: string; num: number }; [k: string]: unknown }
+// `num` is optional because a store may not have numbers at all: it is
+// @yaks/id's column, which an app's store does not load and the fleet's does.
+type Row = { entity: { eid: string; num?: number }; [k: string]: unknown }
 
 // A client on one app's graph API, as one person (or nobody).
 export let client = (

@@ -261,9 +261,16 @@ Deno.test('a rule sigil throws Unsupported rather than compiling', () => {
 Deno.test('ordering by an unfiltered column still joins its table', () => {
   let { sql } = compile(parse('.priority=1&.order=title'), v)
   assert(sql.includes('left join "doc"'), sql)
-  // the spine num breaks ties, so the order a query asks for is total and a
-  // page of it is the same page wherever it is cut
-  assert(sql.endsWith('order by "doc"."title", "entity"."num" desc'), sql)
+  // the spine breaks ties — the num where there is one, the row id always —
+  // so the order a query asks for is total and a page of it is the same page
+  // wherever it is cut
+  assert(
+    sql.endsWith(
+      'order by "doc"."title", "entity"."num" desc, ' +
+        '"entity"."id" desc',
+    ),
+    sql,
+  )
 })
 
 Deno.test('a window with no .order is newest-first by spine num', () => {
@@ -273,10 +280,36 @@ Deno.test('a window with no .order is newest-first by spine num', () => {
   assertEquals(params, [1, 7, 2])
 })
 
+// A number is opt in (@yaks/id), so the same vocabulary without it: the spine
+// is there, the column is not.
+let unnumbered = loadVocab({
+  $defs: {
+    ...doc.$defs,
+    entity: { component: true, type: 'object', wire: false, properties: {} },
+  },
+} as VocabDoc)
+
+Deno.test('a store with no numbers still states its order, by the spine id', () => {
+  let { sql } = compile(parse('.priority=1&.limit=2'), unnumbered)
+  assert(sql.endsWith('order by "entity"."id" desc limit ?'), sql)
+  assert(!sql.includes('"entity"."num"'), sql)
+})
+
+Deno.test('a cursor names an entity by number, and a store with none says so', () => {
+  assertThrows(
+    () => compile(parse('.priority=1&.after=7'), unnumbered),
+    Unsupported,
+    'does not number its entities',
+  )
+})
+
 Deno.test('an explicit .order survives a window', () => {
   let { sql } = compile(parse('.priority=1&.order=-title&.limit=2'), v)
   assert(
-    sql.endsWith('order by "doc"."title" desc, "entity"."num" desc limit ?'),
+    sql.endsWith(
+      'order by "doc"."title" desc, "entity"."num" desc, ' +
+        '"entity"."id" desc limit ?',
+    ),
     sql,
   )
 })

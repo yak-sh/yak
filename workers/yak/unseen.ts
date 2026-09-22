@@ -183,7 +183,10 @@ type Broke = {
 }
 type Hit = {
   kind: string
-  entity: { eid: string; num: number }
+  // No number: an app's store does not load @yaks/id (vocab.ts), so a break
+  // noted there is named by its eid, and `idOf` writes the short handle. The
+  // directory numbers its own, and the same line reads both.
+  entity: { eid: string; num?: number | null }
   doc?: { title?: string }
   exception?: Broke
   error?: Broke

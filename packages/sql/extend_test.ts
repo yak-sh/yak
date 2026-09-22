@@ -106,7 +106,7 @@ Deno.test('an extension spells an order value that names no column', () => {
   assert(
     sql.endsWith(
       'order by case "entity"."id" when 7 then 0 else 1 end, ' +
-        '"entity"."num" desc',
+        '"entity"."num" desc, "entity"."id" desc',
     ),
     sql,
   )
@@ -115,7 +115,9 @@ Deno.test('an extension spells an order value that names no column', () => {
   assert(down.sql.includes('else 1 end desc'), down.sql)
   let col = compile(parse('.order=title'), v, { extend: [ranks] })
   assert(
-    col.sql.endsWith('order by "doc"."title", "entity"."num" desc'),
+    col.sql.endsWith(
+      'order by "doc"."title", "entity"."num" desc, "entity"."id" desc',
+    ),
     col.sql,
   )
 })

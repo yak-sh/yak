@@ -62,8 +62,8 @@ any bundle is refused, nothing in that call is written.
 
     let recipes = await query('.recipe!&.doc?')
 
-A GET of `./api/query?<filter>`, returning an array of rows — oldest first, by
-the number the store minted. An aggregate filter returns an object instead
+A GET of `./api/query?<filter>`, returning an array of rows — oldest first, in
+the order they were written. An aggregate filter returns an object instead
 (`query('.doc!&.count!')` → `{count: 12}`). The filter goes into the URL as you
 wrote it, so a value carrying `&` or `#` needs `encodeURIComponent` around it;
 `#` would otherwise start a fragment and take the rest of the filter with it.
@@ -232,7 +232,7 @@ beside the components, and refuses with the same message.
 ## What a row carries back
 
     { kind: 'recipe',
-      entity: { eid: '4f3c…', num: 12 },
+      entity: { eid: '4f3c…' },
       doc: { title: 'Lemon cake', body: '…' },
       recipe: { serves: 8, minutes: 45 } }
 
@@ -474,11 +474,11 @@ directly from `curl`, from another page, or from your own `worker.js` through
     content-type: application/x-ndjson
     {"entity": {"eid": "$1"}, "doc": {"title": "Lemon cake"}}
     {"entity": {"eid": "$2"}, "doc": {"title": "Fig tart"}}
-    → {"entity": {"eid": "4f3c…", "num": 12}, "doc": {"title": "Lemon cake"}}
-      {"entity": {"eid": "8b91…", "num": 13}, "doc": {"title": "Fig tart"}}
+    → {"entity": {"eid": "4f3c…"}, "doc": {"title": "Lemon cake"}}
+      {"entity": {"eid": "8b91…"}, "doc": {"title": "Fig tart"}}
 
     GET ./api/query?.doc!
-    → [ {"kind": "doc", "entity": {"eid": "4f3c…", "num": 12},
+    → [ {"kind": "doc", "entity": {"eid": "4f3c…"},
          "doc": {"title": "Lemon cake"}} ]
 
     GET ./api/query?.doc!&.count!

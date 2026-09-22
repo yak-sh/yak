@@ -1029,6 +1029,16 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
   let sort = order ? sortOf(ctx, order.value) : null
   let limit = find<Limit>(cs, 'limit')
   let after = find<After>(cs, 'after')
+  // Whether this store numbers its entities: @yaks/id's document declares the
+  // column, so a vocabulary that loaded it has numbers and one that did not
+  // has none (the spine table holds the column either way).
+  let numbered = !!ctx.v.column('entity', 'num')
+  // The cursor names its anchor by that entity's number, so a store which
+  // mints none has nothing for it to name: `num < n` over a column of NULLs
+  // answers with an empty page instead of saying so.
+  if (after && !numbered) {
+    throw new Unsupported('.after', 'this store does not number its entities')
+  }
   let out = rel(ctx.d.spine, {
     cols,
     joins: joinsOf(ctx),
@@ -1042,7 +1052,16 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Rel => {
   // made. Either way the order is stated, never left to the query planner: two
   // engines, or one engine with a different index, must not return a bare
   // `.doc!` in two different orders.
-  out.order.push(`"entity"."num"${sort || limit || after ? ' desc' : ''}`)
+  //
+  // The number says it where a store has one (@yaks/id is opt in, and one that
+  // adopted its numbers from an export may hold them out of insert order), and
+  // the spine's own id — the row order every store has — breaks its ties and
+  // stands alone where there is no number at all. Left to the num column, a
+  // store that mints none would be ordering by the same NULL in every row,
+  // which is to say by whatever the planner chose.
+  let down = sort || limit || after ? ' desc' : ''
+  if (numbered) out.order.push(`"entity"."num"${down}`)
+  out.order.push(`"entity"."id"${down}`)
   if (limit) out.limit = limit.n
   return out
 }

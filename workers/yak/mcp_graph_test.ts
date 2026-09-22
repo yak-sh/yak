@@ -1091,3 +1091,63 @@ slow(
     }
   },
 )
+
+// Numbers are @yaks/id's, and an app's store does not load it (T-37831): an
+// entity there is called by the eid its client minted, the answer carries no
+// number to read, and asking the store to mint one is refused by name rather
+// than answered with a bundle that has none.
+slow('an app store answers eids and no numbers, and refuses $num', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    await agent.tool('app_new', { slug: 'recipes', title: 'Recipes' })
+    await agent.tool('app_files', {
+      app: 'recipes',
+      files: [{
+        path: 'vocab.json',
+        content: vocabFile({ recipe: { serves: num } }),
+      }],
+    })
+    await agent.tool('app_deploy', { app: 'recipes' })
+    let wrote = JSON.parse(
+      await agent.tool('graph_apply', {
+        app: 'recipes',
+        entities: [{
+          entity: { eid: '$cake' },
+          doc: { title: 'Lemon cake' },
+          recipe: { serves: 4 },
+        }],
+      }),
+    ) as { entity: { eid: string; num?: number } }[]
+    assert(wrote.every((b) => b.entity.num == null), JSON.stringify(wrote))
+
+    // And the read says the same: `id=` answers the whole bundle, stamps and
+    // all, and the spine on it carries the eid and the archetype it was filed
+    // under — no number to read.
+    let [whole] = JSON.parse(
+      await agent.tool('graph_query', {
+        app: 'recipes',
+        filter: `id=${wrote[0].entity.eid}`,
+      }),
+    ) as { entity: Record<string, unknown> }[]
+    assert(!('num' in whole.entity), JSON.stringify(whole.entity))
+
+    // A request nothing answers is a refusal naming it, never a silent write.
+    await assertRejects(
+      () =>
+        agent.tool('graph_apply', {
+          app: 'recipes',
+          entities: [{
+            entity: { eid: '$tart' },
+            recipe: { serves: 2 },
+            $num: true,
+          }],
+        }),
+      Error,
+      '$num',
+    )
+  } finally {
+    await k.stop()
+  }
+})

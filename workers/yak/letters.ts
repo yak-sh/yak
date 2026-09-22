@@ -73,11 +73,13 @@ let str = (v: unknown, what: string): string => {
 let num = (v: unknown): number | undefined =>
   typeof v == 'number' && Number.isFinite(v) ? v : undefined
 
-// Newest first, by the number the store minted: an arrival is numbered when it
-// arrived and a letter of the app's own when it was written, so one key orders
-// both directions without either pretending to know the other's clock.
-let newest = (a: Bundle, b: Bundle) =>
-  (b.entity?.num ?? 0) - (a.entity?.num ?? 0)
+// Newest first, by the moment the row was written: an arrival is stamped when
+// it arrived and a letter of the app's own when it was written, so one key
+// orders both directions without either pretending to know the other's clock.
+// The store sorts it, because the store is where the window is cut — sorting
+// the page after it came back would only order whichever letters the limit
+// happened to leave.
+let NEWEST = '&.order=-created.at'
 
 let address = (env: Host) =>
   `the app slug; its email address is <space>.<app>@${apex(env)}`
@@ -132,9 +134,9 @@ let listing = (ctx: Ctx): Tool => ({
     let rows = await read(
       ctx.env,
       [{ space, app, who }],
-      `${LETTER}${which}&.limit=${num(args.limit) ?? 20}`,
+      `${LETTER}${which}${NEWEST}&.limit=${num(args.limit) ?? 20}`,
     )
-    return (Array.isArray(rows) ? rows as Bundle[] : []).sort(newest)
+    return Array.isArray(rows) ? rows as Bundle[] : []
   },
 })
 

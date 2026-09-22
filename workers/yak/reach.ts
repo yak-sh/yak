@@ -39,7 +39,7 @@ import { vouched, type Who } from './session.ts'
 import { edits, mode } from '@yaks/member'
 import { storeOf } from './door.ts'
 import { appKeywords, coreDocs, meant } from './vocab.ts'
-import { type Bundle, dead, type Entity } from '@yaks/graph'
+import { type Bundle, dead, type Entity, requested } from '@yaks/graph'
 import { matcher } from '@yaks/match'
 import { parse } from '@yaks/query'
 import {
@@ -323,7 +323,7 @@ let apartIn = (vocabs: { r: Reach; doc: VocabDoc }[]) => {
 
 type Held = {
   // The spine as the first store that answered spelled it: the eid is what the
-  // entity is called everywhere, and the num is that store's own counter.
+  // entity is called everywhere, which is the whole of an app's address.
   entity: Entity
   comps: Record<string, unknown>
   // The kind each store called the row, by the store that said it.
@@ -394,8 +394,8 @@ let gathered = async (
 
 // One bundle per eid, out of every store that holds a piece of it. One home
 // per component, so the first store that answers a component owns it here
-// too; `entity` keeps the first store's num, since a num is a store's own
-// counter and the eid is what the entity is called everywhere. Its archetype
+// too; `entity` is the first store's, which says the same thing in every one
+// of them, since the eid is what the entity is called everywhere. Its archetype
 // is the one thing on the spine that is a claim — the tables a store holds for
 // the row — so it comes from the store whose word named the kind, and a
 // fan-out says what that store alone would say (C-32800 item 2).
@@ -658,11 +658,6 @@ let NOT_A_COMP = ['entity', 'tombstone']
 
 let isComp = (k: string) => !NOT_A_COMP.includes(k) && !k.startsWith('$')
 
-// A bundle addressed by anything but an eid — a spine num — cannot be split,
-// because the halves would have to find each other by an address only one
-// store can resolve.
-let elsewhere = (e: Bundle) => e.entity?.num != null
-
 // Every `$alias` in the batch, minted here. A bundle that lands in two stores
 // must land under one eid, and two stores minting their own would make two
 // entities out of one — so the door mints, the answer maps the alias to what
@@ -675,7 +670,15 @@ let minted = (batch: Bundle[]) => {
     if (typeof eid == 'string') {
       return eid.startsWith('$') ? (aliases[eid] ??= crypto.randomUUID()) : eid
     }
-    return elsewhere(e) ? null : crypto.randomUUID()
+    // An eid is the only address an app's store has: it mints no numbers
+    // (vocab.ts), so a bundle naming one names nothing, and minting an eid for
+    // it would write a new entity where the caller meant an existing one.
+    if (e.entity?.num != null) {
+      throw new Error(
+        'entity.num addresses nothing here — name the entity by its eid',
+      )
+    }
+    return crypto.randomUUID()
   })
   // An alias stands wherever an eid goes — a ref column, an edge's end,
   // a nested bundle's address — so the swap is the whole batch's, by value.
@@ -889,6 +892,14 @@ export let written = async (
   aliases: Record<string, string>
   where: string
 }> => {
+  // Every `$` word the wire carries. The split below rebuilds each part out of
+  // the keys it knows, so one it does not know would be dropped on the way to
+  // a store and the caller would never hear about it — `$num: true` coming
+  // back as a write with no number and no word why is exactly what @yaks/graph
+  // `requested` refuses, said here because this door is where it would be
+  // lost. `$app` is the door's own (agent.ts `aimed`), which is why it is
+  // named beside the graph's.
+  requested(batch, ['$app'])
   let { parts, aliases } = await routed(env, reach, named, batch)
   if (!parts.length) throw new Error('entities: nothing to write')
   if (parts.length > 1) {

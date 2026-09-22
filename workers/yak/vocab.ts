@@ -6,10 +6,13 @@ import { archetypeDoc } from '@yaks/archetype'
 // 83 tables are the fleet's (V-33553).
 //
 // What is core here, and why each piece is:
-//   entity      the spine — the `num` a store mints on first touch. It has no
-//               table of its own: @yaks/sqlite raises `entity` and `tombstone`
-//               as the layout's fixed spine, and @yaks/graph reserves the
-//               tombstone word on the wire, so neither is declared.
+//   entity      the spine — the eid an entity is called by, and nothing else.
+//               It has no table of its own: @yaks/sqlite raises `entity` and
+//               `tombstone` as the layout's fixed spine, and @yaks/graph
+//               reserves the tombstone word on the wire, so neither is
+//               declared. An app's entities carry no number: @yaks/id is a
+//               plugin a graph opts into, and an app has not (T-37831), so an
+//               app's ids are the eid and the short handle built from it.
 //   docDoc      @yaks/doc: title and body, the words a person reads and the
 //               only thing search searches. `body` says `store: "blob"`, which
 //               is @yaks/blob's keyword — the text is swapped for its address
@@ -30,8 +33,9 @@ import { archetypeDoc } from '@yaks/archetype'
 //               every store already holds rows under these names, and a word
 //               means the same thing in every store — so they are reserved
 //               like the rest of the core (T-33810).
-// @yaks/id's `prefix` keyword is registered rather than used: a component may
-// declare the letter its entities are numbered in, and the loader carries it.
+// @yaks/id is loaded by the platform's own two stores and by no app's
+// ({@link platformDocs}, {@link metaKeywords}): the directory orders its
+// memories by the number it minted, and an app has nothing to number.
 //
 // And the app's own `vocab.json` — or `vocab.yml`, read through the same door
 // (@yaks/yaml, M-34605). It is a JSON Schema 2020-12 document with `$defs`
@@ -97,9 +101,9 @@ let stampCols: Record<string, PropSchema> = {
 /** The components every app's store has that no package owns: the spine, the
  * writer, and the two server-owned stamps. `doc` is @yaks/doc's, `member`
  * @yaks/member's, and both are loaded beside this one (see {@link coreDocs}).
- * The `num` on the spine is @yaks/id's and arrives with its document: every
- * store on this platform is numbered, because its tools answer in `T-`-style
- * ids and its migrations read the number a row was given. */
+ * The spine carries the eid alone: a number is @yaks/id's column, which an
+ * app's store does not load, so an app's entity has one name and it is the one
+ * its client minted. */
 export let coreDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
   title: 'core',
@@ -501,7 +505,6 @@ let invocationDoc: VocabDoc = {
 
 export let coreDocs: VocabDoc[] = [
   coreDoc,
-  idDoc,
   classificationDoc,
   docDoc,
   memberDoc,
@@ -956,7 +959,7 @@ export let platformDocs: VocabDoc[] = [
  * words. The Store loads it instead of {@link appVocab} when the object it woke
  * in is the meta store (graph.ts).
  */
-export let platformVocab = (): Vocab => loadVocab(platformDocs, appKeywords)
+export let platformVocab = (): Vocab => loadVocab(platformDocs, metaKeywords)
 
 // ---- the git object graph's store (D-34943) ---------------------------------
 
@@ -986,7 +989,7 @@ export let gitDocs: VocabDoc[] = [
 ]
 
 /** The git object store's whole vocabulary (graph.ts, {@link gitDocs}). */
-export let gitVocab = (): Vocab => loadVocab(gitDocs, appKeywords)
+export let gitVocab = (): Vocab => loadVocab(gitDocs, metaKeywords)
 
 // What a column admits, as a comparison makes it: the closed set, or the type.
 // The same rule reach.ts `colsOf` holds two spaces to.
@@ -1025,14 +1028,21 @@ export let PLATFORM_APART: string[] = (() => {
 })()
 
 /** The keyword vocabularies those documents and an app's own may use. Each is
- * owned by the package that reads it — @yaks/id `prefix`, @yaks/blob `store`,
- * @yaks/edge `relation` — and registered so the loader carries it. */
+ * owned by the package that reads it — @yaks/blob `store`, @yaks/edge
+ * `relation` — and registered so the loader carries it. @yaks/id's `prefix` is
+ * not among them: it says which letter an entity's NUMBER wears, and an app's
+ * entities have no number, so a `prefix` declared in an app's vocab.json is
+ * dropped on load like any word nothing here reads. */
 export let appKeywords: Keywords[] = [
-  idKeywords,
   blobKeywords,
   edgeKeywords,
   keyKeywords,
 ]
+
+/** The same list for the platform's own two stores, which do have numbers:
+ * @yaks/id's keyword beside the rest, so a component of theirs can say the
+ * letter its ids wear. */
+export let metaKeywords: Keywords[] = [idKeywords, ...appKeywords]
 
 /**
  * Every word the platform already says, sorted. A `vocab.json` naming one is
@@ -1339,3 +1349,12 @@ export let meant = (said: unknown): VocabDoc => {
  */
 export let appVocab = (source: unknown = {}): Vocab =>
   loadVocab([...coreDocs, appDoc(source)], appKeywords)
+
+/**
+ * Whether this store numbers its entities, read off the vocabulary it woke
+ * with: @yaks/id's document is the one place `entity.num` is declared, so a
+ * store that loaded it has numbers and one that did not has none. The storage
+ * adapter is told this (graph.ts), so there is one answer rather than a
+ * vocabulary saying one thing and the writer doing another.
+ */
+export let numbered = (v: Vocab): boolean => !!v.column('entity', 'num')

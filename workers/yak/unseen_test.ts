@@ -4,7 +4,7 @@
 // about. The end-to-end half — a page reporting itself, the mark landing in
 // the app's store — is serving_test.ts and report_test.ts.
 import { assert, assertEquals } from '@std/assert'
-import { fileOf, named, past } from './unseen.ts'
+import { fileOf, line, named, past } from './unseen.ts'
 
 let E = 'e0000000-0000-4000-8000-00000000000e'
 
@@ -27,6 +27,28 @@ Deno.test('named: an id, either spelling', () => {
   // A uuid is not a moment, and neither is a human id: the shapes cannot
   // collide, so a stale id is refused rather than closing the whole app.
   assert(!named('E-84-ish', hit))
+})
+
+// The same break as an app's store holds it: no number, because an app's store
+// does not load @yaks/id (vocab.ts). Its id is the short handle built from the
+// eid, and that is what the line prints and what closes it.
+let unnumbered = {
+  ...broke({ at: '2026-08-14T12:00:00.000Z' }),
+  entity: { eid: E },
+}
+
+Deno.test('named: an unnumbered break answers to its short handle', () => {
+  assert(named('E#e000000000', unnumbered))
+  assert(named(E, unnumbered))
+  assert(!named('E-84', unnumbered))
+})
+
+Deno.test('line: an app entity is named by its short handle', () => {
+  let said = line({
+    app: { eid: 'a1', slug: 'recipes' } as never,
+    hit: unnumbered,
+  })
+  assert(said.startsWith('- E#e000000000 '), said)
 })
 
 Deno.test('named: a version bound is up to AND including', () => {

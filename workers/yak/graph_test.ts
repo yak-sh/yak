@@ -188,12 +188,13 @@ Deno.test('a manifest the vocabulary refuses leaves the store as it was', async 
       recipe: { serves: 8 },
     }], owner)
     assertEquals(wrote.status, 200)
-    // The batch as applied, plus everything the graph synthesized: the number
-    // storage minted, and the byline the stamp phase wrote, each riding a
-    // bundle of its own.
+    // The batch as applied, plus everything the graph synthesized: the byline
+    // the stamp phase wrote, riding a bundle of its own. No number rides with
+    // it — an app's store does not load @yaks/id, so the eid its client minted
+    // is the whole of what an entity here is called (T-37831).
     let applied = await wrote.json() as Bundle[]
     assertEquals(applied[0].entity.eid, CAKE)
-    assert(applied.some((b) => (b.entity.num ?? 0) >= 1))
+    assert(applied.every((b) => b.entity.num == null))
     assert(applied.some((b) => by(b) == ADA))
 
     // An answer carries the components the line names and no more, so the doc

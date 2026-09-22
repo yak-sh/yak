@@ -130,9 +130,9 @@ export let store = (base) => {
       }),
     })
   // The filter line, the grammar the boards speak: '.doc.title~=cake',
-  // '.opaque.format=recipe', 'id=<eid>', 'limit=', 'after='. Oldest first,
-  // by the number the store minted; a windowed read is the newest page of
-  // that same order.
+  // '.opaque.format=recipe', 'id=<eid>', 'limit='. Oldest first, in the order
+  // the rows were written; a windowed read is the newest page of that same
+  // order.
   //
   // A row carries only the components the filter names, so name the ones the
   // page will draw: '.recipe!' answers recipes with no titles, and
@@ -300,9 +300,9 @@ let asked = (filter = '') => {
   return [line, ...screen].join('&')
 }
 
-// Oldest first, by the number the store minted — `query()`'s own order.
-let rows = (held) =>
-  [...held.values()].sort((a, b) => (a.entity.num ?? 0) - (b.entity.num ?? 0))
+// Oldest first — `query()`'s own order, which is the order the fill arrived
+// in and the order a live row is added at, so the map already holds it.
+let rows = (held) => [...held.values()]
 
 export let { apply, me, query, search, subscribe, upload } = store(
   new URL('.', import.meta.url),

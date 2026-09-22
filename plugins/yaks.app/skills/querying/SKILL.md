@@ -1,6 +1,6 @@
 ---
 name: querying
-description: 'Querying: the filter grammar (yaks.app). The one filter grammar, used everywhere a store is read, with worked examples: presence and absence, contains, comparisons, ranges, time phrases, walking a reference, counting, paging, full text — and why a row carries only the components its filter named.'
+description: 'Querying: the filter grammar (yaks.app). The one filter grammar, used everywhere a store is read, with worked examples: presence and absence, contains, comparisons, ranges, time phrases, walking a reference, counting, windows, full text — and why a row carries only the components its filter named.'
 ---
 
 # Querying: the filter grammar
@@ -98,14 +98,14 @@ rows.
 **A row carries only the components its filter named.** This is the one rule to
 hold on to, because the mistake it prevents is a page that draws `undefined`.
 
-A row is `{kind, entity: {eid, num}, ...those components}`. So this is the wrong
+A row is `{kind, entity: {eid}, ...those components}`. So this is the wrong
 page:
 
     for (let r of await query('.recipe!')) {
       draw(r.doc.title)                  // TypeError: no doc on the row
     }
 
-    → [{ kind: 'recipe', entity: {eid: '940d…', num: 1},
+    → [{ kind: 'recipe', entity: {eid: '940d…'},
          recipe: {serves: 4, minutes: 20, cuisine: 'american'} }]
 
 and this is the right one:
@@ -114,7 +114,7 @@ and this is the right one:
       draw(r.doc.title, r.recipe.minutes)
     }
 
-    → [{ kind: 'recipe', entity: {eid: '940d…', num: 1},
+    → [{ kind: 'recipe', entity: {eid: '940d…'},
          doc: {title: 'Pancakes', body: 'flour, milk, eggs'},
          recipe: {serves: 4, minutes: 20, cuisine: 'american'} }]
 
@@ -131,8 +131,8 @@ not missing from it, so test the value and not `in`. The platform's own columns
 read back the same way, `doc.title` included.
 
 `entity` and `kind` are on every row: `entity.eid` is the address to write back
-to, `entity.num` is the number the store minted in order, and `kind` is what the
-entity is — the first component it has, one of your own included.
+to — the only name an entity has here — and `kind` is what the entity is, the
+first component it has, one of your own included.
 
 Three kinds of row are left out of a listing unless the filter names them: the
 platform's stamps (`.created!`, `.updated!`), the platform's own error rows
@@ -358,24 +358,20 @@ used.
     let { count } = await query('.chore!&.completed=&.count!')
     badge.textContent = `${count} to do`
 
-## Windows and paging
+## Windows
 
 A window bounds the answer without changing what matches.
 
     limit=20            the newest 20 matches
-    after=<num>         continue below a spine num you already have
 
-A plain listing is oldest first, by the number the store minted. A windowed
+A plain listing is oldest first, in the order the rows were written. A windowed
 listing is the newest that many — still in that same oldest-first order among
-themselves. So `limit` is the front page of a feed, and paging walks backwards:
+themselves. So `limit` is the front page of a feed:
 
     let page = await query('.doc!&limit=20')
-    let oldest = page[0].entity.num
-    let older = await query(`.doc!&limit=20&after=${oldest}`)
 
-`after` means "older than this num", so the cursor is the smallest num you hold,
-not the largest. Both forms work — `limit=20` and `.limit=20` are the same
-window — and a bad bound is refused rather than dropped:
+Both forms work — `limit=20` and `.limit=20` are the same window — and a bad
+bound is refused rather than dropped:
 
     .limit=abc
     → .limit takes a whole number: .limit=200

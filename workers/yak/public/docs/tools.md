@@ -319,7 +319,7 @@ somebody the store knows returns `{eid, name}`, so the answer names who ran
 rather than "someone". The answer counts the rows and returns them:
 
     leaderboard: 12 rows in yourname/runs
-    { "rows": [ { "kind": "jog", "entity": { "eid": "4f3c…", "num": 12 },
+    { "rows": [ { "kind": "jog", "entity": { "eid": "4f3c…" },
                   "jog": { "who": "Ada", "miles": 5 },
                   "created": { "at": "2026-09-01T…",
                                "by": { "eid": "…", "name": "Ada" } } } ] }

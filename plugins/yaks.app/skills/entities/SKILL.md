@@ -28,9 +28,9 @@ sync, nothing to keep in step.
     graph_apply { app: 'lending', entities: [
       { entity: { eid: piranesi }, loan: { to: 'Maya' } } ] }
 
-`num` is the other half of an address and is _not_ shared: it is one store's own
-counter, so the same entity is `#3` in one app and `#17` in another. Address
-things by eid across apps, and by num only inside one.
+The eid is the whole address. An app's store mints no number beside it — a
+number is a store's own counter, and would say `#3` in one app and `#17` in
+another for the same entity — so a thing has one name everywhere.
 
 ## Which app a component lives in
 
@@ -170,7 +170,7 @@ the question is asked of every app in reach — every app the person may read, i
 every space they belong to — and answered as one bundle per entity.
 
     graph_query { filter: '.book!&.loan?' }
-    → [ { kind: 'book', entity: { eid: '…', num: 3 },
+    → [ { kind: 'book', entity: { eid: '…' },
           book: { pages: 245 }, loan: { to: 'Maya' },
           _stores: { book: 'yourname/reading-list', loan: 'yourname/lending' } } ]
 
