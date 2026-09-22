@@ -19,6 +19,7 @@
 // a port selected and released before their child can bind it.
 import { fileURLToPath } from 'node:url'
 import { apex } from './host.ts'
+import { b64u } from './mcp-probe.ts'
 import { until } from '../../src/testing.ts'
 import { COOKIE, sign, verify } from '../../src/token.ts'
 import { ready, WRANGLER } from './wrangler.ts'
@@ -940,4 +941,230 @@ export let zipped = async (entries: Packed[]) => {
     i += p.length
   }
   return out
+}
+
+// ---- a kernel that is already running (roster_workerd_test.ts) ------------
+//
+// yaks.app answers the same doors workerd does, so a suite that drives one can
+// drive the other: this is `kernel` for a host already deployed — where it is,
+// one request at a hostname, and a stop with nothing to stop. What it cannot
+// give is the two things only a local runtime has: its log, so no letter can
+// be read back, and its session secret, so no cookie can be minted. A run
+// against a deployed kernel carries a bearer instead.
+export let deployed = (url: string) => {
+  let base = url.replace(/\/+$/, '')
+  let host = new URL(base).host
+  return {
+    base,
+    host,
+    secret: '',
+    log: '',
+    socket: undefined,
+    at: (where: string, path: string, init: RequestInit = {}) =>
+      fetch(`https://${where}${path}`, init),
+    stop: () => Promise.resolve(),
+  }
+}
+
+/**
+ * A bearer, the way a host gets one: dynamic registration as a public client,
+ * the authorization code with PKCE, and the exchange. mcp_auth_test.ts walks
+ * the same steps and asserts on each of them; this walks them to come back
+ * with a token, for a suite that wants to reach the connector the way a client
+ * does rather than with a cookie no client has.
+ */
+export let bearerFor = async (
+  k: Pick<Kernel, 'at' | 'host'>,
+  cookie: string,
+) => {
+  let back = 'https://probe.invalid/cb'
+  let form = (
+    path: string,
+    fields: Record<string, string>,
+    sent: Record<string, string> = {},
+  ) =>
+    k.at(k.host, path, {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        ...sent,
+      },
+      body: new URLSearchParams(fields).toString(),
+    })
+  let reg = await k.at(k.host, '/oauth/register', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      client_name: 'a roster probe',
+      redirect_uris: [back],
+      token_endpoint_auth_method: 'none',
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+    }),
+  })
+  if (reg.status != 201) throw new Error(`register: ${await reg.text()}`)
+  let { client_id } = await reg.json() as { client_id: string }
+  let verifier = crypto.randomUUID() + crypto.randomUUID()
+  let q = new URLSearchParams({
+    response_type: 'code',
+    client_id,
+    redirect_uri: back,
+    state: 'roster',
+    scope: 'graph',
+    code_challenge: b64u(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)),
+    ),
+    code_challenge_method: 'S256',
+  }).toString()
+  let allowed = await form('/oauth/allow', { q }, { cookie })
+  if (allowed.status != 302) throw new Error(`allow: ${await allowed.text()}`)
+  await allowed.body?.cancel()
+  let code = new URL(allowed.headers.get('location')!).searchParams.get('code')!
+  let got = await (await form('/oauth/token', {
+    grant_type: 'authorization_code',
+    code,
+    client_id,
+    redirect_uri: back,
+    code_verifier: verifier,
+  })).json() as { access_token?: string }
+  if (!got.access_token) throw new Error(`token: ${JSON.stringify(got)}`)
+  return got.access_token
+}
+
+// ---- Stripe's own sandbox, not stood in for -------------------------------
+//
+// `stripe` above is the stand-in every seam test uses. These are the other
+// thing: Stripe itself in test mode, which is what proves a purchase works
+// rather than proving the right fields were assembled. The key is the owner's
+// sandbox secret key, passed in the environment and never committed; a run
+// without one fails naming what to set rather than passing over the money
+// paths in silence.
+
+/** The sandbox secret key, or the sentence saying how to supply one. It must
+ * be a test-mode key: a live key here would charge somebody. */
+export let stripeKey = () => {
+  let key = Deno.env.get('STRIPE_KEY') ?? ''
+  if (!key) {
+    throw new Error(
+      'no Stripe sandbox key: set STRIPE_KEY to a test-mode secret key and ' +
+        'the money paths run against Stripe for real. The owner keeps one at ' +
+        "op read 'op://Yak Shaving LLC/yaks.app stripe/sandbox/secret key'",
+    )
+  }
+  if (!key.startsWith('sk_test_')) {
+    throw new Error('STRIPE_KEY is not a test-mode key (sk_test_…)')
+  }
+  return key
+}
+
+/** One call to Stripe, in Stripe's own dialect: form-encoded in, JSON out,
+ * with the bracketed keys its nested fields are spelled with. A refusal is
+ * thrown carrying Stripe's own message, which is the whole of the failure. */
+export let charged = async (
+  key: string,
+  path: string,
+  fields?: Record<string, unknown>,
+  on?: string,
+) => {
+  let body = new URLSearchParams()
+  let write = (prefix: string, value: unknown) => {
+    if (value == null) return
+    if (typeof value == 'object') {
+      for (let [k, v] of Object.entries(value)) {
+        write(prefix ? `${prefix}[${k}]` : k, v)
+      }
+    } else body.set(prefix, String(value))
+  }
+  write('', fields ?? {})
+  let r = await fetch(`https://api.stripe.com${path}`, {
+    method: fields ? 'POST' : 'GET',
+    headers: {
+      authorization: `Bearer ${key}`,
+      'content-type': 'application/x-www-form-urlencoded',
+      ...(on ? { 'stripe-account': on } : {}),
+    },
+    ...(fields ? { body: body.toString() } : {}),
+  })
+  let said = await r.json() as { error?: { message: string } }
+  if (said.error) throw new Error(`stripe ${path}: ${said.error.message}`)
+  return said as Record<string, unknown>
+}
+
+/**
+ * The recurring price a Plus checkout charges, found or made in the sandbox.
+ * A price carries no name of its own, so the product holds the name and the
+ * price hangs off it: a second run reuses both rather than filling the sandbox
+ * with a product per run. STRIPE_PRICE names one outright where the owner has
+ * a price they would rather charge.
+ */
+export let plusPrice = async (key: string, named = 'yaks.app probe Plus') => {
+  let asked = Deno.env.get('STRIPE_PRICE')
+  if (asked) return asked
+  // Stripe is the seller under Managed Payments, which the platform asks for
+  // (billing.ts), and a seller owes tax — so a product with no tax code is
+  // one Stripe refuses to sell. This is the code for software as a service.
+  let sold = { name: named, tax_code: 'txcd_10103000' }
+  let products = await charged(key, '/v1/products?limit=100') as unknown as {
+    data: { id: string; name: string; tax_code?: string }[]
+  }
+  let found = products.data.find((p) => p.name == named)
+  if (found && !found.tax_code) {
+    await charged(key, `/v1/products/${found.id}`, {
+      tax_code: sold.tax_code,
+    })
+  }
+  let product = found ??
+    await charged(key, '/v1/products', sold) as unknown as { id: string }
+  let prices = await charged(
+    key,
+    `/v1/prices?product=${product.id}&active=true&limit=100`,
+  ) as unknown as { data: { id: string; recurring?: unknown }[] }
+  let price = prices.data.find((p) => p.recurring) ??
+    await charged(key, '/v1/prices', {
+      product: product.id,
+      currency: 'usd',
+      unit_amount: 900,
+      recurring: { interval: 'month' },
+    }) as unknown as { id: string }
+  return price.id
+}
+
+/**
+ * An event as Stripe would deliver it, carrying an object Stripe actually
+ * holds. Stripe cannot reach a workerd bound to loopback, so the half of
+ * delivery a probe supplies is the hop itself: the object is fetched from the
+ * sandbox, wrapped in the envelope the handler reads, and signed with the
+ * secret the kernel was booted with.
+ */
+export let delivered = async (
+  k: Pick<Kernel, 'at'>,
+  path: '/stripe/webhook' | '/stripe/connect',
+  secret: string,
+  type: string,
+  object: unknown,
+  // The connected account an event is about. Stripe puts it on the envelope
+  // rather than in the object, and it is what the Connect door attributes by,
+  // so an event without one is not about a seller at all (sell.ts `apply`).
+  on?: string,
+) => {
+  let at = Math.floor(Date.now() / 1000)
+  let raw = JSON.stringify({
+    id: `evt_${crypto.randomUUID()}`,
+    type,
+    created: at,
+    ...(on ? { account: on } : {}),
+    data: { object },
+  })
+  let r = await k.at('yaks.app', path, {
+    method: 'POST',
+    body: raw,
+    headers: {
+      'content-type': 'application/json',
+      'stripe-signature': await signed(secret, raw, at),
+    },
+  })
+  let said = await r.text()
+  if (!r.ok) throw new Error(`${path}: ${r.status} ${said}`)
+  return said
 }
