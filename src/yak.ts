@@ -30,19 +30,17 @@
 // off jsr could reach.
 import { fileURLToPath } from 'node:url'
 import { type Command, forgetToken, main, saveToken, Usage } from '@yaks/cli'
+import { ADMIN, BOT, isTestAddress } from './bots.ts'
 import {
   type Account,
   accountsIn,
-  ADMIN,
   banner,
-  BOT,
   CURRENT,
   envOf,
   envPath,
   forgotten,
   isAdmin,
   isTest,
-  isTestAddress,
   LEGACY,
   localPart,
   named,

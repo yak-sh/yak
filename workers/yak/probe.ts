@@ -1068,6 +1068,7 @@ export let charged = async (
   path: string,
   fields?: Record<string, unknown>,
   on?: string,
+  method = fields ? 'POST' : 'GET',
 ) => {
   let body = new URLSearchParams()
   let write = (prefix: string, value: unknown) => {
@@ -1080,7 +1081,7 @@ export let charged = async (
   }
   write('', fields ?? {})
   let r = await fetch(`https://api.stripe.com${path}`, {
-    method: fields ? 'POST' : 'GET',
+    method,
     headers: {
       authorization: `Bearer ${key}`,
       'content-type': 'application/x-www-form-urlencoded',

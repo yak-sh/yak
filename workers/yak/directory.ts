@@ -34,6 +34,7 @@ import {
   PLATFORM_STORE,
   storeOf,
 } from './door.ts'
+import { ADMIN } from '../../src/bots.ts'
 import { KERNEL, type Meta, meta as metaStore } from './meta.ts'
 import { mailFrom } from './post.ts'
 import { SLUG } from './route.ts'
@@ -41,13 +42,6 @@ import { firstOf } from './router.ts'
 import { nameOf } from './signin.ts'
 
 export let META = { space: 'yak', app: 'platform' }
-// The platform's own admin person (D-35373). Agents run a named platform act
-// as it — `yak … --admin` — so the act is recorded as the admin and not as the
-// owner, who did not ask for it. A fleet address (src/mailaddr.ts
-// `mailDomain`), so its sign-in codes land in the tasks graph like any bot
-// account's and no mailbox of anybody's is involved. It is seeded, not waited
-// for: a fresh kernel has one before anybody signs in.
-export let ADMIN = 'admin@bot.yak.sh'
 // The meta space's own store, named the way every app's is. Its slugs are
 // the platform's own and never move, so the name is a constant — door.ts
 // spells it, beside the rest of what addresses a store.

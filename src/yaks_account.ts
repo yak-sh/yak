@@ -20,16 +20,8 @@
 // cookie's own name comes from token.ts rather than retyped, because a session
 // pasted in by hand arrives as the whole `yak_session=…` pair a browser shows.
 import { fileURLToPath } from 'node:url'
+import { ADMIN, BOT, isTestAddress } from './bots.ts'
 import { COOKIE } from './token.ts'
-
-export let BOT = '@bot.yak.sh'
-
-// The platform's own admin person (D-35373, workers/yak/directory.ts `ADMIN`,
-// which seeds the row). It wears a fleet address so its sign-in codes land in
-// the graph like a throwaway's — but it is NOT a throwaway: an act of the
-// platform's is the admin's, recorded as the admin, and reaching it takes
-// `--admin` the way reaching the owner's takes `--owner`.
-export let ADMIN = `admin${BOT}`
 
 export type Account = {
   // The address it signed in as, '' when the session was pasted in by hand.
@@ -41,11 +33,7 @@ export type Account = {
   name: string
 }
 
-// A test account is provably a throwaway: the bot domain, and not the one
-// address on it that is the platform's admin. An address we cannot see is NOT
-// proof, so it reads as the owner's — the safe direction to be wrong in.
-export let isTestAddress = (address: string) =>
-  address.endsWith(BOT) && address != ADMIN
+// A test account is provably a throwaway (bots.ts).
 export let isTest = (a: Account) => isTestAddress(a.address)
 export let isAdmin = (a: Account) => a.address == ADMIN
 

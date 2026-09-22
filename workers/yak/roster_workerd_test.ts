@@ -33,13 +33,15 @@
 //     YAK_PROBE_URL=https://yaks.app YAK_PROBE_TOKEN=<bearer> \
 //       TASKS_SLOW=1 deno test -A --unstable-net workers/yak/roster_workerd_test.ts
 //
-//   The bearer is an ordinary OAuth token, got the way a host gets one
-//   (probe.ts `bearerFor`, or by hand through /login and /oauth/allow). That
-//   run makes its own scratch spaces, works only inside them, and unmakes
-//   what it made; it never touches a space it did not create. What it cannot
-//   unmake is the space itself — no door here deletes one, so the run leaves
-//   the ask standing and the emailed link is a person's to open. It buys
-//   nothing either: a purchase against a deployed kernel would be a real
+//   The bearer is an ordinary OAuth token for a test account, an address on
+//   the bot domain (src/bots.ts), got the way a host gets one (probe.ts
+//   `bearerFor`, or `yak test` and then /oauth/allow). That run makes its own
+//   scratch spaces, works only inside them, and erases them at the end; it
+//   never touches a space it did not create. Nothing it did is left for a
+//   person to see: a test account's feedback is kept and never mailed, and
+//   its spaces are deleted without the confirmation letter a person's would
+//   need. Both runs sign in as one, so both hold that. It buys nothing
+//   either: a purchase against a deployed kernel would be a real
 //   purchase, so `space_sell` and `domain_attach` are called there for the
 //   refusal a free space gets, which is their other answer and worth holding.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
@@ -52,6 +54,7 @@ import {
   deployed,
   hostnames,
   kernel,
+  letters,
   num,
   plusPrice,
   signIn,
@@ -60,6 +63,8 @@ import {
   vocabFile,
 } from './probe.ts'
 import { HELLO } from './mcp-probe.ts'
+import { BOT } from '../../src/bots.ts'
+import { GRAPH } from './mail-config.ts'
 import { managePath } from './route.ts'
 
 let LIVE = Deno.env.get('YAK_PROBE_URL') ?? ''
@@ -135,15 +140,13 @@ slow(
       STRIPE_CONNECT_WEBHOOK_SECRET: connsec,
       ...(sandboxKey ? { STRIPE_KEY: sandboxKey, STRIPE_PRICE: price } : {}),
     })
-    // Everything this run made, most recent first, so cleanup undoes it in
-    // the order it was made.
+    // Every space this run made and has not yet erased.
     let spaces: string[] = []
-    let apps: { space: string; app: string }[] = []
     try {
       // The credential, as a client holds one: a bearer, never a cookie.
       // Under workerd the person signs in first and walks the OAuth flow; a
       // deployed run is handed the token it will use.
-      let cookie = LIVE ? '' : (await signIn(k)).cookie
+      let cookie = LIVE ? '' : (await signIn(k, `probe-${tag()}${BOT}`)).cookie
       let bearer = LIVE ? TOKEN : await bearerFor(k, cookie)
       assert(bearer, 'set YAK_PROBE_TOKEN to a bearer for YAK_PROBE_URL')
       let agent = connector(k, undefined, bearer)
@@ -182,15 +185,16 @@ slow(
         'list',
       )
       // One person may send three an hour, and this suite is run again and
-      // again: the pause is as much the tool working as the thanks is, and
-      // both say where the words went.
+      // again: the pause is as much the tool working as the keeping is. The
+      // keeping is all it does for a test account — no letter goes anywhere.
       let sent = await refused(tool, 'feedback', {
         text: 'The roster suite says hello. Nothing to answer.',
       })
       assert(
-        /people who run yaks\.app|hello@yaks\.app/.test(sent),
+        /is a test account|already this hour/.test(sent),
         `feedback: ${sent}`,
       )
+      if (!LIVE) assertEquals(letters(k, GRAPH), [], 'no feedback letter went')
 
       // ---- a space, and a second one to install into ---------------------
       let mine = `roster-${tag()}`
@@ -200,7 +204,7 @@ slow(
         let made = await tool('space_new', { slug, title: slug })
         assertStringIncludes(made, `space ${slug} (`)
         eids[slug] = /\(([0-9a-f-]{36})\)/.exec(made)![1]
-        spaces.unshift(slug)
+        spaces.push(slug)
       }
       assertStringIncludes(
         await tool('space_set', { space: mine, title: 'Notes and things' }),
@@ -213,7 +217,6 @@ slow(
         await tool('app_new', { space: mine, slug: app, title: 'Notes' }),
         `${mine}.yaks.app/${app}/`,
       )
-      apps.unshift({ space: mine, app })
       assertStringIncludes(
         await tool('app_files', {
           space: mine,
@@ -340,7 +343,6 @@ slow(
         await tool('app_install', { space: theirs, name: offer, as: app }),
         offer,
       )
-      apps.unshift({ space: theirs, app })
       await tool('app_deploy', { space: mine, app })
       assertStringIncludes(
         await tool('app_update', { space: theirs, app }),
@@ -565,20 +567,44 @@ slow(
           `${host} is detached`,
         )
         assert(!cf!.held.has(host), 'the hostname went back to Cloudflare')
+
+        // And cancelled, the way the person would, so the space is one a
+        // delete may take: a paying space is refused (erase.ts `refused`).
+        let ended = await charged(
+          key,
+          `/v1/subscriptions/${sub.id}`,
+          undefined,
+          undefined,
+          'DELETE',
+        )
+        assertEquals(ended.status, 'canceled')
+        await delivered(
+          k,
+          '/stripe/webhook',
+          whsec,
+          'customer.subscription.deleted',
+          ended,
+        )
       }
 
-      // ---- a space asked for, and the address it would free -----------------
-      // Nobody may delete a space through this door: the tool says what would
-      // stop and mails the owner the link. Restoring needs no confirmation,
-      // so the pair is the ask and the undo of one already confirmed.
+      // ---- the trash, a space's turn, and gone ------------------------------
+      // A space only test accounts are in is nobody's work, so there is no
+      // letter to wait for: the trash, back out of it, and erased for good.
       assertStringIncludes(
         await tool('space_delete', { space: theirs }),
-        'check their email',
+        `${theirs}.yaks.app is in the trash`,
       )
       assertStringIncludes(
-        await refused(tool, 'space_restore', { space: theirs }),
-        theirs,
+        await tool('space_restore', { space: theirs }),
+        `${theirs} is back`,
       )
+      for (let space of [...spaces]) {
+        assertStringIncludes(
+          await tool('space_delete', { space, forever: true }),
+          `${space}.yaks.app is gone`,
+        )
+        spaces.splice(spaces.indexOf(space), 1)
+      }
 
       // ---- and the assertion this module exists for -------------------------
       if (Deno.env.get('YAK_PROBE_TRACE')) console.log(heard.join('\n'))
@@ -590,21 +616,14 @@ slow(
           'roster gets a call here, or this suite is not the coverage it claims',
       )
     } finally {
-      // Everything this run made, unmade. A deployed run shares its namespace
-      // with the owner's own work, so it leaves nothing behind it can remove;
-      // a space can only be asked for, never deleted here, so the apps go and
-      // the ask stands.
-      let agent = connector(k, undefined, LIVE ? TOKEN : undefined)
-      let quietly = async (name: string, args: Record<string, unknown>) => {
-        try {
-          await agent.tool(name, args)
-        } catch { /* cleanup says nothing about what was already gone */ }
-      }
+      // Whatever a failure left standing, erased: a deployed run shares its
+      // namespace with everybody's work, so it leaves nothing of its own.
       if (LIVE) {
-        for (let { space, app } of apps) {
-          await quietly('app_delete', { space, app, forever: true })
+        let agent = connector(k, undefined, TOKEN)
+        for (let space of spaces) {
+          await agent.tool('space_delete', { space, forever: true })
+            .catch(() => {/* already gone */})
         }
-        for (let space of spaces) await quietly('space_delete', { space })
       }
       cf?.stop()
       await k.stop()

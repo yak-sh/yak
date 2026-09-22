@@ -12,7 +12,8 @@ import {
 } from '@std/assert'
 import { argsFor, type Ctx } from '@yaks/cli'
 import { known, verbs } from './yak.ts'
-import { ADMIN, envOf, Refused } from './yaks_account.ts'
+import { ADMIN } from './bots.ts'
+import { envOf, Refused } from './yaks_account.ts'
 import {
   boundaries,
   type Commit,

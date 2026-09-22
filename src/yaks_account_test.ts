@@ -2,10 +2,10 @@
 // owner's takes a named flag. Everything below is that rule, plus the promise
 // that editing `.env` never disturbs a line that isn't ours.
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
+import { ADMIN } from './bots.ts'
 import {
   type Account,
   accountsIn,
-  ADMIN,
   banner,
   envOf,
   forgotten,

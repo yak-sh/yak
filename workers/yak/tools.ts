@@ -37,6 +37,7 @@ import { deployWorker } from './deploy_worker.ts'
 import { bindingLines, bindings } from './bindings.ts'
 import type { Blobs } from '../../src/store/blobs.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
+import { isTestAddress } from '../../src/bots.ts'
 import { fullFiles } from './usage.ts'
 import { parseTools, TOOLS_EXAMPLE, viewsOf } from '../../src/store/tools.ts'
 import { borrowed, type Vocab } from '../../src/store/vocab.ts'
@@ -94,15 +95,20 @@ import {
   daysLeft,
   doomed,
   door,
+  erase,
   erased,
   keeping,
+  kept as inTrash,
   letter,
   naming,
+  nobodys,
   refused,
   ticket,
   trash,
+  trashSpace,
   untrash,
   untrashSpace,
+  went,
 } from './erase.ts'
 import { dropSecret, SECRET_NAME, secrets, setSecret } from './dispatch.ts'
 import {
@@ -1812,7 +1818,7 @@ let OURS: Row[] = [
       // tool that guesses which space to destroy from context is a tool that
       // one day guesses wrong (`ownSpace`), and it costs the agent one word
       // it already knows.
-      let { space } = await owns(ctx, {
+      let { space, who } = await owns(ctx, {
         ...args,
         space: slug(args.space, 'space'),
       })
@@ -1827,6 +1833,15 @@ let OURS: Row[] = [
             'or space_delete(forever: true) mails a link that erases it now',
         )
       }
+      let d = await doomed(ctx.dir, space)
+      if (await nobodys(ctx.dir, d)) {
+        if (forever) {
+          let out = await erase(ctx.env, ctx.dir, d, who)
+          return { text: went(d, out, ctx.env) }
+        }
+        await trashSpace(ctx.env, ctx.dir, space, who)
+        return { text: inTrash(d, ctx.env), space }
+      }
       if (!ctx.env.SESSION_SECRET) {
         throw new Error('the platform cannot sign a confirmation link here')
       }
@@ -1835,7 +1850,6 @@ let OURS: Row[] = [
       // can point this letter at somebody else.
       let to = await ctx.dir.emailAt(ctx.person)
       if (!to) throw new Error('we have no address to write to you at')
-      let d = await doomed(ctx.dir, space)
       // What the link would do, in the words of the act it carries: `forever`
       // names what is destroyed, the trash names what stops (erase.ts).
       let bullets = (lines: string[]) => lines.map((l) => `  - ${l}`).join('\n')
@@ -4369,7 +4383,10 @@ let OURS: Row[] = [
       let where = app && space
         ? `${space.slug}/${app.slug}${app.version ? ` v${app.version}` : ''}`
         : space?.slug ?? ''
-      let sent = await mail(ctx.env)({
+      // A test account's words are kept and go nowhere (src/bots.ts): a
+      // letter in a person's mailbox is a thing a person has to read.
+      let test = isTestAddress(email ?? '')
+      let sent = !test && await mail(ctx.env)({
         to: [replyTo(ctx.env), GRAPH],
         subject: `feedback: ${opening}`,
         body: `${said.trim()}\n\n—\n` +
@@ -4392,6 +4409,9 @@ let OURS: Row[] = [
               ? ''
               : ' It went as from someone signed out, so there is no address ' +
                 'to answer — say one in the words if a reply is wanted.')
+          : test
+          ? 'The words are kept for the people who run yaks.app, and not ' +
+            `mailed: ${email} is a test account.`
           : 'The words are kept for the people who run yaks.app — the mail ' +
             'could not go out just now, so it waits with them rather than ' +
             'being lost. No need to say it again.',
