@@ -120,6 +120,10 @@ export type Env = {
     }): void
   }
   ANALYTICS_API?: string
+  // How often a visitor may write to an `open` app (apps.ts `visiting`,
+  // wrangler.toml `ratelimits`). Absent only in the in-memory harness; under
+  // `wrangler dev` it counts like the deployed one.
+  VISITS?: { limit(o: { key: string }): Promise<{ success: boolean }> }
   // An app's own code (dispatch.ts): the Workers for Platforms namespace its
   // worker.js is uploaded into, and the token the upload speaks to the
   // Workers API with — the account tag above is the same one. The namespace

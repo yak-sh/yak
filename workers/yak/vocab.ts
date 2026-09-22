@@ -401,20 +401,24 @@ export let appsDoc: VocabDoc = {
     //
     // `items` is the cart as JSON in one text column, the way `home.first`
     // is; a column is a scalar, and this is a list.
+    //
+    // Every column is server-owned: the webhook writes it through the kernel's
+    // door (sell.ts `asApp`), and no page, member or visitor can say an order
+    // was paid (T-37881). Who may remove one is graph.ts `FLOORS`.
     order: {
       component: true,
       type: 'object',
       kind: true,
       before: ['doc'],
       properties: {
-        session: text,
-        intent: text,
-        account: text,
-        items: text,
-        total_cents: num,
-        fee_cents: num,
-        email: text,
-        status: { enum: ['paid', 'refunded', 'disputed'] },
+        session: owned(text),
+        intent: owned(text),
+        account: owned(text),
+        items: owned(text),
+        total_cents: owned(num),
+        fee_cents: owned(num),
+        email: owned(text),
+        status: owned({ enum: ['paid', 'refunded', 'disputed'] }),
       },
     },
     favorite: {

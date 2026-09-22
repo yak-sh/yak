@@ -251,6 +251,15 @@ index_name = "yak-memories"
 binding = "VIEWS"
 dataset = "yak_views"
 
+# How often one visitor may write to an app that is `open` (apps.ts
+# `visiting`, T-37896): 30 writes or uploads a minute, per visitor per app, a
+# visitor being a signed-in person or else an IP. Owners and editors are not
+# counted. `wrangler dev` simulates the counter.
+[[ratelimits]]
+name = "VISITS"
+namespace_id = "37896"
+simple = { limit = 30, period = 60 }
+
 # An app's files. `wrangler dev` simulates the bucket.
 [[r2_buckets]]
 binding = "BLOBS"
@@ -527,6 +536,11 @@ index_name = "yak-memories-staging"
 [[env.staging.analytics_engine_datasets]]
 binding = "VIEWS"
 dataset = "yak_views_staging"
+
+[[env.staging.ratelimits]]
+name = "VISITS"
+namespace_id = "37897"
+simple = { limit = 30, period = 60 }
 
 [[env.staging.r2_buckets]]
 binding = "BLOBS"

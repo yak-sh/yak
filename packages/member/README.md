@@ -46,11 +46,11 @@ for columns whose short names are disabled.
 
 The modes determine access:
 
-| Mode      | Read                                  | Write ordinary data                             |
-| --------- | ------------------------------------- | ----------------------------------------------- |
-| `public`  | Anyone                                | Owner or editor                                 |
-| `open`    | Anyone                                | Anyone, including anonymous callers and viewers |
-| `private` | Any principal with a permission level | Owner or editor                                 |
+| Mode      | Read                                  | Write ordinary data                                                         |
+| --------- | ------------------------------------- | --------------------------------------------------------------------------- |
+| `public`  | Anyone                                | Owner or editor                                                             |
+| `open`    | Anyone                                | Anyone adds rows; a principal holding no writing level changes only its own |
+| `private` | Any principal with a permission level | Owner or editor                                                             |
 
 ## Membership is not permission
 
@@ -152,6 +152,23 @@ owner permission on the configured app. An editor can change ordinary data but
 cannot write these access-control components. This additional check also runs
 for an `open` app.
 
+An application names more such components with `floors`, each with the least
+level that may write it whatever the app's mode:
+
+```ts
+members({ app: 'shop', space: 'club', floors: { product: 'editor' } })
+```
+
+## A visitor to an open app adds, and changes only its own rows
+
+A principal that an `open` app admits and no level does (an anonymous caller, a
+viewer, a stranger signed in) may create entities, and may change or delete an
+existing entity only when its `created.by` names that principal, or when the
+entity is the principal itself. An anonymous caller owns nothing, so it only
+adds. A change that leaves every column it names as it was is admitted on any
+row, so a retried write of the same values is not refused. Owners and editors
+are not affected.
+
 Create the first owner membership before installing `members()`, as in the
 example. With the guard installed, writing the first owner membership requires
 an owner that does not yet exist. Thereafter an authorized owner can maintain
@@ -199,25 +216,26 @@ This package registers no invitation handler.
 
 The main export includes:
 
-| Exports                                                   | Purpose                                                                        |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `memberDoc`                                               | Vocabulary document containing the three components.                           |
-| `MEMBER`, `GRANT`, `ACCESS`, `GOVERNED`                   | Component names and the list requiring owner permission.                       |
-| `Role`, `Level`, `Mode`; `ROLES`, `LEVELS`, `MODES`       | Value types and their supported values.                                        |
-| `role`, `level`, `mode`                                   | Read a value with its default: member, viewer or public.                       |
-| `reads`, `edits`, `writes`                                | Pure permission checks.                                                        |
-| `members(guard)`                                          | Graph plugin with the vocabulary, permission-read requirements and write hook. |
-| `guarding(guard)`, `wanting(guard)`, `actorOf`, `governs` | Write hook and supporting helpers.                                             |
-| `policy(storage, where)`                                  | Read and write checks bound to storage.                                        |
-| `modeOn`, `levelOn`, `readsOn`, `writesOn`                | Checks using an existing graph transaction.                                    |
-| `Guard`, `Viewer`, `Where`, `Policy`                      | Configuration and policy types.                                                |
-| `Denied`                                                  | Error with `actor`, `app`, `need` and `act` fields.                            |
+| Exports                                                | Purpose                                                                        |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `memberDoc`                                            | Vocabulary document containing the three components.                           |
+| `MEMBER`, `GRANT`, `ACCESS`, `GOVERNED`                | Component names and the list requiring owner permission.                       |
+| `Role`, `Level`, `Mode`; `ROLES`, `LEVELS`, `MODES`    | Value types and their supported values.                                        |
+| `role`, `level`, `mode`                                | Read a value with its default: member, viewer or public.                       |
+| `reads`, `edits`, `writes`, `reaches`                  | Pure permission checks.                                                        |
+| `members(guard)`                                       | Graph plugin with the vocabulary, permission-read requirements and write hook. |
+| `guarding(guard)`, `wanting(guard)`, `actorOf`, `asks` | Write hook and supporting helpers.                                             |
+| `policy(storage, where)`                               | Read and write checks bound to storage.                                        |
+| `modeOn`, `levelOn`, `readsOn`, `writesOn`             | Checks using an existing graph transaction.                                    |
+| `Guard`, `Floors`, `Viewer`, `Where`, `Policy`         | Configuration and policy types.                                                |
+| `Denied`                                               | Error with `actor`, `app`, `need` and `act` fields.                            |
 
 ## What is deliberately not here
 
-Authentication belongs to the caller. Permissions apply to an app as a whole;
-this package supplies no per-grant query filters. It supports exactly the
-`viewer`, `editor` and `owner` levels.
+Authentication belongs to the caller. Permissions apply to an app as a whole,
+apart from the floors and a visitor's own rows above; this package supplies no
+per-grant query filters. It supports exactly the `viewer`, `editor` and `owner`
+levels.
 
 ## Integration
 

@@ -200,7 +200,12 @@ let ADA = 'b0000000-0000-4000-8000-000000000002'
 let ANA = 'c0000000-0000-4000-8000-000000000003'
 let NOTE = 'd0000000-0000-4000-8000-000000000004'
 
-type Vouch = { person?: string; role?: string; access?: string }
+type Vouch = {
+  person?: string
+  role?: string
+  access?: string
+  kernel?: boolean
+}
 
 let headers = (v: Vouch = {}): Record<string, string> => ({
   'x-store': 'ada/cookbook',
@@ -209,6 +214,7 @@ let headers = (v: Vouch = {}): Record<string, string> => ({
   'x-yak-access': v.access ?? 'private',
   ...(v.person ? { 'x-yak-person': v.person } : {}),
   ...(v.role ? { 'x-yak-role': v.role } : {}),
+  ...(v.kernel ? { 'x-yak-kernel': '1' } : {}),
 })
 
 let owner: Vouch = { person: ADA, role: 'owner' }
@@ -284,6 +290,15 @@ let read = async (store: Store, eid: string, v = owner): Promise<Bundle> => {
   )
   return (await r.json() as Bundle[])[0]
 }
+
+// The receipt beside a sale is written by the platform through the kernel's
+// door (sell.ts `asApp`), and it leaves from the app like any other letter.
+Deno.test("the platform's receipt leaves from the app's own address", async () => {
+  let { store, mail } = await cookbook()
+  let platform: Vouch = { person: APP, role: 'editor', kernel: true }
+  assertEquals((await post(store, '/apply', letter(), platform)).status, 200)
+  assertEquals(mail.sent[0]?.from, 'ada.cookbook@yaks.app')
+})
 
 Deno.test("a member's letter leaves from the app's own address", async () => {
   let { store, mail } = await cookbook()

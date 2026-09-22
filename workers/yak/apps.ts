@@ -135,6 +135,10 @@ let SAYS: Record<string, string> = {
   not_a_reader: 'sign in to see this app',
   no_bytes: 'an upload needs a body: post the file itself',
   too_large: 'that file is too big to send — try a smaller one',
+  too_many_writes: 'that is a lot of changes in one minute — wait a moment ' +
+    'and try again',
+  visit_too_large: 'that is too much to send to this app at once — send it ' +
+    'in smaller pieces, or ask its owner to make you an editor',
   no_such_file: 'no file at that address in this app',
   // What the store said no to — an unknown component, a `$was` that moved, a
   // dead entity. Its own sentence rides in `message`; this is the fallback.
@@ -541,6 +545,29 @@ let flooding = (space: Space, app: App) => {
   return ++hit.n > RATE
 }
 
+// A visitor to an `open` app: somebody its access lets write and no level
+// does (T-37896). The store keeps them to new rows and their own (@yaks/member
+// guard); this door keeps them to a pace and a size, since every row they add
+// is held on the owner's bytes. Owners and editors are not counted — it is
+// their app.
+//
+//   VISIT_BATCH   one write, as sent: a guest book entry is a few hundred bytes
+//   VISIT_UPLOAD  one upload: a phone photo, downscaled on the page
+//   30 a minute   writes and uploads together, per visitor per app, where a
+//                 visitor is a signed-in person or else an IP (wrangler.toml
+//                 `VISITS`, Cloudflare's own counter at the edge)
+export let VISIT_BATCH = 16 * 1024
+export let VISIT_UPLOAD = 2 * 1024 * 1024
+
+let visiting = async (req: Request, env: Env, app: App, who: Who) => {
+  if (writes(who.role) || !env.VISITS) return null
+  let key = `${app.eid} ${
+    who.person ?? req.headers.get('cf-connecting-ip') ?? ''
+  }`
+  let { success } = await env.VISITS.limit({ key })
+  return success ? null : json(429, 'too_many_writes')
+}
+
 let pathOf = (url: unknown) => {
   try {
     return new URL(String(url)).pathname
@@ -707,12 +734,13 @@ let took = async (
   app: App,
   store: Door,
   headers: Record<string, string>,
+  max = MAX,
 ) => {
   let sent = Number(req.headers.get('content-length') ?? 0)
-  if (sent > MAX) return json(413, 'too_large')
+  if (sent > max) return json(413, 'too_large')
   let bytes = new Uint8Array(await req.arrayBuffer())
   if (!bytes.byteLength) return json(400, 'no_bytes')
-  if (bytes.byteLength > MAX) return json(413, 'too_large')
+  if (bytes.byteLength > max) return json(413, 'too_large')
   let stopped = await fullFiles(env, space, [{
     key: blobKey(space, app, await sha256(bytes)),
     bytes: bytes.byteLength,
@@ -1047,6 +1075,11 @@ let api = async (
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayPost) return refused()
     let body = await req.text()
+    if (!writes(who.role) && body.length > VISIT_BATCH) {
+      return json(413, 'visit_too_large')
+    }
+    let paced = await visiting(req, env, app, who)
+    if (paced) return paced
     // The free tier's byte ceiling (T-32758). Data costs money to hold, so
     // this is a refusal — one the page shows in the platform's own sentence,
     // the way it shows every other.
@@ -1087,10 +1120,12 @@ let api = async (
   if (path == '/blob') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayPost) return refused()
+    let paced = await visiting(req, env, app, who)
+    if (paced) return paced
     return took(req, env, space, app, store, {
       ...headers,
       ...(await named(env, who, app)),
-    })
+    }, writes(who.role) ? MAX : VISIT_UPLOAD)
   }
   if (path.startsWith('/blob/')) {
     if (req.method != 'GET') return json(405, 'method_not_allowed')

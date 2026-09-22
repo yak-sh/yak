@@ -323,8 +323,9 @@ let ACCESS = {
   description:
     "who may read and write the app's data: public (the default), anyone " +
     'with the link reads it, members with write permission change it; ' +
-    'open, anyone with the link writes too, which is what a vote page, a ' +
-    'shared list or a signup sheet needs; private, nobody but the person ' +
+    'open, anyone with the link adds to it too and changes only what they ' +
+    'added, which is what a vote page, a guest book or a signup sheet ' +
+    'needs; private, nobody but the person ' +
     'and invited members may read; writing still needs a writer role',
 }
 

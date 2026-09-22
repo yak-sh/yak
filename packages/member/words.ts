@@ -55,6 +55,10 @@ export let mode = (v: unknown): Mode =>
  * a `viewer`, and a principal holding nothing, do not. */
 export let writes = (l: Level | null): boolean => l == 'owner' || l == 'editor'
 
+/** Does this level reach that one? Holding nothing reaches nothing. */
+export let reaches = (l: Level | null, floor: Level): boolean =>
+  l != null && LEVELS.indexOf(l) >= LEVELS.indexOf(floor)
+
 // The two rules, stated once. Everything else in this package — the `policy`
 // helpers the HTTP layer calls, the `precondition` hook a transaction passes —
 // reads a mode and a level out of storage and then calls one of these two

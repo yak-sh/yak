@@ -13,6 +13,7 @@ import { type Graph, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { memberDoc } from './comp.ts'
 import { members } from './plugin.ts'
+import type { Floors } from './guard.ts'
 
 let doc: VocabDoc = {
   $defs: {
@@ -123,12 +124,13 @@ export let store = (): Storage => {
   return s
 }
 
-/** A guarded graph over that storage, deciding for one of the club's apps. */
-export let guarded = (s: Storage, app: string): Graph =>
+/** A guarded graph over that storage, deciding for one of the club's apps,
+ * with any components that ask a level of their own. */
+export let guarded = (s: Storage, app: string, floors?: Floors): Graph =>
   graph({
     storage: s,
     vocab: club,
-    plugins: [members({ app, space: ids.club })],
+    plugins: [members({ app, space: ids.club, floors })],
   })
 
 /** An unguarded write into the storage — how the club was set up in the first

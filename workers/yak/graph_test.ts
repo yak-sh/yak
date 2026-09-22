@@ -59,6 +59,7 @@ type Vouch = {
   person?: string
   role?: string
   title?: string
+  kernel?: boolean
 }
 
 let headers = (v: Vouch = {}): Record<string, string> => ({
@@ -68,6 +69,7 @@ let headers = (v: Vouch = {}): Record<string, string> => ({
   ...(v.person ? { 'x-yak-person': v.person } : {}),
   ...(v.role ? { 'x-yak-role': v.role } : {}),
   ...(v.title ? { 'x-yak-title': v.title } : {}),
+  ...(v.kernel ? { 'x-yak-kernel': '1' } : {}),
 })
 
 let get = (store: Store, path: string, v?: Vouch) =>
@@ -391,6 +393,71 @@ Deno.test('an open app is written by nobody', async () => {
   // Unattributed: nobody signed it, so nothing claims they did.
   let applied = await wrote.json() as Bundle[]
   assert(applied.every((b) => by(b) == null))
+})
+
+// An open app takes a visitor's rows and keeps everybody else's (T-37881,
+// T-37896): the shop's prices are its editors', what was sold is the
+// platform's, and a row the owner wrote is the owner's.
+Deno.test('a visitor to an open app adds, and touches no price, order or row of the owner’s', async () => {
+  let own: Vouch = { ...owner, access: 'open' }
+  let open: Vouch = { app: APP, access: 'open' }
+  let store = await cookbook(state(), SCHEMA, own)
+  let P = 'd0000000-0000-4000-8000-000000000004'
+  let O = 'e0000000-0000-4000-8000-000000000005'
+  let status = async (v: Vouch, b: unknown) =>
+    (await post(store, '/apply', [b], v)).status
+  assertEquals(
+    await status(own, { entity: { eid: CAKE }, recipe: { serves: 8 } }),
+    200,
+  )
+  assertEquals(
+    await status(own, { entity: { eid: P }, product: { price_cents: 2800 } }),
+    200,
+  )
+  for (
+    let b of [
+      { entity: { eid: P }, product: { price_cents: 1 } },
+      { entity: { eid: crypto.randomUUID() }, product: { price_cents: 1 } },
+      { entity: { eid: O }, order: {} },
+      { entity: { eid: CAKE }, recipe: { serves: 1 } },
+      { entity: { eid: CAKE }, $delete: true },
+    ]
+  ) assertEquals(await status(open, b), 403, JSON.stringify(b))
+  assertEquals(
+    await status(open, {
+      entity: { eid: crypto.randomUUID() },
+      recipe: { serves: 2 },
+    }),
+    200,
+  )
+  // What was sold is written by the platform, and nobody else moves it: an
+  // order's columns are server-owned, so a page's say-so lands nothing at all.
+  assertEquals(
+    await status(open, {
+      entity: { eid: O },
+      order: { status: 'paid', total_cents: 1 },
+    }),
+    200,
+  )
+  assertEquals(
+    await (await get(store, `/query?q=.eid=${O}`, own)).json(),
+    [],
+  )
+  let platform: Vouch = { app: APP, person: APP, role: 'editor', kernel: true }
+  assertEquals(
+    await status(platform, { entity: { eid: O }, order: { status: 'paid' } }),
+    200,
+  )
+  assertEquals(
+    await status(own, { entity: { eid: O }, order: { status: 'refunded' } }),
+    200,
+  )
+  let rows = await (await get(store, `/query?q=.eid=${P},${O}`, own)).json()
+  let of = (eid: string) => rows.find((r: Bundle) => r.entity.eid == eid)
+  assertEquals(of(P).product.price_cents, 2800)
+  assertEquals(of(O).order.status, 'paid')
+  let [cake] = await (await get(store, `/query?q=.eid=${CAKE}`, own)).json()
+  assertEquals(cake.recipe.serves, 8)
 })
 
 // A name outlives the batch (T-34390): @yaks/key carries it, @yaks/alias

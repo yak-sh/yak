@@ -121,16 +121,15 @@ import { DELIVER, MAIL, mailbox } from '@yaks/mail'
 import {
   actorOf,
   Denied,
+  type Floors,
   type Level,
   level,
-  levelOn,
   members,
   type Mode,
   mode,
   type Policy,
   policy,
   reads,
-  writes,
 } from '@yaks/member'
 import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
@@ -413,6 +412,26 @@ let NO_PITR =
   'Cloudflare production Durable Object that does, and local development does ' +
   'not'
 
+/**
+ * The platform's words that ask a level of their own in an app's store,
+ * whatever the app's `access` (@yaks/member `floors`, T-37881). An `open` app
+ * takes a visitor's rows on purpose, and these are the rows that are not a
+ * visitor's to write:
+ *
+ *   product  what the checkout charges (sell.ts `priced`): the seller's
+ *   order    what was sold: its columns are the webhook's alone (vocab.ts),
+ *            and an owner may clear one
+ *   deliver  the ask to send a letter, which leaves under the platform's
+ *            name — an open app with no floor here is an open relay, and the
+ *            first spam run would take the zone's reputation with it. Writing
+ *            the letter is not held to anything; a draft is ordinary data.
+ */
+export let FLOORS: Floors = {
+  product: 'editor',
+  order: 'owner',
+  [DELIVER]: 'editor',
+}
+
 /** The id a mirrored grant is filed under: one per (app, person), derived, so
  * the same vouch lands on one row however often it is said. */
 export let grantEid = (app: string, person: string): string =>
@@ -645,7 +664,7 @@ export class Store {
         // this platform already speaks (vocab.ts `coreDocs`), so there is
         // nothing left for a `docs()` to declare.
         ...(!meta && app
-          ? [this.#posting(app), mailbox({ domain: apex(this.#bind) })]
+          ? [this.#posting(), mailbox({ domain: apex(this.#bind) })]
           : []),
         // What every domain of this Worker declares about a write, as data
         // (plugin.ts `rules`, plugins.ts): a query over one bundle in the batch
@@ -965,19 +984,14 @@ export class Store {
    * The address is a claim about who wrote — a letter from
    * `ada.cookbook@yaks.app` is DKIM-signed by us and read by the world as
    * ours — and a column a client may write is a column a client may forge. A
-   * letter the kernel writes is left alone: that is an arrival (T-33687),
-   * whose `from` is the sender's own, out on the web.
+   * letter the kernel writes is left alone unless it asks to leave: an
+   * arrival (T-33687) keeps the sender's own `from`, out on the web, and the
+   * receipt the platform files beside a sale (sell.ts) leaves from the app
+   * like any other letter.
    *
-   * Who may send is the roster, not the app's mode. @yaks/member's rule is
-   * about the app, and an `open` app admits an anonymous visitor's write on
-   * purpose — that is what open means. But a letter does not stay in the app:
-   * it leaves under the platform's name, so an open app with no rule here is
-   * an open relay, and the first spam run would take the zone's reputation
-   * with it. So the ask to send — the `deliver` component — is held to a level
-   * that writes: a member or an editor, and never nobody at all. Writing the
-   * letter is not held to anything; a draft is ordinary data.
+   * Who may ask for one to leave is `FLOORS` below, not this plugin.
    */
-  #posting(app: string): Plugin {
+  #posting(): Plugin {
     let letter = (b: Bundle): Bundle => {
       let mail = b[MAIL] as Comp | null | undefined
       // Dropping the envelope is not writing one, and a bundle that is neither
@@ -992,17 +1006,7 @@ export class Store {
       name: 'yak/post',
       hooks: {
         normalize: (bundles) =>
-          this.#kernelling ? bundles : bundles.map(letter),
-        precondition: (bundles, tx) => {
-          if (this.#kernelling || !bundles.some((b) => b[DELIVER])) {
-            return bundles
-          }
-          let who = actorOf(bundles)
-          return then(levelOn(tx, who, app), (held) => {
-            if (!writes(held)) throw new Denied(who, app, 'editor')
-            return bundles
-          }) as Bundle[] | Promise<Bundle[]>
-        },
+          bundles.map((b) => this.#kernelling && !b[DELIVER] ? b : letter(b)),
       },
     }
   }
@@ -1026,10 +1030,11 @@ export class Store {
    * carries no person to hold a level — so the rule as written would refuse
    * exactly the writes the platform must always be able to make.
    *
-   * The rule itself stays @yaks/member's. Only who it is asked about is ours.
+   * The rule itself stays @yaks/member's. Only who it is asked about is ours,
+   * and which of this platform's words ask a level of their own (`FLOORS`).
    */
   #guarding(app: string): Plugin {
-    let plugin = members({ app })
+    let plugin = members({ app, floors: FLOORS })
     let guard = plugin.hooks?.precondition
     return {
       ...plugin,

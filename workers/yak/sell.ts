@@ -48,7 +48,7 @@ import {
   stamp,
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { metaOf } from './meta.ts'
+import { KERNEL, metaOf } from './meta.ts'
 import { managePath } from './route.ts'
 import { apex, type Host, url as hostUrl } from './host.ts'
 import { whoIs } from './session.ts'
@@ -824,14 +824,16 @@ let inApp = async (env: Env, space: Space, slug: string) => {
   return app && !app.trashed ? app : null
 }
 
-/** The app's own store, opened as the app (dispatch.ts `owning`, T-34303). The
- * platform is writing the app's data on its behalf, so the byline on the row is
- * the app's entity and not a person's — nobody signed in, and the buyer is not
- * a member here and never will be. `editor` is what puts that write past the
- * app's own `access` and no further. */
+/** The app's own store, written by the platform (meta.ts `KERNEL`) with the
+ * app's byline. The byline is the app's entity and not a person's — nobody
+ * signed in, and the buyer is not a member here and never will be. The door is
+ * the kernel's because an order's columns are server-owned (vocab.ts `order`,
+ * T-37881): the one writer who can say a sale was paid is the one that heard it
+ * from Stripe. `editor` is what lets the reads beside it (the products a
+ * receipt names, the order a refund finds) past a private app's `access`. */
 let asApp = (env: Env, space: Space, app: App) => {
   let store = appStore(env.STORE, space, app, env)
-  let who = { 'x-yak-person': app.eid, 'x-yak-role': 'editor' }
+  let who = { ...KERNEL, 'x-yak-person': app.eid, 'x-yak-role': 'editor' }
   return metaOf((path, init, sent) => store(path, init, { ...who, ...sent }))
 }
 

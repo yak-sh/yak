@@ -51,6 +51,10 @@ Two more, and both are load-bearing:
   buyer back to. A buyer who closes that tab has still paid. The order is
   written when Stripe reports that the money moved, and by nothing else.
 
+Both hold whatever the app's `access`. On an `open` app a visitor adds rows of
+their own, but a `product` is written only by the owner and editors, and an
+`order`'s columns only by the platform.
+
 ## The seller connects an account
 
 Plus is required for setup and new checkout sessions. After a downgrade,
@@ -160,11 +164,12 @@ store:
     order { session, account, items, total_cents, fee_cents, email, status }
 
 `order` is one of the platform's own components, so every app already has it and
-no `vocab.json` declares it. `status` is `paid`, and becomes `refunded` or
-`disputed` if it ever does. The buyer gets a confirmation from the app's own
-address, `<space>.<app>@yaks.app`, with the items and the total on it
-(<https://yaks.app/docs/mail.md>), and a reply to it lands back in the app's
-store as mail the seller can read.
+no `vocab.json` declares it. Its columns are the platform's alone: no page,
+member or visitor writes one, and the owner may delete an order row. `status` is
+`paid`, and becomes `refunded` or `disputed` if it ever does. The buyer gets a
+confirmation from the app's own address, `<space>.<app>@yaks.app`, with the
+items and the total on it (<https://yaks.app/docs/mail.md>), and a reply to it
+lands back in the app's store as mail the seller can read.
 
 It is a row, so the seller's own view is a query:
 

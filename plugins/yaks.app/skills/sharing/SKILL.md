@@ -22,11 +22,28 @@ Only members write. A stranger's write is refused 401 with `not_a_writer` and a
 write is refused 403, because signing in is no longer the way through — the
 owner's is.
 
-**`open`** — anyone with the link writes too, signed in or not. This is what a
-vote page, a shared list or a signup sheet needs. The cost is a byline: a guest
-who never signed in is nobody yet, so their rows carry no `created.by` at all.
-If the page wants to show who said what, it has to ask for a name on the page
-and save it in its own row.
+**`open`** — anyone with the link adds to it too, signed in or not. This is what
+a vote page, a guest book or a signup sheet needs. A visitor (anyone the app
+lets write who is not its owner or an editor) adds rows, and changes or deletes
+only the rows they wrote; everybody else's rows are refused to them. The owner
+and editors change anything, as ever. A shared list that visitors tick off
+together is therefore a list whose ticks are rows of their own, one per tick,
+rather than an edit to somebody else's item.
+
+A visitor is also held to a visitor's size and pace: 16 KB in one write, 2 MB in
+one upload, and 30 writes and uploads a minute to one app, counted per signed-in
+person or, signed out, per address. Past that the answer is 413
+`visit_too_large` or 429 `too_many_writes` (<https://yaks.app/docs/errors.md>).
+
+Three of the platform's own words stay out of a visitor's reach whatever the
+access: `product` is written by the owner and editors, an `order`'s columns only
+by the platform (<https://yaks.app/docs/selling.md>), and the ask to send a
+letter, `deliver`, by the owner and editors (<https://yaks.app/docs/mail.md>).
+
+The cost of letting anyone in is a byline: a guest who never signed in is nobody
+yet, so their rows carry no `created.by` at all, and a row nobody signed is
+nobody's to change again. If the page wants to show who said what, it has to ask
+for a name on the page and save it in its own row.
 
     let who = await me()
     if (!who.writes) show(`<a href="${who.signIn}">Sign in to post</a>`)

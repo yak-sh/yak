@@ -4,6 +4,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Storage } from '@yaks/graph'
 import { isPromise } from '@yaks/graph'
 import { Denied } from './deny.ts'
+import type { Floors } from './guard.ts'
 import { grant, guarded, ids, setMode, store } from './harness.ts'
 
 let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
@@ -155,4 +156,72 @@ Deno.test('an owner may change what the thing says about everyone else', () => {
 Deno.test('an empty batch is nobody’s business', () => {
   let s = store()
   assertEquals(sync(guarded(s, ids.list).apply([])), [])
+})
+
+// ---- an open thing: new rows, and your own ---------------------------------
+
+// One change by one principal, as the guarded graph takes it.
+let as = (s: Storage, who: string | null, b: Bundle, floors?: Floors) =>
+  sync(
+    guarded(s, ids.list, floors).apply([
+      { ...b, ...(who ? { $actor: { by: who } } : {}) },
+    ]),
+  )
+
+let opened = () => {
+  let s = store()
+  setMode(s, ids.list, 'open')
+  as(s, ids.dana, { entity: { eid: 'mine' }, pick: { title: 'Dana’s' } })
+  return s
+}
+
+let titleOf = (s: Storage, eid: string) =>
+  ((s.read(`.eid=${eid}`) as Bundle[])[0]?.pick as { title?: string })?.title
+
+Deno.test('a visitor adds to an open thing and changes nobody else’s row', () => {
+  let s = opened()
+  for (let who of [null, ids.kim, ids.mo]) {
+    denied(() => as(s, who, { entity: { eid: 'mine' }, pick: { title: 'x' } }))
+    denied(() => as(s, who, { entity: { eid: 'mine' }, pick: null }))
+    denied(() => as(s, who, { entity: { eid: 'mine' }, $delete: true }))
+  }
+  assertEquals(titleOf(s, 'mine'), 'Dana’s')
+  as(s, null, { entity: { eid: 'theirs' }, pick: { title: 'Hi' } })
+  assertEquals(titleOf(s, 'theirs'), 'Hi')
+})
+
+Deno.test('a signed-in visitor changes and deletes what they wrote', () => {
+  let s = opened()
+  as(s, ids.kim, { entity: { eid: 'kims' }, pick: { title: 'One' } })
+  as(s, ids.kim, { entity: { eid: 'kims' }, pick: { title: 'Two' } })
+  assertEquals(titleOf(s, 'kims'), 'Two')
+  denied(() => as(s, null, { entity: { eid: 'kims' }, $delete: true }))
+  as(s, ids.kim, { entity: { eid: 'kims' }, $delete: true })
+  assertEquals(titleOf(s, 'kims'), undefined)
+})
+
+Deno.test('an anonymous row is nobody’s, and saying it again is no change', () => {
+  let s = opened()
+  as(s, null, { entity: { eid: 'anon' }, pick: { title: 'Hi' } })
+  as(s, null, { entity: { eid: 'anon' }, pick: { title: 'Hi' } })
+  denied(() => as(s, null, { entity: { eid: 'anon' }, pick: { title: 'Yo' } }))
+})
+
+Deno.test('an editor changes anyone’s row on an open thing', () => {
+  let s = opened()
+  as(s, ids.raj, { entity: { eid: 'mine' }, pick: { title: 'Raj’s' } })
+  assertEquals(titleOf(s, 'mine'), 'Raj’s')
+})
+
+Deno.test('a floor holds whatever the mode', () => {
+  let s = opened()
+  let row = { entity: { eid: 'p' }, pick: { title: 'priced' } }
+  let floors: Floors = { pick: 'editor' }
+  denied(() => as(s, null, row, floors))
+  denied(() => as(s, ids.mo, row, floors))
+  as(s, ids.raj, row, floors)
+  let e = assertThrows(() =>
+    as(s, ids.raj, { ...row, pick: { title: 'x' } }, { pick: 'owner' })
+  ) as Denied
+  assertEquals(e.need, 'owner')
 })
