@@ -602,14 +602,14 @@ slow('space_sell connects an account and hands back one link', async () => {
         body: new URLSearchParams({ billing: 'checkout' }),
       })
     for (
-      let [origin, session] of [
-        ['https://other.yaks.app', cookie],
-        ['https://ada.yaks.app', ''],
-        ['https://ada.yaks.app', (await signIn(k)).cookie],
-      ]
+      let [origin, session, status] of [
+        ['https://other.yaks.app', cookie, 403],
+        ['https://ada.yaks.app', '', 404],
+        ['https://ada.yaks.app', (await signIn(k)).cookie, 404],
+      ] as const
     ) {
       let r = await subscribe(origin, session)
-      assertEquals(r.status, 404)
+      assertEquals(r.status, status)
       await r.body?.cancel()
     }
     assertEquals(fake.calls.length, 0)

@@ -18,6 +18,7 @@ import {
 import { parseHTML } from 'linkedom'
 import { slow, until } from '../../src/testing.ts'
 import {
+  allowed,
   connector,
   type Kernel,
   kernel,
@@ -121,10 +122,10 @@ slow(
           ),
           code_challenge_method: 'S256',
         }).toString()
-        let allowed = await form(k, '/oauth/allow', { q }, owner.cookie)
-        assertEquals(allowed.status, 302)
-        await allowed.body?.cancel()
-        let code = new URL(allowed.headers.get('location')!).searchParams.get(
+        let allow = await allowed(k, q, owner.cookie)
+        assertEquals(allow.status, 302)
+        await allow.body?.cancel()
+        let code = new URL(allow.headers.get('location')!).searchParams.get(
           'code',
         )!
         let token = await form(k, '/oauth/token', {
@@ -543,7 +544,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     assertMatch(page, new RegExp(email))
 
     // Allowing it hands the client its code, on the redirect it registered.
-    let granted = await form(k, '/oauth/allow', { q }, cookie)
+    let granted = await allowed(k, q, cookie)
     assertEquals(granted.status, 302)
     let to = new URL(granted.headers.get('location') ?? '')
     assertEquals(to.origin + to.pathname, back)
@@ -728,7 +729,7 @@ slow('a connector keeps its door until the person closes it', async () => {
       ),
       code_challenge_method: 'S256',
     }).toString()
-    let granted = await form(k, '/oauth/allow', { q }, cookie)
+    let granted = await allowed(k, q, cookie)
     let code = new URL(granted.headers.get('location') ?? '')
       .searchParams.get('code') ?? ''
     let token = (fields: Record<string, string>, auth?: string) =>
@@ -1028,7 +1029,7 @@ slow('account settings save the name and address', async () => {
     // And nor may their own cookie, carried by somebody else's page. Sibling
     // spaces are same-site, so `SameSite=Lax` lets the session ride a form one
     // space's page posts at another's — the origin check is what does not
-    // (route.ts `sameOrigin`).
+    // (route.ts `guarded`).
     let forged = await k.at(`${want}.yaks.app`, managePath('settings'), {
       method: 'POST',
       redirect: 'manual',
@@ -1039,7 +1040,7 @@ slow('account settings save the name and address', async () => {
       },
       body: new URLSearchParams({ space: `taken-${uniq()}` }).toString(),
     })
-    assertEquals(forged.status, 404)
+    assertEquals(forged.status, 403)
     await forged.body?.cancel()
     assert((await dir.query(`.space.slug=${want}`)).length, 'still theirs')
   } finally {

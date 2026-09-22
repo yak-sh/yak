@@ -975,6 +975,33 @@ export let deployed = (url: string) => {
  * with a token, for a suite that wants to reach the connector the way a client
  * does rather than with a cookie no client has.
  */
+/**
+ * The Allow button, clicked the way a browser clicks it: the consent page is
+ * drawn for this cookie and this authorize request, and its form is posted
+ * back with the token only that page holds (identity.ts `consenting`). The
+ * redirect is the answer, unfollowed.
+ */
+export let allowed = async (
+  k: Pick<Kernel, 'at' | 'host'>,
+  q: string,
+  cookie: string,
+) => {
+  let page = await (await k.at(k.host, `/oauth/authorize?${q}`, {
+    headers: { cookie },
+  })).text()
+  let consent = /name="consent" value="([^"]+)"/.exec(page)?.[1]
+  if (!consent) throw new Error(`no consent form in: ${page}`)
+  return k.at(k.host, '/oauth/allow', {
+    method: 'POST',
+    redirect: 'manual',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      cookie,
+    },
+    body: new URLSearchParams({ q, consent }).toString(),
+  })
+}
+
 export let bearerFor = async (
   k: Pick<Kernel, 'at' | 'host'>,
   cookie: string,
@@ -1019,10 +1046,10 @@ export let bearerFor = async (
     ),
     code_challenge_method: 'S256',
   }).toString()
-  let allowed = await form('/oauth/allow', { q }, { cookie })
-  if (allowed.status != 302) throw new Error(`allow: ${await allowed.text()}`)
-  await allowed.body?.cancel()
-  let code = new URL(allowed.headers.get('location')!).searchParams.get('code')!
+  let allow = await allowed(k, q, cookie)
+  if (allow.status != 302) throw new Error(`allow: ${await allow.text()}`)
+  await allow.body?.cancel()
+  let code = new URL(allow.headers.get('location')!).searchParams.get('code')!
   let got = await (await form('/oauth/token', {
     grant_type: 'authorization_code',
     code,

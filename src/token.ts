@@ -53,6 +53,7 @@ export type Use =
   | 'grant' // the CLI's bearer (grants.ts)
   | 'link' // a sign-in link, once or standing (link.ts)
   | 'handoff' // custom-domain sign-in (handoff.ts)
+  | 'consent' // the OAuth consent form (identity.ts)
   | 'erase' // a space's deletion ticket (erase.ts)
   | 'review' // a gallery review ticket (gallery.ts)
 
@@ -121,8 +122,8 @@ export let sign = (claims: Claims, secret: string) =>
   seal('session', claims, secret)
 
 // The claims a session token carries, or null for anything but a well-formed
-// session token under this secret that has not expired. `now` is milliseconds, the clock a
-// test hands in.
+// session token under this secret that has not expired. `now` is
+// milliseconds, the clock a test hands in.
 export let verify = async (
   token: string,
   secret: string,

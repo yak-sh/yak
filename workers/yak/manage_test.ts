@@ -149,7 +149,7 @@ slow('account pages remain reachable behind a custom home app', async () => {
         them.cookie,
         'https://other.yaks.app',
       )).status,
-      404,
+      403,
     )
     assertEquals(await title(), 'Dana')
     assertStringIncludes(
@@ -213,7 +213,7 @@ slow(
         headers: { ...headers, origin: 'https://evil.example' },
         body: new URLSearchParams({ billing: 'portal' }),
       })
-      assertEquals(denied.status, 404)
+      assertEquals(denied.status, 403)
     } finally {
       await k.stop()
       await fake.stop()

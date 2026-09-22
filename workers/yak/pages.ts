@@ -1194,14 +1194,23 @@ puts everything back exactly as it was.`
   )
 
 // An app asking, for a browser that is already signed in: one click is the
-// whole consent.
-export let askAllow = (email: string, q: string, who: string, env: Host = {}) =>
+// whole consent. `consent` is the form's own token (identity.ts `consenting`),
+// which only this page, drawn for this person, ever holds.
+export let askAllow = (
+  email: string,
+  q: string,
+  who: string,
+  consent: string,
+  env: Host = {},
+) =>
   shell(
     env,
     'Allow access to your apps on yaks.app',
     `${esc(who)} would like to use your apps on yaks.app as ${esc(email)}.`,
     200,
-    `<form method="post" action="/oauth/allow">${carried(q)}
+    `<form method="post" action="/oauth/allow">${carried(q)}${
+      held('consent', consent)
+    }
 <button class="Button" type="submit">Allow</button>
 </form>${home(env)}`,
   )

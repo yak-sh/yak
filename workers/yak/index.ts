@@ -14,8 +14,9 @@
 // files nothing (unseen.ts `refusal`).
 //
 // One thing beyond routing happens here, and it is here because nowhere else
-// still knows it: a request at a graph door whose `Origin` names another
-// address is refused before it is served (route.ts `sameOrigin`). Sibling
+// still knows it: a write, or a request at a graph door, whose `Origin` names
+// another address is refused before it is served (route.ts `guarded`,
+// `sameOrigin`). Sibling
 // spaces are subdomains of one registrable domain, so they are same-site and
 // the session cookie rides along to a door another space's page aims at; the
 // browser's own `Origin` is what tells them apart, and after `aimed` rewrites
@@ -105,8 +106,8 @@ import { routed } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import {
   aimedAt,
-  doorway,
   foreign,
+  guarded,
   hostOf,
   MOUNT,
   platform,
@@ -211,10 +212,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // The other Stripe door, and it is its own endpoint on purpose (sell.ts,
   // T-34523): what a seller's connected account says happened, verified with a
   // second signing secret. Not under `/api/` — that prefix is the graph's —
-  // but named in route.ts `doorway` all the same, so both money doors keep the
-  // same-origin guard their `/api/` spelling used to give them for free. It
-  // costs this one nothing: Stripe posts server to server with no Origin at
-  // all, and an absent Origin is allowed (route.ts `sameOrigin`).
+  // and guarded all the same, as every write is (route.ts `guarded`). It costs
+  // this one nothing: Stripe posts server to server with no Origin at all, and
+  // an absent Origin is allowed (route.ts `sameOrigin`).
   if (path == '/stripe/connect') return sell.fetch(req, env)
   // What the platform takes from a sale (sell.ts `fees`, T-34554), read and
   // set by whoever owns the `yak` space. Before the connector, for the reason
@@ -383,8 +383,8 @@ let aimed = async (req: Request, env: Env, host: string) => {
   return new Request(url, new Request(req, { headers }))
 }
 
-// A page on somebody else's address, at one of our graph doors (route.ts
-// `sameOrigin`, `doorway`). It is refused in the shape every other api
+// A page on somebody else's address, writing or at one of our graph doors
+// (route.ts `sameOrigin`, `guarded`). It is refused in the shape every other api
 // refusal has (apps.ts `json`) — a code the page's code reads, a sentence its
 // person reads — and it is a deliberate no, so nothing is filed about it.
 let stranger = () =>
@@ -525,7 +525,7 @@ let router = {
       // stripped off and marked readable by any origin (route.ts `shared`).
       let anyone = false
       if (
-        doorway(asked) &&
+        guarded(req.method, asked) &&
         !sameOrigin(host, req.headers.get('origin'))
       ) {
         if (!shared(req.method, asked)) return stranger()

@@ -290,33 +290,37 @@ export let route = (host: string, pathname: string, env: Host = {}): Route => {
 export let platform = (host: string, pathname: string, env: Host = {}) =>
   !foreign(host, env) && pathname.startsWith('/.well-known/')
 
-// The doors the graph answers at, read from the path a browser asked for:
-// an app's `/<app>/api/…`, a front page's own `/api/…` (apps.ts `fetch`
-// serves the home app everything no other app claims), and the connector at
-// `/mcp`. Pages, files and images are deliberately not here — an app's bytes
-// are the web's, and a cross-origin GET of one carries no `Origin` anyway.
-// The shape over-reaches a little: a static asset at `/x/api/y` on the apex
-// matches too, which costs nothing, since nothing a browser fetches
-// cross-origin without CORS can read the answer either way.
+// What a page at another address may not ask for here, read from the method
+// and the path (`sameOrigin` below is the check itself).
 //
-// The drop door is here too (drop.ts, T-34230). It is not a graph door — it is
-// a form a member posts a file to — but it changes a space with nothing but
-// the session cookie behind it, and sibling spaces are same-site, so a page in
-// anybody's space could aim a form at anybody else's `/deploy` and the cookie
-// would ride along. Same guard, same reason.
+// Every write, wherever it is aimed. Sibling spaces are same-site, so any
+// form a page in anybody's space aims at a door that acts on the session
+// cookie arrives with the cookie. A list of the doors that write was the
+// guard once, and every door added after it was open: the OAuth consent, the
+// space delete, the standing link and the address picker were all forged from
+// a free space (T-37874), as the billing webhook had been by being renamed
+// out of the list (T-35357). The method is the one thing a new door cannot
+// forget to say. Guarding costs a server-to-server caller nothing — Stripe
+// posts with no `Origin`, and an absent one is allowed.
 //
-// So are the two money doors, by name rather than by prefix (T-35357). Both
-// were `/api/…` when they were written and were guarded by the shape above;
-// renaming the billing webhook to `/stripe/webhook` (ea6ddda6, 1855f420)
-// carried it out of that shape and quietly out of the guard, while the test
-// that asserts a stranger's page is refused there kept passing on the old
-// spelling. A door that moves money must not depend on its spelling for that,
-// so it is listed. Guarding costs Stripe nothing: it posts server to server
-// with no `Origin`, and an absent one is allowed below.
-export let doorway = (pathname: string) =>
-  pathname == '/mcp' || pathname == '/deploy' ||
-  pathname == '/stripe/webhook' || pathname == '/stripe/connect' ||
-  /^(?:\/[^/]+)?\/api\//.test(pathname)
+// Except the two doors the OAuth provider answers with CORS on purpose:
+// token and registration read no cookie at all, a code, its PKCE verifier
+// and a client's own metadata being the whole of what they take, and a
+// browser-based client posts to them from its own origin.
+//
+// And the doors the graph answers at, whatever the method: an app's
+// `/<app>/api/…`, a front page's own `/api/…` (apps.ts `fetch` serves the home
+// app everything no other app claims), and the connector at `/mcp`, where a
+// socket or a stream is a read that carries the session's write grant.
+// Pages, files and images are deliberately not here — an app's bytes are the
+// web's, and a cross-origin GET of one carries no `Origin` anyway. The shape
+// over-reaches a little: a static asset at `/x/api/y` on the apex matches too,
+// which costs nothing, since nothing a browser fetches cross-origin without
+// CORS can read the answer either way.
+export let guarded = (method: string, pathname: string) =>
+  (method != 'GET' && method != 'HEAD' && method != 'OPTIONS' &&
+    pathname != OAUTH.token && pathname != OAUTH.register) ||
+  pathname == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(pathname)
 
 // The browser's own word for the page that asked, against the hostname it
 // asked at. Every space is a subdomain of one registrable domain, so sibling

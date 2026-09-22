@@ -2,8 +2,8 @@
 import { assertEquals } from '@std/assert'
 import {
   aimedAt,
-  doorway,
   foreign,
+  guarded,
   hostOf,
   onZone,
   ORIGIN,
@@ -180,33 +180,45 @@ Deno.test("platform: a grant on our name is not an app's to make", () => {
   }
 })
 
-// Which paths the origin check guards (route.ts `doorway`): everywhere the
-// graph answers, and nowhere an app's own bytes do.
-Deno.test('doorway: the graph doors, not the pages', () => {
-  let doors: [string, boolean][] = [
-    ['/recipes/api/apply', true],
-    ['/recipes/api/ws', true],
-    ['/recipes/api/blob', true],
-    ['/recipes/api/files/index.html', true],
+// What the origin check guards (route.ts `guarded`): every write but the
+// OAuth provider's two CORS doors, and every method where the graph answers.
+Deno.test('guarded: every write, and the graph doors, not the pages', () => {
+  let doors: [string, string, boolean][] = [
+    ['GET', '/recipes/api/apply', true],
+    ['GET', '/recipes/api/ws', true],
+    ['GET', '/recipes/api/blob', true],
+    ['GET', '/recipes/api/files/index.html', true],
     // A front page's own door, at a space's bare hostname (apps.ts `fetch`),
     // and a custom domain's, which is that same address before the router
     // rewrites it (index.ts `aimed`).
-    ['/api/apply', true],
-    ['/mcp', true],
-    // The doors named rather than shaped: the drop form, and the two money
-    // doors that lost the guard when they left `/api/` (T-35357).
-    ['/deploy', true],
-    ['/stripe/webhook', true],
-    ['/stripe/connect', true],
-    ['/', false],
-    ['/stripe/', false],
-    ['/recipes/', false],
-    ['/recipes/api', false],
-    ['/recipes/apiary/x', false],
-    ['/recipes/photo.png', false],
-    ['/mcpx', false],
+    ['GET', '/api/apply', true],
+    ['GET', '/mcp', true],
+    // Every write, named or not (T-37874): the forms the audit forged, the
+    // drop door, and the money doors that once left a list (T-35357).
+    ['POST', '/oauth/allow', true],
+    ['POST', '/space/jeff/delete', true],
+    ['POST', '/login/link', true],
+    ['POST', '/connect', true],
+    ['POST', '/deploy', true],
+    ['POST', '/stripe/webhook', true],
+    ['PUT', '/recipes/notes.txt', true],
+    ['DELETE', '/anything', true],
+    // The provider's own CORS doors, which read no cookie.
+    ['POST', '/oauth/token', false],
+    ['POST', '/oauth/register', false],
+    ['GET', '/', false],
+    ['HEAD', '/', false],
+    ['OPTIONS', '/oauth/token', false],
+    ['GET', '/space/jeff/delete', false],
+    ['GET', '/recipes/', false],
+    ['GET', '/recipes/api', false],
+    ['GET', '/recipes/apiary/x', false],
+    ['GET', '/recipes/photo.png', false],
+    ['GET', '/mcpx', false],
   ]
-  for (let [path, want] of doors) assertEquals(doorway(path), want, path)
+  for (let [method, path, want] of doors) {
+    assertEquals(guarded(method, path), want, `${method} ${path}`)
+  }
 })
 
 // The line between spaces (route.ts `sameOrigin`). Sibling spaces are

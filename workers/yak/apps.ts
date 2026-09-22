@@ -75,7 +75,6 @@ import {
   manageView,
   MOUNT,
   route,
-  sameOrigin,
 } from './route.ts'
 import { covers, PLATFORM_PATHS } from './router.ts'
 import { titling, vouched, type Who, whoIs } from './session.ts'
@@ -1276,12 +1275,6 @@ let closed = async (
       days: daysLeft(space.trashed!),
     }, env)
   }
-  // The same origin check `saved` makes and for the same reason: every space
-  // is a subdomain of one registrable domain, so `SameSite=Lax` is not the
-  // guard here — a sibling's page is same-site.
-  if (!sameOrigin(hostOf(req), req.headers.get('origin'))) {
-    return nothingHere(env)
-  }
   let form = await req.formData().catch(() => new FormData())
   if (String(form.get('restore-space') ?? '').trim() == space.slug) {
     await untrashSpace(env, dir, space, who)
@@ -1304,16 +1297,13 @@ let root = (
 // Account forms return to the section that submitted them. Settings fields
 // are independent; changing an address cannot overwrite an omitted name.
 // Sibling spaces share the cookie's site, so ownership alone is insufficient:
-// the request's origin must belong to this space too.
+// a page at another address never gets here (route.ts `guarded`).
 let saved = async (
   req: Request,
   env: Env,
   dir: ReturnType<typeof directory>,
   space: Space,
 ): Promise<Response> => {
-  if (!sameOrigin(hostOf(req), req.headers.get('origin'))) {
-    return nothingHere(env)
-  }
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
   if (who.role != 'owner' || !who.person) return nothingHere(env)
   let form = await req.formData().catch(() => new FormData())

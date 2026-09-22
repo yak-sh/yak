@@ -1070,7 +1070,7 @@ export let priceAt = async (dir: Directory, file: Response) => {
  *
  * It writes through `stamp`, which empties the directory's read cache, so the
  * rate a sale is charged is the rate set a moment ago rather than one a TTL
- * later. Under `/api/`, so the same-origin guard (route.ts `doorway`) stands in
+ * later. Under `/api/`, so the same-origin guard (route.ts `guarded`) stands in
  * front of it: sibling spaces are same-site, and without that guard a page in
  * anybody's space could aim a form at this door and the owner's cookie would
  * ride along. A CLI sends no `Origin` at all and is unaffected.

@@ -81,7 +81,7 @@ import {
   OAuthProvider,
   type OAuthProviderOptions,
 } from '@cloudflare/workers-oauth-provider'
-import { cookieValue, verify } from '../../src/token.ts'
+import { cookieValue, opened, seal, verify } from '../../src/token.ts'
 import { connectionsOf } from './connections.ts'
 import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
@@ -321,9 +321,10 @@ let browser = async (env: Env, req: Request) => {
 // A space that is not this person's answers exactly what a space that does
 // not exist answers: a stranger learns nothing about anybody's address here.
 //
-// The POST needs no origin check of its own: the session cookie is
-// `SameSite=Lax` (token.ts `cookie`), so a form posted from somebody else's
-// page arrives without it and is sent to sign in like any stranger.
+// The POST is a write, so a page at any other address is refused before it
+// gets here (route.ts `guarded`). `SameSite=Lax` is no help with that: every
+// space is same-site with the apex, so a form posted from a page in anybody's
+// space arrives carrying the cookie (T-37874).
 let closing = async (
   req: Request,
   env: Env,
@@ -661,6 +662,37 @@ let allow = async (
   return redirect(redirectTo, set)
 }
 
+// The consent form's own token: this person, this authorize request, the next
+// hour, sealed for nothing but this (src/token.ts). The Allow button is the
+// one form here that grants a stranger a year of access, so it does not rest
+// on the origin check alone: a POST that did not come from the page drawn for
+// this person and this request is refused (T-37874).
+let CONSENT = 60 * 60
+
+type Consent = { person: string; q: string; exp: number }
+
+let consenting = (secret: string, person: string, q: string) =>
+  seal(
+    'consent',
+    {
+      person,
+      q,
+      exp: Math.floor(Date.now() / 1000) + CONSENT,
+    } satisfies Consent,
+    secret,
+  )
+
+let consented = async (
+  secret: string,
+  person: string,
+  q: string,
+  token: string,
+) => {
+  let c = token ? await opened<Consent>('consent', token, secret) : null
+  return !!c && c.person == person && c.q == q &&
+    typeof c.exp == 'number' && c.exp * 1000 > Date.now()
+}
+
 // The name a person sees on the consent card: what the client called itself
 // when it registered, or its bare id.
 let clientName = async (env: Env, ask: AuthRequest) =>
@@ -923,6 +955,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       row?.email?.address ?? 'yourself',
       q,
       await clientName(env, ask),
+      await consenting(secret(env), who.person, q),
       env,
     )
   }
@@ -932,6 +965,11 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let q = field('q')
     if (!who) {
       return askEmail(q || null, null, undefined, undefined, undefined, env)
+    }
+    if (!await consented(secret(env), who.person, q, field('consent'))) {
+      return new Response('That consent page has expired. Connect again.', {
+        status: 403,
+      })
     }
     return allow(req, env, q, who.person)
   }

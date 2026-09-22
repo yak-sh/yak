@@ -9,6 +9,7 @@ import {
 import { slow } from '../../src/testing.ts'
 import { COOKIE, sign } from '../../src/token.ts'
 import {
+  allowed,
   client,
   connector,
   kernel,
@@ -927,15 +928,7 @@ slow(
         ),
         code_challenge_method: 'S256',
       }).toString()
-      let granted = await k.at('yaks.app', '/oauth/allow', {
-        method: 'POST',
-        redirect: 'manual',
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          cookie: jeff.cookie,
-        },
-        body: new URLSearchParams({ q }).toString(),
-      })
+      let granted = await allowed(k, q, jeff.cookie)
       assertEquals(granted.status, 302)
       let to = new URL(granted.headers.get('location') ?? '')
       assertEquals(to.searchParams.get('state'), 'a-mixed-state')
