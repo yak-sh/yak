@@ -31,11 +31,6 @@ member reads it back with `app_files`:
 Anyone who can reach the app can read it, which is everyone in the space. A
 stranger with the link cannot, whatever the app's access is.
 
-The file was called `AGENTS.md` before, and an app that still carries one goes
-on working: `NOTES.md` is read first and the old name is read where there is no
-new one. Nothing migrates by itself, and an app with both is the new name. Write
-the new one.
-
 ## The recipe example
 
 The whole shape, for the app this platform gets asked for more than any other:

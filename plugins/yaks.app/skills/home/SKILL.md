@@ -166,6 +166,9 @@ not have read themselves. Routing is not a way around another app's `access`.
     space_set(slug: 'ada-cooks')     the space is now ada-cooks.yaks.app
     space_set(title: 'Ada cooks')    just the name it is called
 
+A title, the space's or an app's, is its name: one line, up to 80 characters. A
+newline in one is folded to a space, and a longer one is refused with the count.
+
 Only the space's owner may move it. Every app in the space moves with the
 address — files, data and all — and each keeps the path it had, so
 `ada.yaks.app/cookbook/` becomes `ada-cooks.yaks.app/cookbook/`.
@@ -184,6 +187,13 @@ has said they are done with it — and then anyone, including them, can take it.
 
 `app_set(app, slug)` is the same move one level down, for one app's path within
 the space.
+
+A few addresses are kept for yaks.app itself, because at `<slug>.yaks.app` or
+`<slug>@yaks.app` they would read as the platform speaking: `login`, `support`,
+`security`, `billing`, `status`, `admin`, `www`, `mail`, `docs`, `api` and the
+like. `space_new`, `space_set`, `app_new`, `app_set` and `app_install` refuse
+one with a sentence saying so, and signing in as `support@…` gives the space
+`support2`.
 
 What a move never touches: the app's own data (its store is named for the app,
 not for the address), any domain of the person's own aimed at the space or one
