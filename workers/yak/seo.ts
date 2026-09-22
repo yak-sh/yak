@@ -1,5 +1,6 @@
 // What the apex says about itself to something that is not a person (T-34288):
-// `/robots.txt`, `/sitemap.xml`, `/llms.txt` and `/llms-full.txt`. The pages'
+// `/robots.txt`, `/sitemap.xml`, `/llms.txt`, `/llms-full.txt` and
+// `/.well-known/security.txt`. The pages'
 // own `<head>` carries the rest — title, description, canonical, Open Graph,
 // JSON-LD — because that half belongs with the words it describes; this file is
 // the site said as a LIST, which no single page can say.
@@ -18,7 +19,7 @@
 import { DOCS, DRAWN, MARKDOWN, TECH } from './docs.ts'
 import type { Env } from './env.ts'
 import { PAGES, uriOf, whole } from './guide.ts'
-import { type Host, hosted, spaceHost, url } from './host.ts'
+import { type Host, hosted, replyTo, spaceHost, url } from './host.ts'
 import { PLATFORM } from './route.ts'
 
 export let SITE_URL = url({})
@@ -162,6 +163,33 @@ export let robots = (env: Host = {}) =>
     '',
   ].join('\n')
 
+// Where to report a security problem (RFC 9116). A researcher who finds one
+// looks for this file before looking for a page, and an agent directory's
+// terms ask a connector for an address vulnerabilities can be sent to. The
+// address is the one a person already writes to (host.ts `replyTo`) — a second
+// inbox nobody watches is worse than no file at all.
+//
+// It is generated rather than a file under `public/` because `Expires` goes
+// stale: the field has to name a moment less than a year away, and a date
+// typed into a file is a date that quietly expires. Here it is a year from the
+// day the request arrives, so it is never within a day of lapsing.
+export let SECURITY = '/.well-known/security.txt'
+
+export let security = (now: Date, env: Host = {}) => {
+  // Midnight on the same day next year, so the answer is the same all day for
+  // a cache to hold, and strictly under a year from the moment it was asked.
+  let expires = new Date(
+    Date.UTC(now.getUTCFullYear() + 1, now.getUTCMonth(), now.getUTCDate()),
+  )
+  return [
+    `Contact: mailto:${replyTo(env)}`,
+    `Expires: ${expires.toISOString()}`,
+    'Preferred-Languages: en',
+    `Canonical: ${at(SECURITY, env)}`,
+    '',
+  ].join('\n')
+}
+
 // The deploy's own timestamp as a sitemap `lastmod`. Cloudflare mints version
 // metadata on every `wrangler deploy` (wrangler.toml `[version_metadata]`), so
 // the date a page was last published is a fact the platform already holds and
@@ -256,13 +284,14 @@ export let full = (parts: { url: string; text: string }[]) =>
     '\n\n---\n\n',
   )
 
-// The four addresses, answered here. Null for anything else, so index.ts falls
+// The addresses answered here. Null for anything else, so index.ts falls
 // through to the assets the way it always did.
 export let answer = async (
   path: string,
   env: Env,
 ): Promise<Response | null> => {
   if (path == '/robots.txt') return text(robots(env))
+  if (path == SECURITY) return text(security(new Date(), env))
   if (path == '/sitemap.xml') {
     return text(sitemap(deployed(env), env), 'application/xml')
   }

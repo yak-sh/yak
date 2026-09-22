@@ -47,7 +47,8 @@
 //     /api/billing/*          billing.ts: checkout and the customer portal
 //     /stripe/connect         sell.ts: what a seller's account says happened
 //     /mcp, /api/*            mcp.ts (T-32329; a JSON 404 until then)
-//     /robots.txt, /sitemap.xml, /llms.txt, /llms-full.txt
+//     /robots.txt, /sitemap.xml, /llms.txt, /llms-full.txt,
+//     /.well-known/security.txt
 //                             seo.ts: the site said as a list, generated —
 //                             reached through PLUGINS (plugin.ts `routes`),
 //                             which is where every root door of a domain sits

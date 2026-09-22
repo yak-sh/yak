@@ -24,6 +24,7 @@ import {
   RENDERED,
   robots,
   said,
+  security,
   SITE,
   SITE_URL,
   sitemap,
@@ -632,6 +633,16 @@ Deno.test('the privacy policy names everywhere the code sends something', () => 
   assertStringIncludes(html, 'this page is the whole list')
 })
 
+// Where a security problem goes, said on the page a person reads as well as
+// in the file a scanner fetches (seo.ts `security`), because a researcher who
+// lands on the help page should not have to guess the address.
+Deno.test('the help page says where to report a security problem', () => {
+  let html = flat(read('help.html'))
+  assertStringIncludes(html, 'Found a security problem? Email')
+  assertStringIncludes(html, `mailto:${REPLY_TO}`)
+  assertStringIncludes(security(new Date()), `Contact: mailto:${REPLY_TO}`)
+})
+
 Deno.test('the help page answers its own questions in JSON-LD', () => {
   let html = read('help.html')
   let [faq] = ld(html)
@@ -768,8 +779,9 @@ Deno.test('ChatGPT gets a downloadable icon within its upload limit', async () =
   assert(icon.size < 10_000, `yaks-app.png is ${icon.size} bytes`)
 })
 
-// The four addresses, in workerd, at the apex and not on a space's hostname —
-// where robots.txt is the customer's own file (route.ts) and always has been.
+// The generated addresses, in workerd, at the apex and not on a space's
+// hostname — where robots.txt is the customer's own file (route.ts) and always
+// has been.
 slow('the apex answers the crawler and the model', async () => {
   let k = await kernel()
   try {
@@ -782,6 +794,20 @@ slow('the apex answers the crawler and the model', async () => {
     let text = await robots.text()
     assertStringIncludes(text, 'User-agent: ClaudeBot')
     assertStringIncludes(text, 'Sitemap: https://yaks.app/sitemap.xml')
+
+    // Where to report a security problem (RFC 9116), at the one address a
+    // researcher or a scanner looks for it.
+    let sec = await k.at('yaks.app', '/.well-known/security.txt')
+    assertEquals(sec.status, 200)
+    assertEquals(sec.headers.get('content-type'), 'text/plain; charset=utf-8')
+    let contact = await sec.text()
+    assertStringIncludes(contact, 'Contact: mailto:hello@yaks.app')
+    assertStringIncludes(contact, 'Preferred-Languages: en')
+    assertStringIncludes(
+      contact,
+      'Canonical: https://yaks.app/.well-known/security.txt',
+    )
+    assert(/\nExpires: \d{4}-/.test(contact), contact)
 
     let map = await k.at('yaks.app', '/sitemap.xml')
     assertEquals(map.status, 200)
@@ -872,6 +898,11 @@ slow('the apex answers the crawler and the model', async () => {
     // apex's file is not borrowed for it.
     let theirs = await k.at('jeff.yaks.app', '/robots.txt')
     assert(!(await theirs.text()).includes('Sitemap: https://yaks.app'))
+    // And `/.well-known/` on a space's hostname is the platform's, with
+    // nothing of ours to say there (route.ts `platform`).
+    let none = await k.at('jeff.yaks.app', '/.well-known/security.txt')
+    await none.text()
+    assertEquals(none.status, 404)
   } finally {
     await k.stop()
   }
