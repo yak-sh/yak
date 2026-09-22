@@ -299,8 +299,10 @@ examples.
 ## Compatibility
 
 The root export is TypeScript with no external runtime dependency. The separate
-`@yaks/vocab/tools` export uses Ajv for JSON Schema validation. Neither uses
-platform-specific storage; both can run on Deno and Node (via JSR / npm).
+`@yaks/vocab/tools` export validates JSON Schema with @cfworker/json-schema,
+which interprets a schema rather than generating code, so it also runs in a
+Cloudflare Worker. Neither uses platform-specific storage; both can run on Deno
+and Node (via JSR / npm).
 
 ## Tools
 

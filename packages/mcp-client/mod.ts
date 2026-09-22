@@ -8,22 +8,24 @@ import {
   ToolListChangedNotificationSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import type { Tool, ToolId } from '@yaks/graph'
-import { toolOutputValidator } from '@yaks/vocab/tools'
+import { errorsText, toolCheck } from '@yaks/vocab/tools'
 import type { jsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/types.js'
 
 // The SDK's default output validator is 2020-only; remote servers also declare
 // draft-07. Use the same dialect-aware validation as local graph tools.
 const schemas: jsonSchemaValidator = {
   getValidator<T>(schema: Record<string, unknown>) {
-    const validate = toolOutputValidator(schema)
-    return (input: unknown) =>
-      validate(input)
-        ? { valid: true as const, data: input as T, errorMessage: undefined }
-        : {
+    const check = toolCheck(schema)
+    return (input: unknown) => {
+      const errors = check(input)
+      return errors.length
+        ? {
           valid: false as const,
           data: undefined,
-          errorMessage: JSON.stringify(validate.errors),
+          errorMessage: errorsText(errors),
         }
+        : { valid: true as const, data: input as T, errorMessage: undefined }
+    }
   },
 }
 

@@ -9,6 +9,7 @@
   "license": "Apache-2.0",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@cfworker/json-schema": "npm:@cfworker/json-schema@4.1.1",
     "ajv": "npm:ajv@^8.17.1"
   },
   "publish": {

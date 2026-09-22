@@ -24,15 +24,16 @@
     "jsr:@std/testing@1": "1.0.20",
     "jsr:@std/toml@1": "1.0.11",
     "jsr:@std/yaml@^1.2.0": "1.2.0",
+    "npm:@cfworker/json-schema@4.1.1": "4.1.1",
     "npm:@cloudflare/sandbox@0.12.9": "0.12.9",
     "npm:@cloudflare/workers-oauth-provider@0.10.3": "0.10.3",
     "npm:@cloudflare/workers-types@^4.20260702.1": "4.20260702.1",
     "npm:@huggingface/transformers@3": "3.8.1",
     "npm:@jsr/std__csv@1.0.6": "1.0.6",
     "npm:@jsr/std__yaml@1.2.0": "1.2.0",
-    "npm:@modelcontextprotocol/sdk@1.29.0": "1.29.0_zod@3.25.76",
-    "npm:@modelcontextprotocol/sdk@^1.12.0": "1.29.0_zod@3.25.76",
-    "npm:@modelcontextprotocol/sdk@^1.29.0": "1.29.0_zod@3.25.76",
+    "npm:@modelcontextprotocol/sdk@1.29.0": "1.29.0_@cfworker+json-schema@4.1.1_zod@3.25.76",
+    "npm:@modelcontextprotocol/sdk@^1.12.0": "1.29.0_@cfworker+json-schema@4.1.1_zod@3.25.76",
+    "npm:@modelcontextprotocol/sdk@^1.29.0": "1.29.0_@cfworker+json-schema@4.1.1_zod@3.25.76",
     "npm:@preact/signals-core@^1.14.0": "1.14.4",
     "npm:@preact/signals@^2.9.0": "2.9.4_preact@10.29.7__preact-render-to-string@6.7.0_preact-render-to-string@6.7.0__preact@10.29.7",
     "npm:@sentry/cloudflare@10.75.0": "10.75.0_@cloudflare+workers-types@4.20260702.1_wrangler@4.111.0__@cloudflare+workers-types@4.20260702.1",
@@ -42,7 +43,6 @@
     "npm:@sqliteai/sqlite-vector-linux-arm64@1.0.0": "1.0.0",
     "npm:@sqliteai/sqlite-vector-linux-x86_64@1.0.0": "1.0.0",
     "npm:@sqliteai/sqlite-vector-win32-x86_64@1.0.0": "1.0.0",
-    "npm:ajv@8.20.0": "8.20.0",
     "npm:ajv@^8.17.1": "8.20.0",
     "npm:croner@10.0.1": "10.0.1",
     "npm:es-module-lexer@1.7.0": "1.7.0",
@@ -157,6 +157,9 @@
     }
   },
   "npm": {
+    "@cfworker/json-schema@4.1.1": {
+      "integrity": "sha512-gAmrUZSGtKc3AiBL71iNWxDsyUC5uMaKKGdvzYsBoTW/xi42JQHl7eKV2OYzCUqvc+D2RCcf7EXY2iCyFIk6og=="
+    },
     "@cloudflare/containers@0.3.7": {
       "integrity": "sha512-DM9dm3FnIBSyiSJ1FLavKwl/lk3oAmTaynCzZQ9pZR0ncRPquSxkxd8Nu2MFILxmDDsPkxKsSNEh9mHHMty4Fw=="
     },
@@ -583,9 +586,10 @@
       "integrity": "sha512-fTUHQaAs2fOsPnuHHztJfp3WcmwDBvbbtpRZoNcpuUnRGPpCS+jN5UPXHDB+R/R1bvna6Ih0iUjWH6PryjKZPA==",
       "tarball": "https://npm.jsr.io/~/11/@jsr/std__yaml/1.2.0.tgz"
     },
-    "@modelcontextprotocol/sdk@1.29.0_zod@3.25.76": {
+    "@modelcontextprotocol/sdk@1.29.0_@cfworker+json-schema@4.1.1_zod@3.25.76": {
       "integrity": "sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ==",
       "dependencies": [
+        "@cfworker/json-schema",
         "@hono/node-server",
         "ajv",
         "ajv-formats",
@@ -603,6 +607,9 @@
         "raw-body",
         "zod",
         "zod-to-json-schema"
+      ],
+      "optionalPeers": [
+        "@cfworker/json-schema"
       ]
     },
     "@opentelemetry/api@1.9.1": {
@@ -1810,6 +1817,7 @@
       "jsr:@std/testing@1",
       "jsr:@std/toml@1",
       "jsr:@std/yaml@^1.2.0",
+      "npm:@cfworker/json-schema@4.1.1",
       "npm:@cloudflare/sandbox@0.12.9",
       "npm:@cloudflare/workers-oauth-provider@0.10.3",
       "npm:@huggingface/transformers@3",
@@ -2179,6 +2187,7 @@
       "packages/vocab": {
         "dependencies": [
           "jsr:@std/assert@1",
+          "npm:@cfworker/json-schema@4.1.1",
           "npm:ajv@^8.17.1"
         ]
       },
@@ -2202,6 +2211,7 @@
       "workers/yak": {
         "packageJson": {
           "dependencies": [
+            "npm:@cfworker/json-schema@4.1.1",
             "npm:@cloudflare/sandbox@0.12.9",
             "npm:@cloudflare/workers-oauth-provider@0.10.3",
             "npm:@jsr/std__csv@1.0.6",
@@ -2209,7 +2219,6 @@
             "npm:@modelcontextprotocol/sdk@1.29.0",
             "npm:@sentry/cloudflare@10.75.0",
             "npm:@sentry/core@10.75.0",
-            "npm:ajv@8.20.0",
             "npm:croner@10.0.1",
             "npm:lucide@1.31.0",
             "npm:postal-mime@3.0.0",

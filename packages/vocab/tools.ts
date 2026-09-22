@@ -1,45 +1,75 @@
 /** JSON Schema validation for portable tool arguments, and the tool
  * declarations a vocabulary carries. Compiled once per schema. */
-import { Ajv, type ValidateFunction } from 'ajv'
+import { type OutputUnit, type Schema, Validator } from '@cfworker/json-schema'
 import type { PropSchema, VocabDoc } from './types.ts'
-import { Ajv2019 } from 'ajv/dist/2019.js'
-import { Ajv2020 } from 'ajv/dist/2020.js'
 
-// Keep dialects in separate instances: 2020-12 changed tuple and ref semantics.
-// Schemas without a declaration retain this package's 2020-12 default. Each
-// instance is built the first time a schema of its dialect is compiled: built
-// at import, all six were paid by every program that loads this module, a
-// Worker that never compiles a schema included (T-37976).
-const dialects = (useDefaults: boolean) => {
-  const options = {
-    strict: false,
-    allErrors: true,
-    useDefaults,
-    addUsedSchema: false,
-  }
-  let current: Ajv2020 | undefined
-  let draft7: Ajv | undefined
-  let draft2019: Ajv2019 | undefined
-  return (schema: Record<string, unknown>) => {
-    const uri = schema.$schema
-    if (
-      uri === undefined ||
-      uri === 'https://json-schema.org/draft/2020-12/schema' ||
-      uri === 'https://json-schema.org/draft/2020-12/schema#'
-    ) return current ??= new Ajv2020(options)
-    if (
-      uri === 'http://json-schema.org/draft-07/schema#' ||
-      uri === 'http://json-schema.org/draft-07/schema'
-    ) return draft7 ??= new Ajv(options)
-    if (
-      uri === 'https://json-schema.org/draft/2019-09/schema' ||
-      uri === 'https://json-schema.org/draft/2019-09/schema#'
-    ) return draft2019 ??= new Ajv2019(options)
+// A schema is interpreted, never compiled to code: a Cloudflare Worker refuses
+// `new Function`, so a validator that generates code (ajv) refused every
+// argument check a Store ran (T-37978). Each schema is read in the dialect it
+// declares, since 2020-12 changed tuple and ref semantics; one that declares
+// none is read as 2020-12.
+const DIALECTS: Record<string, '7' | '2019-09' | '2020-12'> = {
+  'https://json-schema.org/draft/2020-12/schema': '2020-12',
+  'https://json-schema.org/draft/2020-12/schema#': '2020-12',
+  'http://json-schema.org/draft-07/schema#': '7',
+  'http://json-schema.org/draft-07/schema': '7',
+  'https://json-schema.org/draft/2019-09/schema': '2019-09',
+  'https://json-schema.org/draft/2019-09/schema#': '2019-09',
+}
+
+const dialectOf = (schema: Record<string, unknown>) => {
+  const uri = schema.$schema
+  if (uri === undefined) return '2020-12'
+  const dialect = DIALECTS[String(uri)]
+  if (!dialect) {
     throw new Error('Unsupported tool JSON Schema dialect: ' + String(uri))
   }
+  return dialect
 }
-const inputDialect = dialects(true)
-const validators = new WeakMap<object, ValidateFunction>()
+
+/** A compiled schema: the errors a value has against it, none when valid. */
+export type Check = (value: unknown) => OutputUnit[]
+
+const checks = new WeakMap<object, Check>()
+
+/** The check for a schema, compiled once per schema object. */
+export const toolCheck = (schema: Record<string, unknown>): Check => {
+  let check = checks.get(schema)
+  if (!check) {
+    const validator = new Validator(schema as Schema, dialectOf(schema), false)
+    // Checked as the JSON it stands for: a property set to `undefined` is one
+    // left out, which the validator would otherwise refuse as no JSON type.
+    check = (value) => {
+      const json = value === undefined
+        ? value
+        : JSON.parse(JSON.stringify(value))
+      const result = validator.validate(json)
+      return result.valid ? [] : result.errors
+    }
+    checks.set(schema, check)
+  }
+  return check
+}
+
+/** Errors as one line: where in the value, and what is wrong there. */
+export const errorsText = (errors: OutputUnit[]): string =>
+  errors.map((e) => `${e.instanceLocation || '#'} ${e.error}`).join('; ')
+
+// An argument left out takes the `default` its schema declares, the way a
+// command line's `--limit` does, down through nested object properties.
+const filled = (schema: unknown, value: unknown): void => {
+  if (!schema || typeof schema != 'object') return
+  if (!value || typeof value != 'object' || Array.isArray(value)) return
+  const props = (schema as { properties?: Record<string, unknown> }).properties
+  const into = value as Record<string, unknown>
+  for (const [key, prop] of Object.entries(props ?? {})) {
+    if (!prop || typeof prop != 'object') continue
+    if (into[key] === undefined && 'default' in prop) {
+      into[key] = structuredClone((prop as { default: unknown }).default)
+    }
+    filled(prop, into[key])
+  }
+}
 
 export const validateToolInput = (
   tool: { inputSchema?: Record<string, unknown>; input?: object },
@@ -49,48 +79,25 @@ export const validateToolInput = (
   if (tool.input) {
     throw new Error('Tool cannot declare both input and inputSchema')
   }
-  let validate = validators.get(tool.inputSchema)
-  if (!validate) {
-    validate = inputDialect(tool.inputSchema).compile(tool.inputSchema)
-    validators.set(tool.inputSchema, validate)
-  }
+  const check = toolCheck(tool.inputSchema)
   const value = structuredClone(args)
-  if (!validate(value)) {
-    throw new Error(
-      'Invalid tool arguments: ' +
-        inputDialect(tool.inputSchema).errorsText(validate.errors),
-    )
+  filled(tool.inputSchema, value)
+  const errors = check(value)
+  if (errors.length) {
+    throw new Error('Invalid tool arguments: ' + errorsText(errors))
   }
   return value
 }
 
 /** Validate the emitted object without applying defaults or changing the result. */
-const outputDialect = dialects(false)
-const outputValidators = new WeakMap<object, ValidateFunction>()
-
-/** Compile a non-mutating validator using the schema's declared dialect. */
-export const toolOutputValidator = (
-  schema: Record<string, unknown>,
-): ValidateFunction => {
-  let validate = outputValidators.get(schema)
-  if (!validate) {
-    validate = outputDialect(schema).compile(schema)
-    outputValidators.set(schema, validate)
-  }
-  return validate
-}
-
 export const validateToolOutput = (
   tool: { outputSchema?: Record<string, unknown> },
   value: unknown,
 ): void => {
   if (!tool.outputSchema) return
-  const validate = toolOutputValidator(tool.outputSchema)
-  if (!validate(value)) {
-    throw new Error(
-      'Invalid tool result: ' +
-        outputDialect(tool.outputSchema).errorsText(validate.errors),
-    )
+  const errors = toolCheck(tool.outputSchema)(value)
+  if (errors.length) {
+    throw new Error('Invalid tool result: ' + errorsText(errors))
   }
 }
 
@@ -163,12 +170,8 @@ export const toolDefinition = (value: unknown): ToolDefinition => {
     { inputSchema: toolDefinitionSchema },
     value as Record<string, unknown>,
   ) as unknown as ToolDefinition
-  if (candidate.inputSchema) {
-    inputDialect(candidate.inputSchema).compile(candidate.inputSchema)
-  }
-  if (candidate.outputSchema) {
-    outputDialect(candidate.outputSchema).compile(candidate.outputSchema)
-  }
+  if (candidate.inputSchema) toolCheck(candidate.inputSchema)
+  if (candidate.outputSchema) toolCheck(candidate.outputSchema)
   const props = candidate.inputSchema?.properties as
     | Record<string, unknown>
     | undefined
@@ -217,10 +220,7 @@ let HINTS = [
  * Nothing is validated here. {@link toolsIn} is the same read with validation,
  * and it is what a program loading somebody else's plugin wants; this one is
  * for a document whose declarations are validated where they are authored (a
- * package's own vocab.json, against the meta-schema, in its tests). It is also
- * the only read that works where generating code from strings is forbidden,
- * such as in a Cloudflare Worker, since ajv validates a schema by compiling it
- * into a function.
+ * package's own vocab.json, against the meta-schema, in its tests).
  *
  * `loadVocab` skips tool entries; this skips everything else. A document is
  * read once for its components and once for its tools, and neither reading has

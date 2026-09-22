@@ -272,6 +272,7 @@
     "@std/csv": "jsr:@std/csv@^1.0.6",
     "@std/yaml": "jsr:@std/yaml@^1.2.0",
     "ajv": "npm:ajv@^8.17.1",
+    "@cfworker/json-schema": "npm:@cfworker/json-schema@4.1.1",
     "@cloudflare/sandbox": "npm:@cloudflare/sandbox@0.12.9",
     "@cloudflare/workers-oauth-provider": "npm:@cloudflare/workers-oauth-provider@0.10.3",
     "@sentry/cloudflare": "npm:@sentry/cloudflare@10.75.0",

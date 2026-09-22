@@ -25,8 +25,8 @@
 // server.
 //
 // This module is NOT re-exported from mod.ts and never will be: reading a
-// declaration means validating it, which means ajv, which has no business in a
-// browser tab that only wants the graph. Import `@yaks/graph/tools` to get it.
+// declaration means validating it, which means a JSON Schema validator, which
+// has no business in a browser tab that only wants the graph. Import `@yaks/graph/tools` to get it.
 
 import { toolsIn, toolsSaid } from '@yaks/vocab/tools'
 import type { VocabDoc } from '@yaks/vocab'
@@ -244,8 +244,8 @@ export let runs = (seams: Seams = {}): Runs => {
  *
  * The declarations are read rather than checked ({@link toolsSaid}), because
  * they are this package's own and its tests check them against the
- * meta-schema; the check is an ajv compile, and a Cloudflare Worker forbids
- * building a function from a string. Each transport restates the arguments in
+ * meta-schema, so no program pays to check them again at load. Each transport
+ * restates the arguments in
  * the form it accepts (@yaks/mcp `core`, which is also what shapes this tier
  * for one server).
  */

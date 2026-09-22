@@ -478,12 +478,9 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 "preact/hooks" = "./node_modules/preact/hooks/dist/hooks.module.js"
 "preact-render-to-string" = "./node_modules/preact-render-to-string/dist/index.mjs"
 "zod" = "./node_modules/zod/index.js"
-# @yaks/vocab validates a tool's arguments with ajv, and names all three of its
-# dialect entry points: the bare name is the package's own `main`. One alias per
-# specifier, because an alias is a name and not a prefix.
-"ajv" = "./node_modules/ajv/dist/ajv.js"
-"ajv/dist/2019.js" = "./node_modules/ajv/dist/2019.js"
-"ajv/dist/2020.js" = "./node_modules/ajv/dist/2020.js"
+# @yaks/vocab validates a tool's arguments with @cfworker/json-schema, which
+# interprets a schema rather than compiling it to code the runtime refuses.
+"@cfworker/json-schema" = "./node_modules/@cfworker/json-schema/dist/esm/index.js"
 "zod-to-json-schema" = "./node_modules/zod-to-json-schema/dist/esm/index.js"
 "@modelcontextprotocol/sdk/server/mcp.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js"
 "@modelcontextprotocol/sdk/types.js" = "./node_modules/@modelcontextprotocol/sdk/dist/esm/types.js"

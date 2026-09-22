@@ -6,8 +6,8 @@
 // in its vocab.json and the graph runs it; nobody writes any code.
 //
 // It has the same shape as `toolsIn` and a fraction of the weight: reading a
-// tool declaration means validating its argument schemas, which means ajv,
-// which is why that loader is its own entry point. A rule is a name and a
+// tool declaration means validating its argument schemas, which means a JSON
+// Schema validator, which is why that loader is its own entry point. A rule is a name and a
 // string, so this loader has no dependencies and is exported from `mod.ts`.
 
 import type { VocabDoc } from './types.ts'
