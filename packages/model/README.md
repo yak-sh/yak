@@ -1,8 +1,8 @@
 # @yaks/model
 
 Provider-neutral request and reply types for model calls, plus vocabulary for
-providers, models, and tools. This package defines the interface; it does not
-make network requests.
+providers and models. This package defines the interface; it does not make
+network requests.
 
 ## Install
 
@@ -14,24 +14,36 @@ deno add jsr:@yaks/model
 
 Three things, and no transport:
 
-- **`Item`** — one line of a conversation as a model sees it: a user turn, an
-  assistant turn, a call the model asked for, the result it was given.
+- **`Item`** — one conversation item sent to or returned by a model: a user
+  turn, an assistant turn, a call the model asked for, the result it was given.
 - **`Model`** — `(Request) => Promise<Reply>`. A request is a model name, the
-  items, the tools, and an optional anchor to continue from; a reply is an id,
-  the model that served it, and the items it produced. A provider that stores
-  its replies adds three optional members: `mark` (the component to write on the
-  record of a reply), `anchor` (reads an anchor back off that record, or returns
-  nothing) and `vocab` (the component `mark` writes).
-- **`provider`, `model`, `tool`** — the entities a graph stores about serving,
-  as one vocabulary document (`modelDoc`), so that which models exist is data.
+  items, the tools, and an optional provider response reference (an **anchor**)
+  to continue from; a reply is an id, the model that served it, and the items it
+  produced. A provider that stores its replies adds three optional members:
+  `mark` (the component to write on the record of a reply), `anchor` (reads an
+  anchor back off that record, or returns nothing) and `vocab` (the component
+  `mark` writes).
+- **`provider`, `model`** — graph components describing providers and available
+  models, exported as the JSON Schema document `modelDoc`. The `tool` component
+  belongs to [@yaks/tools](../tools), not this vocabulary. `Tool` here is the
+  provider-neutral TypeScript type for a callable tool description.
 
 A provider package implements `Model`: [@yaks/openai](../openai) does it over
 the Responses API; an Ollama or a Workers AI package would sit beside it. A
 conversation package ([@yaks/session](../session)) turns its stored transcript
 into items and calls the model. Neither imports the other.
 
+The root module exports these types, `ModelError`, `modelDoc`, the `models()`
+graph plugin, and the `PROVIDER`, `MODEL`, and `TOOL` component-name constants.
+`@yaks/model/vocab` exports `modelDoc` and `docs: [modelDoc]` for plugin
+loaders. `@yaks/model/rules` exports `rules()`, which supplies that schema
+plugin without write-time behavior. The package has no database or conversation
+storage; the calling application stores the provider and model records if it
+needs them.
+
 A model that throws `ModelError` failed in a way the caller expects — a refusal,
-a rate limit, a missing credential. Anything else it throws is a bug.
+a rate limit, a missing credential. Other exceptions are unexpected failures
+that the caller can record separately.
 
 ## Minimal implementation
 

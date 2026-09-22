@@ -23,8 +23,11 @@ const document = {
 }
 ```
 
-Compose `docDoc` with your domain vocabulary to add shared text fields without
-repeating their definitions in each component.
+An entity is a record identified by `entity.eid`; each component is a named
+object on it. The JSON object above is a bundle containing the `doc` component.
+Compose `docDoc` (the exported JSON Schema document) with your domain vocabulary
+to add shared text fields without repeating their definitions. The package
+provides no storage: the graph's adapter persists the title and body.
 
 ## Two columns
 
@@ -33,9 +36,9 @@ repeating their definitions in each component.
 | `title` | the one line the entity is known by |
 | `body`  | the prose, as markdown              |
 
-And deliberately nothing else. A `slug` is addressing, an `excerpt` is derived,
-a `format` is a rendering decision, and the clock belongs to the graph. Each is
-its own component on the same entity — which is the point of components.
+And deliberately nothing else. A slug can be stored by an addressing package, an
+excerpt can be computed from the body, a renderer chooses its output format, and
+graph provenance components record timestamps. None is a column of `doc`.
 
 ## Use
 
@@ -44,10 +47,12 @@ import { loadVocab } from '@yaks/vocab'
 import { graph } from '@yaks/graph'
 import { docDoc, docs } from '@yaks/doc'
 
-let vocab = loadVocab([docDoc, mine])
-let g = graph({ storage, vocab, plugins: [docs()] })
+import { ram } from '@yaks/ram'
 
-g.apply([{
+const vocab = loadVocab([docDoc])
+const g = graph({ storage: ram(vocab), vocab, plugins: [docs()] })
+
+await g.apply([{
   entity: { eid: 'r1' },
   doc: { title: 'Lemon cake', body: '3 lemons, 200g sugar…' },
 }])
@@ -58,29 +63,47 @@ twice, so packages that need `doc` — [@yaks/mail](https://jsr.io/@yaks/mail) i
 one — depend on this package and leave the composing to you, rather than
 shipping a second copy of the component.
 
-## The body may be content-addressed, and `doc` never knows
+## Optional content-addressed body storage
 
 `body` declares `store: "blob"` — a keyword this package **names** but does not
 import. On its own it does nothing:
 
 - Load without [@yaks/blob](https://jsr.io/@yaks/blob)'s `blobKeywords` and
   `body` is an ordinary text column.
-- Load with them and compose `blobs(vocab, store)`, and the text is swapped for
-  its address on the way into the row and back on the way out.
+- Load with them and compose `blobs(vocab, store)` to replace incoming text with
+  its content address. Also configure read resolution (for example, the SQLite
+  read override described in @yaks/blob) to return text instead of hashes.
 
-The same document, the same writes, the same reads. A graph grows into
-content-addressed storage without touching its vocabulary, and `@yaks/doc`
-depends on nothing to make that true.
+Callers still write and read text; they do not handle the content hashes. This
+can be enabled without changing the vocabulary declaration.
+
+## Exports
+
+The root import provides `docDoc`, `docs()`, the `DOC`, `TITLE`, and `BODY`
+constants. `./vocab` exports the schema document and a `docs` array; `./rules`
+exports the plugin factory expected by the CLI loader. Note that root `docs()`
+is a function, unlike the array in `./vocab`.
 
 ## Kind order
 
-`doc` is a kind, and it declares no `before`. A `before` may only name a kind
-the loaded vocabulary declares, so a base package cannot order itself against
-components it does not ship. Your own vocabulary decides which wins:
+A **kind** is a component used to classify an entity for display. `doc` is a
+kind, and it declares no `before`. A `before` may only name a kind the loaded
+vocabulary declares, so a base package cannot order itself against components it
+does not ship. Your own vocabulary decides which wins:
 
 ```ts
 // recipe takes display-kind precedence over doc
-{ recipe: { type: 'object', kind: true, before: ['doc'], properties: { … } } }
+const recipeSchema = {
+  $defs: {
+    recipe: {
+      type: 'object',
+      component: true,
+      kind: true,
+      before: ['doc'],
+      properties: {},
+    },
+  },
+}
 ```
 
 ## What is deliberately not here

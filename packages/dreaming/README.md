@@ -1,15 +1,17 @@
 # @yaks/dreaming
 
-Background work an agent does when nobody is asking it anything: standing
-intentions that come due on a schedule, and the record of how often a memory has
-been recalled.
+Store scheduled agent work and create a session when it becomes due. A `dream`
+is an entity describing recurring or deferred work; its `doc.body` contains the
+instructions. This package also declares counters and relationships that record
+memory retrieval. It writes to the graph supplied by the caller, not to a
+separate database.
 
 ```sh
 deno add jsr:@yaks/dreaming
 ```
 
-- `dream{scope, floor}` — a standing intention, filed under a project. `floor`
-  is a timestamp: the earliest it may run again.
+- `dream{scope, floor}` — a scheduled work item associated with a project.
+  `floor` is a timestamp: the earliest it may run again.
 - `recall{count, first_at, last_at}` — how many times an entity has been
   recalled, and when it last was. This is the data dreaming works over.
 - `recalled` — an edge relation: this entry recalled that entity, at this time.
@@ -26,16 +28,16 @@ the dream's own body text. In the code and in the configuration that session is
 called a **desk** (`desk.ts`, the exported `desk()` function, the `desk` config
 key).
 
-The `floor` column is the whole queue: anything that wants writing later files a
-dream with its body text and sets `floor` to when it should next run. Two guards
-keep a due dream to one session at a time:
+The `floor` column stores the earliest start time. Create a dream with body text
+and a floor timestamp to request future work. Two checks prevent repeated
+starts:
 
 - while the session is open it holds the dream's `claim`
   ([@yaks/session](../session)'s lock), so a second trigger finds the claim and
   does nothing;
-- opening one also moves `floor` forward by the `rest` interval the
-  configuration sets, so a session that died without releasing its claim still
-  cannot reopen before then.
+- opening one moves `floor` forward when a `rest` interval is configured.
+  Without `rest`, only the claim prevents another start. This package does not
+  release a dead session's claim; session cleanup must do that.
 
 A dream is checked when it is created, when its `floor` is changed to a time
 that has already passed, and when a [@yaks/wake](../wake) `wake` on it — or one
@@ -58,37 +60,54 @@ aimed at it through `wake.target` — fires. Nothing polls.
 }
 ```
 
-WHAT gets opened is never decided in this package. A provider, a model, an
-effort, a persona — none of those are facts about the graph, so the
-configuration names them and this package decides when. A configuration with no
-`desk` registers no effects at all, which is what a graph that only stores
-dreams wants. `rest` is a @yaks/wake recurrence (`1h`, `@daily`, `0 9 * * 1-5`),
-parsed when the plugin is composed: one this machine cannot parse is reported at
-boot and the plugin then registers nothing, rather than opening a session on
-every trigger.
+The configuration selects the provider, model, effort, persona and actor used by
+the new session. Replace the example identifiers with entities in your graph;
+these values are not built-in accounts or models. `ask` supplies fallback text
+when the dream has no body. With neither body nor `ask`, no session opens.
+
+A configuration without `desk` registers no effects, allowing a graph to store
+dreams without running them. `rest` is a @yaks/wake recurrence (`1h`, `@daily`,
+`0 9 * * 1-5`). An invalid recurrence produces a warning during plugin
+composition and disables these effects instead of preventing startup.
 
 No process is launched here. What this package writes is a session row and its
 first entry — [@yaks/session](../session)'s components, plus the `references`
-edge to the persona — and whatever runs sessions on this machine runs it:
+edge to the persona — and a separately configured session runner executes it.
+The following is a schematic list of bundles (one entity's components as a JSON
+object), not executable input:
 
 ```
 { entity: { eid: s }, session: { actor: 'N-scribe' } }
 { entity: { eid: e }, entry: { session: s, seq: 1 },
   content: { body: "Write up what is waiting." },
   using: { provider: 'Y-openai', model: 'O-gpt-6', effort: 'high' } }
-{ entity: { eid: s }, references: {} , edge: { from: s, to: 'N-scribe' } }
-{ entity: { eid: dream }, claim: { session: s },
+{ entity: { eid: relationId }, references: {} , edge: { from: s, to: 'N-scribe' } }
+{ entity: { eid: dreamId }, claim: { session: s },
   dream: { floor: '…+1h' }, recall: { count: 2, … } }
 ```
 
-The dream's own record of having run is `recall`: how many times it has come
-due, and when it last did.
+The dream's `recall` records how many sessions were opened and the first and
+latest opening times, not whether the requested work succeeded. These counters
+are server-stamped, so the effects writer must apply them as trusted writes.
 
 The handler is idempotent — a dream that is resting, or already claimed, opens
 nothing — so the registration declares `sweep: { pending: '.dream' }` and the
-server may replay it over every dream at boot. A `desk` the configuration gets
-wrong (a model this machine does not serve) becomes a failed effect: it is
-reported, and it does not fail the transaction.
+server may replay it over every dream at boot. A failure in an effect is
+reported by @yaks/effects after the original transaction has committed; it
+cannot roll that transaction back. This package does not check whether a model
+is served locally: execution failures belong to the session runner.
+
+## Exports
+
+- `@yaks/dreaming`: `dreamingDoc`, component-name constants, `due`
+  (earliest-start check), `desk` (construct session and claim bundles),
+  `opening` and `ringing` (effect handlers), `watches` (their registrations),
+  and `Desk`/`Open` types.
+- `@yaks/dreaming/vocab`: the schema in `docs`.
+- `@yaks/dreaming/effects`: the `effects(host, options)` factory. Here `host`
+  means the process that opened the graph; the factory currently uses only
+  options. Load the session, doc, kernel and wake schemas and the corresponding
+  execution services when configuring a runnable graph.
 
 ## Compatibility
 

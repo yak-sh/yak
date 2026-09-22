@@ -101,6 +101,10 @@ retained between requests.
 | `@yaks/mcp`       | `shapeOf`, `inputSchemaOf`, `annotated`, `COMMAND`, `Security`: argument schemas, MCP annotations, command metadata key, and security metadata type |
 | `@yaks/mcp/stdio` | `stdio`: connect the server to process stdin and stdout                                                                                             |
 
+`annotated(tool)` produces MCP behavior hints and includes `annotations.title`
+when the tool declares a nonempty title. It does not invent a title for tools
+without one.
+
 ## The five graph tools
 
 The generic tools are declared and implemented in `@yaks/graph`. `core()` adapts

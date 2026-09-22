@@ -5,9 +5,10 @@ back at the start of the next conversation. This package supplies the `memory`
 component, the write and read helpers, and two tools; storage and optional
 semantic ranking come from elsewhere.
 
-Throughout this README, "the server" means whichever process opened the graph
-and loaded this package — usually a long-running `yak serve`, sometimes just the
-CLI.
+An entity is a record identified by `entity.eid`. A bundle is a JSON object
+containing that identifier and the entity's named components, such as `doc` and
+`memory`. The graph and its storage adapter persist these objects; this package
+constructs writes, queries and display text.
 
 ## Install
 
@@ -21,22 +22,23 @@ deno add jsr:@yaks/memory
 ```ts
 import { loadVocab } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
-import { line, memoryDoc, passage, saved } from '@yaks/memory'
+import { memoryDoc, saved } from '@yaks/memory'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
 
-let vocab = loadVocab([docDoc, memoryDoc, mine])
+const vocab = loadVocab([docDoc, memoryDoc])
+const g = graph({ vocab, storage: ram(vocab) })
 
-// keeping one
-g.apply(saved({
+await g.apply(saved({
   eid: crypto.randomUUID(),
   said: 'use grams, never cups',
-  space: ada,
   about: 'recipes',
   context: 'looking at the recipe app',
 }))
 
-// getting them back — with words the full-text index ranks them, without
-// words the newest come first
-g.read(line({ space: ada, limit: 8, said: 'how do they like measurements' }))
+console.log(await g.read('.memory .doc?'))
+// For persistent storage, replace ram with a database adapter. For full-text
+// queries, configure @yaks/fts on a compatible SQL adapter.
 ```
 
 ## The component
@@ -53,29 +55,38 @@ The text is `doc.body`, verbatim. That is where a store's search index lives, so
 a memory is findable through the same API as every other text and renders
 through the same renderer. `memory` holds the rest:
 
-- `space` — whose space it was said in. Every member of that space can read it,
-  and it is deleted with the space.
+- `space` — the space the statement belongs to. Deleting the space deletes its
+  memories. Space membership and read access require application access
+  controls; this schema alone does not enforce them.
+- `scope` — an optional project reference; the memory survives project deletion.
+- `last_confirmed_at` — a stamped timestamp for the latest confirmation.
+- `feedback{by}` — a separate component marking a correction and, when known,
+  the entity identifying the person who supplied it.
 - `about` — the app it was about, by slug, when it was about one.
 - `context` — the line or two needed to understand the words. Never a
   restatement of them.
 
-Authorship is the graph's own `created{at, by}`. Who said it and when are facts
-every entity already carries; a second copy here would drift from the first.
+The graph's optional `created{at, by}` component records when the record was
+created and the writer's identity. It identifies the speaker only when the
+application writes as that speaker; `feedback.by` can identify a different
+person who supplied a correction.
 
 ## Writing
 
-`saved()` rejects an empty `said` — a memory with no sentence in it is an
-agent's note about a conversation, which is the thing this package exists to not
-be — and truncates `context` to `LINES` (two) lines: enough to record what was
-being talked about, not enough to restate what was said.
+`saved()` trims `said` and rejects an empty result. It keeps the statement
+rather than summarizing it. It drops blank context lines, trims each remaining
+line, and keeps at most `LINES` (two). It returns a list containing one bundle;
+the caller passes that list to `g.apply()`.
 
 ## Reading
 
 `line()` builds the query string that finds memories, in the filter grammar
-every yaks store answers. With words in it, the store's own full-text index over
-`doc` ranks them; with none, the newest come first.
+understood by yaks storage adapters. With `said`, it adds search terms as a
+filter; without `near` or explicit ids, it orders by descending `entity.num`.
+This requires numbered entities for creation-order sorting. Search terms do not
+request BM25 ranking. A `.near` query requires a configured embedding index.
 
-`Ranker` is the interface for a server that can do better than word matching:
+`Ranker` is the interface for an application-supplied semantic search function:
 
 ```ts
 type Ranker = (
@@ -84,12 +95,12 @@ type Ranker = (
 ) => Promise<Eid[]>
 ```
 
-It returns the memories nearest in MEANING, ids only and closest first, and
-`ordered()` reorders the store's result to match. Nothing here knows how that is
-done: on Cloudflare it is Vectorize with an embedding from Workers AI, on a
-server it could be [@yaks/embedding](https://jsr.io/@yaks/embedding) over
-SQLite, and with no ranker at all the word matching ranks them. A server that
-binds none loses ranking by meaning and nothing else.
+It returns semantically similar memory ids, closest first, and `ordered()`
+reorders the store's result to match. Nothing here knows how that is done: on
+Cloudflare it is Vectorize with an embedding from Workers AI, on a server it
+could be [@yaks/embedding](https://jsr.io/@yaks/embedding) over SQLite, and
+without a ranker the query filters by words and sorts by entity number. The
+library does not automatically call a ranker; the application does.
 
 An external vector index must use the same dimensions and similarity metric as
 the embedding model. Creating and updating that index is the server's
@@ -98,10 +109,14 @@ responsibility.
 ## The passage
 
 `passage({ name, space }, memories)` builds the text an agent is given at the
-start of a conversation: the newest few, whole and in quotes, with each one's
-context under it. It is bounded — `LAST` (8) of them and `BYTES` (2048) bytes,
-whichever runs out first, then one line saying the rest are a `memory_recall`
-away. Whatever process formats the passage must also expose that recall tool.
+start of a conversation. Pass `Memory` records in the desired order; use
+`heard(bundle)` to convert graph results and `ordered(ids, memories)` to apply
+an external ranking. Each statement is quoted in full with its context below.
+The helper includes at most `LAST` (8) records and targets `BYTES` (2048) UTF-8
+bytes of record text. The first record is always included even if oversized, and
+the heading and omitted-results notice are additional bytes. This is not a
+strict total-output bound. If records are omitted, a notice names
+`memory_recall`, so the application should expose that tool.
 
 ## The tools
 
@@ -121,19 +136,30 @@ the words requires `was` — the token `memory recall` returns beside them, whic
 the graph's own precondition check reads — so a memory another writer changed
 since you read it is rejected as a whole rather than overwritten.
 
-`memory recall` returns memories WHOLE, ranked by whatever the server has: its
-full-text index over `doc`, which matches `said` as a PHRASE, so use the words
-you expect the memory to contain; its vectors where `near` names an anchor
-entity and [@yaks/embedding](https://jsr.io/@yaks/embedding) is composed, which
-is the ranking that answers a sentence; and the newest where it has neither.
+`memory recall` returns complete memories, not excerpts. `said` is converted to
+search terms, so use words expected in the stored statement, not a new question
+about it. Those terms are filters, not a guaranteed exact phrase or a relevance
+ranking. `near` names an existing entity for semantic ranking when
+[@yaks/embedding](https://jsr.io/@yaks/embedding) is configured. Without that
+ranking or explicit ids, the query sorts by descending entity number.
+
+## Exports
+
+The root exports `memoryDoc`, `saved`, `clamped`, `line`, `heard`, `ordered`,
+`passage`, the `Saving`, `Asked`, `Memory`, and `Ranker` types, and constants
+`MEMORY`, `FEEDBACK`, `LINES`, `EMPTY`, `LAST`, and `BYTES`. `clamped` performs
+context-line trimming; `EMPTY` is the empty-statement error message.
+`@yaks/memory/vocab` exports `memoryDoc` and its `docs` array for schema
+loaders; `@yaks/memory/tools` supplies the tool implementations described above.
 
 ## Compatibility
 
 Pure TypeScript. It imports no platform API — no `Deno`, no Node built-in, no
 DOM global beyond `TextEncoder` — and type-checks under
 `lib: ["dom", "esnext"]`, so it runs unchanged in a **browser**, on **Deno**,
-and on **Node** (via JSR / npm). Its only dependencies are the sibling packages:
-`@yaks/graph`'s bundle types and a `@yaks/vocab` schema.
+and on **Node** (via JSR / npm). The library depends on sibling schema and graph
+libraries. The optional `./tools` implementations additionally require the
+configured graph and, for search queries, the appropriate search extensions.
 
 ## License
 

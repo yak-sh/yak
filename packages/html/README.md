@@ -1,9 +1,14 @@
 # @yaks/html
 
-Server-side HTML from the same portable views used by `@yaks/preact` and
-`@yaks/text`. `render(registry, bundle, view, vocab, ctx?)` uses the Preact host
-for registry selection and tree construction, then `preact-render-to-string` for
-serialization. An unmatched view returns an empty string.
+Renders graph records as HTML strings, using the same view functions as
+`@yaks/preact` and `@yaks/text`. A registry is a list of named view functions
+with selection predicates; a bundle is one entity's components as a JSON object.
+The vocabulary describes those components.
+
+The exported `render(registry, bundle, view, vocab, ctx?)` uses the Preact
+rendering backend for view selection and tree construction, then
+`preact-render-to-string` for serialization. An unmatched view returns an empty
+string.
 
 ```ts
 import { render } from '@yaks/html'

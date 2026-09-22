@@ -1,20 +1,54 @@
 # @yaks packages
 
-Small, focused, independently publishable building blocks (npm + JSR) for a
-query → schema → SQL → storage pipeline over an entity/component data model.
-Each package does one job well and composes with the others; none requires the
-rest.
+TypeScript libraries for storing, querying and rendering records, plus packages
+for agent sessions, tools and application domains. Packages can be imported
+individually, but many depend on other `@yaks/*` packages. They are intended for
+publication through JSR and npm; runtime requirements vary by package.
 
-In dependency order:
+## Start here
 
-- **[@yaks/query](./query)** — parse a query string to a plain, serializable
-  AST, or build the same AST from code. Schema-agnostic: it knows the format
-  (operators, any-of lists, ranges, time literals, directives), not what any
-  field means.
-- **[@yaks/yaml](./yaml)** — reads the files a vocabulary and its neighbours are
-  declared in: YAML parsed to a value (JSON is valid YAML, so nothing has to be
-  converted), a markdown file's frontmatter read as a bundle, and placeholders
-  in a template filled in. Depends on nothing but the graph's `Bundle` type.
+An **entity** is a record identified by `entity.eid`. Its **components** are
+named objects describing different aspects of the record. A **bundle** is one
+entity's components as a JSON object. A **batch** is a list of changes applied
+in one transaction. A **vocabulary** is the schema declaring the components,
+columns and relationships a graph accepts.
+
+This complete example stores documents in memory. `loadVocab()` loads the
+schema, `ram()` provides storage, and `graph()` validates and applies changes:
+
+```ts
+import { docDoc } from '@yaks/doc'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+
+let vocab = loadVocab([docDoc])
+let g = graph({ storage: ram(vocab), vocab })
+await g.apply([{
+  entity: { eid: 'first-note' },
+  doc: { title: 'Getting started', body: 'A document stored as components.' },
+}])
+console.log(await g.read('.doc.title="Getting started"'))
+```
+
+RAM contents disappear when the process exits. Use [@yaks/sqlite](./sqlite) for
+persistent local storage, [@yaks/api](./api) for HTTP access, and
+[@yaks/client](./client) for a synchronized browser graph. Each README documents
+its exports, setup, storage behavior and limitations. The package index below is
+grouped approximately by function, **not** by dependency order.
+
+## Package index
+
+- **[@yaks/query](./query)** — Parse query strings into an abstract syntax tree
+  (AST), or build the same tree from code. It understands operators, lists,
+  ranges and directives, not application field meanings. Time-parsing helpers
+  are separate from parsing scalar query values.
+
+- **[@yaks/yaml](./yaml)** — Parse YAML or JSON text and split Markdown
+  frontmatter from its body. Frontmatter can contain a partial bundle. Its graph
+  dependency is type-only; it uses the standard YAML parser. `fill()`
+  substitutes `{{name}}` placeholders. The package performs no file I/O.
+
 - **[@yaks/vocab](./vocab)** — describe a component vocabulary as JSON Schema
   (2020-12) plus a small custom keyword vocabulary, and interrogate it at
   runtime: column types, path routing, display ordering, instance checks.
@@ -25,121 +59,149 @@ In dependency order:
 - **[@yaks/names](./names)** — the other way to address an entity: the
   components a vocabulary marks `by_name`, the column each one stores its name
   in, and the lookup for a name somebody typed.
-- **[@yaks/sql](./sql)** — compile a `@yaks/query` AST against a `@yaks/vocab`
-  schema into a SQL string and bound params, through a dialect-agnostic
-  relational IR (a SQLite dialect ships with the package).
-- **[@yaks/archetype](./archetype)** — one content-addressed entity per
-  component-table set: portable SHA-256 identity, cached table-presence matches
-  and add/remove transitions, and the graph plugin that maintains each entity's
-  archetype. SQLite backfills from the physical file and retires descriptors
-  whose tables disappeared; readers with narrower vocabularies still agree.
-- **@yaks/sqlite** — the storage adapter: composes the three packages above to
-  answer queries as result bundles and write bundles back to a SQLite database.
-  (In development.)
-- **[@yaks/blob](./blob)** — content-addressed storage for a text column,
-  transparent to the code reading and writing it: mark the column, and the row
-  stores the value's hash while the value itself is written to a table, a
-  directory or a bucket — once, however many rows hold the same value.
-- **[@yaks/fts](./fts)** — full-text search over any text property: the FTS5
-  index implied by the vocabulary, and the `@yaks/sql` extension that compiles a
-  bare search term in a query string into a `match` clause.
-- **[@yaks/embedding](./embedding)** — the other kind of search: a vector per
-  entity, kept current by a sweep, and the `@yaks/sql` extension that compiles
-  `.near=<entity>` and `.order=similar` into a nearest-neighbour ranking.
-- **[@yaks/telemetry](./telemetry)** — RETIRED: the graph holds what the
-  tool-call log held. A call is a `call` settled as a `result` with its `ms` and
-  its `created.by`, and a failure is the `error` or `exception` stored with it
-  ([@yaks/tools](./tools/README.md#what-replaced-the-tool-call-log)), so
-  `/telemetry` is a query. Nothing composes this package; it dies with the fleet
-  server that imports it.
-- **[@yaks/match](./match)** — the other evaluator of the same grammar: a
-  `@yaks/query` AST run as a predicate over bundles held in memory, with no
-  database. Tested query by query for parity with `@yaks/sql`.
-- **[@yaks/graph](./graph)** — the core the rest are plugins to: the
-  entity/component model, the bundle a write is sent as, and the phased,
-  pluggable `apply()` that filters, normalizes, validates and atomically commits
-  a list of changes over any `Storage`.
-- **[@yaks/render](./render)** — views selected by query specificity and a
-  role-rightmost name, actions contributed per component, and column schemas
-  matched by the same registry. Renderers are passed a hyperscript function, so
-  the program using them decides what a tree is rendered into.
-- **[@yaks/preact](./preact)** — the Preact host for that registry: an Entity
-  component reading a function store, subscribing while mounted, and handing
-  Preact's hyperscript to the same portable renderers.
-- **[@yaks/html](./html)** — server-side HTML from the same registry, composed
-  through the Preact host and its server serializer without a DOM.
+- **[@yaks/sql](./sql)** — Compile a query AST against a loaded vocabulary into
+  SQL and bound parameters. Its intermediate representation describes relational
+  operations but also contains SQL fragments; the supplied renderer targets
+  SQLite. Extensions implement full-text, relationship and vector queries.
+
+- **[@yaks/archetype](./archetype)** — Record each distinct set of
+  component-table names in one entity with a SHA-256-derived id, and maintain an
+  `archetype` reference on entities. Cached table-presence matches and
+  component-add/remove transitions reduce repeated work. SQLite backfills from
+  physical tables and retires obsolete descriptors (records describing a table
+  set); readers loading fewer schemas still derive the same ids for the same
+  sets.
+
+- **[@yaks/sqlite](./sqlite)** — A SQLite storage adapter. It compiles queries,
+  returns bundles and applies component changes through the graph `Storage`
+  interface. The caller supplies a database driver; the adapter creates
+  component tables from schemas.
+
+- **[@yaks/blob](./blob)** — Store text and binary content by hash. A marked
+  text column stores a hash while a table, directory or object store holds the
+  content. Text substitution requires both the graph plugin and read resolution.
+  SQL content and component writes share a transaction only on the same
+  connection; files and object-store writes cannot roll back with SQL.
+
+- **[@yaks/fts](./fts)** — Build SQLite FTS5 indexes and compile text search
+  terms. By default it indexes stored scalar text columns marked `search: true`,
+  with one index per component. A bare query term needs this or another search
+  extension.
+
+- **[@yaks/embedding](./embedding)** — Store vectors and compile
+  `.near=<entity>` and `.order=similar`. An injected embedding function
+  determines what similarity means. Watched writes schedule debounced update
+  passes; they are not an unconditional startup or periodic refresh. Bounded
+  passes need further scheduling to process all stale rows.
+
+- **[@yaks/telemetry](./telemetry)** — Retired standalone SQLite tool-call log.
+  New code records `call`, `execution`, `result`, timing, attribution and
+  failures in the graph through
+  [@yaks/tools](./tools/README.md#what-replaced-the-tool-call-log), which can be
+  queried for telemetry. Only the legacy server imports this package; removal is
+  planned with that server.
+
+- **[@yaks/match](./match)** — Evaluate supported query AST clauses against
+  bundles in memory. Tests compare shared behavior with SQL, but search,
+  ordering and unsupported queries differ; see the package's compatibility
+  table.
+
+- **[@yaks/graph](./graph)** — The entity/component API and phased `apply()`
+  operation: filter, normalize, validate and commit changes using a supplied
+  `Storage` adapter. Plugins add schema declarations and lifecycle hooks.
+  `apply()` returns composed patches, not complete entity snapshots.
+
+- **[@yaks/render](./render)** — Select renderers by query specificity and a
+  requested view name (more specific name segments are on the right), collect
+  component actions, and select column renderers by schema. Renderers receive an
+  element-construction function so the caller chooses the output representation.
+
+- **[@yaks/preact](./preact)** — Connect the render registry to Preact. Its
+  `Entity` component reads a function-based store and subscribes while mounted,
+  using Preact's element-construction function for portable renderers.
+
+- **[@yaks/html](./html)** — Render the same registry to server-side HTML using
+  @yaks/preact and Preact's serializer, without a browser DOM.
+
 - **[@yaks/text](./text)** — Markdown and plain text from those same trees,
   preserving headings, lists, links, code and emphasis while stripping control
   bytes from every text leaf and destination.
-- **[@yaks/markdown](./markdown)** — GFM Markdown parsed to structural nodes for
-  that same element vocabulary, never an HTML string or a terminal escape, with
-  a link filter that refuses every scheme but `http`, `https` and `mailto`.
+- **[@yaks/markdown](./markdown)** — Parse GitHub Flavored Markdown into
+  structural nodes, not an HTML string or terminal control sequence. Its link
+  filter permits relative URLs and explicit `http`, `https` and `mailto`
+  schemes.
+
 - **[@yaks/tui](./tui)** — the same Preact trees on a terminal: a fake DOM, a
   swappable backend (a diffing ANSI painter today), and the three widgets a
   console app is made of — a scrolling transcript, a multi-line input box, and a
   frame with a sidebar of pluggable panels.
-- **[@yaks/ram](./ram)** — the storage adapter with nothing underneath it: a
-  `Map` of bundles answering `@yaks/graph`'s `Storage`, reads through
-  `@yaks/match`, synchronous, browser-ready. Tested change for change against
-  `@yaks/sqlite`.
+- **[@yaks/ram](./ram)** — Implement graph storage with a synchronous in-memory
+  `Map` and @yaks/match queries, suitable for browsers and tests. Shared
+  operations are tested against SQLite, but RAM does not support every SQL query
+  or the multi-entity declarative rules that need `Tx.bindings`.
+
 - **[@yaks/edge](./edge)** — links between entities as a component: the
   `edge{from, to}` component an entity carries, the id derived from the
   from/relation/to triple it records, the relations a vocabulary declares, and
   traversal — both as a walk over storage and as the `@yaks/sql` extension that
   compiles `.cites->p1` and `.edges`.
-- **[@yaks/key](./key)** — the values an entity can be looked up by, stored as
-  entities: a `key{of, value}` component tagged with your own kinds (`isbn`,
-  `email`, `alias`), each key's eid being `sha256("<kind>|<value>")` — so a
-  value is unique within its kind by construction, and writing it twice writes
-  one row. What `@yaks/edge` is to a link, this is to a has-many value.
+- **[@yaks/key](./key)** — Store lookup values as entities with `key{of, value}`
+  plus an application tag such as `isbn`, `email` or `alias`. Each key id is
+  derived from `sha256("<kind>|<value>")`, making a value unique within its
+  kind. An entity can have several such values, each referencing its owner
+  through `of`.
+
 - **[@yaks/alias](./alias)** — the kind of key that is a name: `alias{name}` on
-  an entity, stored as a key of its own, so seed data written twice updates one
-  entity rather than creating two — and a name can be used anywhere an eid can,
-  in a reference column and in an API request.
+  an entity, expanded into a separate key entity, so seed data written twice
+  updates one entity rather than creating two — and a name can be used anywhere
+  an eid can, in a reference column and in an API request.
 - **[@yaks/git](./git)** — git objects as entities: an object's eid IS its SHA-1
   object id, with its SHA-256 name beside it as a key, its body in a @yaks/blob
   store, and the two traversals a pack supports (`entry`, `parent`) as edges —
   plus the builders that turn a `path → sha256` manifest into trees and a
   commit. It also models the working copy: the `repository` and `worktree` a
   checkout consists of, the landed `commit` attached to the work it is about,
-  and the `anchor` that ties a document to source. Its `land` tool is the one
-  that acts on the local machine: it fast-forwards the branch checked out at
-  `ctx.cwd`, which for the CLI is the directory the command was run in.
-- **[@yaks/effects](./effects)** — what a graph DOES about what it commits:
-  handlers run after the transaction, each isolated, with an optional durable
-  ledger. Registered on a component and one of the three things that happen to
-  it (`created`/`changed`/`removed`), or on a PATTERN — any query, run wherever
-  the transaction just made it true, so nothing has to be stored in the graph
-  just to trigger an effect. This package is the mechanism only; it ships no
-  effects of its own. Alongside the ledger it defines
-  `lease{name, holder, until}`: one background job, one row, its eid derived
-  from the job's name and the claim settled by the graph's own precondition — so
-  every process can attempt a job and exactly one gets it.
-- **[@yaks/journal](./journal)** — who wrote what, when: every committed
-  transaction recorded inside that same transaction, in three append-only
-  tables, storing after-images only — which gives three things: the history of
-  one entity, the inverse of a transaction (undo), and a cursor-based feed of
-  everything committed since a given point.
+  and the `anchor` that ties a document to source. Its `land` tool operates on
+  the checkout at `ctx.cwd` (the CLI working directory), fast-forwarding its
+  branch into the base in the primary worktree. If the base moved, it rebases
+  and returns without landing; rerun tests and land again.
+- **[@yaks/effects](./effects)** — Run registered handlers after committed
+  component changes or newly matching query patterns, isolating handler failures
+  from the original transaction. An optional durable attempt log supports
+  retries; it does not guarantee exactly-once external effects.
+  `lease{name, holder, until}` records named background-job ownership using
+  deterministic ids and transactional preconditions. Coordination requires
+  suitable storage isolation and lease configuration. This package provides
+  mechanisms, not domain-specific actions.
+
+- **[@yaks/journal](./journal)** — Record committed transactions as after-images
+  in three append-oriented tables on the same database transaction/connection.
+  APIs read entity history, produce limited inverse changes for undo, and
+  provide a cursor-based change feed. Provenance fields are skipped by default;
+  explicit redaction is supported. Undo cannot reconstruct deleted entities.
+
 - **[@yaks/doc](./doc)** — the text a person reads: `doc{title, body}`, the one
   component a task, a letter and a recipe all share, so search, editing and
   rendering are implemented once. Its `body` uses `@yaks/blob`'s `store` keyword
   without depending on the package that implements it — content-addressed when
   blob is loaded, plain text otherwise.
-- **[@yaks/tools](./tools)** — a tool is a function from bundles to bundles, and
-  this runs one and keeps the record: the `tool` registered, the `call` that
-  asked for it, the `execution` it is claimed under and the `result` it comes to
-  rest as. The calling program invokes the function itself; calls nobody is
-  waiting on — scheduled ones, or ones left behind by a crash — are picked up by
-  registering this vocabulary's rules as effects.
-- **[@yaks/member](./member)** — who belongs and what they may touch: a space
-  roster (`member`), per-entity grants (`grant`), an access mode (`access`), the
-  `precondition` hook that rejects a write the actor's role does not allow, and
-  the `canRead` check the HTTP and MCP servers run before answering a query.
-- **[@yaks/session](./session)** — a session is a transcript: its `entry` lines
-  (prose as `content`, an `ask` of a model, a tool `call` and its `result`, a
-  `stop`), a status computed from the newest entry and never stored, the daemon
-  that responds to it, its lock on any entity (`claim`), and the `conflict`
-  recorded when two sessions want the same thing.
+- **[@yaks/tools](./tools)** — Run functions that accept and return bundles,
+  recording the tool declaration, `call`, claimed `execution`, and `result`.
+  Direct callers invoke the runner; configured effects execute queued or
+  recoverable calls. The graph stores both the operation and its outcome,
+  including errors and timing.
+
+- **[@yaks/member](./member)** — Declare space memberships, app grants and app
+  access modes. A `precondition` hook rejects unauthorized writes; callers must
+  separately enforce `canRead` for reads. Authentication and graph opening are
+  supplied by the application. HTTP and MCP signing alone do not enforce read
+  permission.
+
+- **[@yaks/session](./session)** — Store agent transcripts as `entry` entities:
+  content, model requests, tool calls/results and stops. Status is derived from
+  transcript entries and outstanding calls. The package also provides model
+  execution, claims on entities and conflict records for competing claims.
+
 - **[@yaks/process](./process)** — a running program as an entity, so whatever
   needs one points at it instead of keeping a pid: `process{pid, command, cwd}`
   for the one that is running, `service{command, cwd, restart, attempts}` for
@@ -152,69 +214,90 @@ In dependency order:
   effect fires on — and the same rows back a session's `shell`, `wait` and
   `stop` tools, so a long-running tool call returns the process instead of
   blocking on it.
-- **[@yaks/spawn](./spawn)** — the previous three combined: a session whose
-  provider is an agent CLI. The `using` component on a session's first entry is
-  the request; a provider that is a command line (`claude`, `codex`) is started
-  as a detached child process through @yaks/process, recorded on the session's
-  own entity; and its JSON-lines stdout is read back as that session's entries —
-  exactly once, tracked by the `imported{source, line}` component on each. It
-  defines no components of its own.
-- **[@yaks/context](./context)** — the instructions a transcript was given, as
-  entries: a `prompt` entry with its source and a hash of the snapshot it was
-  made from, so what the model read is recorded rather than guessed at. It
-  persists nothing itself; the calling program decides which sources are allowed
-  and writes the rows.
-- **[@yaks/model](./model)** — the interface between a conversation and the
-  model serving it: provider-neutral message items, one request and reply shape,
-  and the `provider`, `model` and `tool` entities a graph stores about them.
+- **[@yaks/spawn](./spawn)** — combine tools, sessions and processes: a session
+  whose provider is an agent CLI. The `using` component on a session's first
+  entry is the request; a provider that is a command line (`claude`, `codex`) is
+  started as a detached child process through @yaks/process, recorded on the
+  session's own entity; and its JSON-lines stdout is read back as that session's
+  entries — exactly once, tracked by the `imported{source, line}` component on
+  each. It defines no components of its own.
+- **[@yaks/context](./context)** — Build instruction entries with source ids and
+  snapshot hashes so a transcript can record what a model was given.
+  `promptEntry()` itself performs no writes; `outputView()` stores projection
+  snapshots. The caller selects permitted sources and persists prompt entries.
+
+- **[@yaks/model](./model)** — Provider-neutral conversation items,
+  request/reply types and a model function interface, plus schemas for
+  `provider` and `model` entities. It exports the `Tool` TypeScript type; stored
+  `tool` declarations belong to @yaks/tools.
+
 - **[@yaks/openai](./openai)** — that interface implemented over OpenAI's
   Responses API: one streamed exchange over `fetch`, a bearer token from
   `OPENAI_API_KEY` or from the Codex sign-in, and the two endpoints those tokens
   are valid for.
-- **[@yaks/kernel](./kernel)** — the base components every graph of work uses:
-  the entity spine, the provenance marks (`created`, `updated`, `decided`,
-  `quarantined`…), the things attached to an entity (`comment`, `image`,
-  `favorite`) and the relation tags its edges carry — plus the schema keywords
-  the core meta-model does not define (`governed`, `lazy`, `well`).
-- **[@yaks/task](./task)** — a to-do list as a component domain: tasks,
-  projects, boards that are saved queries rather than stored membership, and a
-  status nobody writes — computed from the `completed` and `cancelled` marks a
-  task carries, by one rule given to both `@yaks/sql` and `@yaks/match`.
+- **[@yaks/oauth](./oauth)** — Shared authorization-attempt and PKCE (Proof Key
+  for Code Exchange) helpers, a private-store interface, and an optional Deno
+  filesystem implementation. Secrets remain outside graph data.
+- **[@yaks/openrouter](./openrouter)** — Implement the model interface over
+  OpenRouter's Responses API, with response metadata schemas and optional PKCE
+  authorization. The application supplies credentials or a private store.
+- **[@yaks/kernel](./kernel)** — Shared identity, provenance and metadata
+  schemas: `entity`, `created`, `updated`, `decided`, `quarantined`, `comment`,
+  `image`, `favorite` and relationship tags. It also defines schema keywords
+  such as `governed`, `lazy` and `well`, and identity-related graph plugins.
+
+- **[@yaks/task](./task)** — Task records, plans and containment relationships.
+  Status is computed from marks such as `completed` and `cancelled`, using rules
+  for both SQL and in-memory evaluation. Projects and saved boards belong to
+  @yaks/project, not this package.
+
 - **[@yaks/wake](./wake)** — coming back to something later, as data: a
   `wake{at, every, target, note}` on any entity, the wakes due at an instant,
   and the recurrence — a duration or a cron expression — that schedules the next
   one. It calls no handler: `tick` writes `fired` and advances the wake, and
   graph rules do the rest. The Cloudflare and Deno drivers share that same
   write.
-- **[@yaks/mail](./mail)** — letters as entities: a `mail` addressed to any
-  entity, the `deliver` that asks for it to go, the `delivered`/`bounced` it
-  comes to rest as, the `created(mail)` effect that hands it to an injected
-  sender, and an arrival read into bundles.
+- **[@yaks/mail](./mail)** — Store messages and delivery requests/outcomes. An
+  effect on `created(mail)` sends messages that also have `deliver`, through a
+  supplied transport. Incoming messages become bundles; subjects and bodies use
+  @yaks/doc. Failed delivery cannot roll back the original graph transaction.
+
 - **[@yaks/memory](./memory)** — what a person said, kept in their own words: a
   `memory` component on a `doc` whose body is what they said plus a few lines of
   context, the query that recalls them, and the text handed to an agent at the
   start of its next conversation.
-- **[@yaks/persona](./persona)** — who is speaking and what they are for: the
-  people a graph knows, the personas an agent can adopt, the roles those
-  personas fill, and a persona rendered — its own instructions plus the
-  documents it references — into the single markdown file an agent reads.
+- **[@yaks/persona](./persona)** — Declare human identities, agent instruction
+  sets and assigned roles. Read a persona's own document and its
+  included/reference documents, then render one Markdown string. The caller
+  decides whether to write a file or use it directly as model context.
+
 - **[@yaks/project](./project)** — a portfolio: the `project` work is filed
   under, the `filed` that files it, the `board` that is a saved filter over it,
   and the `venture` being built.
 - **[@yaks/goal](./goal)** — an objective that is never finished, and the
   `satisfies` edge recording which work contributed to it.
-- **[@yaks/design](./design)** — what was proposed, the review it got, and the
-  architecture that stands.
+- **[@yaks/design](./design)** — Store design proposals, review verdicts and
+  adopted architecture as separate components. CLI/MCP tool implementations
+  create and decide proposals; an approved review does not automatically add
+  `architecture`.
+
 - **[@yaks/dreaming](./dreaming)** — what an agent works on when nothing else is
   asking for its attention: a `dream` with an earliest-start time, the `recall`
   it consolidates, and the effect that starts a session on a dream whose start
   time has passed (`./effects`; the config names what gets started).
-- **[@yaks/notify](./notify)** — how somebody is told something: a notification,
-  the subscriptions and mutes that decide who gets it, and an open chat.
-- **[@yaks/hook](./hook)** — an event another system delivered, kept as it
-  arrived.
-- **[@yaks/page](./page)** — a web page as captured: its URL, and when its bytes
-  were archived.
+- **[@yaks/notify](./notify)** — Declare notification records, subscriptions
+  (`watch` or `mute`) and chats. It stores intent and relationships, not a
+  delivery service.
+
+- **[@yaks/hook](./hook)** — Declare stored external events: source, event name,
+  payload, HTTP method/path/headers and verification result. Receipt handling
+  and signature verification are responsibilities of the importing application.
+
+- **[@yaks/page](./page)** — Capture web pages with source URL, archive
+  timestamp and document content. Fetching, asset capture, rewriting and
+  scrubbing helpers are optional operations; the graph stores the resulting
+  metadata.
+
 - **[@yaks/tmux](./tmux)** — a terminal somebody can watch: `tmux{of, pane}`,
   what is running in it, and the target string tmux itself accepts. Components
   only — the session is the transcript, the process is the pid, and the terminal
@@ -236,43 +319,40 @@ In dependency order:
   server's tools reached over Streamable HTTP and presented as the same `Tool`
   definitions a graph hands to its own model, with credentials resolved by the
   calling program.
-- **[@yaks/cli](./cli)** — the same graph from a shell: the `yak` command. A
-  config file names a graph, and each command opens it directly — loading the
-  plugins the config lists, running the tool in that same process, and exiting.
-  There is no server to connect to; SQLite's WAL mode allows as many concurrent
-  writers as there are commands running. `--host` is for a graph this machine
-  cannot open as a file, in which case the command reads that server's
-  `tools/list` at run time instead. Either way the CLI has no built-in command
-  list, so it cannot drift out of step with the graph it is talking to, and a
-  program can contribute its own commands at start-up to appear alongside the
-  rest under one `--help`. `yak serve` is the same composition with the HTTP
-  endpoints added — one more process over the same file, not a server everything
-  else has to go through.
-- **[@yaks/harness](./harness)** — the packages above as a working agent, with
-  nothing under it but a file: one SQLite database it makes itself, the session
-  daemon in the same process, the shell and generic graph tools handed to the
-  model, and the commands (`new`, `send`, `ls`, `show`, `tasks`, `models`)
-  contributed through @yaks/cli's plugin interface. No server and no sync —
-  everything going in or out is a bundle or a query, so the same rows can be
-  moved into a larger graph unchanged.
+- **[@yaks/cli](./cli)** — The `yak` command and reusable CLI APIs. Local graph
+  commands load configured plugins and open storage in the same process;
+  `--host` selects remote MCP and discovers its tools at runtime. Built-ins are
+  `help`, `login`, `logout`, `serve` and `apply`; graph tools and application
+  commands add others. Multiple processes can share a SQLite WAL database, but
+  writes serialize. `yak serve` adds HTTP endpoints over the same composition
+  rather than being mandatory for local commands.
+
+- **[@yaks/harness](./harness)** — A local agent application combining SQLite,
+  model execution, shell tools, graph tools and a terminal interface. Its `new`,
+  `send`, `ls`, `show`, `tasks` and `models` commands use the flat @yaks/cli
+  API. The default TUI backend runs in a Web Worker. Blob text is stored in
+  SQLite; artifacts, private authorization state and draft recovery files also
+  use the filesystem. It starts no HTTP server by default and does not require
+  synchronization.
+
 - **[@yaks/workerd](./workerd)** — that handler as a Cloudflare Worker: the
   `WebSocketPair` upgrade that `/ws` needs, the `fetch` entrypoint a Worker
   exports, authentication from a cookie or a bearer token, and the forwarding to
   a Durable Object when the graph lives in one.
 - **[@yaks/durable-object](./durable-object)** — the storage adapter inside that
   Durable Object: its embedded SQLite driven through `@yaks/sqlite`, plus the
-  plumbing that hands a hibernatable WebSocket's frames to `@yaks/api`'s
+  adapter that passes a hibernatable WebSocket's frames to `@yaks/api`'s
   subscriptions.
 - **[@yaks/d1](./d1)** — the other Cloudflare database, and the one that is only
   reachable asynchronously: the same `Storage`, answered with promises, where a
   transaction buffers its writes and sends them as one atomic `batch()`, because
   D1 has no interactive transaction to hold open.
-- **[@yaks/sync](./sync)** — the other end of that transport: a plugin that
-  forwards a client graph's committed writes to a server, applies what the
-  server pushes back, and reconciles — or reverts — the optimistic write in
-  between. A `sync` schema keyword declares, per component, which state is
-  synced to the server, which stays in the browser, and which is discarded when
-  the tab closes.
+- **[@yaks/sync](./sync)** — Send local graph changes to a server and reconcile
+  or revert optimistic updates. Deletion batches wait for the server. Schema
+  keywords `sync` and `durable` separately describe delivery and intended
+  lifetime. There is no durable offline write queue or automatic retry of failed
+  writes.
+
 - **[@yaks/canvas](./canvas)** — the user interface stored as data: a `canvas`
   of `card`s each `pin`ned at a position, the `camera` a window looks through, a
   `cursor`, split `layout`s of `pane`s, folds and a shelf. The layout is stored,
@@ -281,29 +361,23 @@ In dependency order:
 - **[@yaks/client](./client)** — the browser layer over all of that: one call
   assembles the graph, its connection to the server and its plugins; a query
   becomes a value that updates as commits change its results; and components
-  declared `local` are kept in IndexedDB between page loads.
+  declared `sync: none` with `durable: forever` are kept in IndexedDB between
+  page loads when local persistence is enabled.
 
 ## Domain plugins
 
-`@yaks/kernel`, `@yaks/doc`, `@yaks/member`, `@yaks/session`, `@yaks/process`,
-`@yaks/task`, `@yaks/wake`, `@yaks/mail`, `@yaks/memory`, `@yaks/tools`,
-`@yaks/context`, `@yaks/canvas`, `@yaks/platform`, `@yaks/persona`,
-`@yaks/project`, `@yaks/goal`, `@yaks/design`, `@yaks/dreaming`, `@yaks/notify`,
-`@yaks/hook`, `@yaks/page` and `@yaks/tmux` ship components rather than
-machinery. Each is a `vocab.json` (JSON Schema 2020-12, loaded by `@yaks/vocab`)
-plus, where it needs one, a graph plugin or an effect — the same shape a
-customer app declares its own components in, so an app's entities and these
-compose by eid with nothing in between.
+Domain packages declare application data: documents, tasks, sessions, processes,
+mail, memories, tools, people, projects, goals, proposals, notifications and UI
+layout. A package's `vocab.json` is JSON Schema 2020-12; optional graph rules,
+tools, effects or views implement behavior. An application defines its own
+components the same way and combines them on entities by id.
 
-These are designed for the use case rather than ported from the fleet server.
-That server is being dismantled, and `docs/transition.md` lists, one row per
-fleet component, which package's component its rows become when the data is
-exported into a plugin-powered graph — or why nothing takes them. Each component
-name has exactly ONE home, so all of these load together with no name declared
-twice. `bin/transition_test.ts` checks that of the `vocab.json` FILES;
-`packages/facets_test.ts` checks it of the `./vocab` export a program actually
-imports, which is the place a package could still copy another package's
-components into its own document and make the two impossible to load together.
+The legacy server in `src/` is being replaced by this package composition.
+[`docs/transition.md`](../docs/transition.md) maps its components to package
+components, or records why a component is not migrated. Each component name has
+one declaring package. `bin/transition_test.ts` checks the JSON files;
+`packages/facets_test.ts` also checks the actual `./vocab` imports so an export
+cannot silently include a second package's declarations.
 
 ## A plugin is a package; its parts are subpath exports
 
@@ -320,17 +394,22 @@ exports it needs, one per kind of contribution, and loads only the ones it runs
 | `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`                           | anything            |
 | `./service` | `service: (host, options, signal) => void \| Promise<void>`                     | anything            |
 | `./views`   | `views` — `@yaks/render` renderers                                              | nothing server-side |
-| `.`         | types, and the pure functions the package offers as a library                   |                     |
+| `.`         | the library API and types; runtime requirements vary by package                 |                     |
 
-Throughout this section, `host` is the program that opened the graph — a server,
-the CLI, a Worker — and `options` is whatever its config file passed to this
-plugin.
+Throughout this section, **host** means the process that opened the graph — a
+server, CLI command or Worker. The `host` argument is an object exposing that
+process's graph, vocabulary and other resources, not an operating-system process
+object. `options` contains the plugin configuration.
 
-Every one of these exports is a factory taking `(host, options)`, `./tools`
-included: a check that queries a package's own SQL table gets the connection
-through `host.sql`, and a threshold or a relation name comes from config rather
-than being hard-coded. Everything a tool needs per CALL — the graph, the caller,
-the arguments — is passed in the tool context instead.
+Server behavior exports (`rules`, `runs`, `effects` and `routes`) are factories
+taking `(host, options)`; `service` additionally takes an `AbortSignal`. Schema
+`docs`, `keywords` and renderer `views` are values, while `derived(vocab)`
+produces computed-column definitions. A **facet** is one of these sub-module
+exports, not another kind of plugin. For example, a check that queries a
+package's own SQL table gets the connection through `host.sql`, and a threshold
+or a relation name comes from config rather than being hard-coded. Everything a
+tool needs per CALL — the graph, the caller, the arguments — is passed in the
+tool context instead.
 
 ### Health checks are just tools named `check`
 
@@ -362,18 +441,19 @@ There used to be a `./digest` export, where each plugin contributed its part of
 the text a session reads before its first turn. It was removed (T-37707). What a
 session should be told is still undecided, and `session_context` now returns
 only what a lifecycle hook needs: the session's own id, and the work it holds a
-lock on.
+lock on. It can create or update that session; file-based instruction loading is
+a separate harness operation.
 
 There used to be a `./boot` export, the single pass a plugin made at start-up.
-It was removed (T-37703), and what it did is now an ordinary effect. Every `yak`
-process — a CLI command, a server, a TUI — writes its own `process` row when it
-opens a graph (`@yaks/process` `started`), so a plugin's start-up work is a
+It was removed (T-37703), and what it did is now an ordinary effect. A `yak`
+process using the full graph composition writes its own `process` row when it
+opens the graph (`@yaks/process` `started`), so a plugin's start-up work is a
 `created(process)` handler that checks the row is this process
 (`@yaks/session/effects` releases the locks a dead holder left behind;
 `@yaks/spawn/effects` picks up the agents a restart left running). Each takes a
 `lease` (`@yaks/effects`) so that two processes starting at the same time do not
-both do the work. Start-up is not a special moment the program has to provide
-for; it is a row appearing, visible to everything that reads the graph.
+both do the work. Startup handlers use that ordinary graph event rather than a
+separate `./boot` callback.
 
 `./service` is work a plugin keeps doing for as long as the program is running:
 a clock, a poll, a periodic sweep (`@yaks/wake/service` fires the wakes that
@@ -382,22 +462,24 @@ commit, which is why neither `routes` nor `effects` could hold it: a scheduled
 time arriving, and a mailbox that has to be polled, are things nobody is calling
 in about.
 
-It is given an `AbortSignal`, makes at least ONE pass, and then keeps going
-until that signal aborts — which is what lets the same function work in both a
-long-running process and a one-shot command. A service, and the sweep that
-retries failed effects, are background jobs (`@yaks/cli` `Served.duties`). Each
-is held under a `lease` named after the package that owns it (`@yaks/effects`
-`holding`): a server or a TUI claims the job and holds it for as long as it is
-running, renewing periodically. A one-shot `yak` command passes its jobs a
-signal that has already aborted, so each makes exactly one pass and releases the
-lease immediately — clearing anything overdue on the way through, and leaving
-alone whatever another process is already holding. A second long-running process
-waits for the job and takes it over when a killed holder's lease expires.
+It is given an `AbortSignal`, is expected to make an initial pass when it
+acquires the lease, and then keeps going until that signal aborts — which is
+what lets the same function work in both a long-running process and a one-shot
+command. A service, and the sweep that retries failed effects, are background
+jobs (`@yaks/cli` `Served.duties`). Each is held under a `lease` named after the
+package that owns it (`@yaks/effects` `holding`): a server or a TUI claims the
+job and holds it for as long as it is running, renewing periodically. A one-shot
+`yak` command passes its jobs a signal that has already aborted, so a service
+that acquires its lease makes one pass and then releases it — clearing anything
+overdue on the way through, and leaving alone whatever another process is
+already holding. A second long-running process waits for the job and takes it
+over when a killed holder's lease expires.
 
 None of this assumes a separate process exists. A machine where the only thing
 anybody runs is `yak tui` still fires its wakes, and one that splits the HTTP
-server, the clock and the sweep across three processes still fires each of them
-exactly once.
+server, the clock and the sweep across three processes can coordinate ownership
+of those jobs. Leases do not guarantee exactly-once external side effects after
+a crash.
 
 A subpath a package does not export is a contribution it does not make, and the
 program skips it. A subpath that exists but fails to import is an error, never a
@@ -405,13 +487,13 @@ skip. Each factory declares only the parts of the host it uses — for example
 `(host: { vocab: Vocab })` — so no package has to import `@yaks/cli` in order to
 state its requirements.
 
-`./rules` exports two things because they share one reason — both run SQL over
-the host's own connection. `rules` decides what a transaction MEANS, as
-@yaks/graph plugins. `extend` decides what a QUERY may contain, as @yaks/sql
-extensions handed to the store when it is built, so a package that maintains an
-index of its own can answer a clause the compiler could not compile by itself,
-and every reader gets that clause with no extra wiring. `@yaks/embedding/rules`
-is the worked example: it creates the vector table and compiles `.near`.
+`./rules` can export graph plugins through `rules`, and query compiler
+extensions through `extend`. Graph plugins need not use SQL. When a package
+maintains a SQL index, both exports can use the same host connection and
+configuration: `rules` maintains the index and `extend` compiles queries against
+it. The store receives these extensions during construction, so callers do not
+register them separately for each read. `@yaks/embedding/rules` is the worked
+example: it creates the vector table and compiles `.near`.
 
 Each file is named after the subpath it is exported at. Where a package already
 uses that filename for something else, the subpath maps to a different file and
@@ -421,17 +503,16 @@ own, so its `./tools` export points at `./runs.ts`).
 **`./vocab` and `./views` are the browser's half.** The browser imports those
 two subpaths from every package, so neither may touch storage, SQL or a server
 runtime, and `deno task check:browser` type-checks both with only the web
-platform's types in scope. That is what it means for a package to "fit the
-split", and it is why `@yaks/process/vocab` can describe a running program
-inside a page that could never start one. `packages/facets_test.ts` walks the
-whole set: every package with components exports them, every subpath has the
-shape a program expects, and `compose` over the fleet's own config loads all of
-them.
+platform's types in scope. This separation lets `@yaks/process/vocab` describe a
+running program inside a page that could never start one.
+`packages/facets_test.ts` walks the whole set: every package with components
+exports them, every subpath has the shape a program expects, and `compose` over
+the fleet's own config loads all of them.
 
 ### Cases that do not split cleanly
 
-Listed here rather than forced into a shape that does not fit. Each is a genuine
-design question, and each paragraph records the resolution proposed for it.
+Listed here rather than forced into a shape that does not fit. These notes
+distinguish implemented behavior from remaining proposals.
 
 - **Two different things both want the name `pane`.** `@yaks/canvas` declares
   `pane{layout, parent, dir, content, view}` — a region of a layout — and a
@@ -445,40 +526,35 @@ design question, and each paragraph records the resolution proposed for it.
   fleet's own note in `src/sessions.ts` proposed. The alternative, renaming the
   canvas's `pane` to `region`, is a better name for a layout split but belongs
   with the canvas's own redesign rather than with this split.
-- **The list of statuses depends on which packages are loaded.** `task.status`
-  is computed from the marks a task carries, and a graph that also locks its
-  tasks reads a held claim as `wip` — a status `@yaks/task` cannot know about,
-  since `claim` belongs to `@yaks/session`. Resolved by load order:
-  `@yaks/session/vocab` redeclares `task.status` with the longer list, and a
-  config that lists it after `@yaks/task` gets that version. What still does not
-  fit is `@yaks/project/rules`, whose board validation checks a saved query
-  against the status list and only ever sees the short one; a program that wants
-  the longer list has to call `projects(vocab, marks)` itself. The proposal: the
-  status list becomes a value the program passes in rather than a package
-  default — a change to `@yaks/task`'s signature that needs its own decision.
-- ~~**An effect needs a configured object to act on.**~~ Resolved: an entry in
-  the config's `plugins` list is either a module specifier or an object with
-  `use` and `with`, and whatever is under `with` is passed to each of that
-  plugin's factories alongside the host. So `@yaks/mail/effects` builds its own
-  transport from what the config named
-  (`{"via": "cloudflare", "account", "token": {"env": "…"}}`), and a value
-  written as `{"env": "NAME"}` is read from the environment when the config is
-  loaded — so a config can name a secret without containing one. See
+- **The list of statuses depends on loaded schemas.** `task.status` is computed
+  from marks. `@yaks/session/vocab` contributes computed-column rules including
+  `claim` as `wip`; load it after `@yaks/task/vocab` to select that calculation.
+  The schemas' status enums are combined for board validation, so
+  `@yaks/project/rules` already recognizes `wip` when session schemas are
+  loaded. `projects(vocab, marks)` remains available for an explicit status
+  list; it is not required just to enable the loaded session statuses.
+- **Effects may require configuration.** Implemented: an entry in the config's
+  `plugins` list is either a module specifier or an object with `use` and
+  `with`, and whatever is under `with` is passed to each of that plugin's
+  factories alongside the host. So `@yaks/mail/effects` builds its own transport
+  from what the config named
+  (`{"via":"cloudflare","account":"account-id","token":{"env":"MAIL_TOKEN"}}`),
+  and a value written as `{"env": "NAME"}` is read from the environment when the
+  config is loaded — so a config can name a secret without containing one. See
   [@yaks/cli](./cli/README.md#what-a-config-passes-to-one-plugin).
 - **`authenticate` is access policy, not a route.** It is exported from
   `./routes` because the HTTP server is where authentication happens, but it is
   not an HTTP path, and at most one plugin in a program may define it.
-  `@yaks/member` is where it belongs, but its `members(where)` needs an
-  application-specific `Guard` that nothing in a config file can name — which is
-  why `@yaks/member` exports `./vocab` and no `./rules`. Plugin options are half
-  the answer: a config can now specify the guard's policy. What it still cannot
-  specify is a FUNCTION, so this waits on `@yaks/member`'s own decision about
-  what a config-expressible guard looks like.
-- **`numbers` is set in two places at once.** Whether the store assigns a
-  human-readable number alongside an eid is a config field today, even though
-  which components HAVE a prefix is declared in the vocabulary. These should be
-  one statement. The proposal: the store assigns a number for any component
-  whose schema declares a `prefix`, and the config field is removed.
+  Authentication identifies the caller; `@yaks/member` implements authorization
+  after that identification. Its `members(where)` needs an application-specific
+  `Guard`, so it exports `./vocab` but no `./rules`. Plugin options can describe
+  policy data, not executable guard functions. A config-expressible guard is a
+  remaining design question, not an implemented authentication service.
+- **Number allocation and display prefixes are separate.** Storage numbering is
+  opt-in; the graph's `numbers(allocate)` plugin handles explicit `$num`
+  requests. A component's `prefix` controls human-readable formatting, not
+  allocation by itself. A proposal to allocate numbers automatically for
+  prefixed components remains unimplemented; do not rely on it.
 - **`./tools` is a reserved subpath that one core package still uses for
   something else.** `@yaks/vocab/tools` is the tool MECHANISM — validating a
   declaration's input — rather than one plugin's implementations, and it
@@ -518,8 +594,9 @@ design question, and each paragraph records the resolution proposed for it.
 
 ## How they compose
 
-Each package depends only on the ones before it in this list, and each is useful
-on its own:
+Choose packages for the required operations. Their imports, not the order of
+this list, determine dependencies. Storage adapters share an interface but
+differ in supported queries, rules and transaction guarantees:
 
 - Use `@yaks/query` alone to parse or build a query AST for your own evaluator —
   an in-memory filter, a different backend, a UI that just needs the structure.
@@ -527,60 +604,61 @@ on its own:
   interrogate it (routing, types, ordering) without committing to SQL.
 - Add `@yaks/sql` once you want that AST and schema compiled straight to a SQL
   string and params for a real database.
-- `@yaks/sqlite` is the batteries-included path: point it at a SQLite database
-  and it handles reading and writing entities for you, built entirely from the
-  three packages above.
+- `@yaks/sqlite` provides persistent local storage: point it at a SQLite
+  database and it handles reading and writing entities for you, using the query,
+  vocabulary and SQL packages plus schema/storage support.
 - `@yaks/blob` moves long values out of the rows transparently: one schema
   keyword on the column, a plugin that substitutes the text for its hash inside
   the write's own transaction, and a read override that resolves it back in the
   SQL statement — so a writer sends text and a reader gets text.
-- `@yaks/fts` adds search on top: it indexes the text properties and registers a
-  clause compiler with `@yaks/sql` — the same extension point the other search
-  and traversal packages use.
+- `@yaks/fts` adds search on top: by default it indexes stored scalar text
+  properties marked `search: true` and registers a clause compiler with
+  `@yaks/sql` — the same extension point the other search and traversal packages
+  use.
 - `@yaks/embedding` adds the other half of search through that same extension
-  point — keyword matching comes from `@yaks/fts`, nearest-by-meaning from here
-  — with the embedding function passed in, so nothing ties you to one model. It
-  is also the clearest example of what that extension point looks like in
-  practice: its `./rules` creates the vector table and gives the store its
-  `.near` compiler (`extend`), its `./effects` triggers the sweep when indexed
+  point — keyword matching comes from `@yaks/fts`, vector similarity from here —
+  with the embedding function passed in, so nothing ties you to one model. It is
+  also the clearest example of what that extension point looks like in practice:
+  its `./rules` creates the vector table and gives the store its `.near`
+  compiler (`extend`), its `./effects` schedules a debounced pass when indexed
   text changes, and the model, endpoint and API key are options the config
   passes to the plugin.
 - `@yaks/match` is the path with no storage at all: give it the same AST and
-  vocabulary and it filters bundles you already hold in memory, so a saved
-  filter means the same thing in the database and in the browser.
+  vocabulary and it filters bundles you already hold in memory, for the
+  supported shared subset. Unsupported clauses fail rather than silently
+  approximate a database result.
 - `@yaks/ram` puts that evaluator behind the same `Storage` interface: a whole
-  graph in a `Map`, with the same `apply()` and the same queries as the database
-  path, for a page, a worker, or a test with no database to install.
+  graph in a `Map`, with the same graph `apply()` API and a subset of database
+  queries, for a page, a worker, or a test with no database to install.
 - `@yaks/edge` adds relationships the same way search was added: a component
   your entities carry, and a clause compiler registered with `@yaks/sql` — so
   `.cites[<=3]->p1` is answered by the database rather than by a walk in your
   own code.
-- `@yaks/effects` is the other end of a write: the graph's phases decide what a
-  transaction MEANS, and this decides what to DO about it once it has committed
-  — send a notification, write a receipt, start a process — registered per
-  component or as a pattern over what committed, run after the commit, and
+- `@yaks/effects` responds to committed writes: graph hooks validate and
+  transform changes inside a transaction; effect handlers respond after it
+  commits — send a notification, write a receipt, start a process — registered
+  per component or as a pattern over what committed, run after the commit, and
   isolated so that a broken handler can never break a write.
 - `@yaks/journal` is the record of the same write: it stores what each
   transaction changed in tables of its own, inside that transaction, so a
-  rejected transaction leaves nothing behind and a committed one always leaves a
-  record. History, undo, and the change feed a live client replays are three
-  different reads of that one log.
+  rejected transaction leaves nothing behind. Its default skip list excludes
+  provenance fields; only recorded changes appear in history. History, undo, and
+  the change feed a live client replays are three different reads of that one
+  log.
 - `@yaks/doc` is the smallest domain plugin there is — one component, no hooks —
   and it exists because a shared component deserves a single home: `@yaks/mail`
   stores a letter's subject and body in it, and anything else with a title
   renders through the same renderer. It ships the `store: "blob"` declaration
   and none of the machinery behind it, which is what lets a graph adopt
   content-addressed bodies later without changing its vocabulary.
-- `@yaks/member` is the other kind of rule over the same `apply()`: not what a
-  transaction MEANS, but who is allowed to make it — enforced as a
+- `@yaks/member` checks who may make a write through `apply()` — enforced as a
   `precondition` hook, so a rejection rolls the whole transaction back, and
-  mirrored as a `canRead` that the HTTP and MCP servers call for reads, which
-  never reach `apply()` at all.
-- `@yaks/session` is the third kind: not who may write, but who is writing right
-  now and what they hold while they do it. A lock is stored on the entity it
-  locks, taking somebody else's lock rolls the transaction back, and the
-  collision is recorded in the `audit` phase — after the rollback, where the
-  record survives.
+  paired with a `canRead` check that applications must integrate for reads,
+  which never reach `apply()` at all.
+- `@yaks/session` adds ownership claims for concurrent work. A lock is stored on
+  the entity it locks, taking somebody else's lock rolls the transaction back,
+  and the collision is recorded in the `audit` phase — after the rollback, where
+  the record survives.
 - `@yaks/task` is a domain rather than a mechanism — what a plugin looks like
   when it ships components instead of machinery. Its one interesting decision is
   that a task's status is not stored: it is computed from the marks a task
@@ -594,10 +672,10 @@ on its own:
   components, so what became of a letter is answerable by a query. It also
   implements the `created(member)` handler that `@yaks/member` documents and
   leaves open — an invitation is a letter, written through the same `apply()` as
-  everything else. Receiving is the mirror image: a pure function from message
-  to bundles, the two lookups that need a graph, and an HTTP endpoint for a mail
-  provider to POST to — idempotent on the Message-ID, so a retry and a sweep
-  record one letter, not two.
+  everything else. Receiving uses a pure function from message to bundles, the
+  two lookups that need a graph, and an HTTP endpoint for a mail provider to
+  POST to — idempotent on the Message-ID, so a retry and a sweep record one
+  letter, not two.
 - `@yaks/api` puts the whole stack behind three HTTP routes. It combines
   `@yaks/graph` (for writes), a storage adapter (for reads) and `@yaks/match`
   (to decide cheaply which subscriptions a committed transaction changed), and
@@ -622,19 +700,20 @@ on its own:
   Durable Object and returns a promise here, with the phases, plugins and
   cascade unchanged. Its README states exactly what D1's lack of an interactive
   transaction costs, rather than claiming an isolation level D1 does not offer.
-- `@yaks/sync` closes the loop: a `@yaks/graph` over `@yaks/ram` in a page, plus
-  this plugin, is a client that writes locally straight away and reconciles with
-  the `@yaks/api` server afterwards. Both transports are passed in, so the whole
-  round trip can run inside one process in a test.
-- `@yaks/client` is that loop with the page's half already wired: the assembly
-  in one call, subscriptions surfaced as values a renderer can hold (a signal
-  when you hand it a signal factory, `useSyncExternalStore` when you hand it to
-  React), and IndexedDB under the components the server never sees.
+- `@yaks/sync` synchronizes a client graph: a `@yaks/graph` over `@yaks/ram` in
+  a page, plus this plugin, optimistically applies eligible writes and
+  reconciles with the `@yaks/api` server afterwards. Both transports are passed
+  in, so the whole round trip can run inside one process in a test.
+- `@yaks/client` assembles that browser configuration: the assembly in one call,
+  subscriptions surfaced as values a renderer can hold (a signal when you hand
+  it a signal factory, `useSyncExternalStore` when you hand it to React), and
+  IndexedDB under the components the server never sees.
 
 ## Publishing requirements
 
-Every package here publishes to [JSR](https://jsr.io) (and npm), so each one
-must meet JSR's bar before it ships. When you add or change a package:
+Packages are intended for [JSR](https://jsr.io) and npm publication. Each must
+meet the registry's requirements before publication. When you add or change a
+package:
 
 - **Every exported symbol has a doc comment.** Functions, types, constants —
   anything in the public API is documented where it is declared.
@@ -642,10 +721,11 @@ must meet JSR's bar before it ships. When you add or change a package:
   comment (`/** … */` at the top) describing what the package is.
 - **`deno.json` has a `description`.** One clear sentence naming what the
   package does.
-- **Works on at least two runtimes.** JSR derives runtime compatibility by
-  analysing the published code, so keep each package runtime-agnostic (Deno and
-  Node at minimum) and state its supported runtimes in the README's
-  Compatibility section — there is no `deno.json` field for it.
+- **State runtime support accurately.** Portable libraries should target Deno
+  and Node at minimum, but host-specific packages may require Deno, Linux or
+  Cloudflare. JSR analyses the code to derive compatibility; there is no
+  `deno.json` compatibility field. State and test actual requirements in each
+  README's Compatibility section rather than promising every runtime.
 
 Run `deno publish --dry-run` in a package to check it before landing — it
 reports missing docs, slow types, and metadata gaps.

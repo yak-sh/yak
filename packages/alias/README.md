@@ -2,7 +2,9 @@
 
 Persistent names for entities in an [@yaks/graph](../graph/README.md) store. Use
 aliases when callers need a stable, readable identifier, or when a repeated
-import should update the same entity without first looking up its eid.
+import should update the same entity without first looking up its eid (entity
+identifier). A bundle is a JSON object containing `entity: {eid}` and the
+entity's named components, such as `recipe: {title}` in the example below.
 
 This is not the same thing as a graph's `$temporary` aliases, which resolve only
 within the one list of changes they appear in. This plugin stores names through
@@ -21,6 +23,7 @@ import { aliasDoc, aliases } from '@yaks/alias'
 const vocab = loadVocab([keyDoc, aliasDoc, {
   $defs: {
     recipe: {
+      component: true,
       type: 'object',
       properties: { title: { type: 'string' } },
     },
@@ -46,6 +49,14 @@ await g.apply([{
 Repeating the first write with the same `alias.name` also updates the named
 entity rather than creating a duplicate. The `keys` plugin must be listed before
 `aliases`.
+
+## Exports
+
+The root module exports `aliasDoc` (the schema document), `aliases(vocab)` (the
+graph plugin), and helpers for constructing and reading alias keys. `./vocab`
+exports the declarations for plugin loaders; `./rules` exports the plugin
+factory. This package does not provide its own database: the graph's storage
+adapter stores the key entities. The example above uses memory only.
 
 ## How a name is stored and looked up
 

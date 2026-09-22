@@ -1,23 +1,33 @@
 # @yaks/context
 
 Explicit instruction snapshots for graph transcripts. This package constructs
-prompt entries and hashes source text; the caller decides which sources to admit
-and persists the entries.
+prompt entries and hashes source text; the caller decides which sources are
+trusted enough to include in a model request and persists those entries. The
+separate `outputView` helper stores snapshots of large tool results.
 
 ## Storage and limitations
 
-The package returns bundles; it does not persist them. Compose the session
-vocabulary for `entry` and `content`, and optionally `@yaks/blob` for
-content-addressed storage of text. The calling program decides when to load
+`promptEntry` returns a bundle: one entity's components as a JSON object,
+including its `entity.eid` identifier. It does not persist the entry. Compose
+the session vocabulary for `entry` and `content`, and optionally `@yaks/blob`
+for content-addressed storage of text. The calling program decides when to load
 files and when to admit their snapshots.
 
 The file loader records disk provenance. It does not resolve graph references
 from generated file headers. `revision` hashes one text snapshot, not an entire
 provider request, and does not imply provider cache validity.
 
-The file loader in `./host` is POSIX-oriented. The core has no filesystem
-dependency. Snapshot immutability is an admission convention, not a graph write
-guard: callers with graph write access can still edit historical entries.
+`instructionFiles(cwd, home?)` from `@yaks/context/host` reads
+`~/.agents/AGENTS.md` first, followed by `AGENTS.md` files from the filesystem
+root down to `cwd`. It resolves symlinks, deduplicates real paths, skips missing
+files, and propagates other read errors. It uses Deno filesystem APIs and is
+POSIX-oriented. The core has no filesystem dependency. Snapshot immutability is
+an admission convention, not a graph write guard: callers with graph write
+access can still edit historical entries.
+
+The root module exports `contextDoc`, `snapshot`, `promptEntry`, `outputView`,
+`OUTPUT_LIMIT`, and the `Snapshot` and `SourceResolver` types. `./vocab` exports
+the component document and its `docs` list without filesystem code.
 
 ## Construct an entry
 

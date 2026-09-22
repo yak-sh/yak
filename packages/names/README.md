@@ -30,9 +30,15 @@ its entities addressable by name, read from the vocabulary's name column
     "https://yaks.sh/vocab/names": true
   },
   "$defs": {
-    "author": { "type": "object", "kind": true, "by_name": true },
+    "author": {
+      "type": "object",
+      "component": true,
+      "kind": true,
+      "by_name": true
+    },
     "shelf": {
       "type": "object",
+      "component": true,
       "kind": true,
       "by_name": "label",
       "properties": { "label": { "type": "string" } }
@@ -41,13 +47,15 @@ its entities addressable by name, read from the vocabulary's name column
 }
 ```
 
-Register the keyword vocabulary when you load the schema, and names resolve:
+Call the JSON document above `catalog`. Include the `doc` schema for its `title`
+field, then register the keyword vocabulary:
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
 import { named, nameKeywords, nameOf, resolve } from '@yaks/names'
+import { docDoc } from '@yaks/doc'
 
-let v = loadVocab([catalog], [nameKeywords])
+let v = loadVocab([docDoc, catalog], [nameKeywords])
 let shelf = [
   { comps: { author: {}, doc: { title: 'Ursula Le Guin' } } },
   { comps: { review: {}, doc: { title: 'Ursula at her best' } } },
@@ -65,10 +73,11 @@ type.
 
 ## Matching
 
-An exact name always wins. Failing that, the closest name above the match
-threshold wins, because nobody types a name exactly as it is stored: the case
-drifts, the punctuation is dropped, and a long name gets abbreviated to its
-first word. Pass `{ close: 1 }` to accept exact names only.
+Names are normalized to lowercase ASCII letters and digits, ignoring spaces and
+punctuation. The highest score at or above the threshold wins; tied scores
+return the first candidate. `CLOSE` defaults to `0.6`. Matching compares the
+full name and a discounted first-word abbreviation. Pass `{ close: 1 }` to
+require equality after normalization, not byte-for-byte equality.
 
 `match.ts` is the scoring on its own — `score`, `closeness`, `nearest` — usable
 over any list, in case you want the same definition of "close enough" elsewhere

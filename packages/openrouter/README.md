@@ -6,6 +6,9 @@ as input, cancellation, and reported token usage. It reuses the portable
 Responses transport and parsing from `@yaks/openai`, but does not use OpenAI
 credentials, enable OpenAI native tools, or write OpenAI response metadata.
 
+This fragment assumes `myPrivateKey` was obtained from private application
+configuration. Do not store it in graph entities or shared configuration files.
+
 ```ts
 import { responses } from '@yaks/openrouter'
 
@@ -21,16 +24,24 @@ Model identifiers are OpenRouter's opaque `vendor/model` strings. Choose one
 available to your account. Tool use and image input depend on the selected
 model. There is no automatic model fallback or rewriting of identifiers.
 
+## Exports and stored data
+
+The root module exports `responses`, its `Options` type, and `openrouterDoc`,
+the schema for `openrouter{response_id}`. `./vocab` exports that document and
+its `docs` list. The adapter returns replies without storing them; the session
+runner can use its `mark(reply)` result to store response metadata in the graph.
+Private authorization records use the separate file store described below.
+
 ## Browser authorization
 
 `@yaks/openrouter/oauth` provides `authorization({store, fetch?, now?})` with
 `begin()`, `complete(returnUrl)`, `cancel()`, and `token()`. `begin` produces an
-OpenRouter authorization URL using PKCE S256. Complete it by pasting the
-browser's return URL. Each attempt has a unique loopback callback path, expires
-after ten minutes, and is consumed after an exchange attempt. The browser may
-show a connection-refused page because this flow does not open a callback
-listener. Copy that page's URL. Restarting requires beginning authorization
-again.
+OpenRouter authorization URL using Proof Key for Code Exchange (PKCE), with a
+SHA-256 challenge (S256). Complete it by pasting the browser's return URL. Each
+attempt has a unique loopback callback path, expires after ten minutes, and is
+consumed after an exchange attempt. The browser may show a connection-refused
+page because this flow does not open a callback listener. Copy that page's URL.
+Restarting requires beginning authorization again.
 
 OpenRouter exchanges the code for an **API key**, not an OAuth access/refresh
 pair. That key is stored privately; there is no refresh token and no inferred

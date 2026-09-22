@@ -1,8 +1,9 @@
 # @yaks/text
 
-Markdown and plain text from the same renderer trees `@yaks/preact` uses. This
-package imports no DOM and no framework. `h` records elements; `markdown` and
-`plain` serialize them:
+Serializes element trees as Markdown or plain text. It implements the same
+rendering interface as `@yaks/preact`, but imports no DOM or UI framework and
+stores no data. The exported `h` function creates element objects; `markdown`
+and `plain` serialize them:
 
 ```ts
 import { h, markdown, plain } from '@yaks/text'
@@ -17,14 +18,16 @@ markdown(node) // 'Open [yaks\\.app](https://yaks.app)'
 plain(node) // 'Open yaks.app (https://yaks.app)'
 ```
 
-Or call `render(registry, bundle, view, vocab, ctx?, mode?)` with a registry
-from `@yaks/render`. The first five arguments are the same as the Preact
-renderer's. Mode defaults to `'markdown'`; pass `'plain'` for undecorated text.
-Context includes `{comp, col}` for column selection and
-`ctx.render(view, overrides?)` for composing nested views through the same
-registry. This renderer always passes `readOnly: true`, including to nested
-views, so that portable editors display their values. An unmatched view produces
-an empty string.
+To render a graph record, call
+`render(registry, bundle, view, vocab, ctx?, mode?)`. A bundle is one entity's
+components as a JSON object; the vocabulary describes those components. Use a
+registry (named view functions with matching predicates) from `@yaks/render`.
+The first five arguments are the same as the Preact renderer's. Mode defaults to
+`'markdown'`; pass `'plain'` for undecorated text. Context includes
+`{comp, col}` for column selection and `ctx.render(view, overrides?)` for
+composing nested views through the same registry. This renderer always passes
+`readOnly: true`, including to nested views, so that portable editors display
+their values. An unmatched view produces an empty string.
 
 | Elements                                                              | Markdown                                 | Plain text            |
 | --------------------------------------------------------------------- | ---------------------------------------- | --------------------- |
@@ -51,6 +54,9 @@ Markdown uses empty HTML comments between adjacent emphasis/code elements or
 independent lists so their delimiters do not merge. Nested emphasis uses inline
 HTML to retain its precise nesting. Both are standard Markdown syntax; consumers
 that remove HTML may lose those distinctions.
+
+The root also exports `Node` and `Mode` types, plus `safe` and `safeHref` for
+the same control-character removal and destination escaping used internally.
 
 ## Content boundary
 

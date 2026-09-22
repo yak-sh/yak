@@ -1,9 +1,14 @@
 # @yaks/preact
 
-The Preact rendering backend for `@yaks/render`. Bind a synchronous bundle
-store, and optionally a subscription, into an `Entity` component, then mount it
-with Preact. This fragment assumes a registry from `@yaks/render`, a loaded
-vocabulary, a bundle map and an application subscription function `watch`:
+Renders graph records as Preact components using the view registry from
+`@yaks/render`. A bundle is one entity's components as a JSON object, including
+its `entity.eid`. A registry associates view names and matching predicates with
+rendering functions. This package stores no entities and persists no edits.
+
+Bind a synchronous function that reads bundles, and optionally a subscription,
+into an `Entity` component, then mount it with Preact. This fragment assumes a
+registry from `@yaks/render`, a loaded vocabulary, a bundle map and an
+application subscription function `watch`:
 
 ```ts
 import { entity } from '@yaks/preact'

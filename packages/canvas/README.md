@@ -1,7 +1,10 @@
 # @yaks/canvas
 
 Graph components and geometry helpers for spatial and split-pane interfaces. The
-package stores layout state; applications render it and handle input.
+package defines the stored layout schema; a graph storage adapter persists it.
+Applications render the layout and handle input. An entity is a record
+identified by `entity.eid`; its components are named objects such as
+`pin: {x, y, w, h}`.
 
 ## Install
 
@@ -18,16 +21,18 @@ scale and dimensions, and a `cursor` stores the current selection. A `layout`
 groups split-screen `pane`s. A `fold` records collapsed sections, and a `shelf`
 records set-aside items. A `client` identifies an open window.
 
-The following setup assumes application vocabulary `mine` and a compatible graph
-storage adapter `storage`:
+Create an in-memory graph:
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
 import { graph } from '@yaks/graph'
 import { canvas, canvasDoc } from '@yaks/canvas'
+import { ram } from '@yaks/ram'
 
-let vocab = loadVocab([canvasDoc, mine])
-let g = graph({ storage, vocab, plugins: [canvas()] })
+let vocab = loadVocab([canvasDoc])
+let g = graph({ storage: ram(vocab), vocab, plugins: [canvas()] })
+await g.apply([{ entity: { eid: 'workspace' }, canvas: {} }])
+console.log(await g.read('.canvas'))
 ```
 
 Layout state is stored as graph entities, so other clients and tools can query
@@ -41,8 +46,9 @@ hook; reference deletion is enforced by the graph vocabulary.
 
 ## Where each piece lives
 
-Every component declares who is notified when it is written, and all of them
-declare `server`.
+Every component declares `sync: "server"`, making it eligible for replication to
+the server when the application configures [@yaks/sync](../sync). The schema
+does not establish a network connection by itself.
 
 | component                                     | sync     | why                                                  |
 | --------------------------------------------- | -------- | ---------------------------------------------------- |
@@ -57,8 +63,10 @@ such as an in-progress drag.
 
 ## The geometry is plain functions
 
-No DOM, no matrices, no units — a canvas unit is whatever you decide one is. A
-browser and a terminal compute the same result instead of drifting apart.
+These functions use numbers without assuming pixels or another unit. They need
+no DOM or transformation matrices, so browser and terminal clients can use the
+same calculations. In the fragment below, `camera` is a `Camera` value and
+`pins` is an array of `Pin` values.
 
 ```ts
 import { frame, place, visible } from '@yaks/canvas'
@@ -103,13 +111,13 @@ would not load on its own.
 **Layout algorithms.** `place` computes a default position for a new card. A
 client that knows a drop point should use it.
 
-## Where it sits
+## Dependencies
 
 A component package over [@yaks/graph](https://jsr.io/@yaks/graph), built the
 same way any application's own plugin is — like
 [@yaks/member](https://jsr.io/@yaks/member) and
-[@yaks/edge](https://jsr.io/@yaks/edge), it ships components and nothing
-privileged.
+[@yaks/edge](https://jsr.io/@yaks/edge), it uses the public graph plugin
+interface.
 
 ## Compatibility
 

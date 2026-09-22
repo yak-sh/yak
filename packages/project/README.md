@@ -1,9 +1,15 @@
 # @yaks/project
 
-The components that make a portfolio out of a graph of work: what a piece of
-work is filed under, the filing itself, the saved filters you look at it
-through, and the businesses being built. The tasks are [@yaks/task](../task)'s;
-this package is what they are filed in.
+Organize graph entities into projects, assign priorities and people, save query
+filters as boards, and record a business's phase and repository policy. Tasks
+belong to [@yaks/task](../task); this package declares their optional project
+metadata. Data lives in the graph you provide, with no separate database.
+
+```sh
+deno add jsr:@yaks/project
+```
+
+## Stored components
 
 - `project` — something work is grouped under. It is addressed by name as well
   as by id.
@@ -11,16 +17,15 @@ this package is what they are filed in.
   separate from being a task so that a task can have none. `priority` orders a
   queue (lower is more urgent) and `domain` names the area of work.
   `filed.project` is a reference declared `death: detach`, so deleting a project
-  frees its tasks instead of deleting them: they were filed under it, not about
-  it.
+  removes that reference instead of deleting the tasks.
 - `board{query}` — a saved filter over the portfolio. A board is its query.
   Membership is never stored — there is no row saying this task is on that board
   — so a board is always current, and a task that starts matching is on it with
   nothing to reconcile. The empty query selects nothing, which is what a board
   nobody has written a filter for should show.
 - `venture{phase, tagline, site}` — a business being built. It has a phase —
-  incubating, building, live, shuttered — rather than a status, because nothing
-  here is ever done.
+  `incubating`, `idea`, `building`, `launching`, `live`, `shuttered` or `killed`
+  — separate from a task's completion status.
 - `paused{at}` — work on it is suspended. It is a separate component rather than
   a phase, so the phase underneath is untouched and resuming means removing the
   component; there is no `paused_from` column remembering where to put the phase
@@ -31,11 +36,12 @@ this package is what they are filed in.
   also pushes. The repository, its checkouts and its remote are
   [@yaks/git](../git)'s.
 
-## The one piece of machinery: checking a board's query
+## Checking a board's query
 
 `projects(vocab)` returns a graph plugin registering a `precondition` hook. It
-runs inside the write transaction, before any row has changed, and refuses a
-board whose query would quietly match nothing. Because a board is its query, an
+runs inside the write transaction, before any row has changed, and rejects a
+board query with an unknown column or task status. It does not reject a valid
+query merely because no current records match. Because a board is its query, an
 empty board and a board with a typo in its filter look exactly alike — no error,
 no empty state saying why, just a board that is always blank. Two ways a query
 is wrong are caught:
@@ -57,22 +63,59 @@ hook sees the write.
 ## Two checks
 
 `@yaks/project/tools` implements the two tools this package declares, both
-read-only, both named with the verb `check` — which is all a "doctor" is
-(@yaks/tools):
+read-only, both declared with the verb `check` so @yaks/tools can discover them:
 
-- `board_check` reads every saved board query and reports the ones that no
-  longer route. The hook above refuses a bad query while the person who typed it
-  is still there, but a vocabulary moves: a column is renamed, a status retires,
-  a component this server used to load is gone. Every board written against the
-  old declarations now matches nothing and reports no error — the same failure,
-  arriving from the other direction.
+- `board_check` reads every saved board query and reports the ones that refer to
+  unknown columns or task statuses. The hook above refuses a bad query while the
+  person who typed it is still there, but loaded schemas can change: a column
+  can be renamed, a status removed, or a component no longer loaded. The check
+  detects invalid saved queries even when no one is writing the board.
 - `project_check` reports governed entities that no project can reach. A
   component declaring the `governed` keyword ([@yaks/kernel](../kernel)) is one
   a project answers for: a task, a memory, a design. The check walks out from
   the projects and from everything filed under one, following containment edges
   (`contains` by default; set `through` in config for other relation tags), and
-  anything it does not reach is work nobody's portfolio holds — it is on no
-  board, in nobody's queue, and nothing will ever report that it was dropped.
+  reports governed entities it does not reach. This detects missing project
+  associations; it does not imply that those entities are invisible to every
+  possible board query.
+
+## Use and exports
+
+A bundle is a JSON object containing one entity's components. This example
+stores a project and a saved board in RAM and enables query validation:
+
+```ts
+import { docDoc } from '@yaks/doc'
+import { graph } from '@yaks/graph'
+import { projectDoc, projects } from '@yaks/project'
+import { ram } from '@yaks/ram'
+import { taskDoc } from '@yaks/task'
+import { loadVocab } from '@yaks/vocab'
+
+let vocab = loadVocab([docDoc, taskDoc, projectDoc])
+let g = graph({ storage: ram(vocab), vocab, plugins: [projects(vocab)] })
+await g.apply([
+  { entity: { eid: 'website' }, project: {}, doc: { title: 'Website' } },
+  {
+    entity: { eid: 'website-board' },
+    board: { query: '.filed.project=website' },
+    doc: { title: 'Website work' },
+  },
+])
+```
+
+- `@yaks/project`: `projectDoc`, `PROJECT`, `FILED`, `BOARD`, `VENTURE`,
+  `projects(vocab, marks?)`, `guarding(vocab, marks?)`, and
+  `unroutable(query, vocab, marks?)` (a diagnostic string or `null`).
+- `@yaks/project/vocab`: schema documents in `docs`.
+- `@yaks/project/rules`: `rules(host)` supplies the validation plugin.
+- `@yaks/project/tools`: `runs(host, options)` supplies the two checks above;
+  `options.through` chooses containment relation tags.
+
+Here `host` is the process that opened the graph; these factories need its
+loaded vocabulary. A schema keyword is metadata on a declaration: `governed`
+identifies components the project check should examine, and must be loaded
+through @yaks/kernel's `kernelKeywords` (imported from `@yaks/kernel`).
 
 ## Compatibility
 

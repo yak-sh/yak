@@ -1,27 +1,28 @@
 # @yaks/kernel
 
-The components most graphs of work need, as one JSON Schema document plus a
-little code: the `entity` row every entity has, the marks recording who touched
-a thing and when, a few things that attach to an entity, and the tags that give
-an edge its meaning.
+Shared identity and metadata components for a graph: entity numbers, creation
+and update provenance, decisions, comments, images, favorites and relationship
+types. They are exported as JSON Schema documents, with plugins for resolving
+human-readable IDs and a tool for creating comments.
 
 ## Terms this README uses
 
-These packages model data as entities and components rather than tables and
-rows, so three terms come up constantly:
+The public API uses entities and components. SQL adapters store them in tables
+and rows internally. Three terms are used below:
 
 - an **entity** is a thing the graph knows about, identified by an `eid` (a
-  UUID). It has no type column: an entity is whatever its components make it.
+  string, commonly a UUID). It has no type column: an entity is whatever its
+  components make it.
 - a **component** is a named object stored on an entity — `doc: {title, body}`,
   `comment: {target}`. One entity can have many.
-- a **bundle** is one entity's id together with some of its components. Writing
-  is passing a list of bundles to `graph.apply()`, which commits all of them in
-  one transaction or none.
+- a **bundle** is one entity's components as a JSON object, including its id.
+  Writing is passing a list of bundles to `graph.apply()`, which commits all of
+  them in one transaction or none.
 
 A **vocabulary** is the set of component declarations a graph was loaded with
-([@yaks/vocab](../vocab)). This package is one such declaration and nothing
-else: `vocab.json` is plain JSON Schema, and anything that reads JSON can read
-it.
+([@yaks/vocab](../vocab)). Its `vocab.json` is one such declaration, readable as
+ordinary JSON. The package also implements human-id resolution and a
+comment-creation tool.
 
 ## What it declares
 
@@ -30,16 +31,16 @@ it.
   describing its particular set of components ([@yaks/archetype](../archetype)).
   No client writes either one: `num` is minted by storage, `archetype` is
   maintained by @yaks/archetype's plugin, and the component is declared
-  `wire: false`.
+  `wire: false` (excluded from the ordinary component input schema).
 - the marks recording what happened to something and who did it — `created`,
   `updated`, `opened`, `archived` — each with `at`, `by` and `via` columns that
   @yaks/graph stamps rather than a caller. `by` is the entity that wrote it and
   `via` is what it was written through (a session, a client).
 - the marks recording what was decided about something — `proposed`, `decided`
-  (with a verdict of `approved` or `declined`), `quarantined` (readable, but
-  never handed out as guidance), and `redaction`, which records that one column
-  of one entity was replaced, keeping a hash of what was there so a claim about
-  it can still be checked.
+  (with a verdict of `approved` or `declined`), `quarantined` (an annotation for
+  applications to exclude a readable record from guidance), and `redaction`,
+  which records that one column of one entity was replaced, keeping a hash of
+  what was there so a claim about it can still be checked.
 - the things that attach to an entity — `comment{target}`, which points a remark
   at any entity at all (the text itself is the `doc{body}` on the same entity),
   `image{w, h}` and `favorite`.
@@ -56,12 +57,13 @@ new entity carrying `doc{body}` and `comment{target}`.
 
 ## Who a write is signed as
 
-`created.by` is not a username from a config file. When a write did not arrive
-through an authenticated HTTP or MCP request, it is signed as the process that
-made it: the `process` row that run wrote about itself on the way in
-([@yaks/process](../process)'s `started()`). A program that runs twice is two
-writers — two `yak` commands over one database file are two of them — so a name
-in config could not tell them apart, and a process entity can.
+`created.by` identifies the writer supplied by the application. In the full CLI
+composition, a write that did not arrive through an authenticated HTTP or MCP
+request is signed as the process that made it: the `process` row that run wrote
+about itself on the way in ([@yaks/process](../process)'s `started()`). A
+program that runs twice is two writers — two `yak` commands over one database
+file are two of them — so a name in config could not tell them apart, and a
+process entity can.
 
 ## Human ids
 
@@ -98,13 +100,33 @@ makes it one, and the core meta-model already has a keyword for that:
 
 `deno.json` names four, and a program imports only the ones it needs:
 
-- `@yaks/kernel` — everything below, re-exported.
+- `@yaks/kernel` — `kernelDoc`, the `spineDoc` and `marksDoc` subsets,
+  `kernelKeywords`, `KERNEL_URI`, and the `ids(vocab)` plugin. It does not
+  re-export the tool factory.
 - `@yaks/kernel/vocab` — the vocabulary documents and keywords, and nothing
   else. It reaches no storage, no SQL and no runtime API, so a browser tab can
   load it on its own.
 - `@yaks/kernel/rules` — the graph plugins: here, just the human-id resolver.
 - `@yaks/kernel/tools` — the implementation of `comment_new`.
 
+## Example
+
+```ts
+import { ids, kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { loadVocab } from '@yaks/vocab'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+
+const vocab = loadVocab([kernelDoc], [kernelKeywords])
+const g = graph({ vocab, storage: ram(vocab), plugins: [ids(vocab)] })
+await g.apply([{ entity: { eid: 'example' }, favorite: {} }])
+console.log(await g.read('.favorite'))
+```
+
+Use a numbered storage adapter when you need `ids` to resolve human ids. Load
+[@yaks/doc](../doc) and the `./tools` factory as well to use `comment_new`. This
+package does not provide persistence: the example stores records in RAM.
+
 ## Compatibility
 
-Deno and Node. A JSON document and a keyword registration; no runtime calls.
+Deno, Node and browsers. The declarations and helpers use no platform APIs.

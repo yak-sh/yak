@@ -1,13 +1,42 @@
 # @yaks/oauth
 
-Small authorization utilities shared by protocol-specific integrations:
+Authorization-flow helpers and private record storage shared by provider
+integrations. This package does not implement an OAuth client by itself.
 
-- `AuthorizationStore<Record>`: serialized private record reads/updates.
-- `attempt(now?)`: a unique correlation value and ten-minute deadline.
-- `pkce()`: a random verifier and its S256 challenge.
-- `@yaks/oauth/host.fileAuthorizationStore(path, validate?)`: a private JSON
-  implementation with a file lock, atomic replacement, and optional record
+## Exports
+
+Import paths:
+
+- `AuthorizationStore<Record>` from `@yaks/oauth`: the private-record interface,
+  with reads and serialized updates.
+- `attempt(now?)` from `@yaks/oauth`: a unique correlation value and ten-minute
+  deadline.
+- `pkce()` from `@yaks/oauth`: a random verifier and its S256 challenge for
+  Proof Key for Code Exchange (PKCE). S256 means the challenge is the URL-safe
+  Base64 encoding of the verifier's SHA-256 hash.
+- `fileAuthorizationStore(path, validate?)` from `@yaks/oauth/host`: a private
+  JSON implementation with a file lock, atomic replacement, and optional record
   validation.
+
+## Example
+
+```ts
+import { attempt, pkce } from '@yaks/oauth'
+
+const pending = attempt()
+const { verifier, challenge } = await pkce()
+// Keep pending and verifier in memory. A protocol adapter includes challenge in
+// the authorization URL, checks the returned state and deadline, then sends the
+// verifier in its code exchange. These helpers do not perform those checks.
+```
+
+`AuthorizationStore<R>.read(key)` returns a record or `undefined`.
+`update(key, fn)` passes a mutable record to an asynchronous callback and
+returns its result. The file implementation serializes updates with a file lock
+and saves mutations even if the callback throws. Callers must validate a
+response before mutating the record if failure should leave it unchanged.
+
+## Storage and security
 
 The store contains sensitive values and is not a graph or synchronization store.
 Files use private permissions but are plaintext. The caller supplies a dedicated
@@ -18,3 +47,9 @@ callbacks, select a provider, or execute token exchanges.
 `@yaks/openrouter/oauth` handles OpenRouter's code-to-API-key exchange. Both use
 the same private storage and attempt lifetime; they do not pretend to implement
 identical protocols. In-flight verifiers remain in memory, not these files.
+
+## Compatibility
+
+The root module uses Web Crypto and `btoa` (modern Deno, Node, browsers, and
+Workers). `./host` uses Deno filesystem and file-lock APIs; it requires Deno and
+read/write permissions for the dedicated store directory.
