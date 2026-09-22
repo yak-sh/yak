@@ -7,6 +7,7 @@ import {
   hostOf,
   onZone,
   ORIGIN,
+  paged,
   platform,
   route,
   sameOrigin,
@@ -272,4 +273,20 @@ Deno.test('shared: the read door, and nothing a write could ride on', () => {
   for (let [method, path, want] of doors) {
     assertEquals(shared(method, path), want, `${method} ${path}`)
   }
+})
+
+// A sandboxed app's page speaking to its own doors (installed.ts): the token
+// leads the app's path, or the path itself at a front page or on a domain.
+Deno.test('paged: the token segment, where an app path starts', () => {
+  let paths: [string, boolean][] = [
+    ['/recipes/~abc.def/api/query', true],
+    ['/recipes/~abc.def/', true],
+    ['/recipes/~abc.def', true],
+    ['/~abc.def/api/me', true],
+    ['/recipes/api/query', false],
+    ['/recipes/sub/~abc/api/query', false],
+    ['/recipes/%7Eabc/api/query', false],
+    ['/~/api/query', false],
+  ]
+  for (let [path, want] of paths) assertEquals(paged(path), want, path)
 })

@@ -1,6 +1,6 @@
 ---
 name: sharing
-description: 'Publishing and installing an app (yaks.app). Who may read and write an app, how somebody is invited to one app rather than the whole space, and how an app travels: app_publish, app_install and app_update, what an installed copy shares (the code, and nothing else), what pinning means, and what an update does to what people saved.'
+description: 'Publishing and installing an app (yaks.app). Who may read and write an app, how somebody is invited to one app rather than the whole space, and how an app travels: app_publish, app_install and app_update, what an installed copy shares (the code, and nothing else), how it runs sandboxed in its own origin and what that leaves it, what pinning means, and what an update does to what people saved.'
 ---
 
 # Publishing and installing an app
@@ -290,6 +290,61 @@ What travels is the app's own files — the pages, the stylesheets, the
   that needs a key should say so in its `about`, and the installer sets their
   own with `app_secret_set`.
 - **Members.** The copy belongs to the installer's space and its guest list.
+
+## How an installed app runs: sandboxed
+
+An app installed from somebody else's release runs the way a phone runs an app
+from a store: walled off from everything else in the space. Its address is the
+same, `<space>.yaks.app/<app>/`, but every answer it gives carries
+`Content-Security-Policy: sandbox allow-scripts allow-forms allow-popups`, so
+the browser runs its pages in an origin of their own that no other app shares.
+The apps a space made itself are not sandboxed; they share the space as they
+always have.
+
+What a sandboxed app has:
+
+- **Its own data**, through `./api/client.js` and the rest of its own `./api/`
+  endpoints. The page is served with a token for the person who opened it in its
+  `<base href>`, `/<app>/~<token>/`, so every relative URL carries it. The token
+  opens this app and no other, and the person's role in the space is checked on
+  every call. It lasts as long as the sign-in that loaded the page.
+- **Scripts, module scripts, forms and popups.** Relative paths work:
+  `./app.js`, `./style.css`, `import './api/client.js'`. An absolute path that
+  names the app, `/<app>/app.js`, leaves the token behind and does not load.
+- **`localStorage` and `sessionStorage`**, supplied by the platform, since the
+  browser's own are not available in a sandboxed origin. `localStorage` keeps
+  each signed-in person's own keys in the app's store, up to a megabyte of text
+  each, private to them: readable at once when the page loads, and saved in the
+  background after each write. For a visitor who is not signed in it lasts as
+  long as the page. `sessionStorage` lasts as long as the page.
+- **Its own words.** A component it declares is planted in its own store even
+  when another app in the space declares the same name, and no app in the space
+  borrows a word from it.
+
+What it does not have:
+
+- **IndexedDB, `document.cookie` and service workers.** The browser refuses them
+  in a sandboxed origin.
+- **The camera, and in Chrome notifications.** Chrome and Firefox refuse the
+  camera to a sandboxed origin without asking, and Chrome refuses notifications
+  the same way. Location and the clipboard ask the person as they would on any
+  page (measured in Chrome 150 and Firefox 146, 2026-09).
+- **Anything else in the space.** Its requests to another app's address arrive
+  signed out, so they see only what a stranger sees; `store('/other/api/')`
+  reads a public app and nothing more. Its own `/api/files/` endpoint refuses
+  it: its code changes only through the tools, by a member.
+- **Its own pages in frames.** A sandboxed page cannot frame another page of the
+  app.
+
+A link the page follows to an address carrying the token lands at the address
+without it, so the token never shows in the address bar.
+
+**Trusting an installed app.** The space's owner can let it out of its sandbox:
+`app_set(app, trusted: true)`. It then runs like the space's own apps, with the
+browser's own storage and the sign-in cookie, and can read and change everything
+in the space. `app_set(app, trusted: false)` sandboxes it again. Trust is given
+to the code the owner saw: an `app_update` run by anyone but the owner puts the
+app back in its sandbox, and the answer says so.
 
 ## What pinning means
 

@@ -334,7 +334,11 @@ app_set:
     false withdraws it at once. Pass forget with a slug this app has already
     left to drop it: it stops redirecting and another app can be created
     there, so every link still aimed at it finds nothing. Only the space
-    owner may do that, and it is final for that address. The default access,
+    owner may do that, and it is final for that address. trusted is for an
+    app installed from someone else's release, which runs sandboxed in its
+    own browser origin: true lets it run like the space's own apps, where it
+    can read and change everything in the space; false sandboxes it again.
+    Only the space owner may set it. The default access,
     'public', allows anyone to read and only members with write permission
     to change data. Returns the current URL and a summary of the changes.
     Documentation: https://yaks.app/docs/home.
@@ -495,9 +499,16 @@ app_publish:
     under the name it already has; a name is claimed once, and only an
     explicit new name moves it, which leaves the old name resolving to
     nothing. Nobody who installed it moves to the new version until they
-    call app_update. Only the space owner may publish. gallery: true also
-    submits it to be shown on https://yaks.app/gallery, a public page of
-    what people have made. That is separate from publishing. It is not
+    call app_update. In every space that installs it, the copy runs
+    sandboxed in its own browser origin unless that space's owner trusts
+    it: it reaches its own data through ./api/client.js, localStorage and
+    sessionStorage are supplied by the platform (localStorage saved per
+    person in the app's store), IndexedDB, cookies, service workers and
+    the camera are unavailable, other apps in the space are reached only as
+    a stranger, and relative paths work where absolute /<app>/ paths do
+    not. Only the space owner may publish. gallery: true also submits it
+    to be shown on https://yaks.app/gallery, a public page of what people
+    have made. That is separate from publishing. It is not
     listed at once; yaks.app reviews the submission and decides, and the app
     is published either way. Returns the published name and version, how to
     install it, and any gallery submission status. Documentation:
@@ -535,8 +546,12 @@ app_install:
     next version does not arrive on its own, and app_update moves the copy
     forward while keeping their data. Pass the published name and optionally
     as for the new app slug. By default it uses the source app slug if free,
-    otherwise the published name. Returns the installed version, file count,
-    new URL and deployment details. Documentation:
+    otherwise the published name. The copy runs sandboxed, in a browser
+    origin of its own: it reaches its own data and nothing else in the
+    space, and the platform supplies its localStorage. The space owner's
+    app_set(trusted: true) lets it run like the space's own apps, with
+    access to everything in the space. Returns the installed version, file
+    count, new URL and deployment details. Documentation:
     https://yaks.app/docs/sharing.
 app_update:
   title: Update an installed app

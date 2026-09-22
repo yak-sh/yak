@@ -573,13 +573,17 @@ components a query does, so it is the same mistake there.
 **Reaching for localStorage.** State a page keeps in the browser is invisible to
 the person's other device, to anyone else looking at the same page, and to the
 person's agent — and gone when they clear their browser. It is not a lighter
-store; it is a store nobody else can see. Save a row instead.
+store; it is a store nobody else can see. Save a row instead. (In an app
+installed from somebody else's release, which runs sandboxed, `localStorage` is
+the platform's: each signed-in person's keys are kept in the app's store rather
+than the browser: <https://yaks.app/docs/sharing.md>.)
 
 **Writing the app's own name into the app.** `/chores/api/client.js`,
 `/chores/style.css`, `fetch('/chores/api/query?…')` — every one breaks the
 moment somebody installs a copy at another address. Write `./api/client.js` and
 `./style.css`. The one address that legitimately names another app is a sibling
-store you meant to read: `store('/lending/api/')`.
+store you meant to read: `store('/lending/api/')`. An installed copy runs
+sandboxed, and reads a sibling only as a stranger would.
 
 **Saving the same thing twice.** Content addressing makes the same bytes one
 blob and one `attachment` row — but a row of your _own_ pointing at them is

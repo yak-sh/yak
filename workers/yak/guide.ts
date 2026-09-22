@@ -313,7 +313,14 @@ the person's own space, where it is an ordinary app of theirs — its own
 address, its own store, their data from the first byte, nothing shared but
 the code — pinned to the version it was installed at until app_update moves
 it, which keeps everything they saved. Look before you build something
-somebody has already made.
+somebody has already made. An installed copy runs sandboxed, in a browser
+origin of its own: it reaches its own data through ./api/client.js and nothing
+else in the space; localStorage and sessionStorage are supplied by the
+platform, localStorage saved per person in the app's store; IndexedDB,
+cookies, service workers and the camera are not available, nor notifications
+in Chrome; relative paths work and absolute /<app>/ paths do not. The space
+owner's app_set(trusted: true) lets it run like their own apps. A published
+app runs this way in every space that installs it.
 
 Whatever breaks — a page's own error, a refused write, a request that failed
 — arrives at the end of a later reply, once. Fix what you see. And when a
