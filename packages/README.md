@@ -170,6 +170,12 @@ grouped approximately by function, **not** by dependency order.
   CLI working directory), fast-forwarding its branch into the base in the
   primary worktree. If the base moved, it rebases and returns without landing;
   rerun tests and land again.
+
+- **[@yaks/mirror](./mirror)** — one sync between files and a graph: a binding
+  names its files and carries a `read` (files → graph), a `values` (graph →
+  files), or both. Each path remembers the Git blob and value hash it last
+  agreed on, so a path both sides changed is reported as a conflict and never
+  overwritten.
 - **[@yaks/effects](./effects)** — Run registered handlers after committed
   component changes or newly matching query patterns, isolating handler failures
   from the original transaction. An optional durable attempt log supports

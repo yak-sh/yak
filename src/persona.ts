@@ -8,8 +8,10 @@
 // there when a repo adopts them — the flip is the owner's move, never
 // ours). materialize() and filesFor() are pure over rows+deps so the
 // CLI verb, the server effect, and the tests render the same bytes;
-// only syncFiles() touches the filesystem, and it stops at the write —
+// personaMirror() hands them to @yaks/mirror as a write-only binding, which
+// is the only thing that touches the files, and it stops at the write —
 // committing what it wrote is git.ts's job, at the callers.
+import { type Binding, memo, present } from '@yaks/mirror'
 import { type Dep, type Edge, idOf } from './types.ts'
 import { accepted, memoryHead, type Row } from './client.ts'
 import { hot } from './warmth.ts'
@@ -487,10 +489,10 @@ export let filesFor = (all: Row[], deps: Dep[]) => {
 }
 
 // The .tasks roots the materializer OWNS, one per managed venture, with the
-// venture's push permission. filesFor writes what SHOULD be there; the sweep
-// (orphans) reads what IS there and deletes the difference — so a repo whose
-// last persona was deleted is still reconciled, even though it produced no
-// file this render.
+// venture's push permission. filesFor says what SHOULD be there; the mirror
+// binding also lists what IS there and deletes the difference — so a repo
+// whose last persona was deleted is still reconciled, even though it produced
+// no file this render.
 export let taskRoots = (all: Row[]): { root: string; push: boolean }[] =>
   all.filter(managed).map((r) => ({
     root: `${r.comps.repo.path}/.tasks`,
@@ -532,80 +534,34 @@ let held = (root: string) => {
   return out
 }
 
-// Projection files present under an owned root that this render did NOT
-// produce — a persona was deleted or its slug renamed, leaving a stale spec
-// still wearing the "authoritative" banner. Each is a delete (body: null,
-// the wire's clear semantics) carrying its venture's push, so syncFiles
-// removes it and git.ts commits the removal. The render IS the manifest;
-// no side-ledger to drift.
-export let orphans = (
-  roots: { root: string; push: boolean }[],
-  keep: { path: string }[],
+// Where the persona binding remembers what each file last agreed on. The
+// graph cannot hold it for the legacy server, so it is a file in the data dir.
+let memory = () => memo(`${Deno.env.get('HOME')}/.tasks/mirror/personas.json`)
+
+// The persona files as a write-only @yaks/mirror binding: the graph owns them.
+// `files` is what the owned roots hold now plus what the render wants, so a
+// deleted or renamed persona's stale file is removed, and a file somebody
+// edited by hand while the graph also moved is a conflict, left as it is.
+// `paths` carries each path's venture push, for git.ts to commit — every path
+// the render names and every one found under an owned root.
+export let personaMirror = (
+  all: Row[],
+  deps: Dep[],
+  mem: Pick<Binding, 'agreed' | 'remember'> = memory(),
 ) => {
-  let want = new Set(keep.map((f) => f.path))
-  return roots.flatMap(({ root, push }) =>
-    held(root).filter((p) => !want.has(p))
-      .map((path) => ({ path, body: null, push }))
-  )
-}
-
-// The full reconcile plan: files to write (filesFor) plus orphans to delete.
-// Impure — it reads the .tasks dirs to see what's there but shouldn't be — so
-// it lives beside syncFiles, not the pure renderers. One plan feeds both the
-// CLI verb and the server effect, so they reconcile identically.
-export let projection = (all: Row[], deps: Dep[]) => {
-  let files = filesFor(all, deps)
-  return [...files, ...orphans(taskRoots(all), files)]
-}
-
-// Write via a temp file + rename: writeTextFileSync truncates before it
-// writes, so a harness reading CLAUDE.md mid-write sees an empty file — and
-// that file is what every agent here boots into. rename is atomic within a
-// filesystem; the temp rides in the same directory to stay on it, and is
-// cleaned if the rename fails so a broken write leaves no litter.
-let writeAtomic = (path: string, body: string) => {
-  let tmp = `${path}.${crypto.randomUUID()}.tmp`
-  try {
-    Deno.writeTextFileSync(tmp, body)
-    Deno.renameSync(tmp, path)
-  } catch (e) {
-    try {
-      Deno.removeSync(tmp)
-    } catch { /* nothing to clean */ }
-    throw e
+  let want = filesFor(all, deps)
+  let push = new Map(want.map((f) => [f.path, f.push]))
+  for (let { root, push: p } of taskRoots(all)) {
+    for (let path of held(root)) if (!push.has(path)) push.set(path, p)
   }
-}
-
-// Reconcile the plan to disk: write string bodies, remove null ones (an
-// orphan or a retracted spec). Reads before writing so an unchanged
-// materialization never churns mtimes (or git status), and a failure on one
-// file never stops the rest — the caller hears all three.
-export let syncFiles = (files: { path: string; body: string | null }[]) => {
-  let written: string[] = []
-  let removed: string[] = []
-  let failed: string[] = []
-  for (let f of files) {
-    try {
-      if (f.body == null) {
-        try {
-          Deno.removeSync(f.path)
-          removed.push(f.path)
-        } catch { /* already gone — nothing to un-write */ }
-        continue
-      }
-      let had: string | undefined
-      try {
-        had = Deno.readTextFileSync(f.path)
-      } catch { /* new file */ }
-      if (had == f.body) continue
-      Deno.mkdirSync(f.path.slice(0, f.path.lastIndexOf('/')), {
-        recursive: true,
-      })
-      writeAtomic(f.path, f.body)
-      written.push(f.path)
-    } catch (e) {
-      failed.push(`${f.path}: ${(e as Error).message}`)
-    }
+  let binding: Binding = {
+    name: 'personas',
+    files: () => present([...push.keys()]),
+    values: () => Promise.resolve(new Map(want.map((f) => [f.path, f.body]))),
+    ...mem,
   }
-  return { written, removed, failed }
+  return {
+    binding,
+    paths: [...push].map(([path, push]) => ({ path, push })),
+  }
 }

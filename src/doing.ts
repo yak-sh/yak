@@ -46,7 +46,8 @@ import { dispatchSweep } from './dispatch.ts'
 import { ruled } from './spawnrule.ts'
 import { embedSweep } from './embed.ts'
 import { initVector, ownVector } from './vector.ts'
-import { projection, syncFiles } from './persona.ts'
+import { personaMirror } from './persona.ts'
+import { sync as mirror } from '@yaks/mirror'
 import { commit } from './git.ts'
 import {
   codexPending,
@@ -401,7 +402,7 @@ export let wireDoing = (d: Doing) => {
   }
   let syncSoon = () => {
     // A probe on a scratch copy must never scribble persona files into the
-    // LIVE venture repos it happens to point at: projection() computes each
+    // LIVE venture repos it happens to point at: personaMirror() computes each
     // file's path from the project's real repo, not from DB_PATH, so an
     // ungated probe write lands in someone's working tree (T-14612). Only
     // the live instance materializes on a graph change; `task sync` stays
@@ -415,12 +416,14 @@ export let wireDoing = (d: Doing) => {
         // fires on every persona-ish change, and snapshot() here cost the
         // graph each time (M-21143).
         let { all, deps } = projectionGraph(db)
-        let files = projection(all, deps)
-        for (let f of syncFiles(files).failed) stuck(f)
+        let { binding, paths } = personaMirror(all, deps)
+        let done = await mirror(binding)
+        for (let f of done.failed) stuck(f)
+        for (let p of done.conflicts) stuck(`conflict ${p}`)
         // Every projection path, not just this tick's writes: a file some
         // earlier tick left dirty (untracked then, adopted since) is dirt
         // this tick can clear. commit() ignores whatever matches HEAD.
-        for (let f of (await commit(files, 'personas: materialize')).failed) {
+        for (let f of (await commit(paths, 'personas: materialize')).failed) {
           stuck(f)
         }
       } catch (e) {

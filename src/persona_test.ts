@@ -1,6 +1,6 @@
 // The persona materializer, pure: rows+deps in, markdown out. One
-// little graph builder writes many cases in few lines; syncFiles gets a
-// temp dir (never a repo). The server effect and the CLI verb render
+// little graph builder writes many cases in few lines; the mirror writes
+// into a temp dir (never a repo). The server effect and the CLI verb render
 // through these same functions, so what passes here is what lands on
 // disk everywhere.
 import { fileURLToPath } from 'node:url'
@@ -14,6 +14,7 @@ import { type Dep, type Edge, kindOf } from './types.ts'
 import { projectionSnapshot, type Row, rows } from './client.ts'
 import { fakeGraph } from './graph_fake.ts'
 import { slow } from './testing.ts'
+import { memo, sync } from '@yaks/mirror'
 import {
   adopted,
   AGENT,
@@ -26,12 +27,15 @@ import {
   homeReads,
   indexLine,
   materialize,
-  orphans,
-  projection,
-  syncFiles,
+  personaMirror,
   taskRoots,
   wornPersona,
 } from './persona.ts'
+
+// Sync the persona files through the mirror, remembering beside them in dir.
+let mirrorAt = (dir: string, all: Row[], deps: Dep[]) =>
+  sync(personaMirror(all, deps, memo(`${dir}/memo.json`)).binding)
+let quiet = { read: [], wrote: [], removed: [], conflicts: [], failed: [] }
 
 let NOW = Date.parse('2026-07-22T00:00:00Z')
 let day = (n: number) => new Date(NOW - n * 86_400_000).toISOString()
@@ -136,7 +140,7 @@ Deno.test('materialize: edge ord breaks a warmth tie, undeclared trails (T-12939
   assert(md2.indexOf('HOT.') < md2.indexOf('ABODY.'))
 })
 
-Deno.test('persisted projection stays fresh across a warmth crossover', () => {
+Deno.test('persisted projection stays fresh across a warmth crossover', async () => {
   let dir = Deno.makeTempDirSync()
   try {
     let project = row({
@@ -184,14 +188,15 @@ Deno.test('persisted projection stays fresh across a warmth crossover', () => {
     assert(early.indexOf('RECENT.') < early.indexOf('DURABLE.'))
     assert(late.indexOf('DURABLE.') < late.indexOf('RECENT.'))
 
-    let first = projection(all, deps)
     // A later CLI check may receive the same graph rows and edges in another
     // order. Persisted bytes use explicit ord + identity, never either input
     // order or the clock that moved above.
-    let later = projection([...all].reverse(), [...deps].reverse())
-    assertEquals(later, first)
-    assertEquals(syncFiles(first).written, [`${dir}/.tasks/AGENTS.md`])
-    assertEquals(syncFiles(later), { written: [], removed: [], failed: [] })
+    let later = [[...all].reverse(), [...deps].reverse()] as const
+    assertEquals(filesFor(...later), filesFor(all, deps))
+    assertEquals((await mirrorAt(dir, all, deps)).wrote, [
+      `${dir}/.tasks/AGENTS.md`,
+    ])
+    assertEquals(await mirrorAt(dir, ...later), quiet)
   } finally {
     Deno.removeSync(dir, { recursive: true })
   }
@@ -238,10 +243,10 @@ Deno.test('persisted projection keeps nested persona order', () => {
     assert(early.indexOf('BETA.') < early.indexOf('ALPHA.'))
     assert(late.indexOf('BETA.') < late.indexOf('ALPHA.'))
 
-    let first = projection(all, deps)
-    let later = projection([...all].reverse(), [...deps].reverse())
+    let first = filesFor(all, deps)
+    let later = filesFor([...all].reverse(), [...deps].reverse())
     assertEquals(later, first)
-    let body = first[0].body ?? ''
+    let body = first[0].body
     assert(body.indexOf('BETA.') < body.indexOf('ALPHA.'))
   } finally {
     Deno.removeSync(dir, { recursive: true })
@@ -339,8 +344,7 @@ slow('task sync --check accepts a projected persona role', async () => {
     ),
     deps,
   }
-  let expected = projection(all, deps)
-  let synced = syncFiles(expected)
+  let synced = await mirrorAt(root, all, deps)
   assertEquals(synced.failed, [])
   let fake = fakeGraph(snap)
   try {
@@ -708,25 +712,6 @@ Deno.test('filesFor: common → AGENTS.md, others → personas/<slug>.md, fleet 
   assertEquals(granted.map((f) => f.push), [true])
 })
 
-Deno.test('syncFiles: writes changes, skips fresh, isolates failures', () => {
-  let dir = Deno.makeTempDirSync()
-  try {
-    let f = { path: `${dir}/deep/AGENTS.md`, body: 'one\n' }
-    assertEquals(syncFiles([f]).written, [f.path])
-    assertEquals(Deno.readTextFileSync(f.path), 'one\n')
-    // unchanged → untouched (no churn for git status to see)
-    assertEquals(syncFiles([f]), { written: [], removed: [], failed: [] })
-    // one bad path fails alone; the good write still lands
-    let good = { path: `${dir}/ok.md`, body: 'two\n' }
-    let bad = { path: `${dir}/ok.md/impossible.md`, body: 'x' }
-    let out = syncFiles([good, bad])
-    assertEquals(out.written, [good.path])
-    assertEquals(out.failed.length, 1)
-  } finally {
-    Deno.removeSync(dir, { recursive: true })
-  }
-})
-
 Deno.test('filesFor / taskRoots: a retired venture is neither written nor swept', () => {
   let proj = row({
     project: {},
@@ -757,49 +742,7 @@ Deno.test('taskRoots: active ventures only, carrying push', () => {
   ])
 })
 
-Deno.test('orphans: a held file absent from the render is a null-body delete', () => {
-  let dir = Deno.makeTempDirSync()
-  try {
-    Deno.mkdirSync(`${dir}/.tasks/personas`, { recursive: true })
-    Deno.writeTextFileSync(`${dir}/.tasks/AGENTS.md`, 'a')
-    Deno.writeTextFileSync(`${dir}/.tasks/personas/gone.md`, 'g')
-    Deno.writeTextFileSync(`${dir}/.tasks/personas/keep.md`, 'k')
-    let roots = [{ root: `${dir}/.tasks`, push: false }]
-    let keep = [
-      { path: `${dir}/.tasks/AGENTS.md` },
-      { path: `${dir}/.tasks/personas/keep.md` },
-    ]
-    assertEquals(orphans(roots, keep), [
-      { path: `${dir}/.tasks/personas/gone.md`, body: null, push: false },
-    ])
-  } finally {
-    Deno.removeSync(dir, { recursive: true })
-  }
-})
-
-Deno.test('syncFiles: a null body un-writes; a write leaves no temp litter', () => {
-  let dir = Deno.makeTempDirSync()
-  try {
-    let p = `${dir}/AGENTS.md`
-    syncFiles([{ path: p, body: 'x\n' }])
-    // the write landed whole (temp + rename) and left nothing beside it
-    assertEquals(Deno.readTextFileSync(p), 'x\n')
-    assertEquals([...Deno.readDirSync(dir)].map((e) => e.name), ['AGENTS.md'])
-    // a null body removes it
-    assertEquals(syncFiles([{ path: p, body: null }]).removed, [p])
-    assertThrows(() => Deno.statSync(p))
-    // removing an already-gone path is a no-op, never a failure
-    assertEquals(syncFiles([{ path: p, body: null }]), {
-      written: [],
-      removed: [],
-      failed: [],
-    })
-  } finally {
-    Deno.removeSync(dir, { recursive: true })
-  }
-})
-
-Deno.test('projection: a renamed slug orphans the old file; sync removes it', () => {
+Deno.test('personaMirror: a renamed slug orphans the old file; sync removes it', async () => {
   let dir = Deno.makeTempDirSync()
   try {
     let proj = row({ project: {}, doc: { title: 'V' }, repo: { path: dir } })
@@ -814,17 +757,13 @@ Deno.test('projection: a renamed slug orphans the old file; sync removes it', ()
     })
     let all = [proj, base, spec]
     let deps = [edge(proj, 'contains', base)]
-    syncFiles(projection(all, deps))
+    await mirrorAt(dir, all, deps)
     assert(Deno.readTextFileSync(`${dir}/.tasks/personas/old.md`).length > 0)
     // rename the slug: old.md is now an orphan, new.md is what the render wants
     spec.comps.alias.slug = 'new'
-    let plan = projection(all, deps)
-    assert(
-      plan.some((f) => f.path.endsWith('/personas/old.md') && f.body == null),
-    )
-    let { written, removed } = syncFiles(plan)
-    assert(removed.includes(`${dir}/.tasks/personas/old.md`))
-    assert(written.includes(`${dir}/.tasks/personas/new.md`))
+    let { wrote, removed } = await mirrorAt(dir, all, deps)
+    assertEquals(removed, [`${dir}/.tasks/personas/old.md`])
+    assertEquals(wrote, [`${dir}/.tasks/personas/new.md`])
     assertThrows(() => Deno.statSync(`${dir}/.tasks/personas/old.md`))
     assert(Deno.readTextFileSync(`${dir}/.tasks/personas/new.md`).length > 0)
   } finally {
@@ -832,7 +771,7 @@ Deno.test('projection: a renamed slug orphans the old file; sync removes it', ()
   }
 })
 
-Deno.test('projection: a deleted persona orphans its file; AGENTS.md untouched', () => {
+Deno.test('personaMirror: a deleted persona orphans its file; AGENTS.md untouched', async () => {
   let dir = Deno.makeTempDirSync()
   try {
     let proj = row({ project: {}, doc: { title: 'V' }, repo: { path: dir } })
@@ -846,11 +785,11 @@ Deno.test('projection: a deleted persona orphans its file; AGENTS.md untouched',
       alias: { slug: 'spec' },
     })
     let deps = [edge(proj, 'contains', base)]
-    syncFiles(projection([proj, base, spec], deps))
+    await mirrorAt(dir, [proj, base, spec], deps)
     assert(Deno.readTextFileSync(`${dir}/.tasks/personas/spec.md`).length > 0)
     // spec deleted from the graph — its file is an orphan under a dir we own
-    let { removed } = syncFiles(projection([proj, base], deps))
-    assert(removed.includes(`${dir}/.tasks/personas/spec.md`))
+    let { removed } = await mirrorAt(dir, [proj, base], deps)
+    assertEquals(removed, [`${dir}/.tasks/personas/spec.md`])
     assertThrows(() => Deno.statSync(`${dir}/.tasks/personas/spec.md`))
     // the surviving common persona's file is left alone
     assert(Deno.readTextFileSync(`${dir}/.tasks/AGENTS.md`).length > 0)

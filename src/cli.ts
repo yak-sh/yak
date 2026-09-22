@@ -140,7 +140,8 @@ import {
   claudePid,
   descends,
 } from './proc.ts'
-import { projection, syncFiles } from './persona.ts'
+import { personaMirror } from './persona.ts'
+import { plan, sync as mirror } from '@yaks/mirror'
 import { commit, revision } from './git.ts'
 import { gitSync } from './repo.ts'
 import { resolve } from 'node:path'
@@ -3011,39 +3012,45 @@ let sync = async (got: Got) => {
     if (check) return print(`sync --check skipped: ${(e as Error).message}`)
     throw e
   }
-  let files = projection(rows(snap), snap.deps)
+  let { binding, paths } = personaMirror(rows(snap), snap.deps)
   if (check) {
-    let drift: string[] = []
-    for (let f of files) {
-      if (f.body == null) {
-        drift.push(`orphan ${f.path}`)
-        continue
-      }
-      let had: string | undefined
-      try {
-        had = Deno.readTextFileSync(f.path)
-      } catch { /* missing */ }
-      if (had != f.body) {
-        drift.push(`${had == null ? 'missing' : 'stale'} ${f.path}`)
-      }
-    }
+    let drift = (await plan(binding)).filter((p) => p.act != 'same')
+      .map((p) =>
+        `${
+          p.act == 'conflict'
+            ? 'conflict'
+            : p.text == null
+            ? 'orphan'
+            : p.sides.file == null
+            ? 'missing'
+            : 'stale'
+        } ${p.path}`
+      )
     if (!drift.length) return print('projections in sync')
     for (let d of drift) warn(d)
     warn(`${drift.length} projection(s) drifted — run: task sync`)
     Deno.exit(1)
   }
-  if (!files.length) {
+  if (!paths.length) {
     return print('no personas with a homed repo — nothing to write')
   }
-  let { written, removed, failed } = syncFiles(files)
-  for (let p of written) print(`wrote ${p}`)
+  let { wrote, removed, conflicts, failed } = await mirror(binding)
+  for (let p of wrote) print(`wrote ${p}`)
   for (let p of removed) print(`removed ${p}`)
+  for (let p of conflicts) {
+    warn(
+      `conflict ${p} — edited here and in the graph; move the edit into ` +
+        'the graph and delete the file',
+    )
+  }
   for (let f of failed) warn(`failed ${f}`)
-  if (!written.length && !removed.length && !failed.length) print('all fresh')
+  if (!wrote.length && !removed.length && !conflicts.length && !failed.length) {
+    print('all fresh')
+  }
   if (got.flags.has('--no-commit')) return
   // Every path, not just this run's writes: a file left dirty by an
   // earlier sync (or adopted with `git add` since) lands here too.
-  let done = await commit(files, 'personas: materialize')
+  let done = await commit(paths, 'personas: materialize')
   for (let root of done.committed) print(`committed ${root}`)
   for (let root of done.pushed) print(`pushed ${root}`)
   for (let p of done.untracked) print(`untracked ${p} — git add to adopt`)
