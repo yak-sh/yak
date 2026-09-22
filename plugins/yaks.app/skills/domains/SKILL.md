@@ -26,7 +26,7 @@ A domain is aimed at the space or the app ITSELF, never at the `.yaks.app`
 address it happens to have. So `space_set(slug)` or `app_set(app, slug)` moves
 the `.yaks.app` address and the domain keeps serving exactly what it served
 before, with nothing to re-attach and no DNS to change
-(<https://yaks.app/guide/home.md>).
+(<https://yaks.app/docs/home.md>).
 
 This page is for you, the assistant. The person you are helping owns a domain
 and probably bought it years ago from GoDaddy or Namecheap or Squarespace. They
@@ -35,7 +35,7 @@ those control panels look like. So: attach the domain here, then walk them
 through their registrar in their own words, or do it for them if you can reach
 it.
 
-Back to the map: <https://yaks.app/guide.md>
+Back to the map: <https://yaks.app/docs.md>
 
 ## Before attaching a domain
 

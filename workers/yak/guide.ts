@@ -1,6 +1,6 @@
-// The guide's pages (T-32982). `public/guide.md` stays what it is — the map,
+// The guide's pages (T-32982). `public/docs.md` stays what it is — the map,
 // covering pretty much everything there is, briefly — and beside it sit the
-// pages that go deep on one subject each, `public/guide/<slug>.md`, which the
+// pages that go deep on one subject each, `public/docs/<slug>.md`, which the
 // connector also offers as MCP resources of their own. Owner, 2026-09-03: "the
 // guide should still list pretty much everything, but it can be very brief
 // with links to read more details about each feature. like querying, i could
@@ -22,7 +22,7 @@
 // An agent never has to leave the connector to read any of it (T-34284). The
 // `guide` tool (tools.ts) returns the same bytes, because plenty of agents are
 // not allowed to fetch yaks.app at all — owner, 2026-09-05: "claude often
-// can't fetch https://yaks.app/guide.md maybe cause of default allowlist
+// can't fetch https://yaks.app/docs.md maybe cause of default allowlist
 // restrictions. can't we just present that same guide via the mcp server so
 // they don't have to fetch?" The files stay the one source: the tool and the
 // MCP resources both read them from the ASSETS binding, at the very URLs the
@@ -123,7 +123,7 @@ with a page name for one subject — querying, components, files, commands of
 your own, code of your own — so read the one the work calls for rather than
 guessing.
 It is a tool here, so nothing has to be fetched off the web; the same text
-is at ${url(env, '/guide.md')} for a person. graph_apply, graph_query and
+is at ${url(env, '/docs.md')} for a person. graph_apply, graph_query and
 search reach that same store from here, for seeding and fixing.
 
 An app can come with DATA: a seed.json beside index.html — a list of the same
@@ -230,7 +230,7 @@ title), and applies one bundle with a source component of its own. The person
 starts it with a bookmarklet the app hands them, because an app's write
 endpoints accept same-origin requests only, so a script on somebody else's
 page cannot write here. Call guide with page clipping for the whole thing
-(${url(env, '/guide/clipping.md')}).
+(${url(env, '/docs/clipping.md')}).
 
 Anything that should happen LATER is a row in the store, not a cron job: put
 wake {at, every, note} on the entity it is about — the reminder, the lease
@@ -245,7 +245,7 @@ duration (30m, 1d), five cron fields (0 9 * * 1-5) or
 @hourly/@daily/@weekly/@monthly, with an optional IANA zone at the end of a
 cron line; wake {at: null} pauses without forgetting the
 schedule. Call guide with page wakes for the whole thing (${
-    url(env, '/guide/wakes.md')
+    url(env, '/docs/wakes.md')
   }).
 
 One app in a space can be its FRONT PAGE — app_set(app, home: true) — and it is
@@ -258,7 +258,7 @@ every path under /api/, so a glob naming one is refused too. Deleting the front
 page puts the space back to its default page. A front-page worker that throws or
 answers 404 is skipped and the request routes as if it were not there, and it
 acts as the visitor, never as the app it routes to. Call guide with page home
-for the whole thing (${url(env, '/guide/home.md')}).
+for the whole thing (${url(env, '/docs/home.md')}).
 
 Every app has a MAILBOX, at ${mailFrom('<space>', '<app>', env)} — ${
     mailFrom('<space>', null, env)
@@ -279,7 +279,7 @@ is not offered. mail_list and mail_send are that mailbox as two tools; mail
 asked about with NO app named — "check my email" — is the person's own mailbox,
 which whatever mail tool they have connected answers and this one does not, and
 naming an app or its address is what makes it this one. Call guide with page
-mail for the whole thing (${url(env, '/guide/mail.md')}).
+mail for the whole thing (${url(env, '/docs/mail.md')}).
 
 A STORE on Plus can take payments without keys or code. The seller connects
 a Stripe account of their own to their SPACE once (space_sell, or the button on
@@ -294,7 +294,7 @@ declares, so no vocab.json declares it — and the buyer gets a confirmation fro
 the app's own address. The charge is on the seller's account and the money is
 theirs, less a small platform fee; no card number ever reaches this platform or
 your app, and refunds are made in their own Stripe dashboard. Call guide with
-page selling for the whole thing (${url(env, '/guide/selling.md')}).
+page selling for the whole thing (${url(env, '/docs/selling.md')}).
 
 An app is a plugin. app_publish offers one to every other space here by
 name, and app_published lists what is on offer; app_install copies one into
@@ -326,7 +326,7 @@ countries. Counts and nothing else — there is no address, no visitor id and no
 browser string in it, so it can never say WHO, and saying so plainly is the
 right answer to that question. Crawlers are in the number, so a handful of
 visits on a page nobody was sent is usually robots. Call guide with page stats
-for the whole thing (${url(env, '/guide/stats.md')}).
+for the whole thing (${url(env, '/docs/stats.md')}).
 
 Anything either of you has to say about THIS PLATFORM rather than their app —
 a tool that refused for no reason you could find, a guide that taught the
@@ -351,11 +351,11 @@ export let UNDO =
   'last 30 days, and called with no time it reports the window and every ' +
   'restore already made.'
 
-export let whole = (env: Host = {}) => url(env, '/guide.md')
+export let whole = (env: Host = {}) => url(env, '/docs.md')
 export let WHOLE = whole()
 
 export let uriOf = (slug: string, env: Host = {}) =>
-  url(env, `/guide/${slug}.md`)
+  url(env, `/docs/${slug}.md`)
 
 // The platform's own pages, in the order an agent is offered them. A page
 // declares its own title, brief and description in its frontmatter now
@@ -383,7 +383,7 @@ let OURS: Page[] = [
 ].map(page)
 
 /** Every guide page: the platform's own, then each plugin's in PLUGINS order
- * (plugin.ts `pages`). The file a page names is still under `public/guide/`
+ * (plugin.ts `pages`). The file a page names is still under `public/docs/`
  * whoever registered it — a plugin contributes the Page entry, not the file
  * itself. */
 export let PAGES: Page[] = [...OURS, ...pagesOf(PLUGINS)]

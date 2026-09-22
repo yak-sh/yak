@@ -316,4 +316,4 @@ install costs is one of the space's app slots.
 
 ---
 
-The whole guide: <https://yaks.app/guide.md>
+The whole guide: <https://yaks.app/docs.md>

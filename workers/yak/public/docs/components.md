@@ -263,7 +263,7 @@ comes from, never what some other store has:
     unknown component: dayline — a component of your own is declared in
       vocab.json and planted by app_deploy:
       {"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}}
-      · https://yaks.app/guide.md
+      · https://yaks.app/docs.md
 
 A column that exists but is the server's (`created.at`, `completed.via`) is
 neither refused nor written. It is dropped in silence, so a row you read and
@@ -551,6 +551,6 @@ draws a relation keeps the far end where it can read it back: the child's own
 row, or an eid in a `text` column of your own. Delete an entity and every edge
 touching it goes with it.
 
-The whole guide is at <https://yaks.app/guide.md>; two apps writing about one
-entity is <https://yaks.app/guide/entities.md>, and the filter grammar in full
-is <https://yaks.app/guide/querying.md>.
+The whole guide is at <https://yaks.app/docs.md>; two apps writing about one
+entity is <https://yaks.app/docs/entities.md>, and the filter grammar in full is
+<https://yaks.app/docs/querying.md>.

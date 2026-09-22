@@ -107,8 +107,8 @@ Deno.test('app config: refusals name the limitation and the available door, one 
   })
   assertEquals(parsed.refused, [
     "refused kv_namespaces: KV has a 1000-namespace account cap and app sharing is undecided; use Durable Object storage or the app's store",
-    "refused queues: queue provisioning is not available for apps; write what is owed into the app's store, with a wake{at} on it (https://yaks.app/guide/wakes.md)",
-    "refused triggers.crons: user workers in a dispatch namespace receive no cron triggers; a wake{at, every} on a row in the app's store is the schedule, and a rule on `fired` is what it does (https://yaks.app/guide/wakes.md)",
+    "refused queues: queue provisioning is not available for apps; write what is owed into the app's store, with a wake{at} on it (https://yaks.app/docs/wakes.md)",
+    "refused triggers.crons: user workers in a dispatch namespace receive no cron triggers; a wake{at, every} on a row in the app's store is the schedule, and a rule on `fired` is what it does (https://yaks.app/docs/wakes.md)",
     "refused vars.KERNEL: KERNEL belongs to yaks.app; choose another binding name, with env.STORE, env.FILES and env.APP for this app's doors",
     'refused durable_objects.bindings[0].script_name: Durable Objects may only belong to this app; use a local class_name and migrations',
   ])

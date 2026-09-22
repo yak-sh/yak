@@ -719,7 +719,7 @@ export let orderOf = (o: Session, account: string) => {
 }
 
 /** What the buyer is told, in the app's own voice. Markdown, because that is
- * what an app's letters are (mail.ts, guide/mail.md) — one line per thing they
+ * what an app's letters are (mail.ts, docs/mail.md) — one line per thing they
  * bought, and the total under it. */
 export let receipt = (
   app: string,
@@ -866,7 +866,7 @@ let sold = async (env: Env, space: Space, event: Event) => {
   await store.apply([
     { entity: { eid }, doc: { title: letter.title }, order },
     // The buyer as a row of their own, and the letter hanging off it — the
-    // shape every app's mailbox uses (guide/mail.md). No `deliver` where there
+    // shape every app's mailbox uses (docs/mail.md). No `deliver` where there
     // is no address to deliver to, which is a sale Stripe took without one; the
     // order still lands, because the money still moved.
     ...(order.email

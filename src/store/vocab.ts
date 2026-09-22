@@ -35,7 +35,7 @@ export let TYPES: Record<string, string> = {
 
 export let EXAMPLE = '{"recipe": {"title": "text", "serves": "number"}}'
 
-export let GUIDE = 'https://yaks.app/guide.md'
+export let GUIDE = 'https://yaks.app/docs.md'
 
 // What a store says when it is asked for a word nobody declared — the same
 // sentence at the write door and the query door, because it is the same

@@ -22,7 +22,7 @@ it.
 This page is that file: where it goes, what belongs in it, what does not, the
 ceiling on it, and the three places an agent is given it.
 
-The map is at <https://yaks.app/guide.md>.
+The map is at <https://yaks.app/docs.md>.
 
 ## Where it goes
 
@@ -152,7 +152,7 @@ lines already there are theirs.
 
 ---
 
-Back to the map: <https://yaks.app/guide.md>. Nearby: the app's own components
-in <https://yaks.app/guide/components.md>, its own commands in
-<https://yaks.app/guide/tools.md>, and its files in
-<https://yaks.app/guide/files.md>.
+Back to the map: <https://yaks.app/docs.md>. Nearby: the app's own components in
+<https://yaks.app/docs/components.md>, its own commands in
+<https://yaks.app/docs/tools.md>, and its files in
+<https://yaks.app/docs/files.md>.

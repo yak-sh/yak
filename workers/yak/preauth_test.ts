@@ -63,7 +63,7 @@ Deno.test('every public method answers, out of the site and nothing else', async
     contents: { text: string }[]
   }
   assertEquals(s.asked, [uriOf('querying')])
-  assertEquals(read.contents[0].text, '# /guide/querying.md')
+  assertEquals(read.contents[0].text, '# /docs/querying.md')
 })
 
 Deno.test('public MCP words and resources use the configured apex', async () => {
@@ -80,7 +80,7 @@ Deno.test('public MCP words and resources use the configured apex', async () => 
   let listed = await answer('resources/list', {}, env) as {
     resources: { uri: string; description: string }[]
   }
-  assertEquals(listed.resources[0].uri, 'https://yaks.fyi/guide.md')
+  assertEquals(listed.resources[0].uri, 'https://yaks.fyi/docs.md')
   assert(listed.resources.every((doc) => doc.uri.includes('yaks.fyi')))
   assert(
     listed.resources.find((doc) => doc.uri.endsWith('/home.md'))!
@@ -118,7 +118,7 @@ Deno.test('a protected method, tool or page is not answered here', async () => {
       // not the guide, which is what says the read is a named list and not a
       // way to fetch the site.
       ['resources/read', { uri: 'ui://mine/runs/leaderboard.html' }],
-      ['resources/read', { uri: 'https://yaks.app/guide/nope.md' }],
+      ['resources/read', { uri: 'https://yaks.app/docs/nope.md' }],
       ['resources/read', { uri: 'https://yaks.app/index.html' }],
       ['resources/read', {}],
       ['notifications/initialized', {}],
@@ -167,7 +167,7 @@ Deno.test('the public resources are the guide, and only the guide', () => {
 // one.
 Deno.test('nothing public sells anything', () => {
   // `subscribe` is deliberately not in this net: it is the client function a
-  // page calls to redraw itself (guide/store.md), and the word to catch is
+  // page calls to redraw itself (docs/store.md), and the word to catch is
   // the noun, not the verb.
   let sold =
     /subscription|upgrade|pricing|\bplans?\b|billing|per month|free to|\$\d/i

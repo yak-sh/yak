@@ -498,4 +498,4 @@ Everything else the grammar has, this store serves.
     id=<eid>
       one entity, whole, however many components it has
 
-The whole guide is at <https://yaks.app/guide.md>.
+The whole guide is at <https://yaks.app/docs.md>.

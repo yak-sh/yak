@@ -32,7 +32,7 @@ export type Who = {
    * not by a seat on the space's roster (T-37615). A guest of one app reads
    * and writes that app's data and sees its page exactly as a member does, and
    * reaches nothing else in the space — its FILES included, since writing an
-   * app's bytes stays a member's act (apps.ts, public/guide/sharing.md). */
+   * app's bytes stays a member's act (apps.ts, public/docs/sharing.md). */
   guest?: boolean
 }
 

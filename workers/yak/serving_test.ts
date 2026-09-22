@@ -1188,7 +1188,7 @@ Deno.test('env.APP: a private app is written by its own worker, and by nobody el
 // ---- the shop example, deployed and shopped in (T-34517) --------------------
 
 // `workers/yak/examples/shop/` is the store recipe the selling guide teaches
-// (public/guide/selling.md), and this is the proof it is an app and not a
+// (public/docs/selling.md), and this is the proof it is an app and not a
 // listing: the same bytes go up through `app_files`, `app_deploy` plants the
 // `product` word and writes the seeded shirts, the storefront is served with
 // its base and its reporter, and the inside of the app stays inside.

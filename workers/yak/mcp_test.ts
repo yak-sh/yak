@@ -325,7 +325,7 @@ slow(
       assertEquals(deep.contents[0].mimeType, 'text/markdown')
       assertStringIncludes(deep.contents[0].text, '# Querying')
       assertStringIncludes(deep.contents[0].text, '.doc!')
-      let got = await k.at('yaks.app', '/guide/querying.md')
+      let got = await k.at('yaks.app', '/docs/querying.md')
       assertEquals(got.status, 200)
       assertEquals(await got.text(), deep.contents[0].text)
 
@@ -341,13 +341,13 @@ slow(
       // saying so, because an answer is bundles now.
       for (let p of PAGES) assertStringIncludes(guide.description, p.slug)
       let map = await agent.tool('guide')
-      assertEquals(map, await (await k.at('yaks.app', '/guide.md')).text())
+      assertEquals(map, await (await k.at('yaks.app', '/docs.md')).text())
       assertStringIncludes(map, '# ')
       // A page, byte for byte what the web serves at its own address.
       assertEquals(
         await agent.tool('guide', { page: 'mail' }),
         await (await k
-          .at('yaks.app', '/guide/mail.md')).text(),
+          .at('yaks.app', '/docs/mail.md')).text(),
       )
       // A name that is no page is a typo, not a refusal: the map, with one
       // line above it naming what there is.
@@ -427,7 +427,7 @@ slow(
         .messages[0].content.text
       assertStringIncludes(ideas, "Any yaks.app ideas you think I'd like")
       assertStringIncludes(ideas, 'I have not made anything there yet')
-      assertStringIncludes(ideas, 'https://yaks.app/guide.md')
+      assertStringIncludes(ideas, 'https://yaks.app/docs.md')
       assertEquals(ideas.includes('https://yaks.app/login'), false)
       // The spec's two -32602s: a name nobody offers, and a required
       // argument nobody filled in.
@@ -859,7 +859,7 @@ slow(
       ) {
         let why = (await assertRejects(ask, Error)).message
         assertStringIncludes(why, 'vocab.json')
-        assertStringIncludes(why, 'https://yaks.app/guide.md')
+        assertStringIncludes(why, 'https://yaks.app/docs.md')
         assertEquals(/P-\d|T-\d/.test(why), false)
       }
       await agent.tool('app_files', {

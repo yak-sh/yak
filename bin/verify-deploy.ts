@@ -40,7 +40,7 @@ export let DOORS = [
   '/help',
   '/login',
   '/connect',
-  '/guide.md',
+  '/docs.md',
 ]
 
 // The pricing page's live contract (billing_workerd_test.ts): the price is on

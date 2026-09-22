@@ -64,7 +64,7 @@ slow('the door before anyone signs in', async () => {
     // What it says is the orientation, not the recipe — nobody who cannot
     // call app_new is told to call it — and it names where signing in is.
     assertStringIncludes(init.instructions, 'yourname.yaks.app')
-    assertStringIncludes(init.instructions, 'https://yaks.app/guide.md')
+    assertStringIncludes(init.instructions, 'https://yaks.app/docs.md')
     assertEquals(init.instructions.includes('app_new'), false)
     assertEquals(await anon.call('ping'), {})
 
@@ -143,7 +143,7 @@ slow('the door before anyone signs in', async () => {
         'yourname.yaks.app/<app>/',
         'index.html',
         'https://yaks.app',
-        'https://yaks.app/guide.md',
+        'https://yaks.app/docs.md',
       ]
     ) assertStringIncludes(said, word)
     // And nothing here sells anything: yaks.app is declared to the plugin
@@ -168,7 +168,7 @@ slow('the door before anyone signs in', async () => {
     assertStringIncludes((await read(uriOf('querying'))).text, '# ')
     // Which is the same bytes the web already hands anybody at that address:
     // this door exposes nothing new, it saves an agent a browser.
-    let plain = await k.at('yaks.app', '/guide.md')
+    let plain = await k.at('yaks.app', '/docs.md')
     assertEquals(plain.status, 200)
     assertEquals(await plain.text(), map.text)
 
@@ -291,7 +291,7 @@ slow('the door before anyone signs in', async () => {
     // read is a named list, not a way to fetch the site.
     await shut('resources/read', { uri: view })
     await shut('resources/read', { uri: 'https://yaks.app/index.html' })
-    await shut('resources/read', { uri: 'https://yaks.app/guide/nope.md' })
+    await shut('resources/read', { uri: 'https://yaks.app/docs/nope.md' })
     await shut('nonsense/method')
     // A body nobody could read: a refusal every caller gets, and still the
     // challenge for one who has not signed in.

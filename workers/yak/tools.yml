@@ -716,7 +716,7 @@ guide:
     store, and has a paragraph on every feature there is. Read that first.
     With a page: the whole of one subject. The pages are {{pages}}. A name
     that is none of them returns the overview, which lists them all. The
-    same pages are served to a person at https://yaks.app/guide.md, and as
+    same pages are served to a person at https://yaks.app/docs.md, and as
     web pages at https://yaks.app/docs.
 
 about:

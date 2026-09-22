@@ -13,8 +13,8 @@ Deno.test('platform text changes address hosts while retaining the product and o
     let [before, after] of [
       ['yaks.app builds apps.', 'yaks.app builds apps.'],
       ['plugins/yaks.app is a product', 'plugins/yaks.app is a product'],
-      ['https://yaks.app/guide.md', 'https://yaks.fyi/guide.md'],
-      ['https://yaks.app:8443/guide.md', 'https://yaks.fyi:8443/guide.md'],
+      ['https://yaks.app/docs.md', 'https://yaks.fyi/docs.md'],
+      ['https://yaks.app:8443/docs.md', 'https://yaks.fyi:8443/docs.md'],
       ['Read https://yaks.app.', 'Read https://yaks.fyi.'],
       [
         'https://yaks.app:secret@evil/ ada.yaks.app',

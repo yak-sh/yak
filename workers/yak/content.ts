@@ -1,5 +1,5 @@
 // GENERATED — do not edit. The words live in the files:
-// public/guide/*.md (a page's frontmatter), prompts/*.md (a prompt's), and
+// public/docs/*.md (a page's frontmatter), prompts/*.md (a prompt's), and
 // tools.yml (what each tool says about itself). Change one of those and run
 // `deno task content`; `deno task content --check` refuses this file when it
 // has fallen behind (gen.ts, T-34606).
@@ -150,7 +150,7 @@ export let SAYS: Record<string, Said> = {
       'A handful of apps worth making on yaks.app for this particular person — out of what they have said and what they have already made — each a line or two, with an offer to build one.',
     'arguments': [],
     'body':
-      "Any yaks.app ideas you think I'd like, based on our chat history?\n\nWhat gets made there: an app is an index.html and whatever files sit beside it,\nserved live at an address of my own — it opens on my phone, it keeps what it\nsaves in a store of its own rather than in one browser, and it is a link I can\nsend to somebody. It can be mine alone, readable by anyone with the link, or\nopen for anyone to add to, and I can invite people into it by email address. It\ncan carry commands of its own for you to call, keep what I have told it about\nhow I want things done, and take money through Stripe. Read the guide before you\ndecide what is possible — the guide tool, or https://yaks.app/guide.md.\n\n{{having}}\n\nGive me five or so, each a line or two: what it is, and why me. Tie every one to\nsomething I have actually said or done rather than to apps in general. Then\noffer to build whichever I pick.",
+      "Any yaks.app ideas you think I'd like, based on our chat history?\n\nWhat gets made there: an app is an index.html and whatever files sit beside it,\nserved live at an address of my own — it opens on my phone, it keeps what it\nsaves in a store of its own rather than in one browser, and it is a link I can\nsend to somebody. It can be mine alone, readable by anyone with the link, or\nopen for anyone to add to, and I can invite people into it by email address. It\ncan carry commands of its own for you to call, keep what I have told it about\nhow I want things done, and take money through Stripe. Read the guide before you\ndecide what is possible — the guide tool, or https://yaks.app/docs.md.\n\n{{having}}\n\nGive me five or so, each a line or two: what it is, and why me. Tie every one to\nsomething I have actually said or done rather than to apps in general. Then\noffer to build whichever I pick.",
   },
   'fix': {
     'name': 'fix',
@@ -421,7 +421,7 @@ export let WORDS: Record<string, Words> = {
   'guide': {
     'title': 'Read the guide',
     'description':
-      'The guide, read here instead of fetched from the web. With no page: the overview, which says what an app is, how its pages read and write its store, and has a paragraph on every feature there is. Read that first. With a page: the whole of one subject. The pages are {{pages}}. A name that is none of them returns the overview, which lists them all. The same pages are served to a person at https://yaks.app/guide.md, and as web pages at https://yaks.app/docs.',
+      'The guide, read here instead of fetched from the web. With no page: the overview, which says what an app is, how its pages read and write its store, and has a paragraph on every feature there is. Read that first. With a page: the whole of one subject. The pages are {{pages}}. A name that is none of them returns the overview, which lists them all. The same pages are served to a person at https://yaks.app/docs.md, and as web pages at https://yaks.app/docs.',
   },
   'about': {
     'title': 'What yaks.app is',

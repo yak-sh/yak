@@ -447,7 +447,7 @@ Deno.test('a recurring call is one invocation per firing, never a re-run', async
   assertEquals((await a.rows('.result')).length, 2)
 })
 
-// The offline simulation, as the guide writes it (guide/wakes.md, T-37613).
+// The offline simulation, as the guide writes it (docs/wakes.md, T-37613).
 // An idle game wants a cadence of a few minutes that keeps advancing while
 // nobody has the page open. The whole of it is one row: the world wears the
 // ask (`call`) and the cadence (`wake{every}`), so every firing runs the

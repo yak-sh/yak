@@ -5,7 +5,7 @@ description: "Coming back later (yaks.app). Schedules as data: a `wake` on any e
 
 # Coming back later
 
-The map is at <https://yaks.app/guide.md>. This page is the whole of scheduling:
+The map is at <https://yaks.app/docs.md>. This page is the whole of scheduling:
 the row that records when, the moment it goes off, and the rule that decides
 what it means.
 
@@ -214,7 +214,7 @@ schedule, and a rule is for what one firing MEANS about that row.
   five minutes (300,000 ms) on the Workers Paid plan
   (<https://developers.cloudflare.com/workers/platform/limits/>, read
   2026-09-19). The 50 ms an app's own worker gets per REQUEST (see
-  <https://yaks.app/guide/code.md>) is a different budget, and not the one a
+  <https://yaks.app/docs/code.md>) is a different budget, and not the one a
   firing spends.
 - **At least once.** An alarm can be delivered twice; the firing is guarded on
   the wake's own `at`, so the second delivery finds the occurrence taken. A

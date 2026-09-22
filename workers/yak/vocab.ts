@@ -277,17 +277,17 @@ export let EXAMPLE =
  * the read door, because it is the same missing act. The fleet's own store
  * says it too (src/store/vocab.ts `TEACH`); it is spelled again here because
  * the Store carries the packages' vocabulary and never the fleet's. */
-export let GUIDE = url({}, '/guide.md')
+export let GUIDE = url({}, '/docs.md')
 export let teach = (env: Host = {}) =>
   ' — a component of your own is declared in vocab.json ' +
   'and planted by app_deploy: ' +
   `${EXAMPLE} · call guide with page ` +
-  `components, or ${url(env, '/guide.md')}`
+  `components, or ${url(env, '/docs.md')}`
 export let TEACH = teach()
 
 /**
  * The words the platform gives every app to reach for rather than invent
- * (public/guide/components.md §The platform's vocabulary): a state, the two
+ * (public/docs/components.md §The platform's vocabulary): a state, the two
  * marks that end one, a thing work belongs to, a note aimed at anything, a
  * star, and an address out on the web. They mean the same thing in every store
  * on the platform, which is the whole reason they are the platform's and not
@@ -663,7 +663,7 @@ export let platformDoc: VocabDoc = {
     // platform's roster and this is its other rung: somebody invited to one
     // app holds that app's data and its page as a member does, and holds no
     // other app in the space at all. Never its FILES: writing an app's bytes
-    // stays a member's act (apps.ts, public/guide/sharing.md).
+    // stays a member's act (apps.ts, public/docs/sharing.md).
     grant: {
       component: true,
       type: 'object',

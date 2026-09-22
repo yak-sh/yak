@@ -6,7 +6,7 @@ secret: the seller connects their own Stripe account to the space once, and
 every charge is made on that account, in their name, settling into their
 balance.
 
-The whole shape is written up at <https://yaks.app/guide/selling.md>.
+The whole shape is written up at <https://yaks.app/docs/selling.md>.
 
 ## Deploying it
 
@@ -40,4 +40,4 @@ landed — so every app already has them and this one declares nothing.
 An order carries the buyer's email address, and an app anyone can read is an app
 where anyone can read the orders. If that is not wanted, set the app `private`
 and let a `worker.js` serve the product list to strangers — the shape is in
-<https://yaks.app/guide/code.md> under the RSVP pattern.
+<https://yaks.app/docs/code.md> under the RSVP pattern.

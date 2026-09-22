@@ -80,7 +80,7 @@ Deno.test('staging tool URLs and app mail use the same configured host', async (
         as: 'undeclared',
       }),
     Error,
-    'https://yaks.fyi/guide.md',
+    'https://yaks.fyi/docs.md',
   )
   await assertRejects(
     () =>

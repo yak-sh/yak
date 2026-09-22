@@ -18,7 +18,7 @@ send to somebody. It can be mine alone, readable by anyone with the link, or
 open for anyone to add to, and I can invite people into it by email address. It
 can carry commands of its own for you to call, keep what I have told it about
 how I want things done, and take money through Stripe. Read the guide before you
-decide what is possible — the guide tool, or https://yaks.app/guide.md.
+decide what is possible — the guide tool, or https://yaks.app/docs.md.
 
 {{having}}
 

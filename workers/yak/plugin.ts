@@ -202,7 +202,7 @@ export type Plugin = {
 
 /**
  * The row a guide page says about ITSELF: the frontmatter of
- * `public/guide/<slug>.md` (M-34605), which is where a page's title, brief and
+ * `public/docs/<slug>.md` (M-34605), which is where a page's title, brief and
  * description live now. Naming a slug is the whole of registering a page — the
  * words are the page's own — and a slug no file answers to throws at module
  * load, which is the build and the test run.
@@ -213,7 +213,7 @@ export type Plugin = {
  */
 export let page = (slug: string): Page => {
   let row = PAGES[slug]
-  if (!row) throw new Error(`public/guide/${slug}.md says nothing`)
+  if (!row) throw new Error(`public/docs/${slug}.md says nothing`)
   return row
 }
 

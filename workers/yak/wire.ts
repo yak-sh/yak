@@ -10,7 +10,7 @@
 //                                → [ …the batch as applied… ]
 //
 // The page's half is FIXED, and that is the whole reason this file exists: it
-// is documented (public/guide.md), it is what `public/client.js` wraps, and
+// is documented (public/docs.md), it is what `public/client.js` wraps, and
 // every app already deployed imports that client and reads `aliases` off an
 // answer. So the store moved and the door translates, rather than every page
 // in the world being asked to move with it.

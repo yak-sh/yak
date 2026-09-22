@@ -10,7 +10,7 @@ from the browser. This page is the whole of that client — what each function
 accepts and returns, what you send when you save, what comes back when you read,
 who may do either, and the HTTP endpoints underneath. The filter string itself —
 what goes inside `query('…')` — has its own page:
-<https://yaks.app/guide/querying.md>.
+<https://yaks.app/docs/querying.md>.
 
 ## The client, and every address relative
 
@@ -593,5 +593,5 @@ their work is gone. `me()` on load, every time.
 
 ---
 
-The whole guide is at <https://yaks.app/guide.md>; the filter string has its own
-page at <https://yaks.app/guide/querying.md>.
+The whole guide is at <https://yaks.app/docs.md>; the filter string has its own
+page at <https://yaks.app/docs/querying.md>.

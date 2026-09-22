@@ -608,7 +608,7 @@ slow('graph_schema answers the index, a word whole, and a kind', async () => {
     ) as { type: string; description: string }
     assertEquals(verified.type, 'bool')
     assertStringIncludes(verified.description, 'DKIM')
-    assertEquals(mail.guide, 'https://yaks.app/guide/mail.md')
+    assertEquals(mail.guide, 'https://yaks.app/docs/mail.md')
     assertEquals(mail.worn_with, ['doc'])
     assertEquals(Object.keys(mail.example!.mail).includes('from'), true)
     // What points AT a letter, from anywhere in reach: its own `reply_to`,
@@ -642,7 +642,7 @@ slow('graph_schema answers the index, a word whole, and a kind', async () => {
 // learn our comp schema? claude was trying to send mail ... but is just
 // guessing at the comp types". So the published input schema is checked here
 // the way a client checks it — with a JSON Schema validator, against the
-// letter bundle the guide teaches (public/guide/mail.md §Sending a letter).
+// letter bundle the guide teaches (public/docs/mail.md §Sending a letter).
 slow(
   "graph_apply's input schema is the vocabulary a client can write",
   async () => {

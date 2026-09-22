@@ -13,7 +13,7 @@ Both directions are the STORE. There is no mail API to call and no key to set: a
 letter you send is an entity you write, and a letter that arrives is an entity
 you read. So "did that go out?" and "what came in?" are queries.
 
-Back to the map: <https://yaks.app/guide.md>
+Back to the map: <https://yaks.app/docs.md>
 
 ## The address
 
@@ -66,7 +66,7 @@ From the page:
     ])
 
 `$ana` and `$note` are aliases local to that one `apply` call; `saved.aliases`
-maps each to the eid it minted (<https://yaks.app/guide/store.md>). A recipient
+maps each to the eid it minted (<https://yaks.app/docs/store.md>). A recipient
 you already have is named by its eid instead, and the same entity receives every
 later letter.
 
@@ -108,10 +108,10 @@ write with no `deliver` in it lands as it always did.
 
 An app's own `worker.js` is no way around this: `env.STORE` reads and writes as
 the person looking, so a route called by a visitor is a visitor's write there
-too (<https://yaks.app/guide/code.md>). When an open app wants a visitor's
-action to end in a letter, have the visitor write the ROW — the sign-up, the
-order, the question — and let a member's own gesture, or you with `graph_apply`,
-turn it into a letter.
+too (<https://yaks.app/docs/code.md>). When an open app wants a visitor's action
+to end in a letter, have the visitor write the ROW — the sign-up, the order, the
+question — and let a member's own gesture, or you with `graph_apply`, turn it
+into a letter.
 
 ## What comes back
 
@@ -238,12 +238,12 @@ rather than guessing at a number.
 ## What is not supported
 
 - **Mail at the person's own domain.** A domain they own can SERVE the app
-  (<https://yaks.app/guide/domains.md>), but mail to and from it is not
-  something this platform does; the app's address stays `<space>.<app>@yaks.app`
-  whatever hostname the pages answer at.
+  (<https://yaks.app/docs/domains.md>), but mail to and from it is not something
+  this platform does; the app's address stays `<space>.<app>@yaks.app` whatever
+  hostname the pages answer at.
 - **Attachments going out.** A letter leaves as a subject and a body. To send
   somebody a file, upload it and put the link in the words
-  (<https://yaks.app/guide/files.md>).
+  (<https://yaks.app/docs/files.md>).
 - **Rich HTML you wrote yourself.** The body is markdown and the HTML is
   generated from it; there is no template to hand in.
 - **cc, bcc, several recipients, or a from address of your choosing.** One

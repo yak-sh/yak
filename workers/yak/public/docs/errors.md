@@ -362,4 +362,4 @@ already in `app_errors`, and fixing it is yours.
 
 ---
 
-The whole guide: <https://yaks.app/guide.md>
+The whole guide: <https://yaks.app/docs.md>

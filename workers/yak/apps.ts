@@ -1099,7 +1099,7 @@ let api = async (
   }
   if (path.startsWith('/files/')) {
     if (req.method != 'PUT') return json(405, 'method_not_allowed')
-    // The file door is never widened (public/guide/sharing.md): a guest of
+    // The file door is never widened (public/docs/sharing.md): a guest of
     // this app writes its data and never its bytes, whatever level the grant
     // gave them. An app takes a guest's rows and never a guest's deploy.
     if (!writes(who.role) || who.guest) return refused()

@@ -18,7 +18,7 @@ import { ORIGIN } from './route.ts'
 import { TOOLS } from './tools.ts'
 
 let guide = Deno.readTextFileSync(
-  new URL('./public/guide.md', import.meta.url),
+  new URL('./public/docs.md', import.meta.url),
 )
 
 // A page as it is written: the row in its frontmatter, and the document under
@@ -27,9 +27,9 @@ let guide = Deno.readTextFileSync(
 let pageFile = (slug: string) =>
   front(
     Deno.readTextFileSync(
-      new URL(`./public/guide/${slug}.md`, import.meta.url),
+      new URL(`./public/docs/${slug}.md`, import.meta.url),
     ),
-    `public/guide/${slug}.md`,
+    `public/docs/${slug}.md`,
   )
 
 let pageText = (slug: string) => pageFile(slug).body
@@ -40,7 +40,7 @@ let pageText = (slug: string) => pageFile(slug).body
 // added to guide.ts and never linked, or a link to a page that was renamed,
 // is the whole failure mode of splitting a document.
 Deno.test("the guide's Deeper links are exactly the pages offered", () => {
-  let linked = [...guide.matchAll(/<https:\/\/yaks\.app\/guide\/(\w+)\.md>/g)]
+  let linked = [...guide.matchAll(/<https:\/\/yaks\.app\/docs\/(\w+)\.md>/g)]
     .map((m) => m[1])
   let slugs = PAGES.map((p) => p.slug)
   assertEquals(new Set(slugs).size, slugs.length, 'two pages share a slug')
@@ -68,7 +68,7 @@ Deno.test('every page offered is a file, and says what it is', () => {
     assertEquals(said?.description, p.description, `${p.slug} description`)
     assert(body.trimStart().startsWith('# '), `${p.slug} opens with no title`)
     // And it points back, so nobody is stranded on one page of a guide.
-    assert(body.includes('yaks.app/guide.md'), `${p.slug} points nowhere back`)
+    assert(body.includes('yaks.app/docs.md'), `${p.slug} points nowhere back`)
   }
 })
 
@@ -113,12 +113,12 @@ Deno.test('no page links a page that is not there', () => {
   for (let p of PAGES) {
     for (
       let m of pageText(p.slug).matchAll(
-        /https:\/\/yaks\.app\/guide\/([\w.-]+)\.md/g,
+        /https:\/\/yaks\.app\/docs\/([\w.-]+)\.md/g,
       )
     ) {
       assert(slugs.has(m[1]), `${p.slug} links ${m[1]}, which is no page`)
     }
-    assertEquals(uriOf(p.slug), `https://yaks.app/guide/${p.slug}.md`)
+    assertEquals(uriOf(p.slug), `https://yaks.app/docs/${p.slug}.md`)
   }
 })
 

@@ -83,7 +83,7 @@ Deno.test('the ideas prompt says where the person stands', () => {
   // rather than copied.
   for (let said of [mine, first, stranger]) {
     assert(said.startsWith("Any yaks.app ideas you think I'd like"))
-    assert(said.includes('https://yaks.app/guide.md'))
+    assert(said.includes('https://yaks.app/docs.md'))
     assert(!said.includes('Yaks '))
   }
 })

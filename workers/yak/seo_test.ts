@@ -18,8 +18,8 @@ Deno.test('seo: staging metadata and guide addresses stay on its own host', () =
     addresses(env).every((url) => url.startsWith('https://yaks.fyi/')),
     true,
   )
-  assertEquals(whole(env), 'https://yaks.fyi/guide.md')
-  assertEquals(uriOf('mail', env), 'https://yaks.fyi/guide/mail.md')
+  assertEquals(whole(env), 'https://yaks.fyi/docs.md')
+  assertEquals(uriOf('mail', env), 'https://yaks.fyi/docs/mail.md')
   assertEquals(pageFor('mail', env), uriOf('mail', env))
   assertEquals(pageFor('unknown', env), undefined)
   for (
@@ -31,7 +31,7 @@ Deno.test('seo: staging metadata and guide addresses stay on its own host', () =
     ]
   ) {
     assertEquals(text.includes('https://yaks.app'), false)
-    assertStringIncludes(text, 'https://yaks.fyi/guide.md')
+    assertStringIncludes(text, 'https://yaks.fyi/docs.md')
   }
   assertStringIncludes(instructions(env), 'This is yaks.app')
   assertStringIncludes(instructions(env), '<space>.<app>@yaks.fyi')

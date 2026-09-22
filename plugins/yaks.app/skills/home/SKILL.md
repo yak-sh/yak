@@ -15,7 +15,7 @@ being the fall-through — the app whose name owns a path gets that path, and
 everything left over comes here. It can also opt in to seeing paths another app
 owns, before that app does.
 
-Back to the map: <https://yaks.app/guide.md>
+Back to the map: <https://yaks.app/docs.md>
 
 ## Which app it is
 
@@ -58,7 +58,7 @@ of the space's apps again, a path no app claims is a 404, and a letter to
 For a request to `<space>.yaks.app<path>` — or to a domain of the person's own,
 which goes through the same five steps at their own address, whether that domain
 carries the space or one app mounted at its root
-(<https://yaks.app/guide/domains.md>) — the first step that answers wins:
+(<https://yaks.app/docs/domains.md>) — the first step that answers wins:
 
 1. **The platform's own paths.** `/login`, `/connect`, `/_yaks`, `/mcp`, and
    every app's `/api/…` store endpoints. The platform answers these and no app
@@ -78,7 +78,7 @@ Steps 3 and 5 are one request, and the front page is handled exactly the way
 step 2 handles any app: its worker first, its files behind it. A worker that
 returns 404 is how it passes the request back — it answers the routes it names
 and leaves the pages, stylesheets and pictures to the platform
-(<https://yaks.app/guide/code.md>).
+(<https://yaks.app/docs/code.md>).
 
 So step 4 is what is left when neither half of the front page has anything at
 `/`, and step 5's 404 is what is left when there is no front page at all.
@@ -150,7 +150,7 @@ longer than a second is skipped, and the platform routes as if it were not there
 — the request lands on the app that owns it, exactly as it did before anyone
 wrote a `first`. A break is recorded as an `exception` on the front page, so
 `app_errors` lists it and the person's agent hears about it
-(<https://yaks.app/guide/errors.md>).
+(<https://yaks.app/docs/errors.md>).
 
 A broken router means the customizations stop applying. It never means the space
 is down.
@@ -195,7 +195,7 @@ of its apps, who is a member, what is published, or what the stats have counted.
 with the app part left off (`<space>.<app>@yaks.app` is any other one). A letter
 written there lands in the FRONT PAGE's store, as the entity every arrival lands
 as: `doc` for the subject and the words, `mail` for the envelope, attachments
-filed as blobs and linked to it. <https://yaks.app/guide/mail.md> describes the
+filed as blobs and linked to it. <https://yaks.app/docs/mail.md> describes the
 whole shape.
 
 Custom mail behavior for the space is whatever the front page does about those

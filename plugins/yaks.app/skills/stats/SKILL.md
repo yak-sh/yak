@@ -5,7 +5,7 @@ description: "Who visited (yaks.app). Visitor counts for an app: what one page v
 
 # Who visited
 
-The map is at <https://yaks.app/guide.md>. This page is the whole of visitor
+The map is at <https://yaks.app/docs.md>. This page is the whole of visitor
 counts: what is recorded, what deliberately is not, the three places you can
 read it, and what the numbers do and do not mean.
 
@@ -111,6 +111,6 @@ Not on every deploy, and not unasked. A count nobody wanted is noise.
 
 ## Nearby
 
-- <https://yaks.app/guide/errors.md> — what broke, and rolling back
-- <https://yaks.app/guide/sharing.md> — who may read an app, and how one travels
-- <https://yaks.app/guide/home.md> — which app answers which address
+- <https://yaks.app/docs/errors.md> — what broke, and rolling back
+- <https://yaks.app/docs/sharing.md> — who may read an app, and how one travels
+- <https://yaks.app/docs/home.md> — which app answers which address

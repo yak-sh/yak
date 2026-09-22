@@ -67,11 +67,11 @@ let manifest = (v: unknown): v is VocabDoc =>
 let examples = (): [string, VocabDoc][] => {
   let sources: [string, string][] = [
     ['vocab.ts EXAMPLE', EXAMPLE],
-    ['guide.md', read('./public/guide.md')],
+    ['docs.md', read('./public/docs.md')],
     ...PAGES.map((
       p,
     ) =>
-      [`guide/${p.slug}.md`, read(`./public/guide/${p.slug}.md`)] as [
+      [`docs/${p.slug}.md`, read(`./public/docs/${p.slug}.md`)] as [
         string,
         string,
       ]

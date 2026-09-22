@@ -15,7 +15,7 @@
 // its own (route.ts): what a person publishes there is theirs to say. The door
 // that calls `answer` is a plugin's root door (seo_door.ts, plugin.ts
 // `routes`) and it answers nothing where the hostname names a space.
-import { DOCS, DRAWN } from './docs.ts'
+import { DOCS, DRAWN, MARKDOWN, TECH } from './docs.ts'
 import type { Env } from './env.ts'
 import { PAGES, uriOf, whole } from './guide.ts'
 import { type Host, hosted, spaceHost, url } from './host.ts'
@@ -76,7 +76,6 @@ export let CONNECTOR = connector()
 export let SITE = [
   '/',
   '/pricing',
-  '/docs/technical',
   '/help',
   '/terms',
   '/privacy',
@@ -97,23 +96,23 @@ export let GALLERY = {
 }
 
 // The documentation's front page is drawn too (docs.ts): the guide's markdown
-// rendered as a page of this site. Its subject pages are drawn as well, but
-// they are named in `addresses` below rather than here — a model asking
-// llms.txt where the guide is wants the `.md` addresses, which the index
-// already gives it a section of its own for.
-export let RENDERED = [GALLERY, DOCS]
+// rendered as a page of this site. So is the technical page, which is the one
+// of its subject pages the guide does not offer — the rest are named in
+// `addresses` below rather than here, since a model asking llms.txt where the
+// guide is wants the `.md` addresses, which the index already gives it a
+// section of its own for.
+export let RENDERED = [GALLERY, DOCS, TECH]
 
 // Every address the sitemap lists: the pages above, the ones the worker draws,
-// then the guide — the map and one page per subject, at the same `.md`
-// addresses the connector hands an agent (guide.ts). They are markdown rather
-// than HTML and they are indexed anyway, which is the point of publishing them
-// at a URL.
+// then the same documentation as the markdown it is drawn from — every page's
+// own address plus `.md` (docs.ts `MARKDOWN`), which is what the connector
+// hands an agent (guide.ts). They are markdown rather than HTML and they are
+// indexed anyway, which is the point of publishing them at a URL.
 export let addresses = (env: Host = {}) => [
   ...SITE.map((path) => at(path, env)),
   ...RENDERED.map((p) => at(p.path, env)),
   ...DRAWN.map((path) => at(path, env)),
-  whole(env),
-  ...PAGES.map((p) => uriOf(p.slug, env)),
+  ...MARKDOWN.map((path) => at(path, env)),
 ]
 
 export let ADDRESSES = addresses()

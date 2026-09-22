@@ -27,7 +27,7 @@ does; what that fee is, is on the <https://yaks.app/pricing> page. The rest
 settles into the seller's own balance, on their own payout schedule, and refunds
 and disputes are theirs to handle in their own Stripe dashboard.
 
-Back to the map: <https://yaks.app/guide.md>
+Back to the map: <https://yaks.app/docs.md>
 
 ## What never happens
 
@@ -94,7 +94,7 @@ platform decrements it.
 
 `price_cents` is whole cents, always. `2800` is $28.00, and a price written as
 `28` is a shop selling shirts for twenty-eight cents. The `alias` is what makes
-a seed file safe to load twice (<https://yaks.app/guide/store.md>).
+a seed file safe to load twice (<https://yaks.app/docs/store.md>).
 
 The page draws them out of the store like anything else:
 
@@ -163,7 +163,7 @@ store:
 no `vocab.json` declares it. `status` is `paid`, and becomes `refunded` or
 `disputed` if it ever does. The buyer gets a confirmation from the app's own
 address, `<space>.<app>@yaks.app`, with the items and the total on it
-(<https://yaks.app/guide/mail.md>), and a reply to it lands back in the app's
+(<https://yaks.app/docs/mail.md>), and a reply to it lands back in the app's
 store as mail the seller can read.
 
 It is a row, so the seller's own view is a query:
@@ -174,7 +174,7 @@ It is a row, so the seller's own view is a query:
     if (mine.writes) draw(await query('.order!&.doc?'))
 
 `.order.status=paid`, `.order.total_cents>=5000`, a bare word for full text —
-the whole filter grammar works on them (<https://yaks.app/guide/querying.md>).
+the whole filter grammar works on them (<https://yaks.app/docs/querying.md>).
 From an agent's side it is the same filter through `graph_query`, so "what sold
 this week" is one call with no page open.
 
@@ -182,7 +182,7 @@ this week" is one call with no page open.
 carries a buyer's email address, and an app anyone can read is an app where
 anyone can read the orders. If that is not wanted, set the app `private` and let
 a `worker.js` hand the product list to strangers — the shape is the RSVP pattern
-in <https://yaks.app/guide/code.md>.
+in <https://yaks.app/docs/code.md>.
 
 ## Trying it before you go live
 

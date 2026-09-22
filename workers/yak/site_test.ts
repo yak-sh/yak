@@ -9,7 +9,7 @@ import { slow } from '../../src/testing.ts'
 import { REPLY_TO } from './mail.ts'
 import { CURRENCY, FILES, FREE, LETTERS, PLUS, PRICE, size } from './meter.ts'
 import { quoted, rate } from './sell.ts'
-import { DRAWN } from './docs.ts'
+import { DRAWN, MARKDOWN } from './docs.ts'
 import { page as galleryPage } from './gallery.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { askEmail, connect } from './pages.ts'
@@ -32,12 +32,12 @@ import {
 let read = (name: string) =>
   Deno.readTextFileSync(new URL(`./public/${name}`, import.meta.url))
 
-// The technical page moved under the documentation (docs.ts, T-37752), so it
-// is a file in a subdirectory and its address is /docs/technical.
+// The technical page is markdown under the documentation now (docs.ts,
+// T-37793), drawn at /docs/technical like every page of it, so what is left
+// here is the site's own HTML files.
 let pages = [
   'index.html',
   'help.html',
-  'docs/technical.html',
   'pricing.html',
   'terms.html',
   'privacy.html',
@@ -133,10 +133,7 @@ Deno.test('every jump names a section on its own page', () => {
       [...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]),
     )
     let jumps = [...html.matchAll(/href="#([^"]+)"/g)].map((m) => m[1])
-    if (
-      ['index.html', 'help.html', 'docs/technical.html', 'style-guide.html']
-        .includes(page)
-    ) {
+    if (['index.html', 'help.html', 'style-guide.html'].includes(page)) {
       assert(jumps.length, `${page} has no jump navigation`)
     }
     for (let j of jumps) assert(ids.has(j), `${page}: #${j} names no section`)
@@ -209,7 +206,10 @@ let flat = (html: string) => html.replace(/\s+/g, ' ')
 Deno.test('the plan pages carry the email allowance the code enforces', () => {
   let free = `${LETTERS.free} emails a month`
   let plus = `${LETTERS.plus.toLocaleString('en-US')} emails a month`
-  for (let page of ['index.html', 'pricing.html', 'docs/technical.html']) {
+  // The technical page is markdown and says the same two numbers, which is
+  // the point of the rule it is written under: read off the code, never
+  // invented (public/docs/technical.md).
+  for (let page of ['index.html', 'pricing.html', 'docs/technical.md']) {
     let html = flat(read(page))
     assert(html.includes(free), `${page} does not say ${free}`)
     assert(html.includes(plus), `${page} does not say ${plus}`)
@@ -276,7 +276,11 @@ let pathOf = (page: string) =>
 // held to here, against the page it actually serves.
 Deno.test('the gallery is a page of this site, drawn rather than filed', async () => {
   assert(!SITE.includes(GALLERY.path), 'the gallery is not a file in public/')
-  assertEquals(RENDERED.map((p) => p.path), ['/gallery', '/docs'])
+  assertEquals(RENDERED.map((p) => p.path), [
+    '/gallery',
+    '/docs',
+    '/docs/technical',
+  ])
   let url = `https://yaks.app${GALLERY.path}`
   let one = flat(await galleryPage([]).text())
   assertStringIncludes(one, '<html lang="en">')
@@ -417,10 +421,17 @@ Deno.test('the sitemap lists every address, and parses', () => {
       ...SITE.map((p) => `https://yaks.app${p}`),
       ...RENDERED.map((p) => `https://yaks.app${p.path}`),
       ...DRAWN.map((p) => `https://yaks.app${p}`),
+      // The one rule: every page of the documentation, plus `.md` (T-37793).
       WHOLE,
       ...PAGES.map((p) => uriOf(p.slug)),
+      'https://yaks.app/docs/technical.md',
     ],
   )
+  assertEquals(MARKDOWN.map((p) => `https://yaks.app${p}`), [
+    WHOLE,
+    ...PAGES.map((p) => uriOf(p.slug)),
+    'https://yaks.app/docs/technical.md',
+  ])
   assertEquals((xml.match(/<lastmod>/g) ?? []).length, ADDRESSES.length)
   assertStringIncludes(xml, `<lastmod>${when}</lastmod>`)
   // No deploy metadata, no date: a made-up one would be worse than none.
@@ -790,15 +801,15 @@ slow('the apex answers the crawler and the model', async () => {
 
     let whole = await (await k.at('yaks.app', '/llms-full.txt')).text()
     assertStringIncludes(whole, '# Building a yaks app')
-    // And it says the name outright, once, at the top (T-34302).
-    assertStringIncludes(whole, 'This platform is called yaks.app')
+    // And it says the name outright, once, at the top (T-34302, b63b2a32).
+    assertStringIncludes(whole, 'The platform is yaks.app')
     for (let p of PAGES) {
       assertStringIncludes(whole, `<!-- ${uriOf(p.slug)} -->`)
     }
 
     // The documentation, drawn from those same files (docs.ts, T-37752): the
-    // map, one subject, the technical page that is still a file under it, and
-    // the 301 its old address answers.
+    // map, one subject, the technical page beside them, and the 301s the
+    // addresses they moved from answer.
     let map2 = await (await k.at('yaks.app', '/docs')).text()
     assertStringIncludes(
       map2,
@@ -818,20 +829,44 @@ slow('the apex answers the crawler and the model', async () => {
     let jump = /<a href="#([^"]+)">/.exec(one)![1]
     assertStringIncludes(one, ` id="${jump}">`)
     let tech = await (await k.at('yaks.app', '/docs/technical')).text()
-    assertStringIncludes(tech, 'Technical details')
-    // The file gets the same sidebar spliced in (docs.ts `framed`), marked.
+    assertStringIncludes(tech, '<h1 id="technical-details">Technical details')
     assertStringIncludes(tech, '<nav class="Page_Side SideNav Docs_Nav"')
     assertStringIncludes(
       tech,
       '<a href="/docs/technical" aria-current="page">Technical details</a>',
     )
-    let moved = await k.at('yaks.app', '/technical', { redirect: 'manual' })
-    await moved.body?.cancel()
-    assertEquals(moved.status, 301)
-    assertEquals(
-      moved.headers.get('location'),
-      'https://yaks.app/docs/technical',
-    )
+
+    // And the whole rule, against the server that serves it: `.md` on a
+    // page's own address is the FILE, served by the assets binding, and the
+    // page is that same text drawn (T-37793).
+    for (let at of ['/docs', '/docs/querying', '/docs/technical']) {
+      let file = await k.at('yaks.app', `${at}.md`, { redirect: 'manual' })
+      assertEquals(file.status, 200, `${at}.md`)
+      assertStringIncludes(
+        file.headers.get('content-type') ?? '',
+        'markdown',
+        `${at}.md`,
+      )
+      let lead = /^# (.+)$/m.exec(await file.text())![1]
+      assertStringIncludes(
+        await (await k.at('yaks.app', at)).text(),
+        `>${lead}</h1>`,
+        at,
+      )
+    }
+
+    for (
+      let [was, now] of [
+        ['/technical', '/docs/technical'],
+        ['/guide.md', '/docs.md'],
+        ['/guide/querying.md', '/docs/querying.md'],
+      ]
+    ) {
+      let moved = await k.at('yaks.app', was, { redirect: 'manual' })
+      await moved.body?.cancel()
+      assertEquals(moved.status, 301, was)
+      assertEquals(moved.headers.get('location'), `https://yaks.app${now}`, was)
+    }
 
     // A space with no app of that name has nothing to serve there, and the
     // apex's file is not borrowed for it.

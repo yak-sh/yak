@@ -43,7 +43,7 @@ your own comes later.
 
 ## The store, from a page
 
-Deeper: <https://yaks.app/guide/store.md> — every function of the client, the
+Deeper: <https://yaks.app/docs/store.md> — every function of the client, the
 HTTP endpoints underneath, and who may read and write.
 
 The platform serves a client library beside every app, at `./api/client.js`:
@@ -182,7 +182,7 @@ row's.
 
 ## Files
 
-Deeper: <https://yaks.app/guide/files.md> — the app's icon, uploads, pictures,
+Deeper: <https://yaks.app/docs/files.md> — the app's icon, uploads, pictures,
 and a gallery that never shows one twice.
 
 An **`icon.png` beside `index.html`** — square, 512, on its own background,
@@ -267,7 +267,7 @@ so the page's own downscale is the whole of it.
 
 ## The components an app has today
 
-Deeper: <https://yaks.app/guide/components.md> — every component with its
+Deeper: <https://yaks.app/docs/components.md> — every component with its
 columns, and vocab.json for components of your own.
 
 These are the platform's built-in components, shared by every app — each one
@@ -402,7 +402,7 @@ firing, the result is written beside the request, and a recurring schedule is a
 standing request — each firing writes its own `call` row, so an earlier result
 is never re-run.
 
-Deeper: <https://yaks.app/guide/wakes.md> — every column, recurrence and time
+Deeper: <https://yaks.app/docs/wakes.md> — every column, recurrence and time
 zones, pausing and resuming, what a rule may match, scheduling a command, and
 why there is no cron trigger to configure.
 
@@ -440,7 +440,7 @@ between.
 
 ## An entity spans apps
 
-Deeper: <https://yaks.app/guide/entities.md> — which app a component lives in,
+Deeper: <https://yaks.app/docs/entities.md> — which app a component lives in,
 and a two-app pair end to end.
 
 An eid means the same entity everywhere. Two of the person's apps can write
@@ -513,7 +513,7 @@ Those are the other app's own endpoints, so that app's `access` decides: a
 
 ## Commands of your own
 
-Deeper: <https://yaks.app/guide/tools.md> — the whole tools.json reference, and
+Deeper: <https://yaks.app/docs/tools.md> — the whole tools.json reference, and
 the view protocol.
 
 An app can also carry its own **commands**, so the person's agent can act on it
@@ -605,7 +605,7 @@ through the app the person is chatting in, which does carry who is looking.
 
 ## The notes an app keeps
 
-Deeper: <https://yaks.app/guide/notes.md> — what belongs in the file, its size
+Deeper: <https://yaks.app/docs/notes.md> — what belongs in the file, its size
 limit, and the three places it is handed over.
 
 A rule the person wants followed _every_ time — recipes in grams, one photo
@@ -632,7 +632,7 @@ asked to "add this recipe" knows there is already a recipe app to add it to.
 
 ## What the person said
 
-Deeper: <https://yaks.app/guide/memory.md> — the shape of a memory, what context
+Deeper: <https://yaks.app/docs/memory.md> — the shape of a memory, what context
 is for, and how a recall is ranked.
 
 A `NOTES.md` is the rules for one app. The other half is what the person said,
@@ -650,7 +650,7 @@ they told somebody once is not something they have to say again.
 
 ## Code of your own
 
-Deeper: <https://yaks.app/guide/code.md> — env, routes, secrets, limits, and
+Deeper: <https://yaks.app/docs/code.md> — env, routes, secrets, limits, and
 whole workers to copy.
 
 An app is pages until you give it a `worker.js`, and then it has a server. Write
@@ -742,9 +742,9 @@ than a `catch` that hides it.
 
 ## Home
 
-Deeper: <https://yaks.app/guide/home.md> — the five steps a request goes
-through, the `first` globs, why a broken router fails open, and where the
-space's mail lands.
+Deeper: <https://yaks.app/docs/home.md> — the five steps a request goes through,
+the `first` globs, why a broken router fails open, and where the space's mail
+lands.
 
 The front page is the space's router as well as its homepage. A request to
 `<space>.yaks.app<path>` is answered by the first of five steps that has
@@ -779,7 +779,7 @@ unchanged.
 
 ## Saving from another site
 
-Deeper: <https://yaks.app/guide/clipping.md> — the whole clipper, the
+Deeper: <https://yaks.app/docs/clipping.md> — the whole clipper, the
 bookmarklet, and what to do when a site refuses.
 
 An app can take a page off somebody else's website — a recipe, a listing, an
@@ -812,7 +812,7 @@ app.
 
 ## Sharing an app
 
-Deeper: <https://yaks.app/guide/sharing.md> — access, members, publishing,
+Deeper: <https://yaks.app/docs/sharing.md> — access, members, publishing,
 installing, pinning.
 
 An app is a plugin. Once it is deployed you can offer it to every other space
@@ -858,7 +858,7 @@ and nothing changes at all.
 
 ## Mail
 
-Deeper: <https://yaks.app/guide/mail.md> — the bundle that sends a letter, what
+Deeper: <https://yaks.app/docs/mail.md> — the bundle that sends a letter, what
 comes back, how an arriving letter is stored, and the limits.
 
 Every app has a mailbox at `<space>.<app>@yaks.app` — `<space>@yaks.app` for the
@@ -899,7 +899,7 @@ at the person's own domain is not offered.
 
 ## Selling things
 
-Deeper: <https://yaks.app/guide/selling.md> — connecting the account, the whole
+Deeper: <https://yaks.app/docs/selling.md> — connecting the account, the whole
 shape of the checkout endpoint, what an order contains, and who can read one.
 
 A shop is a shape the platform already knows, and it needs no keys and no code.
@@ -936,9 +936,9 @@ that tab has still paid.
 
 ## A custom domain
 
-Deeper: <https://yaks.app/guide/domains.md> — the record to add and where to
-type it at each registrar, the apex, moving DNS to Cloudflare, and what each
-pending state means.
+Deeper: <https://yaks.app/docs/domains.md> — the record to add and where to type
+it at each registrar, the apex, moving DNS to Cloudflare, and what each pending
+state means.
 
 A space, or one app of it, can also answer at a domain the person already owns,
 with the `.yaks.app` address still working. `ourbookclub.com` on the space
@@ -1010,7 +1010,7 @@ stranger and 403 to a member who is not allowed to write. `me` answers everyone
 
 ## The filter grammar
 
-Deeper: <https://yaks.app/guide/querying.md> — every operator, with worked
+Deeper: <https://yaks.app/docs/querying.md> — every operator, with worked
 examples.
 
 The same grammar the platform uses everywhere:
@@ -1055,7 +1055,7 @@ wide would print `undefined` for every row that has no `doc`.
 
 ## When something breaks
 
-Deeper: <https://yaks.app/guide/errors.md> — every refusal, app_errors, and
+Deeper: <https://yaks.app/docs/errors.md> — every refusal, app_errors, and
 rolling back.
 
 A refusal returns a code for you and a message for the person —
@@ -1121,7 +1121,7 @@ The one thing with no way back is what somebody explicitly asked to erase:
 
 ## Who visited
 
-Deeper: <https://yaks.app/guide/stats.md> — what a page view records, what it
+Deeper: <https://yaks.app/docs/stats.md> — what a page view records, what it
 never does, and the three places to read it.
 
 Every HTML page the platform answers for an app is counted, and nothing else —

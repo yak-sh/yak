@@ -320,7 +320,7 @@ is for. Reach for those.
 
 An app may also declare variables, D1, R2, local Durable Objects, Workers AI and
 Vectorize bindings in `wrangler.jsonc` or `wrangler.json` beside `worker.js`.
-The [guide's server section](https://yaks.app/guide.md#code-of-your-own)
+The [guide's server section](https://yaks.app/docs.md#code-of-your-own)
 describes the supported settings. A declared binding keeps its name, including
 `STORE`, `FILES` or `APP`; otherwise those names are the convenience bindings
 described above.
@@ -333,7 +333,7 @@ platform endpoint — `POST ./api/pay/checkout`, which your worker calls through
 is what the charge lands on. You post a cart of product eids and quantities; the
 price is read off each `product` row in the app's own store, so no amount of
 money is ever part of the request and there is no key for your worker to leak.
-<https://yaks.app/guide/selling.md> is the whole of it.
+<https://yaks.app/docs/selling.md> is the whole of it.
 
 ## Who is asking
 
@@ -600,4 +600,4 @@ a file the app serves.
 
 ---
 
-The whole guide: <https://yaks.app/guide.md>
+The whole guide: <https://yaks.app/docs.md>

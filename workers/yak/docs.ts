@@ -2,26 +2,32 @@
 // docs page? `technical` is close... maybe we rename that to `Documentation`?
 // anyone technical would gravitate there anyway"
 //
-// The guide is markdown — public/guide.md and public/guide/<slug>.md — because
-// markdown is what an agent fetches, and those files stay the one copy of it.
-// This draws the same bytes as pages of the site: `/docs` is the map with a
-// contents list, and `/docs/<slug>` is one subject. Nothing is generated ahead
-// of time and no HTML is written beside the markdown, so a guide edit is a
-// documentation edit. The `.md` addresses answer exactly as they did.
+// One rule, everywhere (T-37793). Owner, 2026-09-22: "the lack of symmetry
+// here is killing me. adding `.md` should get you the markdown page.
+// presumably they should be the exact same text. `/docs` is `/docs.md`
+// rendered as html". So a page of the documentation is at `/docs/<slug>`, its
+// markdown at `/docs/<slug>.md`, and the map at `/docs` and `/docs.md`. The
+// markdown IS the page: public/docs.md and public/docs/<slug>.md, which the
+// assets binding serves as files at the `.md` addresses, and this file renders
+// at the addresses without them. Nothing is generated ahead of time and no
+// HTML is written beside the markdown, so a guide edit is a documentation
+// edit.
 //
-// The technical page is a page of the documentation too, and it is still a
-// file: public/docs/technical.html, which the assets binding serves at
-// /docs/technical. Every number on it is read off the code (its own header
-// comment), which is why it was not turned into prose. What it cannot hold
-// itself is the sidebar — that list has one source, `CONTENTS` below — so its
-// bytes are wrapped in the same frame on the way out (`framed`, called from
-// index.ts). `/technical` answers a 301 for the links already in the world.
+// The technical page (public/docs/technical.md) is drawn from its own markdown
+// like any other. The guide does not OFFER it — it answers a person asking
+// where this runs, not an agent building an app — so it says no `guide` row in
+// its frontmatter, it is no connector resource, and `TECHNICAL` below is the
+// one place that knows it is there. Every number on it is read off the code,
+// and the pointer is a comment in the file beside the words it holds up.
+//
+// `/technical` and the old `/guide` addresses answer 301, for the links
+// already in the world and the resource list a connector cached.
 import { headings, parse, render as drawn, type Token } from '@yaks/markdown'
 import { front } from '@yaks/yaml'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import type { Env } from './env.ts'
-import { PAGES } from './guide.ts'
+import { type Page, PAGES } from './guide.ts'
 import { esc } from './html.ts'
 import { type Host, hosted, url } from './host.ts'
 import { foot, head, html, top } from './shell.ts'
@@ -38,49 +44,62 @@ export let DOCS = {
     'code of its own, domains — the same guide an assistant reads.',
 }
 
-// The technical page's row in the contents. It is written here because this
-// list is what decides the ORDER and the labels of the documentation; the page
-// itself owns the words in its own head.
-let TECHNICAL = {
+// The technical page's row. Every other page says this much in its own
+// frontmatter (M-34605), read back by gen.ts; this one is no guide page, so
+// the row it is listed and drawn by is written here instead.
+let TECHNICAL: Page = {
   slug: 'technical',
   title: 'Technical details',
   brief: 'hosting, storage, limits and exports',
+  description:
+    'Where yaks.app runs, where your things are kept, what an app can do, ' +
+    "and what it can't do yet.",
 }
 
-/** Every page the contents list offers, in the order it offers them. */
-export let CONTENTS = [
-  ...PAGES.map(({ slug, title, brief }) => ({ slug, title, brief })),
-  TECHNICAL,
-]
+/** Every page of the documentation, in the order the contents offers them. */
+export let CONTENTS: Page[] = [...PAGES, TECHNICAL]
 
 export let pathOf = (slug: string) => `${PATH}/${slug}`
 
-/** The subject pages drawn here, for the sitemap (seo.ts `addresses`). The
- * technical page is not among them: it is a file, so it is in `SITE`. */
+/** The guide's subject pages, drawn here (seo.ts `addresses`). */
 export let DRAWN = PAGES.map((p) => pathOf(p.slug))
+
+/** The markdown every one of these pages is drawn from: the same address plus
+ * `.md`, which is the whole rule and what the sitemap lists. */
+export let MARKDOWN = [PATH, ...CONTENTS.map((p) => pathOf(p.slug))]
+  .map((path) => `${path}.md`)
+
+/** The technical page as the site lists it (seo.ts `RENDERED`), the way the
+ * gallery and the map are listed: drawn, so there is no file to read a title
+ * and a line back out of. */
+export let TECH = {
+  path: pathOf(TECHNICAL.slug),
+  title: `${TECHNICAL.title} · yaks.app`,
+  description: TECHNICAL.description,
+}
 
 // The markdown links its own pages by their `.md` addresses, which is what an
 // agent fetches. On a page of the site those links should land on the page
-// beside this one, so the guide addresses are pointed at /docs while it
-// renders — the files are untouched. Both spellings the guide uses are
-// covered: the angle-bracket form, which has to become a titled link because a
-// relative address is no autolink, and an ordinary link's target.
+// beside this one, so the `.md` comes off while it renders — the files are
+// untouched. Both spellings the pages use are covered: the angle-bracket form,
+// which has to become a titled link because a relative address is no autolink,
+// and an ordinary link's target.
 let LABEL: Record<string, string> = Object.fromEntries(
-  PAGES.map((p) => [p.slug, p.title]),
+  CONTENTS.map((p) => [p.slug, p.title]),
 )
 
 let linked = (source: string) =>
   source
     .replace(
-      /<https?:\/\/[^\s<>]*\/guide\/(\w+)\.md>/g,
+      /<https?:\/\/[^\s<>]*\/docs\/(\w+)\.md>/g,
       (all, slug) => LABEL[slug] ? `[${LABEL[slug]}](${pathOf(slug)})` : all,
     )
-    .replace(/<https?:\/\/[^\s<>]*\/guide\.md>/g, `[The guide](${PATH})`)
+    .replace(/<https?:\/\/[^\s<>]*\/docs\.md>/g, `[The guide](${PATH})`)
     .replace(
-      /\]\(https?:\/\/[^\s()]*\/guide\/(\w+)\.md([^\s()]*)\)/g,
+      /\]\(https?:\/\/[^\s()]*\/docs\/(\w+)\.md([^\s()]*)\)/g,
       (all, slug, rest) => LABEL[slug] ? `](${pathOf(slug)}${rest})` : all,
     )
-    .replace(/\]\(https?:\/\/[^\s()]*\/guide\.md([^\s()]*)\)/g, `](${PATH}$1)`)
+    .replace(/\]\(https?:\/\/[^\s()]*\/docs\.md([^\s()]*)\)/g, `](${PATH}$1)`)
 
 /** The document's own name: the first top-level heading it opens with. */
 let titled = (tokens: Token[]) => {
@@ -91,10 +110,9 @@ let titled = (tokens: Token[]) => {
 let markup = (tokens: Token[]) =>
   tokens.length ? renderToString(drawn(tokens, h)) : ''
 
-// The contents: every subject with the phrase it is offered by, and the
-// markdown addresses named once at the foot of it, since a reader who wants
-// the file rather than the page is the reader this whole guide was written
-// for.
+// The contents: every subject with the phrase it is offered by, and the one
+// rule at the foot of it, since a reader who wants the file rather than the
+// page is the reader this whole guide was written for.
 let contents = () =>
   `<nav class="Docs_Pages" aria-label="Contents">
 <h2>The pages</h2>
@@ -107,8 +125,8 @@ ${
     ).join('\n')
   }
 </ul>
-<p class="Note Note-small">Every page here is also markdown, for an assistant
-to read: <a href="/guide.md">/guide.md</a> and <a href="/llms-full.txt">/llms-full.txt</a>.</p>
+<p class="Note Note-small">Add <code>.md</code> to any page's address for the
+markdown an assistant reads: <a href="${PATH}.md">${PATH}.md</a>.</p>
 </nav>`
 
 let back = `<p class="Docs_Back"><a href="${PATH}">← Documentation</a></p>`
@@ -188,40 +206,6 @@ ${foot}
   )
 }
 
-// The technical page is a FILE (public/docs/technical.html) and the only page
-// of the documentation that is, so the one thing it lacks is the frame the
-// drawn pages wear. It gets it here, on the way out, the way the home page's
-// showcase is spliced into its file (index.ts): a second copy of the sidebar
-// written into that file would list the pages twice and go stale the day one
-// is added. Its own words are untouched — its Pills are already its contents.
-//
-// Two marks carry the frame: the page kind on the <body>, which is where the
-// width the header and footer read is asked for (style.css), and the file's
-// own <main>, which becomes the article inside the documentation's grid.
-let BODY = '  <body>\n'
-let OPENED = /<main class="Page ([^"]*)">/
-
-/** The technical page's bytes, wearing the documentation's frame. Served
- * unchanged if the file no longer opens the way `BODY` and `OPENED` expect,
- * which docs_test.ts is what stops. */
-export let framed = async (file: Response) => {
-  let text = await file.text()
-  let opened = text.includes(BODY) ? OPENED.exec(text) : null
-  let headers = new Headers(file.headers)
-  // The body just changed length, and it is no longer the file etag names.
-  headers.delete('content-length')
-  headers.delete('etag')
-  let body = opened
-    ? text.replace(BODY, '  <body class="Docs">\n').replace(
-      OPENED,
-      `<main class="Page">\n${side('technical')}\n<article class="Page_Body ${
-        opened[1]
-      }">`,
-    ).replace('</main>', '</article>\n</main>')
-    : text
-  return new Response(body, { status: file.status, headers })
-}
-
 // The markdown, as the site serves it: one fetch of the same file the `.md`
 // address answers with, rewritten for this deployment's own host the way every
 // other text asset is (index.ts). A page's frontmatter is the row the
@@ -231,8 +215,14 @@ let source = async (env: Env, path: string) => {
   return got.ok ? hosted(front(await got.text(), path).body, env) : null
 }
 
-/** `/docs`, `/docs/<slug>`, and the 301 the old technical address answers.
- * Null for anything else, so /docs/technical falls through to its file. */
+// Where the documentation used to live (T-37793). The move is a move, so the
+// old addresses redirect rather than answer: a `.md` under /guide is the same
+// page's markdown under /docs, whatever slug it names, and a page that went
+// away 404s at the new address the way it would have at the old one.
+let MOVED = /^\/guide(\/[\w.-]+)?\.md$/
+
+/** `/docs`, `/docs/<slug>`, and the 301s the addresses these moved from
+ * answer. Null for anything else, so the assets are reached as they were. */
 export let answer = async (
   req: Request,
   env: Env,
@@ -241,9 +231,13 @@ export let answer = async (
   if (path == '/technical') {
     return Response.redirect(url(env, pathOf('technical')), 301)
   }
+  let moved = MOVED.exec(path)
+  if (moved) {
+    return Response.redirect(url(env, `${PATH}${moved[1] ?? ''}.md`), 301)
+  }
   if (req.method != 'GET' && req.method != 'HEAD') return null
   if (path == PATH) {
-    let text = await source(env, '/guide.md')
+    let text = await source(env, '/docs.md')
     if (!text) return null
     let tokens = parse(linked(text), { breaks: false })
     return page(
@@ -256,9 +250,9 @@ export let answer = async (
     )
   }
   let slug = path.startsWith(`${PATH}/`) ? path.slice(PATH.length + 1) : ''
-  let row = PAGES.find((p) => p.slug == slug)
+  let row = CONTENTS.find((p) => p.slug == slug)
   if (!row) return null
-  let text = await source(env, `/guide/${slug}.md`)
+  let text = await source(env, `/docs/${slug}.md`)
   if (!text) return null
   let tokens = parse(linked(text), { breaks: false })
   return page(

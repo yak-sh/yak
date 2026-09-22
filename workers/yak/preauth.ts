@@ -7,7 +7,7 @@
 // building here works — the same thing a person reads on the website. `about`
 // says what yaks.app is in a paragraph, and the guide resources are the depth.
 // Both are already world-readable over plain HTTP —
-// https://yaks.app/guide.md and every guide/<slug>.md answer 200 to anybody —
+// https://yaks.app/docs.md and every docs/<slug>.md answer 200 to anybody —
 // so this exposes nothing new; it puts the same words through the door the
 // agent is already talking to, instead of making it open a browser.
 //
@@ -104,7 +104,7 @@ mailbox and never a person's own; mail asked about with no app named is their
 mail account, which is somewhere else entirely.
 
 Signed out, this door already does a fair amount. The guide is here to read:
-${url(env, '/guide.md')} is the map, and a page per subject sits beside it.
+${url(env, '/docs.md')} is the map, and a page per subject sits beside it.
 app_published is what other people have published, browsable by word.
 graph_query, graph_show, graph_schema and search read ONE app you name — its
 space and its slug — as long as its pages are readable by anyone with the
@@ -157,7 +157,7 @@ export type Doc = {
 }
 
 // The guide is how an app is built here, and how its pages save and list
-// through the client the kernel serves them (public/guide.md): the map,
+// through the client the kernel serves them (public/docs.md): the map,
 // covering pretty much everything, briefly.
 let guide = (env: Host = {}): Doc => ({
   uri: whole(env),

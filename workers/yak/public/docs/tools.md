@@ -519,4 +519,4 @@ and the club has three commands anywhere the person talks to their agent, doing
 what they could do on the page and no more.
 
 The whole guide, everything else an app can do, is at
-<https://yaks.app/guide.md>.
+<https://yaks.app/docs.md>.

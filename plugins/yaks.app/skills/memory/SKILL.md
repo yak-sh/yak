@@ -15,7 +15,7 @@ The rule is one line long: **keep their words, not your summary of them.**
 This page is those two tools: what belongs in a memory, what does not, how they
 are ranked, and how they differ from an app's `NOTES.md`.
 
-The map is at <https://yaks.app/guide.md>.
+The map is at <https://yaks.app/docs.md>.
 
 ## The shape
 
@@ -109,7 +109,7 @@ one app is known to every agent working anywhere in that space.
 - **`NOTES.md`** is the rules for one app, written by an agent, in whatever
   words make them followable — "every ingredient's amount is repeated in the
   step that uses it". It lives beside that app's `index.html`. See
-  <https://yaks.app/guide/notes.md>.
+  <https://yaks.app/docs/notes.md>.
 - **A memory** is what the person said, in their words, across the whole space —
   "use grams, never cups".
 

@@ -252,6 +252,6 @@ And the person's agent sees the whole thing at once, without naming an app:
 Neither app knows the other's schema. Delete the lending app and the books are
 untouched; delete a book and its loan goes with the entity.
 
-The whole guide is at <https://yaks.app/guide.md>; the components themselves,
-and `vocab.json`, are <https://yaks.app/guide/components.md>, and the filter
-grammar in full is <https://yaks.app/guide/querying.md>.
+The whole guide is at <https://yaks.app/docs.md>; the components themselves, and
+`vocab.json`, are <https://yaks.app/docs/components.md>, and the filter grammar
+in full is <https://yaks.app/docs/querying.md>.

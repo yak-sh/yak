@@ -356,7 +356,7 @@ async (req) => {
 let SPINE = 'entity'
 
 // The two pieces of the wider platform grammar an app's store refuses BY NAME
-// rather than answering some other way (public/guide/querying.md, where both
+// rather than answering some other way (public/docs/querying.md, where both
 // are written down as this store's own limits). A work lane is the fleet's
 // board, which nothing here has; semantic ranking needs a vector index, which
 // nothing here has either — and an empty answer to a question about neither
@@ -1680,7 +1680,7 @@ export class Store {
     if (answer.ok || this.#get('name') == PLATFORM_STORE) return answer
     let said = await answer.json() as { error?: string; message?: string }
     return /^unknown (prop|component)/.test(said.message ?? '') &&
-        !said.message!.includes(url(this.#bind, '/guide.md'))
+        !said.message!.includes(url(this.#bind, '/docs.md'))
       ? Response.json({ ...said, message: said.message + teach(this.#bind) }, {
         status: answer.status,
       })

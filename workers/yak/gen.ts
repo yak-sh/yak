@@ -45,30 +45,36 @@ let filesIn = (dir: URL, ext: string) =>
 let said = (v: unknown, where: string): string =>
   typeof v == 'string' && v.trim() ? v : refuse(`${where} is missing`)
 
-/** Every guide page, read once: public/guide/<slug>.md, where `doc` says the
+/** Every guide page, read once: public/docs/<slug>.md, where `doc` says the
  * title, `guide` says what the connector lists it by, and the rest is the page.
  *
  * The file names no ENTITY: `guide.slug` is declared `identity` (see
  * content.vocab.json), so the page is its slug wherever it is read — here, and
  * in a store the day one applies it (T-34649). Which is why the refusal below
- * matters as much as the row: the slug and the filename are one fact. */
+ * matters as much as the row: the slug and the filename are one fact.
+ *
+ * A page of the documentation that says no `guide` row at all is not a guide
+ * page and is skipped: the technical page is documentation the site draws
+ * (docs.ts) and not a resource the connector offers. A page that DOES declare
+ * one is held to it, so a row that drifted from its filename still refuses. */
 let guides = () =>
-  filesIn(new URL('public/guide/', HERE), '.md').map((name) => {
-    let file = `public/guide/${name}`
+  filesIn(new URL('public/docs/', HERE), '.md').flatMap((name) => {
+    let file = `public/docs/${name}`
     let slug = name.slice(0, -3)
     let { meta, body } = front(Deno.readTextFileSync(new URL(file, HERE)), file)
     let doc = meta.doc as Record<string, unknown> ?? {}
-    let guide = meta.guide as Record<string, unknown> ?? {}
+    let guide = meta.guide as Record<string, unknown> | undefined
+    if (!guide) return []
     if (guide.slug != slug) {
       refuse(`${file}: guide.slug is ${guide.slug}, not ${slug}`)
     }
-    return {
+    return [{
       slug,
       title: said(doc.title, `${file} doc.title`),
       description: said(guide.description, `${file} guide.description`),
       brief: said(guide.brief, `${file} guide.brief`),
       body,
-    }
+    }]
   })
 
 let GUIDES = guides()
@@ -130,7 +136,7 @@ let words = () => {
 }
 
 let HEAD = `// GENERATED — do not edit. The words live in the files:
-// public/guide/*.md (a page's frontmatter), prompts/*.md (a prompt's), and
+// public/docs/*.md (a page's frontmatter), prompts/*.md (a prompt's), and
 // tools.yml (what each tool says about itself). Change one of those and run
 // \`deno task content\`; \`deno task content --check\` refuses this file when it
 // has fallen behind (gen.ts, T-34606).

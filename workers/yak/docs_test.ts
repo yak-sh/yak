@@ -6,7 +6,7 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { headings, parse } from '@yaks/markdown'
 import { front } from '@yaks/yaml'
-import { answer, CONTENTS, DOCS, framed, PATH, pathOf } from './docs.ts'
+import { answer, CONTENTS, DOCS, PATH, pathOf } from './docs.ts'
 import type { Env } from './env.ts'
 import { PAGES } from './guide.ts'
 import { esc } from './html.ts'
@@ -57,13 +57,13 @@ Deno.test('/docs draws the guide with a link to every page', async () => {
       `<a href="${pathOf(p.slug)}">${esc(p.title)}</a>`,
     )
   }
-  // The technical page is one of them, and the markdown stays named for the
-  // reader who wants the file rather than the page.
+  // The technical page is one of them, and the one rule is said at the foot
+  // for the reader who wants the file rather than the page.
   assertStringIncludes(html, '<a href="/docs/technical">Technical details</a>')
-  assertStringIncludes(html, '<a href="/guide.md">/guide.md</a>')
+  assertStringIncludes(html, '<a href="/docs.md">/docs.md</a>')
   // A guide page is linked at the page beside this one, never at its .md.
   assertStringIncludes(html, 'href="/docs/querying"')
-  assertEquals(html.includes('https://yaks.app/guide/querying.md'), false)
+  assertEquals(html.includes('https://yaks.app/docs/querying.md'), false)
 })
 
 // A page is titled by the heading it opens with, which is the page's own name
@@ -73,12 +73,12 @@ Deno.test('/docs draws the guide with a link to every page', async () => {
 let heading = (slug: string) =>
   /^# (.+)$/m.exec(
     Deno.readTextFileSync(
-      new URL(`./public/guide/${slug}.md`, import.meta.url),
+      new URL(`./public/docs/${slug}.md`, import.meta.url),
     ),
   )![1]
 
 Deno.test('every guide page draws under its own heading', async () => {
-  for (let p of PAGES) {
+  for (let p of CONTENTS) {
     let html = await read(pathOf(p.slug))
     let name = heading(p.slug)
     assertStringIncludes(html, `<title>${esc(name)} · yaks.app</title>`)
@@ -103,7 +103,6 @@ let sidebar = (html: string) =>
 
 Deno.test('every page of the documentation carries the whole list beside it', async () => {
   for (let at of [PATH, ...CONTENTS.map((p) => pathOf(p.slug))]) {
-    if (at == pathOf('technical')) continue // a file — see `framed` below
     let nav = sidebar(await read(at))
     assertEquals(
       [...nav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]),
@@ -119,17 +118,16 @@ Deno.test('every page of the documentation carries the whole list beside it', as
 // What is on the page, linked by the ids the renderer gave those very
 // headings (@yaks/markdown). A contents list whose links land nowhere is
 // worse than none, so both halves are asserted against the same file.
-let sourceOf = (path: string) =>
-  front(
-    Deno.readTextFileSync(new URL(`./public${path}`, import.meta.url)),
-    path,
-  ).body
+let fileAt = (path: string) =>
+  Deno.readTextFileSync(new URL(`./public${path}`, import.meta.url))
+
+let sourceOf = (path: string) => front(fileAt(path), path).body
 
 Deno.test('a page lists its own sections, and every one of them is there', async () => {
-  for (let p of PAGES) {
+  for (let p of CONTENTS) {
     let html = await read(pathOf(p.slug))
     let toc = html.split('<nav class="Page_Aside')[1].split('</nav>')[0]
-    let inside = headings(parse(sourceOf(`/guide/${p.slug}.md`)))
+    let inside = headings(parse(sourceOf(`/docs/${p.slug}.md`)))
       .filter((v) => v.depth == 2 || v.depth == 3)
     assert(inside.length > 1, p.slug)
     assertEquals(
@@ -144,47 +142,76 @@ Deno.test('a page lists its own sections, and every one of them is there', async
   }
 })
 
-// The technical page is the one page of the documentation that is a file, so
-// the frame is spliced into its bytes rather than drawn around them — and the
-// words in the file are exactly the words served.
-Deno.test('the technical page wears the same frame around untouched words', async () => {
-  let file = Deno.readTextFileSync(
-    new URL('./public/docs/technical.html', import.meta.url),
-  )
-  let html = await framed(new Response(file)).then((r) => r.text())
-  let nav = sidebar(html)
+// The technical page is drawn from its own markdown like every other page,
+// and it is the page the guide does not offer: no `guide` row in the file, no
+// row in PAGES, and the words still reach the page.
+Deno.test('the technical page is markdown drawn like the rest', async () => {
+  assertEquals(PAGES.find((p) => p.slug == 'technical'), undefined)
   assertEquals(
-    [...nav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]),
-    [PATH, ...CONTENTS.map((p) => pathOf(p.slug))],
+    front(fileAt('/docs/technical.md'), 'technical.md').meta.guide,
+    undefined,
   )
+  let html = await read(pathOf('technical'))
+  assertStringIncludes(html, '<title>Technical details · yaks.app</title>')
   assertStringIncludes(
-    nav,
+    html,
     `href="${pathOf('technical')}" aria-current="page"`,
   )
-  // The frame's width is asked for on the body, and the file's own main is
-  // now the article inside it.
+  // The frame's width is asked for on the body, and the document is the
+  // article inside it (T-37785).
   assertStringIncludes(html, '<body class="Docs">')
   assertStringIncludes(html, '<main class="Page">')
   assertStringIncludes(html, '<article class="Page_Body Prose">')
-  assertStringIncludes(html, '</article>\n</main>')
-  // Untouched: every section of the file, still in it, and nothing drawn
-  // twice.
-  let body = file.split('<main class="Page Prose">')[1].split('</main>')[0]
-  assertStringIncludes(html, body)
   assertEquals((html.match(/<main[\s>]/g) ?? []).length, 1)
   assertEquals((html.match(/<h1[\s>]/g) ?? []).length, 1)
+  // A number read off the code is on the page; the comment naming where it
+  // was read is in the file and nowhere on the page (@yaks/markdown).
+  assertStringIncludes(html, '20 versions')
+  assertStringIncludes(sourceOf('/docs/technical.md'), 'versions.ts KEEP = 20')
+  assertEquals(html.includes('versions.ts'), false)
 })
 
-Deno.test('/technical answers a permanent redirect to its page', async () => {
-  let said = await got('/technical')
-  assertEquals(said.status, 301)
-  assertEquals(said.headers.get('location'), 'https://yaks.app/docs/technical')
+// The whole rule, on one page: the `.md` address is the FILE, the address
+// without it is that same file drawn, and neither redirects to the other.
+Deno.test('a page and its markdown are one text at two addresses', async () => {
+  for (let at of [PATH, ...CONTENTS.map((p) => pathOf(p.slug))]) {
+    let text = sourceOf(`${at}.md`)
+    // Nothing is drawn for the `.md` address: it is a file under public/.
+    assertEquals(
+      await answer(
+        new Request(`https://yaks.app${at}.md`),
+        site(),
+        `${at}.md`,
+      ),
+      null,
+      at,
+    )
+    // And the page is that file's own words, heading and all.
+    let html = await read(at)
+    let lead = /^# (.+)$/m.exec(text)![1]
+    assertStringIncludes(html, `>${lead}</h1>`, at)
+  }
 })
 
-// /docs/technical is a FILE, so nothing is drawn for it and the request falls
-// through to the assets binding (index.ts).
+// Every address these moved from answers a 301 rather than a 404: the links
+// are in the world and in the resource list a connector cached (T-37793).
+Deno.test('the addresses the documentation moved from redirect to it', async () => {
+  for (
+    let [was, now] of [
+      ['/technical', '/docs/technical'],
+      ['/guide.md', '/docs.md'],
+      ['/guide/querying.md', '/docs/querying.md'],
+      ['/guide/nope.md', '/docs/nope.md'],
+    ]
+  ) {
+    let said = await got(was)
+    assertEquals(said.status, 301, was)
+    assertEquals(said.headers.get('location'), `https://yaks.app${now}`, was)
+  }
+})
+
 Deno.test('the drawn pages stop where the files start', async () => {
-  for (let path of ['/docs/technical', '/docs/nothing', '/help']) {
+  for (let path of ['/docs/nothing', '/help', '/guide/querying']) {
     assertEquals(
       await answer(new Request(`https://yaks.app${path}`), site(), path),
       null,

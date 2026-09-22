@@ -301,7 +301,7 @@ let apexHelp = (env: Env) =>
   'same value (Porkbun has one; GoDaddy, Namecheap, Squarespace and Hover ' +
   'do not), or attach www.<domain> instead and redirect the apex to it. ' +
   'Call guide with page domains, which walks through each ' +
-  `(${hostUrl(env, '/guide/domains.md')}).\n\n`
+  `(${hostUrl(env, '/docs/domains.md')}).\n\n`
 
 // What an app lets someone who is not a member do with its data (T-32504).
 // The person's agent picks it from their ask, which is why the words are the

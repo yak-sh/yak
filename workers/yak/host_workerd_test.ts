@@ -34,7 +34,7 @@ slow(
       assertEquals(init.serverInfo.name, 'yaks.app')
       assertStringIncludes(init.instructions, 'https://yaks.fyi/login')
       let guide = await anon.call('resources/read', {
-        uri: 'https://yaks.fyi/guide.md',
+        uri: 'https://yaks.fyi/docs.md',
       })
       assert(!guide.contents[0].text.includes('https://yaks.app/'))
       let agent = connector(k, cookie)

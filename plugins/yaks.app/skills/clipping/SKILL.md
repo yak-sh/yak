@@ -469,8 +469,8 @@ that does nothing on their phone.
 ---
 
 Related: worker routes, `env.STORE` and the limits are
-<https://yaks.app/guide/code.md>; declaring `recipe` and `source` is
-<https://yaks.app/guide/components.md>; the blob endpoint and pictures are
-<https://yaks.app/guide/files.md>; the filter syntax, including quoting an
-address, is <https://yaks.app/guide/querying.md>. The whole guide:
-<https://yaks.app/guide.md>.
+<https://yaks.app/docs/code.md>; declaring `recipe` and `source` is
+<https://yaks.app/docs/components.md>; the blob endpoint and pictures are
+<https://yaks.app/docs/files.md>; the filter syntax, including quoting an
+address, is <https://yaks.app/docs/querying.md>. The whole guide:
+<https://yaks.app/docs.md>.

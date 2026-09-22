@@ -41,22 +41,25 @@ let vocab = loadVocab([core, content as VocabDoc])
 let file = (path: string) =>
   front(Deno.readTextFileSync(new URL(path, import.meta.url)), path)
 
-let named = (dir: string) =>
+// Every file of a kind in a directory, by the row it declares: a documentation
+// page saying no `guide` row is not a guide page (the technical page is drawn
+// by docs.ts and offered by nobody), and gen.ts skips it for the same reason.
+let named = (dir: string, comp: string) =>
   [...Deno.readDirSync(new URL(dir, import.meta.url))]
     .map((e) => e.name)
-    .filter((n) => n.endsWith('.md'))
+    .filter((n) => n.endsWith('.md') && file(`${dir}${n}`).meta[comp])
     .sort()
 
 // The two rosters, walked rather than listed: a page or a prompt added
 // tomorrow is covered the day it lands.
-let pages = named('./public/guide/')
-let prompts = named('./prompts/')
+let pages = named('./public/docs/', 'guide')
+let prompts = named('./prompts/', 'prompt')
 
 Deno.test('no content file names an entity — the identity column does', () => {
   assert(pages.length > 1 && prompts.length > 1)
   for (
     let [dir, comp, col, names] of [
-      ['./public/guide/', 'guide', 'slug', pages],
+      ['./public/docs/', 'guide', 'slug', pages],
       ['./prompts/', 'prompt', 'name', prompts],
     ] as const
   ) {
@@ -78,7 +81,7 @@ Deno.test('no content file names an entity — the identity column does', () => 
 
 Deno.test('a page applied twice is one entity, at the id its slug names', () => {
   let g = graph({ storage: memory(), vocab })
-  let { meta } = file('./public/guide/store.md')
+  let { meta } = file('./public/docs/store.md')
   let eid = identityEid('guide', ['store'])
 
   let once = g.apply([{ ...meta, entity: { eid: '$page' } }]) as Bundle[]

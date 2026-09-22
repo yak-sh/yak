@@ -443,4 +443,4 @@ photo added later gets its box too.
   progress per file, not within one.
 
 The whole guide, everything else an app can do, is at
-<https://yaks.app/guide.md>.
+<https://yaks.app/docs.md>.
