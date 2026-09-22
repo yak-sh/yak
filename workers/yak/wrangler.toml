@@ -24,6 +24,14 @@ compatibility_flags = [
   "enable_ctx_exports",
 ]
 
+# Every isolate parses the whole script before it answers, a Store waking for
+# one query included, so the bundle ships minified: 4.1 MB became 1.9 MB
+# (T-37975). Names survive (wrangler's `keep_names` defaults on), so a Sentry
+# frame still says which function threw; the source map goes up with the
+# deploy so Workers Logs prints a stack in the files it came from.
+minify = true
+upload_source_maps = true
+
 # The apex and every first-level space hostname, both on the yaks.app zone;
 # the zone's Universal certificate covers the wildcard. `*/*` is the third
 # because a customer's own hostname is not spelled `yaks.app` at all
