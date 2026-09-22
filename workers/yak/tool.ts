@@ -149,12 +149,16 @@ export let worded = (row: Row): Tool => {
 export let str = (description: string) => ({ type: 'string', description })
 
 export let SPACE = str(
-  "the space slug, as in <space>.yaks.app. Leave it out: the person's own " +
-    'space is used, and where you name an app, the space is whichever of ' +
-    'theirs holds it. Name one only when an error asks you to',
+  'the space slug: the short name in <space>.yaks.app, not a full URL. ' +
+    'When optional, omit it to use the unique reachable space holding the ' +
+    'named live app, otherwise the only space the person owns (created if ' +
+    'needed). If more than one matches, the error asks you to choose. ' +
+    'Always supply it when this tool requires space',
 )
 
-export let APP = str('the app slug, its path within the space')
+export let APP = str(
+  'the app slug: the short name in <space>.yaks.app/<app>/, not a full URL',
+)
 
 export let text = (v: unknown, what: string) => {
   if (typeof v != 'string' || !v) throw new Error(`${what} is required`)

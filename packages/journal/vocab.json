@@ -8,12 +8,12 @@
       "tool": true,
       "noun": "history",
       "title": "Read an entity’s history",
-      "description": "List every committed transaction that touched one entity, newest first. Each is returned as the patch it applied (the components it wrote, or $delete if it deleted the entity) stamped with who wrote it, when, and through which tool or process. The journal is written inside the same transaction as the change, so this gives attribution and a diff without a version table. It covers changes made since this graph started journaling.",
+      "description": "List every committed transaction that touched one entity, newest first. Each is returned as the patch it applied (the named groups of fields it wrote, or $delete if it deleted the record) stamped with who wrote it, when, and through which tool or process. The journal is written inside the same transaction as the change, so this gives attribution and a diff without a version table. It covers changes made since this graph started journaling.",
       "input": {
         "entity": {
           "type": "string",
           "ref": "entity",
-          "description": "the entity whose history to read: an id, a name, or an eid"
+          "description": "record whose history to read: human-readable id, registered name, or unique entity id (eid)"
         },
         "limit": {
           "type": "number",

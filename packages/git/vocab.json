@@ -250,7 +250,7 @@
     "land": {
       "tool": true,
       "title": "Land the current branch",
-      "description": "Land the branch the current checkout is on. Fast-forwards it into the base branch (the one the shared checkout has checked out) and pushes if the base has an upstream. If the base has moved, rebases the branch onto it and returns WITHOUT merging, printing what the rebase pulled in so the caller can re-run its tests and land again; that counts as a failure, because nothing landed. Refuses to land when a file would end up with content no commit on the branch wrote, unless allow-revert names that file. Runs no tests and reads no graph: everything comes from git, in the checkout the calling process is in.",
+      "description": "Land the branch the current checkout is on. Fast-forwards it into the base branch (the one the shared checkout has checked out) and pushes if the base has an upstream. If the base has moved, rebases the branch onto it and returns WITHOUT merging, printing what the rebase pulled in so the caller can re-run its tests and land again; that counts as a failure, because nothing landed. Refuses to land when a file would end up with content no commit on the branch wrote, unless allow-revert names that file. Runs no tests and reads no graph: everything comes from Git, in the checkout assigned to this tool call by the host (the CLI uses its current directory). Returns Git’s output and the landed commit SHA in content.body. No arguments are needed for an ordinary landing.",
       "input": {
         "allow-revert": {
           "type": "string",

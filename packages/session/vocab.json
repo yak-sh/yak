@@ -351,17 +351,17 @@
       "noun": "claim",
       "verb": "take",
       "title": "Claim an entity",
-      "description": "Claim an entity for a session, so no other session picks it up. A claim is a lease, not a patch: writing one over another session’s claim fails the whole batch, so release first. The same session claiming again is a no-op refresh.",
+      "description": "Reserve a stored record (entity) for an agent work session so another session cannot claim it. This reservation is a claim or lease: writing one over another session’s claim fails the whole batch, so release first. The same session claiming again is a no-op refresh. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "target": {
           "type": "string",
           "ref": "entity",
-          "description": "the entity to claim; any entity at all"
+          "description": "the entity to claim; any entity at all; pass its id or registered name"
         },
         "session": {
           "type": "string",
           "ref": "session",
-          "description": "the session that holds the claim (default: the caller’s session)"
+          "description": "the session that holds the claim (default: the caller’s session); pass its id or registered name"
         }
       },
       "required": [
@@ -379,12 +379,12 @@
       "noun": "claim",
       "verb": "release",
       "title": "Release a claim",
-      "description": "Release the claim on an entity. Deliberately unguarded: releasing is how a claim is handed over, and a dead session’s claims are released by whichever process notices first.",
+      "description": "Remove the reservation (claim) held by an agent work session on a stored record (entity). Deliberately unguarded: releasing is how a claim is handed over, and a dead session’s claims are released by whichever process notices first. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "target": {
           "type": "string",
           "ref": "entity",
-          "description": "the entity whose claim to release"
+          "description": "the entity whose claim to release; pass its id or registered name"
         }
       },
       "required": [
@@ -402,20 +402,20 @@
       "noun": "session",
       "verb": "context",
       "title": "Read a session’s context",
-      "description": "Run at the start of a session: find or create the session entity for the harness’s session id, and return its id and the entities it holds claims on, as text for the harness to inject into the session. Never fails loudly, since a hook that fails is a session that will not start.",
+      "description": "At the start of an agent work session, find or create its stored session record. Pass the id assigned by the harness (the program hosting the agent), or a hook containing session_id. Returns the session record changes and text in content.body naming the session and records it holds claims (work reservations) on, for the harness to inject. An explicit session argument takes precedence over the hook. With no session id, including a malformed hook without an explicit id, returns nothing and makes no changes.",
       "input": {
         "session": {
           "type": "string",
-          "description": "the harness’s own id for the session"
+          "description": "session id assigned by the harness (the program hosting the agent), or an existing session’s human-readable id or unique entity id; takes precedence over hook"
         },
         "hook": {
           "type": "string",
-          "description": "a harness lifecycle event as JSON; `-` reads it from stdin, which is how a hook passes its event in"
+          "description": "lifecycle event encoded as a JSON string containing session_id; the CLI accepts - to read this JSON from stdin, but MCP callers pass the JSON string itself"
         },
         "actor": {
           "type": "string",
           "ref": "entity",
-          "description": "the entity this session acts as; the identity that survives a /clear"
+          "description": "id or name of the persistent identity this session acts as, retained when the agent clears its conversation"
         }
       },
       "options": {
@@ -430,15 +430,15 @@
       "noun": "session",
       "verb": "wrap",
       "title": "Wrap up a session",
-      "description": "Run at the end of a session: record the session’s brief, its own account of what it did, and release every claim it still holds. A session that was never created does nothing.",
+      "description": "At the end of an agent work session, save the optional brief (its own account of what it did) and release every claim, or work reservation, it still holds. Pass a session id or a hook containing session_id. Returns bundles (JSON objects with entity ids and field groups) for the brief and claim removals. If the session does not exist or no id is supplied, returns nothing and makes no changes.",
       "input": {
         "session": {
           "type": "string",
-          "description": "the harness’s own id for the session"
+          "description": "session id assigned by the harness (the program hosting the agent), or an existing session’s human-readable id or unique entity id; takes precedence over hook"
         },
         "hook": {
           "type": "string",
-          "description": "a harness lifecycle event as JSON; `-` reads it from stdin, which is how a hook passes its event in"
+          "description": "lifecycle event encoded as a JSON string containing session_id; the CLI accepts - to read this JSON from stdin, but MCP callers pass the JSON string itself"
         },
         "brief": {
           "type": "string",
@@ -460,15 +460,15 @@
       "noun": "session",
       "verb": "brief",
       "title": "Record a session’s brief",
-      "description": "Write the session’s brief: its own account of what it did, which the next session by the same actor is given. Replaces any brief it recorded before.",
+      "description": "Save an agent work session’s brief: its own account of what it did. Replaces any previous brief; creates a session record if needed. Pass text and either session or a hook containing session_id. Returns the session id and written fields as a JSON bundle. This stores the brief but does not itself inject it into another session.",
       "input": {
         "session": {
           "type": "string",
-          "description": "the harness’s own id for the session"
+          "description": "session id assigned by the harness (the program hosting the agent), or an existing session’s human-readable id or unique entity id; takes precedence over hook"
         },
         "hook": {
           "type": "string",
-          "description": "a harness lifecycle event as JSON; `-` reads it from stdin, which is how a hook passes its event in"
+          "description": "lifecycle event encoded as a JSON string containing session_id; the CLI accepts - to read this JSON from stdin, but MCP callers pass the JSON string itself"
         },
         "text": {
           "type": "string",
@@ -490,7 +490,7 @@
       "noun": "hooks",
       "verb": "install",
       "title": "Install the lifecycle hooks",
-      "description": "Write this package’s SessionStart and SessionEnd entries into a harness settings file, so every session starts by reading its context back (session_context) and ends by wrapping up (session_wrap). Replaces an earlier install and leaves every other entry in the file alone. Writes to the machine the tool runs on.",
+      "description": "Write SessionStart and SessionEnd hooks (commands run when an agent session starts or ends) into a Claude-compatible harness settings file, so every session starts by reading its context back (session_context) and ends by wrapping up (session_wrap). Replaces an earlier install and leaves every other entry in the file alone. Writes to the machine the tool runs on. Returns a text confirmation naming the settings path. Pass remove: true to uninstall just these hooks.",
       "input": {
         "path": {
           "type": "string",
@@ -517,7 +517,7 @@
       "noun": "claim",
       "verb": "check",
       "title": "Check for stale claims",
-      "description": "Check that no entity is claimed by a session that is over: a holder this graph has no session entity for, or one whose session stopped or failed. Otherwise the board reports somebody working on what nobody is working on.",
+      "description": "Check for work reservations (claims) on records (entities) whose agent session is over: a holder this graph has no session entity for, or one whose session stopped or failed. Otherwise the board reports somebody working on what nobody is working on. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
       "input": {},
       "readOnly": true
     },
@@ -526,7 +526,7 @@
       "noun": "session",
       "verb": "check",
       "title": "Check for stalled sessions",
-      "description": "Check that no session has stalled: waiting on a turn or a tool answer for hours with nothing appended. A daemon that died mid-turn leaves a session that simply stops, and nothing else reports it.",
+      "description": "Check that no session has stalled: waiting on a turn or a tool answer for hours with nothing appended. Uses the server’s stall threshold (two hours by default) for pending or running sessions. A stopped background process can leave such a session without an answer. Reports when timestamps are unavailable to make that judgment. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
       "input": {},
       "readOnly": true
     }

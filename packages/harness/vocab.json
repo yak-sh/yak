@@ -22,7 +22,7 @@
     },
     "session_list": {
       "tool": true,
-      "description": "List every session entity in the connected graph, as whole bundles.",
+      "description": "List every agent work-session record in the connected graph, as bundles: JSON objects with entity ids and their named groups of fields (components). Takes no arguments; includes sessions regardless of their status.",
       "noun": "session",
       "verb": "list",
       "input": {},

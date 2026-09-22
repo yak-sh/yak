@@ -82,8 +82,9 @@ let newest = (a: Bundle, b: Bundle) =>
 let address = (env: Host) =>
   `the app slug; its email address is <space>.<app>@${apex(env)}`
 
-let SPACE = "the space the app is in; leave it out and the person's own is " +
-  'used, as with every other tool'
+let SPACE = 'the space slug in <space>.yaks.app; omit to infer it from the ' +
+  'app slug, or fall back to the only space the person owns. If more than ' +
+  'one matches, the error asks you to choose'
 
 // The recipient an address already names in this app, if any. A letter is
 // addressed to an ENTITY here, so writing a second row for a person the app
@@ -107,12 +108,13 @@ let listing = (ctx: Ctx): Tool => ({
   readOnly: true,
   title: "List an app's email",
   description:
-    `Every email an app received at its own address, and every one it sent ` +
-    `from it, newest first, as whole bundles, each carrying its outcome: ` +
-    `delivered{at, via} or bounced{at, reason}. ${
-      scope(ctx.env)
-    } direction selects one ` +
-    `side: received, sent, or all (the default).`,
+    `List an app's email records as bundles: JSON objects with entity ids, ` +
+    `message text, mail headers and delivery fields when present. Sent mail ` +
+    `may later carry delivered{at, via} or bounced{at, reason}; an absent ` +
+    `outcome is not confirmation of delivery. ${scope(ctx.env)} ` +
+    `direction selects received, sent, or all (the default, including ` +
+    `drafts). Returns up to limit records (20 by default), with the returned ` +
+    `records sorted newest first.`,
   input: {
     app: z.string().describe(address(ctx.env)),
     space: z.string().optional().describe(SPACE),
@@ -145,11 +147,11 @@ let sending = (ctx: Ctx): Tool => ({
   openWorld: true,
   description:
     `Send one email from an app's own address to one recipient: an email ` +
-    `address, or the eid of an entity in the app that already carries ` +
-    `email{address}, which is the entity later emails to the same person ` +
-    `are attached to. It creates the recipient entity if the app does not ` +
-    `have one yet, then the email entity beside it, and returns the email as ` +
-    `written; whether it was delivered is recorded on the email entity a ` +
+    `address, or the unique id (eid) of a record in the app that has an ` +
+    `email{address} field. Later emails to that person link to the same ` +
+    `record. Creates the recipient record if needed, then the email record, ` +
+    `and returns the email as written: a JSON object with its id and named ` +
+    `groups of fields (components). Delivery is recorded on that email a ` +
     `moment later as delivered or bounced, so read it back with mail_list. ` +
     `The body is markdown. ${scope(ctx.env)} Sending ` +
     `requires a member who may write, even in an app anyone can write to. ` +
@@ -160,8 +162,8 @@ let sending = (ctx: Ctx): Tool => ({
     app: z.string().describe(address(ctx.env)),
     space: z.string().optional().describe(SPACE),
     to: z.string().describe(
-      'the recipient: an email address, or the eid of an entity in the app ' +
-        'that carries email{address}',
+      'the recipient: an email address, or the unique id (eid) of a record ' +
+        'in the app with an email{address} field',
     ),
     title: z.string().describe('the subject line'),
     body: z.string().describe('the body, as markdown'),

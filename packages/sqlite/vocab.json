@@ -9,7 +9,7 @@
       "noun": "storage",
       "verb": "check",
       "title": "Check the database file",
-      "description": "Check that the SQLite file holds no orphaned component row and no reference to an entity that does not exist. Neither shows up in a query, since every read starts from the entity table, so this asks the connection directly: whether foreign keys are enforced, which rows violate one, and what SQLite’s own integrity_check reports.",
+      "description": "Check that the SQLite file holds no component row without its parent record (entity) and no reference to a nonexistent entity. These can be missed by ordinary entity queries, so this asks the connection directly: whether foreign keys are enforced, which rows violate one, and what SQLite’s own integrity_check reports. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
       "input": {},
       "readOnly": true
     },
@@ -17,8 +17,8 @@
       "tool": true,
       "noun": "archetype",
       "verb": "check",
-      "title": "Check the archetype pointers",
-      "description": "Check that every archetype pointer matches the components its entity has. A writer that inserts rows without going through the graph, and without updating the archetypes of the entities it touched, leaves stale pointers that both reads and the query planner rely on.",
+      "title": "Check entity component sets",
+      "description": "Check that each entity’s archetype pointer matches the components it actually has. An entity is a stored record; its components are named groups of fields, and its archetype pointer identifies the set of component types present. Direct database writes that bypass the graph can leave these pointers stale, causing reads and query planning to use the wrong component set. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
       "input": {},
       "readOnly": true
     }

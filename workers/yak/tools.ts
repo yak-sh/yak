@@ -311,10 +311,10 @@ let ACCESS = {
   enum: [...appAccess],
   description:
     "who may read and write the app's data: public (the default), anyone " +
-    'with the link reads it, the person and whoever they invite write it; ' +
+    'with the link reads it, members with write permission change it; ' +
     'open, anyone with the link writes too, which is what a vote page, a ' +
     'shared list or a signup sheet needs; private, nobody but the person ' +
-    'and whoever they invite may read or write',
+    'and invited members may read; writing still needs a writer role',
 }
 
 let ROLES: Role[] = ['owner', 'editor', 'viewer']
@@ -1117,8 +1117,8 @@ let laid = async (blobs: Blobs, from: string, onto: string) => {
 // two tools that would drift.
 
 let FORGET = str(
-  'an address this has already moved away from, to stop it redirecting ' +
-    'and let it be taken again; never the current address. Only when the ' +
+  'a previous slug (not a URL) this has moved away from, to stop redirects ' +
+    'and let it be taken again; never the current slug. Only when the ' +
     'person has said they are done with it',
 )
 
@@ -1937,7 +1937,7 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         space: SPACE,
-        slug: str('the path label'),
+        slug: str('the app slug: the short URL path segment, e.g. recipes'),
         title: str('its name'),
         access: ACCESS,
       },
@@ -2016,9 +2016,10 @@ let OURS: Row[] = [
           type: 'string',
           enum: [...OPS],
           description:
-            'the operation; leave it out when passing files, which is a write',
+            'list, read, write, patch, fetch, delete, history or restore. Required ' +
+            'unless files, content or base64 supplies a write',
         },
-        path: str('the file path, e.g. index.html'),
+        path: str('path relative to the app root, e.g. index.html'),
         content: str('the file text, for write'),
         base64: str(
           'the file bytes, base64-encoded, instead of content: for a file ' +
@@ -2038,7 +2039,7 @@ let OURS: Row[] = [
             'it',
         ),
         sha: str(
-          'for restore: the sha256 of the version to put back, from op ' +
+          'for restore: the SHA-256 content hash of the version to put back, from op ' +
             'history. With both sha and at left out, the newest is put back',
         ),
         at: str(
@@ -2050,7 +2051,7 @@ let OURS: Row[] = [
           items: {
             type: 'object',
             properties: {
-              path: str('the file path'),
+              path: str('path relative to the app root'),
               content: str('the file text'),
               base64: str('the file bytes, base64, instead of content'),
             },
@@ -2685,7 +2686,7 @@ let OURS: Row[] = [
       properties: {
         space: SPACE,
         app: APP,
-        slug: str('the new path label, to move the app'),
+        slug: str('the new app slug (URL path segment), to move the app'),
         title: str('the new name'),
         access: ACCESS,
         home: {
@@ -2693,8 +2694,9 @@ let OURS: Row[] = [
           description:
             'true to make this app what <space>.yaks.app/ opens: it is ' +
             'served at that address, and its own /<app>/ redirects there; ' +
-            'false to leave the space with no front page, where that ' +
-            'address lists the apps a visitor may open',
+            'false to unset this app if it is currently the front page, leaving ' +
+            'the space address to list apps a visitor may open. Does not ' +
+            'unset another app that is the front page',
         },
         first: {
           type: 'array',
@@ -2912,7 +2914,10 @@ let OURS: Row[] = [
       properties: {
         space: SPACE,
         app: APP,
-        name: str('the name the worker reads it as, e.g. WEATHER_KEY'),
+        name: str(
+          'the name worker.js reads as env.NAME, e.g. WEATHER_KEY; letters, ' +
+            'digits and underscores, not starting with a digit',
+        ),
         value: str('the secret itself; it is never returned by any tool'),
       },
       required: ['app', 'name', 'value'],
@@ -2963,7 +2968,11 @@ let OURS: Row[] = [
     idempotent: true,
     input: {
       type: 'object',
-      properties: { space: SPACE, app: APP, name: str('the secret to remove') },
+      properties: {
+        space: SPACE,
+        app: APP,
+        name: str('the secret name to remove, e.g. WEATHER_KEY; not its value'),
+      },
       required: ['app', 'name'],
     },
     run: async (ctx, args) => {
@@ -3084,7 +3093,7 @@ let OURS: Row[] = [
           items: { type: 'string' },
           description:
             'ids of errors that are fixed; each is archived and stops ' +
-            'being listed. An id from a line of this listing, or an eid.',
+            'being listed. Use an id from this listing, or a unique entity id (eid).',
         },
         seen: {
           type: 'array',
@@ -3124,7 +3133,9 @@ let OURS: Row[] = [
     input: {
       type: 'object',
       properties: {
-        space: str('one space to list; leave it out for all of theirs'),
+        space: str(
+          'one space slug to list; omit for every space the caller belongs to',
+        ),
       },
     },
     // The listing is one question, so it is asked as one (T-35431): five
@@ -3718,8 +3729,8 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         words: str(
-          'words to search the published apps by, matched against name, ' +
-            'title and description. Leave it out to list all of them',
+          'words that must all occur in the listing text: name, title, description, ' +
+            'origin or version details. Omit to list all published apps',
         ),
       },
     },
@@ -3758,8 +3769,8 @@ let OURS: Row[] = [
         space: SPACE,
         name: str('the published name, from app_published'),
         as: str(
-          "the slug to install it at in their space; the app's own slug, " +
-            'the one app_published prints, unless you pass another',
+          "the new app slug; defaults to the source app's slug if free, " +
+            'otherwise its published name. app_published lists both',
         ),
       },
       required: ['name'],
@@ -3930,7 +3941,7 @@ let OURS: Row[] = [
         space: SPACE,
         email: str('their email address'),
         app: str(
-          'the app they are being invited to, and the only one they get: ' +
+          'the app slug they are being invited to, and the only app they get: ' +
             'they have access to this app and nothing else in the space. ' +
             'Leave it out to add them to the space, which reaches every app ' +
             'in it',
@@ -3942,7 +3953,7 @@ let OURS: Row[] = [
         note: str(
           "the person's own message to them, placed at the top of the " +
             'invitation email as written and quoted as theirs; a line or ' +
-            'two, not a newsletter. Leave it out and the email is the ' +
+            'two, at most 500 characters. Leave it out and the email is the ' +
             'invitation alone',
         ),
         role: {
@@ -3950,7 +3961,7 @@ let OURS: Row[] = [
           enum: [...ROLES],
           description:
             'editor (the default) reads and writes, viewer only reads, ' +
-            'owner may invite others too',
+            'owner may invite others too when the membership is space-wide',
         },
       },
       required: ['email'],
@@ -4085,8 +4096,9 @@ let OURS: Row[] = [
         space: SPACE,
         email: str('their email address'),
         app: str(
-          'the app they were invited to: removes them from that one app ' +
-            'and leaves the rest. Leave it out to remove them from the space',
+          'the app slug they were invited to: revokes that app invitation ' +
+            'and leaves the rest. Omit to revoke space-wide membership; ' +
+            'independent app invitations remain',
         ),
       },
       required: ['email'],
@@ -4155,7 +4167,7 @@ let OURS: Row[] = [
             `default, ${HOURS} at most`,
         },
         space: str(
-          'limit it to this one space: a token naming one reaches that ' +
+          'limit it to this space slug: a token naming one reaches that ' +
             "space's apps and nothing else of the person's",
         ),
         revoke: str(
@@ -4233,7 +4245,7 @@ let OURS: Row[] = [
             'or good, in the words the person used, and what you tried',
         ),
         app: str(
-          'the app they were looking at when it came up, if there was one',
+          'the slug of the app they were using, if any',
         ),
         space: SPACE,
       },
@@ -4366,7 +4378,7 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         page: str('the page returned: a slug, or `guide` for the overview'),
-        markdown: str('the page itself'),
+        markdown: str('the page text as Markdown'),
       },
       required: ['page', 'markdown'],
     },

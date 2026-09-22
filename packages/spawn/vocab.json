@@ -6,22 +6,22 @@
       "noun": "session",
       "verb": "spawn",
       "title": "Start an agent on a task",
-      "description": "Start an agent on a task. Writes a session entity, a first entry naming the provider, model and effort, and the session’s claim on the task; committing that starts the agent, so a task another session already holds refuses the whole request. With wait, returns how the run ended (its brief and its exit code) instead of the session id.",
+      "description": "Start an agent on a task. Creates a session record for the run, an initial log entry naming the provider (agent runner), model and reasoning effort, and a claim reserving the task for that session; committing that starts the agent, so a task another session already holds refuses the whole request. With wait, returns how the run ended (its brief or final output, and its exit code when recorded) instead of the session id. Returns text in content.body. A wait timeout reports that the run is still running and does not kill it.",
       "input": {
         "task": {
           "type": "string",
           "ref": "task",
-          "description": "the task to hand to the agent, which the session claims"
+          "description": "the task to hand to the agent, which the session claims; pass its id or registered name"
         },
         "provider": {
           "type": "string",
           "ref": "provider",
-          "description": "the provider that runs the agent; one whose transport is a command line"
+          "description": "id or registered name of the provider (agent runner); it must use command-line transport"
         },
         "model": {
           "type": "string",
           "ref": "model",
-          "description": "the model the run uses"
+          "description": "id or registered name of the model the run uses; optional"
         },
         "effort": {
           "type": "string",
@@ -40,10 +40,18 @@
           "description": "how long to wait: 45m, 2h, or bare seconds (default 30m)"
         }
       },
-      "required": ["task", "provider"],
+      "required": [
+        "task",
+        "provider"
+      ],
       "options": {
-        "positional": ["task"],
-        "short": { "p": "provider", "m": "model" }
+        "positional": [
+          "task"
+        ],
+        "short": {
+          "p": "provider",
+          "m": "model"
+        }
       }
     },
     "session_wait": {
@@ -51,20 +59,26 @@
       "noun": "session",
       "verb": "wait",
       "title": "Wait for a session to end",
-      "description": "Wait for a session to end, then return its brief and the exit code its run ended with. A session still running when the timeout passes is reported as still running, never killed.",
+      "description": "Wait for a session to end, then return its brief (or final output) and exit code when recorded, as text in content.body. A session still running when the timeout passes is reported as still running, never killed.",
       "input": {
         "session": {
           "type": "string",
           "ref": "session",
-          "description": "the session to wait on"
+          "description": "the session to wait on; pass its id or registered name"
         },
         "timeout": {
           "type": "string",
           "description": "how long to wait: 45m, 2h, or bare seconds (default 30m)"
         }
       },
-      "required": ["session"],
-      "options": { "positional": ["session"] },
+      "required": [
+        "session"
+      ],
+      "options": {
+        "positional": [
+          "session"
+        ]
+      },
       "readOnly": true,
       "idempotent": true
     },
@@ -73,20 +87,29 @@
       "noun": "session",
       "verb": "peek",
       "title": "Read the end of a session",
-      "description": "Return the last entries of a session as the graph holds them, one line per entry, plus its current status. Reads a bounded number of entries, never the provider’s own log file.",
+      "description": "Return the last entries of an agent work session as stored in the graph, one line per entry, plus its current status. Returns at most lines entries (40 by default), as text in content.body; never the provider’s own log file.",
       "input": {
         "session": {
           "type": "string",
           "ref": "session",
-          "description": "the session to read"
+          "description": "the session to read; pass its id or registered name"
         },
         "lines": {
           "type": "number",
           "description": "how many entries to return, newest last (default 40)"
         }
       },
-      "required": ["session"],
-      "options": { "positional": ["session"], "short": { "n": "lines" } },
+      "required": [
+        "session"
+      ],
+      "options": {
+        "positional": [
+          "session"
+        ],
+        "short": {
+          "n": "lines"
+        }
+      },
       "readOnly": true,
       "idempotent": true
     }

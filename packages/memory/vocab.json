@@ -60,7 +60,7 @@
       "noun": "memory",
       "verb": "save",
       "title": "Save a memory",
-      "description": "Save what somebody said, in their own words. The memory is the sentence itself, never your summary of it, which can only hold less, plus a line or two of context somebody will need to read it weeks later. scope names the project it belongs to; leave it out for a principle that applies everywhere. feedback names who gave the correction, when the words are one. Pass id to patch an existing memory instead of creating one: anything left out is unchanged, and replacing the words requires was, the token memory_recall returns beside them, so a memory another writer changed since you read it is refused whole rather than overwritten.",
+      "description": "Save what somebody said, in their own words. The memory is the sentence itself, never your summary of it, which can only hold less, plus a line or two of context somebody will need to read it weeks later. scope names the project it belongs to; leave it out when creating a principle that applies everywhere (when patching, omission keeps the existing scope). feedback names who gave the correction, when the words are one. Pass id to patch an existing memory instead of creating one: anything left out is unchanged, and replacing the words requires was, the string at $was.doc.body that memory_recall returns beside them, so a memory another writer changed since you read it is refused whole rather than overwritten. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed. Creating a memory requires nonempty said; omit id to create one.",
       "input": {
         "said": {
           "type": "string",
@@ -77,11 +77,11 @@
         "scope": {
           "type": "string",
           "ref": "project",
-          "description": "the project the memory belongs to; leave it out for one that applies everywhere"
+          "description": "project id or name; omit on creation for a memory that applies everywhere, or on a patch to keep the current scope"
         },
         "feedback": {
           "type": "string",
-          "description": "who gave the correction these words are: a person, or empty when nobody knows. Either way the memory is marked as feedback"
+          "description": "the correcting person’s id or name, or an empty string if unknown; either marks the memory as feedback"
         },
         "about": {
           "type": "string",
@@ -90,11 +90,11 @@
         "id": {
           "type": "string",
           "ref": "memory",
-          "description": "an existing memory to patch instead of creating one"
+          "description": "existing memory’s id or registered name to patch; omit to create a memory"
         },
         "was": {
           "type": "string",
-          "description": "the token memory_recall returned beside the words you are replacing"
+          "description": "the string at $was.doc.body on the memory returned by memory_recall; required when replacing existing words"
         }
       },
       "options": {
@@ -112,16 +112,16 @@
       "noun": "memory",
       "verb": "recall",
       "title": "Recall memories",
-      "description": "Return the memories closest to what you are doing. said is matched against their text as a phrase, so pass the words you expect the memory to contain rather than a sentence of your own. near names an entity and ranks by meaning instead, where this server keeps vectors; that is the ranking that answers a sentence. With neither, the newest are returned. Each memory is returned whole, since half of what somebody said is worse than none of it, and carries the $was token memory_save requires before replacing it.",
+      "description": "Find saved memories containing all the words in said, not necessarily as an exact phrase. Pass words you expect the memory to contain, not a paraphrase. near is an entity id or name used to rank results by meaning when the server has a vector index for similarity search; it does not remove the said filter. Without near, results are newest first unless ids selects particular memories. With neither said nor near, returns the newest memories. Results are bundles (JSON objects with entity ids and component fields), including the full saved words and context, never snippets. Each carries $was.doc.body, the string to pass as memory_save’s was when replacing those words. Optional ids, scope and feedback narrow the results; limit defaults to 8.",
       "input": {
         "said": {
           "type": "string",
-          "description": "the words you expect the memory to contain, matched as a phrase"
+          "description": "words the memory must contain, matched as text terms rather than an exact phrase"
         },
         "near": {
           "type": "string",
           "ref": "entity",
-          "description": "an entity to rank by meaning against, where this server keeps vectors"
+          "description": "entity id or name whose meaning ranks the results, when this server has a vector index; any said filter still applies"
         },
         "ids": {
           "type": "array",
@@ -133,7 +133,7 @@
         "scope": {
           "type": "string",
           "ref": "project",
-          "description": "only memories filed under this project"
+          "description": "project id or registered name; return only memories filed under it"
         },
         "feedback": {
           "type": "boolean",

@@ -152,7 +152,7 @@
       "noun": "task",
       "verb": "new",
       "title": "Create a task",
-      "description": "Create a task: an entity with task{} and doc{title, body} components. It is open because it has neither a completed nor a cancelled mark. Pass a project, priority, assignee or domain and it gets a filed{} component too.",
+      "description": "Create a task: a stored record with task{} and doc{title, body} field groups. It is open because it has neither a completed nor a cancelled mark. Pass a project, priority, assignee or domain and it gets a filed{} group holding those filing fields too. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "title": {
           "type": "string",
@@ -165,7 +165,7 @@
         "project": {
           "type": "string",
           "ref": "project",
-          "description": "the project to file it under"
+          "description": "the project to file it under; pass its id or registered name"
         },
         "priority": {
           "type": "number",
@@ -174,7 +174,7 @@
         "assignee": {
           "type": "string",
           "ref": "entity",
-          "description": "whose queue it goes in"
+          "description": "id or registered name of the person or agent whose queue it goes in"
         },
         "domain": {
           "type": "string",
@@ -200,7 +200,7 @@
       "noun": "task",
       "verb": "list",
       "title": "List tasks",
-      "description": "List the tasks a query selects, as whole bundles. `.task` is always part of the query and yours is joined onto it; with no query, `.task.status=open` is used. The syntax is the query grammar: `.status=done`, `.filed.project=P-19`, `.priority<3`, or a bare word to match text.",
+      "description": "List the tasks a query selects, as bundles: JSON objects with entity ids and component fields. `.task` is always part of the query and yours is joined onto it; with no query, `.task.status=open` is used. Use filters of the form .component.column=value joined with &: `.task.status=done`, `.filed.project=P-19`, `.priority<3`, or a bare word to match text.",
       "input": {
         "query": {
           "type": "string",
@@ -226,12 +226,12 @@
       "noun": "task",
       "verb": "update",
       "title": "Update a task",
-      "description": "Change a task’s status, title, body or filing. `status` is not a stored column: done adds the completed mark and removes the cancelled one, cancelled does the reverse, and open removes both. Anything left out is unchanged.",
+      "description": "Change a task’s status, title, body or filing. `status` is not a stored field: done adds the completed mark and removes the cancelled one, cancelled does the reverse, and open removes both. Anything left out is unchanged. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "task": {
           "type": "string",
           "ref": "task",
-          "description": "the task to change"
+          "description": "the task to change; pass its id or registered name"
         },
         "status": {
           "type": "string",
@@ -253,7 +253,7 @@
         "project": {
           "type": "string",
           "ref": "project",
-          "description": "the project to file it under"
+          "description": "the project to file it under; pass its id or registered name"
         },
         "priority": {
           "type": "number",
@@ -262,7 +262,7 @@
         "assignee": {
           "type": "string",
           "ref": "entity",
-          "description": "whose queue it goes in"
+          "description": "id or registered name of the person or agent whose queue it goes in"
         },
         "domain": {
           "type": "string",

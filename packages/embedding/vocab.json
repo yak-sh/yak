@@ -9,7 +9,7 @@
       "noun": "vector",
       "verb": "check",
       "title": "Check the vector index",
-      "description": "Report whether the vector index is being rebuilt. A dirty flag older than the sweep’s own interval means no process is rebuilding the index, so every similarity search answers from the last good build. Nothing else reports this: writes still succeed and searches still return results.",
+      "description": "Check the vector index used to rank entities by semantic similarity. Reports missing embedding configuration or a missing vector table. Reports a stale populated index when its dirty flag (needs rebuilding) remains set and the newest vector is older than the server’s stale threshold, 30 minutes by default. This can reveal a stopped rebuild process even though writes succeed and searches still return results from the last good build. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
       "input": {},
       "readOnly": true
     }

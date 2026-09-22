@@ -151,12 +151,12 @@
       "noun": "inbox",
       "verb": "list",
       "title": "List the inbox",
-      "description": "List every mail message addressed to one reader and not yet archived, newest first: routed to them, written to them, or delivered to an email address they have. `●` marks unread, `·` read, `×` archived. Archiving is the only thing that removes a message from the list, so an empty inbox is one the reader emptied.",
+      "description": "List mail messages addressed to one reader and not yet archived, newest first: routed to them, written to them, or delivered to an email address they have. `●` marks unread, `·` read, `×` archived. Archiving is the only thing that removes a message from the list, so an empty inbox is one the reader emptied. Returns the message records as bundles (JSON objects with entity ids and component fields), up to limit (50 by default). Omit who for the caller; all: true includes archived messages.",
       "input": {
         "who": {
           "type": "string",
           "ref": "entity",
-          "description": "whose inbox to read (default: the caller)"
+          "description": "whose inbox to read (default: the caller); pass its id or registered name"
         },
         "all": {
           "type": "boolean",
@@ -182,12 +182,12 @@
       "noun": "inbox",
       "verb": "archive",
       "title": "Archive an inbox item",
-      "description": "Remove one item from the inbox. Nothing is deleted and no history is lost: `inbox list --all` still shows it, and a later message on the same thread arrives as its own item.",
+      "description": "Remove one item from the inbox. Nothing is deleted and no history is lost: `inbox_list(all: true)` (CLI: `inbox list --all`) still shows it, and a later message on the same thread arrives as its own item. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "item": {
           "type": "string",
           "ref": "entity",
-          "description": "the item to archive; any entity an inbox can hold"
+          "description": "the item to archive; any entity an inbox can hold; pass its id or registered name"
         }
       },
       "required": [
@@ -205,12 +205,12 @@
       "noun": "mail",
       "verb": "show",
       "title": "Read a mail message",
-      "description": "Return one mail message in full: its headers, its body, and the rest of its thread with this message marked. Reading marks the message opened, which is why this tool writes where graph_show only reads.",
+      "description": "Return one mail message in full: its headers, its body, and one-line summaries of the rest of its thread, with this message marked. The text is returned in content.body alongside the opened mark. Reading marks the message opened, which is why this tool writes where graph_show only reads.",
       "input": {
         "letter": {
           "type": "string",
           "ref": "mail",
-          "description": "the message to read"
+          "description": "the message to read; pass its id or registered name"
         }
       },
       "required": [
@@ -228,12 +228,12 @@
       "noun": "mail",
       "verb": "reply",
       "title": "Reply to a mail message",
-      "description": "Write a reply threaded on one message and request that it be sent. It is addressed to the other side of the original (the sender of a received message, or the recipient of one you sent) from the address the original used, with the subject prefixed `Re:`. Replying to a received message archives it: a thread you have answered is not waiting on you. The configured sender delivers it; a graph with no sender configured records the reply and never sends it.",
+      "description": "Write a reply threaded on one message and request that it be sent. It is addressed to the other side of the original (the sender of a received message, or the recipient of one you sent) from the address the original used, with the subject prefixed `Re:`. Replying to a received message archives it: a thread you have answered is not waiting on you. The configured sender delivers it; a graph with no sender configured records the reply and never sends it. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed. Confirm the recipient and message before requesting delivery; a sent email cannot be recalled.",
       "input": {
         "letter": {
           "type": "string",
           "ref": "mail",
-          "description": "the message being replied to"
+          "description": "the message being replied to; pass its id or registered name"
         },
         "body": {
           "type": "string",
@@ -260,7 +260,7 @@
       "noun": "mail",
       "verb": "send",
       "title": "Send a mail message",
-      "description": "Create a mail message and request that it be sent. `to` is an email address or the id of an entity in this graph; an address nobody in the graph has becomes a new `email` entity, so the address book grows as mail is sent. `from` defaults to the caller’s own email address. The configured sender delivers it and writes `delivered` or `bounced` onto the message.",
+      "description": "Create a mail message and request that it be sent. `to` is an email address or the id of an entity in this graph; an address nobody in the graph has becomes a new `email` entity, so the address book grows as mail is sent. `from` defaults to the caller’s own email address. Without a configured sender, the message is recorded but not sent. A configured sender delivers it asynchronously and writes `delivered` or `bounced` onto the message. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed. Confirm the recipient and message before requesting delivery; a sent email cannot be recalled. The initial result is not a delivery receipt; read the message again to check its outcome.",
       "input": {
         "to": {
           "type": "string",
@@ -281,7 +281,7 @@
         "about": {
           "type": "string",
           "ref": "entity",
-          "description": "the entity this message is about, so the correspondence is attached to it"
+          "description": "the entity this message is about, so the correspondence is attached to it; pass its id or registered name"
         }
       },
       "required": [
@@ -305,7 +305,7 @@
       "noun": "mail",
       "verb": "check",
       "title": "Check the mail",
-      "description": "Check that every received mail message has a sender. A message with a Message-ID but no `from` can never be answered, since a reply has no address to go to.",
+      "description": "Check that every received mail message has a sender. Also reports incomplete configuration for a sender this server has configured. A message with a Message-ID but no `from` can never be answered, since a reply has no address to go to. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
       "input": {},
       "readOnly": true
     }

@@ -27,7 +27,7 @@
       "noun": "design",
       "verb": "new",
       "title": "Propose a design",
-      "description": "Write a proposed change down as an entity with design{}, doc{title, body} and proposed{} components. Who proposed it and when are stamped from the caller, never passed as arguments.",
+      "description": "Write a proposed change down as a stored record with named field groups: design{}, doc{title, body} and proposed{}. Who proposed it and when are stamped from the caller, never passed as arguments. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "title": {
           "type": "string",
@@ -40,7 +40,7 @@
         "project": {
           "type": "string",
           "ref": "project",
-          "description": "the project to file it under"
+          "description": "the project to file it under; pass its id or registered name"
         }
       },
       "required": [
@@ -62,12 +62,12 @@
       "noun": "design",
       "verb": "decide",
       "title": "Decide a design",
-      "description": "Record the decision on a proposed design: approved or declined. The decider is the caller, stamped from the caller’s identity, so a decision an agent makes is recorded as the agent’s, and as an owner’s only when the owner is calling.",
+      "description": "Record the decision on a proposed design: approved or declined. The decider is the caller, stamped from the caller’s identity, so a decision an agent makes is recorded as the agent’s, and as an owner’s only when the owner is calling. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "design": {
           "type": "string",
           "ref": "design",
-          "description": "the design to decide"
+          "description": "id or registered name of the design proposal to decide"
         },
         "verdict": {
           "type": "string",
@@ -76,7 +76,7 @@
             "declined"
           ],
           "default": "approved",
-          "description": "the decision: approved or declined"
+          "description": "decision to record: approved (default) or declined"
         }
       },
       "required": [

@@ -136,7 +136,7 @@
       "noun": "board",
       "verb": "check",
       "title": "Check board queries",
-      "description": "Report saved board queries that no longer parse against the vocabulary. A board is its query, so one written against components the vocabulary no longer declares matches nothing and reports no error.",
+      "description": "Check saved board queries (filters defining which records a board displays) against the store’s vocabulary, its schema of components and fields. A board is its query, so a query naming removed components or invalid fields can leave work missing from the board; this check reports why it no longer resolves. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
       "input": {},
       "readOnly": true
     },
@@ -145,7 +145,7 @@
       "noun": "project",
       "verb": "check",
       "title": "Check project coverage",
-      "description": "Report governed entities no project reaches: neither filed under a project nor linked to one through a containment edge. Work that no project holds is work nothing will ever report as dropped.",
+      "description": "Report records that should belong to a project but do not. A record is checked if it has a component marked governed: true in the schema, such as task or design. It is covered if filed directly under a project or reached through containment relationships from a project or a filed record. The server chooses which relationships mean containment; the default is contains. Uncovered work can be missed by project-based reports. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
       "input": {},
       "readOnly": true
     }

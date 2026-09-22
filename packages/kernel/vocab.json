@@ -330,12 +330,12 @@
       "noun": "comment",
       "verb": "new",
       "title": "Comment on an entity",
-      "description": "Create a comment on an entity: a new entity with doc{body} and comment{target} components, attributed to the caller. The target can be any entity: a task, a design, a session, another comment.",
+      "description": "Create a comment on an entity: a new stored record with doc{body} holding the text and comment{target} linking to its subject, attributed to the caller. The target can be any entity: a task, a design, a session, another comment. Returns the applied changes as bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "target": {
           "type": "string",
           "ref": "entity",
-          "description": "the entity the comment is about"
+          "description": "the entity the comment is about; pass its id or registered name"
         },
         "body": {
           "type": "string",

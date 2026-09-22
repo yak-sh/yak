@@ -113,7 +113,7 @@
       "noun": "effect",
       "verb": "check",
       "title": "Check effect runs",
-      "description": "Check that every effect run reached a reported end. A run that used up its attempts is marked failed and reported for a person to look at; a run still pending long after it was due means no process is dispatching effects.",
+      "description": "Check recorded background actions (effects), such as sending mail after a transaction commits. Reports runs marked failed after exhausting their attempts, and runs still pending past their due time by more than the server’s threshold (10 minutes by default). An overdue run can indicate that no process is dispatching actions, even while graph writes succeed. Does not retry or mark runs failed itself; with no effect records supported by the schema, reports no findings. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
       "input": {},
       "readOnly": true
     }
