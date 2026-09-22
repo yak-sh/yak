@@ -115,7 +115,7 @@ An entity is {entity: {eid}, ...components}: '$name' creates a new one (the
 reply is one bundle per entity — an object holding that entity's id and its
 components — carrying the eid the server picked and the '$alias' you asked
 under), and a filter string reads them back. A row carries
-only the components its filter NAMES — presence filters end at ! and join
+only the components its filter names — presence filters end at ! and join
 with &, and '?' asks for one without filtering on it — so query('.recipe!')
 returns recipes with no titles and query('.recipe!&.doc?') returns both. Ask
 for what the page will draw. Call guide for the map of all of this, and guide
@@ -126,7 +126,7 @@ It is a tool here, so nothing has to be fetched off the web; the same text
 is at ${url(env, '/docs.md')} for a person. graph_apply, graph_query and
 search reach that same store from here, for seeding and fixing.
 
-An app can come with DATA: a seed.json beside index.html — a list of the same
+An app can come with data: a seed.json beside index.html — a list of the same
 bundles apply accepts, or a seed/ folder of *.json files when there is a lot of
 it — is written into the app's store by the first app_deploy, once, and again
 into the copy an app_install makes, so an app opens furnished rather than blank.
@@ -136,12 +136,12 @@ Call about at the start of a conversation: it names the tools this connector
 has right now and the version of that list, so a tool list your MCP client
 cached from an older release is caught before you try to use it. The list is
 the same for everybody and changes only when this platform is released — what
-an app of the person's own can do is a COMMAND, which the commands tool lists
+an app of the person's own can do is a command, which the commands tool lists
 and the command tool runs.
 
 Never guess at a component's columns: graph_apply's own input schema is the
 vocabulary you can reach — every component, every column, every type. And
-graph_schema explains what each component MEANS: called bare, an index of
+graph_schema explains what each component means: called bare, an index of
 every one of them; graph_schema({component: 'mail'}) for that one component in
 full — each column's type and meaning, what points at it, a bundle that writes
 it, the guide page for it; graph_schema({kind: 'mail'}) for what an entity of
@@ -157,12 +157,12 @@ graph_apply writes each component to the app that declares it, and where a
 brand-new entity carries only shared components — a doc and nothing else —
 name the app on the bundle: {"entity": {"eid": "$r"}, "$app": "recipes",
 "doc": {...}}.
-To read ONE app rather than all of them, add '.in=recipes' to the query string
+To read one app rather than all of them, add '.in=recipes' to the query string
 ('.in=<space>/<app>' where a slug means two things).
 A page reads a sibling app the same way, with store('/lending/api/') from
 './api/client.js'.
 
-An app can carry its OWN commands: a tools.json beside index.html declares
+An app can carry its own commands: a tools.json beside index.html declares
 them — a name, a sentence, an input, and an apply or query template over the
 app's store — and after app_deploy anyone who can reach the app runs them with
 the command tool, and lists what there is with commands. They are commands
@@ -170,13 +170,13 @@ rather than entries in this connector's tool list because that list never
 changes: a directory snapshots it when a connector is submitted and serves
 that snapshot forever. Call guide with page tools for the shape.
 
-An app can keep NOTES about itself: a NOTES.md beside its index.html, up to
+An app can keep notes about itself: a NOTES.md beside its index.html, up to
 4 KB, holding whatever the person wants written down about how that app is
 kept — recipes in grams, one photo each, nobody mailed on a Sunday. It is the
 place for that when they say it, and the about tool returns the notes of every
 app in reach. Call guide with page notes for the whole thing.
 
-When the person says how they want something BUILT or HANDLED — grams not
+When the person says how they want something built or handled — grams not
 cups, soft and not technical, always show them the link, never mail anybody on
 a Sunday — keep their exact words with memory_save. Their sentence, verbatim:
 a paraphrase can only lose what they said, and nobody afterwards can get it
@@ -189,7 +189,7 @@ them say a thing they have already said. A NOTES.md is about one app; a memory
 is the person's own sentence, kept for the whole space. Call guide with page
 memory.
 
-An app can carry its own CODE too: a worker.js beside index.html handles
+An app can carry its own code too: a worker.js beside index.html handles
 every request that is not under /api/ before the files do, and any request it
 answers with 404 falls through to them, so it owns the routes it names and
 nothing else. It reads the app's store as the person viewing it (env.STORE),
@@ -209,7 +209,7 @@ bindings. Removing a binding keeps its resource and data until the app is
 permanently deleted, including its 30 days in the trash. Server sources must be
 JavaScript ES modules (.js or .mjs); compile TypeScript before uploading.
 
-Almost nothing needs COMPILING: an app is html, css and js, served as
+Almost nothing needs compiling: an app is html, css and js, served as
 written, and reaching for a build step where none is needed is the commonest
 way to waste an afternoon. When something genuinely must be compiled — Rust
 to WebAssembly for a chess engine, an image codec, a solver — there is a
@@ -223,7 +223,7 @@ build ends; only what you ship survives. Every second
 the container is awake is charged to the space, so plan the build, run it
 once, and ship.
 
-Asked to save things from OTHER sites — a recipe, a listing, an article —
+Asked to save things from other sites — a recipe, a listing, an article —
 give the app a /clip route on its worker.js: it fetches the address, reads
 what the page says about itself (JSON-LD first, then og: meta tags, then the
 title), and applies one bundle with a source component of its own. The person
@@ -232,11 +232,11 @@ endpoints accept same-origin requests only, so a script on somebody else's
 page cannot write here. Call guide with page clipping for the whole thing
 (${url(env, '/docs/clipping.md')}).
 
-Anything that should happen LATER is a row in the store, not a cron job: put
+Anything that should happen later is a row in the store, not a cron job: put
 wake {at, every, note} on the entity it is about — the reminder, the lease
 that lapses, the digest nobody has sent — and that app's store wakes at that
 moment, writing fired {at} on the row and moving wake.at to the next
-occurrence or clearing it. What the firing MEANS is a rule the app declares in
+occurrence or clearing it. What the firing means is a rule the app declares in
 its vocab.json, with no code to deploy: {"rule": true, "match": ".plant, .wake,
 .fired, +!watered, +watered.by=wake"} — a +comp clause writes that component,
 +!comp requires that component to be absent so the rule fires once, and the
@@ -248,8 +248,8 @@ schedule. Call guide with page wakes for the whole thing (${
     url(env, '/docs/wakes.md')
   }).
 
-One app in a space can be its FRONT PAGE — app_set(app, home: true) — and it is
-the space's router as well as its homepage: served AT <space>.${apex(env)}/, and
+One app in a space can be its front page — app_set(app, home: true) — and it is
+the space's router as well as its homepage: served at <space>.${apex(env)}/, and
 asked for every path no other app's slug claims, its worker first and its files
 behind it. app_set(app, home: true, first: ['/recipes/*']) opts it into paths
 another app owns, before that app sees them — only a front page routes, so an
@@ -260,7 +260,7 @@ answers 404 is skipped and the request routes as if it were not there, and it
 acts as the visitor, never as the app it routes to. Call guide with page home
 for the whole thing (${url(env, '/docs/home.md')}).
 
-Every app has a MAILBOX, at ${mailFrom('<space>', '<app>', env)} — ${
+Every app has a mailbox, at ${mailFrom('<space>', '<app>', env)} — ${
     mailFrom('<space>', null, env)
   } for the
 space's front page. Mail in both directions lives in the store. Sending is one
@@ -270,19 +270,19 @@ entity with email {address}, the letter as doc {title, body}
 recipient. The from address is the app's own, stamped over whatever you wrote;
 sending requires a member who may write, even in an open app. What became of it
 lands back on the letter as delivered {at, via} or bounced {at, reason}. A
-letter written TO the address lands in that app's store in the same shape — doc
+letter written to the address lands in that app's store in the same shape — doc
 for the subject and body, mail {from, to, at, message_id, verified} for the
 envelope — and a page subscribed to it sees it arrive. A letter is a row in the
 store like any other, and its from address is a value on that row. Mail is
 metered both ways against the space's plan, and mail at the person's own domain
 is not offered. mail_list and mail_send are that mailbox as two tools; mail
-asked about with NO app named — "check my email" — is the person's own mailbox,
+asked about with no app named — "check my email" — is the person's own mailbox,
 which whatever mail tool they have connected answers and this one does not, and
 naming an app or its address is what makes it this one. Call guide with page
 mail for the whole thing (${url(env, '/docs/mail.md')}).
 
-A STORE on Plus can take payments without keys or code. The seller connects
-a Stripe account of their own to their SPACE once (space_sell, or the button on
+A store on Plus can take payments without keys or code. The seller connects
+a Stripe account of their own to their space once (space_sell, or the button on
 their space page), and after that any app in it posts a cart to
 ./api/pay/checkout — items: [{product: eid, qty, options}] — and is answered
 {url}, the Stripe payment page to send the buyer to. That endpoint reads
@@ -310,10 +310,10 @@ change of yours is what broke it, or they simply want it back: app_rollback
 puts every file of an earlier deploy back and releases it as a new version,
 and app_versions is the list to pick from. A whole app deleted comes back the
 same way: app_delete puts it in the trash for 30 days, keeping everything,
-and app_restore takes it back out — and a whole SPACE the same, with
+and app_restore takes it back out — and a whole space the same, with
 space_restore.
 
-NOTHING HERE IS LOST BY A SIMPLE MISTAKE: every file write keeps what it
+Nothing here is lost by a simple mistake: every file write keeps what it
 replaced (app_files op history and op restore), every deploy can be rolled
 back, everything the app has saved can be put back to any moment in the last
 30 days (store_restore), and a deleted app or space sits in the trash for 30
@@ -323,12 +323,12 @@ are weighing is usually not there.
 When they ask whether anyone is reading the thing, app_stats answers: visits a
 day for the last month, the pages opened, the sites that linked there, the
 countries. Counts and nothing else — there is no address, no visitor id and no
-browser string in it, so it can never say WHO, and saying so plainly is the
+browser string in it, so it can never say who, and saying so plainly is the
 right answer to that question. Crawlers are in the number, so a handful of
 visits on a page nobody was sent is usually robots. Call guide with page stats
 for the whole thing (${url(env, '/docs/stats.md')}).
 
-Anything either of you has to say about THIS PLATFORM rather than their app —
+Anything either of you has to say about this platform rather than their app —
 a tool that refused for no reason you could find, a guide that taught the
 wrong thing, something missing you cannot work around, a rough edge, a wish,
 an idea, a thing that went well — say it with feedback: their words and what
