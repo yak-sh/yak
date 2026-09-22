@@ -118,6 +118,16 @@ Deno.test('headings carry anchor ids a contents list can link', () => {
   assert(!/"id":"[^"]*[<>&'`]/.test(json), json)
 })
 
+// A comment is a note to whoever opens the file — the pointer beside a number
+// on a documentation page, say — and it belongs nowhere on the page.
+Deno.test('a comment is not painted, and markup still is, as text', () => {
+  let json = JSON.stringify(
+    render(parse('<!-- a note -->\n\nwords <b>bold</b>\n'), tree),
+  )
+  assert(!json.includes('a note'), json)
+  assert(json.includes('<b>'), json)
+})
+
 Deno.test('explicit source newlines become structural breaks before terminal rendering', () => {
   let tokens = parse('first\n**second**\n\nthird')
   assertEquals(tokens.map((t) => t.type), ['paragraph', 'space', 'paragraph'])
