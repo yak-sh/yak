@@ -161,6 +161,7 @@ export let SHIM = shim()
 // The visitor an app's worker acts as, for one minute, on one store.
 export let granting = (secret: string, store: string, who: Who) =>
   seal(
+    'visit',
     {
       store,
       person: who.person,
@@ -206,7 +207,7 @@ export let granted = async (
 ): Promise<Who | null> => {
   let sealed = req.headers.get(GRANT)
   if (!sealed || !secret) return null
-  let g = await opened<Grant>(sealed, secret)
+  let g = await opened<Grant>('visit', sealed, secret)
   if (!g || g.store != store || !(g.exp * 1000 > Date.now())) return null
   return { person: g.person ?? null, role: g.role ?? null }
 }

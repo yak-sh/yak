@@ -22,7 +22,12 @@ let kv = () => {
 
 let tokenFor = (
   hand: { person: string; host: string; jti?: string; exp?: number },
-) => seal({ jti: crypto.randomUUID(), exp: sec() + 60, ...hand }, SECRET)
+) =>
+  seal(
+    'handoff',
+    { jti: crypto.randomUUID(), exp: sec() + 60, ...hand },
+    SECRET,
+  )
 
 // A directory that vouches for exactly one customer hostname.
 let dir = {
@@ -49,7 +54,7 @@ Deno.test('opener: expired, tampered, wrong-host, wrong-secret refused', async (
     null,
   )
   // tampered — signed under another secret
-  let bad = await seal({
+  let bad = await seal('handoff', {
     person: 'u-1',
     host: 'good.com',
     jti: 'j',
@@ -101,6 +106,7 @@ Deno.test('handoffTo: mints only for a directory-verified custom host', async ()
   let u = new URL(to!)
   assertEquals(u.searchParams.get('next'), '/recipes?a=1')
   let hand = await opened<{ person: string; host: string }>(
+    'handoff',
     u.searchParams.get('t')!,
     SECRET,
   )

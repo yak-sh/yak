@@ -81,14 +81,18 @@ export let LIFE = 7 * 24 * 60 * 60_000
 export type Ticket = { app: string; list: boolean; exp: number }
 
 export let ticket = (app: App, list: boolean, secret: string) =>
-  seal({ app: app.eid, list, exp: Date.now() + LIFE } satisfies Ticket, secret)
+  seal(
+    'review',
+    { app: app.eid, list, exp: Date.now() + LIFE } satisfies Ticket,
+    secret,
+  )
 
 export let ticketed = async (
   token: string,
   secret: string,
   now = Date.now(),
 ): Promise<Ticket | null> => {
-  let t = await opened<Ticket>(token, secret)
+  let t = await opened<Ticket>('review', token, secret)
   return t && typeof t.app == 'string' && typeof t.exp == 'number' &&
       t.exp > now
     ? { app: t.app, list: !!t.list, exp: t.exp }

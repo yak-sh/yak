@@ -14,7 +14,9 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { COOKIE, sign, verify } from '../../src/token.ts'
-import { SESSION, slid } from './session.ts'
+import { granting } from './dispatch.ts'
+import { GRANT, tokenOf } from './grants.ts'
+import { SESSION, slid, whoIs } from './session.ts'
 
 let SECRET = 'a-probe-secret'
 let ENV = { SESSION_SECRET: SECRET }
@@ -77,6 +79,30 @@ Deno.test('a renewal never speaks over an answer that sets the cookie itself', a
   assertEquals(r.headers.get('set-cookie'), own)
   let socket = new Response(null, { status: 101 })
   assertEquals(await slid(asked(await aged(46)), ENV, socket), socket)
+})
+
+Deno.test('a token minted for anything else is no session, and renews into none', async () => {
+  // The two a stranger can hold (T-37873): the grant an app's worker is handed
+  // for every signed-in visitor, and a CLI grant with its prefix taken off.
+  // Each names a person and an expiry, and neither is a cookie.
+  let exp = Math.floor(Date.now() / 1000) + DAY
+  let visit = await granting(SECRET, 'eve/trap', {
+    person: 'p-1',
+    role: 'owner',
+  })
+  let cli = (await tokenOf(
+    { id: 'a1', person: 'p-1', space: null, exp },
+    SECRET,
+  )).slice(GRANT.length)
+  for (let t of [visit, cli]) {
+    let req = asked(`${COOKIE}=${t}`)
+    assertEquals(
+      await whoIs(req, SECRET, () => Promise.resolve('owner')),
+      { person: null, role: null },
+    )
+    let r = await slid(req, ENV, new Response('ok'))
+    assertEquals(r.headers.get('set-cookie'), null)
+  }
 })
 
 Deno.test('a cookie a stranger wrote, and no cookie at all, renew nothing', async () => {

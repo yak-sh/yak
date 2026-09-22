@@ -1,7 +1,7 @@
 // The session token's contract: what verifies is exactly what this secret
 // signed, unexpired, and nothing else.
 import { assertEquals, assertMatch } from '@std/assert'
-import { cookie, cookieValue, sign, verify } from './token.ts'
+import { cookie, cookieValue, opened, seal, sign, verify } from './token.ts'
 
 let secret = 'a-test-secret'
 let claims = { person: 'u-1', space: null, exp: 2_000_000_000 }
@@ -27,6 +27,19 @@ Deno.test('a forged, edited, foreign, or expired token is null', async () => {
   assertEquals(await verify(t, secret, claims.exp * 1000), null)
   let dead = await sign({ ...claims, exp: 1 }, secret)
   assertEquals(await verify(dead, secret), null)
+})
+
+Deno.test('a value sealed for one use opens as no other, a session least', async () => {
+  // A grant carries a person and an expiry, which is all a session's claims
+  // are: sealed for another use, it still fails the session's mac.
+  for (let use of ['visit', 'grant', 'link', 'handoff', 'erase'] as const) {
+    let t = await seal(use, claims, secret)
+    assertEquals(await verify(t, secret), null)
+    assertEquals(await opened(use, t, secret), claims)
+  }
+  let session = await sign(claims, secret)
+  assertEquals(await opened('grant', session, secret), null)
+  assertEquals(await opened('session', session, secret), claims)
 })
 
 Deno.test('the cookie carries the token platform-wide and reads back', () => {

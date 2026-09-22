@@ -143,7 +143,7 @@ Deno.test('nothing but a well-formed pass under this secret opens', async () => 
       { once: { email: ME } },
       { standing: { id: 'a', person: 'p1' } },
     ]
-  ) assertEquals(await passOf(await seal(junk, SECRET), SECRET), null)
+  ) assertEquals(await passOf(await seal('link', junk, SECRET), SECRET), null)
   // And a store row is not a link: what it keeps is a mac, never the digits.
   assert((await mac(ME, '123456', SECRET)) != '123456')
   assertEquals(links(undefined), null)

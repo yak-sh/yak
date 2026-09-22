@@ -177,6 +177,7 @@ Deno.test('a worker acts as the visitor, and only on its own store', async () =>
   assertEquals(
     await back(
       await seal(
+        'visit',
         { store: 'jeff/recipes', person: 'p1', role: 'owner', exp: 1 },
         SECRET,
       ),

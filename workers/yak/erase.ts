@@ -93,8 +93,8 @@ import { refuse } from './tool.ts'
 // when it was minted, so nothing has to be swept when it dies.
 export let LIFE = 60 * 60_000
 
-// What the letter carries: the space, the person it was mailed to, the second
-// it dies, and whether the button under it trashes or erases. The kernel signs
+// What the letter carries: the space, the person it was mailed to, the unix
+// second it dies, and whether the button under it trashes or erases. The kernel signs
 // it; nobody else can mint one — so `forever` cannot be talked onto a link,
 // which is the whole reason it rides in here rather than in the query string.
 export type Ticket = {
@@ -111,10 +111,11 @@ export let ticket = (
   forever = false,
 ) =>
   seal(
+    'erase',
     {
       space: space.eid,
       person,
-      exp: Date.now() + LIFE,
+      exp: Math.floor((Date.now() + LIFE) / 1000),
       ...(forever ? { forever: true } : {}),
     } satisfies Ticket,
     secret,
@@ -125,9 +126,9 @@ export let ticketed = async (
   secret: string,
   now = Date.now(),
 ): Promise<Ticket | null> => {
-  let t = await opened<Ticket>(token, secret)
+  let t = await opened<Ticket>('erase', token, secret)
   return t && typeof t.space == 'string' && typeof t.person == 'string' &&
-      typeof t.exp == 'number' && t.exp > now
+      typeof t.exp == 'number' && t.exp * 1000 > now
     ? { space: t.space, person: t.person, exp: t.exp, forever: !!t.forever }
     : null
 }

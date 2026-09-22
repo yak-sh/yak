@@ -247,7 +247,7 @@ Deno.test('an expired grant is nobody, and nobody reads a private app', async ()
   )
 
   // A minute ago, said in the grant's own shape (dispatch.ts `granting`).
-  let stale = await seal({
+  let stale = await seal('visit', {
     store: STORE,
     person: ADA,
     role: 'owner',

@@ -104,13 +104,13 @@ Deno.test('a forged, edited or foreign token is nobody', async () => {
   let b = book()
   let { grant, token } = await mint(SECRET, b, { person: 'p-1' })
   // Another secret's seal, carrying a grant this ledger really holds.
-  let forged = GRANT + await seal(grant, 'other')
+  let forged = GRANT + await seal('grant', grant, 'other')
   assertEquals(await held(forged, SECRET, b), null)
   // Sealed under ours, but naming a grant nothing was ever written for: the
   // row is the revocation, so a token without one is not a caller.
   let unwritten: Grant = { ...grant, id: 'deadbeefdead' }
   assertEquals(
-    await held(GRANT + await seal(unwritten, SECRET), SECRET, b),
+    await held(GRANT + await seal('grant', unwritten, SECRET), SECRET, b),
     null,
   )
   // An OAuth access token is the provider's to verify, never this door's.

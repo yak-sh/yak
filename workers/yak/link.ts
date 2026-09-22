@@ -82,7 +82,7 @@ export let linkTo = (t: string, at = PLATFORM) =>
 
 /** The one-click link for a code just minted, for the letter to carry. */
 export let onceLink = async (secret: string, once: Once, at = PLATFORM) =>
-  linkTo(await seal({ once } satisfies Pass, secret), at)
+  linkTo(await seal('link', { once } satisfies Pass, secret), at)
 
 /**
  * A standing link, and the row that lets it be taken back. `days` is refused
@@ -107,7 +107,10 @@ export let stand = async (
   await book.keep(standing, now)
   return {
     standing,
-    url: linkTo(await seal({ standing } satisfies Pass, secret), want.host),
+    url: linkTo(
+      await seal('link', { standing } satisfies Pass, secret),
+      want.host,
+    ),
   }
 }
 
@@ -122,7 +125,7 @@ export let passOf = async (
   t: string,
   secret: string,
 ): Promise<Pass | null> => {
-  let p = t ? await opened<Pass>(t, secret) : null
+  let p = t ? await opened<Pass>('link', t, secret) : null
   if (!p) return null
   let { once, standing } = p
   if (

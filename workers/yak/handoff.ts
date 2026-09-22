@@ -51,7 +51,7 @@ export let handoffTo = async (
     exp: Math.floor(now / 1000) + HANDOFF_LIFE,
   }
   let to = new URL(`https://${host}${HANDOFF}`)
-  to.searchParams.set('t', await seal(hand, secret))
+  to.searchParams.set('t', await seal('handoff', hand, secret))
   to.searchParams.set('next', safeNext(url.pathname + url.search))
   return to.href
 }
@@ -73,7 +73,7 @@ export let opener = async (
   spend: (jti: string) => Promise<boolean>,
   now = Date.now(),
 ): Promise<string | null> => {
-  let h = await opened<Hand>(t, secret)
+  let h = await opened<Hand>('handoff', t, secret)
   let sec = Math.floor(now / 1000)
   if (
     !h || typeof h.person != 'string' || typeof h.jti != 'string' ||

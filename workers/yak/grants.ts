@@ -141,7 +141,7 @@ export let ledger = (kv: unknown) => {
 // (sandbox.ts `worn`) instead of minting one per command. It is not a way to
 // recover a token somebody lost: nothing but this kernel can read the ledger.
 export let tokenOf = async (g: Grant, secret: string) =>
-  GRANT + await seal(g, secret)
+  GRANT + await seal('grant', g, secret)
 
 // A grant, and the token that carries it. The token is answered once and kept
 // nowhere: what the ledger holds is the grant, and the seal is what proves the
@@ -179,7 +179,7 @@ export let held = async (
   now = Date.now(),
 ): Promise<Grant | null> => {
   if (!token.startsWith(GRANT) || !book) return null
-  let g = await opened<Grant>(token.slice(GRANT.length), secret)
+  let g = await opened<Grant>('grant', token.slice(GRANT.length), secret)
   if (
     !g || typeof g.person != 'string' || typeof g.id != 'string' ||
     typeof g.exp != 'number' || g.exp * 1000 <= now
