@@ -92,11 +92,11 @@
       "noun": "persona",
       "verb": "read",
       "title": "Read a persona",
-      "description": "A persona as one markdown document: its own instruction text, then every document it includes in full, then one line naming each document it only mentions. This is the text an agent is given — where it goes (a file, a repo, a spawned agent’s system prompt) is the caller’s business.",
+      "description": "Return a persona as one markdown document: its own instruction text, then the full text of every document it includes, then one line naming each document it only references. This is the text an agent is given; where it goes (a file, a repository, a spawned agent’s system prompt) is up to the caller.",
       "input": {
         "persona": {
           "type": "string",
-          "description": "the persona’s eid, its id, or the name it is addressable by"
+          "description": "the persona’s eid, its id, or the name it is addressed by"
         }
       },
       "required": [

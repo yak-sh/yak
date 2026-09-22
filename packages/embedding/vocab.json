@@ -9,7 +9,7 @@
       "noun": "vector",
       "verb": "check",
       "title": "Check the vector index",
-      "description": "Reports whether the vector index is still being rebuilt. A dirty flag older than the sweep's own interval means nothing is rebuilding the index, so every similarity search is answering from the last good build — silently, since writes still succeed and searches still return results.",
+      "description": "Report whether the vector index is being rebuilt. A dirty flag older than the sweep’s own interval means no process is rebuilding the index, so every similarity search answers from the last good build. Nothing else reports this: writes still succeed and searches still return results.",
       "input": {},
       "readOnly": true
     }

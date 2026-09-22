@@ -150,21 +150,21 @@
       "tool": true,
       "noun": "inbox",
       "verb": "list",
-      "title": "What is waiting for me",
-      "description": "Every letter addressed to one reader and not yet archived, newest first — routed to them, written to them, or delivered to an address they have. `●` is unread, `·` read, `×` archived. Archiving is the only thing that takes a letter out, so an empty list is one they emptied.",
+      "title": "List the inbox",
+      "description": "List every mail message addressed to one reader and not yet archived, newest first: routed to them, written to them, or delivered to an email address they have. `●` marks unread, `·` read, `×` archived. Archiving is the only thing that removes a message from the list, so an empty inbox is one the reader emptied.",
       "input": {
         "who": {
           "type": "string",
           "ref": "entity",
-          "description": "whose inbox to read (default: whoever is asking)"
+          "description": "whose inbox to read (default: the caller)"
         },
         "all": {
           "type": "boolean",
-          "description": "the archived ones too — the way back to anything hidden"
+          "description": "include archived messages, which is how to find anything hidden"
         },
         "limit": {
           "type": "integer",
-          "description": "how many letters to return (default 50)"
+          "description": "return at most this many messages (default 50)"
         }
       },
       "options": {
@@ -181,13 +181,13 @@
       "tool": true,
       "noun": "inbox",
       "verb": "archive",
-      "title": "Hide it until it needs me again",
-      "description": "Take one item out of the inbox. Nothing is deleted and no history is lost — `inbox list --all` shows it again, and a later letter on the same thread arrives as its own item.",
+      "title": "Archive an inbox item",
+      "description": "Remove one item from the inbox. Nothing is deleted and no history is lost: `inbox list --all` still shows it, and a later message on the same thread arrives as its own item.",
       "input": {
         "item": {
           "type": "string",
           "ref": "entity",
-          "description": "the item to hide — any entity an inbox can carry"
+          "description": "the item to archive; any entity an inbox can hold"
         }
       },
       "required": [
@@ -204,13 +204,13 @@
       "tool": true,
       "noun": "mail",
       "verb": "show",
-      "title": "Read the letter",
-      "description": "One letter whole — its envelope, its words, and the rest of its thread with this one marked. Reading IS the mark: it stamps the letter opened, which is why this writes where `graph_show` only reads.",
+      "title": "Read a mail message",
+      "description": "Return one mail message in full: its headers, its body, and the rest of its thread with this message marked. Reading marks the message opened, which is why this tool writes where graph_show only reads.",
       "input": {
         "letter": {
           "type": "string",
           "ref": "mail",
-          "description": "the letter to read"
+          "description": "the message to read"
         }
       },
       "required": [
@@ -227,17 +227,17 @@
       "tool": true,
       "noun": "mail",
       "verb": "reply",
-      "title": "Answer it",
-      "description": "Write a reply threaded on one letter and request that it be sent. It is addressed to the FAR side — an arrival's author, or your own sent letter's recipient — from the address the original used, with the subject prefixed `Re:`. Answering an arrival archives it: a thread you have replied to is not one waiting on you. The configured sender carries it; a graph that names none records the letter and never sends it.",
+      "title": "Reply to a mail message",
+      "description": "Write a reply threaded on one message and request that it be sent. It is addressed to the other side of the original (the sender of a received message, or the recipient of one you sent) from the address the original used, with the subject prefixed `Re:`. Replying to a received message archives it: a thread you have answered is not waiting on you. The configured sender delivers it; a graph with no sender configured records the reply and never sends it.",
       "input": {
         "letter": {
           "type": "string",
           "ref": "mail",
-          "description": "the letter being answered"
+          "description": "the message being replied to"
         },
         "body": {
           "type": "string",
-          "description": "the words of the reply"
+          "description": "the text of the reply"
         }
       },
       "required": [
@@ -259,12 +259,12 @@
       "tool": true,
       "noun": "mail",
       "verb": "send",
-      "title": "Write a letter",
-      "description": "Create a letter and request that it be sent. `to` is an address, or the id of somebody in this graph; an address nobody here has becomes an `email` entity, so the address book grows by use. `from` defaults to the address whoever is asking has. The configured sender carries it and writes `delivered` or `bounced` back onto the letter.",
+      "title": "Send a mail message",
+      "description": "Create a mail message and request that it be sent. `to` is an email address or the id of an entity in this graph; an address nobody in the graph has becomes a new `email` entity, so the address book grows as mail is sent. `from` defaults to the caller’s own email address. The configured sender delivers it and writes `delivered` or `bounced` onto the message.",
       "input": {
         "to": {
           "type": "string",
-          "description": "an address, or the id of whoever it is for"
+          "description": "an email address, or the id of the entity it is for"
         },
         "subject": {
           "type": "string",
@@ -272,16 +272,16 @@
         },
         "body": {
           "type": "string",
-          "description": "the words"
+          "description": "the text of the message"
         },
         "from": {
           "type": "string",
-          "description": "the address it is from (default: the caller's own)"
+          "description": "the address it is sent from (default: the caller’s own)"
         },
         "about": {
           "type": "string",
           "ref": "entity",
-          "description": "the entity this letter is about, so the correspondence hangs off it"
+          "description": "the entity this message is about, so the correspondence is attached to it"
         }
       },
       "required": [
@@ -305,7 +305,7 @@
       "noun": "mail",
       "verb": "check",
       "title": "Check the mail",
-      "description": "Check that every letter that arrived carries a sender. A letter that has a Message-ID but no `from` is one nobody can ever answer — the reply has no address to go to.",
+      "description": "Check that every received mail message has a sender. A message with a Message-ID but no `from` can never be answered, since a reply has no address to go to.",
       "input": {},
       "readOnly": true
     }

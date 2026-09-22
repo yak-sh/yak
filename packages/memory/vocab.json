@@ -59,8 +59,8 @@
       "tool": true,
       "noun": "memory",
       "verb": "save",
-      "title": "Keep what was said",
-      "description": "Keep somebody's words as they said them. The sentence itself is the memory — never your summary of it, which can only ever hold less — plus the line or two of context somebody needs to read it six weeks from now. scope names the project it belongs to; leave it out for a principle everybody carries. feedback names who GAVE the correction, when the words are one. Pass id instead to patch a memory that already exists: anything you leave out is left unchanged, and replacing the words requires was — the token memory recall returns beside them — so a memory another writer changed since you read it is rejected as a whole rather than overwritten.",
+      "title": "Save a memory",
+      "description": "Save what somebody said, in their own words. The memory is the sentence itself, never your summary of it, which can only hold less, plus a line or two of context somebody will need to read it weeks later. scope names the project it belongs to; leave it out for a principle that applies everywhere. feedback names who gave the correction, when the words are one. Pass id to patch an existing memory instead of creating one: anything left out is unchanged, and replacing the words requires was, the token memory_recall returns beside them, so a memory another writer changed since you read it is refused whole rather than overwritten.",
       "input": {
         "said": {
           "type": "string",
@@ -72,29 +72,29 @@
         },
         "context": {
           "type": "string",
-          "description": "what was being talked about — two lines, never a restatement of what was said"
+          "description": "what was being discussed, in two lines; never a restatement of what was said"
         },
         "scope": {
           "type": "string",
           "ref": "project",
-          "description": "the project the words belong to; unsaid, they are everybody's"
+          "description": "the project the memory belongs to; leave it out for one that applies everywhere"
         },
         "feedback": {
           "type": "string",
-          "description": "who GAVE the correction these words are — a person, or empty where nobody knows whose they were. Either way the memory is marked as feedback"
+          "description": "who gave the correction these words are: a person, or empty when nobody knows. Either way the memory is marked as feedback"
         },
         "about": {
           "type": "string",
-          "description": "the app they were said about, by slug"
+          "description": "the app the words were said about, by slug"
         },
         "id": {
           "type": "string",
           "ref": "memory",
-          "description": "a memory to patch instead of creating one"
+          "description": "an existing memory to patch instead of creating one"
         },
         "was": {
           "type": "string",
-          "description": "the token memory recall printed for the words you are replacing"
+          "description": "the token memory_recall returned beside the words you are replacing"
         }
       },
       "options": {
@@ -111,17 +111,17 @@
       "tool": true,
       "noun": "memory",
       "verb": "recall",
-      "title": "What was said about this",
-      "description": "The memories nearest what you are doing. said is matched against their text as a PHRASE, so use the words you expect the memory to contain rather than a sentence of your own; near names an entity and ranks by MEANING instead, where this server keeps vectors, which is the ranking that answers a sentence; with neither, the newest are returned. Each is returned WHOLE — half of what somebody said is worse than none of it — carrying the $was token memory save requires before it replaces any of them.",
+      "title": "Recall memories",
+      "description": "Return the memories closest to what you are doing. said is matched against their text as a phrase, so pass the words you expect the memory to contain rather than a sentence of your own. near names an entity and ranks by meaning instead, where this server keeps vectors; that is the ranking that answers a sentence. With neither, the newest are returned. Each memory is returned whole, since half of what somebody said is worse than none of it, and carries the $was token memory_save requires before replacing it.",
       "input": {
         "said": {
           "type": "string",
-          "description": "the words you expect them to have used — matched as a phrase"
+          "description": "the words you expect the memory to contain, matched as a phrase"
         },
         "near": {
           "type": "string",
           "ref": "entity",
-          "description": "an entity to rank by meaning, where this server keeps vectors"
+          "description": "an entity to rank by meaning against, where this server keeps vectors"
         },
         "ids": {
           "type": "array",
@@ -133,11 +133,11 @@
         "scope": {
           "type": "string",
           "ref": "project",
-          "description": "only the ones filed under this project"
+          "description": "only memories filed under this project"
         },
         "feedback": {
           "type": "boolean",
-          "description": "only the ones recording a correction somebody gave"
+          "description": "only memories recording a correction somebody gave"
         },
         "limit": {
           "type": "number",

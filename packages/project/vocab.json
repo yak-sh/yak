@@ -135,8 +135,8 @@
       "tool": true,
       "noun": "board",
       "verb": "check",
-      "title": "Check the boards",
-      "description": "Reports saved board queries that no longer route. A board is its query, so one written against components the vocabulary no longer declares matches nothing and reports no error.",
+      "title": "Check board queries",
+      "description": "Report saved board queries that no longer parse against the vocabulary. A board is its query, so one written against components the vocabulary no longer declares matches nothing and reports no error.",
       "input": {},
       "readOnly": true
     },
@@ -144,8 +144,8 @@
       "tool": true,
       "noun": "project",
       "verb": "check",
-      "title": "Check the portfolio",
-      "description": "Reports governed entities no project can reach — neither filed under one nor linked to one by a containment edge. Work nobody's portfolio holds is work nothing will ever report as dropped.",
+      "title": "Check project coverage",
+      "description": "Report governed entities no project reaches: neither filed under a project nor linked to one through a containment edge. Work that no project holds is work nothing will ever report as dropped.",
       "input": {},
       "readOnly": true
     }

@@ -350,18 +350,18 @@
       "tool": true,
       "noun": "claim",
       "verb": "take",
-      "title": "Claim it",
-      "description": "Take the lock on an entity for a session, so nobody else picks it up. A lease, not a patch: writing one over another session’s lock fails the whole batch — release first. The same session re-claiming is a no-op refresh.",
+      "title": "Claim an entity",
+      "description": "Claim an entity for a session, so no other session picks it up. A claim is a lease, not a patch: writing one over another session’s claim fails the whole batch, so release first. The same session claiming again is a no-op refresh.",
       "input": {
         "target": {
           "type": "string",
           "ref": "entity",
-          "description": "the entity to lock — any entity at all"
+          "description": "the entity to claim; any entity at all"
         },
         "session": {
           "type": "string",
           "ref": "session",
-          "description": "the session holding it (default: whoever is asking)"
+          "description": "the session that holds the claim (default: the caller’s session)"
         }
       },
       "required": [
@@ -378,13 +378,13 @@
       "tool": true,
       "noun": "claim",
       "verb": "release",
-      "title": "Let it go",
-      "description": "Drop the lock on an entity. Unguarded on purpose: releasing is how a lock is handed over, and a dead session’s locks are freed by whichever process notices first.",
+      "title": "Release a claim",
+      "description": "Release the claim on an entity. Deliberately unguarded: releasing is how a claim is handed over, and a dead session’s claims are released by whichever process notices first.",
       "input": {
         "target": {
           "type": "string",
           "ref": "entity",
-          "description": "the entity to lock — any entity at all"
+          "description": "the entity whose claim to release"
         }
       },
       "required": [
@@ -401,21 +401,21 @@
       "tool": true,
       "noun": "session",
       "verb": "context",
-      "title": "What this session was in the middle of",
-      "description": "Start of a transcript: find or mint the session entity for a harness’s session id, and report what it was in the middle of — what it holds a claim on, and the last thing the actor behind it wrote about itself. The harness injects the prose; nothing here fails loudly.",
+      "title": "Read a session’s context",
+      "description": "Run at the start of a session: find or create the session entity for the harness’s session id, and return its id and the entities it holds claims on, as text for the harness to inject into the session. Never fails loudly, since a hook that fails is a session that will not start.",
       "input": {
         "session": {
           "type": "string",
-          "description": "the harness's own id for the transcript"
+          "description": "the harness’s own id for the session"
         },
         "hook": {
           "type": "string",
-          "description": "a harness lifecycle payload as JSON — `-` reads it from stdin, which is how a hook passes its event in"
+          "description": "a harness lifecycle event as JSON; `-` reads it from stdin, which is how a hook passes its event in"
         },
         "actor": {
           "type": "string",
           "ref": "entity",
-          "description": "who it speaks as — the identity that survives a /clear"
+          "description": "the entity this session acts as; the identity that survives a /clear"
         }
       },
       "options": {
@@ -429,16 +429,16 @@
       "tool": true,
       "noun": "session",
       "verb": "wrap",
-      "title": "End of a transcript",
-      "description": "End of a transcript: record the session’s own account of itself, and release every lock it still holds. A session that was never created does nothing.",
+      "title": "Wrap up a session",
+      "description": "Run at the end of a session: record the session’s brief, its own account of what it did, and release every claim it still holds. A session that was never created does nothing.",
       "input": {
         "session": {
           "type": "string",
-          "description": "the harness's own id for the transcript"
+          "description": "the harness’s own id for the session"
         },
         "hook": {
           "type": "string",
-          "description": "a harness lifecycle payload as JSON — `-` reads it from stdin, which is how a hook passes its event in"
+          "description": "a harness lifecycle event as JSON; `-` reads it from stdin, which is how a hook passes its event in"
         },
         "brief": {
           "type": "string",
@@ -459,20 +459,20 @@
       "tool": true,
       "noun": "session",
       "verb": "brief",
-      "title": "Record what happened",
-      "description": "Write the session’s own account of itself — the brief the next session by the same actor is given. Replaces whatever it recorded before.",
+      "title": "Record a session’s brief",
+      "description": "Write the session’s brief: its own account of what it did, which the next session by the same actor is given. Replaces any brief it recorded before.",
       "input": {
         "session": {
           "type": "string",
-          "description": "the harness's own id for the transcript"
+          "description": "the harness’s own id for the session"
         },
         "hook": {
           "type": "string",
-          "description": "a harness lifecycle payload as JSON — `-` reads it from stdin, which is how a hook passes its event in"
+          "description": "a harness lifecycle event as JSON; `-` reads it from stdin, which is how a hook passes its event in"
         },
         "text": {
           "type": "string",
-          "description": "the account"
+          "description": "the brief"
         }
       },
       "required": [
@@ -489,8 +489,8 @@
       "tool": true,
       "noun": "hooks",
       "verb": "install",
-      "title": "Install the injection loop",
-      "description": "Write this package’s lifecycle entries into a harness settings file, so every session starts by reading its context back and ends by wrapping up. Replaces an earlier install and leaves every other entry alone. Writes to the machine the tool runs on.",
+      "title": "Install the lifecycle hooks",
+      "description": "Write this package’s SessionStart and SessionEnd entries into a harness settings file, so every session starts by reading its context back (session_context) and ends by wrapping up (session_wrap). Replaces an earlier install and leaves every other entry in the file alone. Writes to the machine the tool runs on.",
       "input": {
         "path": {
           "type": "string",
@@ -502,7 +502,7 @@
         },
         "remove": {
           "type": "boolean",
-          "description": "take the entries out instead"
+          "description": "remove the entries instead of writing them"
         }
       },
       "options": {
@@ -516,8 +516,8 @@
       "tool": true,
       "noun": "claim",
       "verb": "check",
-      "title": "Check the locks",
-      "description": "Check that no entity is locked by a session that is over: a holder this graph has no session for, or one whose transcript stopped or failed. Otherwise the board reports that somebody is working on what nobody is working on.",
+      "title": "Check for stale claims",
+      "description": "Check that no entity is claimed by a session that is over: a holder this graph has no session entity for, or one whose session stopped or failed. Otherwise the board reports somebody working on what nobody is working on.",
       "input": {},
       "readOnly": true
     },
@@ -525,8 +525,8 @@
       "tool": true,
       "noun": "session",
       "verb": "check",
-      "title": "Check the transcripts",
-      "description": "Check that no transcript has stalled — waiting on a turn or an answer for hours with nothing appended. A daemon that died mid-turn leaves a session that simply stops, and nothing anywhere reports it.",
+      "title": "Check for stalled sessions",
+      "description": "Check that no session has stalled: waiting on a turn or a tool answer for hours with nothing appended. A daemon that died mid-turn leaves a session that simply stops, and nothing else reports it.",
       "input": {},
       "readOnly": true
     }

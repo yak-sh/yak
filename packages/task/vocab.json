@@ -151,34 +151,34 @@
       "tool": true,
       "noun": "task",
       "verb": "new",
-      "title": "File a task",
-      "description": "Write down something to do: an entity with task{} and doc{title, body}. It is open because it has neither the completed nor the cancelled mark. Name a project, priority, assignee or domain and it gets a filed{} component too.",
+      "title": "Create a task",
+      "description": "Create a task: an entity with task{} and doc{title, body} components. It is open because it has neither a completed nor a cancelled mark. Pass a project, priority, assignee or domain and it gets a filed{} component too.",
       "input": {
         "title": {
           "type": "string",
-          "description": "what to do, in a line"
+          "description": "what to do, in one line"
         },
         "body": {
           "type": "string",
-          "description": "what is being asked for, plus pointers to the details, as Markdown"
+          "description": "what is being asked for, plus pointers to the details, as markdown"
         },
         "project": {
           "type": "string",
           "ref": "project",
-          "description": "the project it is filed under"
+          "description": "the project to file it under"
         },
         "priority": {
           "type": "number",
-          "description": "queue order — lower is more urgent"
+          "description": "queue order; lower is more urgent"
         },
         "assignee": {
           "type": "string",
           "ref": "entity",
-          "description": "whose queue it is filed in"
+          "description": "whose queue it goes in"
         },
         "domain": {
           "type": "string",
-          "description": "the work area"
+          "description": "the area of work"
         }
       },
       "required": [
@@ -200,15 +200,15 @@
       "noun": "task",
       "verb": "list",
       "title": "List tasks",
-      "description": "The tasks a query selects, as whole bundles. `.task` is always part of the query and yours is joined onto it; passing no query lists `.task.status=open`. The grammar is the query grammar: `.status=done`, `.filed.project=P-19`, `.priority<3`, a bare word to match text.",
+      "description": "List the tasks a query selects, as whole bundles. `.task` is always part of the query and yours is joined onto it; with no query, `.task.status=open` is used. The syntax is the query grammar: `.status=done`, `.filed.project=P-19`, `.priority<3`, or a bare word to match text.",
       "input": {
         "query": {
           "type": "string",
-          "description": "query parameters joined onto `.task`"
+          "description": "query parameters, joined onto `.task`"
         },
         "limit": {
           "type": "number",
-          "description": "at most this many"
+          "description": "return at most this many"
         }
       },
       "options": {
@@ -226,7 +226,7 @@
       "noun": "task",
       "verb": "update",
       "title": "Update a task",
-      "description": "Change a task's status, title, body or filing. `status` is not a column: done adds the completed mark and removes the cancelled one, cancelled does the reverse, and open removes both. Anything you leave out is left alone.",
+      "description": "Change a task’s status, title, body or filing. `status` is not a stored column: done adds the completed mark and removes the cancelled one, cancelled does the reverse, and open removes both. Anything left out is unchanged.",
       "input": {
         "task": {
           "type": "string",
@@ -240,7 +240,7 @@
             "done",
             "cancelled"
           ],
-          "description": "where it stands now"
+          "description": "the new status: open, done or cancelled"
         },
         "title": {
           "type": "string",
@@ -253,20 +253,20 @@
         "project": {
           "type": "string",
           "ref": "project",
-          "description": "the project it is filed under"
+          "description": "the project to file it under"
         },
         "priority": {
           "type": "number",
-          "description": "queue order — lower is more urgent"
+          "description": "queue order; lower is more urgent"
         },
         "assignee": {
           "type": "string",
           "ref": "entity",
-          "description": "whose queue it is filed in"
+          "description": "whose queue it goes in"
         },
         "domain": {
           "type": "string",
-          "description": "the work area"
+          "description": "the area of work"
         }
       },
       "required": [

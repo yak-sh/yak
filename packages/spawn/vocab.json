@@ -5,31 +5,31 @@
       "tool": true,
       "noun": "session",
       "verb": "spawn",
-      "title": "Hand work to an agent",
-      "description": "Start an agent on a task. Writes a session, the first entry naming the provider, model and effort, and the session's claim on the task; committing that starts the agent, so a task somebody else already holds refuses the whole request. With wait, returns how the run ended — its brief and its exit code — instead of the session id.",
+      "title": "Start an agent on a task",
+      "description": "Start an agent on a task. Writes a session entity, a first entry naming the provider, model and effort, and the session’s claim on the task; committing that starts the agent, so a task another session already holds refuses the whole request. With wait, returns how the run ended (its brief and its exit code) instead of the session id.",
       "input": {
         "task": {
           "type": "string",
           "ref": "task",
-          "description": "the work it is being handed, which it claims"
+          "description": "the task to hand to the agent, which the session claims"
         },
         "provider": {
           "type": "string",
           "ref": "provider",
-          "description": "who runs it — a provider whose transport is a command line"
+          "description": "the provider that runs the agent; one whose transport is a command line"
         },
         "model": {
           "type": "string",
           "ref": "model",
-          "description": "which model it serves the run with"
+          "description": "the model the run uses"
         },
         "effort": {
           "type": "string",
-          "description": "how hard to think, where the model accepts such a setting"
+          "description": "the reasoning effort, where the model accepts such a setting"
         },
         "instruction": {
           "type": "string",
-          "description": "what to tell it (default the task's id and title — it holds the claim and reads the rest itself)"
+          "description": "what to tell the agent (default: the task’s id and title; it holds the claim and reads the rest itself)"
         },
         "wait": {
           "type": "boolean",
@@ -37,7 +37,7 @@
         },
         "timeout": {
           "type": "string",
-          "description": "how long to wait — 45m, 2h, or bare seconds (default 30m)"
+          "description": "how long to wait: 45m, 2h, or bare seconds (default 30m)"
         }
       },
       "required": ["task", "provider"],
@@ -50,8 +50,8 @@
       "tool": true,
       "noun": "session",
       "verb": "wait",
-      "title": "Block until it is over",
-      "description": "Wait for a session to end, then return its brief and the exit code its run ended on. A session still going when the timeout passes is reported as still going, never killed.",
+      "title": "Wait for a session to end",
+      "description": "Wait for a session to end, then return its brief and the exit code its run ended with. A session still running when the timeout passes is reported as still running, never killed.",
       "input": {
         "session": {
           "type": "string",
@@ -60,7 +60,7 @@
         },
         "timeout": {
           "type": "string",
-          "description": "how long to wait — 45m, 2h, or bare seconds (default 30m)"
+          "description": "how long to wait: 45m, 2h, or bare seconds (default 30m)"
         }
       },
       "required": ["session"],
@@ -72,8 +72,8 @@
       "tool": true,
       "noun": "session",
       "verb": "peek",
-      "title": "A glance at the transcript",
-      "description": "The end of a session's transcript as the graph holds it, one line per entry, plus what it is doing now. Reads a bounded number of entries, never the provider's own log file.",
+      "title": "Read the end of a session",
+      "description": "Return the last entries of a session as the graph holds them, one line per entry, plus its current status. Reads a bounded number of entries, never the provider’s own log file.",
       "input": {
         "session": {
           "type": "string",
@@ -82,7 +82,7 @@
         },
         "lines": {
           "type": "number",
-          "description": "how many entries, newest last (default 40)"
+          "description": "how many entries to return, newest last (default 40)"
         }
       },
       "required": ["session"],

@@ -22,11 +22,12 @@
     },
     "session_list": {
       "tool": true,
-      "description": "List sessions in the connected graph.",
+      "description": "List every session entity in the connected graph, as whole bundles.",
       "noun": "session",
       "verb": "list",
       "input": {},
-      "readOnly": true
+      "readOnly": true,
+      "title": "List sessions"
     }
   }
 }

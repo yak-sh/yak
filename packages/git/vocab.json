@@ -249,12 +249,12 @@
     },
     "land": {
       "tool": true,
-      "title": "Land this branch",
-      "description": "Land the branch the caller is standing on. Fast-forwards it into the base — the branch the shared checkout has checked out — and pushes if the base has an upstream. If the base moved, rebases onto it and returns WITHOUT merging, printing what it pulled in so the caller can re-run its tests and land again; that counts as a failure, because nothing landed. Refuses a landing whose files carry content no commit on the branch wrote, unless allow-revert names them. Runs no tests and reads no graph: every coordinate comes from Git, and the checkout is the one the process running this call is in.",
+      "title": "Land the current branch",
+      "description": "Land the branch the current checkout is on. Fast-forwards it into the base branch (the one the shared checkout has checked out) and pushes if the base has an upstream. If the base has moved, rebases the branch onto it and returns WITHOUT merging, printing what the rebase pulled in so the caller can re-run its tests and land again; that counts as a failure, because nothing landed. Refuses to land when a file would end up with content no commit on the branch wrote, unless allow-revert names that file. Runs no tests and reads no graph: everything comes from git, in the checkout the calling process is in.",
       "input": {
         "allow-revert": {
           "type": "string",
-          "description": "comma-separated files whose rewind is deliberate; landed with a warning"
+          "description": "comma-separated paths whose reverted content is intended; they land with a warning"
         }
       },
       "destructive": true

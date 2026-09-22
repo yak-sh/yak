@@ -27,20 +27,20 @@
       "noun": "design",
       "verb": "new",
       "title": "Propose a design",
-      "description": "Write a change down so it can be argued with: an entity with design{}, doc{title, body} and proposed{} on it. Who proposed it and when are stamped from the caller, never passed as arguments.",
+      "description": "Write a proposed change down as an entity with design{}, doc{title, body} and proposed{} components. Who proposed it and when are stamped from the caller, never passed as arguments.",
       "input": {
         "title": {
           "type": "string",
-          "description": "what it proposes, in a line"
+          "description": "what the design proposes, in one line"
         },
         "body": {
           "type": "string",
-          "description": "the proposal itself, as Markdown"
+          "description": "the proposal itself, as markdown"
         },
         "project": {
           "type": "string",
           "ref": "project",
-          "description": "the project it is filed under"
+          "description": "the project to file it under"
         }
       },
       "required": [
@@ -62,12 +62,12 @@
       "noun": "design",
       "verb": "decide",
       "title": "Decide a design",
-      "description": "Record the decision on a proposal: approved, or declined. The decider is whoever is calling — stamped from the caller, so an agent's own decision is recorded as the agent's, and as an owner's only when the owner is the one calling.",
+      "description": "Record the decision on a proposed design: approved or declined. The decider is the caller, stamped from the caller’s identity, so a decision an agent makes is recorded as the agent’s, and as an owner’s only when the owner is calling.",
       "input": {
         "design": {
           "type": "string",
           "ref": "design",
-          "description": "the design being decided"
+          "description": "the design to decide"
         },
         "verdict": {
           "type": "string",
@@ -76,7 +76,7 @@
             "declined"
           ],
           "default": "approved",
-          "description": "what was decided"
+          "description": "the decision: approved or declined"
         }
       },
       "required": [

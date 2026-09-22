@@ -8,19 +8,19 @@
       "tool": true,
       "noun": "graph",
       "verb": "apply",
-      "title": "Apply a batch",
-      "description": "Apply entity bundles to this store: create, patch or delete entities and their components, atomically. The change you pass is an array of BUNDLES — {entity: {eid}, <component>: {<columns>}}, the same shape a client's apply() takes: an omitted column is untouched, a null column is cleared, a null component is dropped, and $delete: true kills the entity. Mint an id yourself, or write '$name' as the eid and read back what the graph named it. Where this store keeps names, alias: {name: '<your name>'} beside a '$name' eid makes the write IDEMPOTENT — the same name written again patches the entity that already holds it instead of making a second one, and a name stands wherever an eid does. A read-modify-write states what it was based on: $was names, per component and column, the SHA-256 of the value you READ (null for \"it held none\"), and the write is refused WHOLE — naming the column and what it holds now — if it has moved since. That is compare-and-set: two callers spending the same balance or claiming the same reward, and only one of them lands. The result is the transaction AS APPLIED, one bundle per entity: {entity: {eid, num}}, every component as written, the stamps the graph made (created, updated), and the '$alias' you named it by. Anything that died — what you deleted, and whatever fell with it — answers as {entity, tombstone: {}} and nothing else. This tool's own input schema is the vocabulary — every component, every column and every type — and graph_schema reports the same thing at length. The schema describes and the server decides: it is open, so a component or column declared since you connected still reaches the graph, and a column nobody declared is refused here alongside the ones that are. check: true REHEARSES the write instead of keeping it: every check this tool makes is made, and then the whole thing is rolled back, so the answer is what WOULD land — every '$name' resolved to the id it would be given — or the refusal, worded exactly as it would be for a write that was kept. That is how a plan of several entities and the links between them is proven before any of it is written.",
+      "title": "Apply a batch of changes",
+      "description": "Create, patch or delete entities and their components in one atomic transaction. `change` is an array of bundles, where a bundle is one entity’s components as one JSON object: {entity: {eid}, <component>: {<columns>}}, the same shape a client’s apply() takes. An omitted column is left unchanged, a null column is cleared, a null component is removed, and $delete: true deletes the entity. Generate the eid yourself, or write '$name' as the eid and read the eid the graph assigned from the result. Where this store keeps names, alias: {name: '<your name>'} beside a '$name' eid makes the write idempotent: writing the same name again patches the entity that already has it instead of creating a second one, and a name can be used wherever an eid can. A read-modify-write can state what it was based on: $was gives, per component and column, the SHA-256 of the value you read (null for “it had none”), and the whole batch is refused, naming the column and its current value, if that value has changed since. That is compare-and-set: two callers spending the same balance or claiming the same reward, and only one of them succeeds. The result is the transaction as applied, one bundle per entity: {entity: {eid, num}}, every component as written, the stamps the graph added (created, updated), and the '$alias' you named it by. Every entity that was deleted, including any deleted as a consequence, is returned as {entity, tombstone: {}} and nothing else. This tool’s input schema is the vocabulary itself, every component, column and type; graph_schema reports the same thing at length. The schema is open: a component or column declared after you connected still reaches the graph, and a column nobody declared is refused by the server. check: true is a dry run: every check is made and the whole transaction is then rolled back, so the result is what would have been written, with every '$name' resolved to the eid it would get, or the refusal, worded exactly as it would be for a kept write. That is how a plan of several entities and the edges between them is proven before any of it is written.",
       "input": {
         "change": {
           "type": "array",
           "items": {
             "type": "object"
           },
-          "description": "the bundles to apply, atomically"
+          "description": "the bundles to apply, in one transaction"
         },
         "check": {
           "type": "boolean",
-          "description": "a dry run: answer what would land, and write none of it"
+          "description": "dry run: return what would be written, and write none of it"
         }
       },
       "required": [
@@ -32,12 +32,12 @@
       "tool": true,
       "noun": "graph",
       "verb": "query",
-      "title": "Read a query",
-      "description": "Find entities in this store by filtering their components and columns, answered as whole bundles. A query STRING selects them: '.status=shelved&.price<20' — dot-params joined with &, with lists (a,b), ranges (1..9), !=, ~=, comparisons, '.prop!' for present and '.prop=' for absent. Directives go in the same string: .order=, .limit=, .refs=<id> for everything pointing at an entity. filters, if you pass any, are joined onto q with &.",
+      "title": "Query entities",
+      "description": "Find entities by filtering on their components and columns, returned as whole bundles (one entity’s components as one JSON object). A query string selects them: '.status=shelved&.price<20'. It is made of dot-params joined with &, with lists (a,b), ranges (1..9), !=, ~=, comparisons, '.prop!' for present and '.prop=' for absent. Directives go in the same string: .order=, .limit=, and .refs=<id> for everything that references an entity. filters, if passed, are joined onto q with &.",
       "input": {
         "q": {
           "type": "string",
-          "description": "the query line"
+          "description": "the query string"
         },
         "filters": {
           "type": "array",
@@ -48,7 +48,7 @@
         },
         "limit": {
           "type": "number",
-          "description": "at most this many entities"
+          "description": "return at most this many entities"
         }
       },
       "required": [
@@ -68,8 +68,8 @@
       "tool": true,
       "noun": "graph",
       "verb": "show",
-      "title": "Show entities whole",
-      "description": "Read entities out of this store by eid, whole: one or several, every component each one carries, plus everything that points AT it, each as its own bundle in {bundles}. Edge entities are ordinary bundles too. This is identity, not search — pass eids, or the name an entity answers to where this store keeps names (an eid wins over a name that spells it). Set backrefs false when you only want the entities themselves.",
+      "title": "Show entities",
+      "description": "Read one or more entities by eid, each returned whole: every component it has, plus every entity that references it, each as its own bundle in {bundles}. Edge entities are ordinary bundles too. This is lookup by identity, not search: pass eids, or the names entities are addressed by where this store keeps names (an eid wins over a name spelled the same way). Set backrefs to false to get only the entities themselves.",
       "input": {
         "ids": {
           "type": "array",
@@ -77,11 +77,11 @@
             "type": "string"
           },
           "ref": "entity",
-          "description": "the eids or names to show"
+          "description": "the eids or names of the entities to read"
         },
         "backrefs": {
           "type": "boolean",
-          "description": "also gather what points at them (default: true)"
+          "description": "also return the entities that reference them (default: true)"
         }
       },
       "required": [
@@ -96,8 +96,8 @@
       "tool": true,
       "noun": "graph",
       "verb": "schema",
-      "title": "The schema",
-      "description": "Read this store's vocabulary — every component, its columns and their types — in three sizes. Bare: the INDEX — every component, what it means in a line, and its column names. With component (one name or several): that component in full — each column's type and meaning, what is server-owned or unique, what points at it and what it points at, and a bundle that writes it. With kind: what an entity of that kind is made of. Read the index first, then ask for the component you are about to write.",
+      "title": "Read the schema",
+      "description": "Read this store’s vocabulary (every component, its columns and their types) at one of three levels of detail. With no arguments: the index, every component with a one-line meaning and its column names. With component (one name or several): that component in full, each column’s type and meaning, which columns are server-owned or unique, what references it and what it references, and an example bundle that writes it. With kind: the components an entity of that kind is made of. Read the index first, then ask for the component you are about to write.",
       "input": {
         "component": {
           "anyOf": [
@@ -111,11 +111,11 @@
               }
             }
           ],
-          "description": "a component to read in full, or several"
+          "description": "a component to read in full, or a list of them"
         },
         "kind": {
           "type": "string",
-          "description": "a display kind, answered as the components an entity of that kind carries"
+          "description": "a display kind, answered as the components an entity of that kind has"
         }
       },
       "options": {
@@ -128,17 +128,17 @@
     "search": {
       "tool": true,
       "verb": "search",
-      "title": "Search the text",
-      "description": "Search the text of this store's entities: the ones whose words match, ranked best first, as whole bundles. Use graph_query when you know what you are filtering on and this when you only know what it says.",
+      "title": "Search text",
+      "description": "Full-text search over this store’s entities: the ones whose text matches, ranked best first, as whole bundles. Use graph_query when you know which columns you are filtering on, and this when you only know what the text says.",
       "input": {
         "words": {
           "type": "string",
           "search": true,
-          "description": "what to search for"
+          "description": "the text to search for"
         },
         "limit": {
           "type": "number",
-          "description": "at most this many entities"
+          "description": "return at most this many entities"
         }
       },
       "required": [

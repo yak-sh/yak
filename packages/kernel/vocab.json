@@ -329,17 +329,17 @@
       "tool": true,
       "noun": "comment",
       "verb": "new",
-      "title": "Comment on anything",
-      "description": "Comment on an entity. Writes a new entity carrying doc{body} and comment{target}, signed as whoever called it. The target can be any entity: a task, a design, a session, another comment.",
+      "title": "Comment on an entity",
+      "description": "Create a comment on an entity: a new entity with doc{body} and comment{target} components, attributed to the caller. The target can be any entity: a task, a design, a session, another comment.",
       "input": {
         "target": {
           "type": "string",
           "ref": "entity",
-          "description": "what the comment is about"
+          "description": "the entity the comment is about"
         },
         "body": {
           "type": "string",
-          "description": "what to say, as Markdown"
+          "description": "the comment, as markdown"
         }
       },
       "required": [
