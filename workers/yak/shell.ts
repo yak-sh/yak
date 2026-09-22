@@ -48,7 +48,7 @@ ${
 <link rel="stylesheet" href="/style.css">`
 
 export let top = `<header class="Top">
-<a class="Top_Name" href="/" aria-label="yaks.app, home"><span>yaks.app</span></a>
+<a class="Top_Name" href="/" aria-label="yaks.app, home"><img class="Yak Yak-small" src="/yak.png" alt="" /><span>yaks.app</span></a>
 <nav class="Nav" aria-label="Site">
 <a href="/#how">How it works</a>
 <a href="/pricing">Pricing</a>
