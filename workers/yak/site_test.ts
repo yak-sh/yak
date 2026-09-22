@@ -176,6 +176,29 @@ Deno.test('every page carries the same four nav links', () => {
   }
 })
 
+// One rule says how wide a page is (T-37785): the header, the document and
+// the footer all read --measure/--side/--aside, and a page kind asks for them
+// on its own <body>. A frame class left on a <main> is exactly the bug this
+// replaced — it sized the document and left the furniture around it at some
+// other width — so the mains carry the frame and nothing else.
+Deno.test('the frame is asked for on the body, above what it frames', () => {
+  let css = read('style.css')
+  assertStringIncludes(css, '  .Top,\n  .Page,\n  .Foot {\n    width: min(')
+  assert(!css.includes('.Top-home'), 'the header still has a width of its own')
+  for (let page of branded) {
+    let html = read(page)
+    // A page that names a kind on its body is framed by that kind; one that
+    // names none is prose in the reading column. .Prose is a voice, not a
+    // frame, so it stays on what it dresses.
+    let kind = /<body class="(\w+)">/.exec(html)?.[1]
+    assertEquals(
+      [...html.matchAll(/<main class="([^"]*)">/g)].map((m) => m[1]),
+      [kind ? 'Page' : 'Page Prose'],
+      page,
+    )
+  }
+})
+
 // What the pages SELL is what the code holds a space to (T-33688). The two
 // allowances live in one place — meter.ts `LETTERS`, which the send door and
 // the standing line both read — so a page quoting a number nothing enforces is

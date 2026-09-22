@@ -44,7 +44,7 @@
     />
     <link rel="stylesheet" href="style.css" />
   </head>
-  <body>
+  <body class="Guide">
     <header class="Top">
       <a class="Top_Name" href="/" aria-label="yaks.app, home">
         <img class="Yak Yak-small" src="yak.png" alt="" />
@@ -58,7 +58,7 @@
       </nav>
     </header>
 
-    <main class="Page Guide">
+    <main class="Page">
       <div class="Prose_Head">
         <h1 class="Title Title-page">Style guide</h1>
         <p class="Note Note-lead">
@@ -390,6 +390,15 @@
         <p class="Note Note-small" data-token="--wide-measure">
           <code class="Guide_Name">--wide-measure</code> — the maximum width
           for grids and previews: <span class="Guide_Value"></span>.
+        </p>
+        <p class="Note Note-small">
+          <code class="Guide_Name">--side</code> and
+          <code class="Guide_Name">--aside</code> add a sidebar before the
+          reading column and a gutter after it, and
+          <code class="Guide_Name">--rhythm</code> says how far apart the
+          page's sections sit. A page kind sets all four on its
+          <code class="Pill Pill-code">body</code>, and the header, the page
+          and the footer are framed by the sum.
         </p>
         <ul class="Guide_Swatches">
           <li class="Guide_Swatch" data-token="--small-radius">
@@ -871,16 +880,25 @@
         </p>
         <ul class="Guide_Rules">
           <li>
-            <b>.Top</b>, <b>.Top_Name</b> — the shared site header. The home
-            page shows the yak in its hero instead of beside the site name.
+            <b>.Top</b>, <b>.Top_Name</b> — the shared site header. It is as
+            wide as the page under it: <b>.Top</b>, <b>.Page</b> and
+            <b>.Foot</b> all read the frame the page asked for. The home page
+            shows the yak in its hero instead of beside the site name.
           </li>
           <li>
-            <b>.Page</b> — the centred page column. Child sections control
-            their own vertical spacing. Pages that contain grids or previews
-            may use <code class="Pill Pill-code">--wide-measure</code>.
+            <b>.Page</b> — the centred reading column and the two slots
+            beside it. A page kind on the <code class="Pill Pill-code">body</code>
+            says how wide it all is, by re-pointing
+            <code class="Pill Pill-code">--measure</code>,
+            <code class="Pill Pill-code">--side</code> and
+            <code class="Pill Pill-code">--aside</code>, and how far apart its
+            sections sit, with <code class="Pill Pill-code">--rhythm</code>.
+            Pages that contain grids or previews may use
+            <code class="Pill Pill-code">--wide-measure</code>.
           </li>
           <li>
-            <b>.Home</b> — spacing and width for the home page sections.
+            <b>.Home</b> — the home page's frame, asked for on its
+            <code class="Pill Pill-code">body</code>.
           </li>
           <li>
             <b>.Hello</b>, <b>.Hello_Copy</b>, <b>.Hello_Yak</b>,

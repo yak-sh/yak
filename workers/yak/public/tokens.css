@@ -51,9 +51,15 @@
     --lead: 1.125rem;
     --small: 0.9375rem;
 
-    /* Space and shape. The gaps derive from one number. */
+    /* Space and shape. The gaps derive from one number, and the frame a page
+       is drawn in — header to footer, style.css — is the five that open the
+       list: a page kind re-points them on its own <body>, and a page that
+       names no kind is one reading column with nothing beside it. */
     --measure: 38rem; /* reading width */
     --wide-measure: 72rem; /* multi-column layouts */
+    --side: 0px; /* a sidebar before the reading column */
+    --aside: 0px; /* a gutter after it */
+    --rhythm: 0px; /* how far apart what fills the column sits */
     --gap: 1rem;
     --control-height: 2.25rem;
     --quarter-gap: calc(var(--gap) / 4);

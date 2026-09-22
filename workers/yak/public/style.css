@@ -332,10 +332,25 @@
 }
 
 @layer sections {
+  /* The frame: how wide this page is, from the header down to the footer.
+     A page says what it wants once, by re-pointing --measure, --side and
+     --aside on its own <body> (the page kinds below do exactly that), and
+     the three pieces of furniture that span the page all read the same three
+     numbers. That is the whole rule: the header sits above the document at
+     the document's own width, whatever the document asked for. */
+  .Top,
+  .Page,
+  .Foot {
+    width: min(
+      100% - 2 * var(--gap),
+      calc(var(--measure) + var(--side) + var(--aside))
+    );
+    margin-inline: auto;
+  }
+
   /* The header: the mark and the name, and the four places worth going
      (T-33643). The name IS "home" — it carries the label — so the nav names
-     the other four and nothing else. Wider than the letter column on
-     purpose: the header spans the page, the reading does not.
+     the other four and nothing else.
 
      Centred and stacked on a phone, and only spread apart once there is room
      for both on one line. */
@@ -345,8 +360,6 @@
     align-items: center;
     justify-content: center;
     gap: var(--half-gap) var(--gap);
-    width: min(100% - 2 * var(--gap), 52rem);
-    margin-inline: auto;
     padding: 1.25rem 0;
   }
 
@@ -390,8 +403,7 @@
 
   /* The reading column, and the two slots beside it. The column says how
      WIDE, never how far apart: what fills it — .Home, .Prose, .Guide — owns
-     its own rhythm. A page that needs a wider column re-points --measure on
-     itself.
+     its own rhythm, and says so by re-pointing --rhythm.
 
      Three columns are always here and the outer two are nothing wide, so a
      page that names no slot is the single column it has always been. A page
@@ -401,20 +413,15 @@
      page drops in lands in the reading column; .Page_Side and .Page_Aside are
      how a child opts into a slot, whether it is a nav, a note beside a
      paragraph, or a pull quote. The slots carry their own gutter as padding,
-     so a page with no slots has no gaps to collapse. */
+     so the rhythm is rows only: a column gap would come out of the very
+     width the page asked for. */
   .Page {
-    --side: 0px;
-    --aside: 0px;
     display: grid;
     grid-template-columns:
       [side] var(--side)
       [body] minmax(0, 1fr)
       [aside] var(--aside);
-    width: min(
-      100% - 2 * var(--gap),
-      calc(var(--measure) + var(--side) + var(--aside))
-    );
-    margin-inline: auto;
+    row-gap: var(--rhythm);
     padding-block: var(--wide-gap) 3rem;
   }
 
@@ -450,10 +457,16 @@
 
   /* Not room enough for a gutter: an aside reads above what it annotates,
      and the sidebar runs down beside both rows rather than making the first
-     one as tall as itself. */
+     one as tall as itself. The gutter closes in the TEMPLATE, not in
+     --aside: the page's asked-for width is what the header and footer read,
+     and below this breakpoint the viewport is the narrower of the two
+     anyway. */
   @media (max-width: 1000px) {
     .Page {
-      --aside: 0px;
+      grid-template-columns:
+        [side] var(--side)
+        [body] minmax(0, 1fr)
+        [aside] 0;
     }
 
     .Page_Side {
@@ -477,7 +490,6 @@
      foot, under the document, where it reads as where to go next. */
   @media (max-width: 700px) {
     .Page {
-      --side: 0px;
       grid-template-columns: minmax(0, 1fr);
     }
 
@@ -503,14 +515,12 @@
     }
   }
 
-  /* Wider grids on the homepage; prose pages retain their reading width. */
-  .Top-home {
-    width: min(100% - 2 * var(--gap), var(--wide-measure));
-  }
-
+  /* The home page (index.html), a page kind on its <body>: wider grids than
+     a letter, and the loose rhythm a landing page reads in. Prose pages name
+     no kind at all and keep the reading width. */
   .Home {
     --measure: var(--wide-measure);
-    gap: clamp(3rem, 6vw, 5rem);
+    --rhythm: clamp(3rem, 6vw, 5rem);
   }
 
   .Hello {
@@ -765,7 +775,7 @@
      wider, because there are only two. */
   .Pricing {
     --measure: 44rem;
-    gap: 3rem;
+    --rhythm: 3rem;
   }
 
   .Plans {
@@ -819,7 +829,7 @@
   .Foot {
     display: grid;
     gap: 0.75rem;
-    padding: var(--wide-gap) var(--gap) 3rem;
+    padding-block: var(--wide-gap) 3rem;
     color: var(--soft-ink);
     font-size: var(--small);
     text-align: center;
@@ -843,9 +853,10 @@
      dresses the rest. Each rendered block is its own grid so paragraphs sit
      closer together than sections do.
 
-     It is the first page to use both .Page slots: the list of pages in the
-     sidebar, what is on this page in the gutter, and the document itself at
-     the reading width in between. */
+     It is the first page kind to use both .Page slots: the list of pages in
+     the sidebar, what is on this page in the gutter, and the document itself
+     at the reading width in between. Both are asked for on the <body>, so
+     the header above the document spans the same frame it does. */
   .Docs {
     --side: 13rem;
     --aside: 14rem;
@@ -974,7 +985,7 @@
      row of swatches is the one thing here that is not a letter. */
   .Guide {
     --measure: 52rem;
-    gap: 3rem;
+    --rhythm: 3rem;
   }
 
   .Guide_Part {

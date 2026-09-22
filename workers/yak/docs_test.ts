@@ -161,7 +161,10 @@ Deno.test('the technical page wears the same frame around untouched words', asyn
     nav,
     `href="${pathOf('technical')}" aria-current="page"`,
   )
-  assertStringIncludes(html, '<main class="Page Docs">')
+  // The frame's width is asked for on the body, and the file's own main is
+  // now the article inside it.
+  assertStringIncludes(html, '<body class="Docs">')
+  assertStringIncludes(html, '<main class="Page">')
   assertStringIncludes(html, '<article class="Page_Body Prose">')
   assertStringIncludes(html, '</article>\n</main>')
   // Untouched: every section of the file, still in it, and nothing drawn

@@ -171,9 +171,9 @@ let page = (
   return html(
     `${head(env, title, description, at)}
 </head>
-<body>
+<body class="Docs">
 ${top}
-<main class="Page Docs">
+<main class="Page">
 ${side(slug)}
 ${onPage(tokens)}
 <article class="Page_Body Prose">
@@ -194,24 +194,29 @@ ${foot}
 // showcase is spliced into its file (index.ts): a second copy of the sidebar
 // written into that file would list the pages twice and go stale the day one
 // is added. Its own words are untouched — its Pills are already its contents.
+//
+// Two marks carry the frame: the page kind on the <body>, which is where the
+// width the header and footer read is asked for (style.css), and the file's
+// own <main>, which becomes the article inside the documentation's grid.
+let BODY = '  <body>\n'
 let OPENED = /<main class="Page ([^"]*)">/
 
 /** The technical page's bytes, wearing the documentation's frame. Served
- * unchanged if the file no longer opens the way `OPENED` expects, which
- * docs_test.ts is what stops. */
+ * unchanged if the file no longer opens the way `BODY` and `OPENED` expect,
+ * which docs_test.ts is what stops. */
 export let framed = async (file: Response) => {
   let text = await file.text()
-  let opened = OPENED.exec(text)
+  let opened = text.includes(BODY) ? OPENED.exec(text) : null
   let headers = new Headers(file.headers)
   // The body just changed length, and it is no longer the file etag names.
   headers.delete('content-length')
   headers.delete('etag')
   let body = opened
-    ? text.replace(
+    ? text.replace(BODY, '  <body class="Docs">\n').replace(
       OPENED,
-      `<main class="Page Docs">\n${
-        side('technical')
-      }\n<article class="Page_Body ${opened[1]}">`,
+      `<main class="Page">\n${side('technical')}\n<article class="Page_Body ${
+        opened[1]
+      }">`,
     ).replace('</main>', '</article>\n</main>')
     : text
   return new Response(body, { status: file.status, headers })
