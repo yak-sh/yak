@@ -428,7 +428,7 @@ Deno.test('a listing asks the directory a fixed number of times', async () => {
   for (let space of ['one', 'two', 'three']) {
     await call(setup, 'space_new', { slug: space, title: space })
     for (let app of ['a', 'b', 'c']) {
-      await call(setup, 'app_new', { space, slug: `${app}pp`, title: app })
+      await call(setup, 'app_new', { space, slug: `${app}-app`, title: app })
     }
   }
   let costs = async (args: Record<string, unknown>) => {
