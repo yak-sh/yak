@@ -142,6 +142,12 @@ import {
 } from './proc.ts'
 import { personaMirror } from './persona.ts'
 import { plan, sync as mirror } from '@yaks/mirror'
+import {
+  configPath as yakConfig,
+  type Plug,
+  read as yakRead,
+  used as yakUsed,
+} from '@yaks/cli/config'
 import { commit, revision } from './git.ts'
 import { gitSync } from './repo.ts'
 import { resolve } from 'node:path'
@@ -1467,6 +1473,44 @@ let sessionsOf = (all: Row[]) =>
     active: !!r.comps.session!.latest_seq,
   }))
 
+// The codebase in the graph follows what landed (D-37959): `yak code sync` in
+// the shared checkout, which reads only the files whose blob moved. The graph
+// it writes is the one yak selects ($YAK_CONFIG, then ~/.yak/yak.json), and
+// only when that config lists @yaks/code — the config line is the switch, and
+// without it nothing opens that graph at all. The landing stands either way,
+// so a failure is one line on stderr.
+let codeSync = async (root: string) => {
+  let graph = yakConfig()
+  let plugins: Plug[] = []
+  try {
+    plugins = graph ? yakRead(graph).plugins ?? [] : []
+  } catch { /* a config yak cannot read is one that lists nothing */ }
+  if (!plugins.some((p) => yakUsed(p) == '@yaks/code')) return
+  let yak = fileURLToPath(new URL('./yak.ts', import.meta.url))
+  let deno = fileURLToPath(new URL('../deno.json', import.meta.url))
+  let out = await new Deno.Command(Deno.execPath(), {
+    args: [
+      'run',
+      '-A',
+      '--config',
+      deno,
+      yak,
+      '--config',
+      graph!,
+      'code',
+      'sync',
+    ],
+    cwd: root,
+    stdin: 'null',
+    stdout: 'piped',
+    stderr: 'piped',
+  }).output()
+  let said = new TextDecoder().decode(out.success ? out.stdout : out.stderr)
+  let line = said.trim().split('\n')[0] ?? ''
+  if (out.success) print(`code sync: ${line}`)
+  else warn(`code sync skipped: ${line}`)
+}
+
 // The one landing door — a pure git primitive. The worktree you stand in names
 // what to land; `git worktree list` names the shared checkout and its base
 // branch (land.ts). No graph read, no gate, no task or claim required — running
@@ -1492,6 +1536,7 @@ let land = async (got: Got) => {
     `landed ${outcome.landed} — now close the task and release your claims ` +
       '(task done <id>; task release <id>)',
   )
+  await codeSync(outcome.root)
   // Landing is already complete. Sibling collection is housekeeping and a
   // graph outage cannot turn the successful git transition into a refusal.
   // Individual git failures are failed runs reported by probes.ts; a stale

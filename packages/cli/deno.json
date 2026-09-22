@@ -4,6 +4,7 @@
   "exports": {
     ".": "./mod.ts",
     "./yak": "./yak.ts",
+    "./config": "./config.ts",
     "./host": "./host.ts"
   },
   "license": "Apache-2.0",
