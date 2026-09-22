@@ -73,6 +73,9 @@ type Ctx = {
   sessionOf: (entry: string) => string | undefined
   /** the prose an artifact entity holds */
   body: (id: unknown) => string | undefined
+  /** the journal's stamp for the write that last set an anchor's sha — the
+   * moment somebody actually checked the place it names */
+  stamp: (id: unknown) => Record<string, string> | undefined
   /** an extra bundle, for a row that says more than one thing */
   also: (b: Bundle) => void
   /** a column this conversion could not carry, counted by name */
@@ -87,7 +90,11 @@ type Move = {
   says: string
   /** the eid the patch lands on, when it is not the row's own entity */
   onto?: (row: Row, ctx: Ctx) => string | undefined
-  make: (row: Row, ctx: Ctx) => Record<string, unknown> | null
+  make?: (row: Row, ctx: Ctx) => Record<string, unknown> | null
+  /** for a row that becomes entities of its own rather than a patch on this
+   * one: the whole bundles it says, `self` being the entity it was read off.
+   * `make` is not asked when a move says this. */
+  becomes?: (row: Row, ctx: Ctx, self: Eid) => Bundle[]
   /** set where this component's rows arrive by some route other than the loop
    * — the spine pass, or a plugin that derives them — and say which. Its table
    * is then not walked, and the count is reported under that reason rather
@@ -156,6 +163,21 @@ let asCall = (facet: string, ...cols: string[]): Move => ({
   },
 })
 
+// Every anchor the fleet wrote was written against the fleet's own checkout:
+// `task stale` asked the repository the caller stood in, and that was always
+// this one. A citation says it outright, since a path means nothing without
+// the repository it is read in. The url, not the path, because that is what
+// the `repo` row for this checkout names its repository by.
+let FLEET = 'https://github.com/jeffpeterson/tasks'
+
+// The paths one anchor named. The fleet's own reading (src/anchor.ts
+// `anchorPaths`) split on newlines and commas, but what was written into the
+// column also used spaces and semicolons — and a file entity called
+// `src/db.ts src/client.ts` is a file nothing could ever check, so every
+// separator anybody used separates here.
+let anchored = (paths: unknown): string[] =>
+  String(paths ?? '').split(/[\s,;]+/).filter(Boolean)
+
 /**
  * The table, as code: one entry per fleet component, `null` where nothing
  * takes its rows. It is checked against `docs/transition.md` before anything
@@ -184,9 +206,52 @@ let MOVES: Record<string, Move | null> = {
   // An anchor is no longer one component on the anchored entity: it is a
   // citation, and one anchor becomes several entities — a `file{path,
   // repository}` per path, and a `cites` edge to each carrying
-  // `revision{commit}`, `symbol`, `lines` and `quote` (D-37775). T-37783
-  // writes those rows; until it does, this takes none.
-  anchor: null,
+  // `revision{commit}`, `symbol`, `lines` and `quote` (D-37775).
+  //
+  // The anchored entity is the citing side: a memory or a design said its
+  // prose was true of these files at this commit, which is exactly what a
+  // citation says. An anchor that named no path cites nothing, and is all
+  // this drops.
+  anchor: {
+    says: 'cites',
+    becomes: (row, ctx, self) => {
+      let paths = anchored(row.paths)
+      if (!paths.length) return []
+      let repository = ctx.repository(FLEET)
+      let sha = text(row.sha)
+      // The commit an anchor promised against is an entity of its own, named
+      // by its sha (@yaks/git `commit`), because `revision` points at one
+      // rather than spelling it a second time. The fleet kept no `commit`
+      // row for any sha an anchor named, so this is where they arrive.
+      if (sha) {
+        ctx.also({
+          entity: { eid: sha, num: null },
+          commit: { repo: repository },
+        })
+      }
+      let symbol = text(row.symbol)
+      let start = num(row.start)
+      let quote = ctx.body(row.hunk)
+      let verified = ctx.stamp(row.entity)
+      return paths.map((path) => {
+        let to = derivedEid(`file|${repository}|${path}`)
+        ctx.also({
+          entity: { eid: to, num: null },
+          file: { path, repository },
+        })
+        return {
+          ...link(self, 'cites', to),
+          ...(sha ? { revision: { commit: sha } } : {}),
+          ...(symbol ? { symbol: { name: symbol } } : {}),
+          ...(start == null
+            ? {}
+            : { lines: { start, end: num(row.end) ?? start } }),
+          ...(quote ? { quote: { text: quote } } : {}),
+          ...(verified ? { verified } : {}),
+        }
+      })
+    },
+  },
   archetype: {
     says: 'archetype',
     // A descriptor names the tables an entity wears, and the tables change
@@ -1136,6 +1201,32 @@ let main = async () => {
     bodies.set(Number(r.entity), String(r.value))
   }
 
+  // When somebody last set an anchor's sha, as the journal recorded that
+  // write. It is the only provenance a citation's `verified` mark can
+  // honestly carry: an anchor kept no at or by of its own. The journal begins
+  // in July 2026 and almost every anchor is older, so almost every citation
+  // arrives unverified — which is what it is.
+  let stamps = new Map<number, Record<string, string>>()
+  for (
+    let r of all(
+      `select c.entity as entity, t.ts as ts, t.actor as actor, t.via as via
+         from journal_change c
+         join journal_tx t on t.id = c.tx
+         join journal_field f
+           on f.change = c.id and f.field = 'sha' and f.present = 1
+        where c.component = 'anchor'
+        order by t.id`,
+    )
+  ) {
+    let by = eidOf(r.actor)
+    let via = eidOf(r.via)
+    stamps.set(Number(r.entity), {
+      at: String(r.ts),
+      ...(by ? { by } : {}),
+      ...(via ? { via } : {}),
+    })
+  }
+
   let firsts = new Map<string, string>()
   for (
     let r of all(
@@ -1268,6 +1359,7 @@ let main = async () => {
     firstEntry: (session) => firsts.get(session),
     sessionOf: (entry) => ran.get(entry),
     body: (id) => bodies.get(Number(id)),
+    stamp: (id) => stamps.get(Number(id)),
     also: (b) => batch.push(b),
     lost: (column) => lost[column] = (lost[column] ?? 0) + 1,
   }
@@ -1350,7 +1442,13 @@ let main = async () => {
       if (FACETS.includes(comp) || comp == 'call') {
         row.$tool = toolOf.get(Number(row.entity)) ?? comp
       }
-      let comps = move.make(row, ctx)
+      if (move.becomes) {
+        let said = move.becomes(row, ctx, self)
+        for (let b of said) await push(b)
+        if (said.length) made++
+        continue
+      }
+      let comps = move.make ? move.make(row, ctx) : null
       if (!comps) continue
       let onto = move.onto ? move.onto(row, ctx) : self
       if (!onto) continue
