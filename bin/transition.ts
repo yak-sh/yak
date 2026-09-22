@@ -181,7 +181,12 @@ let MOVES: Record<string, Move | null> = {
       return row.slug == null ? null : { name: String(row.slug) }
     },
   },
-  anchor: same('anchor', 'paths', 'sha', 'symbol', 'hunk', 'start', 'end'),
+  // An anchor is no longer one component on the anchored entity: it is a
+  // citation, and one anchor becomes several entities — a `file{path,
+  // repository}` per path, and a `cites` edge to each carrying
+  // `revision{commit}`, `symbol`, `lines` and `quote` (D-37775). T-37783
+  // writes those rows; until it does, this takes none.
+  anchor: null,
   archetype: {
     says: 'archetype',
     // A descriptor names the tables an entity wears, and the tables change

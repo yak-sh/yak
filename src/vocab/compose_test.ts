@@ -67,7 +67,6 @@ let SHARED = [
   'about',
   'accept',
   'alias',
-  'anchor',
   'app',
   'archetype',
   'architecture',

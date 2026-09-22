@@ -13,7 +13,7 @@
 // tool runner records as a failed call and a command line reports as exit 1.
 // Those are the same two exit codes `land` has always had.
 //
-// `cites check` is a CHECK — a tool whose verb is `check`, which is all a
+// `cites check` is a check — a tool whose verb is `check`, which is all a
 // doctor is (@yaks/tools ./check.ts) — so a citation that moved is a finding
 // in a report, never a refused write. It enforces nothing, on purpose: a
 // document whose code moved is work somebody has to do, not a transaction to
@@ -21,7 +21,7 @@
 // which is what keeps the mark meaning "somebody looked" rather than
 // "somebody edited this".
 //
-// The journal is a SEAM rather than an import of the log: a citation of an
+// The journal is a seam rather than an import of the log: a citation of an
 // entity is graded on what changed about that entity afterwards, which only a
 // host with @yaks/journal's tables can answer, and a host without them gets
 // `unknown` rather than a wrong answer.

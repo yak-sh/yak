@@ -1,6 +1,6 @@
 // The citation tools, handed bundles the way a runner hands them over. A tool
 // is a function from bundles to bundles: nothing here opens a store, and what
-// the answer LANDS as is the runner's, tested where the runner is.
+// the answer lands as is the runner's, tested where the runner is.
 //
 // The cases that need Git run under TASKS_SLOW, since each builds a
 // repository. The rest reach no subprocess at all: a citation nobody has
