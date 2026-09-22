@@ -13,6 +13,11 @@
   It is also still yaks.app's voice: plain words, short sentences, no hype. It
   is the page for the person who asked "but where does it actually run" — the
   lead says out loud that nobody needs to read it.
+
+  It is a page of the documentation now (docs.ts, T-37752), served at
+  /docs/technical straight out of this file while the rest of those pages are
+  the guide's markdown drawn at request time. /technical answers a 301 to it.
+  Being in a subdirectory, it names the site's own files from the root.
 -->
 <html lang="en">
   <head>
@@ -24,10 +29,10 @@
       content="Where yaks.app runs, where your things are kept, what an app can do, and what it can't do yet."
     />
     <meta name="color-scheme" content="light dark" />
-    <link rel="canonical" href="https://yaks.app/technical" />
+    <link rel="canonical" href="https://yaks.app/docs/technical" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="yaks.app" />
-    <meta property="og:url" content="https://yaks.app/technical" />
+    <meta property="og:url" content="https://yaks.app/docs/technical" />
     <meta property="og:title"
       content="Technical: hosting, storage and limits" />
     <meta
@@ -50,26 +55,26 @@
     <meta name="twitter:image" content="https://yaks.app/og.png" />
     <meta name="twitter:image:alt"
       content="yaks.app: build an app by asking Claude or ChatGPT" />
-    <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32" />
-    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap"
     />
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <header class="Top">
       <a class="Top_Name" href="/" aria-label="yaks.app, home">
-        <img class="Yak Yak-small" src="yak.png" alt="" />
+        <img class="Yak Yak-small" src="/yak.png" alt="" />
         <span>yaks.app</span>
       </a>
       <nav class="Nav" aria-label="Site">
         <a href="/#how">How it works</a>
         <a href="/pricing">Pricing</a>
-        <a href="/technical" aria-current="page">Technical</a>
+        <a href="/docs" aria-current="page">Documentation</a>
         <a href="/login">Sign in</a>
       </nav>
     </header>
@@ -132,7 +137,7 @@
         <p>
           Structured app data uses a graph of entities and components. Apps
           can declare their own components. See
-          <a href="/guide.md">the developer guide</a> for the data model.
+          <a href="/docs">the documentation</a> for the data model.
         </p>
       </section>
 
@@ -369,8 +374,9 @@
       <section id="more">
         <h2>More technical documentation</h2>
         <p>
-          <a href="/guide.md">The developer guide</a> documents the data model,
-          queries, files, sharing, server-side code, and error handling.
+          <a href="/docs">The documentation</a> covers the data model, queries,
+          files, sharing, server-side code, and error handling. Every page of
+          it is markdown as well, for an assistant to read.
         </p>
         <p>
           Report an error on this page to
@@ -383,7 +389,7 @@
       <p>yaks.app · Yak Shaving LLC</p>
       <ul class="Foot_Links">
         <li><a href="/help">Help</a></li>
-        <li><a href="/technical">Technical</a></li>
+        <li><a href="/docs">Documentation</a></li>
         <li><a href="/pricing">Pricing</a></li>
         <li><a href="/terms">Terms</a></li>
         <li><a href="/privacy">Privacy</a></li>

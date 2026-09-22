@@ -83,6 +83,7 @@ import { directory } from './directory.ts'
 import { customOf, reading, stageOf, type Step, steps } from './domains.ts'
 import * as drop from './drop.ts'
 import { bound, type Env, type Inbound } from './env.ts'
+import * as docs from './docs.ts'
 import * as gallery from './gallery.ts'
 import { apex, hosted } from './host.ts'
 import * as identity from './identity.ts'
@@ -238,6 +239,12 @@ let serve = async (req: Request, env: Env, r: Route) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let shown = await gallery.answer(req, env, path, dir)
   if (shown) return shown
+  // The documentation (docs.ts, T-37752): the guide's markdown drawn as pages
+  // of this site, and the 301 the old `/technical` address answers. It draws
+  // nothing for `/docs/technical`, which is a file, so that one falls through
+  // to the assets below.
+  let read = await docs.answer(req, env, path)
+  if (read) return read
   let page = await env.ASSETS.fetch(req)
   if (page.status == 404) return lost(env)
   let type = page.headers.get('content-type')?.split(';')[0].trim() ?? ''

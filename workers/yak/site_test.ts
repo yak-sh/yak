@@ -9,6 +9,7 @@ import { slow } from '../../src/testing.ts'
 import { REPLY_TO } from './mail.ts'
 import { CURRENCY, FILES, FREE, LETTERS, PLUS, PRICE, size } from './meter.ts'
 import { quoted, rate } from './sell.ts'
+import { DRAWN } from './docs.ts'
 import { page as galleryPage } from './gallery.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { askEmail, connect } from './pages.ts'
@@ -31,10 +32,12 @@ import {
 let read = (name: string) =>
   Deno.readTextFileSync(new URL(`./public/${name}`, import.meta.url))
 
+// The technical page moved under the documentation (docs.ts, T-37752), so it
+// is a file in a subdirectory and its address is /docs/technical.
 let pages = [
   'index.html',
   'help.html',
-  'technical.html',
+  'docs/technical.html',
   'pricing.html',
   'terms.html',
   'privacy.html',
@@ -47,16 +50,15 @@ let branded = [...pages, 'style-guide.html']
 Deno.test('every page wears the raster yak', () => {
   for (let page of branded) {
     let html = read(page)
+    // A page in a subdirectory names the site's own files from the root.
     assert(
-      html.includes(
-        '<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32" />',
-      ),
+      /<link rel="icon" href="\/?favicon-32\.png" type="image\/png" sizes="32x32" \/>/
+        .test(html),
       `${page} has no PNG favicon`,
     )
     assert(
-      html.includes(
-        '<link rel="apple-touch-icon" href="apple-touch-icon.png" />',
-      ),
+      /<link rel="apple-touch-icon" href="\/?apple-touch-icon\.png" \/>/
+        .test(html),
       `${page} has no home-screen icon`,
     )
     assert(!html.includes('yak.svg'), `${page} still uses the old drawing`)
@@ -110,7 +112,19 @@ Deno.test('the connector icon is square, self-contained and on the ground', () =
 // An extensionless link: the assets door serves `terms.html` for `/terms`
 // and redirects the other spelling, so the pages link the short one.
 let links = (html: string) =>
-  [...html.matchAll(/<a href="\/([a-z-]+)">/g)].map((m) => m[1])
+  [...html.matchAll(/<a href="(\/[a-z-]+)">/g)].map((m) => m[1])
+
+// The seven places the footer names, on every page of this site and on every
+// page the worker draws (shell.ts `foot`).
+let FOOT = [
+  '/help',
+  '/docs',
+  '/pricing',
+  '/terms',
+  '/privacy',
+  '/acceptable-use',
+  '/cookies',
+]
 
 Deno.test('every jump names a section on its own page', () => {
   for (let page of branded) {
@@ -120,7 +134,7 @@ Deno.test('every jump names a section on its own page', () => {
     )
     let jumps = [...html.matchAll(/href="#([^"]+)"/g)].map((m) => m[1])
     if (
-      ['index.html', 'help.html', 'technical.html', 'style-guide.html']
+      ['index.html', 'help.html', 'docs/technical.html', 'style-guide.html']
         .includes(page)
     ) {
       assert(jumps.length, `${page} has no jump navigation`)
@@ -150,7 +164,7 @@ Deno.test('the style guide demonstrates every shared component', () => {
 // (T-33643). The current page marks itself with aria-current and nothing else,
 // so the set of destinations is identical everywhere.
 Deno.test('every page carries the same four nav links', () => {
-  let want = ['/#how', '/pricing', '/technical', '/login']
+  let want = ['/#how', '/pricing', '/docs', '/login']
   for (let page of branded) {
     let nav = read(page).split('<nav class="Nav"')[1]?.split('</nav>')[0] ?? ''
     assert(nav, `${page} has no nav`)
@@ -172,7 +186,7 @@ let flat = (html: string) => html.replace(/\s+/g, ' ')
 Deno.test('the plan pages carry the email allowance the code enforces', () => {
   let free = `${LETTERS.free} emails a month`
   let plus = `${LETTERS.plus.toLocaleString('en-US')} emails a month`
-  for (let page of ['index.html', 'pricing.html', 'technical.html']) {
+  for (let page of ['index.html', 'pricing.html', 'docs/technical.html']) {
     let html = flat(read(page))
     assert(html.includes(free), `${page} does not say ${free}`)
     assert(html.includes(plus), `${page} does not say ${plus}`)
@@ -218,11 +232,7 @@ Deno.test('every footer link names a page that is there', () => {
     let foot = parseHTML(read(page)).document.querySelector('body > footer')
       ?.outerHTML ?? ''
     assert(foot, `${page} has no footer`)
-    assertEquals(
-      links(foot).map((l) => `${l}.html`),
-      pages.slice(1),
-      page,
-    )
+    assertEquals(links(foot), FOOT, page)
   }
 })
 
@@ -243,7 +253,7 @@ let pathOf = (page: string) =>
 // held to here, against the page it actually serves.
 Deno.test('the gallery is a page of this site, drawn rather than filed', async () => {
   assert(!SITE.includes(GALLERY.path), 'the gallery is not a file in public/')
-  assertEquals(RENDERED.map((p) => p.path), ['/gallery'])
+  assertEquals(RENDERED.map((p) => p.path), ['/gallery', '/docs'])
   let url = `https://yaks.app${GALLERY.path}`
   let one = flat(await galleryPage([]).text())
   assertStringIncludes(one, '<html lang="en">')
@@ -267,15 +277,22 @@ Deno.test('the gallery is a page of this site, drawn rather than filed', async (
   let nav = one.split('<nav class="Nav"')[1].split('</nav>')[0]
   assertEquals(
     [...nav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]),
-    ['/#how', '/pricing', '/technical', '/login'],
+    ['/#how', '/pricing', '/docs', '/login'],
   )
-  assertEquals(
-    links(one.split('<footer')[1]).map((l) => `${l}.html`),
-    pages.slice(1),
-  )
+  assertEquals(links(one.split('<footer')[1]), FOOT)
   assertStringIncludes(sitemap(null), `<loc>${url}</loc>`)
   // And the home page points at it, since it is in no nav.
   assertStringIncludes(read('index.html'), 'href="/gallery"')
+})
+
+// The rename is a rename: the link text and the address both moved, and a
+// page still saying the old one would be a page pointing at a 301 (T-37752).
+Deno.test('no page still says Technical, or links /technical', () => {
+  for (let page of branded) {
+    let html = read(page)
+    assertEquals(html.includes('href="/technical"'), false, page)
+    assertEquals(html.includes('>Technical</a>'), false, page)
+  }
 })
 
 Deno.test('the sitemap and the pages on disk are one list', () => {
@@ -376,6 +393,7 @@ Deno.test('the sitemap lists every address, and parses', () => {
     [
       ...SITE.map((p) => `https://yaks.app${p}`),
       ...RENDERED.map((p) => `https://yaks.app${p.path}`),
+      ...DRAWN.map((p) => `https://yaks.app${p}`),
       WHOLE,
       ...PAGES.map((p) => uriOf(p.slug)),
     ],
@@ -750,10 +768,31 @@ slow('the apex answers the crawler and the model', async () => {
     let whole = await (await k.at('yaks.app', '/llms-full.txt')).text()
     assertStringIncludes(whole, '# Building an app on yaks.app')
     // And it says the name outright, once, at the top (T-34302).
-    assertStringIncludes(whole, 'This place is called yaks.app')
+    assertStringIncludes(whole, 'This platform is called yaks.app')
     for (let p of PAGES) {
       assertStringIncludes(whole, `<!-- ${uriOf(p.slug)} -->`)
     }
+
+    // The documentation, drawn from those same files (docs.ts, T-37752): the
+    // map, one subject, the technical page that is still a file under it, and
+    // the 301 its old address answers.
+    let map2 = await (await k.at('yaks.app', '/docs')).text()
+    assertStringIncludes(map2, '<h1>Building an app on yaks.app</h1>')
+    assertStringIncludes(map2, '<a href="/docs/querying">')
+    let one = await (await k.at('yaks.app', '/docs/querying')).text()
+    assertStringIncludes(
+      one,
+      '<title>Querying: the filter grammar · yaks.app</title>',
+    )
+    let tech = await k.at('yaks.app', '/docs/technical')
+    assertStringIncludes(await tech.text(), 'Technical details')
+    let moved = await k.at('yaks.app', '/technical', { redirect: 'manual' })
+    await moved.body?.cancel()
+    assertEquals(moved.status, 301)
+    assertEquals(
+      moved.headers.get('location'),
+      'https://yaks.app/docs/technical',
+    )
 
     // A space with no app of that name has nothing to serve there, and the
     // apex's file is not borrowed for it.

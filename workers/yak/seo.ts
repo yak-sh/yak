@@ -15,6 +15,7 @@
 // its own (route.ts): what a person publishes there is theirs to say. The door
 // that calls `answer` is a plugin's root door (seo_door.ts, plugin.ts
 // `routes`) and it answers nothing where the hostname names a space.
+import { DOCS, DRAWN } from './docs.ts'
 import type { Env } from './env.ts'
 import { PAGES, uriOf, whole } from './guide.ts'
 import { type Host, hosted, spaceHost, url } from './host.ts'
@@ -75,7 +76,7 @@ export let CONNECTOR = connector()
 export let SITE = [
   '/',
   '/pricing',
-  '/technical',
+  '/docs/technical',
   '/help',
   '/terms',
   '/privacy',
@@ -95,7 +96,12 @@ export let GALLERY = {
     'Explore apps made with yaks.app. Try one out or make it your own.',
 }
 
-export let RENDERED = [GALLERY]
+// The documentation's front page is drawn too (docs.ts): the guide's markdown
+// rendered as a page of this site. Its subject pages are drawn as well, but
+// they are named in `addresses` below rather than here — a model asking
+// llms.txt where the guide is wants the `.md` addresses, which the index
+// already gives it a section of its own for.
+export let RENDERED = [GALLERY, DOCS]
 
 // Every address the sitemap lists: the pages above, the ones the worker draws,
 // then the guide — the map and one page per subject, at the same `.md`
@@ -105,6 +111,7 @@ export let RENDERED = [GALLERY]
 export let addresses = (env: Host = {}) => [
   ...SITE.map((path) => at(path, env)),
   ...RENDERED.map((p) => at(p.path, env)),
+  ...DRAWN.map((path) => at(path, env)),
   whole(env),
   ...PAGES.map((p) => uriOf(p.slug, env)),
 ]

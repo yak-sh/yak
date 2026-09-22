@@ -51,6 +51,7 @@ import { keyed, prefixOf } from './files.ts'
 import { type Letter, REPLY_TO } from './mail.ts'
 import { esc } from './pages.ts'
 import { GALLERY } from './seo.ts'
+import { foot, head, html, top } from './shell.ts'
 import { type Host, replyTo, url as siteUrl } from './host.ts'
 
 // Where the gallery lives, and where a letter's links land. What the page SAYS
@@ -283,79 +284,6 @@ export let pictures = async (env: Env, all: Shown[]) =>
   })))
 
 // ---- the page ----------------------------------------------------------
-
-// What every page here wears in its head, in the shape the file pages wear it
-// (public/*.html, site_test.ts): the title and the line, the canonical, the
-// Open Graph pair a link unfurls with, and the site's own stylesheet. A page
-// the worker draws is still one of the site's pages.
-let head = (
-  env: Host,
-  title: string,
-  description: string,
-  at: string,
-  index = true,
-) =>
-  `<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)}</title>
-<meta name="description" content="${esc(description)}">
-<meta name="color-scheme" content="light dark">
-${
-    index
-      ? ''
-      : '<meta name="robots" content="noindex">\n'
-  }<link rel="canonical" href="${esc(at)}">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="yaks.app">
-<meta property="og:url" content="${esc(at)}">
-<meta property="og:title" content="${esc(title)}">
-<meta property="og:description" content="${esc(description)}">
-<meta property="og:image" content="${siteUrl(env, '/og.png')}">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="${esc(title)}">
-<meta name="twitter:description" content="${esc(description)}">
-<meta name="twitter:image" content="${siteUrl(env, '/og.png')}">
-<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap">
-<link rel="stylesheet" href="/style.css">`
-
-// The site's own header and footer, said the way the files say them, so a page
-// drawn here is not a page a visitor can tell apart from one that is a file.
-// The nav is the same four places on every page of this site or it is not a
-// nav (site_test.ts), and the footer the same seven. A page drawn here says
-// them exactly as the files say them — the gallery is reached from the home
-// page's showcase, not by growing the nav a fifth link on one page only.
-let top = `<header class="Top">
-<a class="Top_Name" href="/" aria-label="yaks.app, home"><span>yaks.app</span></a>
-<nav class="Nav" aria-label="Site">
-<a href="/#how">How it works</a>
-<a href="/pricing">Pricing</a>
-<a href="/technical">Technical</a>
-<a href="/login">Sign in</a>
-</nav>
-</header>`
-
-let foot = `<footer class="Foot">
-<p>yaks.app · Yak Shaving LLC</p>
-<ul class="Foot_Links">
-<li><a href="/help">Help</a></li>
-<li><a href="/technical">Technical</a></li>
-<li><a href="/pricing">Pricing</a></li>
-<li><a href="/terms">Terms</a></li>
-<li><a href="/privacy">Privacy</a></li>
-<li><a href="/acceptable-use">Acceptable use</a></li>
-<li><a href="/cookies">Cookies</a></li>
-</ul>
-</footer>`
-
-let html = (body: string, status = 200) =>
-  new Response(`<!doctype html>\n<html lang="en">\n<head>\n${body}\n`, {
-    status,
-    headers: { 'content-type': 'text/html; charset=utf-8' },
-  })
 
 // The card opens the app. Copy instructions sit outside that link so selecting
 // them does not navigate away.

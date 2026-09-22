@@ -552,7 +552,7 @@ Deno.test('sandbox_exec names what is in the image, and where the rest comes fro
 Deno.test('the guide and the limits page say the same image', async () => {
   let [guide, tech] = await Promise.all([
     at('public/guide/code.md'),
-    at('public/technical.html'),
+    at('public/docs/technical.html'),
   ])
   for (let [name, version] of await pinned()) {
     assert(guide.includes(version), `code.md names ${name} ${version}`)

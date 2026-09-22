@@ -380,6 +380,7 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 "@yaks/journal" = "../../packages/journal/mod.ts"
 "@yaks/key" = "../../packages/key/mod.ts"
 "@yaks/mail" = "../../packages/mail/mod.ts"
+"@yaks/markdown" = "../../packages/markdown/mod.ts"
 "@yaks/match" = "../../packages/match/mod.ts"
 "@yaks/mcp" = "../../packages/mcp/mod.ts"
 "@yaks/member" = "../../packages/member/mod.ts"
@@ -407,6 +408,9 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # here, out of this directory's own install (package.json).
 "@std/yaml" = "./node_modules/@std/yaml/mod.js"
 "croner" = "./node_modules/croner/dist/croner.js"
+# @yaks/markdown parses with marked, and the repo vendors it as plain ESM
+# (deno.json), so the documentation pages cost this bundle no npm install.
+"marked" = "../../src/vendor/marked.esm.js"
 "preact" = "./node_modules/preact/dist/preact.module.js"
 "preact/hooks" = "./node_modules/preact/hooks/dist/hooks.module.js"
 "preact-render-to-string" = "./node_modules/preact-render-to-string/dist/index.mjs"

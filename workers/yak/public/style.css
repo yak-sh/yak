@@ -723,6 +723,77 @@
     color: var(--soft-ink);
   }
 
+  /* The documentation (docs.ts): the guide's markdown drawn as a page. The
+     renderer names no classes — it emits the plain elements the markdown
+     asked for — so everything here dresses those, and .Prose above already
+     dresses the rest. Each rendered block is its own grid so paragraphs sit
+     closer together than sections do. */
+  .Docs .Markdown {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .Docs h3 {
+    margin-top: 0.75rem;
+    font-size: 1.05rem;
+    font-weight: 800;
+  }
+
+  .Docs ol:not([class]) {
+    display: grid;
+    gap: var(--half-gap);
+    padding-inline-start: 1.4rem;
+    list-style: decimal;
+  }
+
+  /* Code blocks are the one thing wider than the column, and they scroll
+     rather than push the page sideways. */
+  .Docs pre {
+    margin: 0;
+    padding: var(--half-gap) 0.75rem;
+    border-radius: var(--small-radius);
+    background: var(--paper);
+    overflow-x: auto;
+  }
+
+  .Docs pre code {
+    padding: 0;
+    background: none;
+    font-size: var(--small);
+  }
+
+  .Docs blockquote {
+    margin: 0;
+    padding-inline-start: 0.75rem;
+    border-inline-start: 2px solid var(--line);
+    color: var(--soft-ink);
+  }
+
+  .Docs_Pages {
+    display: grid;
+    gap: 0.75rem;
+    padding: var(--gap);
+    border-radius: var(--radius);
+    background: var(--paper);
+  }
+
+  .Docs_Pages ul {
+    display: grid;
+    gap: var(--half-gap);
+    margin: 0;
+    padding-inline-start: 1.25rem;
+    list-style: disc;
+  }
+
+  .Docs_Pages li {
+    color: var(--soft-ink);
+  }
+
+  .Docs_Back {
+    color: var(--soft-ink);
+    font-size: var(--small);
+  }
+
   /* The style guide itself (style-guide.html): a wider column, because a
      row of swatches is the one thing here that is not a letter. */
   .Guide {
