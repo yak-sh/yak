@@ -274,6 +274,21 @@ slow(
       // in, whole bundles out, and a batch of bundles to write.
       assertStringIncludes(says('graph_query'), 'A query string')
       assertStringIncludes(says('graph_apply'), 'an array of bundles')
+      // And each of them names the page that documents it, which is what a
+      // directory reviewing a connector asks of a tool that queries something.
+      for (
+        let [name, page] of [
+          ['graph_query', 'querying'],
+          ['search', 'querying'],
+          ['graph_apply', 'store'],
+          ['graph_schema', 'components'],
+        ]
+      ) {
+        assertStringIncludes(
+          says(name),
+          `Documentation: https://yaks.app/docs/${page}.`,
+        )
+      }
       // Both mail tools say which mailbox they are, because the tool list is
       // where a model with a mail connector beside this one decides what
       // "check my email" meant (T-34149).

@@ -4,7 +4,7 @@
 // every structured reply against the tool's published outputSchema, so a
 // schema that stopped describing its answer fails here.
 
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { z } from 'zod'
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -80,6 +80,32 @@ Deno.test('a read-only door lists no write, and its reads take its scope', async
   assert(tools.find((t) => t.name == 'graph_query')!.inputSchema.properties.q)
   let out = await called(client, 'search', { shelf: 'poetry', words: 'spring' })
   assertEquals(bundles(result(out))[0].entity.eid, 'b1')
+  await client.close()
+})
+
+// A directory reviewing a connector asks a tool that queries something to name
+// the documentation for what it queries, so each of these closes with the page
+// that explains it. The address is the project's own: these tools are the same
+// tools whoever serves them, and so is the page that documents them.
+Deno.test('every generic tool says where it is documented', async () => {
+  let client = await connect({ search: () => [spring] })
+  let tools = (await client.listTools()).tools as {
+    name: string
+    description: string
+  }[]
+  for (
+    let [name, page] of [
+      ['graph_query', 'querying'],
+      ['search', 'querying'],
+      ['graph_apply', 'store'],
+      ['graph_schema', 'components'],
+    ]
+  ) {
+    assertStringIncludes(
+      tools.find((t) => t.name == name)!.description,
+      `Documentation: https://yaks.app/docs/${page}.`,
+    )
+  }
   await client.close()
 })
 
