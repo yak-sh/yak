@@ -1,8 +1,25 @@
 # @yaks/openai
 
 An OpenAI Responses API client and an adapter for `@yaks/model`. The client
-handles streamed responses, credentials, retries, and errors; the session
-package handles transcript persistence.
+handles streamed responses, credentials, retries, and errors. It does not open a
+database or persist conversations. Applications can call it directly, or use
+`@yaks/session` to save requests, replies, usage, and response IDs in a graph.
+Optional generated images are written through a storage callback supplied by the
+application.
+
+## Exports
+
+- `responses(options)` returns a provider-neutral `Model` from `@yaks/model`.
+- `transport(options)` returns the lower-level Responses client, with `run()`
+  and `reach()` methods. `frames(stream)` decodes server-sent events (SSE).
+- `credential`, `fromEnv`, `fromCodex`, and `codexPaths` read or locate
+  credentials through application-supplied environment and file functions.
+  `OPENAI` and `CODEX` identify the two default endpoints.
+- `input`, `body`, and `items` convert between model requests/replies and
+  Responses API data. `ResponseError` describes transport failures; exported
+  types describe options, credentials, events, results, usage, and images.
+- `openaiDoc` and `OPENAI_COMP` describe the `openai{response_id}` component.
+  `@yaks/openai/vocab` exports `openaiDoc` and `docs` for schema loading.
 
 ## Install
 
@@ -17,30 +34,39 @@ import { credential, responses } from '@yaks/openai'
 
 let model = responses({
   credential: credential(Deno.env.get, Deno.readTextFile),
+  web: false, // Enable provider-hosted search when the application needs it.
 })
 let reply = await model({
   model: 'your-model-id',
   items: [{ kind: 'user', text: 'hi' }],
   tools: [],
 })
+console.log(reply.items)
 ```
 
-`credential` looks in the environment (`OPENAI_API_KEY`, the public API) and
-then in the Codex CLI's `auth.json` (`TASKS_CODEX_HOME`, `CODEX_HOME`,
-`~/.local/state/tasks/codex`, `~/.codex`), whose OAuth tokens reach the Codex
-backend under their account. How a file is read is handed in, so the package
-runs wherever `fetch` does.
+`credential` checks `OPENAI_API_KEY` first. It then checks `auth.json` in
+`TASKS_CODEX_HOME`, `CODEX_HOME`, `$XDG_STATE_HOME/tasks/codex`,
+`~/.local/state/tasks/codex`, and `~/.codex`, in that order, skipping absent
+roots and unreadable or unusable files. API keys use the public API; Codex OAuth
+tokens use the Codex backend with their account ID. The application supplies
+file and environment access, so the client itself needs only web-standard APIs.
 
-Every request streams and is read to its end; only the completed items come back
-as neutral items. `store` is `false` unless asked for: the Codex backend refuses
-anything else. What the API keeps about a reply is this package's own component,
-`openai{response_id}` (`openaiDoc`, written by the model's `mark`); with `store`
-on, `anchor` reads it back so that the next request continues from that reply
-and sends only what followed it. Without `store`, `anchor` returns nothing and
-the caller replays the conversation.
+Every HTTP request streams and is read to the end. The returned reply contains
+completed model items. Supply `request.onText` to receive text deltas while the
+request runs. Reasoning and other provider-specific items are available through
+the lower-level transport rather than the neutral model item list.
 
-A refusal the API named, a missing credential, and a connection that was never
-established are all `ModelError`s. Anything else thrown is a bug.
+`store` defaults to `false`. The model's `mark(reply)` returns
+`openai{response_id}` for the caller to persist; it does not write the graph
+itself. With `store: true`, `anchor(components)` returns that ID so a session
+can continue from a stored response and send only subsequent context. Without
+storage, `anchor` returns nothing and the caller replays the conversation. The
+Codex backend requires `store: false`.
+
+Operational transport failures are mapped to `ModelError`, except a provider
+`invalid_request_error`, which remains a `ResponseError` so callers can inspect
+invalid request history. Other exceptions, including application callback
+failures, propagate unchanged.
 
 ## Provider-native transport
 
@@ -81,32 +107,36 @@ later runs, and hides credential-loader exception messages. It is not a general
 PII filter. Observation vocabulary is not part of this package.
 
 The native transport defaults to two bounded retries for credential loading and
-for every transient HTTP failure — a connection that was never established, a
-body that was cut off, a stream that ended with no completion, a 5xx or 429, and
-any failure whose provider `code` indicates capacity (`server_is_overloaded`,
+for transient request failures: an unestablished connection, a truncated body, a
+stalled stream, a stream ending without completion, a 5xx or 429, and any
+failure whose provider `code` indicates capacity (`server_is_overloaded`,
 `server_error`, `overloaded`, `overloaded_error`, `rate_limit_exceeded`)
 whatever its status. Auth and validation refusals fail fast. `Retry-After`
-extends the backoff, up to 60s. One refresh on 401 when supplied. `retries` and
-`pause` configure the backoff. `shape` replaces the default request shaping for
-compatible providers; otherwise requests always stream, default to
-`store: false`, and request encrypted reasoning. `reach()` probes `/models` with
-a five-second timeout: any HTTP answer proves connectivity, not authorization.
+extends the backoff, up to 60s. One refresh on 401 when supplied. `retries` sets
+the attempt limit and `pause` supplies the delay function. `patienceMs` can
+extend HTTP retries beyond that limit; its default of zero keeps the attempt
+limit. `run(request, { noRetry: true })` prevents replay of a dispatched
+exchange. `shape` replaces the default request shaping for compatible providers;
+otherwise requests always stream, default to `store: false`, and request
+encrypted reasoning. `reach()` probes `/models` with a five-second timeout: any
+HTTP answer proves connectivity, not authorization.
 
 Native failures are `ResponseError`s with a stable `kind` and optional provider
 `code` (the error body's or event's `code`, or its `type` when the code is
-null), HTTP `status`, rate `limits`, and partial `items`/`evidence`. The Model
-adapter maps these to `ModelError`s and defaults to no retries. It accepts the
-same transport policies plus `refresh`, `signal`, and `event`; its `store` and
-anchor behavior is unchanged. `frames(stream)` exposes the same SSE decoder
-without transport policies or redaction and releases its reader on exit.
+null), HTTP `status`, rate `limits`, and partial `items`/`evidence`. The model
+adapter uses the same retry defaults, but disables HTTP replay when the request
+has an `onText` callback, preventing duplicate streamed text. It accepts the
+transport policies plus `refresh`, `signal`, and `event`; error mapping and
+continuation behavior are described above. `frames(stream)` exposes the same SSE
+decoder without transport policies or redaction and releases its reader on exit.
 
 Completed Responses usage is returned as provider-neutral `Reply.usage` and
-persisted by the session on the ask entry's `usage` component. Counts include
-input, output, total, cached input, and reasoning output tokens when reported.
-Cached tokens are part of input, and reasoning tokens are part of output;
-neither should be added again. Missing counts remain unknown, not zero. The
-provider does not report a cache expiration timestamp here; a cache hit records
-past reuse, not a promise that the next request will hit the cache.
+persisted by the session on the model-request entry's `usage` component. Counts
+include input, output, total, cached input, and reasoning output tokens when
+reported. Cached tokens are part of input, and reasoning tokens are part of
+output; neither should be added again. Missing counts remain unknown, not zero.
+The provider does not report a cache expiration timestamp here; a cache hit
+records past reuse, not a promise that the next request will hit the cache.
 
 ## Native image generation
 
@@ -117,6 +147,7 @@ Image generation is opt-in. Supply an external binary store through the existing
 import { artifactStore, fileBlobs } from '@yaks/blob'
 import { responses } from '@yaks/openai'
 
+const apiKey = Deno.env.get('OPENAI_API_KEY')!
 const model = responses({
   credential: () => ({ token: apiKey, base: 'https://api.openai.com/v1' }),
   images: {
@@ -144,7 +175,7 @@ directly must not log raw image events.
 
 The check validates format signatures, not full image decoding. Dimensions are
 not inferred. A storage error fails the response rather than claiming an image
-was saved. Failed graph admission after a successful external write can leave an
+was saved. A failed graph write after a successful external write can leave an
 unreferenced blob; cleanup is not automatic. No live-provider generation was
 used in the automated tests.
 
@@ -172,4 +203,6 @@ Provider/model support and account permissions still apply; an unsupported-tool
 error is reported rather than silently retrying without web access. This was
 validated with mocked responses, not a paid live request.
 
-Reference: https://developers.openai.com/api/docs/guides/tools-web-search
+See the
+[OpenAI web search guide](https://developers.openai.com/api/docs/guides/tools-web-search)
+for provider behavior and supported models.

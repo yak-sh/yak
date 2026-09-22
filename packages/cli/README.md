@@ -1,82 +1,73 @@
 # @yaks/cli
 
-`yak`, the command line for a [@yaks/graph](https://jsr.io/@yaks/graph) — either
-one this machine can open as a file, or one an MCP server holds somewhere else.
+`@yaks/cli` provides `yak`, a command-line client for a
+[@yaks/graph](../graph/README.md), and the functions that assemble and serve a
+graph from a JSON config file. A graph stores entities. Each entity has a stable
+ID and components, which are named objects containing columns. A bundle is one
+entity's components represented as a JSON object; it can describe the entity's
+current state or a change to it. A batch is a list of changes applied in one
+transaction.
 
 ```sh
 deno install -gAf jsr:@yaks/cli/yak
+
+yak --config yak.json task list # Open a local graph, run a tool, and exit.
+yak land                        # Run a tool against the selected graph.
+yak serve --config yak.json     # Serve a local graph over HTTP.
+yak app_list                    # Call a tool on the selected MCP server.
 ```
 
-A GRAPH is a store of entities: an entity has a stable id, carries components
-(named objects of columns), and a write is a list of those bundles applied in
-one transaction. [@yaks/graph](../graph/README.md) defines those terms; this
-package is how a person and a script reach one.
+A tool is an operation declared by a graph, with a name, an input schema, and an
+implementation. `yak` turns each tool in the selected graph into a subcommand.
+Its arguments and help come from the tool's input schema, so a new tool does not
+require a new CLI release.
 
-```sh
-yak --config yak.json task list    # opens that graph, runs the tool, exits
-yak land                           # the same, in the checkout you are in
-yak serve --config yak.json        # an HTTP server over the same graph
-yak app_list                       # a tool yaks.app lists, called over /mcp
-```
+`yak` provides five commands itself: `help`, `login`, `logout`, `serve`, and
+`apply`. Its other commands come from either a graph opened in the current
+process or an MCP server queried at run time.
 
-Every subcommand is a TOOL. `yak` itself carries only `help`, `login`, `logout`,
-`serve` and `apply`; everything else is a tool of the graph the command opens,
-or a tool the MCP server it names lists, read at run time and parsed through
-that tool's own input schema. So the command line cannot drift from what an
-agent is calling, and a tool a release adds is a subcommand the day it ships,
-without publishing this package again.
+The package has two main responsibilities:
 
-Two halves, one set of tools:
-
-- **the composition** ([./serve.ts](./serve.ts)) — one config file naming plugin
-  packages, whose subpath exports are imported one at a time and composed into a
-  running graph. A command line composes it to run one tool and exit
-  ([./local.ts](./local.ts)); `yak serve` composes the same thing and serves
-  HTTP over it. There is no other wiring: a graph IS a config file and a list of
-  packages.
-- **the client** ([./platform.ts](./platform.ts)) — for a graph this machine
-  cannot open as a file, every tool an MCP server lists becomes a subcommand of
-  the same name, with that tool's input schema as its grammar and its own help
-  page.
+- [`serve.ts`](./serve.ts) imports configured plugin modules, opens storage,
+  assembles the graph, and optionally serves it over HTTP.
+- [`platform.ts`](./platform.ts) lists and calls tools on a remote MCP server.
+  [`local.ts`](./local.ts) exposes the same command interface for a graph opened
+  by the current process.
 
 ## Where a command runs
 
-**There is no server process to start.** A config names a GRAPH — a SQLite file
-and the plugins that read and write it — and a `yak` command OPENS it, imports
-them, runs the tool in its own process and exits. SQLite in WAL mode accepts as
-many writers as there are commands running, each serialized by the file itself,
-so nothing bottlenecks on a process somebody had to remember to start.
-`yak serve` is one more process over the same file.
+A host is a process that opens and runs a graph. A config file describes a local
+graph: its SQLite database, plugins, and host settings. A command that selects a
+config opens that graph in its own process, runs the requested tool, and exits.
+It does not require `yak serve`. SQLite uses WAL mode for file-backed graphs,
+allowing separate CLI and server processes to share the database.
 
-`--host` is for a graph this machine cannot open as a file — yaks.app, another
-machine — and then the command talks to that machine's MCP server at `/mcp`.
-Given together with `--config`, the two name two places and the command is
-refused.
+`--host` has a different meaning on the command line: it selects a remote
+hostname or origin whose MCP endpoint is `/mcp`. A bare hostname uses HTTPS.
+`--host` and `--config` cannot be used together because they select different
+graphs.
 
-In order, a command runs:
+The CLI chooses its target in this order:
 
-| what it was given | where it runs                                         |
-| ----------------- | ----------------------------------------------------- |
-| `--config <path>` | here, over the graph that config names                |
-| `--host <host>`   | there — a bare name is `https://`, an origin as given |
-| `$YAKS_HOST`      | there                                                 |
-| `$YAK_CONFIG`     | here, over the graph that config names                |
-| `~/.yak/yak.json` | here, over this machine's own graph, when it exists   |
-| nothing           | `yaks.app`                                            |
+| Input             | Target                                               |
+| ----------------- | ---------------------------------------------------- |
+| `--config <path>` | The local graph described by that config             |
+| `--host <host>`   | The remote MCP server at `<host>/mcp`                |
+| `$YAKS_HOST`      | The remote MCP server named by the variable          |
+| `$YAK_CONFIG`     | The local graph described by the variable            |
+| `~/.yak/yak.json` | The local graph described by this file, if it exists |
+| None of the above | `https://yaks.app/mcp`                               |
 
-So a machine whose shell exports `YAK_CONFIG=/etc/yak.json` types
-`yak task list` and opens its own graph; `yak --host yaks.app app_list` still
-reaches the platform from the same shell.
-
-A tool runs the same way either way: the command line writes a CALL entity and
-the runner runs it (@yaks/tools), so the record of a tool a person typed and a
-tool an agent called is the same record, and the rules, the post-commit effects
-and the attribution are one set for both.
+Local and remote tool invocations both create a call entity and run it through
+`@yaks/tools`. Tool calls made by people and agents therefore use the same
+validation, rules, effects, attribution, and stored record. CLI-only commands
+such as `help`, `login`, `logout`, `serve`, and `apply` use their own command
+implementations.
 
 ## The config
 
-One JSON file. `--config` names it, else `$YAK_CONFIG`, else the one this
-machine keeps for its own graph.
+Pass a config path with `--config`, set `$YAK_CONFIG`, or place the file at
+`~/.yak/yak.json`:
 
 ```json
 {
@@ -99,61 +90,49 @@ machine keeps for its own graph.
 }
 ```
 
-| field      | what it declares                                                                                                                  |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `db`       | the SQLite file, or `:memory:`. Relative to the config file itself                                                                |
-| `plugins`  | the packages, by import specifier; a relative one resolves against the config                                                     |
-| `port`     | what `serve` listens on (default 8787)                                                                                            |
-| `hostname` | which interface `serve` binds                                                                                                     |
-| `numbers`  | whether the store mints a short human-readable number beside each entity id. Opt-in: left out, no entity gets one                 |
-| `adopt`    | reuse the `num` an incoming entity already carries instead of minting one — what a store seeded from another store's export needs |
-| `name`     | what the MCP server calls itself (default `yak`)                                                                                  |
-| `lease`    | how long this process's hold on a background job stands before another process may take it over, in ms (default 30_000)           |
+Relative database paths and plugin specifiers are resolved relative to the
+config file.
+
+| Field      | Meaning                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------ |
+| `db`       | SQLite path or `:memory:`. Required unless `$DB_PATH` is set.                                    |
+| `plugins`  | Package specifiers, optionally paired with plugin-specific options.                              |
+| `port`     | Port used by `serve`; defaults to `8787`.                                                        |
+| `hostname` | Network interface used by `serve`.                                                               |
+| `numbers`  | Enables short entity numbers. `{ "except": [...] }` excludes entities carrying named components. |
+| `adopt`    | Preserves incoming entity numbers instead of minting new ones. Intended for store imports.       |
+| `name`     | MCP server name; defaults to `yak`.                                                              |
+| `lease`    | Background-job lease duration in milliseconds; defaults to `30000`.                              |
+
+There is no default database path. `compose` throws unless `db` or `$DB_PATH` is
+present.
 
 ### What a config passes to one plugin
 
-A `plugins` entry is a bare specifier, or `{"use": "<specifier>", "with": {…}}`
-— that plugin's own options, handed to each of its factories beside the HOST,
-the object holding the graph being assembled and everything under it
-(`rules(host, options)`, `effects(host, options)`, `routes(host, options)`; its
-fields are listed below). A plugin nobody configured is handed `{}`, so a
-factory reads its options without guarding first. The keys belong to the PLUGIN;
-nothing here interprets them, which is what keeps a config from growing a field
-per package.
+A plugin entry is either a package specifier or an object with `use` and `with`
+fields. Each exported plugin factory receives `(host, options)`. The host
+contains the config, vocabulary, database connection, store, graph, process
+entity, request authentication function, and shutdown signal. An entry without
+`with` receives an empty object. Option keys belong to the plugin.
 
-That is the answer to the one thing a plugin cannot state alone: what an effect
-ACTS ON. `@yaks/mail`'s outbound half hands a letter to a transport — an
-account, a token, an endpoint — and none of that is a fact about the graph, so
-the config names it and `@yaks/mail/effects` builds it. Name no sender and there
-is no outbound watch, which is what a graph that only receives mail wants.
+At any depth in `with`, an object containing only `{ "env": "NAME" }` reads that
+environment variable when the property is accessed. This keeps secrets out of
+the JSON file and lets a long-running plugin observe a value supplied after
+startup. An unset variable produces `undefined`; the plugin decides how to
+handle it.
 
-**A secret is named, not stored.** An option written `{"env": "NAME"}` — at any
-depth — is the environment's value at the moment it is READ, so a config file is
-committable, the token is not in it, and a variable exported after the process
-started is picked up by the next code that asks for one. A name nothing exports
-reads as undefined, and the plugin reports, in its own words, what it is waiting
-for.
-
-**Missing config never prevents startup.** A plugin's factory does not throw
-over config that has not arrived or cannot be used: it contributes nothing,
-reports why once, and its `check` tool keeps answering the question. A process
-comes up with its mail unsent, its uploads unmounted or its vectors unbuilt, and
-starts doing each the moment its config is there — rather than refusing to start
-at all.
-
-**There is no default database.** `db`, or `DB_PATH` in the environment, or the
-process refuses to start: the path anybody would pick as a default is somebody's
-live graph.
+Plugin factories may omit functionality when configuration is unavailable. Any
+diagnostic behavior, including a `check` tool, belongs to the plugin; the CLI
+does not impose a startup policy for missing plugin options.
 
 ## A plugin is a package, and each part of it is a subpath export
 
-No manifest, no registry, no activation. A plugin's `exports` map names one
-subpath per part it has, and the process opening the graph imports
-`<plugin>/<subpath>` for the parts it runs — serve.ts calls those six subpaths a
-plugin's `FACETS`. A subpath the package does not export is a part it does not
-have, and is skipped; a subpath that exists and fails to import is an error,
-never a skip. A package that exports none of the six is a typo in the config,
-and composing refuses it by name.
+A facet is a sub-module export: one optional plugin subpath that supplies a
+specific part of the running graph. `compose` looks for six facets in every
+configured package: `./vocab`, `./rules`, `./tools`, `./effects`, `./routes`,
+and `./service`. An unexported facet is skipped. An exported facet that fails to
+import causes composition to fail, as does a package that exports none of the
+six.
 
 ```json
 {
@@ -168,16 +147,20 @@ and composing refuses it by name.
 }
 ```
 
-| subpath     | what it exports                                                                      | may import          |
-| ----------- | ------------------------------------------------------------------------------------ | ------------------- |
-| `./vocab`   | `docs`, `keywords?`, `derived?`                                                      | nothing server-side |
-| `./rules`   | `rules: (host, options) => Plugin[]`, `extend?` (@yaks/sql)                          | anything            |
-| `./tools`   | `runs: (host, options) => Runs` — the functions behind its `tool: true` declarations | ajv, SQL, anything  |
-| `./effects` | `effects: (host, options) => Watch[]`                                                | anything            |
-| `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`                                | anything            |
-| `./service` | `service: (host, options, signal)` — what keeps running                              | anything            |
-| `./views`   | `views` — @yaks/render renderers for the web UI and the TUI                          | nothing server-side |
-| `.`         | types, and the pure functions the package offers as a library                        |                     |
+| Subpath     | Expected exports                                                              |
+| ----------- | ----------------------------------------------------------------------------- |
+| `./vocab`   | `docs?`, `keywords?`, and `derived?` declarations                             |
+| `./rules`   | `rules?: (host, options) => Plugin[]` and query `extend?` functions           |
+| `./tools`   | `runs?: (host, options) => Runs`, keyed by declared tool name                 |
+| `./effects` | `effects?: (host, options) => Watch[]` for post-commit work                   |
+| `./routes`  | `routes?: (host, options) => Route[]` and at most one `authenticate?` factory |
+| `./service` | `service?: (host, options, signal)` for leased background work                |
+| `.`         | Public types and library functions; not loaded by `compose`                   |
+
+The web UI separately imports `./vocab` and `./views`. Those modules must work
+in a browser and must not import SQL, storage drivers, or server-only APIs.
+`deno task check:browser` verifies this constraint. `compose` does not load
+`./views`.
 
 ```ts
 // @yaks/mail/vocab
@@ -188,176 +171,104 @@ export let derived = (vocab) => mailRead(vocab)
 // @yaks/mail/rules
 export let rules = (host, options) => [mailbox({ domain: options.domain })]
 
-// @yaks/embedding/rules — the same subpath's other half: what a QUERY may ask
+// @yaks/embedding/rules
 export let extend = (host, options) => [semantic(host.sql, embedderOf(options))]
 
-// @yaks/sqlite/tools — a tool function reads the host's own connection, and
-// its options
-export let runs = (host, options) => ({ storage_check: (_, ctx) => … })
-
-// @yaks/mail/routes
-export let routes = (
-  host,
-  options,
-) => [{ method: 'POST', path: '/inbound', handle }]
-export let authenticate = (request) => who(request) // at most one plugin
-```
-
-`./vocab` and `./views` are the two subpaths the web UI imports, from every
-package, so neither may reach storage, SQL or a server runtime;
-`deno task check:browser` type-checks both with only the web platform in scope.
-That is what lets a browser load what a plugin DECLARES without loading what it
-DOES — `@yaks/process/vocab` describes a running program where `@yaks/process`
-starts one.
-
-`compose` imports every subpath but `./views`, which is the web UI's business
-rather than the graph's.
-
-### A tool that acts on the MACHINE
-
-Some tools are not about the graph at all. `land` fast-forwards a branch;
-`hooks install` writes a settings file. They are tools like any other — declared
-in a `vocab.json`, listed over `/mcp`, run by the same runner — and what tells
-them where to act is `ctx.cwd`, the working directory of the process running the
-call. On a command line that is the directory the person typed in, because the
-command opened the graph itself and ran the tool in the same process.
-
-```ts
-// @yaks/git/tools
-export let runs = () => ({
-  land: async (_bundles, ctx) => {
-    let outcome = await land({ cwd: ctx.cwd, write })
-    if (!('landed' in outcome)) throw new CallError('diverged', said)
-    return [{ entity: { eid: '$landed' }, content: { body: … } }]
-  },
+// @yaks/sqlite/tools
+export let runs = (host, options) => ({
+  storage_check: (_bundles, ctx) => check(host.sql, options),
 })
 ```
 
-A tool that REFUSES rather than doing the work throws a `CallError`: the runner
-records it, and the command's exit code reports which it was.
+### A tool that acts on the MACHINE
 
-`host` is `{config, vocab, storage, sql, graph, me, who, stopping}`. `storage`
-and `graph` are live from the moment each is open — a factory may keep a
-reference, and must not call it before it returns. A `rules` factory runs while
-the graph is being composed and may install tables of its own through
-`host.sql`; the `extend` factory beside it returns the @yaks/sql extensions the
-STORE is built with, which is how a package holding an index of its own teaches
-the query compiler a clause the compiler would otherwise reject (`.near` over
-vectors, a text term over an index) — every read path then has it, and nobody
-wires one up. A factory need not take the whole host: it names the parts it uses
-(`(host: { vocab: Vocab }) => …`), which is how a package states what it needs
-without importing this one.
+Some tools change the machine running them instead of only changing the graph.
+For example, `land` updates a checkout and `hooks install` writes a settings
+file. Tool implementations receive `ctx.cwd`, the working directory of the
+process that executes the call. A locally opened graph uses the directory where
+the user ran `yak`; a remote call uses the server process's directory.
 
-A **route** is `{method, path, handle}` (@yaks/api `Route`): `handle` is a plain
-`(Request) => Response`, `path` is exact or ends in `*` for a prefix, and
-`method` is the HTTP method or `*` for any. A request no route claims falls
-through to @yaks/api, which answers `/apply`, `/query` and `/ws` and returns an
-error for anything else.
+A tool that declines a call throws `CallError`. The runner records the error,
+and `yak` returns exit code `1`.
 
-A route that WRITES signs what it writes: `host.who(request)` is the same answer
-`/apply` beside it gets, and `signed(change, actor)` (@yaks/api) attaches it —
-without it an upload or a capture is attributed to nobody while the write next
-to it is attributed. One plugin may name the caller (`authenticate` on its
-`./routes`, a factory like every other export, so it can read the graph to
-answer); where it names nobody, the answer is this process itself.
+Factories can retain `host.storage` and `host.graph`, but must not access them
+before initialization. In particular, `rules.extend` runs before the store
+exists. A route is an `@yaks/api` `Route` with `method`, `path`, and a
+`(Request) => Response` handler. Paths are exact unless they end in `*`; `*`
+also matches any method. Unmatched requests fall through to the standard
+`/apply`, `/query`, and `/ws` API.
+
+Routes that write should use `host.who(request)` and `signed` from `@yaks/api`
+to attribute their changes. At most one plugin may export `authenticate`.
+Without an authenticated caller, writes are attributed to the host process.
 
 ## Who a process writes as, and what starting up IS
 
-There is no configured actor, because a run of a program is not a singleton: two
-`yak` commands and a `yak serve` over one file are three writers. Every `yak`
-process — a command, an HTTP server, a TUI — writes its own row when it opens a
-graph (@yaks/process `started`):
+Every command, server, or TUI that opens a graph creates its own process entity:
 
-```
-process{pid, command, cwd}   …and exit{code} when it is over
+```text
+process{pid, command, cwd} ...and exit{code} when it closes
 ```
 
-That row is what its own writing is attributed to. A change reaching `apply()`
-with no `$actor` at all — a rule's effect, a bulk load poured in through
-`yak apply` — is this process's writing and is stored attributed to it, so
-`created.by` answers _which run wrote this_ and a child process's row, written
-by its parent, records whose child it is without needing a column for it. A
-request that authenticated somebody is signed with that identity instead.
+Writes without an explicit actor are attributed to that process. Authenticated
+requests are attributed to the authenticated identity. On shutdown, `close()`
+records the exit and releases the process's leases in one transaction.
 
-STARTING UP is that row appearing, so start-up work is an ordinary post-commit
-effect: a plugin registers `created(process)` and compares the entity against
-`host.me` (`@yaks/spawn/effects` re-adopts the agents a restart left running,
-`@yaks/session/effects` frees the locks a dead holder left). Each takes a
-`lease` (@yaks/effects) named for the work, so two processes starting together
-do not both do it. There is no `./boot` subpath and no start-up hook this
-package has to offer.
+Creating the process entity also provides the startup event. Plugins can
+register an effect for `created(process)` and compare its entity ID with
+`host.me`; there is no separate `./boot` facet. A lease prevents two processes
+opening the same graph from performing the same startup work.
 
 ## What `compose` does
 
-[`compose(config)`](./serve.ts) assembles the whole thing, in order:
+[`compose(config)`](./serve.ts) performs these steps:
 
-1. imports each plugin's subpath exports, one subpath apiece, skipping the ones
-   it does not export and refusing a plugin that exports none;
-2. loads every `./vocab`'s `docs` and `keywords` into one vocabulary
-   (@yaks/vocab `loadVocab` — a component declared twice is a conflict);
-3. opens the SQLite file (@yaks/sqlite), runs the migrations, and builds the
-   store with every `./vocab`'s `derived` columns, every `./rules`'s `extend`
-   clause compilers, and a full-text index over every column any vocabulary
-   declared `search: true` (@yaks/fts) — so a bare word in any query is a text
-   match and `/mcp` lists a ranked `search`;
-4. builds the graph over it with every `./rules` plus the post-commit effect
-   registry (@yaks/effects), whose writes go through the graph's own `apply()`,
-   trusted;
-5. registers every `./effects`;
-6. joins the vocabulary's `tool: true` declarations to the functions each
-   `./tools` exports (@yaks/graph `loadTools`) — a declaration nobody implements
-   is a load error, not a tool that lists and then fails;
-7. mounts the HTTP endpoints: @yaks/api at `/apply`, `/query` and `/ws`,
-   @yaks/mcp at `/mcp`, then the plugins' own routes;
+1. Imports every available server facet from each configured plugin.
+2. Combines vocabulary documents and keywords, rejecting duplicate component
+   declarations.
+3. Opens SQLite, runs migrations, and builds storage with derived columns, query
+   extensions, optional entity numbers, and full-text indexes for fields
+   declared with `search: true`.
+4. Builds the graph from plugin rules and the post-commit effect registry.
+5. Registers plugin effects and joins tool declarations to their `runs`
+   implementations. A declared tool without an implementation is an error.
+6. Creates the standard API, MCP endpoint, and plugin routes as one handler.
+7. Creates the current process entity after registrations are ready.
 
-and finally writes this process's own `process` row, whose creation is every
-plugin's start-up pass.
-
-It returns a `Served`: the host, its `me`, its `tools`, its `runner`, its `fx`,
-one `handler`, its `duties` and `close`. `serve(config)` is that plus
-`Deno.serve`, the `tool` rows a call points at, and the calls a crash left
-claimed and unanswered. Reading the config file is [./config.ts](./config.ts),
-which imports nothing, so a command that only needs to know WHERE the graph is
-never opens a database.
+It returns a `Served` object containing the `Host` fields plus `tools`,
+`runner`, `fx`, `handler`, `duties`, and `close`. `serve(config)` additionally
+ensures tool entities exist, reconciles interrupted calls, starts background
+jobs, and calls `Deno.serve`.
 
 ## Background jobs: the work nobody is asking for
 
-The effect sweep and every plugin's `./service` are background jobs — `duties`
-in the code: functions any process may run, one at a time, under a `lease`
-(@yaks/effects) named for the package that owns the work.
+The effect sweep and each plugin's `./service` export are background jobs,
+represented as `duties`. Each job runs under a lease named for its owning
+package, so only one process over a graph runs it at a time.
 
 ```ts
-await host.duties() //                    hold them while this process is up
-await host.duties(AbortSignal.abort()) // one pass each, then release them
+await host.duties() // Run until the host shuts down.
+await host.duties(AbortSignal.abort()) // Run one pass, then release leases.
 ```
 
-`serve` makes the first call and a `yak` command makes the second on its way in
-(local.ts), and that is the whole difference between them — nothing here assumes
-a separate process. A long-running process takes each job and renews its lease
-on a timer; a one-shot command does what nobody is doing and leaves alone what
-somebody is; a second long-running process waits, and takes a job over when a
-killed holder's lease expires. A machine where the only thing anybody runs is
-`yak tui` still fires its scheduled wakes; a machine that splits the HTTP
-server, the clock and the sweep across three processes still fires each exactly
-once.
+`serve` uses the long-running form. A one-shot local command uses the second
+form before executing its tool, allowing overdue effects and scheduled work to
+progress when no server is running. A live process renews its lease; another
+process can take over after the lease expires or is released.
 
-A process releases every lease it holds in the same transaction that stamps its
-`exit`, so an ordinary ending hands the work straight on and only a kill leaves
-a lease to expire.
-
-`close()` aborts `host.stopping` FIRST — before that last transaction and before
-the database is closed — so a plugin that armed a timer of its own hangs it off
-that signal and nothing is left pending over a store that is gone. A process
-ending is one fact, and everything it was doing on its own stops on it.
+`close()` first aborts `host.stopping`, then releases leases, records the
+process exit, and closes SQLite. Plugin timers and loops should listen to
+`host.stopping` or the signal passed to `service`.
 
 ## The command line
 
-`cli(commands, opts)` is the entry point: hand it commands and it reads the
-command line — the subcommand, either order of a two-word tool, the arguments
-through that tool's own input schema — runs the one it found, and returns the
-exit code (0 succeeded, 1 the tool or the server refused, 2 the command line was
-wrong). A program with subcommands of its own passes more; the first to claim a
-name wins, so the order of the list is the precedence.
+`cli(commands, opts)` parses and runs one command and returns an exit code:
+
+| Code | Meaning                                        |
+| ---- | ---------------------------------------------- |
+| `0`  | Success                                        |
+| `1`  | A tool or server refused or failed the request |
+| `2`  | Invalid command-line usage                     |
 
 ```ts
 import { cli, helpTool } from '@yaks/cli'
@@ -365,12 +276,48 @@ import { cli, helpTool } from '@yaks/cli'
 Deno.exitCode = await cli([helpTool(opts), ...mine], opts)
 ```
 
-Flags lifted off every command line: `--host`, `--config`, `--json`, `--timing`,
-`--help`. An argument value written `@path` is read from that file, and `-` is
-read from stdin. `$YAKS_TOKEN` is the bearer token when set, otherwise the one
-`yak login` saved.
+Commands earlier in the array take precedence. Tools with a noun and verb can be
+written in either order, such as `yak task list` or `yak list task`. The usage
+page groups verbs under their noun. `yak graph`, `yak graph --help`, and
+`yak help graph` print the commands in the `graph` group.
 
-The usage page groups a noun's verbs under it — `graph` holds `apply`, `query`,
-`show` and `schema` — and a tool that declared one word alone stands above them.
-A noun on its own prints that block by itself. So `yak graph`, the same word
-with `--help`, and `yak help graph` all ask one question: what can this word do.
+| Global flag       | Meaning                                                                |
+| ----------------- | ---------------------------------------------------------------------- |
+| `--config <path>` | Open the graph described by a local config.                            |
+| `--host <host>`   | Call a remote MCP server.                                              |
+| `--json`          | Print structured results as JSON.                                      |
+| `--timing`        | Print response timing to stderr. `$YAKS_TIMING=1` enables it globally. |
+| `--help`, `-h`    | Print general or command-specific help.                                |
+
+An argument value written as `@path` is read from that file; `-` reads from
+stdin. `yak apply` accepts a JSON array or newline-delimited JSON. For streamed
+input, it groups bundles into batches of 50; `--dry-run` validates and reports
+the result while rolling back the transaction.
+
+Remote authentication uses `$YAKS_TOKEN` when set. Otherwise,
+`yak login <token>` stores a token for the selected host and `yak logout`
+removes it. Tokens and cached tool lists are stored separately under
+`$YAKS_HOME`, or the platform config directory followed by `/yaks`:
+
+| File         | Contents                                                    |
+| ------------ | ----------------------------------------------------------- |
+| `token.json` | Per-host bearer tokens; mode `0600` on non-Windows systems  |
+| `tools.json` | Per-host tool schemas, protocol version, and roster version |
+
+The tool cache avoids an MCP round trip for ordinary calls. A server response
+that reports a changed roster invalidates or updates the cache.
+
+The package exports three entry points:
+
+- `@yaks/cli` exports command parsing, schema conversion, display and completion
+  helpers, MCP transport, token and roster storage, config reading, remote tool
+  listing, app-command adapters, and the `main`, `YAK`, `TOOLS`, and `HOST`
+  values used by the installed command.
+- `@yaks/cli/yak` exports the executable `main`, built-in commands, and
+  defaults. Run it directly or pass additional commands to `main(argv, extra)`.
+- `@yaks/cli/serve` exports config and host types, the facet loader, `compose`,
+  `serve`, and supporting host functions for programs that assemble a graph.
+
+Application commands use `yak command <name> --app <app> key=value`, or the
+short form `yak <app> <name> key=value`. Values are parsed as JSON when
+possible. A graph tool with the same command name takes precedence.

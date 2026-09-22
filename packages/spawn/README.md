@@ -1,60 +1,82 @@
 # @yaks/spawn
 
-Runs an agent CLI — `claude`, `codex` — as a detached child process, and reads
-its JSON-lines stdout back into the graph as a session transcript.
+`@yaks/spawn` starts supported agent CLIs as detached processes and imports
+their JSON-lines output into `@yaks/session` transcripts.
 
 ```sh
 deno add jsr:@yaks/spawn
 ```
 
-This package defines no components of its own. It connects three that already
-exist:
-
-- the session and its entries are [@yaks/session](../session)'s `session` and
-  `entry` components;
-- the running child process is [@yaks/process](../process)'s `process`
-  component, stored on that same session entity;
-- what was asked for is the `using{provider, model, effort}` component on the
-  session's first entry.
-
-Throughout this README, "the server" means whichever process opened the graph
-and loaded this package — usually a long-running `yak serve`, sometimes just the
-CLI.
+The package defines no process or transcript components. Sessions and entries
+come from `@yaks/session`; `process` and `exit` come from `@yaks/process`;
+`provider`, `model`, and `using` come from `@yaks/model`. Its vocabulary
+document declares the `session spawn`, `session wait`, and `session peek` tools.
 
 ## Starting an agent
 
-There is no HTTP endpoint that launches an agent, and no `launch` column.
-Instead you insert two rows — a session, and its first entry — and committing
-them is the request:
+Write a session and its first input in one transaction. A **bundle** is one
+entity's components as a JSON object, and a **batch** is a list of changes
+applied in one transaction.
 
 ```jsonc
 [
-  { "entity": { "eid": "$s" }, "session": {} },
+  { "entity": { "eid": "$session" }, "session": {} },
   {
-    "entity": { "eid": "$e" },
-    "entry": { "session": "$s" },
+    "entity": { "eid": "$entry" },
+    "entry": { "session": "$session" },
     "content": { "body": "fix T-1" },
     "using": { "provider": "Y-2", "model": "O-7", "effort": "high" }
   }
 ]
 ```
 
-That array is one transaction: `graph.apply()` writes all of it or none of it.
+The `@yaks/spawn/effects` handlers run after the batch commits. They read the
+provider's `name`, select the matching `claude` or `codex` adapter, validate the
+requested effort against the model, and start the command. Providers handled
+over HTTP have no command adapter and remain the responsibility of the
+in-process `@yaks/session` daemon.
 
-`@yaks/spawn/effects` exports handlers that run after such a transaction
-commits. When a `using` component appears on a session's first entry, the
-handler reads the provider entity it points at, reads that provider's `name`,
-and looks the name up in this package's adapter table — `claude`, `codex`, or
-any the server added. If there is a match, it runs that command. A provider
-whose transport is `http` is not in the table, so nothing is launched here and
-[@yaks/session](../session)'s in-process `react` handles it instead. The
-requested effort is validated against the `efforts` the model lists before
-anything starts.
+The process is stored on the session entity. It runs through `@yaks/process` in
+a detached systemd user scope, so it can outlive the process that opened the
+graph. That graph-opening process is the **host**. On host startup, the effects
+take the `@yaks/spawn` lease and resume monitoring active runs, preventing two
+hosts from importing the same logs. Effect handlers start the long-running work
+without awaiting it; failures go to the configured `report` callback.
 
-## The three tools
+<a id="how-the-child-process-is-started"></a>
 
-`@yaks/spawn/tools` exports the implementations of the three tools declared with
-`tool: true` in `vocab.json`. They are this package's whole public interface:
+The package does not reap child processes.
+
+## Logs and transcript storage
+
+<a id="the-log-file-and-the-transcript"></a>
+
+Standard output is stored in the process directory as `<session-eid>.out`. Each
+recognized line becomes a transcript entry with `imported{source, line}`. The
+largest imported line number is the durable read position, so monitoring can
+resume after a restart without a separate cursor. Unrecognized and invalid JSON
+lines remain in the file and are not entries.
+
+When the process exits, the follower appends a transcript `stop` entry. A
+nonzero exit is recorded with that entry. Writing `stop` on the session entity
+requests termination: SIGTERM to the process group, then SIGKILL after the
+configured grace period. A `stop` on an entry only ends the transcript.
+
+<a id="stopping-a-run"></a>
+
+Adapters omit provider-side tool calls from the graph. Those calls have already
+run in the agent process; recording them as session `call` components would
+allow the host's tool runner to execute them again.
+
+<a id="what-an-adapter-is"></a>
+
+An adapter contains a provider command line and a parser that converts one
+output line into transcript components. Providers and the models they serve
+remain graph entities, so adding a model does not require a package release.
+
+## CLI and tool use
+
+<a id="the-three-tools"></a>
 
 ```sh
 yak session spawn T-37667 --provider claude --model opus --effort high --wait
@@ -62,89 +84,19 @@ yak session wait S-4211 --timeout 45m
 yak session peek S-4211 -n 20
 ```
 
-`spawn` inserts the session, its first entry, and the session's claim on the
-task. `wait` blocks until the run is over, then prints the session's brief and
-its exit code. `peek` prints the transcript out of the graph — not out of the
-log file. Over MCP the same three are named `session_spawn`, `session_wait` and
-`session_peek`.
-
-`spawn` calls `graph.apply()` itself, rather than returning the rows for the
-tool runner to insert. That is unusual here — every other tool in these packages
-returns rows and lets the runner commit them — but the child process does not
-exist until the transaction has committed, because the effect handler runs after
-the commit. A tool that only returned the rows could not then watch what it
-started, and `--wait` would have nothing to wait for.
-[@yaks/process](../process)'s `shell` tool works the same way, for the same
-reason.
-
-`wait` polls the graph on the same interval the logs are read on; there is no
-separate notification channel. Whether a run has finished depends on what is
-behind the session. If it has a `process` component, the run is over when that
-process exits — a provider often prints its final event and then lingers, so its
-own `stop` entry does not mean the run ended. A session with no process is over
-when its transcript ends. If `wait` reaches its timeout it reports that the run
-is still going and leaves it alone; killing it is what `stop` is for.
-
-## How the child process is started
-
-`start` launches through @yaks/process: a launcher that exits immediately, a
-`setsid` wrapper running inside its own `systemd-run --user --scope` unit, a
-pidfile, and a file holding the exit code. The agent therefore outlives the
-server, restarting the server does not kill it, and nothing in this package
-reaps child processes.
-
-The `process` component is written on the session's own entity, so "which
-session is this" and "which process is running it" are the same row.
-
-## The log file and the transcript
-
-The child's stdout is written to @yaks/process's `<eid>.out` by the wrapper, and
-survives restarts. The graph stores the transcript read out of that file: one
-entry per line the adapter recognizes, each with an `imported` component
-recording the source file and the line number. That also serves as the read
-position — the highest line number already imported is where the next read
-begins — so every line is imported exactly once, with no cursor column to keep
-up to date. When a new server process opens the graph, the `created(process)`
-handler picks up runs that are still going, watching their pids again and
-reading their logs on from there.
-
-Lines the adapter does not recognize, and lines that are not JSON at all, do not
-become entries. They stay in the file.
-
-A provider that exits without printing a final event — killed, crashed, or
-simply finished — still ends the transcript: the code tailing the log writes the
-`stop` entry itself, with the exit code beside it when it was not 0. The end of
-a run is read from the process, never inferred from the conversation.
-
-## Stopping a run
-
-Writing a `stop` component on the session's own entity, next to its `process`,
-kills the run: SIGTERM to the process group, then SIGKILL to whatever is still
-alive after the grace period. It is the same component @yaks/process reads next
-to a `service` row. It does not conflict with the `stop` that marks the end of a
-transcript, because that one is written on an entry and this one on the session.
-
-## What an adapter is
-
-An adapter is a provider's argv, plus a function that converts one line of its
-output into the components of a transcript entry. Which providers exist, and
-which models each one serves, is graph data ([@yaks/model](../model)'s
-`provider` and `model` entities), so adding a model means inserting a row, not
-cutting a release.
-
-Adapters deliberately never produce `call` and `result` components. The provider
-already ran its own tool calls, in its own process. Written into the graph as a
-`call` row, the server's tool runner ([@yaks/tools](../tools)) would execute any
-call naming a tool it has, running them a second time. No component yet means
-"another process already ran this", so tool calls stay in the log file and out
-of the transcript.
+The MCP names are `session_spawn`, `session_wait`, and `session_peek`. `spawn`
+creates the session, first entry, and claim on the task. It calls
+`graph.apply()` itself because the post-commit effect must start the process
+before `--wait` can monitor it. `wait` polls the graph. A session with a
+`process` ends when that process exits, even if its transcript already has a
+`stop`; a session without a process ends when its transcript reaches `stopped`
+or `failed`. It reports the brief and exit code, and reaching its timeout leaves
+the run active. `peek` renders recent entries from the graph.
 
 ## Configuration
 
 ```jsonc
-// yak.json
 {
-  "db": "graph.db",
   "plugins": [
     "@yaks/session",
     "@yaks/process",
@@ -154,18 +106,28 @@ of the transcript.
 }
 ```
 
-The options set the working directory the agent runs in (`cwd`), how often its
-log is read (`poll`, in ms), how long `wait` waits by default (`timeout`,
-written the way a person writes a duration: `45m`), and how many entries `peek`
-prints (`lines`).
+Effects accept `cwd`, process-file `dir`, polling interval `poll`, and kill
+`grace`. Tools accept `poll`, a human-readable default `timeout` such as `45m`,
+and the number of `lines` shown by `peek`.
 
-Providers cannot be configured this way, because an adapter is a function and
-config holds only JSON. To add one, import `spawning` and pass your own adapter
-table:
+Custom adapters are functions and cannot be represented in JSON configuration:
 
 ```ts
-import { spawning } from '@yaks/spawn/effects'
 import { adapters } from '@yaks/spawn'
+import { spawning } from '@yaks/spawn/effects'
 
-export let effects = spawning({ adapters: { ...adapters, mine } })
+export const effects = spawning({ adapters: { ...adapters, mine } })
 ```
+
+## Exports
+
+The main module exports the built-in `claude` and `codex` adapters, the
+`adapters` table, adapter types, and the lower-level `asked()`, `imported()`,
+`follow()`, `start()`, `resume()`, and `down()` functions. Additional entry
+points are:
+
+- `@yaks/spawn/vocab`: `spawnDoc` and `docs`;
+- `@yaks/spawn/effects`: `effects`, `spawning()`, and effect configuration;
+- `@yaks/spawn/tools`: `runs()`, duration parsing, and brief formatting.
+
+The launcher requires Linux, `setsid`, and a systemd user manager.

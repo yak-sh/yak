@@ -1,8 +1,12 @@
 # @yaks/tui
 
-Preact, rendered to a terminal. Preact draws into a fake DOM; a **backend**
-turns that tree into what the screen shows. The backend that ships is an ANSI
-painter that repaints only the lines that changed.
+`@yaks/tui` renders Preact components in a terminal. Preact writes an in-memory
+tree through the small DOM implementation in `dom.ts`; a `Backend` measures and
+paints that tree. The included ANSI backend updates only changed terminal rows.
+
+The package does not persist application data. Components keep transient input,
+scroll, measurement, and selection state in memory. Applications own durable
+data and pass it into their component tree.
 
 ```ts
 import { h } from 'preact'
@@ -19,447 +23,437 @@ let App = () =>
 await run(App)
 ```
 
-`deno run -A demo.ts` (or `deno task tui:demo` from the repo root) is the whole
-thing driven: 500 transcript lines to scroll, an input box that appends to them,
-a sidebar of two panels. Ctrl-C quits.
+From this directory, run `deno task demo`. From the repository root, run
+`deno task tui:demo`. The demo provides 500 scrollable transcript lines, a
+multiline input, and two responsive sidebar panels. Press Ctrl+C to exit.
+
+The public entry point is `mod.ts`. It exports:
+
+- application lifecycle: `run` and `quit`;
+- components and related types: `Frame`, `Panel`, `Scroll`, `View`, `Textarea`,
+  `VirtualList`, `VirtualWindow`, `VirtualItem`, `Anchor`, `Image`, and
+  `ImageSource`;
+- rendering: `ansiBackend`, `Backend`, `Line`, `Seg`, `Metrics`, `lay`, `clip`,
+  `wrap`, `screenful`, `ansi`, and `clipboard`;
+- styling: `theme`, `everforest`, `Sheet`, and `Style`;
+- input and routing: `decode`, `feed`, `Input`, `Key`, `Mouse`, `MouseEvent`,
+  `Name`, `Keys`, `useKeys`, `useKeymap`, `press`, `pressTo`, `pressFocused`,
+  `hit`, and `routeMouse`;
+- screen state: `size`, `metrics`, `terminalFocused`, `useMetric`, `measured`,
+  and `clear`;
+- selection: `useVisualController`, `useTextSurface`, `emptyVisual`,
+  `VisualState`, `beginVisual`, `visualKey`, `copyText`, `RenderedCursor`, and
+  `TextPoint`;
+- low-level DOM utilities: `doc`, `install`, `onPaint`, `touch`, `TNode`,
+  `TText`, and `TElement`;
+- pure editor and scrolling helpers: `Edit`, `bol`, `eol`, `spot`, `edit`, and
+  `scrolled`.
+
+Most applications need only `run` and the components. The lower-level exports
+support custom backends, focused tests, and applications that own input routing.
 
 ## Backend contract
 
 ```ts
 type Backend = {
+  control?: (body: string) => void
   size: () => { columns: number; rows: number }
   start: () => void
-  draw: (root: TElement) => { written: number; metrics: Metrics }
+  draw: (
+    root: TElement,
+  ) => { written: number; metrics: Metrics; lines?: Line[] }
   reset: () => void
+  copy?: (text: string) => void
   stop: () => void
 }
 ```
 
-`draw` receives the rendered tree and returns the number of screen lines written
-and its layout measurements — `{total, height}` per element `id`, which is how a
-scroll region learns how much content it has, since only the thing that lays out
-knows. `run(App, {backend})` takes another one; nothing in a widget names ANSI.
+`run(App, { backend })` accepts a custom backend. `draw` receives the rendered
+tree and returns the number of terminal rows written plus measurements for
+elements with an `id`. Each measurement contains `{ total, height, width }`,
+which lets scrolling components respond to layout without knowing terminal
+dimensions themselves. Optional painted `lines` enable pointer hit testing.
+`control` receives terminal protocol replies, and `copy` handles clipboard
+requests. Widgets do not depend directly on ANSI escape sequences.
 
 ## Layout
 
-Four structural attributes, because only the painter knows the terminal's size:
+The painter recognizes these structural attributes:
 
-| attribute        | means                                                                         |
-| ---------------- | ----------------------------------------------------------------------------- |
-| `row`            | element children side by side                                                 |
-| `col`            | element children stacked                                                      |
-| `width` / `grow` | a fixed column, or the one that takes what is left                            |
-| `wrap`           | fold text at word boundaries (hard-fold long words) before scroll measurement |
-| `height`         | a fixed box                                                                   |
-| `scroll`         | window this box's content from that offset, and measure it                    |
+| Attribute       | Meaning                                                           |
+| --------------- | ----------------------------------------------------------------- |
+| `row`           | Lay out element children side by side.                            |
+| `col`           | Stack element children vertically.                                |
+| `width`         | Reserve a fixed number of columns.                                |
+| `grow`          | Use space left by fixed siblings.                                 |
+| `grow-fit`      | In a column, shrink to content within the element's share.        |
+| `wrap`          | Wrap at word boundaries and split words longer than the width.    |
+| `height`        | Reserve a fixed number of rows.                                   |
+| `max-height`    | Cap rows without padding shorter content.                         |
+| `overflow-text` | Add a final plain-text row when `max-height` clips content.       |
+| `scroll`        | Display content starting at a row offset and report measurements. |
+| `fill`          | Extend the inherited style across the available row width.        |
 
-Everything else flows: block elements stack as lines, inline elements (`span`,
-`b`, `i`, `a`, `button`, `label`) run into them, `pre` keeps its newlines, and
-class names look up the sheet. A lone element child inherits its parent's box,
-so a wrapper is not a layout.
+Block elements stack as rows. Inline elements such as `span`, `b`, `i`, `a`,
+`button`, and `label` share a row. `pre` preserves newlines. A class name looks
+up a `Style` in the active `Sheet`. A wrapper with one element child passes its
+box to that child.
+
+Semantic `strong`, `em`, `del`, headings, links, code, block quotes, rules, and
+tables receive terminal-specific rendering without requiring application
+components to emit ANSI.
 
 ## Style
 
-`theme.ts` is the default sheet — `Block_Element-modifier` class names, the same
-convention the web uses, in Everforest. Pass `{sheet}` to `ansiBackend` or `run`
-to add to it or replace an entry. `Style` is the whole vocabulary a class has:
-`fg`, `bold`, `dim`, `italic`, `underline`, `strike`, `inverse`, `glyph`,
-`indent`, `gap`.
+`theme.ts` exports the default `theme` sheet and the `everforest` color palette.
+Class names use the repository's `Block_Element-modifier` convention. Pass
+`sheet` to `run` or `ansiBackend`; provided entries replace default entries with
+the same names.
+
+A `Style` may set `fg`, `bg`, `bold`, `dim`, `italic`, `underline`, `strike`,
+`inverse`, `glyph`, `indent`, and `gap`. The painter also uses `href` internally
+for sanitized links.
 
 ## Widgets
 
-- **`Scroll`** — a window over its children. Follows the bottom while it is at
-  the bottom; arrows, page keys and the wheel move it. `scrolled()` is the math
-  on its own.
-- **`Textarea`** — the input box. Enter submits, Shift+Enter opens a line (which
-  is why `run` requests Kitty and xterm extended keys), plus arrows, home/end,
-  word jump and word delete, `^A ^E ^U ^K ^W`, bracketed paste, and a painted
-  cursor. It soft-wraps at its measured content width, grows to `max` visual
-  rows and then scrolls. Arrows and Home/End navigate visual rows; Ctrl+A/E
-  still address hard lines. Soft wraps never change submitted text. `edit()`
-  handles text edits; `visualRows()` and `visualEdit()` handle wrapping and
-  visual navigation.
-- **`Frame`** — a main column and a right sidebar of `{title, Render}` panels,
-  which folds away below `min` columns.
+- `Scroll` displays a window over its children. It follows appended content
+  while positioned at the bottom. Arrow keys, page keys, Ctrl+Home/Ctrl+End, and
+  the mouse wheel change its offset. Set `follow={false}` for content that
+  should open at the top, `keyboard={false}` when another component owns keys,
+  or `scrollbar` to reserve a visual scrollbar column. `scrolled` exposes its
+  offset calculation as a pure function.
+- `Textarea` is a multiline editor. Enter submits and Shift+Enter or Alt+Enter
+  inserts a newline. It supports navigation, word movement and deletion,
+  Ctrl+A/E/U/K/W, bracketed paste, soft wrapping, and a painted cursor. `max`
+  limits its visible rows. The pure helpers `edit`, `bol`, `eol`, and `spot`
+  support editor tests and custom controls.
+- `Frame` places application content beside an optional right sidebar. Each
+  `Panel` supplies a `title` and Preact `Render` component. The sidebar is
+  hidden below `min` terminal columns.
+- `VirtualList` renders only enough stable-ID items to fill its viewport. Use it
+  for large transcripts or lists whose items are static presentation.
+- `Image` reserves terminal cells for an asynchronously loaded PNG when Kitty
+  graphics are enabled and otherwise displays its fallback label.
 
-Keys reach widgets through `screen.ts`: `useKeys(fn)` puts a handler on the
-focus stack while mounted (newest first, falsy passes it down), and `press(key)`
-offers one. `size` and `useMetric(id)` are what a widget knows about the screen.
+`useKeys(handler)` registers a handler while its component is mounted. Newer
+handlers run first, and a falsy return passes the key to the next handler.
+`press(key)` starts normal routing. `size` is a signal containing terminal
+dimensions; `useMetric(id)` returns the last layout measurement for an element.
 
 ## The boundary
 
-Every text node and every href loses the C0/DEL/C1 class before it is painted
-(`@yaks/text`'s `safe`, keeping `\n`, which means a line break here, and turning
-a tab into two spaces). Every escape the terminal sees comes from `ansi()` or
-from `draw()` — never from content.
+Before painting, the backend removes C0, DEL, and C1 control characters from
+text and link targets with `@yaks/text`. Newlines remain line breaks and tabs
+become two spaces. All terminal escape sequences originate in backend code,
+including `ansi`, drawing, graphics, and clipboard output.
 
 ## Compatibility
 
-Deno today: `run()` uses `Deno.stdin`, `Deno.consoleSize` and `SIGWINCH`.
-Everything below it — the DOM, the decoder, the painter, the widgets — is
-runtime-agnostic and tested through an injected size and write, but another
-runtime still needs its own input and terminal-lifecycle adapter.
+`run` currently requires Deno because it uses `Deno.stdin`, `Deno.consoleSize`,
+and signal listeners. The DOM, input decoder, painter, and widgets accept
+injected data and can be used in another runtime, but that runtime must provide
+its own terminal input and lifecycle adapter.
 
 ### Lazy lists
 
-`VirtualList` accepts items with stable `id`s, `renderItem`, and an optional
-content `version(item)` (default: JSON). Use `follow: true` for transcripts;
-ordinary lists start at the first item. Detached scrolling keeps the top item ID
-and its local visual-row offset. Reordering or changing earlier items does not
-move that anchor. Shrinking the anchor clamps its offset; removing it selects
-its old-index successor, or the final remaining item. A changed `id` resets the
-viewport. Home/End with Ctrl jump to start/follow-end; paging and wheel keys
-move locally. Viewport height changes preserve a detached top anchor, or the
-bottom edge while following.
+Each `VirtualList` item must have a stable string `id`. Pass `renderItem` to
+produce its Preact content and optionally pass `version(item)` when content can
+change without its ID changing. The default version is `JSON.stringify(item)`.
+Use `follow` for a transcript that starts and remains at the end; otherwise the
+list starts at its first item.
 
-Cold bottom-open walks backward only until the screen fills. No earlier-item
-height pass, prefix sum, total-height measurement, or spacer estimate is needed.
-The painter delegates this viewport's layout directly, bypassing normal child
-layout. There is no extra overscan: each visited item is measured as a unit and
-its complete wrapped lines remain available for subsequent nearby scrolling.
-Only visible items are revisited on warm paints. Preact structural trees (and
-therefore parsed Markdown results) and wrapped lines are retained in separate
-256-item LRU caches. Resize/theme changes re-layout visible cached trees only;
-content versions invalidate trees as well. List item renderers must be static
-presentation: live editing components belong outside this cache. If rendering
-also depends on external data, include that revision in `version`.
+The viewport stores an item ID and visual-row offset instead of a global row
+number. Changes before that item therefore preserve the visible position.
+Removing the anchor selects its former successor or the last remaining item.
+Changing the list component's `id` resets its viewport.
 
-This is rendering virtualization, not graph pagination: replacing the items
-array builds an O(N) identity index; unchanged arrays do not. The application
-still owns the full item data. Memory is bounded by item count, not bytes, and a
-single giant entry still costs its whole parse/layout. No scrollbar is exposed,
-so there is no misleading exact total height for unmeasured history.
+Opening at the bottom measures backward only until the screen is full. The list
+does not calculate every earlier item height or mount every item. It retains up
+to 256 Preact trees and 256 laid-out items in separate least-recently-used
+caches. A resize or theme change lays out visible cached trees again; a changed
+version rebuilds the affected tree. Render item content as static presentation,
+and include revisions of external dependencies in `version`.
+
+The application still owns the complete item array. Replacing that array builds
+an O(N) ID index; passing the same array does not. Cache limits count items, so
+one very large item can still consume substantial memory.
 
 ### Pointer routing
 
-`decode`/`feed` return `Input` (`Key | Mouse`): narrow `name === 'mouse'` before
-sending keyboard input to `press`. SGR reports carry zero-based `x/y`, button,
-modifiers, release, event type and signed wheel deltas. Button reports are
-retained; no click synthesis or application click actions are installed.
+`decode` and `feed` return `Input`, which is `Key | Mouse`. Check
+`input.name === 'mouse'` before passing keyboard input to `press`. SGR mouse
+reports contain zero-based coordinates, button data, modifiers, release state,
+event type, and signed wheel movement.
 
-The ANSI backend returns ownership-bearing, screen-clipped `lines`. `routeMouse`
-hit-tests these painted cells and bubbles through `TElement.parentNode` to
-Preact `onWheel`, `onMouseDown`, `onMouseUp` and `onMouseMove` listeners.
-Handlers receive `target`, `currentTarget`, `preventDefault()` (consumption) and
-`stopPropagation()`. Returning true also consumes. This is bubble-only, not a
-full browser event model. Misses do not fall back to keyboard focus. Resize and
-shutdown invalidate the saved hit surface. Custom backends without `lines`
-continue to support keyboard input but do not provide pointer targets.
+The ANSI backend attaches owning elements to its clipped painted lines.
+`routeMouse` hit-tests those cells and bubbles `onClick`, `onWheel`,
+`onMouseDown`, `onMouseUp`, and `onMouseMove` through `TElement.parentNode`.
+Handlers receive `target`, `currentTarget`, `preventDefault`, and
+`stopPropagation`; returning `true` also consumes the event. This is a small
+bubbling event system rather than a browser event model. A backend without
+painted `lines` still supports keyboard input but cannot target pointers.
 
-`Scroll` and `VirtualList` accept unmodified vertical wheel notches at the
-pointed region, consuming movement and allowing known boundaries to bubble.
-Keyboard scrolling is unchanged. Virtual item trees remain detached/lazy;
-currently their painted cells target the list element itself, not individual
-item nodes. Terminal mode 1000 supplies buttons/wheels, 1006 selects SGR; their
-previous modes are saved/restored using DEC private mode save/restore.
-Alternate-scroll mode remains enabled for terminals without mouse reporting.
-Terminals must support these mode controls for restoration to work. Motion is
-decoded if received, but motion reporting is not enabled.
+`Scroll` and `VirtualList` handle unmodified vertical wheel reports over their
+painted region. At a known boundary, the report can bubble to an enclosing
+scroll region. Virtual-list item trees are detached from the main tree, so their
+painted cells target the list element.
 
-Hit coordinates follow the painter's existing string-length width model, so wide
-glyphs/combining characters share its existing limitations. No pointer capture,
-capture-phase listeners, synthetic clicks or horizontal scrolling yet.
+The ANSI backend enables terminal modes 1000 and 1006 and restores their saved
+values on shutdown. It decodes motion reports if a terminal sends them, but does
+not request motion reporting. Coordinates use JavaScript string lengths; wide
+glyphs and combining characters can therefore misalign. Pointer capture,
+capture-phase listeners, and horizontal scrolling are not implemented.
 
 ### Optional scrollbars
 
-`VirtualList` and `Scroll` accept `scrollbar: true`. The bar reserves one column
-and uses a three-row solid thumb on a `│` track (short viewports clamp it;
-widths below two columns omit it). `Scrollbar` and `Scrollbar_Snapped` theme
-tokens control its appearance; following the end dims the bar. This is visual
-only, without dragging or click-to-jump.
+Set `scrollbar` on `Scroll` or `VirtualList` to reserve one column for a
+three-row thumb on a `│` track. Very short viewports clamp the thumb, and widths
+under two columns omit it. `Scrollbar` and `Scrollbar_Snapped` style the bar;
+following the end uses the snapped style. The scrollbar does not support
+dragging or click-to-jump.
 
-Virtual-list thumb positions estimate unvisited heights from the bounded
-measurement cache. Estimates may adjust as items are visited, but never move the
-item-relative anchor or cause offscreen layout. Empty and short content still
-show the thumb; an end-following list places it at the bottom.
+`VirtualList` estimates unmeasured item heights from its bounded measurement
+cache. The estimate can change as items are visited, but it does not move the
+item-relative viewport anchor or trigger offscreen layout.
 
 ### Characterwise VISUAL selection
 
-The application supplies `useVisualController(get, set)`; its state stays
-outside TUI widgets. `useTextSurface({id, snapshot, width, adjacent?})` opts in
-any text region. Textarea registers its draft; VirtualList registers only when
-given `textOf(item)`. That callback reads one anchored item, not rendered
-history.
+An application can store `VisualState` and register it with
+`useVisualController(get, set)`. `useTextSurface` registers a selectable text
+region. `Textarea` registers its draft automatically; `VirtualList` registers
+item source only when passed `textOf(item)`.
 
-Alt+v enters VISUAL (or cycles regions), Tab cycles opt-in regions, hjkl/arrows
-extend an inclusive selection, Home/End select to row boundaries, `y` yanks and
-exits, Escape cancels. Plain keys remain editing keys outside VISUAL. `[` / `]`
-choose the previous/next item where supplied, resetting the selection.
+Alt+V enters source selection or cycles regions. Tab cycles registered regions;
+H/J/K/L or arrows extend an inclusive selection; Home/End move to row edges; `[`
+and `]` select adjacent items when available; `y` copies and exits; Escape
+cancels. Outside this mode, ordinary editing keys keep their normal behavior.
 
-This first implementation is **source selection**: the chosen region temporarily
-shows its exact source in a plain wrapped view, with an inverse selection. This
-avoids copying ANSI, borders or rendered metadata, and retains Markdown source
-and explicit newlines without inventing soft-wrap newlines. Selection is bounded
-to one surface/item; cross-item ranges and rendered-Markdown selection are not
-implemented. Navigating within the source view scrolls locally and leaves the
-normal virtual-list anchor unchanged. Unmounting a surface does not read its
-data.
+During source selection, the active region displays its source as wrapped plain
+text with an inverse selection. Copied text excludes ANSI, borders, and rendered
+metadata and preserves explicit newlines without adding soft-wrap newlines.
+Selection is limited to one surface or item. Moving through source does not
+change a virtual list's normal scroll anchor.
 
-The ANSI backend requests OSC52 clipboard writes only on `y`. A terminal may
-deny or truncate those writes: success is not acknowledged. iTerm2 clipboard
-permission and tmux `set-clipboard`/OSC52 support must be enabled as
-appropriate; no shell clipboard program or tmux passthrough bypass is used.
-Hosts may supply their own clipboard backend. The harness retains the last yank
-in its private ephemeral `visual.yank` field regardless of terminal clipboard
-support.
+Copying asks the ANSI backend to write OSC52. The terminal may reject or
+truncate the request without acknowledgement. iTerm2 clipboard permission and
+tmux OSC52 support may need configuration. Applications can provide a custom
+backend `copy` method. The test harness records its last requested copy in the
+ephemeral `visual.yank` field.
 
-Limitations: one active visual controller per terminal (like the existing
-keyboard stack), no mouse selection yet, and display geometry uses the editor's
-existing UTF-16 column model rather than grapheme/wcwidth-aware geometry. The
-controller must return current state synchronously so burst input can advance
-selection.
+Only one visual controller may be active for a terminal. Mouse selection is not
+implemented. Positions use UTF-16 columns instead of grapheme or terminal-cell
+widths, and the controller's `get` function must return current state
+synchronously.
 
 ## Inline images (experimental)
 
-`Image` is a graph-independent component accepting an `ImageSource` with a
-stable `key`, an asynchronous `load(): Promise<Uint8Array>`, `alt` text, and a
-fixed cell height (`rows`). Enable `graphics: 'kitty'` on `ansiBackend` or `run`
-to transmit PNG images using the Kitty graphics protocol. Pass `tmux: true` for
-tmux DCS passthrough. Graphics are disabled by default; there is no capability
-probe yet.
+`Image` accepts an `ImageSource` containing a stable `key`, asynchronous
+`load(): Promise<Uint8Array>`, fallback `alt` text, and fixed cell height in
+`rows`. Set `graphics: 'kitty'` on `run` or `ansiBackend`; set `tmux: true` when
+tmux DCS passthrough is required. Graphics default to disabled, with no
+capability probe.
 
-Images load only when their entire reserved rectangle is visible. Partially
-clipped rectangles keep their text fallback instead of drawing over neighboring
-content. Changing placement deletes the previous placement; removing the image
-or stopping the backend cleans up its placements. A warm paint does not upload
-image bytes again. Text changes may re-place a cached image, without
-retransmitting it. Resizing recomputes the rectangle but does not invalidate its
-bytes.
+An image loads only when its complete reserved rectangle is visible. Clipped or
+unvisited images retain a text fallback. The backend caches uploaded bytes,
+updates placement after text or size changes, and deletes placements when an
+image moves, unmounts, or the backend stops.
 
-The first version supports PNG only, limits uploads to 4 MiB and declared pixel
-area to 32 megapixels, and retains at most eight images (up to 32 MiB of source
-bytes, plus temporary base64 encoding). Rows are clamped to 1–16. Images scale
-to the reserved cell rectangle; aspect-ratio-aware sizing is not implemented. A
-failed load keeps the label for the life of that cache entry. The terminal owns
-PNG decoding; signature/dimension checks are not full image validation.
+Only PNG is supported. Uploads are limited to 4 MiB, declared pixel area to 32
+megapixels, height to 1–16 terminal rows, and the cache to eight images or 32
+MiB of source bytes. The terminal performs PNG decoding; local signature and
+dimension checks are not full validation. A failed load stays failed until that
+cache entry is replaced.
 
-Kitty-capable terminal support must be configured by the application. In tmux,
-`set -g allow-passthrough on` may be necessary. Protocol generation is tested,
-but visual behavior depends on terminal/tmux versions and has not been verified
-on a live iTerm2 installation. iTerm2's separate OSC 1337 protocol is not
+Applications must configure compatible terminals. tmux may require
+`set -g allow-passthrough on`. iTerm2's OSC 1337 image protocol is not
 implemented.
 
-Kitty replies are terminal protocol data, not keystrokes. APC replies (including
-fragmented replies and tmux-wrapped replies) are consumed before keyboard
-handling. A bare Escape is distinguished from a fragmented reply with a short 25
-ms delay. Every image upload chunk requests quiet operation. Error replies with
-a known image ID leave a diagnostic fallback instead of inserting text into the
-input box.
-
-Image fallback labels distinguish loading, clipped/unvisited images, and failed
-loads or rejected images. A “Kitty image sent” label means the backend sent its
-commands, not that the terminal confirmed a visible placement. If that label
-remains visible, verify terminal support and tmux passthrough configuration.
+Kitty APC replies are terminal protocol data. `feed` consumes complete,
+fragmented, and tmux-wrapped replies before key routing. Known upload errors
+change the fallback label. A “Kitty image sent” label only confirms that the
+backend wrote protocol commands; it does not confirm display by the terminal.
 
 ### Modified Enter
 
-`feed()` preserves CSI keyboard sequences across stdin chunks, including Kitty
-`CSI 13;2u` and xterm `CSI 27;2;13~` for Shift+Enter. Alt+Enter also inserts a
-newline, including the legacy ESC-prefixed CR/LF form. Complete sequences are
-dispatched immediately; partial CSI sequences are held without extending the
-existing standalone Escape timeout.
+`feed` preserves CSI keyboard sequences across input chunks, including Kitty
+`CSI 13;2u` and xterm `CSI 27;2;13~` for Shift+Enter. It also recognizes
+Alt+Enter in CSI and legacy Escape-prefixed CR/LF forms. Complete sequences are
+returned immediately; incomplete CSI sequences remain buffered without extending
+the 25 ms timeout used to distinguish a bare Escape key.
 
-If a terminal sends a bare CR or LF for Shift+Enter, it is indistinguishable
-from plain Enter. The decoder cannot reconstruct the missing modifier. Inspect
-the terminal's extended-key settings or reset its terminal session in that case;
-application-side decoding changes cannot recover a modifier that was not sent.
+If a terminal sends bare CR or LF for Shift+Enter, the modifier is absent and
+cannot be reconstructed. Enable the terminal's extended-key reporting or reset
+the terminal session.
 
 ### Compact sidebars and controlled shortcuts
 
-A bounded `Frame` panel can set `fit: true`. It takes its natural content
-height, up to an equal share of the available height; ordinary bounded panels
-receive the unused rows. This keeps short summaries compact while a longer list
-uses the remaining space. Overflow still scrolls. Panel order is display order,
-so put a summary last to keep it at the bottom when another panel grows.
+A bounded `Frame` panel can set `fit: true` to use its natural content height up
+to an equal share of available rows. Other bounded panels receive unused rows,
+and overflow still scrolls. Panel order is display order, so a summary placed
+last remains below a growing panel.
 
-The layout attribute `grow-fit="1"` provides the same behavior inside a column.
-The `fill="1"` attribute fills a row's available width with its inherited style,
-useful for background selection without adding a marker column.
+The `grow-fit="1"` layout attribute provides the same behavior in any column.
+`fill="1"` extends inherited styling through the row's available width.
 
-`Textarea` accepts an optional `passKey(key)` predicate. Returning true leaves
-that key to another mounted handler, allowing an application to reserve
-navigation shortcuts without changing the standalone editor's bindings.
+`Textarea` accepts `passKey(key)`. Returning true leaves that key for another
+mounted handler, which lets applications reserve shortcuts while retaining the
+editor's default bindings.
 
 ## Controlled keyboard routing
 
-`useKeymap(handler)` registers a mounted interceptor before widget focus and
-VISUAL handling. Returning true consumes an event. This supports application
-modes without coupling widgets to an application store. Keep mode state in the
-application; unregistering on unmount restores ordinary key handling.
+`useKeymap(handler)` installs a mounted interceptor before widget focus and
+source-selection handling. Return true to consume a key. Keep application mode
+state outside this package; unmounting the hook restores normal routing.
 
-`useKeys(handler, id)` optionally names a target. `pressTo(id, key)` sends a
-command to that target without moving focus; changing its ID does not reorder
-the keyboard stack. `pressFocused(key)` forwards an already-routed key without
-running interceptors again. `beginVisual(id)` begins source selection on a
-specific registered text surface. A controlled `Textarea` can set `active` false
-to hide its cursor while another mode owns input.
+`useKeys(handler, id)` assigns a stable target. `pressTo(id, key)` sends a key
+to that target without changing focus. `pressFocused(key)` continues routing an
+already intercepted key without invoking interceptors again. `beginVisual(id)`
+starts source selection on a registered surface. Set a controlled `Textarea`'s
+`active` prop to false when another mode should hide its cursor.
 
 ### Clipboard requests
 
-`copyText(text)` requests a clipboard write through the backend installed by
-`run`. It returns whether a writer was available, not whether the terminal
-accepted the clipboard contents. The terminal backend uses OSC52 with UTF-8
-base64 encoding. Callers own any local recovery buffer and should keep it before
-clearing editable text. This API does not modify a textarea or VISUAL selection.
+`copyText(text)` asks the backend installed by `run` to copy text. Its boolean
+return reports whether a clipboard writer exists, not whether the terminal
+accepted the content. The ANSI backend emits UTF-8 text as base64 OSC52. Callers
+must retain any local recovery buffer before clearing editable text.
 
 ## Tables
 
 Semantic `table`, `thead`, `tbody`, `tfoot`, `tr`, `th`, and `td` elements use
-measured columns rather than text separated with pipes. Header cells are bold;
-`Table_Header` and `Table_Border` theme tokens control their appearance. Borders
-are dim by default, with a horizontal divider between every logical row. Cells
-retain text styles and links, wrap words and long runs, and preserve explicit
-line breaks. Use `align="left"`, `"center"`, or `"right"` on cells; a CSS
-`text-align` declaration is also recognized. Shared Markdown rendering supplies
-the alignment from its column markers.
+measured columns. Header cells are bold; `Table_Header` and `Table_Border`
+control their styles. Cells preserve text styles, links, and explicit line
+breaks and wrap words and long runs. Set `align` to `left`, `center`, or
+`right`; the painter also recognizes CSS `text-align` written by shared
+renderers.
 
-Tables fill the available content width. Columns start at three text positions
-and grow toward sampled content widths, capped at forty positions for this
-initial allocation. Any remaining space is shared evenly across columns, with
-leftmost columns receiving rounding remainders. Sizing samples the first 32
-rows, at most 128 text positions/nodes per cell. Later or larger values wrap
-rather than changing the allocation. Missing cells are empty. If there is not
-room for these columns and their borders, rows become stacked records with
-header labels repeated above each value. No columns are silently discarded.
+Tables fill available content width. Initial widths sample at most 32 rows and
+128 text positions or nodes per cell, with sampled content widths capped at 40
+positions. Later or longer values wrap. Missing cells remain empty. When the
+available width cannot contain columns and borders, each row becomes a stacked
+record with repeated header labels.
 
-Tables nested in quotes, lists, or bordered boxes use the remaining inner width.
-A whole table is still laid out when its virtual-list item is measured; rows
-within an individual table are not virtualized. Cached items are reused on warm
-paints. Column/row spanning and CSS table sizing are not supported. Like the
-rest of the current text painter, widths count UTF-16 code units, not terminal
-grapheme widths; wide CJK characters, combining marks and emoji can therefore
-misalign. This renderer does not introduce a separate, incompatible Unicode
-width calculation just for tables.
+Nested tables use their container's remaining width. A table inside one
+virtual-list item is fully laid out when that item is measured; its rows are not
+separately virtualized. Row spans, column spans, and CSS table sizing are not
+supported. Width uses UTF-16 code units, so CJK characters, combining marks, and
+emoji can misalign.
 
 ### Code block backgrounds
 
-Semantic `pre` elements fill their available width with the `Code` theme style,
-including blank lines. The default code background is neutral dark grey
-(`#343434`), without a blue tint; the foreground is unchanged. Enclosing borders
-and indentation reduce that width. Inline `code` styles only its text. Source
-text and the enclosing layout's existing long-line wrapping or clipping behavior
-are unchanged.
+Semantic `pre` elements fill available width, including blank rows, with the
+`Code` theme style. The default background is `#343434`; inline `code` styles
+only its text. Borders and indentation reduce available width. Existing wrapping
+or clipping behavior still controls long source lines.
 
 ### Proportional terminal sidebar
 
-`Frame` defaults to a fixed 30-column sidebar. Set `ratio={0.2}` to use 20% of
-terminal columns, rounded down, with `width` acting as the minimum (30 by
-default). It leaves at least one terminal column for the main content. The
-sidebar remains hidden below `min` terminal columns (90 by default).
+`Frame` uses a 30-column sidebar by default. Set `ratio={0.2}` to request 20% of
+terminal columns, rounded down. `width` then acts as a minimum, and the frame
+always leaves at least one terminal column for main content. The sidebar remains
+hidden below `min`, which defaults to 90 columns.
 
-`Frame` is a terminal-level layout: its width ratio and visibility threshold use
-the terminal size, not a nested container's measured width. Nested layouts
-should use the painter's row/column sizing or pass an explicit fixed `width`.
-This option does not add general CSS percentage sizing.
+The ratio and visibility threshold use terminal dimensions, not a nested
+container's width. Nested layouts should use row and column attributes or a
+fixed `width`.
 
 ### Controlled item selection
 
-`VirtualList` accepts `selected: string` and `onSelect(id)` for item navigation.
-Up/down select adjacent items, Home/End select endpoints, PageUp/PageDown move
-approximately one viewport, and Ctrl+U/D move approximately half a viewport.
-Page distances use measured average item heights; they do not measure unseen
-history. The `List_Selected` theme token styles selection. A changed selection
-is revealed automatically; wheel scrolling can subsequently move away from it.
-Without `onSelect`, the existing row-scrolling behavior remains unchanged.
+Pass `selected` and `onSelect(id)` to `VirtualList` for controlled item
+selection. Up/Down select adjacent items, Home/End select endpoints,
+PageUp/PageDown move about one viewport, and Ctrl+U/D move about half a
+viewport. Distances use average measured item heights and do not measure unseen
+items. `List_Selected` styles the selection. A changed selection is revealed;
+the mouse wheel may then scroll away from it. Without `onSelect`, the same keys
+scroll by rendered rows.
 
 ### Graceful quit
 
-`run(App, {shutdown, force})` supports two-stage interruption. The first Ctrl+C
-(or SIGINT) calls asynchronous `shutdown` and stops routing ordinary input.
-Completion exits without another keypress. A second interrupt calls `force` and
-exits without awaiting the drain. Applications can update their existing view
-state inside `shutdown` to explain the wait. Without these callbacks, Ctrl+C
-exits immediately. Fatal errors still restore the terminal.
+`run(App, { shutdown, force })` supports two-stage interruption. The first
+Ctrl+C or SIGINT calls asynchronous `shutdown` and stops ordinary input routing.
+When it finishes, the app exits. A second interrupt calls `force` and exits
+without waiting. The application may update its existing view state during
+shutdown. Without these callbacks, Ctrl+C exits immediately. Errors still
+restore terminal state.
 
 ### Partially loaded virtual lists
 
-`VirtualList` accepts optional `range: { before, after }` and
-`onRange({ anchor?, edge? })`. The flags describe unloaded neighbors. The widget
-requests an overlapping range near a visible boundary; Home/End can request the
-actual start/end rather than treating the loaded slice as the entire list. The
-application fetches the data, preserves the controlled item anchor, and replaces
-the loaded items. Set `pending` while replacing a requested edge so the
-temporary collection cannot overwrite the saved position. While pending, the
-last painted viewport and scrollbar remain visible; an initially unloaded list
-displays `Loading…` with its scrollbar. Changing the list identity clears that
-paint cache. Pending lists do not accept navigation or publish normalized
-positions. A finished empty result must use `pending: false`, so it clears the
-previous content.
+For paged data, pass `range: { before, after }` and `onRange(request)`. The
+flags say whether unloaded neighbors exist. Near a visible boundary, or after a
+Home/End request, the list asks the application for overlapping data. The
+application fetches it, preserves the controlled viewport anchor, and replaces
+`items`.
 
-The widget remains storage-independent. It uses the same item identity,
-selection, and measured-line cache as a complete list. Its scrollbar estimates
-unloaded ranges; it does not fetch or measure history to compute exact totals.
+Set `pending` while replacing a requested page. The list retains its last
+painted viewport and scrollbar during that transition; an initially pending list
+displays `Loading…`. Pending lists ignore navigation and do not publish
+normalized viewport positions. Set `pending={false}` for a completed empty
+result so old content is cleared. Changing the list `id` also clears the paint
+cache.
+
+The widget does not fetch or store application records. It retains only
+identity, selection, viewport, rendered-line caches, and measurements needed for
+display.
 
 ### Terminal focus and the input caret
 
-The backend enables terminal focus reporting and restores its previous setting
-on shutdown. `terminalFocused` describes terminal focus independently of widget
-focus. `Textarea` hides its synthetic block caret on focus-out and restores it
-on focus-in without changing its value or cursor position. Focus reports are
-consumed before keyboard shortcuts and never become input text.
+The ANSI backend enables terminal focus reporting and restores the saved mode on
+shutdown. `terminalFocused` is a signal independent of widget focus. `Textarea`
+hides its synthetic block cursor on focus-out and restores it on focus-in
+without changing text or cursor position. Focus reports are consumed before
+keyboard routing.
 
-When no reports arrive, the terminal is assumed focused. Under tmux, focus
-forwarding may require `set -g focus-events on`; the application does not change
-your tmux configuration. Detection of inactive panes/windows depends on the
-terminal and multiplexer forwarding those reports.
+If no reports arrive, the terminal is considered focused. tmux may require
+`set -g focus-events on`; the application does not change tmux configuration.
 
 ### Mouse clicks
 
-Preact `onClick` handlers receive primary-button clicks through the same clipped
-hit-testing and bubbling used for wheel events. A click requires a press and
-release on the same clickable element (including its inline children). Right
-clicks, modified presses, and reported drags do not activate it. Handlers can
-call `stopPropagation()` or `preventDefault()`. Unmounting clears unfinished
-presses. VISUAL source selection continues to suppress mouse navigation.
+Preact `onClick` handlers receive unmodified primary-button clicks through the
+same clipped hit testing and bubbling used for wheel events. The press and
+release must occur on the same clickable element or its inline child. Right
+clicks, modifier-assisted clicks, and drags do not activate it. Unmounting
+clears an unfinished press. Source-selection mode suppresses mouse navigation.
 
-Virtualized item contents still target the list element itself, not individual
-controls inside the item; this does not yet provide per-item controls or mouse
-text selection.
+Virtualized item contents target the list element, so controls inside an item do
+not receive individual clicks. Mouse text selection is not implemented.
 
-A block can set `max-height` to cap its rendered rows without padding shorter
-content. Optional `overflow-text` adds a plain-text final row only when the cap
-is exceeded. This is presentation clipping, not source truncation.
+`max-height` caps any block without padding shorter content. Optional
+`overflow-text` adds a plain-text final row only when content is clipped. The
+source data is unchanged.
 
 ### Rendered text cursor
 
-`VirtualList` optionally accepts a controlled `cursor` (`id`, local rendered
-`row`, UTF-16 `col`, and optional selection `anchor`), `onCursor`, and `onYank`.
-With these present, arrows move within rendered lines rather than selecting
-whole items. Movement measures only visited items and requests neighboring data
-through its existing `onRange` interface. `v` starts a range, `y` copies, and
-Escape clears the range. The caller chooses keyboard aliases and stores the
-cursor state.
+`VirtualList` can accept a controlled `cursor`, `onCursor`, and `onYank`.
+`RenderedCursor` contains an item `id`, local rendered `row`, UTF-16 `col`, and
+an optional selection `anchor`. With these props, arrows move through rendered
+lines. Movement measures only visited items and requests neighboring data
+through `onRange`. `v` begins a range, `y` copies it, and Escape clears it; the
+application chooses any additional aliases and stores cursor state.
 
-Cursor and range styling are applied to cached lines without changing Markdown
-or reparsing it. `Seg.decorative` marks borders and generated padding that must
-not be copied. `Seg.softBreak` distinguishes wrapping from explicit line breaks.
-Copies preserve rendered text, not original Markdown syntax. Selected tables
-copy their visible cell text and spacing, not a CSV or Markdown reconstruction.
+Cursor styling decorates cached lines without reparsing item content.
+`Seg.decorative` excludes generated borders and padding from copied text, while
+`Seg.softBreak` distinguishes wrapping from source line breaks. Copies contain
+displayed text rather than Markdown syntax; table copies contain visible cell
+text and spacing.
 
-Selection can span overlapping loaded pages while their measured text remains in
-the bounded cache. A missing endpoint or evicted item refuses the copy rather
-than silently truncating it. Copies are capped at 65,536 UTF-16 code units. This
-is a visible-text selection API, not an unbounded export API. Resizing or
-streamed reflow clamps the local row/column to valid positions; it does not
-preserve a semantic character offset across a completely different Markdown
-layout. Surrogate pairs are kept together, but terminal width still uses UTF-16
-units; wide CJK, combining sequences, and emoji can require further width
-handling.
+A selection may span overlapping loaded pages while their measured lines remain
+cached. Missing or evicted endpoints produce an error instead of truncated text.
+Copies are limited to 65,536 UTF-16 code units. Resize and reflow clamp
+positions but do not preserve a semantic character offset. Surrogate pairs stay
+together; other terminal-width limitations still apply.
 
 ### Estimated virtual scroll ranges
 
-A partial `VirtualList` can supply `range.total` (the logical item count) and
-`range.offset` (the index of its first loaded item), alongside `before`/`after`.
-The scrollbar estimates unknown items using the average height of measured items
-and retains numeric heights after their rendered content is evicted. Replacing
-an overlapping page does not reset those measurements. Drawing the scrollbar
-never measures additional items or changes the logical scroll anchor.
+A partial `VirtualList` may include `range.total`, the complete logical item
+count, and `range.offset`, the logical index of the first loaded item. Supply
+both together with `before` and `after`. The scrollbar estimates unknown item
+heights from measured averages and retains numeric heights after rendered text
+leaves the bounded cache. Drawing it does not measure more items or move the
+viewport anchor.
 
-Height metadata grows with the items visited, not their text size. It is kept
-for the current width and theme; changing either invalidates those measurements.
-Revisited items with changed versions are remeasured. Measurements for unloaded
-items remain estimates until revisited; arbitrary insertions/removals outside
-the loaded page can temporarily make remembered positions approximate. Callers
-without counts retain the older neighboring-page estimate. A fixed three-row
-thumb still rounds to terminal rows; estimation improvements do not make it a
-pixel-accurate scrollbar.
+Height metadata grows with visited items and contains numbers rather than item
+text. Width or theme changes invalidate it, and a changed item version is
+remeasured when revisited. Insertions or removals outside a loaded page can make
+remembered estimates temporarily approximate. Without total and offset, the list
+uses its neighboring-page estimate. The three-row terminal thumb remains an
+approximate row-level indicator.

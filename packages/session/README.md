@@ -1,282 +1,248 @@
 # @yaks/session
 
-Graph transcripts and a model/tool execution loop. Sessions identify
-conversations; ordered entries record inputs, model requests, outputs, tool
-calls, and results.
+`@yaks/session` stores conversations as graph transcripts, derives their status,
+manages claims, and runs model and tool turns. It does not start an
+operating-system process.
 
-## Install
+<a id="install"></a>
 
 ```sh
 deno add jsr:@yaks/session
 # or: npx jsr add @yaks/session
 ```
 
-## The transcript
+## Storage model
 
-No process is started or stopped here. A session is identity only; everything it
-does is an entry, and what it is doing is read off the newest one.
+<a id="the-transcript"></a>
 
-```
-{ entity: { eid: run }, session: { id: 'spike' } }
-{ entity: { eid: e1 }, entry: { session: run, seq: 1 },
-  content: { body: 'List your tools, then say done.' },
-  using: { provider, model, effort: 'low' } }
-```
+A session entity has a `session` component. Each transcript entry is a separate
+entity with `entry{session, seq}`. A **bundle** is one entity's components as a
+JSON object. The components beside `entry` determine its type:
 
-An `entry` is `{session, seq}` and nothing else. The component stored beside it
-is what makes it one kind of entry rather than another:
+| Components                            | Meaning                            |
+| ------------------------------------- | ---------------------------------- |
+| `content{body}` without `output`      | input from a person or system      |
+| `ask{to, through}`                    | a request to a model               |
+| `content{body}` with `output{source}` | model or process output            |
+| `call{to, id, args, source}`          | a tool call requested by a model   |
+| `result{call}` with `content`         | a tool result                      |
+| `using{provider, model, effort}`      | model selection on an input or ask |
+| `stop`                                | no further transcript work         |
+| `error{code}`                         | an expected failure                |
+| `exception`                           | an unexpected failure              |
 
-| beside `entry`                   | it is                                                              |
-| -------------------------------- | ------------------------------------------------------------------ |
-| `content{body}`                  | an **input**: prose from a person or a system                      |
-| `content` + `output{source}`     | an **output**: what a model returned, `source` the ask it answered |
-| `ask{to, through}`               | the daemon asked model `to`, from the prefix ending at `through`   |
-| `call{to, id, args, source}`     | a tool the model asked for, from that ask                          |
-| `result{call}` + `content`       | what the tool returned                                             |
-| `using{provider, model, effort}` | set or switched on an input; recorded as served on an ask          |
-| `stop`                           | a marker: the daemon does nothing after it                         |
-| `error{code}` + `content`        | an outcome the code expected                                       |
-| `exception` + `content`          | one it did not: a defect report                                    |
-
-There is no `input` component — prose with no `output` beside it is one — and no
-status column anywhere. `statusOf(entries)` reports what is outstanding: a call
-the newest ask made that no result answers is `running` whatever landed after
-it, and otherwise the newest entry decides (`input`/`result` → pending,
-`ask`/`call` → running, output → settled, `stop` → stopped, `exception` or three
-errors → failed). `sessionDerived` is the same rule expressed as SQL, so
-`.session.status=running` filters through a @yaks/sqlite index with no stored
-column to keep in sync.
-
-What a provider keeps about an ask is the provider's own component on the ask
-entry: [@yaks/openai](../openai) declares `openai{response_id}` and writes it
-through the model's `mark`; its `anchor` reads it back so the next ask continues
-from that reply with only what followed. Provider-specific continuation data
-stays in the provider component.
-
-`fork{from}` on a session continues another transcript from one of its entries:
-the parent's entries up to `from` are the fork's prefix, and where the provider
-kept that reply, the fork's first ask sends only its own input.
-
-## The daemon
-
-`react(g, session, { model, tools })` is one step: read the newest entry, do the
-one thing it calls for — ask the model, run an open tool call, retry an error
-within the retry limit — and append what happened. `daemon(g, fx, deps)`
-registers it as a `created(entry)` effect so entries trigger steps and steps
-write entries until a step finds nothing to do; `settle()` loops it manually.
-
-```ts
-import { effects } from '@yaks/effects'
-import { graph } from '@yaks/graph'
-import { modelDoc } from '@yaks/model'
-import { openaiDoc, responses } from '@yaks/openai'
-import { ram } from '@yaks/ram'
-import { loadVocab } from '@yaks/vocab'
-import { daemon, sessionDoc, sessions } from '@yaks/session'
-
-let vocab = loadVocab([sessionDoc, modelDoc, openaiDoc])
-let fx = effects(vocab)
-let g = graph({ storage: ram(vocab), vocab, plugins: [sessions(), fx] })
-let d = daemon(g, fx, { model: responses({ credential }), tools })
-g.apply([session, input]) // the input triggers the first step
-await d.idle(session.entity.eid)
-```
-
-`deno task session:spike` runs exactly that against the model and prints the
-transcript through the package's `Line` and `Status` renderers.
-
-## When something runs the session
-
-A session is still identity only, and an application that RUNS one adds no
-session columns for it. The run is described by other packages' components:
-
-```
-@yaks/process  process{pid, command, cwd}   the program, while it lives
-@yaks/process  exit{code}                   how that program ended
-@yaks/git      worktree{repository, path}   where it works
-               using{provider, model, effort}  on the first entry: what was asked
-               spawned{parent, call}          the parent that delegated it
-               imported{source, line}         the log line an entry was read from
-```
-
-What it is DOING is never one of them: `session.status` is read off the entries,
-and so are the times the fleet used to store as `started_at`, `input_at` and
-`finished_at` — they are the `created.at` of the first entry, the newest input,
-and the newest entry. A stop is a `stop` ENTRY, not a request on the session;
-what a run produced is its last `content`, its `usage` (@yaks/model) and its
-stderr prose carrying `output`. What a persona or a role asked for is an edge to
-that persona or role, resolved at ask time, never copied onto a column.
-
-One thing has no home yet: the terminal pane a run is displayed in is a TODO for
-a `@yaks/tmux`, not a column here.
-
-## A lock is a lease, not a patch
-
-A `claim{session}` is a session's lock, and it is stored on the entity it locks
-— one lock per entity by construction, and "who has this?" is answered by the
-entity itself. Writing one over somebody else's fails the whole batch loudly:
-
-```ts
-g.apply([{ entity: { eid: page }, claim: { session: ada } }])
-g.apply([{ entity: { eid: page }, claim: { session: bo } }])
-// Bounced: <page> is already claimed by <ada>
-```
-
-The same session re-claiming is a no-op refresh. A **release** (`claim: null`)
-is unguarded: releasing is how a lock is handed over.
-
-The write is refused on the `precondition` phase — inside the batch's own
-transaction, before any row moves, so the holder is read before the `cascade`
-phase could remove it. The collision is recorded after the rollback, on the
-`audit` phase, as a `conflict{target, loser, holder, at}` written through a
-detached transaction. And at start-up, `reapLeases(storage)` frees every lock
-whose holder is not a session in the graph. Nothing expires on its own: a lease
-with a timeout would have to be renewed, and a worker that is merely thinking
-hard would lose its lock mid-edit.
-
-`claim.session` is declared `death: 'release'`: delete a session's entity and
-its locks go while the documents live. That is declared in `sessionDoc` and
-carried out by @yaks/graph's cascade — no code for it here.
-
-## One id means one run
-
-A caller names a transcript in three ways — the eid, the human-readable id a
-person types (`S-37703`), and the harness's own id for the run — and
-`sessionFor` resolves all three to the same entity. So the same `--session S-20`
-means the same entity to `claim take` and to `session wrap`. Only the last of
-the three may not exist yet, which is what `session context --hook -` mints.
-
-The same resolution runs on the HTTP side, reading the id from the `x-via`
-request header: a request names which run it speaks for, and what it writes is
-attributed `by` whoever that run speaks as (`session.actor`, else the run
-itself) and `via` the run. That is `@yaks/session/routes`, an `authenticate`
-function an HTTP server imports — it identifies a writer, it never authorizes
-one; a server that gates access checks a key alongside it.
-
-## Exports
-
-| export                                           | is                                                       |
-| ------------------------------------------------ | -------------------------------------------------------- |
-| `sessionDoc`                                     | the vocabulary, one document to load beside your own     |
-| `SESSION`, `CLAIM`, `CONFLICT`, `ENTRY`, …       | the component names                                      |
-| `sessions(opts)`                                 | the @yaks/graph plugin — vocabulary, rules, audit        |
-| `react`, `settle`, `daemon`, `transcript`        | the daemon: one step, a loop, an effect, a fork's prefix |
-| `statusOf`, `kindOf`, `textOf`, `sessionDerived` | the status rule over bundles and as SQL                  |
-| `views`                                          | `Line` and `Status`, portable @yaks/render renderers     |
-| `leasing(opts)`, `naming`, `auditing(opts)`      | the hooks on their own                                   |
-| `reapLeases(storage)`, `staleLeases(tx)`         | start-up reconciliation, doing and reading               |
-| `sessionFor`, `speaking`, `where`                | the run an id names, and the actor it writes as          |
-| `Bounced`, `Unnamed`                             | the refusals, with their facts as fields                 |
-
-## What is deliberately not here
-
-**A process.** Pid, pane, a log to tail — the components a run's PROCESS needs
-belong to the application that runs processes. **A transport.** The daemon is
-handed a @yaks/model `Model`; @yaks/openai is one. **What the work IS.** A page,
-a task, a drawing are plain entities in your own vocabulary; a lock works on
-anything.
-
-## Compatibility
-
-Pure TypeScript; the only platform API it touches is `crypto.randomUUID`, to
-mint entries and conflict records (pass your own `mint` to avoid it). Runs on
-**Deno**, **Node**, in the **browser**, and inside a Cloudflare Worker.
-
-`archived{at}` is [@yaks/kernel](../kernel)'s marker, stored on a session like
-on anything else: a durable visibility flag, independent of transcript status.
-It does not stop a daemon, release claims, or remove entries. Consumers decide
-which listings hide it; the harness archives root sessions and hides their
-subtrees without copying the marker to every child.
-
-### Appending entries
-
-Omit `entry.seq` when creating an entry. The session plugin assigns a positive
-integer inside the write transaction, after any concurrent entries already
-committed. Explicit positions remain available for imports, but fractional or
-occupied positions are rejected. Retrying the same entry EID preserves its
-position.
+`entry.seq` is assigned transactionally when omitted. `appendEntry()` is the
+usual way to append text, and `repairSequences()` migrates older data while
+preserving entry IDs and references.
 
 ```ts
 import { appendEntry } from '@yaks/session'
 
-await appendEntry(g, sessionId, 'A new message')
-await appendEntry(g, sessionId, 'Background context', {
-  eid: 'notice:operation-123',
+await appendEntry(graph, sessionId, 'Please review this change')
+await appendEntry(graph, sessionId, 'Build completed', {
+  eid: 'notice:build-123',
   notice: true,
 })
 ```
 
-The `notice` session tool provides the second operation without requiring the
-caller to calculate sequence numbers. Passive notices do not wake a settled
-session. Applications can also use `g.apply` with
-`entry: { session: sessionId }` when they need additional components.
+A fork has `fork{from}` on its session entity. Its logical transcript contains
+the parent transcript through the referenced entry, followed by its own entries.
+Provider continuation data is stored as a provider-specific component on an ask
+entry; for example, `@yaks/openai` stores `openai{response_id}`.
 
-`repairSequences(tx)` repairs historical positions in a startup transaction. It
-processes parent sessions before forks and retains entry EIDs, including
-`fork.from` and `ask.through` references. Run it before starting session work;
-older concurrent writers that still explicitly calculate positions may now
-receive a collision error and must be upgraded.
+Session status is derived from entries rather than stored. `statusOf()` returns
+`empty`, `pending`, `running`, `settled`, `stopped`, or `failed`.
+`sessionDerived` exposes the corresponding `session.status` SQL-derived column.
+An unanswered call from the newest model request keeps a transcript `running`
+regardless of later entries. Otherwise, input/result means `pending`, ask/call
+means `running`, output means `settled`, stop means `stopped`, and exception or
+three consecutive errors means `failed`. No entries means `empty`. There is no
+separate `input` component.
 
-Historical ties are settled, not rejected: entries sharing a position are
-ordered by when they were stamped, then by the order storage returned the rows,
-then by eid. An entry left unpositioned takes the slot of the last entry stamped
-before it and is settled there by the same tiebreak. Every boot repairs a
-database the same way.
+Applications that run a session add components from other packages:
+`process{pid, command, cwd}` and `exit{code}` describe its program;
+`worktree{repository, path}` describes its checkout; `spawned{parent, call}`
+describes delegation; and `imported{source, line}` records imported log entries.
+Start, latest-input, and finish times are entry `created.at` values. The last
+`content`, `usage`, and process output record what the run produced. Persona and
+role remain referenced entities.
 
-`daemon.interrupt(session)` aborts the signal for the session's current request
-and returns whether an active turn received the request. It does not wait for
-provider acknowledgment or stop independent tool processes. The harness checks
-for an in-flight model attempt before offering this operation. Models receive
-the signal through `Request.signal`; custom models must observe it. This is
-separate from `daemon.stop()`, which stops admission and drains the daemon.
+`archived{at}` is the general `@yaks/kernel` visibility marker. Archiving a
+session does not stop its daemon, release claims, remove entries, or change
+transcript status.
 
-## Bounded transcript reads
+## Claims
 
-`transcriptWindow(graph, session, options)` reads a page of transcript entries,
-including the bounded parent history of a fork. It does not change the full
-transcript used for model requests.
+<a id="a-lock-is-a-lease-not-a-patch"></a>
+
+`claim{session}` is stored on the entity a session claims. A **batch** is a list
+of changes applied in one transaction. If a batch attempts to replace another
+session's claim, the whole transaction fails with `Bounced`; the collision is
+then recorded as `conflict{target, loser, holder, at}`.
+
+```ts
+graph.apply([{ entity: { eid: page }, claim: { session: ada } }])
+graph.apply([{ entity: { eid: page }, claim: { session: bo } }])
+// Bounced: <page> is already claimed by <ada>
+```
+
+Reclaiming with the same session is harmless. Set `claim: null` to release a
+claim; release is unguarded so a caller can hand a claim over. The collision
+check runs in the transaction's `precondition` phase, before cascades change
+rows. After rollback, the `audit` phase records the conflict in a separate
+transaction. Claims do not expire. Deleting a session releases its claims
+through the graph cascade. `reapLeases(storage)` releases claims whose holder is
+no longer a session.
+
+## Running a transcript
+
+<a id="the-daemon"></a>
+<a id="when-something-runs-the-session"></a>
+
+`react()` performs one required step: request a model response, run the next
+tool call, or retry an error. `settle()` repeats steps directly. `daemon()`
+registers the same work with `@yaks/effects` so new entries schedule turns.
+
+This complete example runs in memory with a local model function:
+
+```ts
+import { effects } from '@yaks/effects'
+import { graph } from '@yaks/graph'
+import { type Model, modelDoc } from '@yaks/model'
+import { ram } from '@yaks/ram'
+import { daemon, sessionDoc, sessions, transcript } from '@yaks/session'
+import { toolsDoc } from '@yaks/tools/vocab'
+import { loadVocab } from '@yaks/vocab'
+
+const vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
+const fx = effects(vocab)
+const g = graph({ storage: ram(vocab), vocab, plugins: [sessions(), fx] })
+const model: Model = async (request) => ({
+  id: crypto.randomUUID(),
+  model: request.model,
+  items: [{ kind: 'assistant', text: 'pong' }],
+})
+const d = daemon(g, fx, { model, tools: [] })
+try {
+  await g.apply([
+    { entity: { eid: 'provider' }, provider: { name: 'local' } },
+    {
+      entity: { eid: 'model' },
+      model: { name: 'example', provider: 'provider' },
+    },
+    { entity: { eid: 'session' }, session: {} },
+    {
+      entity: { eid: 'input' },
+      entry: { session: 'session' },
+      content: { body: 'Reply with pong' },
+      using: { provider: 'provider', model: 'model' },
+    },
+  ])
+  await d.idle('session')
+  console.log(await transcript(g, 'session'))
+} finally {
+  await d.stop()
+}
+```
+
+Replace the local function with `responses({ credential })` from `@yaks/openai`
+to use that provider; also load its `openaiDoc` vocabulary.
+`deno task session:spike` is the repository's provider-backed example, which
+prints a transcript with the `Line` and `Status` renderers.
+
+`daemon.interrupt(session)` returns whether it found an active turn and aborts
+that turn's model request. It does not wait for provider acknowledgement or stop
+independent tool processes. Models receive the abort through `Request.signal`;
+custom models must observe it. `daemon.stop()` stops accepting work and drains
+admitted callbacks.
+
+<a id="recorded-tool-execution"></a>
+
+Tool execution vocabulary belongs to `@yaks/tools`. The session loop builds a
+runner for each step, executes transcript calls serially, and writes returned
+text as `content{body}` plus `output{source}` beside a `result` entry with its
+`call` and `ms` fields. A precommit rule adds `entry.session` to results before
+sequence allocation. The general tool-runner plugin is not registered because
+its effect-phase execution would race the session loop. An unknown tool is
+handled by a refusing tool, producing an `error{code}` result. A durable
+`execution.state=running` without a result requires explicit recovery and is not
+replayed automatically (`UnfinishedCall`).
+
+## Reading transcripts
+
+<a id="bounded-transcript-reads"></a>
+
+`transcript()` loads the full fork-aware history used for a model request.
+`transcriptWindow()` reads a bounded page for user interfaces:
 
 ```ts
 import { transcriptWindow } from '@yaks/session'
 
-const newest = await transcriptWindow(graph, session, { limit: 64 })
-const around = await transcriptWindow(graph, session, { anchor: entryId })
-const oldest = await transcriptWindow(graph, session, { edge: 'start' })
+const newest = await transcriptWindow(graph, sessionId, { limit: 64 })
+const around = await transcriptWindow(graph, sessionId, { anchor: entryId })
+const oldest = await transcriptWindow(graph, sessionId, { edge: 'start' })
 ```
 
-A page returns `{ entries, before, after }`. `before` and `after` indicate
-unloaded neighbors, not additional locally available rows. Limits count entries,
-not bytes, and are clamped to 1–256 (default 64). An unknown or out-of-prefix
-anchor falls back to the newest page. Entries remain in logical transcript
-order. A fork's newer parent entries never enter its pages.
+The result is `{ entries, before, after, total, offset }`. Limits count entries,
+are clamped to 1–256, and default to 64. An unknown anchor or one outside the
+fork prefix selects the newest page. A fork never includes parent entries
+written after its `fork.from` boundary. `transcriptPlan()` returns ordinary
+bounded graph queries; it is not a transactionally frozen snapshot, so
+subscriptions must refresh it when membership changes. `transcriptSegments()`
+describes ancestor ranges, and `transcriptUsage()` reads the latest usage
+without transcript text. `before` and `after` indicate unloaded neighbors. Pages
+remain in logical transcript order. A plan reads entry positions first, then
+limits body reads to the selected ranges; it can be used with `@yaks/api`
+subscriptions.
 
-`transcriptPlan` provides ordinary bounded query strings for the same page. It
-first reads entry identity/position projections, then limits body reads to the
-selected ranges. Applications can use those queries with `@yaks/api`
-subscriptions. A plan is not a transactionally frozen snapshot: applications
-must refresh it when transcript membership changes. `transcriptSegments`
-describes the contributing ancestor ranges. `transcriptUsage` reads the latest
-reported ask/usage fields without loading transcript prose.
+## Identity and HTTP attribution
 
-## Recorded tool execution
+<a id="one-id-means-one-run"></a>
 
-Tool invocation vocabulary and execution live in `@yaks/tools`. `sessionDoc`
-includes the invocation declarations for compatibility. A tool there is a
-function from bundles to bundles, so `react` builds a `runner` for the step and
-wraps each session tool: the text it returns becomes a `content{body}` entity
-carrying `output{source}`, and the runner writes them beside the `result` entry
-(with its `call` and `ms` columns) that the transcript reads. The runner's
-plugin is deliberately NOT registered on a session graph — a transcript's calls
-are run in order, one at a time, and an effect-phase runner would race that. A
-call naming a tool this session does not serve is handled by a tool that
-refuses, so the refusal is an `error{code}` and a result like any other return
-value rather than a call left open.
+`sessionFor()` resolves an entity ID, a human-readable session ID, or a harness
+session ID to the same entity. `speaking()` returns the actor a session writes
+as. The `@yaks/session/routes` entry point exports `authenticate()`, which reads
+the session from the `x-via` header. Writes use `session.actor` as `by` when
+present, otherwise the session itself; `via` identifies the session in either
+case. Applications enforce access separately.
 
-A precommit membership rule adds `entry.session` to results that reference
-transcript calls, before the independent sequence allocator runs.
+<a id="appending-entries"></a>
 
-A durable `execution.state = running` without a result requires explicit
-recovery; it is not automatically replayed (`UnfinishedCall`). Tools retain
-their existing trusted session context, including fork and wait behavior. See
-[tool execution](../tools/README.md) for non-session callers and recovery
-limitations.
+Explicit sequence positions are supported for imports. Fractional and occupied
+positions are rejected, while retrying an existing entry ID preserves its
+position. Passive notices do not wake a settled session; the `notice` tool
+appends them without requiring a sequence number. Direct `g.apply` calls can
+also omit `entry.seq` when additional components are needed. `repairSequences()`
+processes parents before forks and preserves `fork.from` and `ask.through`
+references. Historical ties are resolved by creation stamp, storage order, then
+entity ID; unpositioned entries are placed after the last entry stamped before
+them, with ties resolved by the same rule. Run repair before starting session
+work. Concurrent older writers that calculate their own positions must be
+upgraded to avoid collision errors.
+
+## Exports
+
+The main module exports:
+
+- vocabulary and constants: `sessionDoc`, `SESSION`, `CLAIM`, `CONFLICT`,
+  `ENTRY`, and the other transcript component names;
+- graph integration: `sessions()`, `leasing()`, `naming`, `auditing()`,
+  `reapLeases()`, and `staleLeases()`;
+- execution: `react()`, `settle()`, `daemon()`, `transcript()`, and
+  `sessionTools()`;
+- inspection: `statusOf()`, `kindOf()`, `textOf()`, `ordered()`,
+  `sessionDerived`, and the bounded transcript functions;
+- identity and rendering: `sessionFor()`, `speaking()`, `where()`, and `views`;
+- error types including `Bounced`, `Unnamed`, and `UnknownSession`.
+
+Additional entry points are `@yaks/session/vocab`, `/rules`, `/tools`,
+`/effects`, `/routes`, and `/views`. A **host** is the process that opened the
+graph; effects and tools receive its graph and, where needed, its process entity
+ID.
+
+<a id="what-is-deliberately-not-here"></a>
+<a id="compatibility"></a>
+
+The main package runs in Deno, Node, browsers, and Cloudflare Workers. Process
+execution belongs to `@yaks/process`; command-line agent execution belongs to
+`@yaks/spawn`.

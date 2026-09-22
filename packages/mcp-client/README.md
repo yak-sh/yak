@@ -1,9 +1,21 @@
 # @yaks/mcp-client
 
-Consume remote MCP tools without a harness, session daemon, or MCP server. This
-package uses the installed MCP TypeScript SDK's Streamable HTTP client. It
-negotiates the SDK-supported protocol revisions; it does not implement the newer
-protocol independently or upgrade the workspace SDK.
+`@yaks/mcp-client` connects to remote Model Context Protocol (MCP) servers over
+Streamable HTTP and exposes their tools as portable `@yaks/graph.Tool`
+definitions. It uses the installed MCP TypeScript SDK for protocol negotiation
+and requires no session daemon, harness, graph, or local MCP server.
+
+```sh
+deno add jsr:@yaks/mcp-client
+```
+
+Entry points:
+
+- `@yaks/mcp-client`: connections, discovery, calls, naming, and error types.
+- `@yaks/mcp-client/oauth`: browser-based OAuth authorization.
+- `@yaks/mcp-client/host`: a local JSON-file OAuth store for Deno applications.
+- `@yaks/mcp-client/graph`: optional graph-backed server configuration.
+- `@yaks/mcp-client/vocab`: the graph vocabulary document alone.
 
 ```ts
 import { connect } from '@yaks/mcp-client'
@@ -13,96 +25,95 @@ const remote = connect({ name: 'design', url: 'https://example.com/mcp' }, {
 })
 try {
   const tools = await remote.list()
-  const result = await remote.call(tools[0].name, { html: '<h1>Example</h1>' })
+  // This example server is assumed to advertise render_html with an html argument.
+  console.log(tools.map((tool) => tool.name))
+  const result = await remote.call('render_html', {
+    html: '<h1>Example</h1>',
+  })
   console.log(result)
 } finally {
   await remote.close()
 }
 ```
 
-`credentialFromYourHost` above is supplied by the application. There is no
-credential file or implicit configuration discovery in this package. Token
-callbacks are consulted per HTTP request. Redirects are refused; credentials
-require HTTPS except for loopback development servers. A rejected call is not
-replayed, including after a 401 or a lost session. Recreate the connection after
-connection failure; never assume a lost response means a mutation did not
-execute.
+`credentialFromYourHost` is application code that returns the credential for
+this server. The application supplies credentials; the package does not search
+config files. The token callback runs for every HTTP request. Credentials
+require HTTPS except on loopback hosts and are never forwarded across origins.
+Redirects are refused.
+
+A failed call is never replayed, because a lost response does not prove that a
+remote mutation failed. Recreate the connection after a connection failure.
 
 ## Graph and CLI use
 
-`remote.tools()` returns existing `@yaks/graph.Tool` definitions with JSON
-Schema `inputSchema` and a `run` handler. They can be passed to the CLI/MCP
-graph-tool adapters, or called directly with the application's own execution
-context. There is no session dependency and no extra invocation/result
-vocabulary. Existing executors own call/result records; this client owns only
-the protocol connection.
+`remote.tools()` returns `@yaks/graph.Tool[]`. Each definition contains the
+remote JSON Schema `inputSchema`, MCP annotations, connection metadata, and a
+`run` handler. Existing graph, CLI, and model adapters can execute these tools;
+this package adds no invocation or result components.
 
-Remote tool names remain opaque and unchanged in `tools/call`. Exposed names
-combine a readable local namespace and the exact remote name: `yaks.app` +
-`app_list` becomes `yaks_app__app_list`. Namespace punctuation is replaced with
-underscores. Duplicate normalized namespaces or resulting tool names are
-rejected. Unsupported remote characters or names exceeding the provider's
-64-character limit produce an actionable error, not a hash. `Server.namespace`
-can choose a shorter local namespace; `label` controls human-facing
-descriptions. `meta.server` and `meta.remoteName` retain connection identity and
-the exact protocol name. Remote schemas are preserved, including references and
-annotations; no conversion to Zod or inference of nouns/verbs from underscores
-is performed. Runtime argument validation is the server's responsibility;
-consumer adapters may validate too.
+A **bundle** is one entity's components represented as a JSON object. A tool's
+`run` method returns bundles containing its text and structured output. Call
+`remote.call()` when the application needs the complete MCP result, including
+non-text content blocks.
 
-`clients(servers, options)` composes several named connections. An optional
-`allow` array restricts discovery and calls to exact remote names. Discovered
-lists are cached and invalidated by `notifications/tools/list_changed`; the
-application requests the next list at an execution boundary. `refresh()` on one
-connection also invalidates its list. Names must be unique across configured
-servers.
+Remote protocol names remain unchanged in `tools/call`. Exposed local names
+combine a normalized namespace with the exact remote name: `yaks.app` and
+`app_list` become `yaks_app__app_list`. Duplicate normalized namespaces or
+exposed names are rejected. Invalid remote characters and names longer than 64
+characters produce errors. Set `Server.namespace` to choose a shorter local
+namespace and `label` to change descriptions. `meta.server` and
+`meta.remoteName` preserve connection identity and the protocol name.
 
-## Results and lifecycle
+Remote schemas and annotations are preserved. The client does not infer CLI
+nouns or verbs, convert schemas to Zod, or validate call arguments. The remote
+server remains responsible for runtime argument validation.
 
-`call` returns the MCP result unchanged, including `isError`,
-`structuredContent`, and content blocks. Protocol/transport failures throw
-`MCPError`; they are distinct from successful protocol replies carrying
-`isError`. Applications must not dump base64 content blocks into a model prompt.
-An application can save those bytes in `@yaks/blob` and return artifact
-references instead, as the harness adapter does.
+`clients(servers, options)` combines several connections. Server names and
+normalized namespaces must be unique. A server's optional `allow` array limits
+discovery and calls to exact remote names. Tool lists are cached until a
+`notifications/tools/list_changed` notification arrives or `refresh()`
+invalidates one connection. Discovery is limited to 1,000 tools.
 
-Each request defaults to a 60-second deadline. `call` accepts an AbortSignal;
-remote cancellation is best-effort, not proof that a side effect was undone.
-`close()` closes the SDK transport and attempts to terminate its protocol
-session. An application should let accepted calls finish before closing, and put
-a bound on a forced shutdown.
-
-This version supports tools over Streamable HTTP only. It does not provide
-stdio, legacy HTTP+SSE fallback, prompts/resources browsing, sampling,
-elicitation, automatic reconnect, mutation retries, or task-based remote tools.
-Embedded resource content and links can still be returned by tools. Tool
-discovery is bounded to 1,000 tools; MCP response bodies themselves are buffered
-by the SDK, not byte-streamed into blob storage.
-
-A CLI can assign explicit local noun/verb metadata without guessing the server's
-naming convention:
+A CLI can add explicit noun and verb metadata:
 
 ```ts
 const tools = (await remote.tools()).map((tool) => ({
   ...tool,
-  // Chosen by this application, not parsed from the remote name.
   noun: 'mockup',
   verb: 'publish',
 }))
 ```
 
-For multiple tools, choose a unique pair for each. The `@yaks/cli/structured`
-adapter accepts these definitions and an execution callback that invokes
-`tool.run(args, context)`. The same original definition remains usable by graph
-executors and model adapters that have no CLI names at all.
+Choose a unique pair for every tool. The `@yaks/cli/structured` adapter can
+execute `tool.run(args, context)`; the definitions remain usable by adapters
+that do not use CLI names.
+
+## Results and lifecycle
+
+`call` returns the MCP result unchanged, including `isError`,
+`structuredContent`, and content blocks. Protocol and transport failures throw
+`MCPError`; an MCP reply with `isError` is still a successful protocol reply.
+Applications should store large or base64 content blocks outside a model prompt,
+for example in `@yaks/blob`, and return artifact references.
+
+Requests default to a 60-second deadline. `call` accepts an `AbortSignal`.
+Cancellation is best-effort and does not prove that a remote side effect was
+undone. `close()` attempts to terminate the protocol session and closes the SDK
+transport. Let accepted calls finish before orderly shutdown.
+
+This version supports tools over Streamable HTTP. It does not support stdio,
+legacy HTTP+SSE fallback, prompt or resource browsing, sampling, elicitation,
+automatic reconnect, mutation retries, or task-based remote tools. Tools may
+still return embedded resource content and links. The SDK buffers response
+bodies in memory.
 
 ## Browser authorization with a pasted return URL
 
-`@yaks/mcp-client/oauth` provides `authorization(options)`, independently of
-sessions or a UI. It uses the MCP SDK for protected-resource and authorization
-server discovery, dynamic client registration, PKCE, token exchange, and
-refresh. A pre-registered public `clientId` or `clientMetadataUrl` can be
-configured when the server does not support dynamic registration.
+`@yaks/mcp-client/oauth` exports `authorization(options)`. It uses MCP SDK
+discovery, dynamic client registration, PKCE, token exchange, and refresh. A
+pre-registered public `clientId` or `clientMetadataUrl` can replace dynamic
+registration.
 
 ```ts
 import { authorization } from '@yaks/mcp-client/oauth'
@@ -113,46 +124,42 @@ const login = authorization({
   store: fileAuthorizationStore('/home/me/.yaks/mcp-auth.json'),
 })
 const { url } = await login.begin()
-// Display url. The person authorizes in their browser, then supplies the
-// complete return URL through a private input, not an agent conversation.
-await login.complete(returnUrl)
-const token = await login.token() // trusted application code only
+displayPrivately(url) // application UI; do not put this in an agent conversation
+await login.complete(returnUrl) // complete URL pasted through private input
+const token = await login.token()
 ```
 
-The default return address is `http://127.0.0.1:8765/oauth/callback`. This flow
-starts no HTTP listener: after authorization, the browser may show a connection
-error. Copy its full address bar. A server must accept that registered redirect;
-configure `redirectUrl` to match a pre-registered client when necessary. A
-loopback listener, or a hosted return page, can be supplied by the application.
-This is not the deprecated out-of-band OAuth grant.
+The default redirect is `http://127.0.0.1:8765/oauth/callback`. The flow starts
+no listener. After consent, the browser may show a connection error; the user
+copies the complete address-bar URL into a private application input. Configure
+`redirectUrl` when the server requires another registered address. An
+application may instead supply a loopback listener or hosted callback page. This
+is an authorization-code flow, not the deprecated out-of-band grant.
 
-The pending state/verifier expires after ten minutes and lives only in memory.
-Restarting or cancelling requires a new authorization. Callback origin/path,
-state, and any issuer parameter are checked before exchanging the code. An
-exchange is not replayed after failure. Tokens refresh shortly before a known
-expiry; an unsuccessful refresh requires sign-in again. A server revoking a
-token before expiry may return an error; mutations are never replayed merely to
-try another credential.
+The pending state and PKCE verifier remain in memory and expire after ten
+minutes. Restarting or cancelling requires a new authorization. The callback
+origin, path, state, and supported issuer parameter are validated before code
+exchange. Failed exchanges are not replayed. Tokens refresh shortly before a
+known expiry; failed refresh requires sign-in again. Early server revocation may
+produce an error, and mutations are not retried with another credential.
 
-`AuthorizationStore` has `read` and serialized `update` operations. The
-implementation in `./host` uses a versioned JSON file, private file permissions,
-an advisory file lock across processes, and atomic file replacement. It is **not
-encrypted**. Token expiry is stored with the private record; no OAuth graph
-vocabulary is introduced by this first implementation. Application-specific
-secret stores can implement the same interface. The access token must only be
-passed to trusted request code, never returned as a model tool result.
+`AuthorizationStore` defines `read` and serialized `update` operations.
+`fileAuthorizationStore(path)` stores a versioned JSON document with private
+file permissions, cross-process advisory locking, and atomic replacement. The
+file is not encrypted. Tokens and expiry stay in that private record; no OAuth
+graph vocabulary is introduced. Applications can implement the interface with a
+secret store. Access tokens belong only in trusted request code.
 
-The configured server controls OAuth discovery. Configure only trusted servers;
-HTTP is accepted only for loopback addresses. Discovery requests and token
-requests have bounded network deadlines and do not follow redirects. This is not
-a general SSRF sandbox or a provider-independent OAuth package.
+Configure only trusted MCP servers. OAuth discovery and token requests use
+bounded deadlines, refuse redirects, and require HTTPS except on loopback
+addresses. This module is not a general SSRF sandbox or provider-independent
+OAuth package.
 
 ## Graph server definitions
 
-`@yaks/mcp-client/graph` exports `mcpDoc` and `serverOf(bundle)`. This optional
-adapter has no harness or session dependency. Load `mcpDoc` with the
-application's vocabulary and store shared server definitions as `mcp_server`
-components:
+`@yaks/mcp-client/graph` is an optional adapter. It exports `mcpDoc`,
+`serverOf`, `graphToolName`, and `graphToolEid`. Connections and credentials
+remain outside graph storage.
 
 ```ts
 await graph.apply([{
@@ -161,22 +168,19 @@ await graph.apply([{
 }])
 ```
 
-`serverOf` validates an enabled row and returns its display label, entity ID,
-and portable `Server` configuration. The `$server` alias above asks the graph to
-generate a UUID. `graphToolName` builds the readable namespace/name pair;
-`graphToolEid` derives a UUID from the server EID and configuration revision.
-Use that UUID for retained handler dispatch, not the displayed name. Renaming
-the label changes future exposed tools. `enabled: false` disables the row.
-`allow` is optional JSON text containing an array of exact remote names. OAuth
-configuration uses `redirect_url`, `client_id`, `client_metadata_url`, and
-`scope`; `credential` is a reference the application interprets, never a bearer
-token. Credentials and open transports remain outside the graph.
+`serverOf(bundle)` validates an enabled `mcp_server` component and returns its
+label, entity ID, and portable `Server` configuration. The `$server` alias asks
+the graph to generate a UUID. `enabled: false` disables the definition. `allow`
+contains JSON text for an array of exact remote names. OAuth fields are
+`redirect_url`, `client_id`, `client_metadata_url`, and `scope`. `credential` is
+an application-defined reference, never a bearer token.
 
-Low-level `connect(server)` and `clients(servers)` remain usable without a
-graph. The harness reads the shared graph instead of maintaining an
-environment-based server list.
+`graphToolName` creates the displayed tool name. `graphToolEid` derives a UUID
+from the server entity, configuration, and remote name; use it for retained
+handler dispatch. Renaming the label changes future exposed tool names.
 
-Remote schemas retain their declared dialect. Input and SDK output validation
-use the shared `@yaks/vocab/tools` validator: draft-07, 2019-09, and 2020-12 are
-supported; undeclared schemas default to 2020-12. Unsupported dialects fail
-explicitly, and validation does not fetch external schema references.
+Low-level `connect` and `clients` work without a graph. Consumer adapters may
+validate tool input. The MCP SDK's output validation uses the shared
+`@yaks/vocab/tools` validator. Draft-07, 2019-09, and 2020-12 are supported;
+undeclared schemas default to 2020-12. Unsupported dialects fail explicitly, and
+external schema references are not fetched.

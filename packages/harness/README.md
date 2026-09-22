@@ -9,90 +9,43 @@ on this machine and are not sandboxed.
 - `open()` creates or opens storage and registers vocabulary and plugins.
 - `harnessTools()` combines shell, delegation and graph tools.
 - `agent()` configures the model and session daemon and exposes session methods.
-- `plugin` supplies the implementations of the tools vocab.json declares, for
-  `@yaks/cli`.
+- `@yaks/harness/vocab`, `/rules`, and `/tools` expose schemas, graph rules, and
+  tool implementations for `@yaks/cli` composition.
+
+The graph stores sessions, transcript entries, tasks, process records, and
+configuration in SQLite. Text bodies use blob tables in that database; binary
+artifacts and private credential files live separately on disk. Frontend
+selection and navigation state are local, with draft recovery files described
+below. A **bundle** is one entity's components as a JSON object. A **batch** is
+a list of changes applied in one transaction. The **host** is the process that
+opened the graph. An **ask** is a recorded model request; a **settled** session
+has finished its current turn without more calls to execute and can accept new
+input.
+
+## Exports
+
+| Import                | Main exports                                                                                                                                                   |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/harness`       | `open`, `dbPath`, `agent`, `seed`, `idOf`, `harnessTools`, `graphTools`, `parametersOf`, CLI `tools`/`own`, `App`, `tui`, `changes`, `panels`, and their types |
+| `@yaks/harness/bin`   | Command-line entry point                                                                                                                                       |
+| `@yaks/harness/vocab` | Vocabulary documents, `vocab`, schema `keywords`, and computed columns via `derived`                                                                           |
+| `@yaks/harness/rules` | `rules({vocab, sql})`, the graph plugins used by the harness                                                                                                   |
+| `@yaks/harness/tools` | `runs(host)`, implementations of the declared graph tools                                                                                                      |
 
 ## Use
 
-Settled subagents are hidden by default regardless of their assigned tasks.
-Tasks remain available in the Tasks panel. **Ctrl+S** toggles **Show settled**;
-NORMAL mode also provides `s`. Root sessions, the selected child, and ancestors
-of active descendants stay reachable. Explicit archival remains separate. This
-filter changes display/navigation only; completion messages and child
-transcripts remain available. Failed and stopped children remain visible.
+Run these commands from the repository root with Deno installed:
 
-## Keyboard modes
-
-**Ctrl+U cuts the entire draft in any mode:** it saves the exact source
-(including newlines) in the frontend's private `visual.yank`, requests an OSC52
-clipboard write, then clears the draft and resets its cursor. It does not send a
-message. Empty drafts leave the clipboard alone. If the clipboard writer throws,
-the draft is retained. If no writer is available, the draft is cut to the local
-yank only. The status line reports the outcome; terminal clipboard permissions
-can prevent OSC52 delivery, which cannot be acknowledged. The local yank remains
-recoverable until replaced or this frontend closes. The standalone textarea's
-Ctrl+U editing behavior is unchanged.
-
-The composer starts in **INSERT** mode. Escape enters **NORMAL**, and `i`
-returns to editing without changing the draft or cursor. NORMAL commands never
-submit or type into the composer. `?` opens help; `?` or Escape dismisses it.
-There is no permanent shortcut panel.
-
-| NORMAL key                | Action                                                    |
-| ------------------------- | --------------------------------------------------------- |
-| `j` / `k`                 | Select next / previous transcript entry                   |
-| `h` / `l`                 | Focus transcript / sidebar                                |
-| `gg` / `G`                | Transcript start / end; `G` resumes bottom-follow         |
-| Tab                       | Switch transcript / sidebar focus                         |
-| `hjkl` with sidebar focus | h/l changes pane; j/k selects visible rows                |
-| `n` / `p`                 | Next / previous root                                      |
-| `o`                       | New session                                               |
-| `t`                       | Toggle message / task composer                            |
-| `a` / `z` / `s`           | Archive selected session / show archived / show settled   |
-| `v`                       | VISUAL selection of the transcript's anchored item source |
-| Ctrl+U / Ctrl+D           | Move selection half a page up / down                      |
-| Ctrl+B / Ctrl+F           | Move transcript selection a page up / down                |
-| `i`                       | Return to INSERT                                          |
-
-In VISUAL, `hjkl` extend selection, `y` copies and returns to NORMAL, and Escape
-cancels to NORMAL. Tab cycles selectable surfaces. In INSERT, Alt+v starts draft
-selection. Selection remains source-based and within one item; this is not a
-full Vim editor. Normal `gg` is a two-key sequence, canceled by any intervening
-command or leaving the mode, with no timing requirement. Bracketed paste in
-NORMAL is ignored rather than interpreted as commands.
-
-Existing modified navigation shortcuts remain available for compatibility.
-Ctrl+C always quits; Ctrl+End follows the transcript end. Plain `?`, `hjkl`, and
-`y` still type normally in INSERT. Mode/focus/help state belongs to the
-frontend's private graph, while the TUI key-routing and text-surface APIs are
-graph-independent.
+```sh
+deno task harness
+```
 
 `deno task harness` with no verb opens the terminal UI. The transcript scrolls
 and word-wraps beside the Sessions, Tasks, and Context usage panels. Enter
 starts a session (or sends to the selected one); Shift+Enter inserts a newline.
-Ctrl+N / Ctrl+P or Alt+Down / Alt+Up select sessions, Ctrl+O selects a new one,
-PgUp / PgDn scroll, and Ctrl+C quits. Shift+Enter needs a terminal supporting
-kitty keyboard sequences (Alt+Enter also inserts a newline).
-
-Tab toggles the visible composer mode between **message** (the default) and
-**task**, without changing the draft. Task mode requires a selected session;
-Enter calls `a.taskEntry(session, text)` to create a `doc` and a bare `task{}`
-(no filing metadata), contain it under the session's claimed tasks, and spawn a
-child that claims it. With no claimed tasks, containment is under the session
-itself. The first line (up to 120 characters) is the title; the entire text is
-the body. Admission, task, edges, child and claim are one atomic write through
-`taskEntry(graph, session, text, limits?)` from `@yaks/session`. A cap refusal
-creates nothing and appears by the composer. The parent stays selected and
-available for messages; the child and its open/wip task appear in the sidebar,
-and completion arrives in the parent transcript without a keypress.
-
-Typing only touches the editor. Post-commit graph effects refresh the content,
-including model replies arriving while stdin is idle; there is no polling loop.
-The sidebar is `Opts.panels` in `app.ts`: each contribution in `panels.ts` is
-`{title, read, Render}`, with `read` returning bundles from graph-backed
-interfaces. To embed the app, mount `App` with
-`{agent: a, subscribe: changes(a), panels}`; use
-`run(() => h(App, opts), {backend})` to choose a terminal backend.
+Ctrl+N / Ctrl+P or Alt+Down / Alt+Up select root sessions, Ctrl+O selects a new
+one, PgUp / PgDn scroll, and Ctrl+C quits. Shift+Enter needs a terminal
+supporting kitty keyboard sequences (Alt+Enter also inserts a newline).
 
 ```sh
 deno task harness new 'reply with the word pong'
@@ -104,7 +57,7 @@ deno task harness models
 ```
 
 `$HARNESS_HOME` moves harness state without changing `HOME`: the defaults are
-`$HARNESS_HOME/yak.db` and the task children's checkouts under
+`$HARNESS_HOME/yak.db` and checkouts for children assigned tasks under
 `$HARNESS_HOME/worktrees`, with `~/.yak` as the state directory when unset.
 `$HARNESS_DB` (including `:memory:`) and `$HARNESS_WORKTREE_DIR` override the
 individual places. For probes, set `HARNESS_HOME` and `TASKS_HOME` to scratch
@@ -118,12 +71,22 @@ The model is `gpt-6-astra` unless `--model` names another, reached with
 
 ```ts
 import { agent, open } from '@yaks/harness'
+import type { Model } from '@yaks/model'
 
-// Supply a model adapter implementing the @yaks/session model contract.
-let a = agent({ h: open(':memory:'), model })
-let s = await a.start('reply with the word pong')
-await a.idle(s)
-for (let e of await a.transcript(s)) console.log(a.line(e))
+// A local model for this example; replace it with a provider adapter.
+let model: Model = async (request) => ({
+  id: crypto.randomUUID(),
+  model: request.model,
+  items: [{ kind: 'assistant', text: 'pong' }],
+})
+let a = agent({ h: open(':memory:'), model, tools: [] })
+try {
+  let s = await a.start('reply with the word pong')
+  await a.idle(s)
+  for (let e of await a.transcript(s)) console.log(a.line(e))
+} finally {
+  await a.close()
+}
 ```
 
 For tests and embedded instances, pass the storage handle as `h`. Do not spread
@@ -132,38 +95,119 @@ the type contract and a runtime check. Without an explicit `h`, `agent()` opens
 the configured persistent database. A temporary working directory does not
 isolate that database.
 
+Settled subagents are hidden by default regardless of their assigned tasks.
+Tasks remain available in the Tasks panel. **Ctrl+S** toggles **Show settled**;
+NORMAL mode also provides `s`. Root sessions, the selected child, and ancestors
+of active descendants stay reachable. Explicit archival remains separate. This
+filter changes display/navigation only; completion messages and child
+transcripts remain available. Failed and stopped children remain visible.
+
+## Keyboard modes
+
+**Ctrl+U cuts the entire draft in INSERT or VISUAL mode:** it saves the exact
+source (including newlines) in the frontend's private `visual.yank`, requests an
+OSC52 clipboard write, then clears the draft and resets its cursor. It does not
+send a message. Empty drafts leave the clipboard alone. If the clipboard writer
+throws, the draft is retained. If no writer is available, the draft is cut to
+the local clipboard copy only. The status line reports the outcome; terminal
+clipboard permissions can prevent OSC52 delivery, which cannot be acknowledged.
+The local clipboard copy remains recoverable until replaced or its saved
+recovery copy is removed. `Alt+p` inserts it into the draft. The standalone
+textarea's Ctrl+U editing behavior is unchanged.
+
+The composer starts in **INSERT** mode. Escape enters **NORMAL**, and `i`
+returns to editing without changing the draft or cursor. NORMAL commands never
+submit or type into the composer. `?` opens help; `?` or Escape dismisses it.
+There is no permanent shortcut panel.
+
+| NORMAL key                   | Action                                                  |
+| ---------------------------- | ------------------------------------------------------- |
+| `j` / `k`                    | Move transcript cursor down / up                        |
+| `h` / `l`                    | Move transcript cursor left / right                     |
+| `gg` / `G`                   | Transcript start / end; `G` resumes bottom-follow       |
+| Tab                          | Switch transcript / sidebar focus                       |
+| `Ctrl+w h` / `Ctrl+w l`      | Focus transcript / sidebar                              |
+| `j` / `k` with sidebar focus | Select visible rows                                     |
+| `n` / `p`                    | Next / previous root                                    |
+| `o`                          | New session                                             |
+| `t`                          | Toggle message / task composer                          |
+| `a` / `z` / `s`              | Archive selected session / show archived / show settled |
+| `v`                          | VISUAL selection of rendered transcript text            |
+| Ctrl+U / Ctrl+D              | Move selection half a page up / down                    |
+| Ctrl+B / Ctrl+F              | Move transcript selection a page up / down              |
+| `i`                          | Return to INSERT                                        |
+
+In VISUAL, `hjkl` extend selection, `y` copies and returns to NORMAL, and Escape
+cancels to NORMAL. Tab cycles selectable surfaces. In INSERT, Alt+v starts draft
+selection. Draft selection uses source text; transcript selection uses rendered
+text and can span retained entries. Enter opens the selected entry's source.
+This is not a full Vim editor. Normal `gg` is a two-key sequence, canceled by
+any intervening command or leaving the mode, with no timing requirement.
+Bracketed paste in NORMAL is ignored rather than interpreted as commands.
+
+Existing modified navigation shortcuts remain available for compatibility.
+Ctrl+C always quits; Ctrl+End follows the transcript end. Plain `?`, `hjkl`, and
+`y` still type normally in INSERT. Mode/focus/help state belongs to the
+frontend's private graph, while the TUI key-routing and text-surface APIs are
+graph-independent.
+
+In INSERT mode, Tab toggles the visible composer mode between **message** (the
+default) and **task**, without changing the draft. Task mode requires a selected
+session; Enter calls `a.taskEntry(session, text)` to create a `doc` and a bare
+`task{}` (no filing metadata), contain it under the session's claimed tasks, and
+spawn a child that claims it. With no claimed tasks, containment is under the
+session itself. The first line (up to 120 characters) is the title; the entire
+text is the body. The queued execution request, task, edges, child and claim are
+one atomic write through `taskEntry(graph, session, text, limits?)` from
+`@yaks/session`. A rejected submission creates nothing and appears by the
+composer. The parent stays selected and available for messages; the child and
+its open/wip task appear in the sidebar, and completion arrives in the parent
+transcript without a keypress.
+
+Typing only touches the editor. Post-commit graph effects refresh the content,
+including model replies arriving while stdin is idle; there is no polling loop
+for transcript refresh. The sidebar is `Opts.panels` in `app.ts`: each
+contribution in `panels.ts` is `{title, read, Render}`, with `read` returning
+bundles from graph-backed interfaces. To embed the app, mount `App` with
+`{agent: a, subscribe: changes(a), panels}`; use
+`run(() => h(App, opts), {backend})` to choose a terminal backend.
+
 ## What it is made of
 
 - **Persistent state.** A transcript is `entry` entities, what it ran is
   `process` entities, the work is `task` entities — @yaks/session, @yaks/process
-  and @yaks/task over @yaks/sqlite. Nothing here writes SQL and session state is
-  persisted; running sessions can be queried with `.session.status=running`.
-- **Two statuses are computed, never stored.** `sessionDerived` and @yaks/task's
-  `derived(taskMarks)` are registered as derived columns. The task plugin uses
-  the same `taskMarks` from @yaks/session: completed/cancelled win, then a claim
-  means wip, otherwise open. `blocked` stays a component of its own, never a
-  status. Queries filter in the database, and the sidebar reads that same
-  status.
-- **Work need not be filed.** `doc` + bare `task{}` is a microtask; optional
-  `filed{project, priority, domain, assignee}` places it in the portfolio.
-  `a.tasks()` reads `.task.status=open,wip`, oldest first, without requiring
-  filing or a project. The CLI and sidebar use that same interface.
-- **The agent holds its own graph.** `harnessTools()` is @yaks/process's shell
-  plus @yaks/mcp's generic tier (`graph_apply`, `graph_query`, `graph_show`,
-  `graph_schema`), each tool's Zod arguments converted to JSON Schema for the
-  model.
-- **Boot reconciles.** `open()` frees the leases of holders that are gone;
-  `resume()` wakes the transcripts a restart left owed a turn.
+  and @yaks/task over @yaks/sqlite. Storage initialization and migrations use
+  SQL; normal agent operations use the graph API. Session state is persisted;
+  running sessions can be queried with `.session.status=running`.
+- **Two statuses are computed, never stored.** `@yaks/harness/vocab` registers
+  computed session and task status columns through `@yaks/session/vocab`. The
+  task plugin uses the same `taskMarks` from @yaks/session: completed/cancelled
+  win, then a claim means wip, otherwise open. `blocked` stays a component of
+  its own, never a status. Queries filter in the database, and the sidebar reads
+  that same status.
+- **Work need not be filed.** `doc` + bare `task{}` is a task without project
+  metadata; optional `filed{project, priority, domain, assignee}` adds project
+  and assignment metadata. `a.tasks()` reads `.task.status=open,wip`, oldest
+  first, without requiring filing or a project. The CLI and sidebar use that
+  same interface.
+- **Tools use the session's graph.** `harnessTools()` combines process,
+  delegation, artifact, text-inspection, and generic graph tools (`graph_apply`,
+  `graph_query`, `graph_show`, `graph_schema`). Existing JSON Schemas are
+  retained; Zod arguments are converted to JSON Schema for the model.
+- **Restart recovery.** `open()` releases execution leases whose holders are
+  absent from the graph; `resume()` schedules sessions with unfinished work.
 
 ## Not here
 
-No sync, no server, no durable effect ledger — the daemon is woken again by
-`resume()` instead. The terminal renderer and its widgets come from @yaks/tui.
+The standalone harness does not run a sync service or HTTP server. It does not
+keep a separate persisted log of pending effects; `resume()` restarts work from
+the session records. The terminal renderer and its widgets come from @yaks/tui.
 
 ## Compatibility
 
-Deno. It makes a file, reads the environment and starts child processes, and its
-SQLite is `jsr:@db/sqlite`.
+The executable and main module require Deno with filesystem, environment, and
+subprocess permissions. SQLite comes from `jsr:@db/sqlite`. Vocabulary exports
+can also be loaded by a browser.
 
 ## Forks and subagents
 
@@ -174,20 +218,22 @@ The default tool table includes `fork`, `spawn`, and `wait`:
   Unanswered calls are not inherited. It returns a concurrent child session id.
 - `spawn({prompt, instructions?, model?, effort?})` returns a fresh child
   session id. It inherits the serving configuration, not the transcript. `model`
-  accepts a model name (served by the inherited provider) or an existing model
+  accepts a model name (using the inherited provider) or an existing model
   entity id.
 - `spawn({task, instructions?, model?, effort?})` instead accepts a task eid or
-  `T-<number>`. The child's first input records its title and body as served;
-  its claim commits with the child, so the task is wip from the first tick.
-  Choose exactly one of `prompt` and `task`. Independent subtasks can run in
-  parallel; tree ordering is through `requires`/`contains`, not priority.
+  `T-<number>`. The child's first input records its title and body when
+  submitted; its claim commits with the child, so the task is wip as soon as it
+  is created. Choose exactly one of `prompt` and `task`. Independent subtasks
+  can run in parallel; tree ordering is through `requires`/`contains`, not
+  priority.
 - `wait({children: [id, ...], timeout?: milliseconds})` waits on direct children
   and returns their statuses and output. The default timeout is 60 seconds;
   timing out leaves the children running.
 - `wait({tasks: [id, ...], timeout?: milliseconds})` returns each task's
   `{task, status, done}`. Shared @yaks/task `done()` requires a settled task
-  (completed or cancelled) with no open direct `requires`/`contains` far ends.
-  Timeout returns the current state without cancelling work.
+  (completed or cancelled) with no unfinished tasks directly referenced by
+  `requires` or `contains` edges. Timeout returns the current state without
+  cancelling work.
 - `wait({process, timeout?})` still waits on a shell process. The tool table
   exposes one merged `wait`: choose exactly one of process, children, or tasks.
 
@@ -196,32 +242,34 @@ A child carries `spawned{parent, call}`; a fork additionally has `fork{from}`.
 queues a completion receipt behind any active parent step: a result if the
 originating call is still open, otherwise an input that wakes another parent
 turn. Failed/stopped children also report their terminal outcome. A stopped
-parent is not revived. When its claimed task is done, a quiet child delivers
-`task T-<number> <status>` plus its final message, with the idempotent receipt
-id `delivery:<child>:task:<task>:<status>`. A child settling before the task is
-done still reports its outcome, using a receipt id derived from its final entry.
-`resume()` reconciles missed receipts without repeating ones already received.
-Fork/spawn calls themselves are idempotent by call id.
+parent is not revived. When its claimed task is done, a child with no active
+work delivers `task T-<number> <status>` plus its final message, with the
+idempotent receipt id `delivery:<child>:task:<task>:<status>`. A child settling
+before the task is done still reports its outcome, using a receipt id derived
+from its final entry. `resume()` reconciles missed receipts without repeating
+ones already received. Fork/spawn calls themselves are idempotent by call id.
 
 `agent({maxChildren: 32, maxSessions: 64})` sets the defaults explicitly. Child
-submissions return an ID and durable `dispatch.state=queued` intent;
+submissions return an ID and a persisted `dispatch.state=queued` record;
 `session.status=queued` distinguishes waiting children from active or settled
-ones. One shared graph-local scheduler admits up to `maxChildren` callbacks
-across all parents (32 by default). FIFO submission order is durable; resumed
-nested waits reacquire a slot before returning. Root sessions do not consume
-child slots; `maxSessions` remains a root-start guard. A waiting delegated
-parent releases its slot, so capacity one supports nested delegation. Worktree
-preparation runs only on admission; failures and queued cancellation terminate
-with a completion receipt. Restart reconciles interrupted admissions; spawn
-replay preserves ID and fork anchor. `stop()` gates admission synchronously and
-drains running storage callbacks, not the durable queue or task settlement.
+ones. One scheduler per graph runs up to `maxChildren` child callbacks across
+all parents (32 by default). FIFO submission order is durable; resumed nested
+waits reacquire a slot before returning. Root sessions do not consume child
+slots; `maxSessions` remains a limit checked when starting a root session. A
+waiting delegated parent releases its slot, so capacity one supports nested
+delegation. Worktree preparation runs only when a queued child is selected to
+execute; failures and queued cancellation terminate with a completion message.
+Restart recovers interrupted scheduling; spawn replay preserves ID and fork
+boundary. `a.d.stop()` immediately prevents new execution and waits for running
+storage callbacks; it does not empty the persisted queue or complete assigned
+tasks. Use `await a.close()` to stop the daemon and close the harness database.
 Independent supervised processes are untouched. This is a single-daemon pool,
 not a distributed lease or a security boundary against arbitrary graph writes.
-Model/API throughput is still bounded by provider limits; full transcript
-transfer and coarse UI projection costs are unchanged.
+Provider limits still constrain model throughput. Scheduling does not reduce the
+context sent to providers or the cost of frontend data refreshes.
 
 `tools` replaces the default table when supplied. `sessionTools(graph, limits)`
-from `@yaks/session` is the standalone delegation table (its admission queries
+from `@yaks/session` is the standalone delegation table (its scheduling queries
 use the registered `session.status` derived column).
 
 ## Performance probe
@@ -230,17 +278,18 @@ use the registered `session.status` derived column).
 deno run -A packages/harness/perf.ts
 ```
 
-This reports warmed median/p95 fresh-entry apply time and the subsequent react
-step's model-dispatch overhead with a fixed 1,000-entry SQLite transcript. It
-uses a fake model and measures no network time. The SQLite/daemon integration
-suite lives under `packages/`, outside the repository's fast test tier.
+This reports warmed median/p95 fresh-entry apply time and the subsequent
+`react()` step's model-dispatch overhead with a fixed 1,000-entry SQLite
+transcript. It uses a fake model and measures no network time. The SQLite/daemon
+integration suite lives under `packages/`, outside the repository's fast test
+tier.
 
 ### Auto-task lifecycle context
 
 Task-mode submission writes a passive `notice` entry into the parent transcript
 in the same batch as the task and child. It records the original request and
 user-created origin. A notice neither wakes the parent nor changes its derived
-status; the next natural ask includes it. Completion still wakes the parent,
+status; the next model request includes it. Completion still wakes the parent,
 with the original context, factual child/task status, and child result. Receipt
 identity remains durable and idempotent across resume/reconciliation. Ordinary
 model delegation keeps its existing receipt behavior.
@@ -257,7 +306,9 @@ tasks outrank their worker's state. The task panel joins already-read session
 state only for rendering; nothing is persisted twice. Completed tasks still
 follow the existing open-task filtering.
 
-### Subagent Git homes
+<a id="subagent-git-homes"></a>
+
+### Subagent working directories
 
 Sessions carry `home{worktree,cwd}`. The worktree reference names a shared Git
 checkout entity owned by `@yaks/git`; cwd is a separate optional command
@@ -267,50 +318,57 @@ inherit home without making a checkout.
 
 `spawn` and `fork` accept `worktree: {path, base?, branch?}` to create a
 checkout, or `home: <worktree-eid>` to attach an existing one. These are
-mutually exclusive. `cwd` can override the command directory independently.
-Creation finishes before child session/input publication, so no child runs
-against an unprepared checkout. The generic session package only exposes a host
-preparation hook; it knows no Git.
+mutually exclusive. `cwd` can override the command directory independently. The
+child and its initial input are recorded as queued before preparation. The
+scheduler prepares the checkout before executing the child. The generic session
+package only exposes a host preparation hook; it knows no Git.
 
 A new worktree defaults to detached committed HEAD, not the parent's dirty
 files. Its root becomes the default cwd unless explicitly overridden. Shell
 resolution is per call → persisted session cwd → home worktree root → harness
 directory; it inherits the harness environment. This is not sandboxing. Failed
-Git preparation remains as `checkout` intent/error and as the failed tool
-result; retrying reconciles the same path.
+Git preparation is recorded on the `checkout` entity and the failed child
+session, with a completion receipt to the parent. Retrying preparation
+reconciles the same path.
 
-A checkout the harness cut for a child is COLLECTED when that child's session is
-over and the checkout holds nothing — a clean tree whose HEAD already exists on
-another branch (`worktrees.ts`). Over is read off the transcript, not off the
-pool: a `stop` line, an exception, the exit of the process behind it, or a turn
-that asked for nothing; a dispatch settling alone collects nothing. Nothing is
-merged, and anything dirty or unlanded is kept and named. Before the bytes go
-the `worktree` row is made true, so a session RESUMED after collection gets its
-checkout cut again at the same path, on the same branch, at the commit it stood
-on — before anything runs in it.
+The harness removes a child checkout only after the session ends and the
+checkout is clean with HEAD reachable from another branch (`worktrees.ts`).
+Session completion is determined from the transcript: a `stop` entry, an
+exception, or a finished turn with no pending calls. If the session has an
+associated process, that process must also have exited. A settled dispatch
+record alone is insufficient. No merge is performed; dirty checkouts and commits
+not on another branch are retained and reported. Before removal, the graph
+records the checkout's current branch and commit. If the session resumes, the
+harness recreates the checkout at the same path, branch, and commit before
+executing further work.
 
-### Prompt context pilot
+<a id="prompt-context-pilot"></a>
 
-`prompt{scope,source,revision}` on an entry explicitly admits its `content.body`
-as instructions. Ordinary file reads and tool results never gain instruction
-status. `agent.instruct(session, text, source)` appends local instructions; it
-is an explicit wake-producing operation, not a passive notice. OpenAI receives
-ordered developer messages, including mid-conversation admissions.
+### Instruction files and prompt history
+
+`prompt{scope,source,revision}` on an entry explicitly marks its `content.body`
+as instructions for model requests. Ordinary file reads and tool results never
+gain instruction status. `agent.instruct(session, text, source)` appends local
+instructions; it is an explicit wake-producing operation, not a passive notice.
+OpenAI receives ordered developer messages, including instructions added during
+the conversation.
 
 Root sessions snapshot global `~/.agents/AGENTS.md` then ancestor `AGENTS.md`
 files from filesystem root to cwd. Missing files are ignored, other read errors
-abort admission. Each file's canonical path and content SHA-256 are recorded. No
-mtime sorting or retrospective reload occurs. Existing `opts.instructions` and
-`using.instructions` remain the legacy base instruction channel; delegated
-`instructions` now append local guidance rather than replacing that base.
+prevent session creation. Each file's canonical path and content SHA-256 are
+recorded. No mtime sorting or retrospective reload occurs. Existing
+`opts.instructions` and `using.instructions` remain the legacy base instruction
+channel; delegated `instructions` now append local guidance rather than
+replacing that base.
 
 Fresh children copy shared prompt snapshots from their parent. Forks copy no
 files: their exact inherited prefix is followed by a local fork-execution note,
 optional child guidance, and the assignment. Fresh children intentionally
-inherit the parent's file snapshots even when assigned a different home;
-admitting that new home's guidance is explicit. A renamed/deleted source doesn't
-alter history. This pilot is host/POSIX-oriented; it doesn't yet provide UI
-admission controls, or prompt supersession. Prompt entries have a query-matched
+inherit the parent's file snapshots even when assigned a different home; loading
+instruction files from the new directory requires an explicit action. A
+renamed/deleted source doesn't alter history. This implementation is designed
+for a local POSIX filesystem; it doesn't yet provide UI controls for choosing
+instruction files, or prompt supersession. Prompt entries have a query-matched
 transcript renderer that shows one clipped line with sequence, scope, and source
 name. Instruction text remains stored and is sent to the provider unchanged;
 compact display does not remove it from context. Fork notes are guidance, not a
@@ -319,7 +377,7 @@ prohibition on useful delegation. Provider cache hits are not guaranteed.
 #### Prompt history and cache limits
 
 `prompt.revision` is the file content SHA-256, not an identity for a full model
-request. Ordered snapshots, the fork anchor and recorded base instructions
+request. Ordered snapshots, the fork boundary and recorded base instructions
 preserve instruction history. There is no aggregate request-prefix identity,
 cache-retention registry, automatic prompt refresh or supersession. Provider
 cached-token counts do not guarantee that a particular prefix remains cached.
@@ -353,21 +411,20 @@ are never reinterpreted as navigation. Ctrl+k is reserved for navigation in the
 harness (the standalone textarea retains its kill-to-end binding). Plain hjkl
 still types; VISUAL mode retains priority.
 
-Tasks shrinks to their content within bounded shares. Context usage is last at
-the bottom; the session tree receives remaining height and scrolls.
+The Tasks panel shrinks to their content within bounded shares. Context usage is
+last at the bottom; the session tree receives remaining height and scrolls.
 
 `Alt+a` archives/unarchives only the selected session, never its root. `Alt+z`
 shows archived roots so they can be selected and restored. Archiving writes a
 persistent `archived` component: it neither stops execution nor removes history.
 Archiving a session hides its subtree; descendants receive no additional archive
-marks. Selection and visibility preferences live only in the frontend graph.
-Trees are keyboard-controlled for now; no coordinate-specific mouse hacks were
-added.
+marks. Selection and visibility preferences live only in the frontend graph. The
+tree supports both keyboard navigation and mouse row selection.
 
-The session title projection reads original local input, excluding inherited
-fork history and instruction/notice entries. This currently adds transcript
-reads to domain refreshes (not keystrokes); the existing coarse async domain
-projection adapter remains a performance interface, documented in
+Session titles are read from original local input, excluding inherited fork
+history and instruction/notice entries. This adds transcript reads when graph
+data is refreshed, rather than on each keystroke. The asynchronous frontend data
+adapter and its performance limits are documented in
 [Frontend implementation](FRONTEND.md).
 
 ### Defect diagnostics
@@ -381,10 +438,10 @@ contains JSON with the stack, recursive cause chain, timestamp, process ID,
 phase, and session when known. Expected tool refusals retain the existing
 `error` semantics.
 
-There is no second journal. Where no graph is attached to take a defect, or
-where the graph is the thing that broke, the record goes to stderr as one JSON
-line — a graph write that fails prints the original failure beside it and never
-recurses. Graph writes drain for at most 250ms at executable shutdown.
+There is no second journal. If no graph is available or the diagnostic graph
+write fails, the record is written to stderr as one JSON line. A failed
+diagnostic write includes the original failure without recursively attempting
+more graph writes. Graph writes drain for at most 250ms at executable shutdown.
 
 Global handlers observe rather than suppress fatal runtime defaults, restoring
 the terminal on the fatal path. Embedded users of `agent()` get daemon
@@ -448,10 +505,10 @@ Current provider errors do not reliably distinguish unsupported image tools from
 other invalid requests, so there is no negative capability cache or speculative
 fallback. Disable images explicitly if your endpoint rejects them.
 
-Binary bytes use `@yaks/blob`'s external file backend under `~/.yak/images`, or
-`HARNESS_IMAGE_DIR`. This directory is made private. Keep it with database
-backups. Do not point it at an unrelated shared directory: the harness enforces
-mode 0700 on it.
+Binary bytes use `@yaks/blob`'s external file backend under
+`$HARNESS_HOME/images` (default `~/.yak/images`), or `HARNESS_IMAGE_DIR`. This
+directory is made private. Keep it with database backups. Do not point it at an
+unrelated shared directory: the harness enforces mode 0700 on it.
 
 Configure it in code with:
 
@@ -469,11 +526,11 @@ artifact storage configuration.
 
 Images are persisted before their graph references, with content-derived
 artifact IDs and attachment entries associated with the original ask and
-session. The transcript shows an artifact label rather than base64. No terminal
-image display, image editing/input replay, or automatic blob cleanup is
-implemented. Inline images and Kitty graphics rendering can be added in the
-terminal backend later. Only the textual artifact reference is replayed when
-provider-side conversation storage is unavailable.
+session. The transcript shows an artifact label rather than base64. Generated
+images are replayed as textual artifact references unless explicitly inspected
+with `image_view`. Optional Kitty graphics display and explicit image inputs are
+described below. Automatic blob cleanup and an image-editing tool are not
+implemented.
 
 For example, with `OPENAI_API_KEY` configured:
 
@@ -501,9 +558,9 @@ placements. VISUAL mode continues to select the artifact's textual label, not
 image pixels.
 
 In tmux, enable `allow-passthrough`; the harness wraps graphics commands when
-`TMUX` is set. SSH requires no server-side display. This pilot does not
+`TMUX` is set. SSH requires no server-side display. This renderer does not
 negotiate terminal support: only enable it on terminals supporting Kitty
-graphics. Actual visual placement in iTerm2 still needs user verification.
+graphics. Visual placement in iTerm2 still needs user verification.
 
 The worker's image read uses a bounded `Uint8Array` postMessage result; it is
 structured-cloned, not transferred. This copies up to 4 MiB per cache miss. No
@@ -536,7 +593,7 @@ The default tools include:
 
 The tools use the same external storage directory as generated images. Image
 bytes are verified against the registered hash and size. The graph stores the
-reference, audience, and admitted revision, not base64. The OpenAI adapter adds
+reference, audience, and inspected revision, not base64. The OpenAI adapter adds
 an `input_image` user message after the tool results. Only the outgoing provider
 request contains a data URL. The original tool call/result pair remains intact.
 
@@ -544,10 +601,10 @@ A replay, including inherited fork history, includes explicitly viewed images
 again; continuation requests include only inspection results in their new
 window. User-only attachments never become model image inputs. Changing an
 artifact reference after inspection fails the revision check instead of sending
-new bytes under the old admission. Requests are limited to 20 MiB of inspected
-images. These tools currently inspect signatures rather than fully decoding
-images; animated GIF, SVG, remote URL import, and video are unsupported. Unknown
-imported files receive `application/octet-stream`.
+new bytes under the previously approved revision. Requests are limited to 20 MiB
+of inspected images. These tools currently inspect signatures rather than fully
+decoding images; animated GIF, SVG, remote URL import, and video are
+unsupported. Unknown imported files receive `application/octet-stream`.
 
 Responses stream by default. Set `HARNESS_STREAM=0` or pass `streaming: false`
 to disable streaming. See [STREAMING.md](STREAMING.md) for lifecycle and
@@ -600,8 +657,8 @@ action.
 
 Draft text, cursor, and message/task mode are restored per session, including
 unsent new-session text. Recovery stays on the frontend machine, not the backend
-or model. `Ctrl+U` cuts to the clipboard and saved local yank; `Alt+p` restores
-that yank. Failed or interrupted admissions restore editable text rather than
+or model. `Ctrl+U` cuts to the clipboard and saved local copy; `Alt+p` restores
+that copy. Failed or interrupted submissions restore editable text rather than
 automatically resending it.
 
 Local unencrypted recovery files use private permissions under `~/.yak/drafts`.
@@ -610,15 +667,15 @@ relocate storage. See [frontend state](FRONTEND.md#local-draft-recovery) for
 isolation, retention, and crash-recovery limits.
 
 The CLI and terminal frontend do not add a built-in agent description or style
-instruction. Instruction files are admitted through `@yaks/context`; callers can
-still supply explicit `instructions`. Existing sessions retain their served
+instruction. Instruction files are loaded through `@yaks/context`; callers can
+still supply explicit `instructions`. Existing sessions retain their recorded
 request history, but the retired built-in harness instruction is omitted from
 future requests. A restart loads this behavior; it cannot retract instructions
 from a request already in progress.
 
 ## Transcript loading
 
-The UI loads a 64-entry window around the bottom or saved entry anchor, then
+The UI loads a 64-entry window around the bottom or saved entry position, then
 loads overlapping ranges on navigation. Context usage reads only the newest
 reported usage fields. Full model history is unchanged. See
 [WINDOWS.md](WINDOWS.md) for the subscription design, benchmark, and entry-size
@@ -629,7 +686,7 @@ limits.
 The harness checks the SQLite migration control table before installing its
 application schema. A pending/failed announcement refuses startup. While
 running, it polls that table once per second. A new announcement or completed
-generation stops admission, drains active work, and closes the database;
+generation stops new execution, drains active work, and closes the database;
 subsequent commands report that a restart is required. It does not automatically
 restart the worker. `migrationPollMs` can configure the interval in
 `agent`/`remote` options.
@@ -641,7 +698,7 @@ migrator must allow at least the longest participating polling interval. See
 for failure recovery and timing limitations. In particular, the grace period is
 not a guarantee that all active callbacks finished.
 
-This first version protects only **explicitly announced migrations**. Existing
+This version protects only **explicitly announced migrations**. Existing
 synchronous `open()` schema installation and legacy startup conversions have not
 been converted to asynchronous preannounced migrations. Do not assume opening a
 new harness version is coordinated with older running connections. Stop those
@@ -650,13 +707,13 @@ compatibility check when an older binary first opens the file.
 
 ## The harness as a plugin module
 
-`./plugin` is where the harness declares what it is made of, once: the
-vocabulary documents it contributes, the columns it computes rather than stores,
-the rules that validate a write, and the implementations behind its tool
-declarations. `store.ts` imports those for the harness's own SQLite file, and a
-server imports the same ones for a served database. Running `yak serve` with a
-harness config (@yaks/cli `compose`) is the harness with HTTP endpoints in front
-of it. Importing the module opens no database and starts nothing.
+The harness exposes separate sub-module exports for composition:
+`@yaks/harness/vocab` supplies schema documents and computed columns,
+`@yaks/harness/rules` supplies graph plugins, and `@yaks/harness/tools` supplies
+tool implementations. `store.ts` uses the same definitions for its SQLite file
+that `@yaks/cli`'s `compose` uses for a database exposed by a server. The
+configured server can expose these graph operations over HTTP; importing these
+modules does not start the session daemon, open a database, or start a server.
 
 The executable accepts `session list` and `list session`, returning session
 bundles as JSON. The same definition is exposed as MCP `session_list` through
@@ -684,9 +741,8 @@ dim-bordered box.
 
 ## Remote MCP tools
 
-The optional host-wide MCP configuration consumes servers through
-`@yaks/mcp-client`. No servers are enabled implicitly. To use the same yaks.app
-sign-in as `yak`:
+Optional MCP server configuration is shared by sessions and connects through
+`@yaks/mcp-client`. No servers are enabled implicitly.
 
 MCP server definitions live in the harness graph, shared by all sessions. Add a
 server with `graph_apply` (or ask an agent to add it):
@@ -701,13 +757,13 @@ server with `graph_apply` (or ask an agent to add it):
 ```
 
 Press **Esc**, **A** to authorize the server. Server rows persist across
-restarts; configuration changes take effect on the next ask, without restarting.
-The panel identifies each server by display name and EID and reports invalid
-definitions. Query `.mcp_server` to list them. Set `mcp_server.enabled` to
-`false` to disable a server, patch its URL or options to edit it, or remove its
-`mcp_server` component to remove it. The `$server` alias in the write above asks
-the graph to generate a UUID; use the returned EID for later edits. The server
-name supplies a readable tool namespace: `yaks.app` exposes `app_list` as
+restarts; configuration changes take effect on the next model request, without
+restarting. The panel identifies each server by display name and EID and reports
+invalid definitions. Query `.mcp_server` to list them. Set `mcp_server.enabled`
+to `false` to disable a server, patch its URL or options to edit it, or remove
+its `mcp_server` component to remove it. The `$server` alias in the write above
+asks the graph to generate a UUID; use the returned EID for later edits. The
+server name supplies a readable tool namespace: `yaks.app` exposes `app_list` as
 `yaks_app__app_list`. Renaming changes future exposed names, not the server
 entity or its OAuth credentials. Distinct configuration revisions have derived
 UUID tool entities, so changing an endpoint cannot retarget already-issued calls
@@ -730,13 +786,13 @@ stores a bearer; it does not initiate OAuth. `YAKS_TOKEN` retains its existing
 credential override behavior. This is independent of model-provider credentials.
 No other agent's configuration is discovered automatically.
 
-Disabled/removed/reconfigured servers disappear from subsequent asks. Handlers
-already offered to a request keep their original connection so their results can
-still be delivered. Retired connections close when the harness drains and shuts
-down; repeated edits can therefore retain transports until shutdown. Invalid or
-unavailable optional servers do not block other servers or ordinary chat; open
-the authorization panel to inspect their errors. Treat descriptions/results as
-data, not instruction files.
+Disabled/removed/reconfigured servers disappear from subsequent model requests.
+Handlers already offered to a request keep their original connection so their
+results can still be delivered. Retired connections close when the harness
+drains and shuts down; repeated edits can therefore retain transports until
+shutdown. Invalid or unavailable optional servers do not block other servers or
+ordinary chat; open the authorization panel to inspect their errors. Treat
+descriptions/results as data, not instruction files.
 
 The backend worker owns these connections; sessions share configuration, not new
 connection definitions. Discovery occurs at execution boundaries, never while
@@ -746,17 +802,17 @@ descriptions and metadata identify their source. The existing session executor
 writes normal call/result entries—there is no second MCP executor.
 
 Text and structured output use ordinary transcript storage and large-output
-handles. Image/audio/embedded binary resource blocks are stored through external
-blob storage and attached as artifact references; they are not automatically
-sent back as model vision inputs. Binary blocks are limited to 20 MiB each.
-Transport failures and `isError` tool replies are expected tool errors, not
-silent success. The client never automatically retries a remote mutation.
-Re-sign in and restart after an authentication/connection failure.
+references. Image/audio/embedded binary resource blocks are stored through
+external blob storage and attached as artifact references; they are not
+automatically sent back as model vision inputs. Binary blocks are limited to 20
+MiB each. Transport failures and `isError` tool replies are expected tool
+errors, not silent success. The client never automatically retries a remote
+mutation. Re-sign in and restart after an authentication/connection failure.
 
-This first integration is tools-only Streamable HTTP. It does not implement
-stdio or resources/prompts selection. Browser OAuth and reconnect after sign-in
-are described below; failed tool mutations are not automatically retried. The
-local mock publish flow is tested; no public mockup is published during tests.
+This integration is tools-only Streamable HTTP. It does not implement stdio or
+resources/prompts selection. Browser OAuth and reconnect after sign-in are
+described below; failed tool mutations are not automatically retried. The local
+mock publish flow is tested; no public mockup is published during tests.
 
 In-flight tool handlers are retained locally when a later discovery snapshot
 changes; a server withdrawing a tool does not silently substitute a different
@@ -787,7 +843,8 @@ soft wraps. They are bounded to retained measured entries and 65,536 UTF-16
 units; a larger or evicted range reports an error instead of silently copying
 less. Viewport reflow retains the entry identity and clamps row/column, rather
 than promising stable character identity through arbitrary live Markdown
-changes. The composer keeps its existing explicit source-selection behavior.
+changes. The composer keeps its existing explicit source-text selection
+behavior.
 
 ### Sign in to an MCP server
 
@@ -800,10 +857,11 @@ cancels.
 
 The default callback is `http://127.0.0.1:8765/oauth/callback`. No listener is
 started, so a browser connection error at that address is expected; copy the
-address bar anyway. If a server requires pre-registration, add an `oauth` object
-to its configuration with `clientId`, `redirectUrl`, and optionally `scope` or
-`clientMetadataUrl`. The callback must match the registered redirect. Browser
-and provider policies can restrict this copy-address-bar workflow.
+address bar anyway. If a server requires pre-registration, add the `client_id`
+and `redirect_url` fields to its `mcp_server` component, with `scope` or
+`client_metadata_url` when required. The callback must match the registered
+redirect. Browser and provider policies can restrict this copy-address-bar
+workflow.
 
 Tokens and client registrations are stored separately from the graph in
 `~/.yak/mcp-auth.json` (0600), or `HARNESS_MCP_AUTH`. This private JSON file is
@@ -824,8 +882,8 @@ conversation input.
 ## OpenRouter
 
 OpenAI remains the default. OpenRouter is a separate provider, selected through
-ordinary graph model configuration—not by pointing OpenAI credentials at a new
-URL. Add configuration (the `$` names create entities in this write):
+ordinary graph model configuration, with its own credentials. Add configuration
+(the `$` names create entities in this write):
 
 ```json
 [
@@ -858,22 +916,25 @@ returned provider/model EIDs. This selects the next request intentionally:
 }
 ```
 
-An existing model EID can also be passed to `fork` or `spawn`; its provider is
-inherited with it. A bare model name retains the parent's provider. The command
-`harness new --provider openrouter --model vendor/model 'message'` creates a new
-session under that provider; authorize beforehand in the TUI. Embedded hosts can
-use `agent({provider: 'openrouter', name: 'vendor/model'})`; configuration is
+An existing model entity ID (EID) can also be passed to `fork` or `spawn`; its
+provider is inherited with it. A bare model name retains the parent's provider.
+The command `harness new --provider openrouter --model vendor/model 'message'`
+creates a new session under that provider; authorize beforehand in the TUI.
+Embedding applications can use
+`agent({provider: 'openrouter', name: 'vendor/model'})`; configuration is
 recorded in the graph. Tests can inject `providers: {openrouter: fakeModel}`.
 
 OpenRouter Responses is stateless: full applicable context is sent on every
 request, including forks. Provider/model switches don't reuse another model's
-continuation anchor. Native OpenAI image generation and web search are omitted;
-regular function tools and explicit image inputs remain model-dependent.
+stored response ID for continuation. Native OpenAI image generation and web
+search are omitted; regular function tools and explicit image inputs remain
+model-dependent.
 
-This first implementation doesn't add a model catalog picker or OpenRouter's
-provider-routing options. The shared graph `provider`/`model` records are the
-configuration source. Credential files are private plaintext, not encrypted;
-PKCE completion has been tested against mocks, not a live account.
+The model selector below lists configured models; it does not fetch the
+OpenRouter catalog or expose OpenRouter provider-routing options. The shared
+graph `provider`/`model` records are the configuration source. Credential files
+are private plaintext, not encrypted; PKCE completion has been tested against
+mocks, not a live account.
 
 ### Choosing a model in the TUI
 
@@ -883,12 +944,12 @@ or click a row. **Esc** cancels without changing the draft. Provider selection
 is automatic from the chosen model's `provider` reference.
 
 With **New session** selected, the choice applies when that draft is submitted;
-it does not change the host default or another session. For an existing session,
-the choice appends a passive `notice` + `using` configuration entry. It does not
-send an invented chat message or start a model request. The `Model (next)` label
-shows the choice for future requests; any request already running keeps its
-original model. Historical ask configuration remains unchanged. Forks inherit
-the effective configuration.
+it does not change the harness default or another session. For an existing
+session, the choice appends a passive `notice` + `using` configuration entry. It
+does not send an invented chat message or start a model request. The
+`Model (next)` label shows the choice for future requests; any request already
+running keeps its original model. Historical request configuration remains
+unchanged. Forks inherit the effective configuration.
 
 The selector reads the configured catalog when opened; it does not fetch a
 provider's model catalog or prices. Authorize the provider with **A** first.
