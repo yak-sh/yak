@@ -72,7 +72,15 @@ import { fields, schema as ftsSchema } from '@yaks/fts'
 import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
 import { edgeEid } from '@yaks/edge'
 import { identityEid, sha256 } from '@yaks/graph'
-import { backfill, grown, indexed, tabled, type Text } from '@yaks/sqlite'
+import {
+  backfill,
+  fold,
+  grown,
+  indexed,
+  pointers,
+  tabled,
+  type Text,
+} from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { handle } from './directory.ts'
 
@@ -346,18 +354,31 @@ let stands = (d: Drive, table: string): boolean =>
   ).length > 0
 
 /** Existing rows need a preparing pass before gaining a unique constraint.
- * Empty tables can acquire it now without changing what old rows must satisfy. */
+ * Empty tables can acquire it now without changing what old rows must satisfy.
+ * `migrated` is the object's marker: a pass it has not reached, over rows it
+ * still has to prepare, raises its own index once they satisfy it. */
 export let install = (
   storage: DurableStorage,
   vocab: Vocab,
   text: Text = {},
-  handling = false,
+  migrated: string | null = null,
   classify = true,
 ) => {
   let d = driver(storage)
   for (let stmt of tabled(vocab, text)) d.exec(stmt)
   for (let stmt of grown(d, vocab)) d.exec(stmt)
   let held = new Set(named(d, 'index').map((i) => i.name))
+  // HANDLED assigns and reconciles handles before it raises `app_store`;
+  // TOOLED moves and merges tools before it raises `tool_name`.
+  let prepared: Record<string, [string, (s: DurableStorage) => boolean]> = {
+    app_store: [HANDLED, unhandled],
+    tool_name: [TOOLED, mistooled],
+  }
+  let deferred = (name: string) => {
+    let [mark, holds] = prepared[name] ?? []
+    return !!mark && !!holds &&
+      MARKS.indexOf(migrated ?? '') < MARKS.indexOf(mark) && holds(storage)
+  }
   let ready = {
     ...vocab,
     indexes: (table: string) =>
@@ -365,8 +386,7 @@ export let install = (
         let name = `${table}_${i.cols.join('_')}`
         if (held.has(name)) return false
         if (!i.unique || !count(d, table)) return true
-        // HANDLED creates this constraint after assigning and reconciling handles.
-        if (handling && name == 'app_store' && unhandled(storage)) return false
+        if (deferred(name)) return false
         throw new Error(
           `skipped unique index ${name}: existing rows require a preparing migration`,
         )
@@ -620,12 +640,14 @@ export let filed = (
 // integer id stays, so every call keeps pointing at its tool; only the eid it
 // is called by moves.
 
-// Each tool row, with the eid it stands at and the one its name derives.
+// Each tool row, with the eid it stands at and the one its name derives,
+// oldest first.
 let toolIds = (d: Drive) =>
   stands(d, 'tool')
     ? d.query(
       `select e.id, e.eid, t.name from ${q('tool')} t` +
-        ' join entity e on e.id = t.entity where t.name is not null',
+        ' join entity e on e.id = t.entity where t.name is not null' +
+        ' order by e.id',
       [],
     ).map((r) => ({
       id: Number(r.id),
@@ -634,9 +656,19 @@ let toolIds = (d: Drive) =>
     }))
     : []
 
-/** Whether a tool row still stands at an id its name does not derive. */
-export let mistooled = (storage: DurableStorage): boolean =>
-  toolIds(driver(storage)).some((t) => t.eid != t.named)
+// The unique index the vocabulary raises over `tool.name`, its identity, by
+// the name @yaks/sqlite gives it (`<comp>_<cols>`).
+let TOOL_NAME = 'tool_name'
+
+/** Whether the tools are not yet their names: a row standing at an id its name
+ * does not derive, or rows the identity's unique index has not been raised
+ * over. */
+export let mistooled = (storage: DurableStorage): boolean => {
+  let d = driver(storage)
+  let rows = toolIds(d)
+  return rows.some((t) => t.eid != t.named) ||
+    (rows.length > 0 && !named(d, 'index').some((i) => i.name == TOOL_NAME))
+}
 
 /** Which rows the pass is about, read out before one moves. */
 export let tools = (storage: DurableStorage): Taken => {
@@ -659,18 +691,30 @@ export let tools = (storage: DurableStorage): Taken => {
 
 /**
  * Each tool onto the id its name derives, synchronously, inside
- * `transactionSync` like every numbered pass. It refuses, moving nothing, when
- * the derived id is already another entity's, or when a link touches a tool —
- * a link's id is derived from its ends, and no store has one to a tool.
+ * `transactionSync` like every numbered pass, and then the identity's unique
+ * index, which `install()` leaves to this pass.
+ *
+ * Tools sharing a name are one tool: the newest row stays, the others fold
+ * into it (@yaks/sqlite `fold`) with every reference repointed, and it takes
+ * the derived id. It refuses, moving nothing, when the derived id is another
+ * entity's, or when a link touches a tool — a link's id is derived from its
+ * ends, and no store has one to a tool.
  */
 export let tooled = (
   storage: DurableStorage,
-  o: { store: string; app: string | null; export: string },
+  o: { store: string; app: string | null; export: string; vocab: Vocab },
 ): Report => {
   let d = driver(storage)
   let rows = toolIds(d)
-  let report = (ok: boolean, moved: number, message?: string): Report => ({
-    ...o,
+  let report = (
+    ok: boolean,
+    moved: number,
+    merged: number,
+    message?: string,
+  ): Report => ({
+    store: o.store,
+    app: o.app,
+    export: o.export,
     at: new Date().toISOString(),
     ok,
     message,
@@ -678,12 +722,15 @@ export let tooled = (
     moved: [{
       table: 'tool',
       from: rows.length,
-      to: rows.length,
-      note: `${moved} tools called by the id their name derives`,
+      to: rows.length - merged,
+      note: `${moved} tools called by the id their name derives, ` +
+        `${merged} merged into the newest of their name`,
     }],
     dropped: [],
   })
-  let moving = rows.filter((t) => t.eid != t.named)
+  let byName = Map.groupBy(rows, (t) => t.named)
+  let moving = [...byName.values()]
+    .filter((ts) => ts.length > 1 || ts[0].eid != ts[0].named).flat()
   let linked = stands(d, 'edge') && moving.length
     ? Number(
       d.query(
@@ -695,20 +742,38 @@ export let tooled = (
     )
     : 0
   if (linked) {
-    throw new Refused(report(false, 0, `${linked} links touch a tool`))
+    throw new Refused(report(false, 0, 0, `${linked} links touch a tool`))
   }
-  for (let t of moving) {
-    if (d.query('select 1 from entity where eid = ?', [t.named]).length) {
+  let into = fold(d, pointers(d, o.vocab))
+  let moved = 0
+  let merged = 0
+  for (let [eid, ts] of byName) {
+    let keep = ts[ts.length - 1]
+    for (let t of ts.slice(0, -1)) {
+      into(t.id, keep.id)
+      merged++
+    }
+    if (keep.eid == eid) continue
+    if (d.query('select 1 from entity where eid = ?', [eid]).length) {
       throw new Refused(
-        report(false, 0, `${t.named} is already another entity's id`),
+        report(false, 0, 0, `${eid} is already another entity's id`),
       )
     }
-    d.query('update entity set eid = ? where id = ?', [t.named, t.id])
+    d.query('update entity set eid = ? where id = ?', [eid, keep.id])
+    moved++
+  }
+  if (rows.length) {
+    d.exec(
+      `create unique index if not exists ${TOOL_NAME} on ${q('tool')}` +
+        ` (${q('name')})`,
+    )
   }
   if (mistooled(storage)) {
-    throw new Refused(report(false, 0, 'a tool still stands at an old id'))
+    throw new Refused(
+      report(false, 0, 0, 'a tool still stands at an old id'),
+    )
   }
-  return report(true, moving.length)
+  return report(true, moved, merged)
 }
 
 // ---- `space.home` → `home{}` (T-34227) -------------------------------------

@@ -620,8 +620,7 @@ export class Store {
         ctx.storage,
         vocab,
         blobText(vocab),
-        meta &&
-          MARKS.indexOf(this.#get('migrated') ?? '') < MARKS.indexOf(HANDLED),
+        this.#get('migrated') ?? null,
         !this.#pending,
       )
       if (held) rebuild(drive)
@@ -1284,7 +1283,13 @@ export class Store {
     }
     // The seventh (D-37943): a tool takes the id its name derives.
     if (!this.#refused) {
-      await this.#after(request, TOOLED, mistooled, toolRows, tooled)
+      await this.#after(
+        request,
+        TOOLED,
+        mistooled,
+        toolRows,
+        (storage, o) => tooled(storage, { ...o, vocab: this.#graph.vocab }),
+      )
     }
     this.#behind = false
   }
@@ -1419,8 +1424,15 @@ export class Store {
     this.#refused = no.report.message
     this.#pending = false
     this.#behind = false
-    // The Tail Worker pages even if the export binding is unavailable.
-    console.error('store: migration refused', this.#refused)
+    // A refused store answers nothing, so it is a defect, not an answer:
+    // Sentry hears it named by the store and the pass, even when the export
+    // binding is unavailable.
+    let named = store
+    try {
+      named ||= this.#get('name') ?? ''
+    } catch { /* a store too broken to read its own name */ }
+    defect(e, { request: 'migration', store: named, mark })
+    console.warn('store: migration refused', this.#refused)
   }
 
   async #report(report: Report) {

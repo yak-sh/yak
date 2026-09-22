@@ -15,6 +15,12 @@
 // something to migrate, which is a third of a second an object — the cost of
 // the thing under test, not of the setup around it.
 import { assert, assertEquals, assertThrows } from '@std/assert'
+import {
+  createTransport,
+  type ErrorEvent,
+  ServerRuntimeClient,
+  setCurrentClient,
+} from '@sentry/core'
 import { slow } from '../../src/testing.ts'
 import { blobSchema } from '@yaks/blob'
 import { type Bundle, derivedEid } from '@yaks/graph'
@@ -1720,28 +1726,100 @@ slow(
   },
 )
 
-Deno.test('a tool standing at its old id takes the id its name derives', async () => {
-  let ctx = state()
+// An app store as the code before D-37943 left it (jill/coaches, 2026-09-22):
+// tool rows at the ids `tool:<name>` hashed to, no unique index over the
+// name, a schema stamp the new vocabulary moves, and the marker one pass
+// behind. `twins` names tools written twice — a row at the old id and a
+// newer one at the derived id, which a planting over the unindexed table
+// writes — and a call aimed at each row.
+let toolsOld = async (ctx: State, names: string[], twins: string[] = []) => {
   await newer(ctx, 'ada/cookbook').query('.tool!')
   let sql = ctx.storage.sql
-  let old = derivedEid('tool:add_chore')
-  sql.exec('insert into entity (eid) values (?), (?)', old, 'c1')
-  sql.exec(
-    "insert into tool (entity, name) select id, 'add_chore' from entity" +
-      ' where eid = ?',
-    old,
-  )
-  sql.exec(
-    'insert into call (entity, "to") select c.id, t.id from entity c, entity t' +
-      " where c.eid = 'c1' and t.eid = ?",
-    old,
-  )
+  sql.exec('drop index tool_name')
+  let tool = (eid: string, name: string, call: string) => {
+    sql.exec('insert into entity (eid) values (?), (?)', eid, call)
+    sql.exec(
+      'insert into tool (entity, name) select id, ? from entity where eid = ?',
+      name,
+      eid,
+    )
+    sql.exec(
+      'insert into call (entity, "to") select c.id, t.id from entity c,' +
+        ' entity t where c.eid = ? and t.eid = ?',
+      call,
+      eid,
+    )
+  }
+  for (let name of names) tool(derivedEid(`tool:${name}`), name, `c-${name}`)
+  for (let name of twins) tool(toolEid(name), name, `c2-${name}`)
+  sql.exec("update yak_kv set v = 'older schema' where k = 'schema'")
   sql.exec("update yak_kv set v = ? where k = 'migrated'", FILED)
+}
+
+let tooling = (ctx: State) =>
+  ctx.storage.sql.exec(
+    'select e.eid, t.name from tool t join entity e on e.id = t.entity' +
+      ' order by t.name',
+  ).toArray()
+
+Deno.test('a store with tools at old ids and twins boots, merges and indexes', async () => {
+  let ctx = state()
+  await toolsOld(ctx, ['add_chore', 'find_chore'], ['add_chore'])
   let files = bucket()
   let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
-  let [call] = await now.query('.call!')
-  assertEquals((call.call as { to: string }).to, toolEid('add_chore'))
-  assertEquals(rowsIn(files.held).tool.length, 1)
-  assertEquals(reportIn(files.held).mark, TOOLED)
+  let calls = await now.query('.call!')
+  assertEquals(calls.length, 3)
+  assertEquals(
+    calls.map((c) => (c.call as { to: string }).to).sort(),
+    [toolEid('add_chore'), toolEid('add_chore'), toolEid('find_chore')].sort(),
+  )
+  assertEquals(tooling(ctx), [
+    { eid: toolEid('add_chore'), name: 'add_chore' },
+    { eid: toolEid('find_chore'), name: 'find_chore' },
+  ])
+  assertEquals(rowsIn(files.held).tool.length, 3)
+  let report = reportIn(files.held)
+  assertEquals([report.mark, report.ok], [TOOLED, true])
+  assertEquals(report.moved[0].to, 2)
   assertEquals(marker(ctx), TOOLED)
+  assertThrows(
+    () => ctx.storage.sql.exec("update tool set name = 'add_chore'").toArray(),
+    Error,
+    'UNIQUE',
+  )
+})
+
+Deno.test('a refused migration reaches Sentry, tagged with its store', async () => {
+  let seen: ErrorEvent[] = []
+  let client = new ServerRuntimeClient({
+    dsn: 'https://key@example.ingest.sentry.io/1',
+    integrations: [],
+    stackParser: () => [],
+    transport: (o) => createTransport(o, () => Promise.resolve({})),
+    beforeSend: (e) => {
+      seen.push(e)
+      return null
+    },
+  })
+  setCurrentClient(client)
+  client.init()
+  let ctx = state()
+  await toolsOld(ctx, ['add_chore'])
+  // A link to a tool is the one shape the pass refuses.
+  let sql = ctx.storage.sql
+  sql.exec("insert into entity (eid) values ('link')")
+  sql.exec(
+    'insert into edge (entity, "from", "to") select l.id, t.entity, t.entity' +
+      " from entity l, tool t where l.eid = 'link'",
+  )
+  let now = newer(ctx, 'ada/cookbook', { EXPORTS: bucket().r2 })
+  await refused(now, 'links touch a tool')
+  await client.flush(1000)
+  assertEquals(seen.length, 1)
+  assertEquals(seen[0].tags, {
+    request: 'migration',
+    store: 'ada/cookbook',
+    mark: TOOLED,
+  })
+  assertEquals(marker(ctx), FILED)
 })

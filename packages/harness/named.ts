@@ -30,6 +30,8 @@ import { edgeEid, names } from '@yaks/edge'
 import {
   componentTables,
   type Driver,
+  fold,
+  pointers,
   reclassify,
   type Store,
 } from '@yaks/sqlite'
@@ -64,24 +66,6 @@ let idOf = (sql: Driver, eid: Eid): number | undefined =>
     | number
     | undefined
 
-// Every column that holds an entity's integer id: the vocabulary's reference
-// columns, and every foreign key onto `entity` (the journal's among them).
-let pointers = (sql: Driver, vocab: Vocab): [string, string][] => {
-  let all = tables(sql)
-  let out = new Set<string>()
-  for (let [comp, prop] of vocab.refCols()) {
-    if (all.includes(comp) && columns(sql, comp).includes(prop)) {
-      out.add(JSON.stringify([comp, prop]))
-    }
-  }
-  for (let t of all) {
-    for (let fk of sql.query(`pragma foreign_key_list(${q(t)})`, [])) {
-      if (fk.table == 'entity') out.add(JSON.stringify([t, String(fk.from)]))
-    }
-  }
-  return [...out].map((s) => JSON.parse(s))
-}
-
 /** What {@link renamed} did: entities called by a new id, and entities folded
  * into another of the same name. */
 export type Renamed = { moved: number; merged: number }
@@ -94,38 +78,9 @@ export let renamed = (sql: Driver, vocab: Vocab): Renamed => {
   if (done(sql) || !NAMES.some((t) => present.includes(t))) return out
   let owned = componentTables(sql)
   let refs = pointers(sql, vocab)
-  // Fold `gone` into `keep`: its rows, where `keep` has none, move across;
-  // where it has one, fill what `keep` left empty. Then everything pointing
-  // at `gone` points at `keep`, and `gone` is no more.
+  let into = fold(sql, refs)
   let merge = (gone: number, keep: number) => {
-    for (let t of owned) {
-      let [row] = sql.query(`select * from ${q(t)} where entity = ?`, [gone])
-      if (!row) continue
-      if (!sql.query(`select 1 from ${q(t)} where entity = ?`, [keep]).length) {
-        sql.query(`update ${q(t)} set entity = ? where entity = ?`, [
-          keep,
-          gone,
-        ])
-        continue
-      }
-      let cols = Object.keys(row).filter((c) => c != 'entity')
-      if (cols.length) {
-        sql.query(
-          `update ${q(t)} set ${
-            cols.map((c) => `${q(c)} = coalesce(${q(c)}, ?)`).join(', ')
-          } where entity = ?`,
-          [...cols.map((c) => row[c] as string | number | null), keep],
-        )
-      }
-      sql.query(`delete from ${q(t)} where entity = ?`, [gone])
-    }
-    for (let [t, c] of refs) {
-      sql.query(`update ${q(t)} set ${q(c)} = ? where ${q(c)} = ?`, [
-        keep,
-        gone,
-      ])
-    }
-    sql.query('delete from entity where id = ?', [gone])
+    into(gone, keep)
     out.merged++
   }
   sql.exec('begin immediate')

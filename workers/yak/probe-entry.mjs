@@ -117,6 +117,21 @@ function object(Implementation) {
       if (scope.id !== this.scope.id) {
         throw new Error('probe namespace mismatch')
       }
+      // A test writing storage the way older code left it (`/__probe/sql`):
+      // the statements run in one transaction, and the object then wakes as a
+      // new incarnation over what they left, as it would after a deploy.
+      if (request.headers.get('x-yak-probe-sql')) {
+        return request.json().then((statements) => {
+          let rows = []
+          this.ctx.storage.transactionSync(() => {
+            for (const [query, ...args] of statements) {
+              rows = this.ctx.storage.sql.exec(query, ...args).toArray()
+            }
+          })
+          this.start(this.scope)
+          return Response.json(rows)
+        })
+      }
       const req = new Request(request)
       req.headers.delete(header)
       return context.run(this.scope, () => this.inner.fetch(req))
@@ -154,6 +169,18 @@ export default {
         : undefined,
     )
     req.headers.delete(header)
+    // Raw SQL into one store object, by the name the kernel opens it by.
+    if (new URL(req.url).pathname === '/__probe/sql') {
+      const { store, sql } = await req.json()
+      const ns = scoped(env, scope).STORE
+      return ns.get(ns.idFromName(store)).fetch(
+        new Request('http://probe/', {
+          method: 'POST',
+          headers: { 'x-yak-probe-sql': '1' },
+          body: JSON.stringify(sql),
+        }),
+      )
+    }
     return context.run(scope, () => kernel.fetch(req, scoped(env, scope)))
   },
   email(message, env) {
