@@ -272,8 +272,8 @@ slow(
       assertStringIncludes(says('app_files'), 'never localStorage')
       // The generic tier states its own grammar (@yaks/mcp): a query string
       // in, whole bundles out, and a batch of bundles to write.
-      assertStringIncludes(says('graph_query'), 'query STRING')
-      assertStringIncludes(says('graph_apply'), 'BUNDLES')
+      assertStringIncludes(says('graph_query'), 'A query string')
+      assertStringIncludes(says('graph_apply'), 'an array of bundles')
       // Both mail tools say WHICH mailbox they are, because the tool list is
       // where a model with a mail connector beside this one decides what
       // "check my email" meant (T-34149).
