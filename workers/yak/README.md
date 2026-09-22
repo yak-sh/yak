@@ -428,3 +428,10 @@ regression. Classification still adds descriptor work: narrow, homogeneous
 stores are not guaranteed a speedup. These are local adapter measurements, not
 production latency promises. Git gains the shared metadata and fewer table
 probes, not a claimed latency improvement for this workload.
+
+## License
+
+yaks.app, this directory, is under the Functional Source License, FSL-1.1-ALv2
+(`LICENSE.md`), from 2026-09-22 forward: each version becomes Apache-2.0 two
+years after its release. The rest of the repo is Apache-2.0 (the root
+`LICENSE`).

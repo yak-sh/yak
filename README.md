@@ -217,3 +217,14 @@ to live on a private tailnet.
 - `docs/ADAPTERS.md` — native TUIs, managed sessions, persistent roles, and the
   compatibility contract for future harnesses.
 - `channels/README.md` — the channel plugin: mechanism, identity, enablement.
+
+## License
+
+The `@yaks/*` packages under `packages/`, the `yak` CLI, and everything else
+here are Apache-2.0 (`LICENSE`), except `workers/yak`, the hosted yaks.app
+platform, which is under the Functional Source License, FSL-1.1-ALv2
+(`workers/yak/LICENSE.md`): each version becomes Apache-2.0 two years after its
+release.
+
+The names yaks.app and yak.sh and the yak logo are trademarks of Yak Shaving LLC
+and are not licensed by either code license.
