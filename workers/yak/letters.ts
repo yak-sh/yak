@@ -157,8 +157,7 @@ let sending = (ctx: Ctx): Tool => ({
     `requires a member who may write, even in an app anyone can write to. ` +
     `Cannot be undone: an email that has been sent cannot be recalled, ` +
     `which makes this one of the very few things here where a mistake is ` +
-    `final. Read it back to the person before you send it. ` +
-    `Documentation: https://yaks.app/docs/mail.`,
+    `final. Documentation: https://yaks.app/docs/mail.`,
   input: {
     app: z.string().describe(address(ctx.env)),
     space: z.string().optional().describe(SPACE),

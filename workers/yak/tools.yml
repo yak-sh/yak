@@ -12,130 +12,112 @@
 space_new:
   title: Create a space
   description: >-
-    Create another space, a group of apps sharing an address and
-    membership, at <slug>.yaks.app, with the signed-in person as its
-    owner. Signing in already gave them one, so use this only when they
-    want another address. Pass a slug (the short name in the URL) and
-    optionally a display title. Returns the space name, entity id and URL.
-    Other tools infer the space when only one fits; specify space when
-    more than one could match.
-
+    Create another space, a group of apps sharing an address and membership,
+    at <slug>.yaks.app, with the signed-in person as its owner. Signing in
+    already gave them one; this makes a second. Pass a slug (the short name
+    in the URL) and optionally a display title. Returns the space name,
+    entity id and URL. Other tools infer the space when only one fits;
+    specify space when more than one could match.
 space_set:
   title: Rename or move a space
   description: >-
     Change a space's name or move it to another address. The title is its
     name; the slug is its address, so changing the slug moves the space to
-    <new>.yaks.app. Every app in it moves with it, files and data
-    included, and each app keeps its own path under the new address. The
-    old address keeps working: it redirects to the new one, path included,
-    so an existing link still opens the same page, and email to
-    <old>.<app>@yaks.app still arrives. The old address also stays
-    reserved: nobody else can take it, and neither can this space, until
-    it is forgotten. Give the person the new address. Only the space owner
-    may rename or move it. Pass forget with a slug the space has already
-    left to drop it: it stops redirecting and anyone can take it, so every
-    link and every email still aimed there finds nothing. Do that only
-    when the person has said they are done with that address. Returns the
-    current address and a summary of the changes, including any old
-    address released.
-    Documentation: https://yaks.app/docs/home.
-
+    <new>.yaks.app. Every app in it moves with it, files and data included,
+    and each app keeps its own path under the new address. The old address
+    keeps working: it redirects to the new one, path included, so an
+    existing link still opens the same page, and email to
+    <old>.<app>@yaks.app still arrives. The old address also stays reserved:
+    nobody else can take it, and neither can this space, until it is
+    forgotten. Only the space owner may rename or move it. Pass forget with
+    a slug the space has already left to drop it: it stops redirecting and
+    anyone can take it, so every link and every email still aimed there
+    finds nothing. Forgetting is final for that address. Returns the current
+    address and a summary of the changes, including any old address
+    released. Documentation: https://yaks.app/docs/home.
 space_delete:
   title: Delete a space
   description: >-
     Delete a space: it goes to the trash for 30 days. Every app in it stops
     answering, its address stops serving and its apps disappear from your
     tools, but nothing is erased, the address is held, and space_restore
-    brings the whole space back within those 30 days. After that the platform
-    erases it: the apps, everything they saved, their files, any domain
-    attached to them, and the address becomes available again. This tool
-    cannot delete the space itself: it emails the space's owner a
-    confirmation link, valid for one hour, and returns a summary of what that
-    link would stop. Read that summary back to the person and tell them to
-    check their email; the confirmation is theirs to give, not yours. Only
-    the space owner may ask, and app_delete is the smaller action when they
-    mean one app. Pass forever: true and the link erases the space at once
-    instead, with nothing kept and no undo; do that only when the person has
-    said they mean exactly that. To undo a delete: space_restore, any time in
-    those 30 days.
-    Documentation: https://yaks.app/docs/errors.
-
+    brings the whole space back within those 30 days. After that the
+    platform erases it: the apps, everything they saved, their files, any
+    domain attached to them, and the address becomes available again. This
+    tool cannot delete the space itself: it emails the space's owner a
+    confirmation link, valid for one hour, and returns a summary of what
+    that link would stop. The confirmation is the owner's to give by opening
+    that link; nothing else completes the deletion. Only the space owner may
+    ask. app_delete trashes one app instead. With forever: true the link
+    erases the space at once instead, with nothing kept and no undo. To undo
+    a delete: space_restore, any time in those 30 days. Documentation:
+    https://yaks.app/docs/errors.
 space_restore:
   title: Restore a deleted space
   description: >-
-    Bring back a space that was deleted. Every app in it serves again at
-    the address it always had, its tools and pages come back, and
-    everything it saved is exactly as it was; nothing is touched while a
-    space sits in the trash. Works within 30 days of the delete being
-    confirmed; after that the space has been erased and there is nothing
-    to bring back. Unlike space_delete, the assistant may do this itself:
-    restoring a space needs no confirmation email. The caller must still
-    be the space owner. Pass the deleted space's slug; returns its
-    restored URL.
-    Documentation: https://yaks.app/docs/errors.
-
+    Bring back a space that was deleted. Every app in it serves again at the
+    address it always had, its tools and pages come back, and everything it
+    saved is exactly as it was; nothing is touched while a space sits in the
+    trash. Works within 30 days of the delete being confirmed; after that
+    the space has been erased and there is nothing to bring back. Unlike
+    space_delete, restoring needs no confirmation email. The caller must
+    still be the space owner. Pass the deleted space's slug; returns its
+    restored URL. Documentation: https://yaks.app/docs/errors.
 space_sell:
   title: Connect Stripe to a space
   description: >-
-    Connect this space to Stripe so its apps can take payments. Requires
-    the Plus plan and the space owner. The tool returns a link where the
-    person finishes setting up with Stripe (their name, their bank
-    account, whatever Stripe asks); all of that happens at Stripe, and
-    yaks.app never sees or holds any of it. They are the merchant: the
-    charge, the money, the name on the customer's statement, and any
-    refunds and disputes are theirs. Give the person the link and stop:
-    nobody can sell until they have finished at Stripe, and calling again
-    returns a fresh link to the same Stripe account, never a second
-    account. If setup is already complete, it returns the payment
-    readiness and platform fee instead of a link. Once they are done,
-    every app in the space can take payments through POST
-    /api/pay/checkout. Pass disconnect: true
-    to stop selling through this space; their Stripe account and
-    everything in it stays theirs, this space just stops charging on it.
-    Disconnecting returns a confirmation that this space can no longer
-    charge through the account.
-    Documentation: https://yaks.app/docs/selling.
-
+    Connect this space to Stripe so its apps can take payments. Requires the
+    Plus plan and the space owner. The tool returns a link where the person
+    finishes setting up with Stripe (their name, their bank account,
+    whatever Stripe asks); all of that happens at Stripe, and yaks.app never
+    sees or holds any of it. They are the merchant: the charge, the money,
+    the name on the customer's statement, and any refunds and disputes are
+    theirs. Nobody can sell until the person has finished at Stripe, and
+    calling again returns a fresh link to the same Stripe account, never a
+    second account. If setup is already complete, it returns the payment
+    readiness and platform fee instead of a link. Once they are done, every
+    app in the space can take payments through POST /api/pay/checkout. Pass
+    disconnect: true to stop selling through this space; their Stripe
+    account and everything in it stays theirs, this space just stops
+    charging on it. Disconnecting returns a confirmation that this space can
+    no longer charge through the account. Documentation:
+    https://yaks.app/docs/selling.
 app_new:
   title: Create an app
   description: >-
-    Create a new app, the thing you are building for the person. It is
-    served at <space>.yaks.app/<slug>/. Pass its slug and optionally a
-    display title. Creating it does not choose a front page for the space;
-    the owner can do that with app_set(home: true). Then call app_files to
-    write index.html, app_deploy to release it, and give the person the
-    link. Pass access when the app is for other people too: 'open' if
-    anyone with the link should be able to write to it (vote, add a line,
-    sign up), and 'private' if only the person and whoever they invite
-    (member_add) should see it at all. The default access is 'public':
-    anyone can read, but only members allowed to write can change data.
-    Returns the app's entity id, URL and access setting.
-    Documentation: https://yaks.app/docs.
-
+    Create a new app, served at <space>.yaks.app/<slug>/. Pass its slug and
+    optionally a display title. Creating it does not choose a front page for
+    the space; the owner can do that with app_set(home: true). app_files
+    writes its files and app_deploy releases a version. Pass access when the
+    app is for other people too: 'open' if anyone with the link should be
+    able to write to it (vote, add a line, sign up), and 'private' if only
+    the person and whoever they invite (member_add) should see it at all.
+    The default access is 'public': anyone can read, but only members
+    allowed to write can change data. Returns the app's entity id, URL and
+    access setting. Documentation: https://yaks.app/docs.
 app_files:
   title: Read or write app files
   description: >-
-    Write the app's files (index.html and any css, js or images beside
-    it), or list them, read one back, or delete one. Write a whole app in
-    one call with files: [{path, content}, …]; passing a files list is the
-    write, so leave op out. path and content write a single file, and
-    base64 in place of content writes a file that is not text, such as an
-    image or the .wasm a worker.js imports. Files are served live at
-    <space>.yaks.app/<app>/<path>, and index.html serves the directory.
-    Keep the app's data in its own store, never localStorage: the page
-    reads and writes the store with `import { apply, query, search } from
-    './api/client.js'`, which is served beside the app. Write every URL
-    relative: the platform gives each page a `<base>` at the app's own
-    address, so nothing in an app needs to name the app, and a copy
-    someone installs at another address still works. Every write returns
-    what it stored: the byte count and SHA-256 content hash, and for a
-    .json file whether it parses, with the position of the error when it
-    does not, so a miscounted bracket is caught in the call that made it.
-    NOTES.md beside index.html holds the app's own notes (how the app is
-    maintained, in the person's words, up to 4 KB), and the about tool
-    returns them. Like vocab.json, it is internal to the app: never served
-    on the web, only read back here. op: patch with path, find and replace
-    edits one file in place; find is an exact string and must occur
+    Write the app's files (index.html and any css, js or images beside it),
+    or list them, read one back, or delete one. Write a whole app in one
+    call with files: [{path, content}, …]; passing a files list is the
+    write, so leave op out. path and content write a single file, and base64
+    in place of content writes a file that is not text, such as an image or
+    the .wasm a worker.js imports. Files are served live at
+    <space>.yaks.app/<app>/<path>, and index.html serves the directory. An
+    app's data lives in its own store, never localStorage: a page reads and
+    writes it with `import { apply, query, search } from './api/client.js'`,
+    served beside the app. Each page gets a `<base>` at the app's own
+    address, so relative URLs resolve there and a copy installed at another
+    address still works.
+    Every write returns what it stored: the byte count and SHA-256 content
+    hash, and for a .json file whether it parses, with the position of the
+    error when it does not, so a miscounted bracket is caught in the call
+    that made it. NOTES.md beside index.html holds the app's own notes (how
+    the app is maintained, in the person's words, up to 4 KB), and the about
+    tool returns them. Like vocab.json, it is internal to the app: never
+    served on the web, only read back here. op: patch with path, find and
+    replace edits one file in place; find is an exact string and must occur
     exactly once. op: fetch with path and url downloads an https response
     body to path, which is how a library is vendored without transcribing
     it, and returns an integrity hash for it. Nothing a write or a delete
@@ -144,11 +126,10 @@ app_files:
     and by whom), and op: restore with path puts one back, the newest by
     default or the one sha or at names. A restore is itself a write, so it
     too can be undone. To undo any write, patch, fetch or delete here: op:
-    history, then op: restore. Pass op explicitly unless
-    supplying files, content or base64 for a write. list returns file
-    paths, read returns file text, and delete confirms the path removed.
-    Documentation: https://yaks.app/docs/files.
-
+    history, then op: restore. Pass op explicitly unless supplying files,
+    content or base64 for a write. list returns file paths, read returns
+    file text, and delete confirms the path removed. Documentation:
+    https://yaks.app/docs/files.
 sandbox_exec:
   title: Run a build command
   description: >-
@@ -156,31 +137,28 @@ sandbox_exec:
     what a browser cannot do on its own: compile something to WebAssembly,
     run a generator, minify an asset. Installed: Rust 1.98.1 with the
     wasm32-unknown-unknown target, wasm-bindgen 0.2.128 and wasm-opt 132;
-    Python 3.13.15 with pip; Go 1.27.1; Zig 0.16.0, which is also the C
-    and C++ compiler here (`zig cc -target wasm32-freestanding -nostdlib
-    -Wl,--no-entry` produces a module a browser loads with no glue code,
-    and -target wasm32-wasi one that a WebAssembly System Interface (WASI)
+    Python 3.13.15 with pip; Go 1.27.1; Zig 0.16.0, which is also the C and
+    C++ compiler here (`zig cc -target wasm32-freestanding -nostdlib
+    -Wl,--no-entry` produces a module a browser loads with no glue code, and
+    -target wasm32-wasi one that a WebAssembly System Interface (WASI)
     compatibility layer runs); Deno 2.9.1, and the Node and Bun the base
     image ships. Anything else can be installed for the duration of the
     build: the command runs as root, so `apt-get install -y <pkg>` or a
-    download works, and it costs the next build nothing. Write the source
-    with sandbox_write, build it here, then sandbox_ship the artifact into
-    the app. An app needs none of this, since html, css and js run as they
-    are, so use the sandbox only when something must be compiled. The
-    sandbox is signed in as the person: `yak` is installed and $YAKS_TOKEN
-    and $YAKS_HOST are set, so `yak <tool>` and curl can call these same
-    tools from inside a script, and the token is short-lived and revoked
-    when the platform destroys the container. Sandbox use is metered in
-    seconds charged to the space, with a {{budget}}-second budget per
-    managed build (or per standalone tool call), so plan the build and run
-    it once rather than iterating inside it. The container is destroyed
-    when the build ends; separate MCP calls reuse it until it sleeps
-    after five idle minutes. Its files are temporary. Returns the
-    exit code, stdout and stderr, each output stream truncated after 8,000
-    characters. A command can call APIs and change apps, so its external
-    effects are not undone by discarding the container.
-    Documentation: https://yaks.app/docs/code.
-
+    download works, and it costs the next build nothing. sandbox_write
+    writes source into it, and sandbox_ship copies a built artifact into the
+    app. An app needs none of this unless something must be compiled: html,
+    css and js run as they are. The sandbox is signed in as the person:
+    `yak` is installed and $YAKS_TOKEN and $YAKS_HOST are set, so `yak
+    <tool>` and curl can call these same tools from inside a script, and the
+    token is short-lived and revoked when the platform destroys the
+    container. Sandbox use is metered in seconds charged to the space, with
+    a {{budget}}-second budget per managed build (or per standalone tool
+    call). The container is destroyed when the build ends; separate MCP
+    calls reuse it until it sleeps after five idle minutes. Its files are
+    temporary. Returns the exit code, stdout and stderr, each output stream
+    truncated after 8,000 characters. A command can call APIs and change
+    apps, so its external effects are not undone by discarding the
+    container. Documentation: https://yaks.app/docs/code.
 sandbox_write:
   title: Write a build file
   description: >-
@@ -192,72 +170,64 @@ sandbox_write:
     metered by the second, as with sandbox_exec. Pass a sandbox path and
     nonempty text; this overwrites that path without file history and
     returns the path written. Nothing to undo: nothing of the app lives
-    here, and only sandbox_ship copies build output into durable app
-    files.
+    here, and only sandbox_ship copies build output into durable app files.
     Documentation: https://yaks.app/docs/code.
-
 sandbox_read:
   title: Read a build file
   description: >-
     Read one file out of this space's build sandbox: a generated source, a
-    build log, whatever the last command left behind. Waking the sandbox
-    is metered by the second, as with sandbox_exec. Pass a path relative
-    to /workspace. Returns file text, truncated after 8,000 characters;
-    use sandbox_exec for other ways to inspect large or binary files.
+    build log, whatever the last command left behind. Waking the sandbox is
+    metered by the second, as with sandbox_exec. Pass a path relative to
+    /workspace. Returns file text, truncated after 8,000 characters;
+    sandbox_exec can inspect a large or binary file with a command.
     Documentation: https://yaks.app/docs/code.
-
 sandbox_ship:
   title: Copy build output into the app
   description: >-
-    Copy what the build produced into the app, where it is served: name
-    the files in the sandbox (pkg/*.wasm, pkg/*.js) and each is written
-    beside index.html under its own filename, as if app_files had written
-    it. The app keeps the artifact independently of the temporary sandbox.
-    This call does not itself destroy the sandbox. Binary files are copied
-    as bytes, so a .wasm arrives intact. Waking the sandbox is metered by
-    the second, as with sandbox_exec. To undo: these are written through
-    app_files, so each keeps the bytes it replaced; use app_files op:
-    history, then op: restore. Pass paths as a list of file paths or
-    wildcard patterns (globs) relative to /workspace. Returns the copied
-    filenames, file count and app URL.
-    Documentation: https://yaks.app/docs/code.
-
+    Copy what the build produced into the app, where it is served: name the
+    files in the sandbox (pkg/*.wasm, pkg/*.js) and each is written beside
+    index.html under its own filename, as if app_files had written it. The
+    app keeps the artifact independently of the temporary sandbox. This call
+    does not itself destroy the sandbox. Binary files are copied as bytes,
+    so a .wasm arrives intact. Waking the sandbox is metered by the second,
+    as with sandbox_exec. To undo: these are written through app_files, so
+    each keeps the bytes it replaced; use app_files op: history, then op:
+    restore. Pass paths as a list of file paths or wildcard patterns (globs)
+    relative to /workspace. Returns the copied filenames, file count and app
+    URL. Documentation: https://yaks.app/docs/code.
 app_deploy:
   title: Release a version
   description: >-
-    Release what you have written. The files are already live, so this
-    marks them as one version, the one an error report will name. Do it
-    when the app is ready to show, then give the person the URL. It also
-    creates the components the app's vocab.json declares ({{vocab}}). A
-    component is a named group of typed fields attached to a stored
-    record, called an entity; vocab.json is the schema defining those
-    groups and fields. A component name the platform already uses is
-    refused, and the whole manifest is refused with it before anything is
-    created; a component this manifest no longer names, and that holds no
-    rows, is dropped. It reports the columns it added and the columns the
-    store still has that this manifest did not name: a column is never
-    renamed or retyped, so a new name is added beside the old one, which
-    keeps every row already written under it. A seed.json beside
-    index.html (a list of bundles, each a JSON object holding an entity id
-    and its components, or a seed/ folder of *.json files when there are
-    many) is written into the app's store here, once per store and after
-    the components, so the app opens with data in it; deploying again
-    seeds nothing. A tools.json beside index.html gives the app commands
-    of its own ({{tools}}), which everyone who can reach the app runs with
-    the command tool, so the person and their agent act on the app through
-    its own commands. A worker.js beside index.html becomes the app's own
-    server code: it handles every request that is not under /api/ before
-    the files do, and whatever it answers 404 falls through to the files.
-    Every deploy is kept, so app_rollback can put this one back later. If
-    the app is published, the published version does not move with it:
-    what strangers install stays the version you published until you call
-    app_publish again, and this tool says so when the published version
-    starts falling behind. To undo: app_rollback, which puts an earlier
-    deploy back as a new version. Pass the app slug. Returns the new
-    version, URL, and any schema, seed, command or worker deployment
-    details.
-    Documentation: https://yaks.app/docs.
-
+    Release the app's files as a version. The files are already live, so
+    this marks them as one version, the one an error report will name. It
+    also creates the components the app's vocab.json declares ({{vocab}}). A
+    component is a named group of typed fields attached to a stored record,
+    called an entity; vocab.json is the schema defining those groups and
+    fields. A component name the platform already uses is refused, and the
+    whole manifest is refused with it before anything is created; a
+    component this manifest no longer names, and that holds no rows, is
+    dropped. It reports the columns it added and the columns the store still
+    has that this manifest did not name: a column is never renamed or
+    retyped, so a new name is added beside the old one, which keeps every
+    row already written under it. A seed.json beside index.html (a list of
+    bundles, each a JSON object holding an entity id and its components, or
+    a seed/ folder of *.json files when there are many) is written into the
+    app's store here, once per store and after the components, so the app
+    opens with data in it; deploying again seeds nothing. A tools.json
+    beside index.html gives the app commands of its own ({{tools}}), which
+    everyone who can reach the app runs with the command tool, so the person
+    and their agent act on the app through its own commands. A worker.js
+    beside index.html becomes the app's own server code: it handles every
+    request that is not under /api/ before the files do, and whatever it
+    answers 404 falls through to the files. Every deploy is kept, so
+    app_rollback can put this one back later. If the app is published, the
+    published version does not move with it: what strangers install stays
+    the version you published until you call app_publish again, and this
+    tool says so when the published version starts falling behind. To undo:
+    app_rollback, which puts an earlier deploy back as a new version. Pass
+    the app slug. Returns the new version, URL, and any schema, seed,
+    command or worker deployment details. Documentation:
+    https://yaks.app/docs.
 store_load:
   title: Load a data file into the store
   description: >-
@@ -265,168 +235,147 @@ store_load:
     path is one file (data/cities.json) or a folder, in which case every
     *.json and *.csv under it is loaded. A JSON file holds a list of
     bundles: JSON objects containing a record (entity) id and named groups
-    of fields (components), as seed.json and graph_apply accept:
-    [{"entity": {"eid": "$a"}, "doc": {"title": "…"}}]. A CSV is a
-    spreadsheet, and `as` names the component one row becomes: as: "city"
-    with headers name,country writes city{name, country} per row, values
-    converted to the column types the app's vocab.json schema declares.
-    `title` and `body` columns go into the row's doc component; an `id`
-    (or `alias`) column is the row's name, stored as alias{name}, which
-    resolves to the entity already holding that name, so loading the file
-    again patches those rows instead of duplicating them, and the name can
-    be used anywhere an entity id (eid) can. map {"Serves how many":
-    "serves"} renames a header that does not match a column. A header that
-    matches no column is refused, as is a cell that will not convert, and
-    the error names the row and the header. All the files are loaded in
-    one transaction, read in filename order, so an alias created in one
-    file resolves in the next; if the store refuses a bundle nothing is
-    written and the refusal names the file and the entry that caused it.
-    This is how a large dataset gets in without being typed into a call:
-    app_files(op: fetch) downloads the file into the app, store_load
-    writes it into the store, two calls. Unlike a seed it is not
-    once-only: call it whenever you like, and it patches and adds as the
-    caller, so the rows carry your attribution. It applies whatever the
-    file contains, deletes included: a bundle with $delete: true (or
-    tombstone: {}) deletes that entity, and the store decides whether you
-    may. A bundle naming an eid patches that row; one naming a $alias
-    creates a new entity each run, unless it carries alias: {name: "…"},
-    which resolves to the entity already holding that name, so a file
-    loaded twice is a patch and not a second copy. Returns the number of
-    entities written and the source filenames (or a file count when more
-    than six files were loaded).
+    of fields (components), as seed.json and graph_apply accept: [{"entity":
+    {"eid": "$a"}, "doc": {"title": "…"}}]. A CSV is a spreadsheet, and `as`
+    names the component one row becomes: as: "city" with headers
+    name,country writes city{name, country} per row, values converted to the
+    column types the app's vocab.json schema declares. `title` and `body`
+    columns go into the row's doc component; an `id` (or `alias`) column is
+    the row's name, stored as alias{name}, which resolves to the entity
+    already holding that name, so loading the file again patches those rows
+    instead of duplicating them, and the name can be used anywhere an entity
+    id (eid) can. map {"Serves how many": "serves"} renames a header that
+    does not match a column. A header that matches no column is refused, as
+    is a cell that will not convert, and the error names the row and the
+    header. All the files are loaded in one transaction, read in filename
+    order, so an alias created in one file resolves in the next; if the
+    store refuses a bundle nothing is written and the refusal names the file
+    and the entry that caused it. A large dataset gets in without being
+    typed into a call: app_files op: fetch downloads the file into the app,
+    and store_load writes it into the store. Unlike a seed it is not
+    once-only: each call patches and adds as the caller, so the rows carry
+    the caller's attribution. It applies whatever the file contains, deletes
+    included: a bundle with $delete: true (or tombstone: {}) deletes that
+    entity, and the store's access rules decide whether the caller may. A
+    bundle naming an eid patches that row; one naming a $alias creates a new
+    entity each run, unless it carries alias: {name: "…"}, which resolves to
+    the entity already holding that name, so a file loaded twice is a patch
+    and not a second copy. Returns the number of entities written and the
+    source filenames (or a file count when more than six files were loaded).
     Documentation: https://yaks.app/docs/store.
-
 app_versions:
   title: List app versions
   description: >-
     List the newest 20 deploys of the named app, newest first, with when
-    each went out and which files changed. Read it when the person says
-    the app used to work, or before rolling back, so you name the version
-    they mean. All deploys are kept; the response reports the total, and
-    an older version can still be rolled back to by number.
+    each went out and which files changed. It is the list a version is named
+    from for app_rollback. All deploys are kept; the response reports the
+    total, and an older version can still be rolled back to by number.
     Documentation: https://yaks.app/docs/errors.
-
 app_rollback:
   title: Roll back to an earlier version
   description: >-
     Put the app back to an earlier deploy: every file of that deploy, its
-    components, its tools and its worker code with them. Use it when the
-    person says a change broke something or asks for the old version back;
-    you do not need to remember what you wrote. It goes out as a new
-    version, so nothing is lost and a rollback can itself be rolled back.
-    Leave version out for the deploy before the live one, or name one from
-    app_versions. Give the person the URL and tell them what came back.
-    Existing data rows are not restored or deleted: files are restored and
-    their schema is reapplied using the same additive rules as app_deploy.
-    To undo: another app_rollback, since this goes out as a new version
-    and app_versions still lists the one you left. Returns the source
-    version, new version, URL and deployment details.
-    Documentation: https://yaks.app/docs/errors.
-
+    components, its tools and its worker code with them. For a change that
+    broke something, or the old version back. It goes out as a new version,
+    so nothing is lost and a rollback can itself be rolled back. Leave
+    version out for the deploy before the live one, or name one from
+    app_versions. Existing data rows are not restored or deleted: files are
+    restored and their schema is reapplied using the same additive rules as
+    app_deploy. To undo: another app_rollback, since this goes out as a new
+    version and app_versions still lists the one you left. Returns the
+    source version, new version, URL and deployment details. Documentation:
+    https://yaks.app/docs/errors.
 store_restore:
   title: Restore the store to a point in time
   description: >-
     Put everything the app has saved back to how it was at a moment: the
-    whole store, every row of it, as of that time. Use it when a write went
-    wrong and the person wants their data back: a bad import, rows deleted
-    that should not have been, a change that turned out to be wrong.
-    Cloudflare keeps the last 30 days of the store, so any moment in those
-    30 days can be restored; at is that moment, as a timestamp
-    (2026-09-06T14:20:00Z). Call it with no at first: it reports the oldest
-    moment still available and every restore already made. It is
+    whole store, every row of it, as of that time. For a write that went
+    wrong: a bad import, rows deleted by mistake, a change that turned out
+    to be wrong. Cloudflare keeps the last 30 days of the store, so any
+    moment in those 30 days can be restored; at is that moment, as a
+    timestamp (2026-09-06T14:20:00Z). Called with no at, it reports the
+    oldest moment still available and every restore already made. It is
     reversible: where the store stood before is recorded before anything
     moves, so a restore is undone by restoring again to a moment just before
-    it, and the response gives you that exact command. What it costs is
-    everything written since the moment you name, so name the latest moment
-    that will do. The app is briefly restarted to pick up the restored
-    store. The app's files are not part of this; app_rollback and app_files
-    op: restore put those back. To undo: another store_restore, to the
-    moment just before this one, which the response gives you.
-    Documentation: https://yaks.app/docs/files.
-
+    it, and the response names that moment. Everything written since the
+    named moment is lost, so the latest moment that will do costs the least.
+    The app is briefly restarted to pick up the restored store. The app's
+    files are not part of this; app_rollback and app_files op: restore put
+    those back. To undo: another store_restore, to the moment just before
+    this one, which the response names. Documentation:
+    https://yaks.app/docs/files.
 app_set:
   title: Rename, move or reshare an app
   description: >-
-    Rename an app, move it to another address, or change who may use it.
-    The title is its name; the slug is its address, so changing the slug
-    moves the app to <space>.yaks.app/<new>/. Its files and everything it
-    has saved move with it, and the old address redirects to the new one,
-    so an existing link still works. Give the person the new link. access
-    is the same choice app_new offers: 'open' when they want everyone with
-    the link to be able to write to the app, 'private' to close it to
-    everyone but its members. home makes this app the space's front page:
-    what <space>.yaks.app/ opens, the app someone lands on when given the
-    space address itself. No app becomes the front page just by being
-    created. home: false removes this app as the front page if it
-    currently is one; it does not unset another app. With no front page,
-    the space address lists apps the visitor can open. Only the space
-    owner may change it. first is the front page's own routing: the paths
-    its worker.js handles before the app whose name owns them, as globs;
-    ["/recipes/*"] sends every address under /recipes/ to the front page
-    instead of the recipes app. Leave it alone unless the front page is
-    meant to route the whole space; an empty list puts every path back
-    where it was. gallery is whether a published app is submitted for
-    https://yaks.app/gallery, the public page of yaks apps: true
-    submits it, false withdraws it at once. Set it only when the person
-    has said which they want. Pass forget with a slug this app has already
+    Rename an app, move it to another address, or change who may use it. The
+    title is its name; the slug is its address, so changing the slug moves
+    the app to <space>.yaks.app/<new>/. Its files and everything it has
+    saved move with it, and the old address redirects to the new one, so an
+    existing link still works. access is the same choice app_new offers:
+    'open' when they want everyone with the link to be able to write to the
+    app, 'private' to close it to everyone but its members. home makes this
+    app the space's front page: what <space>.yaks.app/ opens, the app
+    someone lands on when given the space address itself. No app becomes the
+    front page just by being created. home: false removes this app as the
+    front page if it currently is one; it does not unset another app. With
+    no front page, the space address lists apps the visitor can open. Only
+    the space owner may change it. first is the front page's own routing:
+    the paths its worker.js handles before the app whose name owns them, as
+    globs; ["/recipes/*"] sends every address under /recipes/ to the front
+    page instead of the recipes app. It matters only when the front page is
+    meant to route the whole space; an empty list puts every path back where
+    it was. gallery is whether a published app is submitted for
+    https://yaks.app/gallery, the public page of yaks apps: true submits it,
+    false withdraws it at once. Pass forget with a slug this app has already
     left to drop it: it stops redirecting and another app can be created
     there, so every link still aimed at it finds nothing. Only the space
-    owner may do that, and only when the person has said they are done
-    with that address. The default access, 'public', allows anyone to read
-    and only members with write permission to change data. Returns the
-    current URL and a summary of the changes.
+    owner may do that, and it is final for that address. The default access,
+    'public', allows anyone to read and only members with write permission
+    to change data. Returns the current URL and a summary of the changes.
     Documentation: https://yaks.app/docs/home.
-
 app_secret_set:
   title: Set a worker secret
   description: >-
     Give the app's worker a secret for an outside service (an API key, a
     token) without the page ever holding it. The value is stored on the
-    app's worker script and nowhere else: not in the app's data, not in
-    its history, and no tool, this one included, can read it back. Only
-    the worker can, as env.NAME, so name it the way its code will refer to
-    it: app_secret_set(app, name: 'WEATHER_KEY', value) and then
-    `fetch(url, {headers: {authorization: env.WEATHER_KEY}})` in
-    worker.js. Ask the person for the value; never invent one. Setting a
-    name that already exists replaces its value. The app needs a worker.js
-    (uploaded by app_deploy) for the secret to reach any code. Returns the
-    secret name and a confirmation, never the value.
+    app's worker script and nowhere else: not in the app's data, not in its
+    history, and no tool, this one included, can read it back. Only the
+    worker can, as env.NAME, so name it the way its code will refer to it:
+    app_secret_set(app, name: 'WEATHER_KEY', value) and then `fetch(url,
+    {headers: {authorization: env.WEATHER_KEY}})` in worker.js. The value is
+    whatever the outside service issued; this tool stores it and does not
+    check it. Setting a name that already exists replaces its value. The app
+    needs a worker.js (uploaded by app_deploy) for the secret to reach any
+    code. Returns the secret name and a confirmation, never the value.
     Documentation: https://yaks.app/docs/code.
-
 app_secret_list:
   title: List worker secrets
   description: >-
     The names of the secrets the app's worker can read. Values are never
     returned, by this tool or any other. Use it to see what a worker.js may
-    read as env.NAME.
-    Documentation: https://yaks.app/docs/code.
-
+    read as env.NAME. Documentation: https://yaks.app/docs/code.
 app_secret_remove:
   title: Remove a worker secret
   description: >-
-    Remove a secret from the app's worker. Its code stops seeing env.NAME
-    at the next request; nothing else about the app changes. To undo:
+    Remove a secret from the app's worker. Its code stops seeing env.NAME at
+    the next request; nothing else about the app changes. To undo:
     app_secret_set with the value again. A secret is never readable once
     set, so this is the one thing here that nothing can restore for you.
     Pass the secret name, not its value. Returns a removal confirmation.
     Documentation: https://yaks.app/docs/code.
-
 app_delete:
   title: Delete an app
   description: >-
     Delete an app: it goes to the trash for 30 days. Its address stops
     answering, its tools and pages disappear from your tools, and it stops
     being the front page, but its files, everything it saved and its slug
-    are all kept, and app_restore brings the whole app back within those
-    30 days. After that the platform erases it for good. Use it only when
-    the person asks for the app to be deleted; app_files op: delete
+    are all kept, and app_restore brings the whole app back within those 30
+    days. After that the platform erases it for good. app_files op: delete
     removes one file, and app_set moves an app rather than replacing it.
-    Pass forever: true to skip the trash and erase it now, only for a
-    person who means it, since nothing is kept and there is no undo. To
-    undo a delete: app_restore, any time in those 30 days. Returns what
-    was trashed or erased and, for a trash operation, how to restore it.
-    Documentation: https://yaks.app/docs/errors.
-
+    forever: true skips the trash and erases it now; nothing is kept and
+    there is no undo. To undo a delete: app_restore, any time in those 30
+    days. Returns what was trashed or erased and, for a trash operation, how
+    to restore it. Documentation: https://yaks.app/docs/errors.
 app_restore:
   title: Restore a deleted app
   description: >-
@@ -434,27 +383,23 @@ app_restore:
     always had, its tools and pages come back, and everything it saved is
     exactly as it was; nothing is touched while an app sits in the trash.
     Works within 30 days of app_delete; after that it has been erased and
-    there is nothing to bring back. app_list shows what is in the trash
-    and how long each app has left. Pass the deleted app slug (and its
-    space if needed to find it). Returns its restored URL and a
-    confirmation.
+    there is nothing to bring back. app_list shows what is in the trash and
+    how long each app has left. Pass the deleted app slug (and its space if
+    needed to find it). Returns its restored URL and a confirmation.
     Documentation: https://yaks.app/docs/errors.
-
 app_errors:
   title: List open errors
   description: >-
     List unarchived error reports for the named app: what a page threw in
     someone's browser, what a request threw on the server, and what the
-    platform reported. Each is a stored record with its own id in the
-    app's data store. New ones are also appended to your next reply, once.
-    Pass `fixed` with the ids you have fixed and they are archived, which
-    removes them from this list and from your replies; pass `seen` to
-    archive errors you are done with without listing every id: `all`, `v3`
-    for everything up to and including that deploy, or a date. Returns any
+    platform reported. Each is a stored record with its own id in the app's
+    data store. New ones are also appended to the next tool reply, once.
+    `fixed` archives the ids it names, which removes them from this list and
+    from replies; `seen` archives without listing every id: `all`, `v3` for
+    everything up to and including that deploy, or a date. Returns any
     archive count followed by the remaining reports, or “no open errors”.
-    Archiving a report does not fix the underlying problem.
-    Documentation: https://yaks.app/docs/errors.
-
+    Archiving a report does not fix the underlying problem. Documentation:
+    https://yaks.app/docs/errors.
 app_list:
   title: List the person's apps
   description: >-
@@ -462,40 +407,32 @@ app_list:
     with its address, the email address it sends and receives at, the
     version it is at, how many errors are still open in it, which app is the
     space's front page, and what the month has cost against what the space
-    is allowed. Read it before creating a second app, and when they ask what
-    they have or where something lives. Deleted apps are listed under Trash
-    with the days each has left, until app_restore brings it back or the 30
-    days run out.
+    is allowed. Deleted apps are listed under Trash with the days each has
+    left, until app_restore brings it back or the 30 days run out.
     Documentation: https://yaks.app/docs.
-
 commands:
   title: List app commands
   description: >-
-    The commands yaks apps declare, with the arguments each one
-    accepts. An app's own commands (the ones its tools.json declares, and
-    the two every component it holds gets, such as add_recipe and
-    find_recipe) are listed here rather than in this tool list, which is
-    the same for everybody. Read it when a request sounds like something
-    an app of theirs already does, then run one with command. Omit app to
-    list all reachable apps, or pass an app slug (space/app if ambiguous).
-    The result groups commands by app and says whether each reads or
-    writes.
-    Documentation: https://yaks.app/docs/tools.
-
+    The commands yaks apps declare, with the arguments each one accepts. An
+    app's own commands (the ones its tools.json declares, and the two every
+    component it holds gets, such as add_recipe and find_recipe) are listed
+    here rather than in this tool list, which is the same for everybody.
+    command runs one of them. Omit app to list all reachable apps, or pass
+    an app slug (space/app if ambiguous). The result groups commands by app
+    and says whether each reads or writes. Documentation:
+    https://yaks.app/docs/tools.
 command:
   title: Run an app command
   description: >-
     Run one of an app's own commands: name it and pass its arguments as
     args, exactly as commands lists them. app is only needed when two apps
     here declare the same command name. The command runs through the app's
-    ordinary API endpoints as the person calling it, so it can do what
-    they could do on the page and never more. To undo whatever it wrote:
+    ordinary API endpoints as the person calling it, so it can do what they
+    could do on the page and never more. To undo whatever it wrote:
     store_restore, to the moment just before it ran. Returns the command
-    result from the app. Read its description in commands before calling;
+    result from the app. Its description in commands says what it does;
     restoring data cannot undo an external effect such as an email or
-    payment.
-    Documentation: https://yaks.app/docs/tools.
-
+    payment. Documentation: https://yaks.app/docs/tools.
 domain_attach:
   title: Attach a custom domain
   description: >-
@@ -506,18 +443,14 @@ domain_attach:
     space and each of its apps can have their own domain at the same time.
     The tool registers the hostname here and returns the DNS record the
     person has to add where their domain is managed, in the response text:
-    type, name, value. Add it for them if you can reach their registrar;
-    otherwise walk them through their registrar's control panel, since you
-    know what GoDaddy's and Namecheap's look like. Nothing serves until
-    that record is in place, so tell them the record, then use
-    domain_status to watch it come up. Only the space owner may attach
-    one. Custom domains require Plus unless the space is exempt. If the
-    space is not eligible, give the person the plan-settings URL returned
-    by this tool to compare paid plans in their space settings; never give
-    them a checkout link. Sign-in returns them to that page. No hostname
-    is registered until the space is eligible.
-    Documentation: https://yaks.app/docs/domains.
-
+    type, name, value. Nothing serves until that record is in place at the
+    registrar; domain_status reports when it has arrived. Only the space
+    owner may attach one. Custom domains require Plus unless the space is
+    exempt. If the space is not eligible, the tool returns the plan-settings
+    URL, where paid plans are compared in the space settings, and returns no
+    checkout link; signing in returns the person to that page. No hostname
+    is registered until the space is eligible. Documentation:
+    https://yaks.app/docs/domains.
 domain_status:
   title: Check a domain
   description: >-
@@ -526,268 +459,216 @@ domain_status:
     accepted the hostname, and whether the certificate is issued, each
     reported specifically enough to tell the person what is still waiting on
     them. It is read from Cloudflare, not from what was last recorded here.
-    Leave hostname out to check every domain in the space. Call it after
-    domain_attach, and again a few minutes later; nothing needs doing in
-    between.
-    Documentation: https://yaks.app/docs/domains.
-
+    Leave hostname out to check every domain in the space. After
+    domain_attach, the record, the hostname and the certificate arrive over
+    a few minutes; nothing needs doing in between. Documentation:
+    https://yaks.app/docs/domains.
 domain_detach:
   title: Detach a custom domain
   description: >-
     Stop serving at a domain, whether it served a space or one app. The
-    hostname is released back to Cloudflare and what it served is
-    untouched: it still answers at its <space>.yaks.app address, and its
-    data and files are not involved. The person's DNS record is theirs to
-    remove wherever their domain is managed; until they do, it points at
-    nothing. Only the space owner may detach. To undo: domain_attach with
-    the same hostname, which starts the certificate again. Returns the
-    detached hostname, the original yaks.app URL and a reminder to remove
-    the DNS record.
+    hostname is released back to Cloudflare and what it served is untouched:
+    it still answers at its <space>.yaks.app address, and its data and files
+    are not involved. The person's DNS record is theirs to remove wherever
+    their domain is managed; until they do, it points at nothing. Only the
+    space owner may detach. To undo: domain_attach with the same hostname,
+    which starts the certificate again. Returns the detached hostname, the
+    original yaks.app URL and a reminder to remove the DNS record.
     Documentation: https://yaks.app/docs/domains.
-
 app_publish:
   title: Publish an app for others to install
   description: >-
     Publish this app so anyone in any other space can install it by name.
     Someone else then calls app_install and gets their own copy: their own
-    store, their own address, their own data from the first byte, pinned
-    to the version you published; nothing is shared but the code. The name
-    is platform-wide, so it is the app's slug unless that is taken, and a
-    taken name is refused. Publishing again publishes whatever is deployed
-    now under the name it already has; a name is claimed once, and only an
+    store, their own address, their own data from the first byte, pinned to
+    the version you published; nothing is shared but the code. The name is
+    platform-wide, so it is the app's slug unless that is taken, and a taken
+    name is refused. Publishing again publishes whatever is deployed now
+    under the name it already has; a name is claimed once, and only an
     explicit new name moves it, which leaves the old name resolving to
     nothing. Nobody who installed it moves to the new version until they
-    call app_update. Only the space owner may publish, and only what the
-    person asked to share. gallery: true also submits it to be shown on
-    https://yaks.app/gallery, a public page of what people have made. That
-    is separate from publishing and always the person's own choice: ask
-    them, never assume. It is not listed at once; yaks.app reviews the
-    submission and decides, and the app is published either way. Returns
-    the published name and version, how to install it, and any gallery
-    submission status.
-    Documentation: https://yaks.app/docs/sharing.
-
+    call app_update. Only the space owner may publish. gallery: true also
+    submits it to be shown on https://yaks.app/gallery, a public page of
+    what people have made. That is separate from publishing. It is not
+    listed at once; yaks.app reviews the submission and decides, and the app
+    is published either way. Returns the published name and version, how to
+    install it, and any gallery submission status. Documentation:
+    https://yaks.app/docs/sharing.
 app_unpublish:
   title: Unpublish an app
   description: >-
     Stop offering the app for install. It stays exactly as it is, and so
-    does every copy anyone installed, since their data is theirs, but
-    nobody new can install it, and the name is free again. It leaves the
-    gallery at the same moment, if it was on it. Only the space owner may
-    unpublish. To undo: app_publish, which publishes it again under the
-    same name unless somebody else has taken it meanwhile. Returns a
-    confirmation, including whether its gallery listing or submission was
-    removed.
-    Documentation: https://yaks.app/docs/sharing.
-
+    does every copy anyone installed, since their data is theirs, but nobody
+    new can install it, and the name is free again. It leaves the gallery at
+    the same moment, if it was on it. Only the space owner may unpublish. To
+    undo: app_publish, which publishes it again under the same name unless
+    somebody else has taken it meanwhile. Returns a confirmation, including
+    whether its gallery listing or submission was removed. Documentation:
+    https://yaks.app/docs/sharing.
 app_published:
   title: List published apps
   description: >-
-    What other people have published here, newest first: the name to
-    install by, what the app is, and which space it came from. Read it
-    when the person asks for something somebody may already have made;
-    installing one is app_install, which gives them their own copy with
-    their own data. Pass words to list only the apps whose name, title or
-    description contain them; the match also includes the printed origin
-    and version details. It needs no account: a published app is offered
-    to everybody. The listing includes each source space and app slug, not
-    a guarantee that the source app's own pages are public.
-    Documentation: https://yaks.app/docs/sharing.
-
+    What other people have published here, newest first: the name to install
+    by, what the app is, and which space it came from. app_install gives
+    them their own copy of one, with their own data. Pass words to list only
+    the apps whose name, title or description contain them; the match also
+    includes the printed origin and version details. It needs no account: a
+    published app is offered to everybody. The listing includes each source
+    space and app slug, not a guarantee that the source app's own pages are
+    public. Documentation: https://yaks.app/docs/sharing.
 app_install:
   title: Install a published app
   description: >-
-    Take an app somebody published (app_published lists them) and give the
+    Take an app somebody published (app_published lists them) and make the
     person their own copy of it: their own address, their own data store,
     their own everything from the first byte. Nothing is shared but the
-    code, so what they save is theirs alone and the publisher never sees
-    it. The copy is pinned to the version it was installed from; the
-    publisher's next version does not arrive on its own, and app_update
-    moves the copy forward while keeping their data. Then give them the
-    link. Pass the published name and optionally as for the new app slug.
-    By default it uses the source app slug if free, otherwise the
-    published name. Returns the installed version, file count, new URL and
-    deployment details.
-    Documentation: https://yaks.app/docs/sharing.
-
+    code, so what they save is theirs alone and the publisher never sees it.
+    The copy is pinned to the version it was installed from; the publisher's
+    next version does not arrive on its own, and app_update moves the copy
+    forward while keeping their data. Pass the published name and optionally
+    as for the new app slug. By default it uses the source app slug if free,
+    otherwise the published name. Returns the installed version, file count,
+    new URL and deployment details. Documentation:
+    https://yaks.app/docs/sharing.
 app_update:
   title: Update an installed app
   description: >-
-    Move an installed app to whatever version its publisher offers now.
-    The person's data stays: every row they saved is theirs and is not
-    touched. Only the code is replaced, so anything you wrote into the
-    copy yourself is replaced too. A vocab.json schema that only added
-    columns is applied to their store; one that would retype a column
-    their rows were written under is refused, and nothing moves. It
-    reports what changed. To undo: app_rollback, since the update goes out
-    as a version like any other and app_versions lists the one before it.
-    Documentation: https://yaks.app/docs/sharing.
-
+    Move an installed app to whatever version its publisher offers now. The
+    person's data stays: every row they saved is theirs and is not touched.
+    Only the code is replaced, so anything you wrote into the copy yourself
+    is replaced too. A vocab.json schema that only added columns is applied
+    to their store; one that would retype a column their rows were written
+    under is refused, and nothing moves. It reports what changed. To undo:
+    app_rollback, since the update goes out as a version like any other and
+    app_versions lists the one before it. Documentation:
+    https://yaks.app/docs/sharing.
 member_add:
   title: Invite someone
   description: >-
     Invite someone by email address, so they can change what an app holds:
-    an editor writes and a viewer only reads; a space owner may also
-    invite. Name the app and that one app is all they get, its page and
-    its data and nothing else in the space; this is how a player joins one
-    game or a household opens one list without being given everything else
-    you keep here. Leave the app out and they are added to the space,
-    which reaches every app in it. Either way the tool attempts to email
-    an invitation: who invited them, the link, and that signing in there
-    with that address is all it takes. Pass a note and the person's own
-    message goes at the top of that email, as written and quoted as
-    theirs: a line or two saying what this is ("the potluck list for
-    Saturday"), which is the difference between an invitation someone
-    opens and one they wonder about. Pass their name if you know it and
-    their apps will show it beside what they write, so nobody sees an
-    address; they can set it themselves at their first sign-in. There is
-    nothing for them to install and no account to create first. Only the
-    space owner may invite. For an app that everyone with the link should
-    be able to write to without signing in at all, set access 'open'
-    instead (app_set). Returns the role, scope of access and sign-in link.
-    If email delivery fails, membership still stands and the response asks
-    you to relay the link yourself. Calling again sends another
-    invitation.
-    Documentation: https://yaks.app/docs/sharing.
-
+    an editor writes and a viewer only reads; a space owner may also invite.
+    Name the app and that one app is all they get, its page and its data and
+    nothing else in the space; this is how a player joins one game or a
+    household opens one list without being given everything else you keep
+    here. Leave the app out and they are added to the space, which reaches
+    every app in it. Either way the tool attempts to email an invitation:
+    who invited them, the link, and that signing in there with that address
+    is all it takes. Pass a note and the person's own message goes at the
+    top of that email, as written and quoted as theirs: a line or two saying
+    what this is ("the potluck list for Saturday"), which is the difference
+    between an invitation someone opens and one they wonder about. Pass
+    their name if you know it and their apps will show it beside what they
+    write, so nobody sees an address; they can set it themselves at their
+    first sign-in. There is nothing for them to install and no account to
+    create first. Only the space owner may invite. An app that everyone with
+    the link may write to without signing in is access 'open' (app_set)
+    rather than a membership. Returns the role, scope of access and sign-in
+    link. If email delivery fails, membership still stands and the response
+    includes the link so it can be passed on another way. Calling again
+    sends another invitation. Documentation: https://yaks.app/docs/sharing.
 member_remove:
   title: Remove someone
   description: >-
     Remove a membership: pass an app slug to revoke its app-specific
-    invitation, or omit app to revoke space-wide membership. Independent
-    app invitations and space-wide membership do not revoke each other.
-    Either way the person keeps their sign-in. Only the space owner may
-    remove, and the last owner cannot be removed, since a space with no
-    owner is one nobody can ever open again. To undo: member_add with the
-    same address, which puts them back where they were. Returns a removal
-    confirmation. App-specific removal revokes an app invitation, not
-    access inherited from space membership.
-    Documentation: https://yaks.app/docs/sharing.
-
+    invitation, or omit app to revoke space-wide membership. Independent app
+    invitations and space-wide membership do not revoke each other. Either
+    way the person keeps their sign-in. Only the space owner may remove, and
+    the last owner cannot be removed, since a space with no owner is one
+    nobody can ever open again. To undo: member_add with the same address,
+    which puts them back where they were. Returns a removal confirmation.
+    App-specific removal revokes an app invitation, not access inherited
+    from space membership. Documentation: https://yaks.app/docs/sharing.
 grant:
   title: Create a CLI token
   description: >-
-    A short-lived token that signs the `yak` CLI in as this person: the
-    same identity and exactly the same access they have here, never more.
-    Use it when someone wants to work from their own terminal, or wants a
-    script to reach their apps; the response is the one line they paste.
-    It lasts an hour unless `hours` says otherwise (24 at most), and
-    `space` limits it to one space, which is the right choice when the
-    token is going somewhere less safe than their laptop. Show them the
-    response as it is: the token is shown once and stored nowhere it can
-    be read back. `revoke` cancels a token before it expires, by the id
+    A short-lived token that signs the `yak` CLI in as this person: the same
+    identity and exactly the same access they have here, never more. For
+    working from a terminal, or a script that reaches their apps; the
+    response is the one line to paste. It lasts an hour unless `hours` says
+    otherwise (24 at most), and `space` limits it to one space, which is the
+    right choice when the token is going somewhere less safe than their
+    laptop. The token is shown once, in the response, and stored nowhere it
+    can be read back. `revoke` cancels a token before it expires, by the id
     the response that created it named. This tool requires a browser or
     connector sign-in; a CLI token cannot create or revoke tokens through
-    it.
-    Documentation: https://yaks.app/docs/sharing.
-
+    it. Documentation: https://yaks.app/docs/sharing.
 feedback:
   title: Send feedback about yaks.app
   description: >-
-    The tool for all feedback about yaks.app itself: this connector, its
-    tools, its guide, the way an app is built or served here. A bug, a
-    rough edge, a step that took three tries, a confusing answer, a wish,
-    a feature idea, a thing that went well: all of it is wanted, from what
-    you ran into working here or in the person's own words. Not for the
-    app you are building for the person: an error inside their own app is
-    theirs and yours to fix (app_errors lists those). Use it the moment
-    something comes up: a tool that refused for no reason you could find,
-    a page or tool that does not exist, an answer that disagreed with the
-    guide, a step the person found baffling, something they wished this
-    place did, a sentence they said about any of it. Where something is
-    broken, go ahead and work around it; nobody sees the workaround, and
-    this report is what they see instead. Say what the person said, in
-    their own words, and what you tried and what happened; those two are
-    the whole report. Who they are, their space, the app if you name one,
-    and the versions are attached automatically; do not repeat them. It
-    reaches a person by email, and they can write back. It works signed
-    out too: the report then records that it came from someone signed out,
-    and there is no address to reply to, so put one in the text if a reply
-    is wanted. Pass text describing the feedback, with optional space and
-    app slugs. Returns a submission confirmation, or says the report was
-    saved but could not be emailed.
-    Documentation: https://yaks.app/docs/errors.
-
+    Send feedback about yaks.app itself: this connector, its tools, its
+    documentation, the way an app is built or served. A bug, a rough edge, a
+    step that took three tries, a confusing answer, a wish, a feature idea,
+    a thing that went well. Not for the app being built for the person: an
+    error inside their own app is listed by app_errors. A report carries
+    what the person said, in their words, and what was tried and what
+    happened; who they are, their space, the app if named, and the versions
+    are attached automatically. It reaches a person by email, and they can
+    write back. It works signed out too: the report then records that it
+    came from someone signed out, and there is no address to reply to unless
+    one is in the text. Pass text describing the feedback, with optional
+    space and app slugs. Returns a submission confirmation, or says the
+    report was saved but could not be emailed. Documentation:
+    https://yaks.app/docs/errors.
 guide:
   title: Read the guide
   description: >-
     The guide, read here instead of fetched from the web. With no page: the
     overview, which says what an app is, how its pages read and write its
-    store, and has a paragraph on every feature there is. Read that first.
+    store, and has a paragraph on every feature there is. It is the map.
     With a page: the whole of one subject. The pages are {{pages}}. A name
     that is none of them returns the overview, which lists them all. The
     same pages are served to a person at https://yaks.app/docs.md, and as
     web pages at https://yaks.app/docs.
-
 about:
   title: What yaks.app is
   description: >-
-    What yaks.app is and what gets made here. Call it when someone asks what
-    this place is, or when you have not signed in and want to know what
-    works signed out and what signing in would add; it answers in a
-    paragraph and says where to sign in. Signed in, it also reports who you
-    are signed in as, how (a browser, a connector, a CLI token) and until
-    when, the tools this connector is listing right now, and every app you
-    can reach: its address, what it holds, the notes it keeps and whatever
-    the person has said in that space. Signed out it reads nothing about
-    anybody: the same answer for everyone.
-
+    What yaks.app is and what gets made here, in a paragraph: what works
+    signed out, what signing in adds, and where to sign in. Signed in, it
+    also reports who you are signed in as, how (a browser, a connector, a
+    CLI token) and until when, the tools this connector is listing right
+    now, and every app you can reach: its address, what it holds, the notes
+    it keeps and whatever the person has said in that space. Signed out it
+    reads nothing about anybody: the same answer for everyone.
 gallery_search:
   title: Search the gallery
   description: >-
     Find an app somebody has already made and shown at
     https://yaks.app/gallery: a recipe box, a sign-up sheet, a tracker. Pass
     the words the person used. Each result includes the command that gives
-    them their own copy of it, at their own address with their own data.
-    Check it before building something from scratch. It works signed out
-    too: the gallery is public.
-    Documentation: https://yaks.app/docs/sharing.
-
+    them their own copy of it, at their own address with their own data. It
+    works signed out too: the gallery is public. Documentation:
+    https://yaks.app/docs/sharing.
 memory_save:
-  title: Save what the person said
+  title: Save a memory
   description: >-
-    Save what the person said about how they want something built or
-    handled, in their words, as they said them. Use it the moment they
-    state a preference, a standard, a taste, a way of working, a thing
-    they never want done again: "use grams, never cups", "keep it soft,
-    not technical", "always show me the link". Save the sentence verbatim:
-    never your summary of it, never a tidied-up version, never what you
-    concluded from it. A summary can only lose what they said, and nobody
-    can get it back. Add context only where the words are unreadable
-    without it, one line saying what was being talked about and no more;
-    the words themselves carry the rest. It is kept for the whole space,
-    so everyone working there sees it, and the about tool returns the
-    newest few to any agent that asks. What is only about one app belongs
-    in that app's NOTES.md instead (https://yaks.app/docs/notes), and a document you
-    wrote (an overview, how something works, why it was built that way)
-    belongs in the app's store as a doc entity, which search finds again
-    (https://yaks.app/docs/memory, Project documents). Only their own sentences go
-    here. Pass said and optional context. Returns the saved words and
-    context as confirmation.
-    Documentation: https://yaks.app/docs/memory.
-
+    Save a memory for the space: a sentence or a note kept for everyone
+    working there and found again by what it is about. A person's own words
+    are kept as they said them, so a preference, a standard or a way of
+    working ("use grams, never cups", "keep it soft, not technical") comes
+    back exactly; a note of the assistant's own, how or why something was
+    built, is kept the same way. context is a line or two saying what was
+    being talked about. It is kept for the whole space, and the about tool
+    returns the newest few to any agent that asks. What is only about one
+    app can also live in that app's NOTES.md (https://yaks.app/docs/notes),
+    and a longer document in the app's store as a doc entity, which search
+    finds. Pass said and optional context. Returns the saved words and
+    context as confirmation. Documentation: https://yaks.app/docs/memory.
 memory_recall:
-  title: Recall what the person said
+  title: Recall memories
   description: >-
-    What the person has said about how they want things done, in their own
-    words, ranked against the words you pass. Ask before building or
-    changing an app, and whenever a choice is theirs to have made: how a
-    page should look, what a thing should be called, how they want to be
-    told about something. The newest few arrive with every connection
-    already; this is how the rest are found. Returns each memory whole, with
-    the line of context saved beside it.
-    Documentation: https://yaks.app/docs/memory.
-
+    The memories kept for the space, ranked against the words passed: what
+    the person has said about how they want things done, and notes saved
+    beside them. The newest few arrive with every connection already; this
+    finds the rest. Returns each memory whole, with the context saved beside
+    it. Documentation: https://yaks.app/docs/memory.
 app_stats:
   title: App traffic
   description: >-
     Return page-view counts for an app: the total over the last 30 days by
     default, and counts by page, referring site and country. These count
-    page loads, not distinct people. Pass days for a different window, up
-    to 90 days; if analytics is not configured, returns that fact instead.
-    Aggregate counts and nothing else: no visitor is identified, no
-    address and no session is kept, so this can never say who someone was
-    or what one person did. Use it when they ask whether anyone is using
-    the app, or which page is worth working on. Only the app's own members
-    may ask.
-    Documentation: https://yaks.app/docs/stats.
+    page loads, not distinct people. Pass days for a different window, up to
+    90 days; if analytics is not configured, returns that fact instead.
+    Aggregate counts and nothing else: no visitor is identified, no address
+    and no session is kept, so this can never say who someone was or what
+    one person did. Only the app's own members may ask. Documentation:
+    https://yaks.app/docs/stats.

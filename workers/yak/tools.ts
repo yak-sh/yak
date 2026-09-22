@@ -1119,8 +1119,7 @@ let laid = async (blobs: Blobs, from: string, onto: string) => {
 
 let FORGET = str(
   'a previous slug (not a URL) this has moved away from, to stop redirects ' +
-    'and let it be taken again; never the current slug. Only when the ' +
-    'person has said they are done with it',
+    'and let it be taken again; never the current slug. Forgetting is final',
 )
 
 /** Whether an address is one this row has actually left. A refusal rather than
@@ -1803,8 +1802,7 @@ let OURS: Row[] = [
           description:
             'true to email a link that erases the space at once instead ' +
             'of trashing it: its apps, everything they saved, their files ' +
-            'and its address, all gone, with no restore. Only when the ' +
-            'person has said they mean exactly that',
+            'and its address, all gone, with no restore',
         },
       },
       required: ['space'],
@@ -3039,8 +3037,7 @@ let OURS: Row[] = [
           type: 'boolean',
           description:
             'true to erase the app now instead of trashing it: its files, ' +
-            'everything it saved and its address, all gone, with no restore. ' +
-            'Only when the person has said they mean exactly that',
+            'everything it saved and its address, all gone, with no restore',
         },
       },
       required: ['app'],
@@ -3645,8 +3642,7 @@ let OURS: Row[] = [
           type: 'boolean',
           description:
             'true to submit it for https://yaks.app/gallery, the public ' +
-            'page of yaks apps people have made. Only when the person has said they ' +
-            'want it shown. It appears there once yaks.app approves it; ' +
+            'page of yaks apps. It appears there once yaks.app approves it; ' +
             'app_set(app, gallery: false) withdraws it at any time',
         },
       },

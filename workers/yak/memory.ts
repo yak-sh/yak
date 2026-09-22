@@ -210,13 +210,12 @@ let MEMORY: Row[] = [
       type: 'object',
       properties: {
         said: str(
-          'the words the person used, exactly as they used them — their ' +
-            'sentence, not a paraphrase of it',
+          "the words to keep: a person's sentence as they said it, or a " +
+            'note of your own',
         ),
         context: str(
-          'the one line needed to understand those words later — what was ' +
-            'being talked about when they said it. Two lines at most, and ' +
-            'leave it out where the words stand on their own',
+          'a line or two saying what was being talked about, where the ' +
+            'words do not stand on their own',
         ),
         about: str(
           'the app they were talking about, by slug, if there was one',
@@ -248,9 +247,8 @@ let MEMORY: Row[] = [
       type: 'object',
       properties: {
         words: str(
-          'what you are about to do or decide, in a few words — "how should ' +
-            'the pages look", "measurements in a recipe". Leave it out for ' +
-            'the newest',
+          'what the memory is about, in a few words: "how the pages look", ' +
+            '"measurements in a recipe". Leave it out for the newest',
         ),
         limit: {
           type: 'number',
