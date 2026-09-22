@@ -169,7 +169,7 @@ import {
   spaceHost,
   url as hostUrl,
 } from './host.ts'
-import { foreign, planSettings, SLUG } from './route.ts'
+import { foreign, planSettings, RESERVED, SLUG } from './route.ts'
 import { globs } from './router.ts'
 import type { Reach } from './reach.ts'
 import { titling, vouched, type Who } from './session.ts'
@@ -501,6 +501,21 @@ let slug = (v: unknown, what: string) => {
   }
   return s
 }
+
+// A slug about to become an address, which may not be one the platform keeps
+// for itself (route.ts `RESERVED`).
+let unreserved = (s: string, what: string) => {
+  if (RESERVED.has(s)) {
+    throw refuse(
+      'conflict',
+      `${what}: ${s} is kept for yaks.app itself, so that nobody reads an ` +
+        'address as the platform speaking. Choose another.',
+    )
+  }
+  return s
+}
+
+let fresh = (v: unknown, what: string) => unreserved(slug(v, what), what)
 
 // A secret's name is a binding, which the app's own code spells as
 // `env.NAME` — so it must be a JavaScript name (dispatch.ts).
@@ -1690,7 +1705,7 @@ let OURS: Row[] = [
       required: ['slug', 'title'],
     },
     run: async (ctx, args) => {
-      let s = slug(args.slug, 'slug')
+      let s = fresh(args.slug, 'slug')
       // A grant narrowed to one space reaches that space and no other
       // (grants.ts `narrowed`), and a space it made would be a space outside
       // it. Said here because minting one is the single act that does not go
@@ -1774,7 +1789,7 @@ let OURS: Row[] = [
     },
     run: async (ctx, args) => {
       let { space, who } = await owns(ctx, args)
-      let to = args.slug == null ? null : slug(args.slug, 'slug')
+      let to = args.slug == null ? null : fresh(args.slug, 'slug')
       let title = args.title == null ? null : text(args.title, 'title')
       let drop = args.forget == null ? null : slug(args.forget, 'forget')
       if (to == null && title == null && drop == null) {
@@ -2072,7 +2087,7 @@ let OURS: Row[] = [
     },
     run: async (ctx, args) => {
       let { space, who } = await inSpace(ctx, args, true)
-      let s = slug(args.slug, 'slug')
+      let s = fresh(args.slug, 'slug')
       // The plan's app ceiling (T-32758), at the one door that adds one.
       // An app costs money to keep, so this is a refusal and not a warning —
       // the warning came at 80%, on the unseen channel (unseen.ts `ceiling`).
@@ -2877,7 +2892,7 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let { space, app, who } = await inApp(ctx, args, true)
       let title = args.title == null ? null : text(args.title, 'title')
-      let to = args.slug == null ? null : slug(args.slug, 'slug')
+      let to = args.slug == null ? null : fresh(args.slug, 'slug')
       let open = args.access == null ? null : access(args.access)
       let home = args.home == null ? null : flag(args.home, 'home')
       let drop = args.forget == null ? null : slug(args.forget, 'forget')
@@ -3965,12 +3980,16 @@ let OURS: Row[] = [
       // absolute way still works. The published name is the fallback when
       // that address is spoken for here, and `as` is still the last word.
       let vacant = async (at: string) =>
-        !(await ctx.dir.app(space, at)) && !(await ctx.dir.former(space, at))
-      let s = args.as != null
-        ? slug(args.as, 'as')
-        : (await vacant(offer.app.slug))
-        ? offer.app.slug
-        : name
+        !RESERVED.has(at) && !(await ctx.dir.app(space, at)) &&
+        !(await ctx.dir.former(space, at))
+      let s = unreserved(
+        args.as != null
+          ? slug(args.as, 'as')
+          : (await vacant(offer.app.slug))
+          ? offer.app.slug
+          : name,
+        args.as != null ? 'as' : 'name',
+      )
       if (await ctx.dir.app(space, s)) {
         throw refuse(
           'conflict',

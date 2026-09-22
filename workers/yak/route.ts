@@ -139,6 +139,74 @@ export type Route = {
 
 export let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
 
+// The slugs no space or app may take, because at `<slug>.yaks.app` and at
+// `<slug>@yaks.app` (post.ts `mailFrom`) they would read as the platform
+// speaking (T-37886): a sign-in page at `login.yaks.app`, a letter from
+// `security@yaks.app`. The doors that mint an address check it (tools.ts
+// `fresh`, directory.ts `free` and `own`, identity.ts `choose`); an address
+// already held keeps working. `yak` is the platform's own space (directory.ts
+// `META`), and `origin` and `saas` its custom-hostname origin (`ORIGIN`).
+export let RESERVED = new Set([
+  'abuse',
+  'account',
+  'accounts',
+  'admin',
+  'administrator',
+  'api',
+  'app',
+  'apps',
+  'auth',
+  'billing',
+  'cf-bounce',
+  'checkout',
+  'connect',
+  'dashboard',
+  'docs',
+  'email',
+  'git',
+  'hello',
+  'help',
+  'hostmaster',
+  'login',
+  'logout',
+  'mail',
+  'manage',
+  'mcp',
+  'mx',
+  'no-reply',
+  'noreply',
+  'oauth',
+  'official',
+  'origin',
+  'password',
+  'pay',
+  'payment',
+  'payments',
+  'postmaster',
+  'pricing',
+  'privacy',
+  'root',
+  'saas',
+  'secure',
+  'security',
+  'settings',
+  'sign-in',
+  'sign-up',
+  'signin',
+  'signup',
+  'staff',
+  'status',
+  'stripe',
+  'support',
+  'system',
+  'terms',
+  'verify',
+  'webmaster',
+  'www',
+  'yak',
+  'yaks',
+])
+
 // Where a hostname somebody else owns is served from: the address on our own
 // zone that the request is carried to, and the mount the app sits at there
 // (T-34596). The directory says which place the domain names — a space, or one

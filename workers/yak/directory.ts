@@ -37,7 +37,7 @@ import {
 import { ADMIN } from '../../src/bots.ts'
 import { KERNEL, type Meta, meta as metaStore } from './meta.ts'
 import { mailFrom } from './post.ts'
-import { SLUG } from './route.ts'
+import { RESERVED, SLUG } from './route.ts'
 import { firstOf } from './router.ts'
 import { nameOf } from './signin.ts'
 
@@ -1114,7 +1114,11 @@ export let directory = (via: Fetcher, now = false) => {
     // sign-in card offers a person before it does (T-32967).
     free: async (base: string) => {
       let slug = base
-      for (let n = 2; await self.space(slug); n++) slug = `${base}${n}`
+      for (
+        let n = 2;
+        RESERVED.has(slug) || await self.space(slug);
+        n++
+      ) slug = `${base}${n}`
       return slug
     },
     // The person's own space, minted the moment they first need one — at
@@ -1136,7 +1140,8 @@ export let directory = (via: Fetcher, now = false) => {
       let row = await one(`.eid=${person}`)
       let wanted = slugFor(row?.email?.address ?? 'space')
       if (mine.length) return mine.find((s) => s.slug == wanted) ?? mine[0]
-      let chosen = !!want && SLUG.test(want) && !await self.space(want)
+      let chosen = !!want && SLUG.test(want) && !RESERVED.has(want) &&
+        !await self.space(want)
       let slug = chosen ? want! : await self.free(wanted)
       // The same batch space_new writes, for the same reasons: the person's
       // own row (they may have none yet), the space, and their ownership of

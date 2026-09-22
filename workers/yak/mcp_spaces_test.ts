@@ -736,3 +736,28 @@ slow('the front page says which paths it answers first', async () => {
     await k.stop()
   }
 })
+
+// An address that would read as the platform speaking is nobody's (T-37886):
+// not a space at `login.yaks.app`, not an app at `/admin/`, not a letter from
+// `security@yaks.app`. Sign-in steps around one the way it steps around a
+// taken one, by number.
+slow('an address that reads as the platform is refused', async () => {
+  let k = await kernel()
+  try {
+    let them = await signIn(k, `security@${k.host}`)
+    let agent = connector(k, them.cookie)
+    let kept = async (tool: string, args: Record<string, unknown>) =>
+      assertStringIncludes(
+        (await assertRejects(() => agent.tool(tool, args), Error)).message,
+        'is kept for yaks.app itself',
+      )
+    await kept('space_new', { slug: 'login', title: 'Login' })
+    await kept('app_new', { slug: 'admin', title: 'Admin' })
+    let made = await agent.tool('app_new', { slug: 'recipes', title: 'R' })
+    assertStringIncludes(made, 'security2.yaks.app')
+    await kept('space_set', { space: 'security2', slug: 'support' })
+    await kept('app_set', { space: 'security2', app: 'recipes', slug: 'www' })
+  } finally {
+    await k.stop()
+  }
+})

@@ -131,7 +131,7 @@ import {
   deleted,
   lost,
 } from './pages.ts'
-import { hostOf, MANAGE, OAUTH, onZone, says, SLUG } from './route.ts'
+import { hostOf, MANAGE, OAUTH, onZone, RESERVED, says, SLUG } from './route.ts'
 import { canon, mint, nameOf, personOf, spend } from './signin.ts'
 import { type Caller, minted } from './session.ts'
 
@@ -473,6 +473,11 @@ export let choose = async (
     return {
       error: 'An address is lowercase letters, numbers and dashes, ' +
         'starting with a letter or a number — like dana or dana-notes.',
+    }
+  }
+  if (RESERVED.has(want)) {
+    return {
+      error: `${want}.${apex(env)} is kept for yaks.app itself. Try another?`,
     }
   }
   if ((await dir.apps(space)).length) {
