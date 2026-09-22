@@ -80,6 +80,12 @@ but does not hand out keys.
 `owner` (may also invite). Inviting an address that is already a member changes
 their role, and the answer reports what it was before.
 
+An invitation is pending until its person accepts it, with the one click in the
+letter, signed in with the address it went to. Until then nothing of the space
+is in their reach: it is not in their listing, a bare app name never resolves to
+it, and their agent is told nothing about it. `member_remove` withdraws a
+pending invitation the same way it removes a member.
+
 ## One app, or the space
 
 `app` is the whole of the difference, and it is a difference in what they get:
@@ -128,15 +134,18 @@ two — 500 characters is the cap, and past it the call is refused rather than
 sending half a sentence in somebody's name. Read it back to the person before
 you send it: it is going out over their name.
 
-The letter names who invited them, what they were invited to and the link, and
-explains that signing in there with that address is all it takes — there is
-nothing to install and no account to make first. They land on the page the link
-names.
+Its subject is always "You have an invitation on yaks.app". The body names who
+invited them and what to, and carries the accept link. Clicking it signed in as
+that address accepts and lands them on the page it names; anyone else is asked
+to sign in with that address first, and the sign-in brings them back to accept.
+There is nothing to install and no account to make first.
 
-The membership stands whatever the mail does. If the letter cannot go — the
-platform's mail is misconfigured — the answer gives you the link to pass on by
-hand, and the reason it could not be sent. Never re-invite to "retry"; give them
-the link.
+The accept link goes only to the invited address, so the answer never hands you
+one. If the letter cannot go, the invitation stands and asking again sends it.
+
+Each invitation letter counts against the space's monthly emails, and one person
+may send 50 invitations an hour. Changing the role of somebody who has already
+accepted sends nothing and counts nothing.
 
 `member_remove` refuses to remove the last owner: a space with nobody to decide
 who belongs is one nobody can open again. Removing someone leaves their sign-in

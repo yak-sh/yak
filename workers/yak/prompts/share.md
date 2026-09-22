@@ -20,4 +20,4 @@ I want to share {{app}} on yaks.app with {{who}}.
 
 Work out what its access should be first — whether they have to sign in, and
 whether anyone else with the link could write — and tell me what you picked.
-Then invite them and give me the link to send.
+Then invite them, and tell me they accept from the letter they receive.

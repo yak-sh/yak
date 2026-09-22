@@ -519,6 +519,26 @@ export let mailed = (k: Pick<Kernel, 'log'>, to: string, after = 0) =>
     { timeout: 20_000, poll: 100, label: `a letter for ${to}` },
   )
 
+// An invitation's one click, the way its person makes it (invite.ts): the link
+// out of the latest invitation letter to that address, opened with `cookie`
+// (or none). Answers the door's response, unread.
+export let clickInvite = async (k: Kernel, email: string, cookie?: string) => {
+  let l = await letter(k, email, '/invite?t=')
+  let link = new URL(/https:\/\/\S+\/invite\?t=\S+/.exec(l.body)![0])
+  return k.at(link.host, link.pathname + link.search, {
+    redirect: 'manual',
+    headers: cookie ? { cookie } : {},
+  })
+}
+
+// Accepted: the click, signed in as its person, landing where it points.
+export let accepted = async (k: Kernel, email: string, cookie: string) => {
+  let r = await clickInvite(k, email, cookie)
+  await r.body?.cancel()
+  if (r.status != 303) throw new Error(`accept: ${r.status}`)
+  return r.headers.get('location')!
+}
+
 // A letter into the kernel, at the door workerd keeps for exactly this: the
 // runtime's local email endpoint hands the body to `email()` as a message
 // (index.ts, inbox.ts). The envelope rides the query string — `from` and `to`

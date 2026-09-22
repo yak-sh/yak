@@ -111,6 +111,7 @@ import {
 } from './link.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
+import { door, INVITE } from './invite.ts'
 import { mail, mailable } from './mail.ts'
 import { fault } from './unseen.ts'
 
@@ -745,6 +746,12 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     if (!person) return redirect('/login?return=%2Fmanage', undefined, 303)
     let space = await dirOf(env).own(person)
     return redirect(backTo(space.slug, '', env), undefined, 303)
+  }
+
+  // An invitation's one click (invite.ts, T-37880): accepted for the person
+  // it names, signed in on this browser, and nobody else.
+  if (path == INVITE && req.method == 'GET') {
+    return door(req, env, dirOf(env), await browser(env, req), secret(env))
   }
 
   // The custom-domain end of cross-domain sign-in (`handoff`). index.ts sends

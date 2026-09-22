@@ -8,6 +8,7 @@ import {
 import { slow } from '../../src/testing.ts'
 
 import {
+  accepted,
   client,
   connector,
   kernel,
@@ -242,7 +243,9 @@ slow('an invited person gets a space of their own', async () => {
     let ana = `ana-${crypto.randomUUID().slice(0, 8)}@yaks.app`
     let hers = ana.split('@')[0]
     await his.tool('member_add', { email: ana, role: 'editor' })
-    let agent = connector(k, (await signIn(k, ana)).cookie)
+    let her = await signIn(k, ana)
+    await accepted(k, ana, her.cookie)
+    let agent = connector(k, her.cookie)
 
     // She belongs to his and owns hers.
     let listed = await agent.tool('app_list')
@@ -304,6 +307,7 @@ slow(
       assertStringIncludes(said, `${mine}/arena`)
       assertStringIncludes(said, `nothing else in ${mine}`)
       let hers = await signIn(k, ana)
+      await accepted(k, ana, hers.cookie)
 
       // The app she was invited to: its page, and its store, as a member has
       // them — a private app answers nobody else at all.
@@ -353,6 +357,7 @@ slow(
 
       // And a member is never quietly demoted to a guest.
       await his.tool('member_add', { email: ana, role: 'editor' })
+      await accepted(k, ana, hers.cookie)
       await assertRejects(
         () => his.tool('member_add', { email: ana, app: 'arena' }),
         Error,

@@ -301,6 +301,8 @@ type Row = {
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role }
   grant?: { app: Id; person: Id; access: Role }
+  invite?: { to: Id; person: Id; role: Role }
+  inviting?: { hour?: string | null; sent?: number | null }
   email?: { address: string }
   former?: { slug: string; slugs?: string | null }
   home?: { first?: string | null }
@@ -1063,6 +1065,31 @@ export let directory = (via: Fetcher, now = false) => {
         ? { eid: row.entity.eid, access: row.grant.access }
         : null
     },
+    // The invitation standing for this person on a space or an app (invite.ts,
+    // T-37880): the eid, so asking again revises the one that stands, and the
+    // role it offers. The same guard as `member`.
+    invite: async (to: string, person: string) => {
+      if (!person) return null
+      let row = await one(`.invite.to=${to}&.invite.person=${person}`, true)
+      return row?.invite ? { eid: row.entity.eid, role: row.invite.role } : null
+    },
+    // One invitation by the eid its letter carries. Fresh, because the click
+    // that accepts it is often the second one on the same letter.
+    invitation: async (eid: string) => {
+      let row = await one(`.eid=${eid}`, true)
+      return row?.invite
+        ? {
+          eid: row.entity.eid,
+          to: idOf(row.invite.to),
+          person: idOf(row.invite.person),
+          role: row.invite.role,
+        }
+        : null
+    },
+    // How many invitations this person has sent in the hour it names. Fresh:
+    // two invitations a second apart must not both read the same count.
+    inviting: async (person: string) =>
+      (await one(`.eid=${person}`, true))?.inviting ?? null,
     // Everyone in a space, by person eid — who to tell when an app's tools
     // move (declared.ts `toolsChanged`), since reaching the app is exactly
     // being in the space.

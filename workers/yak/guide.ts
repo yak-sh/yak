@@ -106,8 +106,9 @@ and 'private', where only members see it at all; member_add invites someone by
 email address — name the app and that one app is all they get, its page and its
 data and nothing else in the space, which is how a player joins one game.
 Leave the app out and they are added to the space itself, which reaches every
-app in it. Either way the invitation is mailed to them with the link, and they
-sign in there with that address and land back on the page they were on.
+app in it. Either way the invitation is mailed to them, and nothing is theirs
+until they accept it with the one click in that letter, signed in with that
+address; then they land on the page it names.
 
 Its data belongs in the app's own store, not localStorage — so it is the same
 on their phone and their laptop, and so you can read and repair it yourself.

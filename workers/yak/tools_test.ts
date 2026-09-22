@@ -27,6 +27,7 @@ import { platform } from './harness.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { inApp } from './tool.ts'
+import { accept } from './invite.ts'
 import type { Address } from './post.ts'
 import { letters } from './letters.ts'
 import { clock } from './timing.ts'
@@ -139,6 +140,11 @@ Deno.test('app_list says the caller’s role in each space it lists', async () =
   })
   let bo = { env, dir, person: (await dir.personAt('bo@books.example'))! }
   await call(bo, 'space_new', { slug: 'bo', title: 'Bo' })
+  // Invited is not in: the seat is his once he accepts (invite.ts).
+  let space = (await dir.space('ada'))!
+  assertEquals(await dir.spaces(bo.person), [(await dir.space('bo'))!])
+  let invite = (await dir.invite(space.eid, bo.person))!
+  await accept(dir, { ...invite, person: bo.person }, { space, app: null })
 
   // The seat is on the space's own line — a tool answers words and the
   // bundles they ride on, and a second structured copy of them is gone.

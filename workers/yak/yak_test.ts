@@ -11,7 +11,9 @@ import {
 } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { parseHTML } from 'linkedom'
+import { SUBJECT } from './invite.ts'
 import {
+  accepted,
   client,
   connector,
   kernel,
@@ -538,22 +540,24 @@ slow('an app says who may read it and who may write it', async () => {
       app: 'diary',
       name: 'Maya',
     })
-    assertStringIncludes(said, 'maya@example.com is an editor of club')
-    // The answer says the letter went and repeats the link, so the person
-    // can relay it by hand as well — and it points at the app they were
-    // invited to, never the space root, which answers nothing here
-    // (C-32624 item 4).
+    assertStringIncludes(
+      said,
+      'maya@example.com is invited as an editor of club',
+    )
+    // The answer says the letter went, and never carries the accept link:
+    // that is the invited address's alone (invite.ts, T-37880).
     assertStringIncludes(said, 'the invitation is on its way')
-    assertStringIncludes(said, 'https://club.yaks.app/diary/')
-    // And the letter itself carries the same link, from the platform's own
-    // sender, saying who invited them and what signing in takes.
+    assertEquals(said.includes('/invite?t='), false)
+    // The letter carries it, from the platform's own sender, under fixed
+    // words, saying who invited them and what signing in takes.
     let invite = await letter(k, 'maya@example.com', 'invited you')
-    // Both people in it by name: the one who invited, and the one invited —
-    // the address is the envelope, never what anyone is called (T-32654).
-    assertStringIncludes(invite.subject, name)
-    assertEquals(invite.subject.includes(email), false)
+    assertEquals(invite.subject, SUBJECT)
+    // Both people in the body by name: the one who invited, and the one
+    // invited — the address is the envelope, never what anyone is called
+    // (T-32654).
+    assertStringIncludes(invite.body, `${name} invited you`)
     assertStringIncludes(invite.body, 'Hi Maya,')
-    assertStringIncludes(invite.body, 'https://club.yaks.app/diary/')
+    assertStringIncludes(invite.body, '/invite?t=')
     assertStringIncludes(invite.body, 'maya@example.com')
     assertStringIncludes(invite.body, 'no account to make first')
     // And the name the invitation gave is hers until she says otherwise, so
@@ -580,7 +584,7 @@ slow('an app says who may read it and who may write it', async () => {
       noted.body.indexOf(hello) < noted.body.indexOf('invited you to'),
       'the note is under the platform lines',
     )
-    assertStringIncludes(noted.body, 'https://club.yaks.app/list/')
+    assertStringIncludes(noted.body, '/invite?t=')
     // A note past a paragraph is refused in a sentence — and refused before
     // anything is written, so an invitation and its note stand or fall
     // together rather than half-arriving.
@@ -612,6 +616,12 @@ slow('an app says who may read it and who may write it', async () => {
     let [row] = await meta(k, cookie).query('.email.address=maya@example.com')
     let maya = row.entity.eid
     let mayaIn = await signedIn(k, maya)
+    // Hers once she accepts, and it lands her on the app she was invited to,
+    // never the space root, which answers nothing here (C-32624 item 4).
+    assertEquals(
+      await accepted(k, 'maya@example.com', mayaIn),
+      'https://club.yaks.app/diary/',
+    )
     let editor = (app: string) => client(k, 'club.yaks.app', app, mayaIn)
     // She was invited to one app (T-37615), so the app beside it is somebody
     // else's: a signed-in stranger at a public list, who reads it and does

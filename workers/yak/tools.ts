@@ -194,6 +194,7 @@ import { archive, healed, line, openIn, rewrote, serve } from './unseen.ts'
 import {
   atCeiling,
   ceilings,
+  counted,
   countedSpend,
   free,
   monthOf,
@@ -203,6 +204,7 @@ import {
   standing,
   tooManySpaces,
 } from './meter.ts'
+import { acceptLink, paced, SUBJECT } from './invite.ts'
 import {
   held,
   history,
@@ -1613,6 +1615,9 @@ let noteOf = (v: unknown) => {
 
 // Their words, marked as theirs: quoted the way a letter quotes, so a reader
 // can tell what the person wrote from what the platform did.
+// The article a role takes: an editor, an owner, a viewer.
+let an = (role: Role) => role == 'viewer' ? 'a' : 'an'
+
 let quoted = (said: string) =>
   said.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n')
 
@@ -4183,18 +4188,16 @@ let OURS: Row[] = [
       // refused invitation mails nothing at all (T-32963).
       let note = args.note == null ? '' : noteOf(args.note)
       // What they were invited to: the app, if one was named, else the
-      // space. Name the app: the space's own address is its front page or a
-      // list of what they may open (T-33040), and neither is the thing they
-      // were invited to look at (C-32624 item 4).
+      // space. Accepting lands them on the app (invite.ts `linkOf`): the
+      // space's own address is its front page or a list of what they may open
+      // (T-33040), and neither is the thing they were invited to look at
+      // (C-32624 item 4).
       let app = args.app == null
         ? null
         : await ctx.dir.app(space, text(args.app, 'app'))
       if (args.app != null && !app) {
         throw refuse('missing', `no app ${args.app} in ${space.slug}`)
       }
-      let link = app
-        ? url(space, app, ctx.env)
-        : `https://${spaceHost(ctx.env, space.slug)}/`
       // The platform's row for that address, minted if it has never seen
       // one: the invitation is what makes the person, and their sign-in
       // later finds this same row by the same address (signin.ts personOf).
@@ -4228,70 +4231,91 @@ let OURS: Row[] = [
             `${app.slug} alone`,
         )
       }
+      // Already in: a new role on the seat or grant they accepted, which asks
+      // nobody anything and sends no letter.
+      let seat = app ? held : had
+      if (seat) {
+        await ctx.dir.apply({
+          entities: [
+            app
+              ? { entity: { eid: seat.eid }, grant: { access: want } }
+              : { entity: { eid: seat.eid }, member: { role: want } },
+          ],
+        }, vouched(who))
+        let was = held ? held.access : had!.role
+        return {
+          text: `${email} is now ${an(want)} ${want} of ` +
+            (app
+              ? `${space.slug}/${app.slug} and nothing else in ${space.slug}`
+              : space.slug) +
+            ` (was ${was})`,
+          space,
+        }
+      }
+      // Anyone else is invited, and nothing is theirs until they accept
+      // (invite.ts, T-37880). The letter is counted twice before it goes: on
+      // the space's monthly letters, and on the inviter's hour.
+      let no = await refusedSpend(ctx.dir, space, 'emails', ctx.env)
+      if (no) throw refuse('limit', no)
+      await stamp(ctx.env, {
+        entities: [{
+          entity: { eid: ctx.person },
+          inviting: paced(await ctx.dir.inviting(ctx.person)),
+        }],
+      })
+      let to = app ? app.eid : space.eid
+      let standing = await ctx.dir.invite(to, person)
+      let eid = standing?.eid ?? crypto.randomUUID()
       await ctx.dir.apply({
         entities: [
-          app
-            ? held ? { entity: { eid: held.eid }, grant: { access: want } } : {
-              entity: { eid: '$grant' },
-              grant: { app: app.eid, person, access: want },
-            }
-            : had
-            ? { entity: { eid: had.eid }, member: { role: want } }
-            : {
-              entity: { eid: '$seat' },
-              member: { space: space.eid, person, role: want },
-            },
+          standing
+            ? { entity: { eid }, invite: { role: want } }
+            : { entity: { eid }, invite: { to, person, role: want } },
         ],
       }, vouched(who))
-      // Being added is a deploy from where the added person stands: every
-      // view the space's apps declare just appeared for them, and the
-      // deploy-time walk tells members — which they were not until now
-      // (declared.ts, T-33004). A re-role moves nothing they can reach, and
-      // neither does a space with no apps. A guest of one app is not on that
-      // walk at all: they have no reach to change, and their app is a page
-      // they open rather than a store their agent lists.
-      if (!app && !had && (await ctx.dir.apps(space)).length) {
-        await reachChanged(ctx.env, person)
-      }
       // The letter, from the platform's own sender — the one the sign-in
-      // code rides (mail.ts). It goes after the membership, which stands
-      // whatever the mail does: a letter that cannot be sent is a link to
-      // relay by hand, never a lost invitation.
+      // code rides (mail.ts). Its subject is fixed words; what the inviter
+      // chose (their name, the app's title, their note) is in the body,
+      // marked as theirs.
       let what = app ? `${app.title} (${space.slug}/${app.slug})` : space.title
       // Who invited them, by name — an address is what the letter is sent
       // to, never what a person is called (T-32654).
       let by = await ctx.dir.nameAt(ctx.person)
+      let accept = await acceptLink(ctx.env.SESSION_SECRET, {
+        invite: eid,
+        to,
+      }, ctx.env)
       let sent = await mail(ctx.env)({
         to: email,
-        subject: `${by ?? 'Someone'} invited you to ${what}`,
+        subject: SUBJECT,
         body: (name ? `Hi ${name},\n\n` : '') +
           // Their words first, and marked as theirs, so a reader never takes
           // the platform to be saying them (T-32963).
           (note ? `${by ?? 'They'} wrote:\n\n${quoted(note)}\n\n` : '') +
-          `${by ?? 'Someone'} invited you to ${what} on yaks.app:\n\n` +
-          `${link}\n\n` +
-          `Sign in there with this address (${email}) and it is yours to ` +
-          `${want == 'viewer' ? 'read' : 'use'}. There is nothing to ` +
-          'install and no account to make first.',
+          `${by ?? 'Someone'} invited you to ${what} on yaks.app, to ` +
+          `${want == 'viewer' ? 'read' : 'use'}. Accept with one click:\n\n` +
+          `${accept}\n\n` +
+          `Sign in with this address (${email}) if you are asked to. There ` +
+          'is nothing to install and no account to make first. Until you ' +
+          'accept, nothing of theirs is shared with you, and if you did not ' +
+          'expect this you can ignore it.',
       }).then(() => true).catch(() => false)
+      if (sent) await counted(ctx.env, space)
       return {
-        text:
-          `${email} is ${want == 'editor' || want == 'owner' ? 'an' : 'a'}` +
-          ` ${want} of ` +
+        text: `${email} is invited as ${an(want)} ${want} of ` +
           (app
-            ? `${space.slug}/${app.slug}${
-              held ? ` (was ${held.access})` : ''
-            } and nothing else in ${space.slug}`
-            : `${space.slug}${had ? ` (was ${had.role})` : ''}`) +
+            ? `${space.slug}/${app.slug} and nothing else in ${space.slug}`
+            : space.slug) +
           ` — ` +
           (sent
             ? `the invitation${
               note ? ' and your note are' : ' is'
-            } on its way to them, with the link: ${link}`
-            : `the invitation could not be mailed, so send them the link ` +
-              `yourself: ${link}`) +
-          `. They sign in there with that address, and it is theirs to ` +
-          `${want == 'viewer' ? 'read' : 'use'}`,
+            } on its way to them. It is theirs once they accept it from ` +
+              `the letter, signed in with that address; until then nothing ` +
+              `of ${space.slug} is in their reach, and member_remove ` +
+              `withdraws it`
+            : `the invitation could not be mailed just now; ask again ` +
+              `later to send it`),
         space,
       }
     },
@@ -4324,6 +4348,20 @@ let OURS: Row[] = [
         : await ctx.dir.app(space, text(args.app, 'app'))
       if (args.app != null && !app) {
         throw refuse('missing', `no app ${args.app} in ${space.slug}`)
+      }
+      // An invitation not yet accepted is withdrawn the same way: the row
+      // goes, and the letter's link opens onto nothing (invite.ts).
+      let pending = person &&
+        await ctx.dir.invite(app ? app.eid : space.eid, person)
+      if (pending) {
+        await ctx.dir.apply({
+          entities: [{ entity: { eid: pending.eid }, tombstone: {} }],
+        }, vouched(who))
+        return {
+          text: `the invitation for ${email} to ${space.slug}` +
+            (app ? `/${app.slug}` : '') + ' is withdrawn',
+          space,
+        }
       }
       let held = app && person && await ctx.dir.grant(app, person)
       if (app) {

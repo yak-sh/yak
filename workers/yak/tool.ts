@@ -203,7 +203,9 @@ export let text = (v: unknown, what: string) => {
 // the caller is only a member of aimed app_install at the inviter's space.
 //
 // Naming the APP is naming the space — the one they can reach that holds
-// that slug. An app's own tool (declared.ts) knows its store and asks
+// that slug, among the spaces they own or have accepted a seat in: an
+// invitation not yet accepted is no seat (invite.ts, T-37880), so a stranger's
+// space never answers to a name their agent says. An app's own tool (declared.ts) knows its store and asks
 // nothing, so the generic tier asking a member of two spaces to also name
 // one read as the platform forgetting what it had just been told (C-32730
 // item 6). Two spaces holding the same slug is the one genuine question, and

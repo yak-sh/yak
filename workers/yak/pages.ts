@@ -1193,6 +1193,32 @@ puts everything back exactly as it was.`
     }</p>${home(env)}`,
   )
 
+// An invitation opened by somebody who is not signed in as the person it is
+// for (invite.ts): the address it went to, and the one button that mails that
+// address a code and brings them back to accept it.
+export let invited = (email: string, back: string, env: Host = {}) =>
+  shell(
+    env,
+    'You have an invitation',
+    `It was sent to ${esc(email)}. Sign in with that address to accept it.`,
+    200,
+    `<form method="post" action="/login">${held('email', email)}${
+      held('return', back)
+    }
+<button class="Button" type="submit">Email me a sign-in code</button>
+</form>${home(env)}`,
+  )
+
+// An invitation that is no longer open: withdrawn, or for a space or an app
+// that is gone. Which one is nobody's business but the inviter's.
+export let closed = (env: Host = {}) =>
+  shell(
+    env,
+    'This invitation is no longer open.',
+    'Ask whoever invited you to send a new one.',
+    410,
+  )
+
 // An app asking, for a browser that is already signed in: one click is the
 // whole consent. `consent` is the form's own token (identity.ts `consenting`),
 // which only this page, drawn for this person, ever holds.

@@ -58,6 +58,7 @@ export type Use =
   | 'consent' // the OAuth consent form (identity.ts)
   | 'erase' // a space's deletion ticket (erase.ts)
   | 'review' // a gallery review ticket (gallery.ts)
+  | 'invite' // an invitation's accept link (workers/yak/invite.ts)
 
 let HMAC = { name: 'HMAC', hash: 'SHA-256' }
 

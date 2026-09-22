@@ -690,6 +690,34 @@ export let platformDoc: VocabDoc = {
         access: { enum: ['owner', 'editor', 'viewer'] },
       },
     },
+    // A seat or a grant offered and not yet taken (invite.ts, T-37880). `to`
+    // is the space (a seat) or the app (a grant), one column the way
+    // `hostname.serves` is, and accepting is one batch that writes the
+    // `member` or `grant` row and drops this one. A word of its own rather
+    // than a pending mark on the seat, so everything that reads `member` and
+    // `grant` (reach, the roster, a bare app slug) reads accepted rows and
+    // nothing else, with no filter for a new reader to forget.
+    invite: {
+      component: true,
+      type: 'object',
+      kind: true,
+      before: ['doc'],
+      unique: [['to', 'person']],
+      properties: {
+        to: ref('cascade'),
+        person: ref('cascade', false),
+        role: { enum: ['owner', 'editor', 'viewer'] },
+      },
+    },
+    // How many invitations this person has sent in the hour it names
+    // (invite.ts `CAP`). On the inviter's own row, because the cap is theirs
+    // and an invitation row dies when it is accepted or withdrawn, which would
+    // hand a sender back the letter it had counted.
+    inviting: {
+      component: true,
+      type: 'object',
+      properties: { hour: owned(text), sent: owned(num) },
+    },
     email: {
       component: true,
       type: 'object',

@@ -40,6 +40,7 @@
 //     /                       the home page, from ./public
 //     /login, /login/code     identity.ts: the email-code sign-in
 //     /manage                 identity.ts: the owner's app library
+//     /invite                 identity.ts: an invitation's one click (invite.ts)
 //     /connect                identity.ts: the connector page, signed in, and
 //                             the address a person's apps live at
 //     /oauth/*                identity.ts: the OAuth 2.1 door for agents
@@ -209,7 +210,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   }
   if (
     path == '/login' || path.startsWith('/login/') || path == '/connect' ||
-    path == '/manage' ||
+    path == '/manage' || path == '/invite' ||
     // Closing a space (identity.ts `closing`, T-33166): a signed-in page and
     // its form, so it belongs with the rest of the cookie's surface rather
     // than at the connector door an agent speaks to.

@@ -7,6 +7,7 @@ import {
 } from '@std/assert'
 import { slow, until } from '../../src/testing.ts'
 import {
+  accepted,
   client,
   commandsIn,
   connector,
@@ -101,6 +102,7 @@ slow('the front page moves, and only the owner moves it', async () => {
       email: ann.email,
       role: 'editor',
     })
+    await accepted(k, ann.email, ann.cookie)
     assertStringIncludes(
       (await assertRejects(
         () =>

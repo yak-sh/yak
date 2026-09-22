@@ -559,9 +559,10 @@ member_add:
     nothing else in the space; this is how a player joins one game or a
     household opens one list without being given everything else you keep
     here. Leave the app out and they are added to the space, which reaches
-    every app in it. Either way the tool attempts to email an invitation:
-    who invited them, the link, and that signing in there with that address
-    is all it takes. Pass a note and the person's own message goes at the
+    every app in it. Either way they are mailed an invitation, and nothing is
+    theirs until they accept it with the one click in that letter, signed in
+    with that address; until then the space is not in their reach. Pass a
+    note and the person's own message goes at the
     top of that email, as written and quoted as theirs: a line or two saying
     what this is ("the potluck list for Saturday"), which is the difference
     between an invitation someone opens and one they wonder about. Pass
@@ -570,15 +571,19 @@ member_add:
     first sign-in. There is nothing for them to install and no account to
     create first. Only the space owner may invite. An app that everyone with
     the link may write to without signing in is access 'open' (app_set)
-    rather than a membership. Returns the role, scope of access and sign-in
-    link. If email delivery fails, membership still stands and the response
-    includes the link so it can be passed on another way. Calling again
-    sends another invitation. Documentation: https://yaks.app/docs/sharing.
+    rather than a membership. Inviting someone who has already accepted
+    changes their role and sends nothing. Each invitation letter counts
+    against the space's monthly emails, and one person may send 50 an hour.
+    Returns the role and scope of access; the accept link goes only to the
+    invited address, so there is no link to pass on. If email delivery fails,
+    calling again later sends it. Documentation:
+    https://yaks.app/docs/sharing.
 member_remove:
   title: Remove someone
   description: >-
-    Remove a membership: pass an app slug to revoke its app-specific
-    invitation, or omit app to revoke space-wide membership. Independent app
+    Remove a membership, or withdraw an invitation not yet accepted: pass an
+    app slug to revoke its app-specific invitation, or omit app to revoke
+    space-wide membership. Independent app
     invitations and space-wide membership do not revoke each other. Either
     way the person keeps their sign-in. Only the space owner may remove, and
     the last owner cannot be removed, since a space with no owner is one

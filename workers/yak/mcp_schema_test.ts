@@ -8,6 +8,7 @@ import {
 import { Ajv } from 'ajv'
 import { slow, until } from '../../src/testing.ts'
 import {
+  accepted,
   commandsIn,
   connector,
   kernel,
@@ -219,6 +220,7 @@ slow('an app declares its own commands, and command runs them', async () => {
       email: maya.email,
       role: 'viewer',
     })
+    await accepted(k, maya.email, maya.cookie)
     let hers = connector(k, maya.cookie)
     assertStringIncludes(
       await hers.tool('command', { name: 'leaderboard' }),

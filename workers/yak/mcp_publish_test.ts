@@ -7,6 +7,7 @@ import {
 } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import {
+  accepted,
   connector,
   kernel,
   letter,
@@ -237,6 +238,7 @@ slow('an app is published by name, and the name is one app', async () => {
       email: ann.email,
       role: 'editor',
     })
+    await accepted(k, ann.email, ann.cookie)
     assertStringIncludes(
       (await assertRejects(
         () =>
