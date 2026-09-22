@@ -153,6 +153,33 @@ Deno.test('the worker is handed who is looking, and never the cookie', async () 
   assertEquals(sent.headers.get('cookie'), 'theme=dark')
 })
 
+Deno.test('an app sets cookies for its own host, and none for the zone', async () => {
+  // Login fixation (T-37876): an app that sets the platform's session, or any
+  // cookie scoped past its own hostname, signs visitors elsewhere in as
+  // whoever it likes. Its own host-only cookies are its business.
+  let headers = new Headers()
+  for (
+    let set of [
+      'theme=dark; Path=/; Secure',
+      'yak_session=attackers.token; Domain=yaks.app; Path=/',
+      'yak_session=attackers.token; Path=/recipes/api',
+      'fix=1; domain=.jeff.yaks.app; Path=/',
+      'bare=1; Domain; Path=/',
+    ]
+  ) headers.append('set-cookie', set)
+  let out = await ran(
+    envOf(() => ({
+      fetch: () => Promise.resolve(new Response('hi', { headers })),
+    })),
+    space,
+    app,
+    visit(),
+    who,
+  )
+  assertEquals(out!.headers.getSetCookie(), ['theme=dark; Path=/; Secure'])
+  assertEquals(await out!.text(), 'hi')
+})
+
 Deno.test('a worker acts as the visitor, and only on its own store', async () => {
   let m = mirror()
   await ran(envOf(m.get), space, app, visit(), who)

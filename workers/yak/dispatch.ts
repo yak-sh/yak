@@ -285,6 +285,35 @@ let broke = (
     }, { env, space, app })
   )
 
+// A cookie an app's code may set: one for its own hostname and no wider. A
+// `Domain` attribute is always wider — `Domain=ada.yaks.app` reaches every
+// name under it, and `Domain=yaks.app` the apex and every space — so a cookie
+// that names one is dropped, and so is one named for the platform's session,
+// which on the app's own host would stand in front of the visitor's (T-37876).
+// Unchecked, an app could sign every visitor of the zone in as the attacker.
+let wide = (set: string) => {
+  let [pair, ...attrs] = set.split(';')
+  return pair.split('=')[0].trim() == COOKIE ||
+    attrs.some((a) => /^domain\s*(=|$)/i.test(a.trim()))
+}
+
+// The app's answer with those cookies taken off, and untouched otherwise. A
+// socket's answer keeps its socket (workerd's `webSocket`, which the rebuilt
+// response has to be handed again).
+let hostOnly = (res: Response): Response => {
+  let sets = res.headers.getSetCookie()
+  if (!sets.some(wide)) return res
+  let headers = new Headers(res.headers)
+  headers.delete('set-cookie')
+  for (let s of sets.filter((s) => !wide(s))) headers.append('set-cookie', s)
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+    webSocket: (res as { webSocket?: unknown }).webSocket,
+  } as ResponseInit)
+}
+
 // The seam (T-33234). `worker.fetch` below is the one line in the whole
 // kernel where the code running is the app's and not ours, so it is the one
 // place a throw may be filed as the app's break. Everything on either side of
@@ -320,8 +349,10 @@ let called = async (
     throw e
   }
   try {
-    return await worker.fetch(
-      await handed(req, app, store, who, env.SESSION_SECRET),
+    return hostOnly(
+      await worker.fetch(
+        await handed(req, app, store, who, env.SESSION_SECRET),
+      ),
     )
   } catch (e) {
     if (nowhere(e)) return null
