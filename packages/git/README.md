@@ -24,6 +24,8 @@ Entry points:
 - `@yaks/git/host`: local checkout discovery and worktree creation using the
   `git` subprocess.
 - `@yaks/git/land`: the filesystem-based branch landing operation.
+- `@yaks/git/cites`: how a citation stands against the code it names, derived
+  from Git.
 - `@yaks/git/tools`: graph-tool implementations, currently `land`.
 - `@yaks/git/vocab`: vocabulary documents without runtime behavior.
 
@@ -134,6 +136,30 @@ asking which commits after `revision.commit` touched the place the citation
 names. `verified` is the one thing that is stored, and only the act of checking
 writes it — editing either end of a citation leaves the mark where it was, so a
 typo fixed in a document cannot pass for a citation somebody checked.
+
+`@yaks/git/cites` derives that answer:
+
+```ts
+import { status } from '@yaks/git/cites'
+
+await status(cite, file, { cwd: '/home/me/project' })
+// { state: 'current' }
+// { state: 'moved', changes: ['b8b0f89'] }   what moved under it
+// { state: 'unverified' }                    nobody has checked it yet
+// { state: 'unknown', why: '…' }             nothing could establish an answer
+```
+
+The question put to Git is `git log <revision.commit>..HEAD`, narrowed to
+`-L :<symbol.name>:<path>` or `-L <lines.start>,<lines.end>:<path>` when the
+citation named a place, so a commit elsewhere in the same file is not reported.
+The commit is checked with `cat-file` first: one this checkout does not have —
+rebased away, or from another clone — reads `unknown`, never `current`.
+
+A citation of an entity rather than a file asks the same question of the
+journal: what changed about that entity after `verified.at`. That is the
+`changed` seam in `Ops`, which a host fills from [@yaks/journal](../journal)'s
+`entries`; without one, a citation of an entity reads `unknown` rather than
+guessing.
 
 Load the components beside the two packages whose mechanisms they use:
 

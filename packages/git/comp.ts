@@ -84,6 +84,11 @@ export let COMPAT = 'compat'
 /** The component recording where one branch of one repository points. */
 export let REF = 'ref'
 
+// The citation components are named in ./cites.ts, beside the code that reads
+// them: `file` as a component and `FILE` as a tree entry's mode (./tree.ts)
+// are two different things, and this module's names are re-exported from
+// ./mod.ts where they would collide.
+
 /**
  * This package's components as a vocabulary document, to load beside
  * @yaks/edge's and @yaks/key's:

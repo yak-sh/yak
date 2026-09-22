@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
+    "./cites": "./cites.ts",
     "./host": "./host.ts",
     "./land": "./land.ts",
     "./tools": "./tools.ts",

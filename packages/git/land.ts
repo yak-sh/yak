@@ -60,7 +60,8 @@ let quiet = { GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '' }
 // load) is returned as a failed run carrying the reason, never thrown: every
 // caller here already handles a git that failed, and none handles an
 // exception.
-let run: Run = async (args, cwd) => {
+/** How this package runs git: one subprocess, output raw, never throwing. */
+export let run: Run = async (args, cwd) => {
   try {
     let out = await new Deno.Command('git', {
       args,
