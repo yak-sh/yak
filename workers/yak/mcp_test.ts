@@ -167,19 +167,28 @@ slow(
         (tools as Said[]).find((t) => t.name == 'graph_apply')!.description!,
         'store_restore',
       )
-      type Listed = { title?: string; annotations?: Record<string, boolean> }
+      type Listed = { title?: string; annotations?: Record<string, unknown> }
       for (let t of tools as (Listed & { name: string })[]) {
         assert(t.title, `${t.name} arrived with no title`)
+        // The title is in the annotations too, which is where the Claude
+        // directory reads a listing's display name (T-37748).
+        assertEquals(t.annotations?.title, t.title, t.name)
         assertEquals(Object.keys(t.annotations ?? {}).sort(), [
           'destructiveHint',
           'idempotentHint',
           'openWorldHint',
           'readOnlyHint',
+          'title',
         ], t.name)
       }
-      let hints = (name: string) =>
-        (tools as (Listed & { name: string })[]).find((t) => t.name == name)
-          ?.annotations
+      // The four hints alone: the title beside them is pinned just above.
+      let hints = (name: string) => {
+        let said = (tools as (Listed & { name: string })[])
+          .find((t) => t.name == name)?.annotations
+        if (!said) return said
+        let { title: _title, ...four } = said
+        return four
+      }
       // Listing a person's own apps is not a thing to stop and ask about;
       // throwing one away is.
       assertEquals(hints('app_list'), {

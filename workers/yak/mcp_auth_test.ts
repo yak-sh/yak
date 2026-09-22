@@ -82,7 +82,7 @@ slow('the door before anyone signs in', async () => {
     let listed = (await anon.call('tools/list')).tools as {
       name: string
       title: string
-      annotations: Record<string, boolean>
+      annotations: Record<string, unknown>
       _meta?: { securitySchemes?: unknown }
     }[]
     let about = listed.find((t) => t.name == 'about')!
@@ -119,6 +119,8 @@ slow('the door before anyone signs in', async () => {
     // a bare entry here reads as a door with no annotations at all.
     assertEquals(about.title, 'What yaks.app is')
     assertEquals(about.annotations, {
+      // Where a directory listing reads the display name (T-37748).
+      title: 'What yaks.app is',
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: false,

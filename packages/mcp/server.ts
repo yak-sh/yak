@@ -310,10 +310,19 @@ export let roster = (opts: Options): string[] => listing(opts).map(toolName)
  * Only `destructive` has a default, and it is the safe one: a tool that writes
  * and has not declared otherwise is treated as destructive, so forgetting to
  * declare it can never loosen a prompt. A read-only tool is never destructive.
+ *
+ * The tool's title rides in the annotations too, for the directories that read
+ * a listing's display name there rather than at the top level of the tool.
  */
 export let annotated = (
-  t: Pick<Tool, 'readOnly' | 'destructive' | 'idempotent' | 'openWorld'>,
+  t: Pick<
+    Tool,
+    'title' | 'readOnly' | 'destructive' | 'idempotent' | 'openWorld'
+  >,
 ) => ({
+  // Omitted when the tool has none: an absent title is the tool saying
+  // nothing, where an empty one would claim its display name is ''.
+  ...(t.title ? { title: t.title } : {}),
   readOnlyHint: !!t.readOnly,
   destructiveHint: t.readOnly ? false : t.destructive ?? true,
   idempotentHint: !!t.idempotent,

@@ -570,3 +570,46 @@ Deno.test('every tool says how a client signs in for it', async () => {
   }])
   await client.close()
 })
+
+Deno.test('a tool lists its title in its annotations as well', async () => {
+  // A connector directory reads a listing's display name out of
+  // `annotations.title`, so it rides there beside the four hints — on both
+  // listing paths, the SDK's own and the passthrough one a declared
+  // `inputSchema` turns on.
+  let shelf = (schema?: Record<string, unknown>) => {
+    let g = shopGraph()
+    g.use({
+      name: 'shelf',
+      tools: [{
+        name: 'shelve',
+        title: 'Shelve a book',
+        description: 'put a book on the shelf',
+        input: {},
+        ...(schema ? { inputSchema: schema } : {}),
+        run: () => [],
+      }, {
+        name: 'dust',
+        description: 'dust the shelf',
+        input: {},
+        run: () => [],
+      }],
+    })
+    return g
+  }
+  type Listed = {
+    name: string
+    title?: string
+    annotations?: { title?: string }
+  }
+  for (let graph of [shelf(), shelf({ type: 'object', properties: {} })]) {
+    let client = await connect({ graph })
+    let tools = (await client.listTools()).tools as Listed[]
+    let one = (name: string) => tools.find((t) => t.name == name)!
+    // The top-level title stays where a host reads it, and rides along here.
+    assertEquals(one('shelve').title, 'Shelve a book')
+    assertEquals(one('shelve').annotations?.title, 'Shelve a book')
+    // A tool with no title claims none: the key is absent, not empty.
+    assert(!('title' in (one('dust').annotations ?? {})))
+    await client.close()
+  }
+})
