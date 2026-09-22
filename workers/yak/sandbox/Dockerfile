@@ -14,9 +14,10 @@
 # its instance type, which for the standard-2 in wrangler.toml is 12 GB — so
 # there is room, and the room is not unlimited.
 #
-# THE BUILD CONTEXT IS packages/cli, not this directory (wrangler.toml
-# `image_build_context`), because the one thing this image COPYs is that
-# package. Everything else it needs it downloads.
+# The build context is the repo root, not this directory (wrangler.toml
+# `image_build_context`), because the one thing this image COPYs is the CLI
+# inside its Deno workspace. The root .dockerignore admits only what that
+# needs; everything else the image has it downloads.
 #
 # The tag MUST match the @cloudflare/sandbox version in package.json: the
 # control server inside the container and the client in the Worker are two
@@ -171,17 +172,19 @@ RUN set -eux; \
 # The `yak` command (packages/cli): every tool the connector lists, as a
 # subcommand, signed in by the $YAKS_TOKEN sandbox.ts puts in the environment.
 #
-# It is installed FROM THE REPO because @yaks/cli is not published yet
-# (T-34168). Once it is, this whole stanza is one line and the COPY and the
-# build context go away:
+# It is installed from the repo, inside the workspace, because @yaks/cli and
+# the sibling @yaks/* packages it imports are resolved by the root deno.json:
+# the CLI runs here exactly as it runs in a checkout, at whatever main holds,
+# rather than against JSR releases that may predate what it imports.
 #
-#   RUN deno install -gf --allow-net --allow-env --allow-read --allow-write \
-#         --root /usr/local jsr:@yaks/cli/yak
+# What arrives is the root deno.json and deno.lock, packages/, and each other
+# workspace member's deno.json, since deno refuses a workspace with a member
+# missing (.dockerignore at the repo root).
 #
 # `--root /usr/local` puts the shim on the PATH every command already has.
-COPY . /opt/yaks/cli
+COPY . /opt/yaks
 RUN set -eux; \
     deno install -gf --allow-net --allow-env --allow-read --allow-write \
-      --root /usr/local --config /opt/yaks/cli/deno.json \
-      /opt/yaks/cli/yak.ts; \
+      --root /usr/local --config /opt/yaks/deno.json \
+      /opt/yaks/packages/cli/yak.ts; \
     yak --help > /dev/null

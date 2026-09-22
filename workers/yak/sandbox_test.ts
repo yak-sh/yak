@@ -489,13 +489,30 @@ Deno.test('the deploy names the container, and the image is the SDK version', as
   assert(tag, 'the Dockerfile is FROM the sandbox image')
   assertEquals(tag[1], pinned.dependencies['@cloudflare/sandbox'])
 
-  // The CLI in the image (T-34387). It is installed from the repo copy until
-  // @yaks/cli is on JSR, which is why the build context is that package and
-  // not this directory — the two have to agree or the copy finds nothing.
-  assertEquals(box.image_build_context, '../../packages/cli')
-  assertStringIncludes(file, 'COPY . /opt/yaks/cli')
+  // The CLI in the image (T-34387), installed inside the repo's Deno
+  // workspace, since the sibling @yaks/* packages it imports resolve only
+  // there. So the context is the repo root, and the root .dockerignore admits
+  // the workspace: the root config, packages/, and every member outside
+  // packages/, since deno refuses a workspace with a member missing.
+  assertEquals(box.image_build_context, '../..')
+  assertStringIncludes(file, 'COPY . /opt/yaks')
   assertStringIncludes(file, 'deno install -gf')
-  assertStringIncludes(file, '/opt/yaks/cli/yak.ts')
+  assertStringIncludes(file, '--config /opt/yaks/deno.json')
+  assertStringIncludes(file, '/opt/yaks/packages/cli/yak.ts')
+  let ignore = (await at('../../.dockerignore')).split('\n')
+  let root = JSON.parse(await at('../../deno.json')) as { workspace: string[] }
+  let admitted = [
+    'deno.json',
+    'deno.lock',
+    'packages',
+    ...root.workspace
+      .map((m) => m.replace(/^\.\//, ''))
+      .filter((m) => !m.startsWith('packages/'))
+      .map((m) => `${m}/deno.json`),
+  ]
+  for (let path of admitted) assert(ignore.includes(`!${path}`), path)
+  assertEquals(ignore.find((l) => l && !l.startsWith('#')), '*')
+  assert(ignore.includes('**/.env*'), 'no .env file reaches the image')
   // Pinned and checksummed like everything else it downloads.
   assert(/^ARG DENO_VERSION=\d+\.\d+\.\d+$/m.test(file), 'deno is pinned')
   assert(/^ARG DENO_SHA256=[0-9a-f]{64}$/m.test(file), 'and checksummed')

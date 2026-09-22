@@ -189,15 +189,16 @@ new_sqlite_classes = ["Sandbox"]
 # here is a fleet yet; raising it is one number. Outbound network is denied
 # but for the package registries (sandbox.ts `REGISTRIES`, index.ts).
 #
-# `image_build_context` is packages/cli rather than the Dockerfile's own
+# `image_build_context` is the repo root rather than the Dockerfile's own
 # directory, which is what a build context defaults to: the image installs the
-# `yaks` CLI from the repo until @yaks/cli is on JSR (T-34168, T-34387), and
-# that package is the only thing it COPYs. Naming the package instead of the
-# repo root keeps the context a handful of files rather than the whole tree.
+# `yak` CLI inside the repo's Deno workspace (T-34387), since the sibling
+# @yaks/* packages it imports resolve only there. The root .dockerignore
+# admits the workspace config and packages/ and nothing else, so the context
+# stays small and no secret or .env file reaches the image.
 [[containers]]
 class_name = "Sandbox"
 image = "./sandbox/Dockerfile"
-image_build_context = "../../packages/cli"
+image_build_context = "../.."
 instance_type = "standard-2"
 max_instances = 5
 
@@ -567,7 +568,7 @@ new_sqlite_classes = ["Sandbox"]
 [[env.staging.containers]]
 class_name = "Sandbox"
 image = "./sandbox/Dockerfile"
-image_build_context = "../../packages/cli"
+image_build_context = "../.."
 instance_type = "standard-2"
 max_instances = 5
 
