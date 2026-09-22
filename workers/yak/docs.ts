@@ -11,10 +11,12 @@
 //
 // The technical page is a page of the documentation too, and it is still a
 // file: public/docs/technical.html, which the assets binding serves at
-// /docs/technical without passing through here. Every number on it is read off
-// the code (its own header comment), which is why it was not turned into
-// prose. `/technical` answers a 301 for the links already in the world.
-import { parse, render as drawn, type Token } from '@yaks/markdown'
+// /docs/technical. Every number on it is read off the code (its own header
+// comment), which is why it was not turned into prose. What it cannot hold
+// itself is the sidebar — that list has one source, `CONTENTS` below — so its
+// bytes are wrapped in the same frame on the way out (`framed`, called from
+// index.ts). `/technical` answers a 301 for the links already in the world.
+import { headings, parse, render as drawn, type Token } from '@yaks/markdown'
 import { front } from '@yaks/yaml'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -111,6 +113,47 @@ to read: <a href="/guide.md">/guide.md</a> and <a href="/llms-full.txt">/llms-fu
 
 let back = `<p class="Docs_Back"><a href="${PATH}">← Documentation</a></p>`
 
+// The sidebar every page of the documentation wears: the whole list, in the
+// order CONTENTS gives it, with the page being read marked. It is the SideNav
+// control the management portal wears (controls.css), because a reader who has
+// learned to move through their own pages already knows how to move through
+// these. The map itself is the first entry — a reader on a subject page needs
+// the way back more than they need a row that says nothing.
+let side = (slug: string) => {
+  let here = (s: string) => s == slug ? ' aria-current="page"' : ''
+  return `<nav class="Page_Side SideNav Docs_Nav" aria-label="Documentation">
+<a href="${PATH}"${here('')}>Overview</a>
+<hr>
+${
+    CONTENTS.map((p) =>
+      `<a href="${pathOf(p.slug)}"${here(p.slug)}>${esc(p.title)}</a>`
+    ).join('\n')
+  }
+</nav>`
+}
+
+// What is on THIS page: its own sections, so a long subject can be crossed
+// without scrolling it. The ids are the renderer's (@yaks/markdown
+// `headings`), which is why nothing here has to slugify anything itself. A
+// page with one section is a page that needs no contents list.
+let onPage = (tokens: Token[]) => {
+  let rows = headings(tokens).filter((v) => v.depth == 2 || v.depth == 3)
+  return rows.length < 2
+    ? ''
+    : `<nav class="Page_Aside Docs_Contents" aria-label="On this page">
+<p class="Docs_Label">On this page</p>
+<ul>
+${
+      rows.map((v) =>
+        `<li class="Docs_Jump${
+          v.depth == 3 ? ' Docs_Jump-sub' : ''
+        }"><a href="#${esc(v.id)}">${esc(v.text)}</a></li>`
+      ).join('\n')
+    }
+</ul>
+</nav>`
+}
+
 // One documentation page, drawn. `lead` is the document's own heading, kept
 // first so the page has exactly one h1; anything handed in as `under` sits
 // between it and the rest of the document.
@@ -121,6 +164,7 @@ let page = (
   description: string,
   tokens: Token[],
   under = '',
+  slug = '',
 ) => {
   let lead = tokens.findIndex((t) => t.type == 'heading' && t.depth == 1)
   let opening = tokens.slice(0, lead + 1)
@@ -129,15 +173,48 @@ let page = (
 </head>
 <body>
 ${top}
-<main class="Page Prose Docs">
+<main class="Page Docs">
+${side(slug)}
+${onPage(tokens)}
+<article class="Page_Body Prose">
 ${markup(opening)}
 ${under}
 ${markup(tokens.slice(lead + 1))}
+</article>
 </main>
 ${foot}
 </body>
 </html>`,
   )
+}
+
+// The technical page is a FILE (public/docs/technical.html) and the only page
+// of the documentation that is, so the one thing it lacks is the frame the
+// drawn pages wear. It gets it here, on the way out, the way the home page's
+// showcase is spliced into its file (index.ts): a second copy of the sidebar
+// written into that file would list the pages twice and go stale the day one
+// is added. Its own words are untouched — its Pills are already its contents.
+let OPENED = /<main class="Page ([^"]*)">/
+
+/** The technical page's bytes, wearing the documentation's frame. Served
+ * unchanged if the file no longer opens the way `OPENED` expects, which
+ * docs_test.ts is what stops. */
+export let framed = async (file: Response) => {
+  let text = await file.text()
+  let opened = OPENED.exec(text)
+  let headers = new Headers(file.headers)
+  // The body just changed length, and it is no longer the file etag names.
+  headers.delete('content-length')
+  headers.delete('etag')
+  let body = opened
+    ? text.replace(
+      OPENED,
+      `<main class="Page Docs">\n${
+        side('technical')
+      }\n<article class="Page_Body ${opened[1]}">`,
+    ).replace('</main>', '</article>\n</main>')
+    : text
+  return new Response(body, { status: file.status, headers })
 }
 
 // The markdown, as the site serves it: one fetch of the same file the `.md`
@@ -186,5 +263,6 @@ export let answer = async (
     row.description,
     tokens,
     back,
+    slug,
   )
 }

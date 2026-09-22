@@ -270,6 +270,15 @@
     overflow-wrap: break-word;
   }
 
+  /* Nothing in a document is wider than the column it is in. A grid item is
+     as wide as its longest unbreakable word unless it is told it may be
+     narrower, and one URL in one paragraph was enough to push a phone's whole
+     page sideways — the opposite of what break-word above is for. What must
+     not shrink says so itself: a code block scrolls (.Docs pre). */
+  .Prose :where(*) {
+    min-width: 0;
+  }
+
   .Prose_Head {
     display: grid;
     gap: var(--half-gap);
@@ -379,14 +388,119 @@
     color: var(--ink);
   }
 
-  /* One column, a letter's width. The column says how WIDE, never how far
-     apart: what fills it — .Home, .Prose, .Guide — owns its own rhythm. A
-     page that needs more room re-points --measure on itself. */
+  /* The reading column, and the two slots beside it. The column says how
+     WIDE, never how far apart: what fills it — .Home, .Prose, .Guide — owns
+     its own rhythm. A page that needs a wider column re-points --measure on
+     itself.
+
+     Three columns are always here and the outer two are nothing wide, so a
+     page that names no slot is the single column it has always been. A page
+     that wants more structure re-points --side (a sidebar before the reading
+     column) or --aside (a gutter after it, for asides and annotations), and
+     the frame grows by exactly that much — nothing else moves. Whatever a
+     page drops in lands in the reading column; .Page_Side and .Page_Aside are
+     how a child opts into a slot, whether it is a nav, a note beside a
+     paragraph, or a pull quote. The slots carry their own gutter as padding,
+     so a page with no slots has no gaps to collapse. */
   .Page {
+    --side: 0px;
+    --aside: 0px;
     display: grid;
-    width: min(100% - 2 * var(--gap), var(--measure));
+    grid-template-columns:
+      [side] var(--side)
+      [body] minmax(0, 1fr)
+      [aside] var(--aside);
+    width: min(
+      100% - 2 * var(--gap),
+      calc(var(--measure) + var(--side) + var(--aside))
+    );
     margin-inline: auto;
     padding-block: var(--wide-gap) 3rem;
+  }
+
+  /* Zero specificity, so a slot class below always wins however it is
+     ordered. */
+  :where(.Page) > * {
+    grid-column: body;
+  }
+
+  /* Both gutters sit in the first row, so the reading column starts level
+     with them rather than below them. That is also why a page that uses a
+     slot wraps its reading column in one .Page_Body: the row is as tall as
+     what is in it. */
+  .Page_Side {
+    grid-column: side;
+    grid-row: 1;
+    align-self: start;
+    padding-inline-end: var(--wide-gap);
+  }
+
+  .Page_Body {
+    grid-column: body;
+  }
+
+  .Page_Aside {
+    grid-column: aside;
+    grid-row: 1;
+    align-self: start;
+    padding-inline-start: var(--wide-gap);
+    color: var(--soft-ink);
+    font-size: var(--small);
+  }
+
+  /* Not room enough for a gutter: an aside reads above what it annotates,
+     and the sidebar runs down beside both rows rather than making the first
+     one as tall as itself. */
+  @media (max-width: 1000px) {
+    .Page {
+      --aside: 0px;
+    }
+
+    .Page_Side {
+      grid-row: 1 / span 2;
+    }
+
+    .Page_Aside {
+      grid-column: body;
+      grid-row: 1;
+      padding-inline-start: 0;
+      margin-block-end: var(--gap);
+    }
+
+    .Page_Body {
+      grid-row: 2;
+    }
+  }
+
+  /* A phone: one column — and what the reader came for first. A sidebar of
+     every page is two screens of somewhere else to be, so it goes to the
+     foot, under the document, where it reads as where to go next. */
+  @media (max-width: 700px) {
+    .Page {
+      --side: 0px;
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .Page_Side,
+    .Page_Body,
+    .Page_Aside {
+      grid-column: 1;
+      grid-row: auto;
+    }
+
+    .Page_Aside {
+      order: 1;
+    }
+
+    .Page_Body {
+      order: 2;
+    }
+
+    .Page_Side {
+      order: 3;
+      padding-inline-end: 0;
+      margin-block-start: var(--wide-gap);
+    }
   }
 
   /* Wider grids on the homepage; prose pages retain their reading width. */
@@ -727,7 +841,69 @@
      renderer names no classes — it emits the plain elements the markdown
      asked for — so everything here dresses those, and .Prose above already
      dresses the rest. Each rendered block is its own grid so paragraphs sit
-     closer together than sections do. */
+     closer together than sections do.
+
+     It is the first page to use both .Page slots: the list of pages in the
+     sidebar, what is on this page in the gutter, and the document itself at
+     the reading width in between. */
+  .Docs {
+    --side: 13rem;
+    --aside: 14rem;
+  }
+
+  /* The sidebar leans against nothing here — the document beside it is not a
+     panel — so the control's edge and the notch its current row cuts in that
+     edge are both pointed at nothing. */
+  .Docs_Nav {
+    --nav-panel: transparent;
+    --nav-edge: transparent;
+  }
+
+  .Docs_Contents {
+    display: grid;
+    gap: var(--half-gap);
+    position: sticky;
+    top: var(--gap);
+  }
+
+  .Docs_Label {
+    color: var(--ink);
+    font-weight: 800;
+  }
+
+  .Docs_Contents ul {
+    display: grid;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .Docs_Jump a {
+    color: var(--soft-ink);
+    text-decoration: none;
+  }
+
+  .Docs_Jump a:hover {
+    color: var(--ink);
+    text-decoration: underline;
+  }
+
+  .Docs_Jump-sub {
+    padding-inline-start: var(--half-gap);
+  }
+
+  @media (max-width: 1000px) {
+    /* Above the document, a contents list reads as a row of places. */
+    .Docs_Contents {
+      position: static;
+    }
+
+    .Docs_Contents ul {
+      grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    }
+  }
+
   .Docs .Markdown {
     display: grid;
     gap: 0.75rem;

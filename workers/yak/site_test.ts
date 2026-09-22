@@ -777,15 +777,31 @@ slow('the apex answers the crawler and the model', async () => {
     // map, one subject, the technical page that is still a file under it, and
     // the 301 its old address answers.
     let map2 = await (await k.at('yaks.app', '/docs')).text()
-    assertStringIncludes(map2, '<h1>Building an app on yaks.app</h1>')
+    assertStringIncludes(
+      map2,
+      '<h1 id="building-an-app-on-yaksapp">Building an app on yaks.app</h1>',
+    )
     assertStringIncludes(map2, '<a href="/docs/querying">')
     let one = await (await k.at('yaks.app', '/docs/querying')).text()
     assertStringIncludes(
       one,
       '<title>Querying: the filter grammar · yaks.app</title>',
     )
-    let tech = await k.at('yaks.app', '/docs/technical')
-    assertStringIncludes(await tech.text(), 'Technical details')
+    // Every page of the documentation reads beside the list of them, and a
+    // drawn page also beside its own sections, linked by the ids the renderer
+    // put on those headings (T-37774).
+    assertStringIncludes(one, '<nav class="Page_Side SideNav Docs_Nav"')
+    assertStringIncludes(one, '<nav class="Page_Aside Docs_Contents"')
+    let jump = /<a href="#([^"]+)">/.exec(one)![1]
+    assertStringIncludes(one, ` id="${jump}">`)
+    let tech = await (await k.at('yaks.app', '/docs/technical')).text()
+    assertStringIncludes(tech, 'Technical details')
+    // The file gets the same sidebar spliced in (docs.ts `framed`), marked.
+    assertStringIncludes(tech, '<nav class="Page_Side SideNav Docs_Nav"')
+    assertStringIncludes(
+      tech,
+      '<a href="/docs/technical" aria-current="page">Technical details</a>',
+    )
     let moved = await k.at('yaks.app', '/technical', { redirect: 'manual' })
     await moved.body?.cancel()
     assertEquals(moved.status, 301)

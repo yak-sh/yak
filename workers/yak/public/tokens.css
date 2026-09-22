@@ -52,7 +52,7 @@
     --small: 0.9375rem;
 
     /* Space and shape. The gaps derive from one number. */
-    --measure: 34rem; /* reading width */
+    --measure: 38rem; /* reading width */
     --wide-measure: 72rem; /* multi-column layouts */
     --gap: 1rem;
     --control-height: 2.25rem;

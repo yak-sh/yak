@@ -4,7 +4,9 @@
 // heading never reaches its title, a guide link that still lands on a file a
 // browser downloads — so each is asserted against the files themselves.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { answer, CONTENTS, DOCS, pathOf } from './docs.ts'
+import { headings, parse } from '@yaks/markdown'
+import { front } from '@yaks/yaml'
+import { answer, CONTENTS, DOCS, framed, PATH, pathOf } from './docs.ts'
 import type { Env } from './env.ts'
 import { PAGES } from './guide.ts'
 import { esc } from './html.ts'
@@ -43,7 +45,11 @@ Deno.test('/docs draws the guide with a link to every page', async () => {
     '<link rel="canonical" href="https://yaks.app/docs">',
   )
   // The guide's own heading, drawn rather than written here, and only one.
-  assertStringIncludes(html, '<h1>Building an app on yaks.app</h1>')
+  // It wears the anchor the renderer names it by, like every heading here.
+  assertStringIncludes(
+    html,
+    '<h1 id="building-an-app-on-yaksapp">Building an app on yaks.app</h1>',
+  )
   assertEquals((html.match(/<h1[\s>]/g) ?? []).length, 1)
   for (let p of CONTENTS) {
     assertStringIncludes(
@@ -78,11 +84,92 @@ Deno.test('every guide page draws under its own heading', async () => {
     assertStringIncludes(html, `<title>${esc(name)} · yaks.app</title>`)
     assertStringIncludes(html, `content="${esc(p.description)}"`)
     assertEquals((html.match(/<h1[\s>]/g) ?? []).length, 1, p.slug)
-    // The document itself, not its frontmatter: the heading opens the page.
-    assertStringIncludes(html.split('<main')[1].slice(0, 120), `<h1>${name}`)
+    // The document itself, not its frontmatter: the heading opens the
+    // article, which is what the sidebar and the contents list sit beside.
+    assertStringIncludes(
+      html.split('<article')[1].slice(0, 160),
+      `>${name}</h1>`,
+    )
     assertStringIncludes(html, '<a href="/docs">← Documentation</a>')
     assertStringIncludes(html, '<nav class="Nav"')
   }
+})
+
+// The sidebar is the whole documentation, on every page of it, with the page
+// being read marked — a list that goes stale the day a page is added is the
+// thing this asserts against CONTENTS itself.
+let sidebar = (html: string) =>
+  html.split('<nav class="Page_Side')[1].split('</nav>')[0]
+
+Deno.test('every page of the documentation carries the whole list beside it', async () => {
+  for (let at of [PATH, ...CONTENTS.map((p) => pathOf(p.slug))]) {
+    if (at == pathOf('technical')) continue // a file — see `framed` below
+    let nav = sidebar(await read(at))
+    assertEquals(
+      [...nav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]),
+      [PATH, ...CONTENTS.map((p) => pathOf(p.slug))],
+      at,
+    )
+    // Exactly one entry is the page being read, and it is this one.
+    let current = [...nav.matchAll(/href="([^"]+)" aria-current="page"/g)]
+    assertEquals(current.map((m) => m[1]), [at], at)
+  }
+})
+
+// What is on the page, linked by the ids the renderer gave those very
+// headings (@yaks/markdown). A contents list whose links land nowhere is
+// worse than none, so both halves are asserted against the same file.
+let sourceOf = (path: string) =>
+  front(
+    Deno.readTextFileSync(new URL(`./public${path}`, import.meta.url)),
+    path,
+  ).body
+
+Deno.test('a page lists its own sections, and every one of them is there', async () => {
+  for (let p of PAGES) {
+    let html = await read(pathOf(p.slug))
+    let toc = html.split('<nav class="Page_Aside')[1].split('</nav>')[0]
+    let inside = headings(parse(sourceOf(`/guide/${p.slug}.md`)))
+      .filter((v) => v.depth == 2 || v.depth == 3)
+    assert(inside.length > 1, p.slug)
+    assertEquals(
+      [...toc.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]),
+      inside.map((v) => v.id),
+      p.slug,
+    )
+    // And the headings themselves wear those ids.
+    for (let v of inside) {
+      assertStringIncludes(html, `<h${v.depth} id="${v.id}">`)
+    }
+  }
+})
+
+// The technical page is the one page of the documentation that is a file, so
+// the frame is spliced into its bytes rather than drawn around them — and the
+// words in the file are exactly the words served.
+Deno.test('the technical page wears the same frame around untouched words', async () => {
+  let file = Deno.readTextFileSync(
+    new URL('./public/docs/technical.html', import.meta.url),
+  )
+  let html = await framed(new Response(file)).then((r) => r.text())
+  let nav = sidebar(html)
+  assertEquals(
+    [...nav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]),
+    [PATH, ...CONTENTS.map((p) => pathOf(p.slug))],
+  )
+  assertStringIncludes(
+    nav,
+    `href="${pathOf('technical')}" aria-current="page"`,
+  )
+  assertStringIncludes(html, '<main class="Page Docs">')
+  assertStringIncludes(html, '<article class="Page_Body Prose">')
+  assertStringIncludes(html, '</article>\n</main>')
+  // Untouched: every section of the file, still in it, and nothing drawn
+  // twice.
+  let body = file.split('<main class="Page Prose">')[1].split('</main>')[0]
+  assertStringIncludes(html, body)
+  assertEquals((html.match(/<main[\s>]/g) ?? []).length, 1)
+  assertEquals((html.match(/<h1[\s>]/g) ?? []).length, 1)
 })
 
 Deno.test('/technical answers a permanent redirect to its page', async () => {

@@ -423,10 +423,15 @@
     stroke-linejoin: round;
   }
 
+  /* --nav-panel is the panel this nav leans against: the current row merges
+     into it, which is what makes it read as the page you are on. A nav with
+     nothing beside it points both at transparent (.Docs_Nav). */
   .SideNav {
+    --nav-panel: var(--paper);
+    --nav-edge: var(--edge);
     display: grid;
     gap: .4rem;
-    border-right: 1px solid var(--edge);
+    border-right: 1px solid var(--nav-edge);
   }
   .SideNav a {
     position: relative;
@@ -451,7 +456,7 @@
     margin-left: 0;
     background: linear-gradient(to right, var(--accent) 4px, var(--paper) 4px)
       padding-box;
-    border-right-color: var(--paper);
+    border-right-color: var(--nav-panel);
     color: var(--ink);
     font-weight: 800;
     z-index: 1;
@@ -461,7 +466,7 @@
     content: '';
     inset: 0 -2px 0 auto;
     width: 3px;
-    background: var(--paper);
+    background: var(--nav-panel);
   }
   .SideNav hr {
     width: 100%;

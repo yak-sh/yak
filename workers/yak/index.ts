@@ -242,7 +242,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // The documentation (docs.ts, T-37752): the guide's markdown drawn as pages
   // of this site, and the 301 the old `/technical` address answers. It draws
   // nothing for `/docs/technical`, which is a file, so that one falls through
-  // to the assets below.
+  // to the assets below and is framed there.
   let read = await docs.answer(req, env, path)
   if (read) return read
   let page = await env.ASSETS.fetch(req)
@@ -269,10 +269,12 @@ let serve = async (req: Request, env: Env, r: Route) => {
     headers.set('content-disposition', 'attachment; filename="yaks-app.png"')
     return new Response(page.body, { status: page.status, headers })
   }
-  // Two pages are files with something LIVE in them: the home page's showcase
-  // (the newest listings) and the pricing page's selling rate (sell.ts). Both
-  // splice into the bytes the assets door answered, and both keep the file's
-  // own words when the directory will not answer.
+  // Three pages are files with something the CODE knows spliced into them:
+  // the home page's showcase (the newest listings), the pricing page's selling
+  // rate (sell.ts), and the technical page's documentation sidebar, which is
+  // the same list of pages the drawn ones carry (docs.ts `framed`). All three
+  // splice into the bytes the assets door answered, and the first two keep the
+  // file's own words when the directory will not answer.
   if (path == '/') {
     let home = await gallery.made(env, dir, page)
     // Overrides can fall back to the old version. The deploy timer must know
@@ -284,6 +286,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
     return new Response(home.body, { status: home.status, headers })
   }
   if (path == '/pricing') return await sell.priceAt(dir, page)
+  if (path == docs.pathOf('technical') && page.status == 200) {
+    return await docs.framed(page)
+  }
   return page
 }
 
