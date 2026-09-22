@@ -13,7 +13,8 @@ import {
   assertMatch,
   assertStringIncludes,
 } from '@std/assert'
-import { COOKIE, sign, verify } from '../../src/token.ts'
+import { COOKIE, sealedOld, sign, verify } from '../../src/token.ts'
+import { CUT } from '../../src/token_legacy.ts'
 import { granting } from './dispatch.ts'
 import { GRANT, tokenOf } from './grants.ts'
 import { SESSION, slid, whoIs } from './session.ts'
@@ -57,6 +58,22 @@ Deno.test('a session past half its life is renewed; one still young is not', asy
   // Day 30, two thirds of it still to run: nothing is set at all.
   let young = await slid(asked(await aged(30)), ENV, new Response('ok'))
   assertEquals(young.headers.get('set-cookie'), null)
+})
+
+// The youngest cookie the old code could have minted; the case is gone once it
+// has died (T-37927 deletes it).
+let last = CUT + SESSION
+
+Deno.test({
+  name: 'a cookie sealed before 2c05d0f6 is re-minted on sight, however young',
+  ignore: Date.now() >= last * 1000,
+  fn: async () => {
+    let old = await sealedOld({ person: 'p-1', space: null, exp: last }, SECRET)
+    let r = await slid(asked(`${COOKIE}=${old}`), ENV, new Response('ok'))
+    let fresh = await verify(value(r.headers.get('set-cookie') ?? ''), SECRET)
+    assertEquals(fresh?.person, 'p-1')
+    assertEquals(fresh?.legacy, undefined)
+  },
 })
 
 Deno.test('a session ninety days idle renews nothing', async () => {

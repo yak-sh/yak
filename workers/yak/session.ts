@@ -164,7 +164,12 @@ export let slid = async (
   let token = cookieValue(req.headers.get('cookie'))
   if (!token) return res
   let claims = await verify(token, env.SESSION_SECRET)
-  if (!claims || claims.exp - Date.now() / 1000 > SESSION / 2) return res
+  // A cookie sealed before 2c05d0f6 is re-minted on sight, whatever its age,
+  // so the old ones leave as their people come back (src/token_legacy.ts).
+  if (
+    !claims ||
+    !claims.legacy && claims.exp - Date.now() / 1000 > SESSION / 2
+  ) return res
   let headers = new Headers(res.headers)
   headers.append(
     'set-cookie',

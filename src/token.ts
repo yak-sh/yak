@@ -26,6 +26,8 @@
 // Nothing here reads a cookie or an env: the kernel's session.ts reads the
 // cookie, the login page (T-32327) mints one with `sign` and sets it with
 // `cookie`.
+import { oldUse, today } from './token_legacy.ts'
+
 export type Claims = { person: string; space: string | null; exp: number }
 
 // The cookie's name. Set on `Domain=yaks.app`, so every space's hostname
@@ -59,81 +61,101 @@ export type Use =
 
 let HMAC = { name: 'HMAC', hash: 'SHA-256' }
 
+let hmac = (raw: BufferSource, usage: KeyUsage) =>
+  crypto.subtle.importKey('raw', raw, HMAC, false, [usage])
+
 // The use's own key: HMAC-SHA256 of the use's name under the secret. One
 // secret to hold and rotate, and no two uses that can verify each other.
 let key = async (secret: string, use: Use, usage: KeyUsage) =>
-  crypto.subtle.importKey(
-    'raw',
+  hmac(
     await crypto.subtle.sign(
       'HMAC',
-      await crypto.subtle.importKey(
-        'raw',
-        enc.encode(secret),
-        HMAC,
-        false,
-        ['sign'],
-      ),
+      await hmac(enc.encode(secret), 'sign'),
       enc.encode(`yaks.app/${use}`),
     ),
-    HMAC,
-    false,
-    [usage],
+    usage,
   )
 
-// A value nobody but this secret can have written, for this use alone:
-// `<body>.<mac>`, the body base64url JSON and the mac HMAC-SHA256 over the
-// body text under the use's key. What is sealed is the caller's to shape, and
-// its expiry is the caller's to check.
-export let seal = async (use: Use, value: unknown, secret: string) => {
+let sealWith = async (k: CryptoKey, value: unknown) => {
   let body = b64u(enc.encode(JSON.stringify(value)))
-  let mac = await crypto.subtle.sign(
-    'HMAC',
-    await key(secret, use, 'sign'),
-    enc.encode(body),
-  )
+  let mac = await crypto.subtle.sign('HMAC', k, enc.encode(body))
   return `${body}.${b64u(new Uint8Array(mac))}`
 }
 
-// What was sealed, or null for anything but a well-formed value sealed for
-// this use under this secret. The check runs through WebCrypto's verify, so
-// it is constant-time without a compare of our own.
-export let opened = async <T>(
-  use: Use,
-  sealed: string,
-  secret: string,
-): Promise<T | null> => {
+// The value under a mac this key made, or null. The check runs through
+// WebCrypto's verify, so it is constant-time without a compare of our own.
+let openWith = async (k: CryptoKey, sealed: string) => {
   let dot = sealed.lastIndexOf('.')
   if (dot < 0) return null
   let body = sealed.slice(0, dot)
   try {
     let ok = await crypto.subtle.verify(
       'HMAC',
-      await key(secret, use, 'verify'),
+      k,
       unb64u(sealed.slice(dot + 1)),
       enc.encode(body),
     )
-    return ok ? JSON.parse(dec.decode(unb64u(body))) as T : null
+    return ok ? JSON.parse(dec.decode(unb64u(body))) : null
   } catch {
     return null
   }
 }
 
+// A value nobody but this secret can have written, for this use alone:
+// `<body>.<mac>`, the body base64url JSON and the mac HMAC-SHA256 over the
+// body text under the use's key. What is sealed is the caller's to shape, and
+// its expiry is the caller's to check.
+export let seal = async (use: Use, value: unknown, secret: string) =>
+  sealWith(await key(secret, use, 'sign'), value)
+
+// What was sealed for this use, and whether it was sealed the way tokens were
+// before 2c05d0f6: under the raw secret, accepted only when its claims are
+// this use's old shape and no other's (token_legacy.ts, deleted after
+// 2027-09-22T20:00Z by T-37927).
+let open = async (use: Use, sealed: string, secret: string) => {
+  let value = await openWith(await key(secret, use, 'verify'), sealed)
+  if (value != null) return { value, legacy: false }
+  let old = await openWith(await hmac(enc.encode(secret), 'verify'), sealed)
+  return old != null && oldUse(old) == use
+    ? { value: today(use, old), legacy: true }
+    : null
+}
+
+/** The seal before 2c05d0f6, for a test to mint an old token with. */
+export let sealedOld = async (value: unknown, secret: string) =>
+  sealWith(await hmac(enc.encode(secret), 'sign'), value)
+
+// What was sealed, or null for anything but a well-formed value sealed for
+// this use under this secret.
+export let opened = async <T>(
+  use: Use,
+  sealed: string,
+  secret: string,
+): Promise<T | null> => (await open(use, sealed, secret))?.value ?? null
+
 export let sign = (claims: Claims, secret: string) =>
   seal('session', claims, secret)
 
 // The claims a session token carries, or null for anything but a well-formed
-// session token under this secret that has not expired. `now` is
-// milliseconds, the clock a test hands in.
+// session token under this secret that has not expired. `legacy` says it was
+// sealed before 2c05d0f6, so the answer carries it re-minted (session.ts
+// `slid`). `now` is milliseconds, the clock a test hands in.
 export let verify = async (
   token: string,
   secret: string,
   now = Date.now(),
-): Promise<Claims | null> => {
-  let c = await opened<Claims>('session', token, secret)
-  if (!c) return null
+): Promise<(Claims & { legacy?: true }) | null> => {
+  let o = await open('session', token, secret)
+  let c = o?.value
+  if (!o || !c) return null
   if (typeof c.person != 'string' || typeof c.exp != 'number') return null
   if (c.exp * 1000 <= now) return null
-  return { person: c.person, space: c.space ?? null, exp: c.exp }
+  return {
+    person: c.person,
+    space: c.space ?? null,
+    exp: c.exp,
+    ...(o.legacy ? { legacy: true as const } : {}),
+  }
 }
 
 // One cookie's value out of a Cookie header, or null.

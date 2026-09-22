@@ -1,7 +1,17 @@
 // The session token's contract: what verifies is exactly what this secret
 // signed, unexpired, and nothing else.
 import { assertEquals, assertMatch } from '@std/assert'
-import { cookie, cookieValue, opened, seal, sign, verify } from './token.ts'
+import {
+  cookie,
+  cookieValue,
+  opened,
+  seal,
+  sealedOld,
+  sign,
+  type Use,
+  verify,
+} from './token.ts'
+import { CUT } from './token_legacy.ts'
 
 let secret = 'a-test-secret'
 let claims = { person: 'u-1', space: null, exp: 2_000_000_000 }
@@ -40,6 +50,65 @@ Deno.test('a value sealed for one use opens as no other, a session least', async
   let session = await sign(claims, secret)
   assertEquals(await opened('grant', session, secret), null)
   assertEquals(await opened('session', session, secret), claims)
+})
+
+// Every kind's claims as the code before 2c05d0f6 sealed them (token_legacy.ts).
+let s = CUT - 60
+let OLD: [Use, Record<string, unknown>][] = [
+  ['session', { person: 'u-1', space: null, exp: s + 90 * 86_400 }],
+  ['session', { person: 'u-1', space: 'jeff', exp: s }],
+  ['visit', { store: 'eve/trap', person: 'u-1', role: 'owner', exp: s }],
+  ['grant', { id: 'abc', person: 'u-1', space: null, exp: s + 86_400 }],
+  ['link', { once: { email: 'a@b.c', code: '123456', back: '/x' } }],
+  ['link', { standing: { id: 'abc', person: 'u-1', exp: s + 365 * 86_400 } }],
+  ['handoff', { person: 'u-1', host: 'a.example', jti: 'j', exp: s }],
+  ['erase', { space: 'sp', person: 'u-1', exp: s * 1000, forever: true }],
+  ['review', { app: 'ap', list: true, exp: s * 1000 }],
+]
+let USES: Use[] = [
+  'session',
+  'visit',
+  'grant',
+  'link',
+  'handoff',
+  'consent',
+  'erase',
+  'review',
+]
+
+Deno.test('a token sealed before 2c05d0f6 opens for its own use and no other', async () => {
+  for (let [use, v] of OLD) {
+    let t = await sealedOld(v, secret)
+    for (let u of USES) {
+      let want = u != use ? null : u == 'erase' ? { ...v, exp: s } : v
+      assertEquals(await opened(u, t, secret), want, `${use} as ${u}`)
+    }
+  }
+})
+
+Deno.test('an old session verifies, marked for re-minting; other old kinds do not', async () => {
+  let was = OLD[0][1]
+  let old = await sealedOld(was, secret)
+  assertEquals(await verify(old, secret, 0), {
+    person: 'u-1',
+    space: null,
+    exp: was.exp as number,
+    legacy: true,
+  })
+  // The two the audit set as a cookie: a visitor's token, and a grant with
+  // its prefix taken off. An erase ticket has a session's keys; its exp is ms.
+  for (let [use, v] of OLD) {
+    if (use == 'session') continue
+    assertEquals(await verify(await sealedOld(v, secret), secret, 0), null)
+  }
+  // Under the raw secret but no old kind's shape, or past its kind's life.
+  for (
+    let v of [
+      { ...claims, role: 'owner' },
+      { person: 'u-1', space: null, exp: CUT + 91 * 86_400 },
+      { person: 'u-1', exp: CUT },
+    ]
+  ) assertEquals(await verify(await sealedOld(v, secret), secret, 0), null)
 })
 
 Deno.test('the cookie carries the token platform-wide and reads back', () => {

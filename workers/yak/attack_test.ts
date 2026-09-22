@@ -6,9 +6,13 @@
 // same-site with the apex, and anybody can serve code from a free space.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { COOKIE } from '../../src/token.ts'
+import { COOKIE, sealedOld, verify } from '../../src/token.ts'
+import { CUT } from '../../src/token_legacy.ts'
 import { allowed, type Kernel, kernel, mailed, signIn } from './probe.ts'
 import { granting } from './dispatch.ts'
+import { SESSION } from './session.ts'
+
+let DAY = 86_400
 import { b64u } from './mcp-probe.ts'
 
 // A form a page posts, with the cookie the browser carries and the address
@@ -88,6 +92,57 @@ slow(
       let own = await mintLink(me.cookie)
       assertEquals(own.status, 200)
       await own.body?.cancel()
+    } finally {
+      await k.stop()
+    }
+  },
+)
+
+// The same attack with tokens sealed before 2c05d0f6, which still open for
+// their own use (src/token_legacy.ts): an old visitor's token and an old grant
+// with its prefix taken off are no cookie, and an old session cookie still
+// signs its person in and comes back re-minted (T-37924).
+slow(
+  'a token sealed before 2c05d0f6 is a cookie only if it was one (T-37924)',
+  async () => {
+    let k = await kernel()
+    try {
+      let me = await signIn(k)
+      let mintLink = (token: string) =>
+        k.at('yaks.app', '/login/link', {
+          method: 'POST',
+          headers: {
+            cookie: `${COOKIE}=${token}`,
+            'content-type': 'application/x-www-form-urlencoded',
+          },
+          body: 'days=365',
+        })
+      let olds = [
+        { store: 'eve/trap', person: me.person, role: 'owner', exp: CUT + 60 },
+        { id: 'abcdef012345', person: me.person, space: null, exp: CUT + DAY },
+      ]
+      for (let v of olds) {
+        let stolen = await mintLink(await sealedOld(v, k.secret))
+        assertEquals(stolen.status, 401)
+        assertEquals(stolen.headers.get('set-cookie'), null)
+        await stolen.body?.cancel()
+      }
+      // The youngest session the old code could mint, while it can live.
+      if (Date.now() >= (CUT + SESSION) * 1000) return
+      let old = await sealedOld(
+        { person: me.person, space: null, exp: CUT + SESSION },
+        k.secret,
+      )
+      let own = await mintLink(old)
+      assertEquals(own.status, 200)
+      await own.body?.cancel()
+      let set = own.headers.get('set-cookie') ?? ''
+      let fresh = await verify(
+        set.slice(`${COOKIE}=`.length, set.indexOf(';')),
+        k.secret,
+      )
+      assertEquals(fresh?.person, me.person)
+      assertEquals(fresh?.legacy, undefined)
     } finally {
       await k.stop()
     }
