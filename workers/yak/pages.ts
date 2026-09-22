@@ -22,11 +22,15 @@ import { CURRENCY, FREE, PLUS, PRICE, size } from './meter.ts'
 
 let home = (env: Host) => `<a class="Away" href="${url(env, '/')}">yaks.app</a>`
 
-let plusPrice = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: CURRENCY,
-  minimumFractionDigits: 0,
-}).format(PRICE.plus)
+// Formatted when a page asks for it: the first Intl formatter an isolate
+// builds loads its locale data, and at module load that was paid by every
+// cold start, a Store's included (T-37976).
+let plusPrice = () =>
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: CURRENCY,
+    minimumFractionDigits: 0,
+  }).format(PRICE.plus)
 
 let billButton = (door: string, label: string, target?: string) =>
   `<button type="button" class="Button Bill_Go${
@@ -829,7 +833,7 @@ let selling = (at: SpacePage, env: Host) => {
       }<p class="Bill_Doors">${
         billButton(
           'checkout',
-          `Subscribe — ${plusPrice} a month`,
+          `Subscribe — ${plusPrice()} a month`,
           managePath('selling'),
         )
       }</p><p class="Say Bill_Say" role="status"></p>`
@@ -1344,7 +1348,7 @@ let plan = (
   let doors = [
     y.plan.plus
       ? ''
-      : billButton('checkout', `Get Plus — ${plusPrice} a month`, target),
+      : billButton('checkout', `Get Plus — ${plusPrice()} a month`, target),
     y.plan.known ? billButton('portal', 'Manage billing', target) : '',
   ].filter(Boolean).join('')
   return `<section class="Card Bill" id="plan"><h2>Your plan</h2>
