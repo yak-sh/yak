@@ -16,6 +16,7 @@
     "@yaks/design",
     "@yaks/session",
     "@yaks/tools",
+    "@yaks/api",
     "@yaks/model",
     "@yaks/openai",
     "@yaks/process",

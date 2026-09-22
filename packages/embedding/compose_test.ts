@@ -4,7 +4,7 @@
 // nothing up here; the test does, because what it is checking is the wiring.
 
 import { assert, assertEquals } from '@std/assert'
-import { compose } from '@yaks/cli/serve'
+import { compose } from '@yaks/cli/host'
 
 // Three documents: two about the same thing in different words, one about
 // something else. The offline embedder sees vocabulary overlap and no meaning,

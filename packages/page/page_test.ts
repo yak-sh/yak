@@ -3,7 +3,7 @@
 // here is the plugin a config would name.
 
 import { assert, assertEquals } from '@std/assert'
-import { compose, type Served } from '@yaks/cli/serve'
+import { compose, type Served } from '@yaks/cli/host'
 import type { Bundle, Comp } from '@yaks/graph'
 import { detached } from '@yaks/graph'
 import { decode } from '@yaks/blob'

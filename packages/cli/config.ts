@@ -6,10 +6,10 @@
 // SQLite in WAL mode accepts as many writers as there are `yak` commands
 // running, so nothing has to be listening for a command line to work.
 // `yak serve` is one more process over the same file, the one that serves HTTP
-// requests.
+// requests — and `serve` is a tool like any other, contributed by @yaks/api.
 //
 // That is why this is its own module. A command that only needs to know where
-// the graph is must not import serve.ts, which pulls in every plugin a config
+// the graph is must not import host.ts, which pulls in every plugin a config
 // names — a cost `yak login` should not pay. So the config is read here, by a
 // module that imports nothing.
 
@@ -32,9 +32,9 @@ export type Config = {
    * resolved against the config file itself; `{use, with}` names one with
    * options. */
   plugins?: Plug[]
-  /** what `yak serve` listens on (default 8787) */
+  /** what `yak serve` listens on (default @yaks/api's `PORT`) */
   port?: number
-  /** which interface it binds (default Deno's own) */
+  /** which interface it binds (default the runtime's own) */
   hostname?: string
   /** whether the store mints a short human-readable number beside each entity
    * id. Opt-IN: left out, no entity gets one, because a number exists for a
@@ -166,6 +166,3 @@ export let read = (path: string): Config => {
     plugins: (config.plugins ?? []).map((plug) => resolved(plug, base)),
   }
 }
-
-/** The default port `yak serve` listens on. */
-export let PORT = 8787

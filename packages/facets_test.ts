@@ -12,7 +12,7 @@
 // second TypeScript program is the only thing that can prove it.
 
 import { assert, assertEquals } from '@std/assert'
-import { compose, FACETS } from '@yaks/cli/serve'
+import { compose, FACETS } from '@yaks/cli/host'
 import { type Keywords, loadVocab, type VocabDoc } from '@yaks/vocab'
 import { idKeywords } from '@yaks/id'
 import { nameKeywords } from '@yaks/names'

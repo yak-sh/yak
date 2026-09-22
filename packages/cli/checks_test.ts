@@ -12,7 +12,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { answerOf, checks, toolEid, worded } from '@yaks/tools'
 import type { Bundle } from '@yaks/graph'
-import { compose, type Served } from './serve.ts'
+import { compose, type Served } from './host.ts'
 
 // The harness plugin speaks the session, project, task and doc words and
 // carries their runs; @yaks/sqlite adds the two checks that can only be asked

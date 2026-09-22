@@ -6,8 +6,8 @@
 // That is the ordinary way a `yak` command runs. SQLite in WAL mode accepts as
 // many writers as there are commands running, each one serialized by the file
 // itself, so nothing bottlenecks on a process somebody has to remember to
-// start. `yak serve` is one more process over the same file, the one that
-// answers HTTP.
+// start. `yak serve` is one more of those commands: a tool that stays up
+// answering HTTP over the same file (@yaks/api).
 //
 // A command line runs a tool exactly as the HTTP server does: it writes a
 // `call` row, the tool runner executes it, and what came back is printed. So
@@ -23,7 +23,7 @@ import { inputSchemaOf } from '@yaks/mcp'
 import { answerOf, faulted, toolEid, worded } from '@yaks/tools'
 import { read } from './config.ts'
 import type { Command, Ctx } from './run.ts'
-import { compose, type Served } from './serve.ts'
+import { compose, type Served } from './host.ts'
 
 // One graph per config path, for the life of the process: listing the tools
 // and running one use the same assembled graph, and opening the file twice
@@ -32,7 +32,7 @@ let held = new Map<string, Promise<Served>>()
 
 // On the way in, a command does whatever is overdue and nobody else is doing:
 // the effect sweep a crash interrupted, the scheduled wakes that came due
-// while nothing was listening (`Served.duties` in serve.ts). It is handed a
+// while nothing was listening (`Host.duties` in host.ts). It is handed a
 // signal that has already aborted, so each background job runs exactly one
 // pass and then releases its lease — a one-shot command is not a lesser kind
 // of process, it is the only one there is on a machine where nobody runs a

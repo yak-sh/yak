@@ -315,6 +315,9 @@ grouped approximately by function, **not** by dependency order.
   handler over a graph, serving `/apply`, `/query` and the `/ws` WebSocket
   endpoint. It authenticates the writer, and a subscription is a saved query
   whose results are pushed again whenever a committed transaction changes them.
+  It also declares the `serve` tool, which binds a port and answers with the
+  handler its host assembled, so `yak serve` is a plugin's verb rather than a
+  command of the CLI.
 - **[@yaks/mcp](./mcp)** — the same graph exposed to an agent: an MCP server of
   five generic tools that accept and return bundles, served either as a portable
   `fetch` handler or over stdio, with each tool's output schema generated from
@@ -326,10 +329,10 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/cli](./cli)** — The `yak` command and reusable CLI APIs. Local graph
   commands load configured plugins and open storage in the same process;
   `--host` selects remote MCP and discovers its tools at runtime. Built-ins are
-  `help`, `login`, `logout`, `serve` and `apply`; graph tools and application
-  commands add others. Multiple processes can share a SQLite WAL database, but
-  writes serialize. `yak serve` adds HTTP endpoints over the same composition
-  rather than being mandatory for local commands.
+  `help`, `login`, `logout` and `apply`; graph tools and application commands
+  add others. Multiple processes can share a SQLite WAL database, but writes
+  serialize. `yak serve` runs @yaks/api's tool over the same composition rather
+  than being mandatory for local commands.
 
 - **[@yaks/harness](./harness)** — A local agent application combining SQLite,
   model execution, shell tools, graph tools and a terminal interface. Its `new`,

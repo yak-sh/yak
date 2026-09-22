@@ -85,7 +85,7 @@ export {
   unique,
   usage,
 } from './run.ts'
-export { type Config, configPath, PORT, read } from './config.ts'
+export { type Config, configPath, read } from './config.ts'
 export { listed, printed, rosterOf } from './platform.ts'
 export { appStray, appTools } from './commands.ts'
 export { HOST, main, own, TOOLS, YAK } from './yak.ts'

@@ -30,7 +30,7 @@ import {
   type Load,
   read,
   type RulesFacet,
-} from '@yaks/cli/serve'
+} from '@yaks/cli/host'
 import type { Bundle, Eid } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import { aliasEid } from '@yaks/alias'

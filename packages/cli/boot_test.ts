@@ -1,10 +1,16 @@
-// The whole thing, once: a config file naming the harness as a plugin, its
-// facets imported one subpath at a time, a
-// scratch database, and the four doors answering over it. It costs a port and
-// a file, so it runs under TASKS_SLOW rather than in the fast tier.
+// The whole thing, once: a config file naming plugins, their facets imported
+// one subpath at a time, a scratch database, and the four endpoints answering
+// over it. It costs a port and a file, so it runs under TASKS_SLOW rather than
+// in the fast tier.
+//
+// The port is bound here rather than through the `serve` tool, because this is
+// `compose` being tested and not that tool: what the tool adds — binding a
+// port with the handler assembled here and recording the call for as long as
+// it listens — is @yaks/api's own test. What this asserts of it is that a
+// config naming that package gets the verb.
 
 import { assert, assertEquals } from '@std/assert'
-import { read, serve } from './serve.ts'
+import { compose, read } from './host.ts'
 
 let slow = (name: string, fn: () => Promise<void>) =>
   Deno.test({ name, fn, ignore: !Deno.env.get('TASKS_SLOW') })
@@ -18,7 +24,7 @@ let free = (): number => {
 }
 
 slow(
-  'yak serve composes the harness plugin and answers on every door',
+  'a composed host answers on every endpoint, and carries the serve verb',
   async () => {
     let dir = Deno.makeTempDirSync()
     let port = free()
@@ -26,15 +32,17 @@ slow(
       `${dir}/yak.json`,
       JSON.stringify({
         db: 'graph.db',
-        plugins: ['@yaks/harness'],
+        plugins: ['@yaks/api', '@yaks/harness'],
         numbers: false,
         port,
       }),
     )
-    let { host, server } = await serve(read(`${dir}/yak.json`))
+    let host = await compose(read(`${dir}/yak.json`))
+    let server = Deno.serve({ port }, host.handler)
     let at = `http://localhost:${port}`
     try {
-      // The tools are the vocabulary's declarations wearing the module's runs.
+      // The tools are the vocabulary's declarations wearing the module's runs
+      // — `serve` among them, contributed by the package in the config.
       let listed = await fetch(`${at}/mcp`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -48,6 +56,7 @@ slow(
       let names = listed.result.tools.map((t: { name: string }) => t.name)
       assert(names.includes('session_list'), names.join(' '))
       assert(names.includes('graph_apply'), names.join(' '))
+      assert(names.includes('serve'), names.join(' '))
 
       // A subscription hears about a write it did not make.
       let socket = new WebSocket(`ws://localhost:${port}/ws`)
@@ -63,13 +72,13 @@ slow(
           session: { id: 'one' },
         }]),
       }).then((r) => r.json())
-      // The door signs the batch with this process, which is the floor where
-      // no plugin named a caller.
+      // The endpoint signs the batch with this process, which is the floor
+      // where no plugin named a caller.
       assertEquals(applied[0].created.by, host.me)
 
       let found = await fetch(`${at}/query?q=.session`).then((r) => r.json())
       assertEquals(found[0].entity.eid, 'boot-session')
-      // A status the store computes rather than keeps, answered over the wire.
+      // A status the store computes rather than keeps, answered over HTTP.
       assertEquals(found[0].session.status, 'empty')
 
       let heard = await until(() =>
@@ -83,7 +92,7 @@ slow(
       socket.close()
     } finally {
       await server.shutdown()
-      host.close()
+      await host.close()
       Deno.removeSync(dir, { recursive: true })
     }
   },

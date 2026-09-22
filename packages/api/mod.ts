@@ -74,4 +74,10 @@ export {
   subscriptions,
 } from './subs.ts'
 export { attach, receive, sink, type Socket, type Upgrade } from './socket.ts'
-export { denoUpgrade } from './deno.ts'
+export {
+  type Addr,
+  denoListen,
+  denoUpgrade,
+  type Listen,
+  type Listener,
+} from './deno.ts'

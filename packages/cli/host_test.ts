@@ -16,7 +16,7 @@ import {
   read,
   unfinished,
   writer,
-} from './serve.ts'
+} from './host.ts'
 
 // The host of these tests, as its own writes are signed: this process, whose
 // row every composition here writes on the way in.

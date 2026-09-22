@@ -1,9 +1,13 @@
-// The `yak` command. It has five subcommands of its own — `help`, `login`,
-// `logout`, `serve`, `apply` — and every other subcommand is a tool: one of
-// the tools of the graph this command opens (local.ts), or one an MCP server
-// lists (platform.ts), with the apps' own commands (commands.ts) beside them.
-// Either list costs something to gather, so run.ts asks for it only when the
-// five built-in subcommands did not match.
+// The `yak` command. It has four subcommands of its own — `help`, `login`,
+// `logout`, `apply` — and every other subcommand is a tool: one of the tools
+// of the graph this command opens (local.ts), or one an MCP server lists
+// (platform.ts), with the apps' own commands (commands.ts) beside them. Either
+// list costs something to gather, so run.ts asks for it only when the four
+// built-in subcommands did not match.
+//
+// `serve` is one of those tools, not one of these four: @yaks/api declares it
+// and implements it, and a config that names that package as a plugin is a
+// config whose graph can be served.
 //
 //   yak app_list
 //   yak app_files --app recipes --path index.html --content @index.html
@@ -12,7 +16,7 @@
 //
 //   yak --config yak.json task list   # opens that graph, runs the tool, exits
 //   yak land                          # the same, on the checkout you are in
-//   yak serve --config yak.json       # an HTTP server over the same graph
+//   yak serve --config yak.json       # the same, for a tool that stays up
 //
 // There is no server process to start. A config file names a graph — a SQLite
 // file and the plugins that read and write it — and a `yak` command opens it,
@@ -34,7 +38,6 @@ import { Usage } from './args.ts'
 import { bundlesIn, chunks } from './apply.ts'
 import { appStray, appTools } from './commands.ts'
 import { cli, type Command, type Ctx, helpTool, type Opts } from './run.ts'
-import { configPath } from './config.ts'
 import { listed } from './platform.ts'
 import { forgetToken, saveToken } from './store.ts'
 
@@ -103,29 +106,6 @@ let local: typeof import('./local.ts') | undefined
 let table = async (c: Ctx): Promise<Command[]> =>
   c.config ? (local ??= await import('./local.ts')).commands(c) : listed(c)
 
-// `serve` is the HTTP server and nothing else: one config, the plugins it
-// names, and what @yaks/api and @yaks/mcp mount over the graph they assemble.
-let served = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
-  let { read, serve } = await import('./serve.ts')
-  let path = configPath(
-    typeof args.config == 'string' ? args.config : c.config,
-  )
-  let config = path ? read(path) : {}
-  if (typeof args.db == 'string') config.db = args.db
-  if (args.port != null) config.port = Number(args.port)
-  let { host, server } = await serve(
-    config,
-    (addr, host) =>
-      c.note(
-        `yak serve — http://${addr.hostname}:${addr.port} · ${config.db}` +
-          ` · ${host.tools.length} tools`,
-      ),
-  )
-  await server.finished
-  await host.close(0)
-  return 0
-}
-
 /** What `yak` itself is, besides the tools it lists. */
 export let YAK: Opts = {
   name: 'yak',
@@ -136,7 +116,7 @@ export let YAK: Opts = {
   stray: appStray,
 }
 
-/** The command's own five subcommands, which shadow a tool of the same name
+/** The command's own four subcommands, which shadow a tool of the same name
  * from either list. */
 export let own: Command[] = [
   helpTool(YAK),
@@ -170,27 +150,6 @@ export let own: Command[] = [
     },
   },
   {
-    name: 'serve',
-    description: 'run an HTTP server over the graph a config names',
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        config: {
-          type: 'string',
-          description: 'the config file (default $YAK_CONFIG)',
-        },
-        db: {
-          type: 'string',
-          description: 'the SQLite file, overriding the config',
-        },
-        port: { type: 'number', description: 'the port to listen on' },
-      },
-    },
-    options: { positional: ['config'] },
-    run: served,
-  },
-  {
     name: 'apply',
     description:
       'apply bundles read as NDJSON, in transactions of 50; --dry-run ' +
@@ -217,7 +176,7 @@ export let own: Command[] = [
 ]
 
 /** What a plain install carries, in precedence order. The apps' commands come
- * after this command's own five and before the graph's tools, because one of
+ * after this command's own four and before the graph's tools, because one of
  * those tools is `command` itself: the graph's version takes the app's
  * arguments as a JSON object, and the one here takes them the way a person
  * types them. */

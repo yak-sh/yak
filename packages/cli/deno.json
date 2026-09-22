@@ -4,7 +4,7 @@
   "exports": {
     ".": "./mod.ts",
     "./yak": "./yak.ts",
-    "./serve": "./serve.ts"
+    "./host": "./host.ts"
   },
   "license": "Apache-2.0",
   "description": "The yak command line: it opens the graph a config file names, or connects to an MCP server, and turns every tool it finds there into a subcommand parsed through that tool's own input schema.",

@@ -76,6 +76,7 @@ All exports are available from `@yaks/api`:
 | `ask`, `write`, `pour`, `CHUNK`                                            | Query, JSON write, and streaming import handlers; import chunk size                   |
 | `subscriptions`, `Subs`, `Ask`, `Frame`, `Sink`                            | Manage subscriptions and their messages                                               |
 | `attach`, `receive`, `sink`, `Socket`, `Upgrade`, `denoUpgrade`            | Connect the subscription protocol to sockets                                          |
+| `denoListen`, `Listen`, `Listener`, `Addr`                                 | Bind a port on Deno, which is what the `serve` tool listens with                      |
 | `json`, `refusal`, `refuse`, `status`, `STATUS`, `Refusal`, `Unauthorized` | Construct JSON responses and translate errors                                         |
 
 `Route` and `routed` help an application compose additional routes; `api()`
@@ -227,7 +228,43 @@ HTTP errors use these statuses. Subscription errors are socket messages, and
 streaming import errors use the final NDJSON line described above. `STATUS` is
 an exported error-name mapping.
 
-## Serving it
+## The `serve` tool
+
+This package is also a plugin. [`vocab.json`](./vocab.json) declares one tool,
+`serve`, and [`tools.ts`](./tools.ts) implements it: it binds a TCP port and
+answers with the request handler the host that loaded it assembled — `/apply`,
+`/query`, `/ws`, `/mcp`, and every route the other plugins added. A config that
+lists `@yaks/api` among its plugins is a config whose graph can be served, and
+`yak serve` is that tool being called like any other
+([@yaks/cli](../cli/README.md)).
+
+```json
+{ "db": "graph.db", "plugins": ["@yaks/api", "@yaks/task"], "port": 8787 }
+```
+
+```sh
+yak serve --config yak.json          # the configured port
+yak serve --config yak.json --port 0 # an arbitrary free one
+```
+
+The port and interface come from the call's `port` and `hostname` arguments,
+then from the config's, then from `PORT` (8787).
+
+The call is the record of the server. The runner writes the call row and marks
+it `running` before the tool starts, and writes the result when the tool returns
+— which is when the server stops. So a server that is up is a call still marked
+`running`, a server that has stopped is a result saying where it listened and
+for how long, and a process killed while serving leaves a call marked `running`
+whose process never recorded an exit, which is the state that keeps another
+runner from starting a second server in its place. Because nothing is printed
+until the call returns, the tool writes the address to standard error as soon as
+the port is bound.
+
+While it listens, the tool also takes over the host's background jobs — the
+effect sweep and each plugin's `./service` — in their long-running form, and
+first finishes any tool calls a previous process was killed in the middle of.
+
+## Serving it yourself
 
 Deno's WebSocket upgrade is the default. In Cloudflare Workers, pass
 `workerUpgrade` from [@yaks/workerd](../workerd/README.md), or use that
@@ -239,8 +276,10 @@ library. An upgrade returns `{ socket, response }`.
 
 The handler uses standard `Request`, `Response`, and socket interfaces and is
 intended for Deno, Node, Bun, and Cloudflare Workers. The package type-checks
-with `dom` and `esnext` libraries. `denoUpgrade` looks up Deno at call time and
-throws outside Deno; other runtimes must provide their own upgrade callback.
+with `dom` and `esnext` libraries. `denoUpgrade` and `denoListen` look up Deno
+at call time and throw outside Deno; other runtimes must provide their own
+upgrade callback, and a runtime that binds its own port has no use for the
+`serve` tool.
 
 ## The related packages
 

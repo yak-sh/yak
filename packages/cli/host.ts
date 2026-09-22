@@ -1,17 +1,18 @@
 /**
- * `yak serve` — the HTTP server over the graph a config file names, and the
- * assembly step every `yak` command shares.
+ * The host: the graph a config file names, opened and assembled — the step
+ * every `yak` command shares.
  *
  * A **host** here means whichever process opened the graph: a one-shot `yak`
- * command, or a long-running `yak serve`.
+ * command, or a process that stays up answering HTTP.
  *
  * There is no server process to start. A config file names a graph, and
  * {@link compose} is what opens it: a command line calls it to run one tool in
- * its own process (local.ts) and exits, and `yak serve` calls the same
- * function and then puts `/apply`, `/query`, `/ws`, `/mcp` and the plugins'
- * own routes over the result. One SQLite file in WAL mode accepts both at
- * once, so serving HTTP is one more process rather than the process everything
- * else waits on.
+ * its own process (local.ts) and exits. Listening on a port is one of those
+ * tools — `serve`, declared and implemented by
+ * {@link https://jsr.io/@yaks/api | @yaks/api}, which takes the
+ * {@link Host.handler} assembled here and hands it to the runtime. One SQLite
+ * file in WAL mode accepts both at once, so serving HTTP is one more process
+ * rather than the process everything else waits on.
  *
  * A host is not written; it is assembled. This module reads a config naming
  * plugin packages and imports six modules from each, one per subpath: the
@@ -24,10 +25,11 @@
  * error, never a skip. Over the plugins it opens one SQLite file and mounts
  * {@link https://jsr.io/@yaks/api | @yaks/api} at `/apply`, `/query` and
  * `/ws`, and {@link https://jsr.io/@yaks/mcp | @yaks/mcp} at `/mcp`. There is
- * no other wiring: a running server is a config file and a list of packages.
+ * no other wiring: a running server is a config file, a list of packages, and
+ * whichever of their tools somebody called.
  *
  * ```ts
- * import { compose } from '@yaks/cli/serve'
+ * import { compose } from '@yaks/cli/host'
  *
  * // let host = await compose({ db: 'graph.db', plugins: ['@yaks/harness/plugin'] })
  * // Deno.serve(host.handler)
@@ -55,7 +57,7 @@ import {
   type Plugin,
   then,
 } from '@yaks/graph'
-import { reconcile, type Runner, runner, toolsDoc } from '@yaks/tools'
+import { type Runner, runner, toolsDoc } from '@yaks/tools'
 import { loadTools, type Runs } from '@yaks/graph/tools'
 import {
   type Keywords,
@@ -92,7 +94,7 @@ import {
   until,
   type Watch,
 } from '@yaks/effects'
-import { type Config, given, type Options, PORT, used } from './config.ts'
+import { type Config, given, type Options, used } from './config.ts'
 
 export {
   type Config,
@@ -106,17 +108,41 @@ export {
 
 /** What every plugin factory is handed: the graph being assembled, the
  * vocabulary of components and tools it holds, the store under it, the
- * database connection beneath that, and the config that named them. `storage`
- * and `graph` are live from the moment each is open — a factory may keep a
- * reference and must not call it before it returns, since an `extend` factory
- * runs before there is a store to read. */
+ * database connection beneath that, and the config that named them. `storage`,
+ * `graph`, `handler`, `runner` and `duties` are live from the moment each is
+ * built — a factory may keep a reference and must not call it before it
+ * returns, since an `extend` factory runs before there is a store to read and
+ * a `runs` factory is asked for its tools before there is a runner to run
+ * them. */
 export type Host = {
   config: Config
   vocab: Vocab
   storage: Store
   sql: Driver
   graph: Graph
-  /** This PROCESS, as an entity (@yaks/process `started`): the row it wrote on
+  /** every HTTP endpoint and route of this host as one request handler:
+   * `/apply`, `/query` and `/ws` from @yaks/api, `/mcp` from @yaks/mcp, and
+   * the plugins' own routes in front of them. Assembled here because the
+   * plugins are; whether any process listens with it is the `serve` tool's
+   * business (@yaks/api). */
+  handler: Handler
+  /** the one tool runner over this graph: what writes a `call` row, runs the
+   * function and writes the result back, for a command line and an HTTP
+   * request alike. */
+  runner: Runner
+  /** Every background job this process may run: the effect sweep, and each
+   * plugin's `./service`. Each is taken under a lease named for the package
+   * that owns it (@yaks/effects `holding`), so of all the processes over one
+   * graph exactly one is running each — a second long-running process waits,
+   * and takes over when a killed holder's lease expires.
+   *
+   * Runs until `signal` aborts; left out, that signal is this host's own, so
+   * it stops with {@link Served.close}. Pass an already-aborted signal for one
+   * pass each and no waiting, which is what a one-shot command does on its way
+   * in, and the live form is what a process that stays up calls. */
+  duties: (signal?: AbortSignal) => Promise<void>
+
+  /** This process, as an entity (@yaks/process `started`): the row it wrote on
    * the way in, what everything it writes is attributed to, and what a
    * start-up effect compares against to tell its own creation from a child
    * process's. */
@@ -283,30 +309,13 @@ export let facet: Load = async (plugin, name) => {
   }
 }
 
-/** An assembled host: everything a plugin factory was given, plus what came
- * out of assembling them. */
+/** An assembled host: everything a plugin factory was given, plus what only
+ * the caller of {@link compose} needs. */
 export type Served = Host & {
   /** every tool declared and implemented across the plugins */
   tools: NamedTool[]
-  /** the one thing that calls a tool function here: the HTTP endpoints and
-   * the command line both write a `call` row and read the result written back
-   * (@yaks/tools) */
-  runner: Runner
   /** the post-commit effect registry the plugins registered on */
   fx: Effects
-  /** every HTTP endpoint and route, as one request handler */
-  handler: Handler
-  /** Every background job this process may run: the effect sweep, and each
-   * plugin's `./service`. Each is taken under a lease named for the package
-   * that owns it (@yaks/effects `holding`), so of all the processes over one
-   * graph exactly one is running each — a second long-running process waits,
-   * and takes over when a killed holder's lease expires.
-   *
-   * Runs until `signal` aborts; left out, that signal is this host's own, so
-   * it stops with {@link Served.close}. Pass an already-aborted signal for one
-   * pass each and no waiting, which is what a one-shot command does on its way
-   * in. */
-  duties: (signal?: AbortSignal) => Promise<void>
   /** close the graph: every lease this process holds released and its `exit`
    * stamped — with the code it is given, or with none where nobody knows how
    * it ended. Await it when the process is about to end, or that last write
@@ -492,6 +501,14 @@ export let compose = async (
     let text = searched(vocab)
 
     let g: Graph | undefined
+    // Built further down, once the plugins have said what they contribute, and
+    // reached through the host by the facets that need them: `@yaks/api`'s
+    // `serve` is a tool, so it is asked for at a moment when the handler it
+    // listens with does not exist yet, and reads it off the host when the call
+    // arrives.
+    let answering: Handler | undefined
+    let calls: Runner | undefined
+    let jobs: ((signal?: AbortSignal) => Promise<void>) | undefined
     let stopping = new AbortController()
     // Who is calling is settled before anything is built: a plugin's route
     // needs the same answer @yaks/api's own endpoints get, or what it writes
@@ -515,6 +532,18 @@ export let compose = async (
       get graph(): Graph {
         if (!g) throw new Error('the graph is not open yet')
         return g
+      },
+      get handler(): Handler {
+        if (!answering) throw new Error('the request handler is not built yet')
+        return answering
+      },
+      get runner(): Runner {
+        if (!calls) throw new Error('the tool runner is not built yet')
+        return calls
+      },
+      duties: (signal) => {
+        if (!jobs) throw new Error('the background jobs are not built yet')
+        return jobs(signal)
       },
     }
     authenticate = doorman(served, host, self)
@@ -608,7 +637,7 @@ export let compose = async (
     // a call points at are written on the first call and at start-up, never
     // while assembling: a one-shot command opens a host to ask one question
     // and should not write just to say hello.
-    let run = runner(g, {
+    let run = calls = runner(g, {
       tools,
       // This host owns the calls it claims, so the start-up pass re-runs its
       // own interrupted calls and leaves alone another runner's, or those an
@@ -635,7 +664,7 @@ export let compose = async (
       core: false,
       name: config.name ?? 'yak',
     })
-    let handler: Handler = (request) => {
+    answering = (request) => {
       let path = new URL(request.url).pathname
       if (path == '/mcp') return agents(request)
       let route = routes.find((r) => routed(r, request.method, path))
@@ -684,7 +713,23 @@ export let compose = async (
         run: (signal) => mod.service!(host, options, signal),
       })),
     ]
-    // This PROCESS, written in. Last in this function, because the creation of
+    // Started together and stopped together, by one signal: a host shutting
+    // down is one fact, and a background job that outlived the database it
+    // reads would be a crash nobody asked for. One that throws is reported
+    // and that plugin's job stops — the others keep going, the way a failing
+    // effect is telemetry rather than a broken host.
+    jobs = (signal) =>
+      Promise.all(
+        duties.map((d) =>
+          holding(
+            g!,
+            d.name,
+            { holder: selfEid(), hold, signal: signal ?? stopping.signal },
+            d.run,
+          ).catch((e) => console.error(`duty failed — ${d.name}`, e))
+        ),
+      ).then(() => {})
+    // This process, written in. Last in this function, because the creation of
     // this row is what start-up work hangs off — a `created(process)` effect
     // comparing the entity against `host.me` is a plugin's one pass at start,
     // and the registrations above have to be in place before it fires. First
@@ -696,25 +741,7 @@ export let compose = async (
       ...host,
       graph: g,
       tools,
-      runner: run,
       fx,
-      handler,
-      // Started together and stopped together, by one signal: a host shutting
-      // down is one fact, and a background job that outlived the database it
-      // reads would be a crash nobody asked for. One that throws is reported
-      // and that plugin's job stops — the others keep going, the way a failing
-      // effect is telemetry rather than a broken host.
-      duties: (signal) =>
-        Promise.all(
-          duties.map((d) =>
-            holding(
-              g!,
-              d.name,
-              { holder: selfEid(), hold, signal: signal ?? stopping.signal },
-              d.run,
-            ).catch((e) => console.error(`duty failed — ${d.name}`, e))
-          ),
-        ).then(() => {}),
       // The last transaction, then the file: every lease this process holds
       // released, and its ending stamped. One transaction, because they are
       // one fact — a process that is over is not doing any work, and the next
@@ -766,37 +793,3 @@ export let unfinished = (g: Graph): SweepRows => (comp, pending) =>
         ...b[comp] as Record<string, unknown>,
       })),
   )
-
-/** Serve a config: assemble the host, then listen. `onListen` is told the
- * address and the host it belongs to — assembly is finished before anything
- * binds a port.
- *
- * A plugin's own start-up work is not called from here: `compose` wrote this
- * process's row, and the `created(process)` effects on it are that pass, so
- * the agents a restart left running are picked back up whichever program
- * opened the graph. */
-export let serve = async (
-  config: Config,
-  onListen?: (addr: Deno.NetAddr, host: Served) => void,
-): Promise<{ host: Served; server: Deno.HttpServer }> => {
-  let host = await compose(config)
-  // Write the `tool` rows a call points at, then finish what a crash left
-  // claimed and unanswered. Here rather than in `compose`, because this is the
-  // server starting — a one-shot command assembles the same host and must not
-  // reach into calls another process is running.
-  await host.runner.ensure()
-  await reconcile(host.runner)
-  // And then the background jobs: the effect sweep and the plugins' timers,
-  // each taken under its own lease and held for as long as this process is up
-  // ({@link Served.duties}). It is the same call a one-shot command makes,
-  // with a live signal instead of an aborted one — an HTTP server is not a
-  // special kind of process, it is the one that stays. Not awaited: it returns
-  // when the host closes.
-  void host.duties()
-  let server = Deno.serve({
-    port: config.port ?? PORT,
-    hostname: config.hostname,
-    onListen: (addr) => onListen?.(addr, host),
-  }, host.handler)
-  return { host, server }
-}
