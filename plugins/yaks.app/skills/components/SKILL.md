@@ -187,7 +187,7 @@ exactly when it matters — an import.
         jotting: { written: '2026-04-11T12:00:00Z' } } ] }
 
 Seed a fortnight of a guestbook and every `created.at` reads today, truthfully:
-today is when you wrote them here. Draw `jotting.written`.
+today is when you wrote them. Draw `jotting.written`.
 
 **`exception`** — `at`, `message`, `stack`, `request`, `version`, all
 server-set. **`failed`** — `at`, `message`, server-set. The platform's own rows
@@ -374,7 +374,7 @@ platform's:
           "blob":    { "type": "string" } } } } }
 
 `photo.blob` is `text` and not `eid`, because a manifest cannot declare a
-reference. It costs nothing here: it holds the eid `upload` answered with, and
+reference. It costs nothing: it holds the eid `upload` answered with, and
 `./api/blob/<eid>` serves the bytes.
 
 **A searched column.** A column can declare more than its type. `"search": true`

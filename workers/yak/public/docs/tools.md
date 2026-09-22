@@ -120,17 +120,17 @@ The deploy reports the command names it registered:
 
 **Who sees them is who can reach the app**: every app in every space the caller
 belongs to. A `public` or `open` app in a space they do not belong to is
-reachable on the web but not here — a command names its app by slug, and there
-is no space to resolve that slug against. Two apps in two of their spaces can
-have a command of the same name; both are listed, and a call that names neither
-app is refused, listing the candidates:
+reachable on the web but not by a command — a command names its app by slug, and
+there is no space to resolve that slug against. Two apps in two of their spaces
+can have a command of the same name; both are listed, and a call that names
+neither app is refused, listing the candidates:
 
     log_run is a command of club/runs and yourname/runs — say which app
 
 A name nobody has is refused with a list of the commands that do exist, since a
 command list is a person's own and no model can have memorized it:
 
-    no command add_run — the apps here offer yourname/runs: log_run, leaderboard,
+    no command add_run — your apps offer yourname/runs: log_run, leaderboard,
     since. commands lists them with their arguments.
 
 `commands` groups them by app and lists each one's arguments the way `command`
@@ -238,7 +238,7 @@ it does depends on whether an argument of that name arrived.
 A variable that is neither an argument nor an entity the template writes is a
 typo, refused at deploy:
 
-    log_run: $when names no input and no entity here — declare it in
+    log_run: $when names no input and no entity — declare it in
     log_run.input
 
 ## The apply action
@@ -385,10 +385,10 @@ served as `text/html;profile=mcp-app`, and the `commands` listing names it as
 that command's `view`. The link is carried there rather than on a tool's
 `_meta`, because this app has no MCP tool of its own to attach it to — which is
 the one thing the fixed tool list costs: an MCP client that renders a widget
-from the tool it called finds nothing to read here, so the agent fetches the
-page and shows it rather than the client drawing it by itself. Only a page a
-command named is readable at all: the app's other files are served on the web,
-not through the connector, and asking for one returns `no resource`.
+from the tool it called finds nothing to read in the answer, so the agent
+fetches the page and shows it rather than the client drawing it by itself. Only
+a page a command named is readable at all: the app's other files are served on
+the web, not through the connector, and asking for one returns `no resource`.
 
 **Relative URLs work.** The connector prepends a `<base href>` pointing at the
 app's own address — the same tag the app's pages are served with on the web —

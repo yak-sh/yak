@@ -3645,7 +3645,7 @@ let OURS: Row[] = [
           type: 'boolean',
           description:
             'true to submit it for https://yaks.app/gallery, the public ' +
-            'page of apps made here. Only when the person has said they ' +
+            'page of yaks apps people have made. Only when the person has said they ' +
             'want it shown. It appears there once yaks.app approves it; ' +
             'app_set(app, gallery: false) withdraws it at any time',
         },

@@ -114,9 +114,9 @@ The page draws them out of the store like anything else:
 
 Same origin, under the app's own `/api/`, so a page reaches it with an ordinary
 `fetch` and an app's `worker.js` reaches it through `env.STORE`. It is callable
-by a GUEST — the person buying has no account here and never will — which is the
-whole point of it being the platform's endpoint and not something an app has to
-be trusted with.
+by a GUEST — the person buying has no yaks.app account and never will — which is
+the whole point of it being the platform's endpoint and not something an app has
+to be trusted with.
 
 - **`items`** is what to sell: the product's eid, how many, and `options` for a
   variant — a size, a colour — which is appended to the line the buyer reads on
@@ -147,7 +147,7 @@ From a page, the whole of it:
     if (!r.ok) return say(out.error.message)
     location.href = out.url
 
-A refusal comes back the way every refusal here does —
+A refusal comes back the way every refusal on yaks.app does —
 `{"error": {"code": …, "message": …}}` — so showing `out.error.message` gives
 the person an explanation rather than a status code. The one worth handling by
 name is the space that has not connected an account yet.
@@ -204,9 +204,9 @@ makes the Checkout Session, addressed to the seller's account, with an
 application fee on it; the charge lives on the seller's account, so their name
 is on the statement, they pay Stripe's processing fee, and they own the refund
 and the dispute. Nothing in that paragraph is something an app has to know or
-can change — it is here because somebody will ask.
+can change — it is on this page because somebody will ask.
 
-## What is not here
+## What selling does not do
 
 Subscriptions and recurring charges, shipping rates and tax calculation,
 discount codes, and refunding from inside an app: a refund is made in the

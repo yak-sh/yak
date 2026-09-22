@@ -41,8 +41,8 @@ Six things, and this list is the whole of it:
 - the space and the app's slug
 - the path that was opened
 - the country the request came from, as Cloudflare's own two letters
-- the **hostname** of the site that linked them here, and nothing else of the
-  referrer — no path, no query, so a search term somebody arrived on is gone
+- the **hostname** of the site that linked them to the app, and nothing else of
+  the referrer — no path, no query, so a search term somebody arrived on is gone
   before it is written down
 - one of three labels for the kind of client: `browser`, `bot` or `agent` (an AI
   assistant fetching the page)
@@ -53,7 +53,7 @@ Six things, and this list is the whole of it:
 - **no visitor id**, no cookie, no session, no fingerprint
 - **not the user-agent string** — a UA is a fingerprint, and only the one label
   above survives it
-- nothing that could be joined back to a person, here or anywhere else
+- nothing that could be joined back to a person, on yaks.app or anywhere else
 
 That is a design choice, not a setting: there is no visitor identity in the
 data, so no query can produce one. If the person asks "who opened it?" or "did
@@ -72,7 +72,7 @@ It returns, for the window:
 - **total** visits, and **daily** — one entry per day, oldest first, including
   the days nobody came
 - **pages** — the most-opened paths
-- **from** — the sites that linked here, busiest first
+- **from** — the sites that linked to the app, busiest first
 - **countries** — where the visitors were
 
 `days` defaults to 30 and is clamped to 90, which is as far back as anything is
@@ -98,9 +98,9 @@ learn.
 ## What the numbers mean, and do not
 
 They are **approximate on purpose**. Under load the counter keeps a sample and
-records how many each kept row stands for, and every total here is already
-multiplied back out — so a big number is a good estimate and a small one is
-exact. Do not present them as a ledger.
+records how many each kept row stands for, and every total in the report is
+already multiplied back out — so a big number is a good estimate and a small one
+is exact. Do not present them as a ledger.
 
 Bots and AI agents are counted alongside people. A brand-new page with eleven
 visits and nobody who has been told about it is usually eleven crawlers, so read

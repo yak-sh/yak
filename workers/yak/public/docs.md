@@ -1,7 +1,7 @@
 # Building a yaks app
 
 The platform is yaks.app, written the way its address is: lowercase, with the
-`.app`. An app made here is a yaks app.
+`.app`. An app built on yaks.app is a yaks app.
 
 A yaks app is an `index.html` and whatever files sit beside it, served live at
 `<space>.yaks.app/<app>/`. There is no build step and no framework: what you
@@ -164,9 +164,9 @@ a page can show a byline to anyone. Any other reference stays the bare eid it
 always was, and a write still accepts that eid — a row read and handed back
 refers to the eid it named.
 
-A person is a row here too, so `query('.person!&.doc?')` lists everyone the
-store has met, by name; they stay out of an ordinary listing, which returns what
-the page saved.
+A person is a row in the store too, so `query('.person!&.doc?')` lists everyone
+the store has met, by name; they stay out of an ordinary listing, which returns
+what the page saved.
 
 An `open` app accepts writes from anyone with the link, and a guest who never
 signed in is nobody yet: their rows have no `created.by` to name. If a byline
@@ -415,9 +415,9 @@ directory takes a snapshot of `tools/list` the day a connector is submitted and
 serves that snapshot forever, and only `tools/call` ever reaches us. So nothing
 a person does changes the list: an app of theirs declares commands, which
 `commands` lists and `command` runs (below), and a space they joined brings more
-of those. Only a release here changes the list:
+of those. Only a release changes the list:
 
-- `about` reports what is here **right now** — every tool name, and a roster
+- `about` reports what the space has _right now_ — every tool name, and a roster
   version naming that list. Call it at the start of a conversation; the answer
   is the whole list, not a summary of it.
 - When a release changes the list while you are connected, a reply carries one
@@ -796,7 +796,7 @@ article — and keep it. Two pieces, and a `worker.js` is what makes it possible
   bar once; pressing it opens the app's clip page with the address of the page
   they are on. It opens a page rather than posting the data, because an app's
   `./api/` write endpoints accept same-origin, cookie-carrying requests only — a
-  script on another site cannot write here today, with or without a token.
+  script on another site cannot write to an app today, with or without a token.
 
 Keep where it came from, in a component of your own —
 
@@ -815,8 +815,8 @@ app.
 Deeper: <https://yaks.app/docs/sharing.md> — access, members, publishing,
 installing, pinning.
 
-An app is a plugin. Once it is deployed you can offer it to every other space
-here, and anyone can take a copy into their own — five tools:
+An app is a plugin. Once it is deployed you can offer it to every other space on
+yaks.app, and anyone can take a copy into their own — five tools:
 
 - `app_publish(app, name?, about?)` — offer the version that is serving, under a
   name the whole platform shares; an app that has never been deployed is
@@ -831,7 +831,7 @@ here, and anyone can take a copy into their own — five tools:
   installs at.
 - `app_install(name, as?)` — take one. Leave `as` out and it lands at the app's
   own slug — the address its author wrote it at — or at the published name when
-  that one is taken here; `as` puts it anywhere you say.
+  that one is taken in the space; `as` puts it anywhere you say.
 - `app_update(app)` — move an installed copy to whatever its publisher offers
   now.
 
@@ -892,10 +892,10 @@ A letter that arrives is stored as one entity in that app's store — `doc` for
 the subject and the words, `mail{from, to, at, message_id, verified}` for the
 envelope, attachments saved as blobs and linked to it with a `contains` edge —
 and anything subscribed sees it arrive. The sender is data, never an actor:
-nobody here wrote the letter, so `created.by` is null, and `mail.verified`
-carries the DKIM verdict, which is not authority to do anything. Mail is metered
-in both directions against the space's plan (<https://yaks.app/pricing>); mail
-at the person's own domain is not offered.
+nobody in the store wrote the letter, so `created.by` is null, and
+`mail.verified` carries the DKIM verdict, which is not authority to do anything.
+Mail is metered in both directions against the space's plan
+(<https://yaks.app/pricing>); mail at the person's own domain is not offered.
 
 ## Selling things
 
@@ -942,8 +942,8 @@ state means.
 
 A space, or one app of it, can also answer at a domain the person already owns,
 with the `.yaks.app` address still working. `ourbookclub.com` on the space
-serves it exactly as `yourname.yaks.app` does — the front page at `/`, every app at
-`/<app>/`. `example.com` on a single app serves that app at the root, and
+serves it exactly as `yourname.yaks.app` does — the front page at `/`, every app
+at `/<app>/`. `example.com` on a single app serves that app at the root, and
 nothing else is there. Both can be in place at once. Three tools, all the space
 owner's:
 
@@ -966,10 +966,10 @@ their registrar's panel better than they do, so walk them through it in their
 own words — or do it for them, if you can reach it.
 
 **The apex is where people give up.** DNS does not allow a CNAME at a bare
-domain (`example.com`, with no `www.` in front). Moving their DNS to
-Cloudflare is the answer to lead with: it is free, its CNAME flattening makes
-the apex work, and it leaves the domain registered where it is. Failing that,
-attach `www.example.com` and forward the apex to it.
+domain (`example.com`, with no `www.` in front). Moving their DNS to Cloudflare
+is the answer to lead with: it is free, its CNAME flattening makes the apex
+work, and it leaves the domain registered where it is. Failing that, attach
+`www.example.com` and forward the apex to it.
 
 Nothing serves until the record resolves — usually minutes, sometimes a day.
 `domain_status` splits the wait into the record arriving, Cloudflare accepting
@@ -1087,7 +1087,7 @@ lists an app's last twenty deploys, newest first, with what changed in each, and
 and its worker — as a new version, so a rollback can itself be rolled back. Only
 the files change; what the app has saved is never touched.
 
-## Nothing here is lost by a simple mistake
+## Nothing is lost by a simple mistake
 
 Every destructive thing on this platform has a way back, and each tool's own
 description ends by naming it. Four of them, at four sizes:
@@ -1111,7 +1111,7 @@ description ends by naming it. Four of them, at four sizes:
 
 So **fix things first and ask afterwards**, rather than the other way round. The
 whole point of keeping all of this is that a change is cheap to try: an agent
-that stops to ask permission before every write is paying a price nobody here is
+that stops to ask permission before every write is paying a price nobody is
 charging. And when the person hesitates — "will I lose everything?" — say which
 of these covers them. They are usually weighing a risk that is not there.
 
@@ -1145,10 +1145,10 @@ is usually eleven robots.
 
 Not every problem belongs to the app. Anything either of you has to say about
 yaks.app itself — a tool that refused for no reason you could find, a tool or
-endpoint that isn't there, a page here that taught you the wrong thing, a step
-the person found baffling, a rough edge, a wish, a feature idea, a thing that
-went well — `feedback(text, app?)` sends it to the people who run yaks.app, and
-it reaches them as mail they can answer.
+endpoint that isn't there, a page of this documentation that taught you the
+wrong thing, a step the person found baffling, a rough edge, a wish, a feature
+idea, a thing that went well — `feedback(text, app?)` sends it to the people who
+run yaks.app, and it reaches them as mail they can answer.
 
 Send what the person said, in their own words, and what you tried and what
 happened. Nothing else: who they are, their space, the app if you name one, and

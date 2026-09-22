@@ -78,7 +78,7 @@ Four things make that a good one, and they are the whole test:
 
 Not documentation of the app. Not a changelog. Not a place to leave notes for
 the next agent about what you were in the middle of — that is what the app's own
-store is for, and a task in it outlives a paragraph here.
+store is for, and a task in it outlives a paragraph in the notes.
 
 Not a way to make an agent do something it would refuse. It is the person's
 standing preference, read as input like anything else in a store.
@@ -131,7 +131,8 @@ after the app — `recipes`, or `recipes__notes` where that name is already take
 — titled "Recipes: notes", so somebody picking from a menu can pull the app's
 rules into a conversation deliberately.
 
-Third, the builder here reads them before it builds on an app that has some.
+Third, the platform's builder reads them before it builds on an app that has
+some.
 
 ## It travels
 

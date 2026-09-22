@@ -308,7 +308,7 @@ An app's `access` is one of three settings, given by `app_new` and `app_set`:
   list, the party wall.
 - `private` — members only, both halves. The pages are hidden too, not just the
   data: a stranger asking for `/diary/` is sent to sign in, and someone signed
-  in who is nobody here gets the nothing-here a wrong address gets. The app's
+  in who is not a member gets the same answer a wrong address gets. The app's
   own `worker.js` runs ahead of that, and `env.APP` lets it write as the app — a
   private app with a worker is one whose gatekeeper is its own code.
 

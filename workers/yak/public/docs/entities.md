@@ -114,7 +114,7 @@ Declaring a component another app homes is refused for exactly one reason — th
 same column with two types. The rows already written under the home's type are
 the record of what that column is, and no manifest may rewrite them.
 
-    vocab.json: book.pages is text here and number in reading-list,
+    vocab.json: book.pages is text in this app and number in reading-list,
       where book lives — a column keeps the type its rows were written under
 
 The whole manifest is read before anything is planted, so that deploy moves

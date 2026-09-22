@@ -3,7 +3,7 @@
   technical details. basically, explain that it's hosted on CF, scalable, some
   limitations, etc etc."
 
-  The rule this page is written under: every number and every capability here
+  The rule this page is written under: every number and every capability on this page
   is READ OFF THE CODE, never invented, and the pointer is named in a comment
   beside anything a reader might want to check. If the code stops being true,
   this page is wrong and somebody has to fix it — so it says as little as it

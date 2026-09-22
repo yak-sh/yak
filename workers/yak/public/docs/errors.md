@@ -14,9 +14,9 @@ guide:
 
 # When something breaks
 
-Nothing here is swallowed. This page is what a refused call returns and how a
-page shows it, what the reporter in every page catches on its own, where a break
-is filed and how you hear about it once, `app_errors`, `app_versions` and
+Nothing is swallowed. This page is what a refused call returns and how a page
+shows it, what the reporter in every page catches on its own, where a break is
+filed and how you hear about it once, `app_errors`, `app_versions` and
 `app_rollback`, and `feedback` for anything either of you has to say about the
 platform itself.
 
@@ -333,11 +333,11 @@ nothing kept: only when the person has said they mean exactly that.
     feedback(text, app?, space?)
 
 The tool for **all** feedback about the platform — this connector, its tools,
-its guide, the way an app is built or served here. A tool that refused for no
-reason you could find, a tool that is missing, a reply that disagreed with what
-was documented, a step the person found baffling; and equally a rough edge, a
-wish, a feature idea, a thing that went well. Whether you ran into it yourself
-or the person said it, it is wanted.
+its guide, the way an app is built or served on yaks.app. A tool that refused
+for no reason you could find, a tool that is missing, a reply that disagreed
+with what was documented, a step the person found baffling; and equally a rough
+edge, a wish, a feature idea, a thing that went well. Whether you ran into it
+yourself or the person said it, it is wanted.
 
 Reach for it the moment it comes up. Where something is broken, work around it
 and carry on: nobody sees the workaround, and this is what is seen instead.

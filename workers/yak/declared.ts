@@ -198,7 +198,7 @@ export let runCommand = async (
     throw new Error(
       `no command ${name}${said ? ` in ${said}` : ''} — ${
         there.length
-          ? `the apps here offer ${there.join('; ')}`
+          ? `your apps offer ${there.join('; ')}`
           : 'no app you can reach declares one'
       }. commands lists them with their arguments.`,
     )

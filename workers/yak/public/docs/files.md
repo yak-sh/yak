@@ -440,7 +440,7 @@ row of your own is a separate row, and two of them are two pictures on the wall.
 On a wall left open for hours, read `.image!` inside the subscription, so a
 photo added later gets its box too.
 
-## What is not here
+## What files do not do
 
 - **No server-side resizing and no thumbnails.** What you upload is what is
   served, at one size. The page downscales.

@@ -135,5 +135,5 @@ Deno.test('nothing the connector says is shouted', () => {
 Deno.test('the instructions teach the spelling', () => {
   assertStringIncludes(INSTRUCTIONS, 'This is yaks.app')
   assertStringIncludes(INSTRUCTIONS, 'lowercase, with the .app')
-  assertStringIncludes(INSTRUCTIONS, 'An app made here is a yaks app')
+  assertStringIncludes(INSTRUCTIONS, 'An app built on yaks.app is a yaks app')
 })

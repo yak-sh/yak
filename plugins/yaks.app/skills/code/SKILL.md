@@ -65,9 +65,9 @@ compile TypeScript before uploading.
 it imports and every module those import. Nothing else goes up: the app's page
 scripts stay pages.
 
-That is also how a worker compiled from another language runs here. A `.wasm`
-arrives as a compiled `WebAssembly.Module`, instantiated once at the top level
-rather than per request:
+That is also how a worker compiled from another language runs on yaks.app. A
+`.wasm` arrives as a compiled `WebAssembly.Module`, instantiated once at the top
+level rather than per request:
 
     import wasm from './add.wasm'
 
@@ -160,9 +160,9 @@ A refusal comes back the way it comes back to a page —
 with a 401 or 403 — so passing it straight through gives the page a message it
 already knows how to show.
 
-The whole filter grammar works here, because these are the same endpoints:
-`.doc!`, `.recipe.minutes<=30`, `id=<eid>`, `limit=`, `.count!`, a bare word for
-full text. Ask for the components you will use.
+The whole filter grammar works in a worker, because these are the same
+endpoints: `.doc!`, `.recipe.minutes<=30`, `id=<eid>`, `limit=`, `.count!`, a
+bare word for full text. Ask for the components you will use.
 
 ## env.APP — the app's graph, as the app itself
 
@@ -294,7 +294,7 @@ your own. Three things follow from it being served the same way:
 - An HTML page comes back **already transformed** — the `<base href>` is in it
   and the reporter script is injected. You are reading what a visitor would have
   received, not the bytes in storage.
-- `worker.js`, `vocab.json` and `tools.json` answer 404 here too. The worker
+- `worker.js`, `vocab.json` and `tools.json` answer 404 to the worker too: it
   cannot read its own manifest this way.
 - A path with no extension that names no file gets `index.html`, the same
   pretty-path fallback the browser gets.

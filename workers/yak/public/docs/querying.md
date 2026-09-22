@@ -441,8 +441,8 @@ its whole string to `query()` and a saved filter is a valid search.
 
 ## What this store will not do
 
-Two pieces of the wider platform grammar are refused here, by name, rather than
-quietly doing something else:
+Two pieces of the wider platform grammar are refused in an app's store, by name,
+rather than quietly doing something else:
 
     .doc!&work=build       → work lanes are not served by this store
     .doc!&.order=similar   → semantic ranking is not served by this store

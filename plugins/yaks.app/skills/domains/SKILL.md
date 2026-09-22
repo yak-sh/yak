@@ -5,7 +5,7 @@ description: 'A custom domain (yaks.app). Pointing a domain the person already o
 
 # A custom domain
 
-A space here answers at `<space>.yaks.app` and each of its apps at
+A space answers at `<space>.yaks.app` and each of its apps at
 `<space>.yaks.app/<app>/`. Either can also answer at a domain the person already
 owns — `example.com`, or `www.example.com` — with the `.yaks.app` address still
 working.
@@ -31,9 +31,9 @@ before, with nothing to re-attach and no DNS to change
 This page is for you, the assistant. The person you are helping owns a domain
 and probably bought it years ago from GoDaddy or Namecheap or Squarespace. They
 do not know what a CNAME is and they should not have to. You already know what
-those control panels look like. So: attach the domain here, then walk them
-through their registrar in their own words, or do it for them if you can reach
-it.
+those control panels look like. So: attach the domain with `domain_attach`, then
+walk them through their registrar in their own words, or do it for them if you
+can reach it.
 
 Back to the map: <https://yaks.app/docs.md>
 
@@ -100,7 +100,7 @@ refuses a CNAME at `@` — it offers a URL Redirect record instead, which is the
 finished, and the panel is Squarespace's) — account.squarespace.com/domains →
 the domain → **DNS** → **Custom Records** → **Add Record**. Fields are Type,
 Name, Priority, TTL, Data — the target goes in **Data**. Name is a prefix and
-Squarespace appends the domain. There is no apex record here at all.
+Squarespace appends the domain. Squarespace has no apex record at all.
 
 **Wix** — Domains → the domain's **Domain Actions** → **Manage DNS records**.
 Wix's own instruction: where another vendor tells you to put `@` in Host Name,
@@ -165,17 +165,17 @@ charges what the registry charges, with no markup added — so transferring the
 domain there at its next renewal usually costs less than they pay now. A
 transfer needs the domain to be at least 60 days old, unlocked at the current
 registrar, and an authorization code from them, and it takes about five days.
-None of that is required to point the domain here; it is just the thing they
-will ask about once their DNS is on Cloudflare.
+None of that is required to point the domain at yaks.app; it is just the thing
+they will ask about once their DNS is on Cloudflare.
 
 ## Reading the status
 
 `domain_status` reports three steps, each with `done`, `waiting` or `error`,
 because each one waits on somebody different:
 
-- **dns** — whether the record resolves here. Waiting means the person has not
-  added it yet, or it has not propagated. This is the only step they can do
-  anything about.
+- **dns** — whether the record resolves to yaks.app. Waiting means the person
+  has not added it yet, or it has not propagated. This is the only step they can
+  do anything about.
 - **validation** — whether Cloudflare has accepted the hostname as one we may
   serve. It follows dns.
 - **certificate** — whether the HTTPS certificate is issued. This is the step

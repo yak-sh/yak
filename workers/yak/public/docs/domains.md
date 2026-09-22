@@ -13,18 +13,18 @@ guide:
 
 # A custom domain
 
-A space here answers at `<space>.yaks.app` and each of its apps at
+A space answers at `<space>.yaks.app` and each of its apps at
 `<space>.yaks.app/<app>/`. Either can also answer at a domain the person already
-owns — `example.com`, or `www.example.com` — with the `.yaks.app`
-address still working.
+owns — `example.com`, or `www.example.com` — with the `.yaks.app` address still
+working.
 
 Two forms, and the difference is what you name:
 
-- **The space.** `ourbookclub.com` serves the space exactly as `yourname.yaks.app`
-  does: the front page at `/`, every app at `/<app>/`. The apps are directories
-  of their own domain.
-- **One app.** `example.com` serves that app at the root of it, and nothing
-  else is there.
+- **The space.** `ourbookclub.com` serves the space exactly as
+  `yourname.yaks.app` does: the front page at `/`, every app at `/<app>/`. The
+  apps are directories of their own domain.
+- **One app.** `example.com` serves that app at the root of it, and nothing else
+  is there.
 
 A space can have both at once, and an app of it can still have a domain of its
 own — at that domain the app is the root, at the space's domain it is a
@@ -39,9 +39,9 @@ before, with nothing to re-attach and no DNS to change
 This page is for you, the assistant. The person you are helping owns a domain
 and probably bought it years ago from GoDaddy or Namecheap or Squarespace. They
 do not know what a CNAME is and they should not have to. You already know what
-those control panels look like. So: attach the domain here, then walk them
-through their registrar in their own words, or do it for them if you can reach
-it.
+those control panels look like. So: attach the domain with `domain_attach`, then
+walk them through their registrar in their own words, or do it for them if you
+can reach it.
 
 Back to the map: <https://yaks.app/docs.md>
 
@@ -71,8 +71,8 @@ existing `.yaks.app` address in the meantime.
   untouched: same data, same files, same `<space>.yaks.app` address.
 
 A domain points at one place, and a hostname belongs to one place across the
-whole platform. `www.example.com` and `example.com` are two hostnames,
-so attach both if they want both.
+whole platform. `www.example.com` and `example.com` are two hostnames, so attach
+both if they want both.
 
 ## The record
 
@@ -90,9 +90,9 @@ serves whatever it served before.
 ## The panels
 
 The trap that catches people at half of these registrars: **the Name/Host field
-is a prefix, and the panel adds the domain itself.** Typing
-`www.example.com` there produces `www.example.com.example.com`. When
-in doubt, type `www`, and check the record's full name after saving.
+is a prefix, and the panel adds the domain itself.** Typing `www.example.com`
+there produces `www.example.com.example.com`. When in doubt, type `www`, and
+check the record's full name after saving.
 
 **GoDaddy** — Domain Portfolio → the domain → **DNS** → **Add New Record**.
 Fields are Type, Name, Value, TTL. Name is the prefix (`www`), not the whole
@@ -108,7 +108,7 @@ refuses a CNAME at `@` — it offers a URL Redirect record instead, which is the
 finished, and the panel is Squarespace's) — account.squarespace.com/domains →
 the domain → **DNS** → **Custom Records** → **Add Record**. Fields are Type,
 Name, Priority, TTL, Data — the target goes in **Data**. Name is a prefix and
-Squarespace appends the domain. There is no apex record here at all.
+Squarespace appends the domain. Squarespace has no apex record at all.
 
 **Wix** — Domains → the domain's **Domain Actions** → **Manage DNS records**.
 Wix's own instruction: where another vendor tells you to put `@` in Host Name,
@@ -141,8 +141,8 @@ the answer ready before they hit it. Three ways through:
 
 **Move their DNS to Cloudflare.** The best option, and the one to lead with.
 Cloudflare's DNS flattens a CNAME at the apex — it resolves the target and
-serves the addresses — so `example.com` simply works. It is free, it does
-not move the domain's registration, and it takes about ten minutes:
+serves the addresses — so `example.com` simply works. It is free, it does not
+move the domain's registration, and it takes about ten minutes:
 
 1. dash.cloudflare.com → **Add a domain** → type `example.com`.
 2. Choose the **Free** plan. Cloudflare scans the existing records; check that
@@ -162,28 +162,28 @@ chain and the domain goes dark. Cloudflare can turn it back on afterwards.
 allowed at the apex. Porkbun has one. GoDaddy, Namecheap, Squarespace, Hover and
 Shopify do not.
 
-**Attach `www` instead.** `domain_attach(app, hostname: 'www.example.com')`,
-a CNAME at `www`, and a forwarding rule at the apex sending `example.com` to
-`www.example.com`. Every registrar above has domain forwarding under some
-name. It works and people accept it, but the address they give out is still the
-bare one, so offer Cloudflare first.
+**Attach `www` instead.** `domain_attach(app, hostname: 'www.example.com')`, a
+CNAME at `www`, and a forwarding rule at the apex sending `example.com` to
+`www.example.com`. Every registrar above has domain forwarding under some name.
+It works and people accept it, but the address they give out is still the bare
+one, so offer Cloudflare first.
 
 While they are moving DNS, it is worth saying that Cloudflare's registrar
 charges what the registry charges, with no markup added — so transferring the
 domain there at its next renewal usually costs less than they pay now. A
 transfer needs the domain to be at least 60 days old, unlocked at the current
 registrar, and an authorization code from them, and it takes about five days.
-None of that is required to point the domain here; it is just the thing they
-will ask about once their DNS is on Cloudflare.
+None of that is required to point the domain at yaks.app; it is just the thing
+they will ask about once their DNS is on Cloudflare.
 
 ## Reading the status
 
 `domain_status` reports three steps, each with `done`, `waiting` or `error`,
 because each one waits on somebody different:
 
-- **dns** — whether the record resolves here. Waiting means the person has not
-  added it yet, or it has not propagated. This is the only step they can do
-  anything about.
+- **dns** — whether the record resolves to yaks.app. Waiting means the person
+  has not added it yet, or it has not propagated. This is the only step they can
+  do anything about.
 - **validation** — whether Cloudflare has accepted the hostname as one we may
   serve. It follows dns.
 - **certificate** — whether the HTTPS certificate is issued. This is the step
@@ -213,8 +213,8 @@ doing in between — check again in five minutes rather than changing anything.
   another site builder, the hostname may still be registered there and will keep
   winning. They have to remove it at the old platform.
 - **The record went in with the domain doubled** —
-  `www.example.com.example.com`. See the panels above. This is the most
-  common one by a distance.
+  `www.example.com.example.com`. See the panels above. This is the most common
+  one by a distance.
 
 ## Detaching
 

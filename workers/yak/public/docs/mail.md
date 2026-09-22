@@ -8,7 +8,7 @@ guide:
     Sending and receiving email from an app: the address a space and an app
     make, the rows that send a letter and who may ask for one, the
     delivered and bounced rows that come back, how an arrival lands with its
-    attachments, and what mail here does not do.
+    attachments, and what the platform's mail does not do.
 ---
 
 # Mail: an app's own address
@@ -38,7 +38,8 @@ for every space there will ever be is a local part at the apex. Say the dotted
 form when you tell somebody where to write.
 
 Case does not matter (`Ada.Cookbook@Yaks.App` is the same mailbox). Underscores
-are not addressable at all, here or upstream, so a slug with one has no mailbox.
+are not addressable at all, at yaks.app or upstream, so a slug with one has no
+mailbox.
 
 The address is the same in both directions: what an app's letters leave under is
 what a stranger writes to. Rename the app and its old address still reaches it,
@@ -50,8 +51,8 @@ arriving, and new ones leave under the new name.
 Three things, written in one `apply` call:
 
 - **The recipient, as an entity with `email{address}`.** A letter is addressed
-  to an ENTITY here, not to a string — so a person in the app's store is one
-  row, and the letters to them hang off it.
+  to an entity, not to a string — so a person in the app's store is one row, and
+  the letters to them hang off it.
 - **The letter: `doc{title, body}`** — the subject and the words, the body in
   markdown.
 - **The request to send it: `deliver{to}`** — naming that recipient. That
@@ -108,7 +109,7 @@ component — is held to a member who may write: an owner or an editor.
 That is deliberately stricter than the app's own access. An `open` app accepts
 an anonymous visitor's write on purpose — that is what open means — but a letter
 does not stay in the app: it leaves under this platform's name, DKIM-signed by
-us. An open app with no rule here would be an open relay.
+us. An open app with no such rule would be an open relay.
 
 So a signed-out visitor's write carrying `deliver` is refused whole — 403,
 `Denied` — and nothing in it is saved, the letter included. The same visitor's
@@ -153,10 +154,10 @@ Two rules worth knowing:
   `deliver` next week and it leaves next week — the send reads the whole entity,
   not the patch that set it off.
 
-Nothing here is a log file: a letter with neither component yet is simply one
-whose outcome has not been written, usually a moment later. The outcome is an
-ordinary write to the store, so a page subscribed to the letter watches it
-settle — draw the row, and the outcome arrives on its own.
+Nothing in the mailbox is a log file: a letter with neither component yet is
+simply one whose outcome has not been written, usually a moment later. The
+outcome is an ordinary write to the store, so a page subscribed to the letter
+watches it settle — draw the row, and the outcome arrives on its own.
 
 ## Mail that arrives
 
@@ -238,10 +239,10 @@ keeps filling past the ceiling; it is only sending that waits for the 1st.
 Over the ceiling a letter does not go out: it comes to rest on the entity as
 `bounced{reason}`, the way a provider's own refusal does, so nothing is lost and
 the words can be sent again next month. The reason is the same message every
-ceiling here uses: what the ceiling is, and where the plans are written down. It
-never hands back a checkout link — paying is a page the person opens themselves,
-signed in. Repeat what the tool reported, and offer to delete or slow down
-rather than guessing at a number.
+ceiling on yaks.app uses: what the ceiling is, and where the plans are written
+down. It never hands back a checkout link — paying is a page the person opens
+themselves, signed in. Repeat what the tool reported, and offer to delete or
+slow down rather than guessing at a number.
 
 ## What is not supported
 

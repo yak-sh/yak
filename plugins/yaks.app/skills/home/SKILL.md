@@ -12,8 +12,8 @@ other app claims.
 
 So it is the space's router as well as its homepage. By default it routes by
 being the fall-through — the app whose name owns a path gets that path, and
-everything left over comes here. It can also opt in to seeing paths another app
-owns, before that app does.
+everything left over comes to the front page. It can also opt in to seeing paths
+another app owns, before that app does.
 
 Back to the map: <https://yaks.app/docs.md>
 
@@ -65,7 +65,7 @@ carries the space or one app mounted at its root
    routes them.
 2. **An app's slug**, which owns the first path segment. `/garden/…` is the
    garden app — its own `worker.js` first where it has one, its files behind
-   that. An address the app used to live at redirects here.
+   that. An address the app used to live at redirects to it.
 3. **The front page's files**, for every path no app claims. `/photo.png` is its
    file and `/about` its page, at the bare hostname.
 4. **The space's index** at `/`, when the space has no front page or the front
@@ -99,7 +99,7 @@ Now `/recipes/lemon` reaches the front page's worker instead of the recipes app,
 and so does `/garden/print`. What the worker does with such a request is up to
 it: a redirect, a decoration, a page of its own — or a 404, which passes the
 request back down to the app that owns it, the same pass-through a worker makes
-everywhere else here.
+everywhere else on yaks.app.
 
 `*` matches any run of characters, slashes included. There is one wildcard and
 no other pattern syntax: `/recipes/*` is everything under `/recipes/`,
@@ -206,10 +206,10 @@ hook to register; the letters are simply in a store you can read.
 
     subscribe('.mail!&.doc?', triage)
 
-Nothing about the mailbox itself changes here. `mail_list` reads the same rows
-back from an agent's side, `mail_send` sends from the same address, and a space
-with no front page is named in the refusal when somebody writes to it, so the
-sender knows to write to `<space>.<app>@yaks.app` instead.
+Nothing about the mailbox itself changes with a front page. `mail_list` reads
+the same rows back from an agent's side, `mail_send` sends from the same
+address, and a space with no front page is named in the refusal when somebody
+writes to it, so the sender knows to write to `<space>.<app>@yaks.app` instead.
 
 ## What a front page is not
 

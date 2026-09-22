@@ -8,7 +8,7 @@ guide:
     Clipping a page somebody is reading into the app's store: a worker route
     that fetches it and reads its JSON-LD, Open Graph and title, a
     bookmarklet that opens it, why a script on another site cannot write
-    here, and what to tell the person when a site refuses a robot.
+    to an app, and what to tell the person when a site refuses a robot.
 ---
 
 # Saving a page from another site
@@ -26,7 +26,7 @@ all three levels; the first half is what you write for anything.
 ## Why the app fetches it, and the other page does not send it
 
 The obvious design — a button on the other site that posts into the app — is not
-one you can build here yet, and it is worth knowing why before you try.
+one you can build on yaks.app yet, and it is worth knowing why before you try.
 
 An app's endpoints under `./api/` accept **same-origin requests carrying the
 person's cookie**. The person's sign-in cookie is `SameSite=Lax` and the
@@ -42,9 +42,9 @@ because it is their own tab on their own site — does the reading and the
 writing. That is the whole trick, and it is why the flow is: press the button,
 land in the app, see what was saved.
 
-Do not build around a token or an extension. Neither exists here today, and a
-page that tells the person to paste an API key somewhere is a page teaching them
-a bad habit for an endpoint that is closed anyway.
+Do not build around a token or an extension. Neither exists on yaks.app today,
+and a page that tells the person to paste an API key somewhere is a page
+teaching them a bad habit for an endpoint that is closed anyway.
 
 ## The metadata a page carries about itself
 
@@ -463,7 +463,7 @@ to the home screen, which is not something to promise a person today. Give them
 the paste box, and say the sharing sheet is coming rather than shipping a button
 that does nothing on their phone.
 
-## What is not here yet
+## What is not built yet
 
 - **No writing into an app from another site.** No API token, and no endpoint
   that accepts a cross-origin write. The bookmarklet is the whole of it.

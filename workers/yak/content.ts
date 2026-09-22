@@ -17,7 +17,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'clipping',
     'title': 'Saving from another site',
     'description':
-      "Clipping a page somebody is reading into the app's store: a worker route that fetches it and reads its JSON-LD, Open Graph and title, a bookmarklet that opens it, why a script on another site cannot write here, and what to tell the person when a site refuses a robot.",
+      "Clipping a page somebody is reading into the app's store: a worker route that fetches it and reads its JSON-LD, Open Graph and title, a bookmarklet that opens it, why a script on another site cannot write to an app, and what to tell the person when a site refuses a robot.",
     'brief': 'saving a page from another site',
   },
   'code': {
@@ -73,7 +73,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'mail',
     'title': "Mail: an app's own address",
     'description':
-      'Sending and receiving email from an app: the address a space and an app make, the rows that send a letter and who may ask for one, the delivered and bounced rows that come back, how an arrival lands with its attachments, and what mail here does not do.',
+      "Sending and receiving email from an app: the address a space and an app make, the rows that send a letter and who may ask for one, the delivered and bounced rows that come back, how an arrival lands with its attachments, and what the platform's mail does not do.",
     'brief': "an app's own email address",
   },
   'memory': {

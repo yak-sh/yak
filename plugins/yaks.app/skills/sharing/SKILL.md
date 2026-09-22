@@ -37,9 +37,9 @@ Ask on load, not on refusal — that is the whole reason `me()` exists.
 **`private`** — members only, either way. The page itself is part of what only
 they see: a signed-out stranger asking for it is sent to the login page (303)
 holding that page as its return address, and someone signed in who is not a
-member here gets the same "Nothing here yet." a wrong address gets — whether the
-app exists at all is its owner's to tell. The app's `/api/` endpoints answer
-`not_a_reader` rather than pretending.
+member of the space gets the same "Nothing here yet." a wrong address gets —
+whether the app exists at all is its owner's to tell. The app's `/api/`
+endpoints answer `not_a_reader` rather than pretending.
 
 The app's own `worker.js` is the exception, and the only one: it runs before
 that redirect, so a private app with a worker is an app whose gatekeeper is its
@@ -128,8 +128,8 @@ intact — they lose this space, not the platform. Naming an app,
 
 ## Publishing
 
-An app is a plugin. Once it is deployed you can offer it to every other space
-here, and anyone can take a copy into their own.
+An app is a plugin. Once it is deployed you can offer it to every other space on
+yaks.app, and anyone can take a copy into their own.
 
 **`app_publish(app, name?, about?, space?)`** — offer the version that is
 serving now.
@@ -170,19 +170,20 @@ Read it before you build something somebody may already have made.
 
 - `name` is the published name from `app_published`.
 - The address the copy lands at is, in order: `as` if you passed it; else the
-  source app's own slug, if nothing here holds that address; else the published
-  name. The source's slug goes first on purpose — an app is written at its own
-  address, and a copy that reads like the app is easier to reason about. (A page
-  written relatively works either way; the platform gives every page a
+  source app's own slug, if nothing in the space holds that address; else the
+  published name. The source's slug goes first on purpose — an app is written at
+  its own address, and a copy that reads like the app is easier to reason about.
+  (A page written relatively works either way; the platform gives every page a
   `<base href>` pointing at the app's own address.)
-- An address already taken here — by an app, or by an address an app has moved
-  away from and still redirects from — is refused, telling you to pass `as`.
+- An address already taken in the space — by an app, or by an address an app has
+  moved away from and still redirects from — is refused, telling you to pass
+  `as`.
 - An installed app counts against the space's app ceiling like any other (the
   free tier allows five, Plus allows 50; trashed apps do not count).
 - The copy keeps the published app's `access`: an app written to be voted on has
   to stay votable. `app_set` changes it afterwards.
-- The copy is not made the front page: `<space>.yaks.app/` lists what is here
-  until somebody sets which app opens there (`app_set(app, home: true)`).
+- The copy is not made the front page: `<space>.yaks.app/` lists the space's
+  apps until somebody sets which app opens there (`app_set(app, home: true)`).
 - The install ends in a release of the copy: its `vocab.json` installed in its
   own store, its `tools.json` listed under its own slug, its `worker.js`
   uploaded as its own script. So the answer carries the deploy's own lines —
@@ -200,9 +201,9 @@ offers now. Below.
 ## The gallery: being shown
 
 Publishing makes an app installable. The gallery is the other half — being
-shown, on <https://yaks.app/gallery>, a public page of what people have made
-here. They are deliberately two separate acts: an offer is between whoever made
-the app and whoever goes looking for one, and a listing is yaks.app putting
+shown, on <https://yaks.app/gallery>, a public page of what people have made on
+yaks.app. They are deliberately two separate acts: an offer is between whoever
+made the app and whoever goes looking for one, and a listing is yaks.app putting
 somebody's app on its own front page.
 
 **`app_publish(app, gallery: true)`**, or **`app_set(app, gallery: true)`**
@@ -213,8 +214,8 @@ can install is a picture of an app.
 
 It is not listed on the spot. Asking sends a letter to yaks.app carrying the
 app's title, its address, the line its owner wrote about it and who made it,
-with two links to answer by. Nothing appears anywhere until somebody here opens
-the link that approves it. That is the whole design and it does not have a
+with two links to answer by. Nothing appears anywhere until somebody at yaks.app
+opens the link that approves it. That is the whole design and it does not have a
 faster path: the page is ours, under our name.
 
 The tool reports where it stands, and so does the app's pill on the space's own
