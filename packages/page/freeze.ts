@@ -7,7 +7,7 @@
 // login archives the login), and a page recorded by its address alone is
 // fetched afterwards by whatever archiver the server was configured with.
 //
-// The fetch runs AFTER THE COMMIT, which is the right place for it: the address
+// The fetch runs after the commit, which is the right place for it: the address
 // is durable before anybody reaches for the network, a site that is down cannot
 // cause the write to fail, and a capture that takes thirty seconds is not a
 // request somebody is holding open. The result goes back through the graph's
@@ -15,7 +15,7 @@
 // whoever is subscribed to it. A capture that fails throws, and the effects
 // registry records the failure: telemetry, never a rolled-back transaction.
 //
-// The archiver itself is INJECTED. Turning a live URL into one self-contained
+// The archiver itself is injected. Turning a live URL into one self-contained
 // document is an external tool's job (monolith, say), and which tool — with
 // which arguments, under which time limit — is the server's business, named in
 // this plugin's options and built in ./host.ts. This module composes the
@@ -31,7 +31,7 @@ import { scrub } from './scrub.ts'
 import { fetchable } from './url.ts'
 
 /**
- * An archiver: one address in, ONE self-contained document out. It rejects when
+ * An archiver: one address in, one self-contained document out. It rejects when
  * it could not produce one — the rejection's message is what the server
  * records, so make it worth reading.
  */
@@ -64,7 +64,7 @@ let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
  * it under its own SHA-256, and return the changes that stamp the page with
  * where it went and when.
  *
- * It is given the page AS IT STANDS, because the archive's `<title>` names the
+ * It is given the page as it stands, because the archive's `<title>` names the
  * page only while nothing else does — a title somebody wrote by hand is never
  * overwritten by a later capture.
  *

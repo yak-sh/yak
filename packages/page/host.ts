@@ -14,7 +14,7 @@
 // ```
 //
 // A server configured with no archiver fetches nothing — which is exactly what
-// a graph fed only BY A BROWSER wants, since those bytes arrive over
+// a graph fed only by A browser wants, since those bytes arrive over
 // `POST /page` and were never going to be refetched.
 
 import type { Driver } from '@yaks/sqlite'
@@ -43,7 +43,7 @@ let decoder = new TextDecoder()
 
 /**
  * A named command, wrapped as an {@link Archive}. The document is read from the
- * command's STDOUT — there is no temporary file to name, collide over, or leave
+ * command's stdout — there is no temporary file to name, collide over, or leave
  * behind, and the bytes are addressed by their content the moment they arrive.
  *
  * ```ts

@@ -4,14 +4,14 @@
 // A `dream` is a standing intention whose `floor` column is the earliest it
 // may run again, and that column is the whole queue: anything that wants
 // writing later files a dream with its body text and sets `floor` to when it
-// should next run. When the dream is checked and its floor has passed, ONE
+// should next run. When the dream is checked and its floor has passed, one
 // session opens on it and is asked that text. The session takes the dream's
 // `claim` while it runs, so a second check finds the claim and does nothing,
 // and the floor moves forward by the configured rest interval, so a session
 // that died without releasing its claim cannot reopen before then either: one
 // guard for the session that is running, one for the session that vanished.
 //
-// WHAT gets opened is not decided here. A session with a persona, asked of a
+// What gets opened is not decided here. A session with a persona, asked of a
 // provider at an effort, is a fact about the machine and never about the
 // graph, so the configuration names it (./effects.ts) and this module writes
 // it. No process is launched: this package writes a session row and its first

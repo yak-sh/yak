@@ -39,7 +39,7 @@ let side = (batch: Batch, want: 'before' | 'after', guard = false): Change => {
   let order: Eid[] = []
   let held = new Map<Eid, Map<string, Comp | null>>()
   let died = new Set<Eid>()
-  // What the transaction LEFT in each column, hashed: the precondition an undo
+  // What the transaction left in each column, hashed: the precondition an undo
   // carries, so that a column somebody else has changed since refuses the whole
   // reversal rather than quietly overwriting it. Only the backward side needs
   // one — replaying forward is a push to subscribers, not a write.
@@ -85,7 +85,7 @@ let side = (batch: Batch, want: 'before' | 'after', guard = false): Change => {
     let moved = false
     for (let [comp, value] of held.get(eid)!) {
       moved = true
-      // The entity row is the bundle's own IDENTITY, not a component beside
+      // The entity row is the bundle's own identity, not a component beside
       // it: a recorded patch to `entity` merges into the key naming which
       // entity this bundle is about, and never lands on top of the eid. A
       // graph this package journals never records one (the hook skips the
@@ -116,7 +116,7 @@ let side = (batch: Batch, want: 'before' | 'after', guard = false): Change => {
 /**
  * The transaction as committed, rebuilt from its deltas — the bundles a server
  * pushes to its subscribers when it reads the feed, with no read of storage at
- * all. They carry what MOVED, so who wrote it and when, which the `journal_tx`
+ * all. They carry what moved, so who wrote it and when, which the `journal_tx`
  * row already holds, are not repeated in them.
  */
 export let applied = (batch: Batch): Change => side(batch, 'after')

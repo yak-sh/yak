@@ -54,7 +54,7 @@ let club = async () => {
   return rig
 }
 
-// One letter that ARRIVED: a Message-ID is what makes it one.
+// One letter that arrived: a Message-ID is what makes it one.
 let arrival = (eid: string, o: Record<string, unknown> = {}) => ({
   entity: { eid },
   doc: { title: 'Potluck Friday', body: 'Bring a dish.' },
@@ -309,7 +309,7 @@ Deno.test('a sender this host cannot build is what the check says out loud', asy
   })
   assertEquals(said.level, 'warn')
   assert(said.body.includes('waiting for credentials'), said.body)
-  // one that CAN be built is nothing to report
+  // one that can be built is nothing to report
   let fine = await checkup(await posted({ to: 'ana@books.example' }), {
     sender: { via: 'stash' },
   })

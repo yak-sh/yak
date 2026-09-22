@@ -34,7 +34,7 @@
  * `sync` value, and all of them declare `server`. For the shared ones that is
  * obvious — a wall nobody else can see is not a wall. The per-window ones
  * (`camera`, `cursor`, `fold`, `shelf`, `client`) are the interesting
- * decision: they describe ONE window, so `sync: none` looks right, and it is
+ * decision: they describe one window, so `sync: none` looks right, and it is
  * wrong. Something other than that window has to read them — a second tab
  * restoring the viewport it left, a directory of who is looking at what, a tool
  * that moves somebody's open card by writing their `cursor`.

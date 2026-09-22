@@ -7,11 +7,11 @@
 // point. A proposal is `design{}` for what it is, @yaks/doc's
 // `doc{title, body}` for its text, and @yaks/kernel's `proposed` and
 // `decided` for its lifecycle — anything can be proposed, so those two belong
-// to the kernel. A tool returns BUNDLES, which are plain data, so naming
+// to the kernel. A tool returns bundles, which are plain data, so naming
 // another package's component costs no import, and a server that composes
 // neither package simply has those columns dropped on the way in.
 //
-// THE DECIDER IS THE CALLER. Neither implementation writes `by` or `at`: those
+// The decider is the caller. Neither implementation writes `by` or `at`: those
 // are stamped columns, filled in from the actor of the write (@yaks/graph's
 // `marks`), which the tool runner sets to whoever made the call. So a decision
 // records the agent that made it rather than the person it believed it was

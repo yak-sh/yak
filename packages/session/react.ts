@@ -244,7 +244,7 @@ export let react = async (
   // result yet, in one batch, so the model is never asked with a call it made
   // still unanswered (the provider refuses that). A tool that throws is an
   // exception and a result saying so, so the model hears what happened and
-  // the session goes on. This is the SAME set statusOf reads as `running`, so
+  // the session goes on. This is the same set statusOf reads as `running`, so
   // a transcript is never called settled with work left here (T-35230).
   let asked = newestAsk(entries)
   let open = openCalls(entries)
@@ -263,7 +263,7 @@ export let react = async (
   if (open.length) {
     const added: Bundle[] = []
     // The runner is what runs a call — here and everywhere else (@yaks/tools).
-    // A session tool answers a STRING and this is where that becomes bundles:
+    // A session tool answers a string and this is where that becomes bundles:
     // the text it returned, carrying `output{source}` so the result names the
     // call
     // it came from. The runner lands them beside the `result{call, ms}` entity

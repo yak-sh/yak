@@ -11,13 +11,13 @@
 //
 // A write has an author even when no client made a request — the rules a
 // transaction fires, the effects that run after it commits, a file somebody
-// imports — and the author is THIS RUN of this program, not a name a config
+// imports — and the author is this run of this program, not a name a config
 // file made up. So this row is what the server signs its writes with
 // (@yaks/cli), which makes `created.by` on any row the answer to "which run
 // wrote this", and a child process's row, written by its parent, identifies its
 // parent without needing a column for it.
 //
-// A process starting is also an EVENT. `created(process)` where the process is
+// A process starting is also an event. `created(process)` where the process is
 // this one is the moment the server has to pick up what a restart left behind —
 // the agents still running, the locks a dead session held — so start-up work is
 // an ordinary post-commit effect handler instead of a separate start-up hook

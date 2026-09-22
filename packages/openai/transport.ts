@@ -142,7 +142,7 @@ let sleep = (ms: number) =>
 let record = (value: unknown): value is Record<string, unknown> =>
   value != null && typeof value == 'object' && !Array.isArray(value)
 
-// A resettable idle deadline for one provider exchange. It aborts its OWN signal
+// A resettable idle deadline for one provider exchange. It aborts its own signal
 // — never the caller's stop — when `ms` passes with no progress, and each frame
 // calls kick() to push the deadline forward. The caller reads stalled() to turn
 // that self-abort into a diagnosable fault instead of a silent hang. A relayed
@@ -195,7 +195,7 @@ let fault = (
   fields: Omit<ResponseFault, keyof Error> = {},
 ): ResponseError => Object.assign(new ResponseError(kind, message), fields)
 
-// Capacity is answered as a CODE at least as often as a status: a 200 stream
+// Capacity is answered as a code at least as often as a status: a 200 stream
 // can end in `response.failed` carrying error.code=server_is_overloaded, and a
 // refusal body can name server_error with no 5xx of its own. Both are the
 // backend asking us to come back, so they retry like a dropped connection.

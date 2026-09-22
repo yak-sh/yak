@@ -222,7 +222,7 @@ export let argsFor = async (
       literal = true
       continue
     }
-    // An option is `--name`, or a `-n` the tool DECLARED as a short. Anything
+    // An option is `--name`, or a `-n` the tool declared as a short. Anything
     // else starting with a dash is a bare word: `-5` is a number somebody
     // typed, not an option nobody declared.
     let eq = word.indexOf('=')

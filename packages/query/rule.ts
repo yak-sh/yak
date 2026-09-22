@@ -1,6 +1,6 @@
-// A query read as a RULE: the part an evaluator can answer, and the parts only
+// A query read as a rule: the part an evaluator can answer, and the parts only
 // a rule engine can act on. The prefix characters mean both at once — `.entity,
-// +!created` is a filter (an entity with no `created`) AND an instruction (add
+// +!created` is a filter (an entity with no `created`) and an instruction (add
 // `created` before running, so the rule runs once) — so something has to
 // separate the two, and that separation belongs here, where the format is
 // defined, rather than in every engine that reads a rule.
@@ -17,7 +17,7 @@ import {
   type Value,
 } from './ast.ts'
 
-/** One column a rule WRITES: the component, the column, and the value as
+/** One column a rule writes: the component, the column, and the value as
  * written (a literal, or a `$name` the compiler reads as a variable).
  * `mutable` records which prefix it came from — `*` writes into a component
  * that has to be there already, `+` into one the rule adds. */
@@ -35,11 +35,11 @@ export type Declares = {
   filter: And
   /** `+comp` — components to add before the rule runs */
   ensures: string[]
-  /** `+!comp` — components that must be ABSENT and are added before the rule
+  /** `+!comp` — components that must be absent and are added before the rule
    * runs, so it fires once */
   gates: string[]
   /** `*comp` — the components the rule writes: its write set. A write is about
-   * something that exists, so this also asserts the component is PRESENT;
+   * something that exists, so this also asserts the component is present;
    * `+comp` or `+!comp` beside it is how a rule writes one that is not there
    * yet. */
   writes: string[]
@@ -47,7 +47,7 @@ export type Declares = {
   resources: string[]
   /** `$name` — the variables it names */
   vars: string[]
-  /** `$name=value` — the variables it BINDS, which is what a template
+  /** `$name=value` — the variables it binds, which is what a template
    * invocation's arguments are */
   values: [string, Value][]
   /** `+comp.col=value` / `*comp.col=value` — the columns it writes */
@@ -121,7 +121,7 @@ export let declared = (ast: Query): Declares => {
     out.filter.clauses.push(c)
   }
   for (let c of ast.clauses) take(c)
-  // The filter half of `*comp`: a rule writes what it MATCHED, so `*comp`
+  // The filter half of `*comp`: a rule writes what it matched, so `*comp`
   // asserts the component is present too — a presence clause written beside it
   // was only ever a second way of saying the same thing. An ensure or a gate
   // already states how a component the rule writes gets there, so neither

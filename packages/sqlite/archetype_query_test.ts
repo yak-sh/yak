@@ -139,7 +139,7 @@ Deno.test('archetype plans and gathers observe commits from another SQLite handl
     reader.install()
     assertEquals(reader.read('.marker!').map((b) => b.entity.eid), ['raw'])
     // A writer adds one owner of an existing shape and one of a new shape
-    // AFTER planning. A stale catalog with a fresh entity scan would return
+    // after planning. A stale catalog with a fresh entity scan would return
     // two matches: neither the old (one) nor the new (three) snapshot.
     afterCatalog = () => {
       writer.tx((tx) => {

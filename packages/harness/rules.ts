@@ -3,7 +3,7 @@
 // It is the same list `store.ts` builds the harness's own SQLite file with: one
 // list, used by the standalone harness and by a server alike.
 //
-// This is the part that needs a DATABASE — it creates the blob tables through
+// This is the part that needs a database — it creates the blob tables through
 // the caller's connection — which is why it is not in `./vocab`: a browser
 // loading the harness's vocabulary never reaches this file.
 

@@ -1,11 +1,11 @@
 // The return value: the change as applied, as one bundle per entity.
 //
-// Every phase of `apply()` works in PATCHES, and each adds its own bundle —
+// Every phase of `apply()` works in patches, and each adds its own bundle —
 // the write the caller sent, the `created` the stamp phase produced, the
 // identity storage created with its `num`, the tombstone a cascade left. That
 // is right inside the pipeline, where a phase must be able to add something
 // without reaching into a bundle another phase is holding. It is wrong as a
-// RETURN VALUE: the caller asked about an entity, and three bundles for one
+// return value: the caller asked about an entity, and three bundles for one
 // entity is a merge it has to do itself before it can see what it just wrote.
 //
 // So the last thing `apply()` does is put them back together:
@@ -52,11 +52,11 @@ import { comps, dead, TOMBSTONE } from './bundle.ts'
  * ```ts
  * composed([
  *   { entity: { eid: 'b1' }, doc: { title: 'Dune' }, $actor: { by: 'ada' } },
- *   { entity: { eid: 'b1' }, created: { at: NOW, by: 'ada' } },
+ *   { entity: { eid: 'b1' }, created: { at: now, by: 'ada' } },
  *   { entity: { eid: 'b1', num: 3 } },
  * ])
  * // [{ entity: { eid: 'b1', num: 3 },
- * //    doc: { title: 'Dune' }, created: { at: NOW, by: 'ada' } }]
+ * //    doc: { title: 'Dune' }, created: { at: now, by: 'ada' } }]
  * ```
  */
 export let composed = (bundles: Bundle[]): Bundle[] => {
@@ -70,7 +70,7 @@ export let composed = (bundles: Bundle[]): Bundle[] => {
     if (!b.$quiet) said.add(eid)
     // The identity is merged rather than replaced: only the phase that created
     // it knows the `num`, and only the caller's own bundle carries the alias.
-    // The FIRST number wins, so a change spread across several stores reads
+    // The first number wins, so a change spread across several stores reads
     // the way a query over them does — a num is one store's own counter, while
     // the eid identifies the entity everywhere.
     if (b.entity.num !== undefined && one.entity.num == null) {

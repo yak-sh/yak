@@ -1,19 +1,19 @@
-// The two pieces of text this package is careful about: what goes INTO an FTS5
-// MATCH, and what comes back marked.
+// The two pieces of text this package is careful about: what goes into an FTS5
+// match, and what comes back marked.
 //
-// FTS5's match syntax is a small language of its own — quotes, NEAR, boolean
+// FTS5's match syntax is a small language of its own — quotes, near, boolean
 // operators, column filters. What a person types into a search box is none of
-// that; it is just text. So every word is written as a QUOTED phrase, which
+// that; it is just text. So every word is written as a quoted phrase, which
 // makes each character in it literal, and the only match syntax a person can
 // reach is two things: a quoted run, which stays one phrase, and a trailing
 // `*`.
 //
-// WORDS, NOT ONE PHRASE. What somebody types is a set of words — `entropy
+// Words, not one phrase. What somebody types is a set of words — `entropy
 // purge`, or a whole question — and each word becomes a term of its own, ANDed
 // together and ranked by relevance (./search.ts). Turning the whole string into
 // a single phrase would match only where those words appear next to each other
 // in that order, which means a question typed into a search box finds nothing
-// at all. A bare word also matches as a PREFIX, so `research` finds
+// at all. A bare word also matches as a prefix, so `research` finds
 // `researching`: the tokenizer does not stem, and a word's ending is the part a
 // person is least deliberate about. The cost is a wider match — `fix` also
 // matches `fixture` — which is what the ranking is for. Quoting is how somebody
@@ -28,7 +28,7 @@
 export let OPEN = '\x01'
 export let CLOSE = '\x02'
 
-// ONE typed word, or one quoted run, as a safe FTS5 term: every character in it
+// One typed word, or one quoted run, as a safe FTS5 term: every character in it
 // literal. A single word matches as a prefix; a run of words becomes a phrase,
 // matched exactly, and a trailing `*` makes its final word a prefix match.
 // Returns '' for text containing no word — a caller must read that as "matches
@@ -45,7 +45,7 @@ export let term = (text: string): string => {
 // typing a phrase means by it.
 let WORDS = /"[^"]*"?|\S+/g
 
-// A whole search string as an FTS5 MATCH expression: each word becomes its own
+// A whole search string as an FTS5 match expression: each word becomes its own
 // {@link term}, each quoted run becomes one phrase, and they are ANDed together
 // (FTS5 treats a space that way). Order of results comes from the ranking, not
 // from here. Returns '' for text containing no word, just as `term` does.

@@ -1,15 +1,15 @@
-// The two HTTP endpoints: a stored object at an address anyone can GET, and the
+// The two HTTP endpoints: a stored object at an address anyone can get, and the
 // PUT that puts one there. This is the module a server imports from
 // `@yaks/blob/routes`. One path, `/blob/<sha256>`, both ways.
 //
-// The address is the NAME, which is what makes an upload a PUT: the caller
+// The address is the name, which is what makes an upload a PUT: the caller
 // states what the bytes are and the server only has to agree. So the same file sent
 // twice — or by two people, or by one client retrying — is one stored object
 // and one row, and bytes that do not hash to the address they were sent to are
 // refused. Nothing else about them is inspected; whoever knows the hash has the
 // bytes, and to know it you had them already.
 //
-// Who may upload is the GRAPH's question, never a second one these endpoints
+// Who may upload is the graph's question, never a second one these endpoints
 // ask. A PUT first runs its `artifact` row against the graph as a check, so
 // whatever refuses that write refuses the upload, and a server with an upload
 // policy writes it as a rule like any other. The two things left over are the
@@ -40,7 +40,7 @@ export let LIMIT = 25 * 1024 * 1024
 
 /** The options a configuration passes to this plugin. */
 export type Options = {
-  /** where the objects these endpoints serve and accept LIVE; name none and
+  /** where the objects these endpoints serve and accept live; name none and
    * they live in the server's own table, beside the text `./rules` keeps
    * there */
   store?: Backend
@@ -52,7 +52,7 @@ export type Options = {
  * describes. */
 export type Backend =
   | {
-    /** the server's own SQLite table — the default, and TEXT: it is the table
+    /** the server's own SQLite table — the default, and text: it is the table
      * SQL reads a body column through (./sqlite.ts), so a server accepting
      * binary uploads names one of the others */
     via: 'sqlite'
@@ -75,7 +75,7 @@ export type Backend =
 
 /** The named store, built — or the message explaining why there is none. A
  * server that believes it is keeping uploads somewhere and is not is worse than
- * one that does not start, so the reason is REPORTED rather than swallowed; it
+ * one that does not start, so the reason is reported rather than swallowed; it
  * is reported rather than thrown, because missing configuration never stops a
  * server coming up. With nowhere to put bytes, the endpoints are not mounted at
  * all, so an upload is refused where it is attempted instead of being written
@@ -207,7 +207,7 @@ export let routes = (
         // calling, so an upload is attributed the way a write through `/apply`
         // beside it is. The first apply runs with `check`, which validates the
         // write without committing it, so the policy that governs a write
-        // decides the upload BEFORE anything is kept; and the bytes are in
+        // decides the upload before anything is kept; and the bytes are in
         // place before the row that names them, so nothing ever points at an
         // object the store does not hold. A PUT that died in between left an
         // object no row names, which is what a content-addressed store has

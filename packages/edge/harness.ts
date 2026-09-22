@@ -1,6 +1,6 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // blog, written as a vocabulary. Posts, and two relations between them: a post
-// CITES another, and a post LINKS to another. `cites` is declared the plain way
+// cites another, and a post links to another. `cites` is declared the plain way
 // (the component's own name is the relation name); `links` is declared as
 // `linked`, so the tests also cover a vocabulary whose component name and query
 // name differ.

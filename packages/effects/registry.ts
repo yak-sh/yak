@@ -1,14 +1,14 @@
 // The registry: which handlers are registered, and what running them means.
 //
-// A registration is a SLOT — a component name, one of the things that can
+// A registration is a slot — a component name, one of the things that can
 // happen to it, and (for a change) the column that has to have moved.
 // Handlers are matched by slot rather than by a filter function, so what a
 // graph will do about a write can be listed, and so a handler watching one
 // column is never run for a batch that moved a different one.
 //
 // A slot is made one of two ways, and they meet in the middle. `created` and
-// `changed` describe what MOVED, which no reading of the committed rows
-// recovers, so they are registered as themselves. A PATTERN is a query, run
+// `changed` describe what moved, which no reading of the committed rows
+// recovers, so they are registered as themselves. A pattern is a query, run
 // wherever this batch made it true. `removed` used to be a third thing and is
 // not any more: `-comp` (@yaks/query) means a batch removed a component, so
 // `fx.removed('post')` is `fx.on('-post')` and the slot it makes is read off
@@ -19,11 +19,11 @@
 //
 // Two rules hold, and they are the reason effects are a separate phase:
 //
-//   POST-COMMIT ONLY. Handlers run after the transaction returned, so what
+//   Post-commit only. Handlers run after the transaction returned, so what
 //   they read is settled and nothing they do can reject the write. A batch
 //   that was refused never reaches this phase at all.
 //
-//   ISOLATED. Every handler runs inside its own try — a throw, or a rejected
+//   Isolated. Every handler runs inside its own try — a throw, or a rejected
 //   promise, is passed to `report` and the next handler still runs. A broken
 //   handler must not break the thing it was watching, and the write is
 //   already durable by then anyway.
@@ -34,7 +34,7 @@
 // one call's return value a promise. A handler that must not delay its caller
 // starts its own work and returns nothing.
 //
-// A handler that WRITES is handed a third argument: the write callback
+// A handler that writes is handed a third argument: the write callback
 // (./write.ts), which puts its bundles through the graph's own `apply()` as a
 // new batch — a list of changes applied in one transaction. The loop that
 // invites is stopped by the generation number that callback sets and this file
@@ -71,7 +71,7 @@ export type {
 } from './registration.ts'
 
 /** A post-commit handler: what happened, a detached transaction to read
- * through, and the callback to WRITE through ({@link Write}). Its return value
+ * through, and the callback to write through ({@link Write}). Its return value
  * is awaited when it is a promise. */
 export type Handler = (event: Event, tx: Tx, write: Write) => unknown
 
@@ -96,7 +96,7 @@ export type Slot = Policy & {
    * cannot have changed whether it holds, so it is not asked */
   watch?: string[]
   /** `-comp` — the components the pattern requires this batch to have
-   * REMOVED. Only the batch itself can answer that, so a slot naming any is
+   * removed. Only the batch itself can answer that, so a slot naming any is
    * run through `tx.bindings` with the batch passed in, never against the
    * committed rows alone */
   gone?: string[]
@@ -110,7 +110,7 @@ export type Job = {
   handler: string
   /** the committed change it is running for */
   event: Event
-  /** the registration itself, where there is one — what it DECLARED is how a
+  /** the registration itself, where there is one — what it declared is how a
    * wrapper knows how many attempts it gets and whether running it twice is
    * safe ({@link Policy}). Absent on a report about a slot nobody
    * registered. */
@@ -181,7 +181,7 @@ export type Effects = Plugin & {
    *   fx.on('-post', (e) => unindex(e.entity.eid))
    *
    * The first names a component and what has to happen to it; the second is a
-   * PATTERN — any query, any number of entities — and it runs wherever the
+   * pattern — any query, any number of entities — and it runs wherever the
    * batch just made it true. Nothing has to be derived into the graph to
    * trigger it: if a call with no result is what you care about, that query is
    * the registration. The third is the deletion clause: `-comp` means this
@@ -214,7 +214,7 @@ let watching = (s: Slot, e: Event): boolean =>
   s.kind != 'matched' && s.comp == e.name && s.kind == e.kind &&
   (s.kind != 'changed' || !s.column || (!!e.comp && s.column in e.comp))
 
-// What a pattern is ABOUT, in one component name: the first component it
+// What a pattern is about, in one component name: the first component it
 // requires. It names the slot and rides on the event, so a pattern effect
 // lists alongside the component ones.
 let about = (plan: Match): string => {
@@ -243,7 +243,7 @@ let gone = (plan: Match): string[] => {
 }
 
 // A pattern whose only clause is `-comp`, and the component it names. That is
-// already exactly what a removal EVENT reports: the registry's reading of the
+// already exactly what a removal event reports: the registry's reading of the
 // batch knows what each removal took, tombstoned casualties and all
 // (./trace.ts), so the slot is registered as that event and triggered by
 // `watching` like a creation or a change — no call to `tx.bindings`, no
@@ -307,7 +307,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
 
   // The write callback as one batch's handlers see it: whatever they write is
   // marked a generation on from the batch that triggered them, so the handler
-  // that observes THAT write knows how far the chain has come.
+  // that observes that write knows how far the chain has come.
   let writer = (gen: number): Write => (bundles) => {
     if (!opts.write) {
       throw new Error(
@@ -346,13 +346,13 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
 
   // Did this batch touch anything a pattern reads? A pattern is true or false
   // over the whole graph; only a batch that moved one of the components it
-  // reads can have CHANGED that, so no other batch runs the query.
+  // reads can have changed that, so no other batch runs the query.
   let stirred = (s: Slot, seen: Event[]) =>
     seen.some((e) => s.watch?.includes(e.name))
 
   // A pattern's bindings, narrowed to this batch. The match is run against
-  // storage the ordinary way — a rule's match IS a query — and a result row is
-  // kept where the batch touched ANY entity it bound, so a handler runs for
+  // storage the ordinary way — a rule's match is a query — and a result row is
+  // kept where the batch touched any entity it bound, so a handler runs for
   // what just happened rather than for every row that has matched all along.
   // Any of them, not the first: what makes `$post; .comment about=$post` newly
   // true is usually the comment. Rows a crash left behind are for a boot sweep
@@ -388,7 +388,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
             .filter((r) => r.entities.some((e) => e && touched.has(e)))
             .map((r) => ({
               kind: 'matched' as Kind,
-              // The subject: the first entity the match BOUND. A pattern that
+              // The subject: the first entity the match bound. A pattern that
               // only writes binds nothing and its slot is null (@yaks/graph
               // `Binding`), so the event is about the first entity there is.
               entity: { eid: r.entities.find((e) => !!e)! },
@@ -411,10 +411,10 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     )
   }
 
-  // A PATTERN registration. The query is parsed here and narrowed to the
+  // A pattern registration. The query is parsed here and narrowed to the
   // components this vocabulary declares (@yaks/graph `asked`), so one pattern
   // is correct in two graphs: a clause about a component this graph cannot
-  // store is dropped, and a pattern that REQUIRES one is registered and inert
+  // store is dropped, and a pattern that requires one is registered and inert
   // — listed, documented, never run.
   let pattern = (
     what: string | Match,

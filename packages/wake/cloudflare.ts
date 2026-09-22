@@ -46,7 +46,7 @@ export let scheduled = (
  *
  * Call it when a wake is written. In the object's `alarm()`, call `tick(graph)`
  * and then set the alarm for its next pending wake. `before` is for an
- * application that ALSO has a Cron Trigger: pass the time of the next trigger,
+ * application that also has a Cron Trigger: pass the time of the next trigger,
  * and a wake falling after it is left for that trigger to fire rather than this
  * object. An application whose alarm is its only clock leaves `before` out.
  *

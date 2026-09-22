@@ -1,11 +1,11 @@
 // The three components this package ships, as one vocabulary document to load
 // beside your own.
 //
-//   service{command, cwd, restart, attempts}   a program that SHOULD run
-//   process{pid, command, cwd}                 a program that IS running
+//   service{command, cwd, restart, attempts}   a program that should run
+//   process{pid, command, cwd}                 a program that is running
 //   exit{code}                                 it is over, and how
 //
-// A process is an ENTITY, not a field on whatever asked for it. That is the
+// A process is an entity, not a field on whatever asked for it. That is the
 // whole idea: the same components describe a provider CLI a session is a
 // transcript of, a web server a supervisor keeps running, and a long-running
 // tool call — so one piece of code records every exit code, and one component
@@ -13,13 +13,13 @@
 //
 // `pid` is the only column an adopted process has, because a pid is the only
 // handle you get on a process nobody here launched. `command` and `cwd` are
-// present exactly when WE started it: they hold the command we asked for, not
+// present exactly when we started it: they hold the command we asked for, not
 // what the kernel reports, and a supervisor that has to start the program again
 // keeps its own copy rather than reading it back.
 //
 // `service` is the wanted half of the same entity: the supervisor acts on a
 // component recording that a program should be running, never on a function
-// call. It is stored on the SAME entity the process lands on — one entity is
+// call. It is stored on the same entity the process lands on — one entity is
 // one supervised program, and reading it tells the whole story (what we want,
 // what is running, how the last attempt ended, how many times it has crashed
 // and been restarted). To stop a service, write a `stop` component, the marker
@@ -90,7 +90,7 @@ export type Tracked = { entity: Entity } & { process: Process; exit?: Exit }
 
 /**
  * The process vocabulary, to load beside your own:
- * `loadVocab([processDoc, ...mine])`. It does not describe WHY a process
+ * `loadVocab([processDoc, ...mine])`. It does not describe why a process
  * runs — that is an ordinary entity in your own vocabulary pointing at this
  * one.
  */

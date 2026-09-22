@@ -1,4 +1,4 @@
-// The identity operand list. `.eid=` and `.num=` on the entity table NAME
+// The identity operand list. `.eid=` and `.num=` on the entity table name
 // entities rather than compare a column, so the right-hand side is a set — the
 // shape an index can look up, and the shape a client fetching named rows asks
 // for.

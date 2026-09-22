@@ -1,5 +1,5 @@
-// The pluggable half of `apply()`. A change runs through a FIXED, ordered list
-// of phases; a plugin registers a hook against a NAMED one. The order matters
+// The pluggable half of `apply()`. A change runs through a fixed, ordered list
+// of phases; a plugin registers a hook against a named one. The order matters
 // — a precondition has to read before the change writes, a cascade has to
 // decide which rows go before they go, an effect must not fire until the
 // transaction commits — so "register code anywhere in apply()" would be a way
@@ -33,9 +33,9 @@ import type { VocabDoc } from '@yaks/vocab'
  * - `precondition` — the `$was` check, and any other "may this change be
  *   applied" check that has to read first (a lease, a quota). The transaction
  *   is open by now.
- * - `rules` — the DECLARATIVE half: a rule is a query, and at this point the
+ * - `rules` — the declarative half: a rule is a query, and at this point the
  *   pending change is readable as if it were already in the tables (storage
- *   provides an OVERLAY), so a rule is evaluated against the graph with this
+ *   provides an overlay), so a rule is evaluated against the graph with this
  *   change already applied, and the `+` half of the rule joins the change as
  *   patches. This runs before anything is persisted on purpose — a component
  *   that is never stored (`sync: peers`) is visible to a rule, and can be
@@ -106,7 +106,7 @@ export type Hook = (
 ) => Bundle[] | Promise<Bundle[]>
 
 /**
- * An ordered write hook may certify that THIS change's checks and writes are
+ * An ordered write hook may certify that this change's checks and writes are
  * independent of each other: checking every operation and then mutating and
  * cascading them together produces exactly the same result as checking and
  * writing them one at a time. That covers the hook's rewrites and any
@@ -118,7 +118,7 @@ export type WriteHook = Hook & { independent?: boolean }
 
 /**
  * A schema for a tool's arguments or its result. What counts as a schema is
- * the TRANSPORT's business — {@link https://jsr.io/@yaks/mcp | @yaks/mcp}
+ * the transport's business — {@link https://jsr.io/@yaks/mcp | @yaks/mcp}
  * takes Zod schemas, because the MCP SDK does — so the core leaves this type
  * opaque rather than depending on a validation library.
  */
@@ -128,13 +128,13 @@ export type Schema = object
  * What a {@link Tool} is handed beside the call's bundles: the graph to read,
  * who is asking, and the arguments the call carried.
  *
- * `actor` is the CALLER's, never the runner's: a tool that writes writes in
+ * `actor` is the caller's, never the runner's: a tool that writes writes in
  * the name of whoever wrote the call, so authorization is decided about the
  * person asking (see {@link https://jsr.io/@yaks/tools | @yaks/tools}). It is
  * the same pair a change carries — `by` the identity, `via` the run it came
  * through — so a tool that needs the session behind a call reads `via`.
  *
- * There is no write method here: a tool RETURNS bundles and the runner applies
+ * There is no write method here: a tool returns bundles and the runner applies
  * them, signed, so a tool cannot write in somebody else's name by accident and
  * the calling program can refuse, combine, or replay what it was asked for.
  */
@@ -154,7 +154,7 @@ export type ToolCtx = {
    * as its source (`output.source`) */
   call: Eid
   /** the working directory of the process running this call, where the calling
-   * program knows one. A tool that acts on the MACHINE rather than the graph
+   * program knows one. A tool that acts on the machine rather than the graph
    * needs it — `land` fast-forwards the git checkout its caller is in, which
    * on a command line is the directory the person ran it from. A graph in a
    * browser tab or a worker has no working directory, and a tool that requires
@@ -168,9 +168,9 @@ export type ToolCtx = {
  * transport (@yaks/mcp) lists it and calls it; this package only carries the
  * declaration.
  *
- * A tool is a function from BUNDLES to BUNDLES. It is handed the call's own
+ * A tool is a function from bundles to bundles. It is handed the call's own
  * bundle and whatever the caller attached to it; it returns the bundles that
- * ARE the result — entities it found, entities it wants created, text as
+ * are the result — entities it found, entities it wants created, text as
  * `content{body}`. The runner applies them beside the `result{call}` entity in
  * one transaction.
  */
@@ -178,7 +178,7 @@ export type Tool<C = ToolCtx, R = Bundle[]> = {
   /** The older flat tool name. A tool declaring `noun`/`verb` derives it from
    * those instead. */
   name?: string
-  /** the entity a CALL references this tool by, where the graph stores tool
+  /** the entity a call references this tool by, where the graph stores tool
    * rows of its own. Derived from the name otherwise (@yaks/tools
    * `toolEid`). */
   eid?: Eid
@@ -210,7 +210,7 @@ export type Tool<C = ToolCtx, R = Bundle[]> = {
   /** this tool only reads — a client may call it without asking the user
    * first */
   readOnly?: boolean
-  /** this tool can DELETE or otherwise irreversibly change what it touches, so
+  /** this tool can delete or otherwise irreversibly change what it touches, so
    * a client should ask before every call. Creating is not destructive: it
    * only adds, and undoing a create is a delete, which is. Left undeclared, a
    * writing tool is treated as destructive — the safe reading of silence. */
@@ -219,11 +219,11 @@ export type Tool<C = ToolCtx, R = Bundle[]> = {
    * it once — a setter that converges on a value, not something that
    * appends. */
   idempotent?: boolean
-  /** it reaches OUTSIDE this graph: mail to a stranger, a page anyone on the
+  /** it reaches outside this graph: mail to a stranger, a page anyone on the
    * web can then read, a record at another company. A tool that only touches
    * what is stored here is closed-world, whatever it writes. */
   openWorld?: boolean
-  /** what the TRANSPORT should send about this tool beside its schemas, handed
+  /** what the transport should send about this tool beside its schemas, handed
    * to the client verbatim — an MCP `_meta`, say, naming the page the client
    * should render the result in. Opaque here, like {@link Schema}. */
   meta?: Record<string, unknown>
@@ -248,7 +248,7 @@ export type Plugin = {
   /** Ordered write policy. The factory sees the storage-ready bundles once;
    * the hook it returns checks or rewrites each live operation against the
    * operations already written before it. Opting in makes mutate and cascade
-   * run one operation at a time, in the SAME transaction. `$was` still checks
+   * run one operation at a time, in the same transaction. `$was` still checks
    * against the pre-write state. No external side effects: any later refusal
    * rolls back everything written before it. */
   beforeWrite?: (bundles: Bundle[]) => WriteHook
@@ -262,7 +262,7 @@ export type Plugin = {
    * plus what the rule produces (see {@link Rule}). The phase runs every rule
    * registered on it, in plugin order, before its hooks. */
   rules?: Rule[]
-  /** the rules it DECLARES as data — a query and nothing else (see
+  /** the rules it declares as data — a query and nothing else (see
    * {@link Declared}). They run in the `rules` phase, over storage's overlay
    * of the pending change, until they reach a fixpoint, and what they produce
    * joins the change. A declared rule needs no code at all: an app ships one
@@ -275,7 +275,7 @@ export type Plugin = {
    * resource name is capitalized, which is what distinguishes it from a
    * component name in the bundle they share; a lowercase name is refused. */
   resources?: Record<string, Resource>
-  /** what its hooks are going to READ, given the change. `apply()` merges
+  /** what its hooks are going to read, given the change. `apply()` merges
    * every plugin's asks with its own and satisfies them all in one read before
    * any hook runs (see {@link Ask} and ./gather.ts), so a hook's `tx.get` and
    * `about()` are answered from memory instead of costing a round trip each.
@@ -284,12 +284,12 @@ export type Plugin = {
   wants?: (bundles: Bundle[]) => Ask[]
   /** the tools it contributes to a transport that serves them */
   tools?: Tool[]
-  /** which of its components are CONTENT-ADDRESSED, and how each derives its
+  /** which of its components are content-addressed, and how each derives its
    * entity's id — consulted in the `mint` phase when such a component arrives
    * under an alias (see {@link Derive}) */
   derive?: Record<string, Derive>
-  /** how an id a CALLER passed becomes an eid, for the ids that are not
-   * already one. The returned map holds only the ids that CHANGED, so a caller
+  /** how an id a caller passed becomes an eid, for the ids that are not
+   * already one. The returned map holds only the ids that changed, so a caller
    * reads it as `at.get(id) ?? id`, and an id this plugin knows nothing about
    * is simply absent. Called through {@link Graph.address}. It belongs to a
    * plugin rather than the core because "what name refers to an entity" is a

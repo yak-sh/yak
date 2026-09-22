@@ -6,14 +6,14 @@
 // same rows.
 //
 // The rules a caller can rely on, in the order they are tried:
-//   `` (equals)  an empty operand means ABSENT; `lo..hi` is an inclusive range
+//   `` (equals)  an empty operand means absent; `lo..hi` is an inclusive range
 //                and `lo...hi` excludes its end; `a,b` is any-of; a number
 //                column compares numerically, anything else as text.
-//   `!`          not-equals, where an absent column COUNTS as different.
+//   `!`          not-equals, where an absent column counts as different.
 //   `~`          contains, case-insensitively; an empty operand means presence.
 //   < <= > >=    comparisons, and an absent column never compares true.
 //   exists       the column has a value.
-// A time-typed column reads its operand as a time PHRASE first (a span, one
+// A time-typed column reads its operand as a time phrase first (a span, one
 // edge of which the operator picks) and falls back to the plain rules when the
 // operand is no phrase at all.
 //
@@ -38,7 +38,7 @@ let NUMERIC: Tag[] = ['number', 'priority', 'bool']
 let numeric = (s: string): boolean => /^-?\d+(\.\d+)?$/.test(s)
 
 // One comparison, over two values of the same type. The four ordered operators
-// plus the equality a time INSTANT asks for.
+// plus the equality a time instant asks for.
 let rel = <T extends string | number>(a: T, b: T, op: string): boolean =>
   op == '<'
     ? a < b
@@ -75,7 +75,7 @@ export let cmp = (op: string, value: string, tag: Tag): Check | null => {
 }
 
 /**
- * Equality: an empty operand asks for an ABSENT (or empty) column, `lo..hi` for
+ * Equality: an empty operand asks for an absent (or empty) column, `lo..hi` for
  * an inclusive range and `lo...hi` for one that excludes its end, `a,b,c` for
  * any of several. Returns `null` when a bound or a list member has a type the
  * column cannot hold.
@@ -107,7 +107,7 @@ export let eq = (value: string, tag: Tag): Check | null => {
 }
 
 /**
- * Not-equals: everything equality does not select, INCLUDING the rows whose
+ * Not-equals: everything equality does not select, including the rows whose
  * column (or whole component) is absent.
  */
 export let ne = (value: string, tag: Tag): Check | null => {
@@ -131,7 +131,7 @@ let iso = (ms: number): string => new Date(ms).toISOString()
 let at = (op: string, ms: number): Check => (v) => rel(String(v), iso(ms), op)
 let both = (a: Check, b: Check): Check => (v) => a(v) && b(v)
 
-// A span whose end equals its start is an INSTANT, where the `=` branch carries
+// A span whose end equals its start is an instant, where the `=` branch carries
 // the whole answer; a span with width answers `=` as a half-open interval.
 let edge = (op: string, s: Span): Check => {
   let point = s.end <= s.start
@@ -149,7 +149,7 @@ let edge = (op: string, s: Span): Check => {
 }
 
 /**
- * A time-typed column against a time PHRASE, resolved relative to `now`. A
+ * A time-typed column against a time phrase, resolved relative to `now`. A
  * comma list of phrases is any-of under equals (none-of under not-equals);
  * anything else reads the whole operand as one phrase. Returns `null` when the
  * operand is not a time phrase, so the caller falls back to the plain rules.

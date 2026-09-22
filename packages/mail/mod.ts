@@ -5,7 +5,7 @@
  * Say a book club runs on a graph. It has people, a reading list, a potluck
  * sign-up. Sooner or later it has to write to somebody — an invitation, a
  * reminder, an answer to a question that arrived by email — and that is this
- * package: a letter is an ENTITY like everything else, so it is queryable,
+ * package: a letter is an entity like everything else, so it is queryable,
  * attributable, and hangs off the thing it is about.
  *
  * ## A letter is an entity
@@ -16,8 +16,8 @@
  * //   mail: { from: 'hello@books.example', target: potluck },
  * //   deliver: { to: ana } }
  * ```
- * `mail` is the ENVELOPE, `deliver` is the request to send it, and `target` is
- * what it is about — any entity at all. Because the recipient is an ENTITY
+ * `mail` is the envelope, `deliver` is the request to send it, and `target` is
+ * what it is about — any entity at all. Because the recipient is an entity
  * rather than a string, the address it goes to is whatever their
  * {@link mailDoc | `email`} component holds at the moment it leaves.
  *
@@ -28,7 +28,7 @@
  * has, so a letter is searched, rendered and edited by whatever already
  * handles a `doc` — instead of by a second copy of the same two columns.
  *
- * Compose `docs()` BESIDE {@link mailbox}, never inside it: a vocabulary
+ * Compose `docs()` beside {@link mailbox}, never inside it: a vocabulary
  * rejects a component declared twice, so an application that already declares
  * `doc` is not fought over it.
  *
@@ -47,7 +47,7 @@
  * ## Receiving is a pure function
  * {@link inbound} turns a message as an Email Worker receives it into the
  * bundles that record it. It queries the graph for nothing, so it can be
- * tested without one. The two columns that ARE lookups — whom the letter is
+ * tested without one. The two columns that are lookups — whom the letter is
  * about, which letter it answers — are answered by {@link arrived} one file
  * over, where there is a graph to query, and `@yaks/mail/routes` exports the
  * HTTP route a mail edge posts a letter on.
@@ -55,7 +55,7 @@
  * ## The worked example
  * {@link invited} fills the `created(member)` handler slot
  * {@link https://jsr.io/@yaks/member | @yaks/member} documents and leaves
- * empty: somebody joins the club, and an invitation is WRITTEN — the sending
+ * empty: somebody joins the club, and an invitation is written — the sending
  * effect carries it like any other letter.
  *
  * ```ts

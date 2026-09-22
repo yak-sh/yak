@@ -48,7 +48,7 @@ let stashed: Text = {
     `(select __s."words" from "stash" __s where __s."key" = ${key})`,
 }
 
-// The search objects an application once wrote by hand: ONE document index
+// The search objects an application once wrote by hand: one document index
 // carrying the envelope as a third column read through a joined view, six
 // triggers feeding it from two tables, a substring index beside it, and a log
 // index whose delete triggers guard rows older than the index.

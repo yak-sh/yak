@@ -22,7 +22,7 @@ let vocab = loadVocab([doc], [idKeywords])
 // The store, as far as addressing is concerned: the entities numbered so far.
 let rows: Bundle[] = [
   // A task is a doc too, so it answers to both letters — which is the point:
-  // whichever kind wins the DISPLAY, the id a person typed still lands.
+  // whichever kind wins the display, the id a person typed still lands.
   { entity: { eid: 'a', num: 7 }, task: {}, doc: {} },
   { entity: { eid: 'b', num: 9 }, memory: {} },
 ]

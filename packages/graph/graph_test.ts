@@ -250,7 +250,7 @@ Deno.test('$was guards a column, and a moved value refuses the whole batch', () 
     Stale,
   ) as Stale
   assertEquals(e.current, 'Dune II')
-  // refused WHOLE: the other bundle in the batch did not land either
+  // refused whole: the other bundle in the batch did not land either
   assertEquals(one.storage.tx((tx) => tx.get(['b2'])), [])
 })
 
@@ -399,7 +399,7 @@ Deno.test('effects run after the commit and a failing one is telemetry', () => {
     ],
   })
   let out = sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]))
-  assertEquals(seen, ['Dune']) // the effect saw COMMITTED data
+  assertEquals(seen, ['Dune']) // the effect saw committed data
   assertEquals(errs.length, 1)
   assert(out.length > 0) // and the batch was not broken by the broken effect
 })

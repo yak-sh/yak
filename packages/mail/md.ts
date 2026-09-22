@@ -1,7 +1,7 @@
 // A letter's body is markdown, and it goes out twice: once as the plain text
 // part and once as HTML. This file is both renderings, from one small reader.
 //
-// It is DELIBERATELY minimal — paragraphs, headings, bullets, links, bold,
+// It is deliberately minimal — paragraphs, headings, bullets, links, bold,
 // italic, code — because a mail client renders a small subset of HTML anyway
 // and because a markdown library is a dependency this package would otherwise
 // not need. If you already have a renderer you trust, hand its output in as
@@ -10,11 +10,11 @@
 // Two rules are not negotiable, and they are why this is not `escape()` plus a
 // regex:
 //
-//   MARKUP A BODY WROTE IS TEXT, NEVER MARKUP. Every character a letter
+//   Markup A body wrote is text, never markup. Every character a letter
 //   carries is escaped; the only tags in the output are the ones this file
 //   generates. A letter from a stranger cannot ship a <script> to your reader.
 //
-//   AN HREF IS TESTED BY ITS SHAPE, NEVER BY A LIST OF BAD SCHEMES. A browser
+//   An href is tested by its shape, never by A list of bad schemes. A browser
 //   decodes entities inside an attribute, so `javascript&colon;alert(1)` is a
 //   scheme by the time it parses one and no denylist sees it coming. Only an
 //   absolute http, https, mailto or tel link becomes an anchor; anything else

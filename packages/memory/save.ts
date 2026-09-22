@@ -1,11 +1,11 @@
 // Writing one down. Two rules live here, and both are about keeping the
 // person's words the person's words.
 //
-// AN EMPTY `said` IS REJECTED. A memory with no sentence in it is an agent's
+// An empty `said` is rejected. A memory with no sentence in it is an agent's
 // note about a conversation, which is the thing this whole package exists to
 // not be.
 //
-// THE CONTEXT IS TRUNCATED to two lines. Context is what somebody needs in order
+// The context is truncated to two lines. Context is what somebody needs in order
 // to read the sentence — what was being talked about, which app, which
 // afternoon — and left unbounded it grows into the summary the sentence was
 // saved instead of. Two lines is enough to say "we were looking at the recipe
@@ -36,7 +36,7 @@ export let clamped = (context: string): string =>
     .slice(0, LINES).join('\n')
 
 /** What a caller hands over to keep one. Everything but the words is
- * optional, because everything but the words is about WHERE they belong: a
+ * optional, because everything but the words is about where they belong: a
  * graph with no spaces in it keeps memories all the same. */
 export type Saving = {
   /** the id to write it at */
@@ -49,7 +49,7 @@ export type Saving = {
   space?: Eid
   /** the project they belong to — absent for a principle everybody carries */
   scope?: Eid
-  /** who GAVE the correction, when the words are one; `true` where they are
+  /** who gave the correction, when the words are one; `true` where they are
    * feedback and nobody knows whose */
   feedback?: Eid | true
   /** the line or two needed to read them */

@@ -4,10 +4,10 @@
  * pluggable `apply()` that commits them.
  *
  * ## The model
- * Everything is an ENTITY, identified by an {@link Entity} — an `eid` the
+ * Everything is an entity, identified by an {@link Entity} — an `eid` the
  * client generates, plus the `num` storage assigns the first time the entity is
- * written. An entity has COMPONENTS: a named object of columns, one per
- * component. An entity has no type of its own; it IS whatever components it
+ * written. An entity has components: a named object of columns, one per
+ * component. An entity has no type of its own; it is whatever components it
  * has. A book is a `doc` plus a `book`; a review is a `doc` plus a `review`.
  * Adding a component adds an aspect to the entity, not a subtype.
  *
@@ -39,12 +39,12 @@
  * ## Apply is pluggable, in fixed phases
  * A change runs through an ordered list of {@link Phase}s — normalize, admit,
  * precondition, mutate, cascade, stamp, journal, commit, effect, audit. The
- * order matters, so a {@link Plugin} registers a {@link Hook} against a NAMED
+ * order matters, so a {@link Plugin} registers a {@link Hook} against a named
  * phase; the hook takes the list of changes and returns the list the next phase
  * sees, which is how a hook rewrites it, adds to it, or (by throwing) refuses
  * it. Every registry is per graph instance.
  *
- * A plugin can express the same thing as DATA: a {@link Rule} is a query over
+ * A plugin can express the same thing as data: a {@link Rule} is a query over
  * one bundle in the transaction plus what it produces (`produce` a template, or
  * `run` a function), and the sigils in the query are what make it a rule —
  * `+comp` ensures the component exists, `+!comp` also requires that it did not
@@ -52,12 +52,12 @@
  * phase evaluates all of its rules against the same state before any of them
  * writes; the core's own `created`/`updated` stamps are two such rules.
  *
- * A plugin also declares what its hooks are going to READ — `wants(bundles)`,
+ * A plugin also declares what its hooks are going to read — `wants(bundles)`,
  * returning {@link Ask}s — and `apply()` satisfies every plugin's asks and its
- * own in ONE read when the transaction opens, so the phases that run before the
+ * own in one read when the transaction opens, so the phases that run before the
  * write read from memory instead of making a round trip each (see ./gather.ts).
  *
- * This package ships ZERO components — a vocabulary is described with
+ * This package ships zero components — a vocabulary is described with
  * {@link https://jsr.io/@yaks/vocab | @yaks/vocab} and contributed by plugins
  * — and has no `snapshot()`: reads are queries answered by a {@link Storage}
  * adapter, never a whole-graph dump. It imports no platform API, so the same

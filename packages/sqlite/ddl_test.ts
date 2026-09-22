@@ -108,7 +108,7 @@ Deno.test('an index comes after the table it covers', () => {
   assert(table >= 0 && index > table, `${table} ${index}`)
 })
 
-// A vocabulary that GREW: `create table if not exists` is silent about a table
+// A vocabulary that grew: `create table if not exists` is silent about a table
 // that is already there, so a column added to a word has to arrive by
 // `alter table` or every read naming it fails at the engine.
 Deno.test('a column a component grew is added to the live table', () => {
@@ -146,7 +146,7 @@ Deno.test('a column a component grew is added to the live table', () => {
   })
   storage(d, was).install()
   assertEquals(cols(d, 'book'), ['entity', 'title'])
-  // The grown vocabulary over the SAME database: the two new columns arrive,
+  // The grown vocabulary over the same database: the two new columns arrive,
   // the reference carrying its foreign key, and nothing already there moves.
   let grew = storage(d, now)
   grew.install()
@@ -231,7 +231,7 @@ Deno.test('reference indexes are installed on new and existing member stores', (
 
 // What the vocabulary can say about a table beyond its columns' types, with
 // native JSON Schema where it has a word: `required` is NOT NULL, `default` is
-// the row's fallback (the clock spelled `{now: true}`), `enum` is a CHECK,
+// the row's fallback (the clock spelled `{now: true}`), `enum` is a check,
 // `integer` keeps its affinity, and a composite may be partial.
 let strict = loadVocab({
   $defs: {

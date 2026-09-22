@@ -3,7 +3,7 @@
 //
 // The format is small enough to give here in full:
 //
-//   'PACK' 0x00000002 <count>          12 bytes, big-endian
+//   'pack' 0x00000002 <count>          12 bytes, big-endian
 //   per object: <type+size varint> <zlib(body)>
 //   <sha1 of every byte above>         20 bytes
 //
@@ -14,7 +14,7 @@
 //   something counted on the way past: a packfile cannot be written without
 //   knowing first how many objects it holds. Whatever enumerated the objects
 //   (./objects.ts) already knows.
-// - **The size in an entry's header is the UNPACKED size**, and after the
+// - **The size in an entry's header is the unpacked size**, and after the
 //   first byte it is little-endian in seven-bit groups; the first byte carries
 //   the type in bits 4-6 and only the low four bits of the size.
 // - **The body is zlib, not raw deflate.** `CompressionStream('deflate')` is

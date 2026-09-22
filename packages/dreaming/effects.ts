@@ -1,10 +1,10 @@
-// What a server DOES about a dream, exported as `@yaks/dreaming/effects`: two
+// What a server does about a dream, exported as `@yaks/dreaming/effects`: two
 // watches that open one session on a dream that has come due, and nothing at
 // all when the configuration names no session to open.
 //
 // That session is why this export takes OPTIONS. Opening one means asking a
 // provider, at an effort, with a persona — an account, a model and a persona
-// that exist on THIS machine — and none of that is a fact about the graph. So
+// that exist on this machine — and none of that is a fact about the graph. So
 // the configuration names what to open and this package decides when:
 //
 // ```json
@@ -19,7 +19,7 @@
 // ```
 //
 // A configuration that names no `desk` registers no watches, which is what a
-// graph that only STORES dreams wants — a reading list, a page of standing
+// graph that only stores dreams wants — a reading list, a page of standing
 // intentions — rather than a session opening on a machine with no agent on it.
 //
 // `rest` is parsed when the plugin is composed, deliberately: a recurrence

@@ -1,5 +1,5 @@
-// One check over the packages as a SET: a plugin is a package whose `exports`
-// map names one subpath per FACET it has, and a host takes each facet from its
+// One check over the packages as a set: a plugin is a package whose `exports`
+// map names one subpath per facet it has, and a host takes each facet from its
 // own subpath (@yaks/cli `compose`). Nothing a compiler sees says the set is
 // consistent — that every package with words exports them, that every subpath
 // resolves, that what comes back is shaped the way a host reads it. This does.
@@ -8,7 +8,7 @@
 // type-checks `./vocab` and `./views` of every package with only the web
 // platform in scope: the web door (T-37583) imports those two of every package
 // and must reach no storage, no SQL and no runtime through either. That check
-// is what "fits neatly" MEANS, and it is a gate rather than a test because a
+// is what "fits neatly" means, and it is a gate rather than a test because a
 // second TypeScript program is the only thing that can prove it.
 
 import { assert, assertEquals } from '@std/assert'
@@ -52,7 +52,7 @@ Deno.test('a package with words exports them at ./vocab, and they load', async (
       Deno.statSync(new URL(`${p.dir}/vocab.json`, here))
       words = true
     } catch { /* no vocabulary to export */ }
-    // @yaks/render's document describes a COLUMN schema rather than a
+    // @yaks/render's document describes a column schema rather than a
     // component domain; it is the one vocab.json no host composes.
     if (!words || p.dir == 'render') continue
     assert(has(p, 'vocab'), `${p.name} has vocab.json and no ./vocab export`)
@@ -70,15 +70,15 @@ Deno.test('a package with words exports them at ./vocab, and they load', async (
   assert(said.includes('@yaks/tmux'), said.join(' '))
 })
 
-// The aggregate: `@yaks/harness` is an APPLICATION whose `./vocab` is the list
+// The aggregate: `@yaks/harness` is an application whose `./vocab` is the list
 // of everything that application speaks, so it names other packages' documents
 // on purpose and cannot be composed beside them. Every other package's `./vocab`
-// says the words that package OWNS.
+// says the words that package owns.
 let AGGREGATE = ['harness']
 
 Deno.test("every package's words load beside every other package's", async () => {
-  // A word has ONE home (packages/README.md). `bin/transition_test.ts` says
-  // that of the `vocab.json` FILES; this says it of the facet a host actually
+  // A word has one home (packages/README.md). `bin/transition_test.ts` says
+  // that of the `vocab.json` files; this says it of the facet a host actually
   // imports, which is where a package can still fold another's words into its
   // own document and make the two uncomposable.
   let home = new Map<string, string>()
@@ -125,10 +125,10 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
   for (let p of packages) {
     // Words are not what makes a plugin: `@yaks/embedding` composes as one
     // whose whole job is the vector table and the `.near` compiler, and
-    // declares no COMPONENT at all — the only word in its vocabulary is its
+    // declares no component at all — the only word in its vocabulary is its
     // check. So every package's facets are walked. The one exemption is
     // `./tools` on a package with no words:
-    // the core's `@yaks/vocab/tools` is the tool MECHANISM under that name and
+    // the core's `@yaks/vocab/tools` is the tool mechanism under that name and
     // predates the facets, and nobody composes it as a plugin. (`@yaks/graph`
     // has words now — the generic tier — so its `./tools` carries the runs
     // behind them like any other.) See packages/README.md, the misfit list.
@@ -149,7 +149,7 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
     }
     if (!words) continue
     // A subpath outside the facet list is a package's own business, but a
-    // facet NAME must mean the facet: nothing may export `./rules` meaning
+    // facet name must mean the facet: nothing may export `./rules` meaning
     // something else.
     for (let key of Object.keys(p.exports)) {
       let facet = key.slice(2)

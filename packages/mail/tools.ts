@@ -1,15 +1,15 @@
-// What an agent may ASK for here: the `@yaks/mail/tools` entry point — the
+// What an agent may ask for here: the `@yaks/mail/tools` entry point — the
 // implementations behind the `tool: true` declarations in ./vocab.json. Five
-// commands a person runs all day, and one CHECK.
+// commands a person runs all day, and one check.
 //
-// THE INBOX IS A QUERY, never a folder. A letter is addressed to somebody
+// The inbox is A query, never a folder. A letter is addressed to somebody
 // three ways — the entity it was routed to (`mail.target`, ./arrive.ts), the
 // entity it was written to (`deliver.to`), and the address that entity has
 // (`mail.to`) — so the inbox is those three asked as one `or`, minus what has
 // been archived. Nothing is moved, copied, or marked on the way in, which is
 // why the same letter reads the same through every interface.
 //
-// ARCHIVING IS THE ONE ACT THAT HIDES. Reading a letter marks it read and
+// Archiving is the one act that hides. Reading a letter marks it read and
 // leaves it in the list; only `inbox archive` takes it out, and `--all` shows
 // the hidden ones again. That asymmetry is the point (M-7048): no sweep,
 // subagent or second reader can drain somebody's inbox behind them, so a list
@@ -18,27 +18,27 @@
 // you, and without that every fresh session shows the same letter again and
 // replies again.
 //
-// READING IS THE MARK, so `mail show` WRITES: it stamps `opened` on the letter
+// Reading is the mark, so `mail show` writes: it stamps `opened` on the letter
 // it renders. That is what keeps it from being a duplicate of `graph_show`
 // (@yaks/mcp's generic tier, which shows any entity at all) — this one marks
-// the letter read and gathers its THREAD, both of which are facts about mail
+// the letter read and gathers its thread, both of which are facts about mail
 // and about nothing else.
 //
 // `archived` and `opened` are another package's components — @yaks/kernel's,
 // the marks recording that somebody looked at a thing and that somebody put it
-// away. A tool returns BUNDLES, which are plain data, so naming a component
+// away. A tool returns bundles, which are plain data, so naming a component
 // costs no import; a server that composes the kernel stores them, and one that
 // does not has those components dropped on write, leaving an inbox that never
 // shrinks. Nothing here declares a second copy of either (M-17871).
 //
-// The SENDER is not this file's business. `mail send` and `mail reply` CREATE
+// The sender is not this file's business. `mail send` and `mail reply` create
 // a letter that asks to be sent (`deliver`), and ./effects.ts — built from the
 // `sender` the config names beside this plugin — is what hands it to a
 // transport and writes `delivered` or `bounced` back onto it. So a tool that
 // writes mail never talks to a mail server, and a test replaces the whole of
 // it with `{"via": "stash"}`.
 //
-// WHAT IS NOT CHECKED in `mail check`, deliberately: whether each address this
+// What is not checked in `mail check`, deliberately: whether each address this
 // graph can create is deliverable at the MTA — the fleet's doctor read
 // Cloudflare Email Routing's live rule set to determine that. That is a
 // question about a zone somebody deployed, answered using a credential the
@@ -79,7 +79,7 @@ import type { Options } from './options.ts'
 /** How many letters an inbox returns when the caller gave no limit. */
 export let PAGE = 50
 
-// The two components this file WRITES that it does not declare. Both are
+// The two components this file writes that it does not declare. Both are
 // @yaks/kernel's, and both are written here as plain strings, because a tool's
 // result is data (see the header).
 let ARCHIVED = 'archived'
@@ -93,7 +93,7 @@ let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
 let col = (c: Comp | undefined, k: string): string => str(c?.[k])
 
 // One entity whole, by eid. Everything here works from the letter as it
-// STANDS rather than from a patch, the way ./send.ts does.
+// stands rather than from a patch, the way ./send.ts does.
 let one = async (ctx: ToolCtx, eid: Eid): Promise<Bundle | undefined> =>
   (await detached(ctx.graph.storage).get([eid]))[0]
 
@@ -129,8 +129,8 @@ export let addressedTo = (who: Eid, address: string): Clause =>
     ...(address ? [eq(`${MAIL}.to`, address)] : []),
   )
 
-// Newest first, from the LIMIT rather than from a clock column: `mail.at` is
-// written when a letter ARRIVES, so ordering by it would sort a letter written
+// Newest first, from the limit rather than from a clock column: `mail.at` is
+// written when a letter arrives, so ordering by it would sort a letter written
 // to you here — an invitation, a reply from the address beside you — to the
 // bottom. A limited result is newest-first by the order rows were written
 // (@yaks/sql bind.ts), which is the order they reached this graph.
@@ -147,7 +147,7 @@ let inbox = (who: Eid, address: string, all: boolean, n: number): Query =>
 export let reSubject = (said: string): string =>
   `Re: ${said.replace(/^(\s*(re|fwd?):\s*)+/i, '').trim()}`
 
-// The far side's address as an ENTITY, since `deliver.to` names a recipient
+// The far side's address as an entity, since `deliver.to` names a recipient
 // rather than a string: whoever already has that address, else a new `email`
 // row for it. That is what makes the address book grow by use instead of by
 // bookkeeping — and why writing to a stranger needs no step before it. An
@@ -177,7 +177,7 @@ let aimedAt = async (
     : { to: await at(ctx, said), made: [] }
 
 /**
- * A letter's THREAD: up its one-parent `reply_to` chain, then down over
+ * A letter's thread: up its one-parent `reply_to` chain, then down over
  * whatever answers anything already found. Each read is keyed by the letters
  * in hand, so a thread costs its own rows rather than every letter ever sent.
  */
@@ -265,7 +265,7 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
     [ARCHIVED]: {},
   }],
 
-  // Reading IS the mark, so this writes. The prose is the result; the `opened`
+  // Reading is the mark, so this writes. The prose is the result; the `opened`
   // patch is what keeps a second call from reporting it as unread.
   mail_show: async (_bundles, ctx): Promise<Bundle[]> => {
     let letter = await letterIn(ctx, ctx.args.letter)
@@ -280,7 +280,7 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
     ]
   },
 
-  // The reply goes to the FAR side — an arrival's author, or our own sent
+  // The reply goes to the far side — an arrival's author, or our own sent
   // letter's recipient — and never to a fallback between the two: the wrong
   // choice here is this graph's own address, so a reply that quietly went
   // there would look sent without being sent.
@@ -308,7 +308,7 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
           [BODY]: str(ctx.args.body),
         },
         // No `target`: on an arrival that column holds whom the letter was
-        // ROUTED to (./arrive.ts), which is this side of the thread — carrying
+        // routed to (./arrive.ts), which is this side of the thread — carrying
         // it forward would file our own answer in our own inbox. `reply_to` is
         // what threads a reply, and it is enough.
         [MAIL]: { ...(from ? { from } : {}), reply_to: letter.entity.eid },
@@ -352,7 +352,7 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
 
   mail_check: async (_bundles, ctx) => {
     // The Message-ID is what other mail systems know a letter by, written from
-    // what arrived — so it marks a letter this graph RECEIVED, and this pair
+    // what arrived — so it marks a letter this graph received, and this pair
     // of predicates is the whole question.
     let orphans = await ctx.read(
       and(present(`${MAIL}.message_id`), absent(`${MAIL}.from`)),

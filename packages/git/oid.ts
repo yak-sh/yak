@@ -1,4 +1,4 @@
-// What a Git object is CALLED: the digest of its own header and body.
+// What a Git object is called: the digest of its own header and body.
 //
 // Every object in this package is named twice. `oid` is Git's SHA-1 object id
 // — the one a `git clone` asks for, and the entity id of the row we keep about
@@ -8,12 +8,12 @@
 // hash-function transition, stored as @yaks/key rows instead of a
 // loose-object index).
 //
-// The two ids are NOT two digests of the same bytes. A tree or a commit names
+// The two ids are not two digests of the same bytes. A tree or a commit names
 // its children by id, so the SHA-256 body is the SHA-1 body with every child
 // id translated — which is why the builders here take the ids to write rather
 // than the objects themselves, and why `Oids` is always a pair.
 //
-// SHA-1 is a NAME here, never a security claim: it is what the packfile format
+// SHA-1 is a name here, never a security claim: it is what the packfile format
 // and Git's protocol specify, so it is what we compute. `crypto.subtle` is the
 // only digest available that does both algorithms over bytes, and it is async,
 // which makes writing an object async all the way up. That is the price of not
@@ -77,7 +77,7 @@ export let objectId =
 /** Git's object id: the SHA-1 of the header and the body. */
 export let oid: Namer = objectId('SHA-1')
 
-/** The same object's SHA-256 object id. Pass it the SHA-256 BODY — the one
+/** The same object's SHA-256 object id. Pass it the SHA-256 body — the one
  * whose children are named by their own `oid256` — or the result is the digest
  * of an object nobody can ask for. */
 export let oid256: Namer = objectId('SHA-256')

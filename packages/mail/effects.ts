@@ -1,4 +1,4 @@
-// What the server DOES about a letter: the `@yaks/mail/effects` entry point —
+// What the server does about a letter: the `@yaks/mail/effects` entry point —
 // one `created(mail)` handler that hands an outbound letter to a sender and
 // writes `delivered` or `bounced` back onto it.
 //
@@ -8,10 +8,10 @@
 // and the factory builds it here.
 //
 // A server that names no sender registers no handler, which is exactly what a
-// graph that only RECEIVES mail wants — not a letter sitting outbound forever
+// graph that only receives mail wants — not a letter sitting outbound forever
 // against a transport nobody configured.
 //
-// A transport that is NAMED but has not been given its credentials amounts to
+// A transport that is named but has not been given its credentials amounts to
 // the same thing: missing config never stops the server from starting, so the
 // handler is not registered, the reason is logged once, and `mail check` keeps
 // reporting it. A letter written meanwhile stays outbound and is sent as soon

@@ -10,7 +10,7 @@
 // `objectBlobs` in this package are each a small object of this shape, and so
 // is anything you write yourself.
 //
-// Every method may return a value OR a promise, the same rule @yaks/graph's
+// Every method may return a value or a promise, the same rule @yaks/graph's
 // `Storage` follows: a table in the database you are already writing answers
 // immediately and keeps `apply()` synchronous, while a bucket over the network
 // answers with a promise and makes it asynchronous.

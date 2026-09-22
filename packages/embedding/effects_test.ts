@@ -77,7 +77,7 @@ let counted = (during: (call: number) => void = () => {}) => {
   return { embedder, calls: () => calls }
 }
 
-// A write that lands WHILE a pass is asking the model belongs to no pass: the
+// A write that lands while a pass is asking the model belongs to no pass: the
 // one running chose its work before that write existed. So the nudge it fires
 // has to survive until the pass is over — and the pass that follows must not
 // re-embed what the first one already did.

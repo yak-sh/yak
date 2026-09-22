@@ -79,7 +79,7 @@ See [mod.ts](./mod.ts) for the complete re-export list.
 `Rel` contains the source, projected columns, joins, a boolean condition tree,
 grouping, ordering, and row limit. It is plain data; SQL fragments are already
 present in sources, column expressions, joins, and `raw` conditions. AND, OR,
-and NOT remain structured until rendering.
+and not remain structured until rendering.
 
 `Dialect` determines table and column expressions. The shipped renderer uses
 SQLite-compatible SQL and `?` placeholders. Supporting another SQL engine may

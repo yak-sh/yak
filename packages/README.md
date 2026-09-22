@@ -155,7 +155,7 @@ grouped approximately by function, **not** by dependency order.
   an entity, expanded into a separate key entity, so seed data written twice
   updates one entity rather than creating two — and a name can be used anywhere
   an eid can, in a reference column and in an API request.
-- **[@yaks/git](./git)** — git objects as entities: an object's eid IS its SHA-1
+- **[@yaks/git](./git)** — git objects as entities: an object's eid is its SHA-1
   object id, with its SHA-256 name beside it as a key, its body in a @yaks/blob
   store, and the two traversals a pack supports (`entry`, `parent`) as edges —
   plus the builders that turn a `path → sha256` manifest into trees and a
@@ -410,7 +410,7 @@ produces computed-column definitions. A **facet** is one of these sub-module
 exports, not another kind of plugin. For example, a check that queries a
 package's own SQL table gets the connection through `host.sql`, and a threshold
 or a relation name comes from config rather than being hard-coded. Everything a
-tool needs per CALL — the graph, the caller, the arguments — is passed in the
+tool needs per call — the graph, the caller, the arguments — is passed in the
 tool context instead.
 
 ### Health checks are just tools named `check`
@@ -432,7 +432,7 @@ finds nothing still returns a result, and one that cannot run reports that
 rather than passing silently. `packages/cli/checks_test.ts` shows the whole idea
 end to end.
 
-What does NOT belong in a package: checks on a particular deployment's health.
+What does not belong in a package: checks on a particular deployment's health.
 The fleet doctor read Cloudflare Email Routing's live rule set, and a provider
 credential file on one machine. Both are questions about a deployment, answered
 using a credential that deployment holds, and both give the same answer whatever
@@ -499,7 +499,7 @@ example: it creates the vector table and compiles `.near`.
 
 Each file is named after the subpath it is exported at. Where a package already
 uses that filename for something else, the subpath maps to a different file and
-the SUBPATH is still the canonical name (`@yaks/harness` has a `tools.ts` of its
+the subpath is still the canonical name (`@yaks/harness` has a `tools.ts` of its
 own, so its `./tools` export points at `./runs.ts`).
 
 **`./vocab` and `./views` are the browser's half.** The browser imports those
@@ -558,24 +558,24 @@ distinguish implemented behavior from remaining proposals.
   allocation by itself. A proposal to allocate numbers automatically for
   prefixed components remains unimplemented; do not rely on it.
 - **`./tools` is a reserved subpath that one core package still uses for
-  something else.** `@yaks/vocab/tools` is the tool MECHANISM — validating a
+  something else.** `@yaks/vocab/tools` is the tool mechanism — validating a
   declaration's input — rather than one plugin's implementations, and it
   predates this convention. Nothing loads it as a plugin, so nothing breaks; the
   check in `packages/facets_test.ts` reserves these subpath names only on
   packages that declare components of their own. `@yaks/graph/tools` was the
   same until the generic tool tier moved into that package's own `vocab.json`:
-  it now exports `loadTools` AND the implementations behind `graph apply` and
+  it now exports `loadTools` and the implementations behind `graph apply` and
   the rest, which is exactly what the subpath name means. The proposal, if the
   remaining one ever causes a problem: rename it to `./tool`, singular — one
   declaration, not a table of implementations.
 - **A tool call that another process already ran.** A provider CLI's transcript
   is full of them, and `call{to, args}` plus `result{call}` are exactly the
   right components to describe what it did — except that a `call` in this graph
-  is an INSTRUCTION: @yaks/tools registers "a call with no result" as an effect
+  is an instruction: @yaks/tools registers "a call with no result" as an effect
   and runs any call naming a tool this program has, which covers most of what a
   fleet agent calls. So `@yaks/spawn`'s adapters leave another process's tool
   calls in the log file rather than writing a row that would be executed a
-  second time. The proposal: a component marking a call as a RECORD rather than
+  second time. The proposal: a component marking a call as a record rather than
   a request — one extra component, matched by the runner's pattern — so an
   imported transcript can record everything it saw.
 - **A view that needs SQL.** No package has one yet. When one does — a renderer
@@ -586,7 +586,7 @@ distinguish implemented behavior from remaining proposals.
 - **`@yaks/render`'s `vocab.json` describes a column schema**, not a set of
   domain components, so it is the one vocabulary document with no `./vocab`
   subpath, and `packages/facets_test.ts` lists it as an exception.
-- **`@yaks/harness`'s `./vocab` is an application's LIST** of packages, rather
+- **`@yaks/harness`'s `./vocab` is an application's list** of packages, rather
   than the components that package owns. It is a program shaped like a plugin,
   so it cannot be loaded alongside the packages it lists, and
   `packages/facets_test.ts` records it as the other exception. It is a list

@@ -1,5 +1,5 @@
 // Landing a branch: the plain Git operation, and the guard that keeps a rebase
-// from quietly reverting the base. It reads NOTHING from a graph — the
+// from quietly reverting the base. It reads nothing from a graph — the
 // checkout you are standing in and `git worktree list` supply every
 // coordinate: the primary worktree is the shared checkout to merge into, and
 // the branch that checkout has checked out is the base every linked worktree
@@ -7,32 +7,32 @@
 // Git's own, so whoever ran it can see exactly what happened. Git exit codes
 // decide every branch in the control flow; Git's prose is diagnostics only.
 //
-// One invocation does at most ONE thing:
+// One invocation does at most one thing:
 //   - Fast-forward the current branch into the base. This succeeds exactly
 //     when the base is still an ancestor of the branch — the common case, and
 //     the whole job when it works. A best-effort push follows if the base has
 //     an upstream (config `@{u}`, nothing configured anywhere else).
-//   - If the base MOVED (it is no longer an ancestor) the fast-forward is
-//     refused: rebase the branch onto the base and RETURN WITHOUT MERGING,
+//   - If the base moved (it is no longer an ancestor) the fast-forward is
+//     refused: rebase the branch onto the base and return without merging,
 //     printing what happened, a `git diff --stat` of what the base pulled in
 //     (so the caller can judge whether re-running its tests matters — docs-only
 //     versus code it touches), and, on a rebase conflict, Git's conflict output
 //     verbatim. The caller re-runs its tests if needed and lands again, which
 //     then fast-forwards cleanly.
 //
-// A landing is also GUARDED: before the fast-forward, land refuses a branch
+// A landing is also guarded: before the fast-forward, land refuses a branch
 // whose files carry content no commit on it wrote — the rebase artifact that
 // quietly reverts the base (see {@link reverts}). `allow` names the files
 // whose rewind is deliberate.
 //
 // The `--ff-only` merge is the compare-and-swap that serializes concurrent
 // landers: a lander whose base moved is refused, rebases, and comes back.
-// Landing means landing in the SHARED CHECKOUT — the one that is actually
+// Landing means landing in the shared checkout — the one that is actually
 // used; pushing to a remote only publishes bytes and is never what makes work
 // take effect, which is why the local fast-forward is the landing and the push
 // is an afterthought.
 //
-// Running a test suite is the CALLER's job, not this operation's — before
+// Running a test suite is the caller's job, not this operation's — before
 // landing, and again after a rebase if the incoming diff could affect it. Land
 // neither runs tests nor knows of any. It runs `git` as a subprocess, so like
 // ./host.ts it is kept out of this package's portable entry point (./mod.ts).
@@ -129,18 +129,18 @@ let same = (a: string, b: string) =>
 // passed because the tests had rewound along with the code. Two questions
 // catch that, both asked of the rebased branch in the moment before it lands:
 //
-//   - which files does `base..HEAD` change that NO commit on the branch
+//   - which files does `base..HEAD` change that no commit on the branch
 //     touches? After a clean rebase that set is empty; anything in it is the
 //     rebase's own doing.
-//   - for the rest, does the landing diff ADD lines, and does the landing blob
-//     equal a blob that path already HELD earlier in the base's history?
+//   - for the rest, does the landing diff add lines, and does the landing blob
+//     equal a blob that path already held earlier in the base's history?
 //     Content the base moved past and the branch puts back is a revert nobody
-//     wrote — but only lines the branch ADDS can put anything back. A hunk that
+//     wrote — but only lines the branch adds can put anything back. A hunk that
 //     only takes lines away reintroduces nothing, so a pure deletion is a
 //     deletion however far back its result happens to match.
 //
 // The second question exists because a rebase rewrites the branch's commits:
-// afterwards a reverting resolution sits INSIDE a branch commit's file list,
+// afterwards a reverting resolution sits inside a branch commit's file list,
 // where the first question cannot see it.
 export type Revert = { file: string; rewound: boolean }
 
@@ -150,12 +150,12 @@ let lines = (out: string) => out.split('\n').filter(Boolean)
 // not its whole history.
 let DEPTH = 200
 
-// `git log --raw` names the blob each commit LEFT at a path
-// (`:mode mode src dst status\tpath`), so ONE walk of the base's recent history
+// `git log --raw` names the blob each commit left at a path
+// (`:mode mode src dst status\tpath`), so one walk of the base's recent history
 // yields every content each path has held — no `rev-parse` per file per
 // commit. Merge commits print no raw lines and contribute nothing, which is
 // right: a merge introduces no content of its own. The base TIP is included
-// harmlessly — its blob for a path IS `base:path`, which a file in the
+// harmlessly — its blob for a path is `base:path`, which a file in the
 // `base...HEAD` diff cannot equal.
 let held = (log: string) => {
   let past = new Map<string, Set<string>>()
@@ -168,7 +168,7 @@ let held = (log: string) => {
   return past
 }
 
-// path → whether the landing diff ADDS anything there. `--numstat` reports
+// path → whether the landing diff adds anything there. `--numstat` reports
 // added and deleted counts per path in the same walk that names the paths, so
 // the guard learns both from one command. A binary file reports `-`: its added
 // line count is unknowable, which the guard treats as content added.
@@ -229,7 +229,7 @@ export let reverts = async (
   let now = blobs(await ask(['ls-tree', '-r', 'HEAD']))
   for (let file of rest) {
     let blob = now.get(file)
-    // A file the branch DELETES has no landing blob and nothing to rewind to,
+    // A file the branch deletes has no landing blob and nothing to rewind to,
     // and a diff that adds no line put nothing back to rewind to it.
     if (blob && adds.get(file) && past.get(file)?.has(blob)) {
       found.push({ file, rewound: true })
@@ -342,7 +342,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   if (dirty) throw new Error(`land: worktree is dirty:\n${dirty}`)
 
   // Ancestry decides which of the two things this invocation does, and it is
-  // asked BEFORE the merge because the guard's refusal has to come before the
+  // asked before the merge because the guard's refusal has to come before the
   // merge too: once the base has fast-forwarded, the bad content has landed.
   let anc = await git(
     tree,
@@ -371,7 +371,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     if (merged.code) throw new Error(message('git merge', merged))
     let sha = await need('read landed commit', root, ['rev-parse', 'HEAD'])
     await publish(git, write, root, base)
-    // The worktree and its branch SURVIVE landing: the caller does its own
+    // The worktree and its branch survive landing: the caller does its own
     // cleanup afterwards, and a command whose working directory was unlinked
     // under it is refused by the kernel. Unlock it instead — whoever handed the
     // worktree out locked it to mark it as in use, and this is that worker

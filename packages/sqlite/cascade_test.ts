@@ -1,8 +1,8 @@
 /// <reference lib="deno.ns" />
 // The death cascade, asked of a database rather than walked. @yaks/graph owns
-// what a death word MEANS; this adapter answers who it reaches, as one
+// what a death word means; this adapter answers who it reaches, as one
 // recursive statement (@yaks/sql's `doomSql`/`looseSql`). The two must not
-// disagree, so every case here is applied to a graph over SQLite AND to a graph
+// disagree, so every case here is applied to a graph over SQLite and to a graph
 // over a Map — which has no statement to compile and is walked instead — and
 // the two answers are compared.
 //
@@ -10,7 +10,7 @@
 // another node (so a chain is expressible, and so is a cycle), and one soft
 // reference of each word.
 //
-// A SECOND vocabulary is WIDE — more tables bearing a cascade column than one
+// A second vocabulary is wide — more tables bearing a cascade column than one
 // compound SELECT may carry (@yaks/sql `ARMS`) — because that is the shape the
 // platform's own vocabulary has, and the shape that cannot be said in one
 // statement. Its cascade is asked in rounds instead, and a chain that
@@ -33,7 +33,7 @@ let doc: VocabDoc = {
       wire: false,
       properties: { num: { type: 'number', stamped: true } },
     },
-    // A node exists ABOUT another node: deleting one takes it with it, however
+    // A node exists about another node: deleting one takes it with it, however
     // long the chain of them is.
     node: {
       component: true,
@@ -203,7 +203,7 @@ Deno.test('the closure carries the rung it fell on', () => {
 })
 
 Deno.test('a chain longer than the rung count still falls whole', () => {
-  // Past @yaks/sql's DEEP the rung number saturates rather than climbing — the
+  // Past @yaks/sql's deep the rung number saturates rather than climbing — the
   // count is what stops, never the walk. A chain twice that long proves it.
   let s = db()
   let n = 80
@@ -231,7 +231,7 @@ Deno.test('a wide vocabulary is asked in rounds until nothing is new', () => {
       { entity: { eid: 'c' }, n6: { of: 'b' } },
       { entity: { eid: 'd' }, n2: { of: 'c' } },
       // A survivor holding the last casualty: the soft references are read after
-      // the closure settles, so an owner of the DEEPEST one still lets go.
+      // the closure settles, so an owner of the deepest one still lets go.
       { entity: { eid: 'm' }, mark: { at: 'd' } },
       { entity: { eid: 'z' }, n1: {} },
     ],

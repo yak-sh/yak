@@ -1,5 +1,5 @@
 // The whole thing, as one Durable Object: a bookshop whose graph lives in the
-// object's SQLite and whose subscribers hear about every batch. It is a CLASS
+// object's SQLite and whose subscribers hear about every batch. It is a class
 // because the platform requires one — a Durable Object is a class the runtime
 // constructs — and it is the only class in the package.
 //

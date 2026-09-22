@@ -2,7 +2,7 @@
 // recipe-box vocabulary, a server graph behind a @yaks/api handler, client
 // graphs connected to it, and pairs of stand-in sockets that carry frames
 // between them. Everything runs in one process: the `fetch` a client is given
-// IS the server's handler, and a socket is two objects passing strings.
+// is the server's handler, and a socket is two objects passing strings.
 //
 // The domain is a shared recipe box — recipes with a course and a serving
 // count, notes about them, cooks who wrote them — so nothing here needs
@@ -44,7 +44,7 @@ let doc: VocabDoc = {
         cook: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },
-    // A note exists ABOUT a recipe — deleting the recipe takes its notes too.
+    // A note exists about a recipe — deleting the recipe takes its notes too.
     note: {
       component: true,
       type: 'object',
@@ -100,13 +100,13 @@ let doc: VocabDoc = {
 /** The recipe-box vocabulary this package's tests read and write against. */
 export let box: Vocab = loadVocab(doc)
 
-/** A graph over a fresh map. `adopt` is what a CLIENT store needs: the numbers
+/** A graph over a fresh map. `adopt` is what a client store needs: the numbers
  * come from the server, not from this map. */
 export let boxGraph = (adopt = false): Graph =>
   graph({ storage: ram(box, { adopt, number: true }), vocab: box })
 
 /** A stand-in socket, driven by hand: it records what this side sent, and
- * `emit` fires the events a WebSocket would. It starts in the CONNECTING
+ * `emit` fires the events a WebSocket would. It starts in the connecting
  * state, so a frame sent before `emit('open')` waits exactly as it would on a
  * WebSocket. */
 export type Fake = Socket & {

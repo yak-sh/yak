@@ -1,5 +1,5 @@
 // The package as a graph plugin: the components it declares, plus the hook that
-// keeps the author of a completion on the mark. What a task is FILED under, and
+// keeps the author of a completion on the mark. What a task is filed under, and
 // the board that is a saved filter over the filing, belong to @yaks/project —
 // and so does the guard over a board's query.
 

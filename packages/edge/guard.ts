@@ -8,7 +8,7 @@
 // name the entity it is about, and an endpoint written as an alias is already
 // the id it resolved to.
 //
-// A bundle naming NEITHER endpoint is a patch of a link that already exists
+// A bundle naming neither endpoint is a patch of a link that already exists
 // (setting `ord`, say) and is left alone: it does not create a link, so it
 // cannot create half of one.
 //

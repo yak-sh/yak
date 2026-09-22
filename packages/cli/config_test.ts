@@ -33,7 +33,7 @@ Deno.test('a line says where it runs: a config it opens, or a door it talks to',
   withEnv({ YAKS_HOST: undefined, YAK_CONFIG: undefined, HOME: bare }, () => {
     // Nothing said: the platform this command came with.
     assertEquals(aimed({}), { host: 'yaks.app' })
-    // A config is a FILE this process opens; the door comes back too, because
+    // A config is a file this process opens; the door comes back too, because
     // it is also the name a bearer is kept under.
     assertEquals(aimed({ config: 'yak.json' }), {
       config: 'yak.json',

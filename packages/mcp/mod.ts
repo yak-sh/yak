@@ -2,7 +2,7 @@
  * @yaks/mcp — the Model Context Protocol server for a yaks graph. It gives an
  * agent the same bundles every other interface onto the graph serves.
  *
- * It ships the GENERIC tier and nothing else — five tools that work over any
+ * It ships the generic tier and nothing else — five tools that work over any
  * vocabulary, rather than one tool per component:
  *
  * - **`graph_apply`** — bundles in, the transaction as applied out, one bundle
@@ -37,7 +37,7 @@
  * `call{to, args}` entity into the graph, signed as the identity this server
  * authenticated, and waits for the result —
  * {@link https://jsr.io/@yaks/tools | @yaks/tools}' runner finds that call,
- * runs the tool as the CALLER, and applies the bundles the tool returned. So
+ * runs the tool as the caller, and applies the bundles the tool returned. So
  * every call this server handled is an entity somebody can read afterwards,
  * and a server whose graph should not record them writes the call and its
  * result into a separate graph ({@link Options.calls}).
@@ -71,7 +71,7 @@
  * ## When a host serves more than tools
  * {@link Options.extend} is handed the SDK's own server object once the tools
  * are registered on it, so resources, prompts and the host's own capabilities
- * are registered on the SAME server rather than a second one beside it. A tool
+ * are registered on the same server rather than a second one beside it. A tool
  * may also carry `meta`, which the client is handed verbatim as `_meta`.
  *
  * @module

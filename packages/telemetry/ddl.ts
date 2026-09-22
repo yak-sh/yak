@@ -1,5 +1,5 @@
 // Where the log lives: one table, one row per call, keyed by nothing but its
-// own rowid. It is LOG data, deliberately outside the graph: no entity id, no
+// own rowid. It is log data, deliberately outside the graph: no entity id, no
 // component, and nothing a client ever syncs. Rows only accumulate; nothing
 // references them.
 //

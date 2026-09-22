@@ -1,18 +1,18 @@
 /**
- * @yaks/effects — what a graph DOES about the data it commits, kept out of the
+ * @yaks/effects — what a graph does about the data it commits, kept out of the
  * write path.
  *
  * A write is settled by {@link https://jsr.io/@yaks/graph | @yaks/graph}'s
- * `apply()`. An EFFECT is the other half: a function registered per component
- * that runs AFTER the transaction commits and acts on what changed. When a post
+ * `apply()`. An effect is the other half: a function registered per component
+ * that runs after the transaction commits and acts on what changed. When a post
  * is published, notify its subscribers. When an order is paid, print a receipt.
  * When an account is deleted, close its sessions.
  *
- * This package is the MECHANISM only — a registry, a write phase, and the rules
+ * This package is the mechanism only — a registry, a write phase, and the rules
  * for running a handler safely. It ships no effect of its own and declares no
  * components; the components are your vocabulary's and the handlers are yours.
  *
- * A BATCH, here and throughout, is a list of changes applied in one
+ * A batch, here and throughout, is a list of changes applied in one
  * transaction: the array passed to `apply()`, written in full or not at all.
  *
  * ## Use
@@ -36,7 +36,7 @@
  * is `on('-comp', run)` written shortly; the first two describe what changed,
  * and what changed is not a query about what is now true.
  *
- * ## Or a PATTERN
+ * ## Or a pattern
  * Those three are the narrow question. The wide one is any query, run
  * wherever this batch just made it true:
  *
@@ -75,7 +75,7 @@
  *
  * So the write is admitted, stamped, journaled, broadcast to subscribers and
  * seen by the other effects — everything a write through `tx.patch` is not. It
- * is a NEW batch, applied after the commit that triggered the handler, never a
+ * is a new batch, applied after the commit that triggered the handler, never a
  * row inserted into the finished transaction. `trusted` is what lets an effect
  * write a server-owned column, which is most of what effects write.
  *

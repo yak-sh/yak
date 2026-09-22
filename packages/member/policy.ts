@@ -1,6 +1,6 @@
 // The four questions, and the order they are answered in.
 //
-// Everything here follows from one idea: MEMBERSHIP IS NOT PERMISSION. A row on
+// Everything here follows from one idea: membership is not permission. A row on
 // the roster does not, on its own, let you touch anything. So permission
 // resolves in this order:
 //
@@ -15,8 +15,8 @@
 // is one row — delete the membership and every permission implied by it goes
 // too.
 //
-// A SHARE LINK is the fourth way in. A grant may name a `token` instead of a
-// person; whoever opens that link acts AS the grant, so the HTTP layer signs
+// A share link is the fourth way in. A grant may name a `token` instead of a
+// person; whoever opens that link acts as the grant, so the HTTP layer signs
 // the changes with the grant's own entity id. `levelOn` therefore checks the
 // principal's own entity for a `grant` component before it looks for grants
 // filed about the principal.
@@ -26,8 +26,8 @@
 // with. Stated once there, the read check at the HTTP layer, the write check in
 // `apply()`, and a service that already knows both values cannot drift apart:
 //
-//   read   the mode is not `private`, OR the principal holds any level
-//   write  the mode is `open`, OR the principal holds owner or editor
+//   read   the mode is not `private`, or the principal holds any level
+//   write  the mode is `open`, or the principal holds owner or editor
 //
 // Every function here threads @yaks/graph's synchronous pass-through: over a
 // synchronous storage (a Map, an embedded database) none of them returns a
@@ -73,7 +73,7 @@ export let modeOn = (tx: Tx, app: Eid): Mode | Promise<Mode> =>
   then(tx.get([app]), ([b]) => mode(of(b, ACCESS)?.mode))
 
 /**
- * Everything filed ABOUT this principal: their membership rows, their grants.
+ * Everything filed about this principal: their membership rows, their grants.
  * Both are entities with a column pointing at the principal, so the two steps
  * that would each have been a read are one backwards read (@yaks/graph
  * `about`), and none at all when the gather already fetched them (@yaks/graph
@@ -104,7 +104,7 @@ export let levelOn = (
 ): Level | null | Promise<Level | null> => {
   if (!who) return null
   return then(tx.get([who]), ([self]) => {
-    // A share link's bearer IS the grant they opened.
+    // A share link's bearer is the grant they opened.
     let own = of(self, GRANT)
     if (own && own.app == app) return level(own.access)
     return then(filed(tx, who), (found) => {

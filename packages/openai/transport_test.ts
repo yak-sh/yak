@@ -325,7 +325,7 @@ Deno.test('responses scrubs failed-stream evidence and credential errors', async
   assertEquals(attempts, 3)
   assertEquals(waits, [200, 400])
   // The source's own diagnosis stays out of it — a credential error can carry
-  // the credential ('secret-old' here) — but its HINT, which the source wrote,
+  // the credential ('secret-old' here) — but its hint, which the source wrote,
   // is what a human needs and rides the fault (T-35017).
   assertEquals(bare.message.includes('secret-old'), false)
   let hinted = responses({
@@ -592,7 +592,7 @@ let hang = (init?: RequestInit) =>
 Deno.test('responses fails a connect that never returns a response', async () => {
   let client = responses({
     credentials: auth(),
-    // A stall is transient now (retry_test), so these measure the FAULT.
+    // A stall is transient now (retry_test), so these measure the fault.
     retries: 0,
     stallMs: 20,
     fetch: (_input, init) =>
@@ -610,7 +610,7 @@ Deno.test('responses fails a connect that never returns a response', async () =>
 Deno.test('responses fails a stream that stalls after connecting', async () => {
   let client = responses({
     credentials: auth(),
-    // A stall is transient now (retry_test), so these measure the FAULT.
+    // A stall is transient now (retry_test), so these measure the fault.
     retries: 0,
     stallMs: 20,
     fetch: (_input, init) => Promise.resolve(new Response(hang(init))),

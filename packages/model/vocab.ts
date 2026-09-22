@@ -2,7 +2,7 @@
 // browser page imports at `@yaks/model/vocab`. It reaches no storage, no SQL
 // and no runtime, so a browser tab loading this vocabulary loads nothing else.
 //
-// What a reply CARRIES is declared elsewhere: `tool` belongs to @yaks/tools and
+// What a reply carries is declared elsewhere: `tool` belongs to @yaks/tools and
 // `artifact` to @yaks/blob. An application that wants them composes those
 // packages in — that is what a plugin list is for. Declaring them here as well
 // would declare one component in two places, which `loadVocab` rejects.

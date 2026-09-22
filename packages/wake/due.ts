@@ -1,10 +1,10 @@
 // The whole scheduling rule, as two nearly pure functions over a graph. There
-// is no timer here and no loop: this module computes WHICH wakes are due and
-// WHAT firing one writes, and the program running it arranges to be called — a
+// is no timer here and no loop: this module computes which wakes are due and
+// what firing one writes, and the program running it arranges to be called — a
 // Deno tick, a Durable Object `alarm()`, a browser tab, a cron job hitting a
 // route. Every one of them calls the same two functions, which is the point.
 //
-// The rule is one predicate: a wake is DUE when its `at` has passed. That is
+// The rule is one predicate: a wake is due when its `at` has passed. That is
 // all, and it holds no matter how long the process was down, because `at` is a
 // stored column and not a running process's memory of when to come back.
 //
@@ -103,7 +103,7 @@ export let next = (
 }
 
 /**
- * The patch that FIRES a due wake: the `fired` value, plus its `at` moved on to
+ * The patch that fires a due wake: the `fired` value, plus its `at` moved on to
  * the next instant — or cleared, when there is no next one.
  *
  * It returns a bundle rather than applying it. `tick` applies one such bundle

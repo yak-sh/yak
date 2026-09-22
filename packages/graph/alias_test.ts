@@ -45,7 +45,7 @@ Deno.test('every reference to the alias points at the same entity', () => {
 })
 
 Deno.test('a content-addressed component names its own entity', () => {
-  // A plugin says how ITS component is named; here a bookmark is the sentence
+  // A plugin says how its component is named; here a bookmark is the sentence
   // "this points at that", so two writers stating it land on one entity.
   let one = graph({
     storage: memory(),

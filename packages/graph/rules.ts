@@ -1,12 +1,12 @@
 // The declarative way to extend a phase. A {@link Hook} is code that takes the
-// bundles; a RULE is a query over one bundle in the change plus what the rule
+// bundles; a rule is a query over one bundle in the change plus what the rule
 // produces — and the query expresses both at once. `.entity, +!created` states
 // what the rule needs (an entity the graph holds no `created` for) and what it
 // does about it (add `created`, which is also what makes the rule fire exactly
 // once, ever). A plugin declares rules beside its hooks, and the phase runs
 // them.
 //
-// ALL RULES IN A PHASE SEE THE SAME STATE. The bundles a phase's rules are
+// All rules in A phase see the same state. The bundles a phase's rules are
 // evaluated against are composed once — what the graph holds for each entity,
 // with this change's patch folded in — before any rule fires. Two rules in one
 // phase therefore see the same state and cannot react to each other's writes,
@@ -20,16 +20,16 @@
 // stored component cannot re-run an effect on an unrelated edit. A rule that
 // declares no write set is unchecked — declaring one is opting in.
 //
-// RESOURCES are the other half of a rule's match. `#Now` binds a singleton the
+// Resources are the other half of a rule's match. `#Now` binds a singleton the
 // phase provides — the change's timestamp, its actor, the vocabulary, the
 // calling program's environment — into the bundle under its own name, so `run`
 // takes the bound bundle and nothing else: everything a rule reads, it named.
 // Resources are built at most once per phase and are read-only; writing one is
 // refused the same way a write outside the write set is. A resource is not part
 // of the vocabulary, so a rule naming a resource nobody provides is an error,
-// while a rule naming an undeclared COMPONENT simply never matches.
+// while a rule naming an undeclared component simply never matches.
 //
-// A resource name is CAPITALIZED — `#Actor`, `#Now` — because it is bound into
+// A resource name is capitalized — `#Actor`, `#Now` — because it is bound into
 // the same bundle as the components, and a component name is lowercase. So
 // `({ trashed, Actor, Now })` shows which is which, and a collision between
 // the two is impossible rather than something to check for. A resource
@@ -37,13 +37,13 @@
 //
 // A resource has the same shape as a component: an object of columns
 // (`Now.at`, `Actor.by`) rather than a bare value. And like an entity written
-// into a reference column, it CONVERTS TO one value when a rule writes it into
+// into a reference column, it converts to one value when a rule writes it into
 // a column: `{ at: Now, by: Actor }` writes the timestamp and the actor's eid.
 // That is not special-cased per resource — each resource declares what it
 // converts to (see {@link stands}), a rule's patch resolves what it wrote, and
 // a resource that converts to nothing writes nothing at all.
 //
-// What a resource is NOT is a value the MATCH side can read:
+// What a resource is NOT is a value the match side can read:
 // `expires.at<Now.at` would need a reference on the value side of a
 // comparison, which the query grammar's values do not have (that is
 // @yaks/logic's unification, planned). A rule that tries it is refused rather
@@ -100,7 +100,7 @@ export type Tick = {
 export type Resource = (tick: Tick) => unknown
 
 /**
- * A resource's value: its columns, plus the one value it CONVERTS TO when a
+ * A resource's value: its columns, plus the one value it converts to when a
  * rule writes it into a column — the timestamp for `#Now`, the eid for
  * `#Actor`. It declares that the way any JavaScript value declares its
  * primitive conversion, so `${Now}` and a written `at: Now` agree by
@@ -114,7 +114,7 @@ export type Resource = (tick: Tick) => unknown
  * `${Now}` // '2026-09-07T00:00:00.000Z'
  * ```
  *
- * The default is the component's FIRST column, which is what a one-column
+ * The default is the component's first column, which is what a one-column
  * resource means and what both `{at}` and `{by, via}` want; a resource whose
  * first column is not the value it converts to passes that value explicitly.
  */
@@ -181,7 +181,7 @@ export type Bound = Bundle & {
  * What a rule writes: components by name (or `null` to remove one), with no
  * identity of its own — the bundle it matched determines which entity it is
  * about. A rule writes to the entity it matched and nowhere else; creating
- * OTHER entities is still a hook's job.
+ * other entities is still a hook's job.
  */
 export type Patch = Record<string, Comp | null>
 
@@ -190,7 +190,7 @@ export type Patch = Record<string, Comp | null>
  *
  * `produce` is the no-code case — a bundle template merged into the matched
  * bundle — and `run` covers everything else, as a function of the bound
- * bundle. The match's `+` components and its `!` condition are applied BEFORE
+ * bundle. The match's `+` components and its `!` condition are applied before
  * either, so the `run` of a rule that fires once already sees the component
  * that will stop it firing again.
  *
@@ -239,7 +239,7 @@ type Ready = {
   checked: boolean
 }
 
-// The capitalized names a match COMPARES against: `expires.at<Now.at` parses
+// The capitalized names a match compares against: `expires.at<Now.at` parses
 // as a comparison with the literal text `Now.at`, because a value in this
 // grammar is always a literal. Only the running phase knows which of these
 // names is a resource, so the names are carried along and `fire` refuses the
@@ -260,7 +260,7 @@ let raws = (v: Value | null): string[] =>
     ? v.items.flatMap(raws)
     : [...raws(v.lo), ...raws(v.hi)]
 
-// Every component a match NAMES, wherever it names it: the filter reads them,
+// Every component a match names, wherever it names it: the filter reads them,
 // and the `+`/`!` parts write and test them. Which components a rule is about
 // decides whether it can ever fire in a given graph — a store whose vocabulary
 // has no `sweep` component cannot have a rule about one, and asking for it
@@ -268,7 +268,7 @@ let raws = (v: Value | null): string[] =>
 let words = (f: And): string[] =>
   f.clauses.flatMap((c) => c.kind == 'pred' && c.path.length ? [c.path[0]] : [])
 
-// Compiled once per rule, per vocabulary. Keyed by the rule OBJECT, so this is
+// Compiled once per rule, per vocabulary. Keyed by the rule object, so this is
 // a memo rather than a registry — two graphs sharing a plugin share the
 // compilation only while they use the same vocabulary.
 let cache = new WeakMap<Rule, { v: Vocab; ready: Ready }>()
@@ -306,7 +306,7 @@ let compile = (r: Rule, v: Vocab): Ready => {
     // A rule about a component this graph does not declare never fires, and
     // that is not an error: the stamp rules ship with the core, and a
     // vocabulary need not declare `created` at all. Every component the rule
-    // names counts, including the ones it only READS — one store's `schedule`
+    // names counts, including the ones it only reads — one store's `schedule`
     // is a component another store has never heard of, and both hold the same
     // rule list. A rule whose components all exist and still will not compile
     // is a mistake, and throws.
@@ -365,7 +365,7 @@ export let fire = (
 ): Bundle[] | Promise<Bundle[]> => {
   let { bundles } = tick
   if (!rules.length) return bundles
-  // One view per ENTITY, not per patch: the phases add bundles to the change
+  // One view per entity, not per patch: the phases add bundles to the change
   // as they go, and a rule is about the entity, so it must not fire once per
   // patch that mentions that entity.
   let seen = new Map<Eid, Bundle>()
@@ -463,7 +463,7 @@ export let fire = (
     }),
     (made) => {
       if (!made.length) return bundles
-      // A phase's rules run AFTER its core work, so from `mutate` onwards the
+      // A phase's rules run after its core work, so from `mutate` onwards the
       // change has already been written and whatever a rule produced has to be
       // written here. Before `mutate`, it is still to come and will write it.
       let late = PHASES.indexOf(tick.phase) >= PHASES.indexOf('mutate')

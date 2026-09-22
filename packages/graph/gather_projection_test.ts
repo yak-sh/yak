@@ -12,7 +12,7 @@ import {
 } from './mod.ts'
 import { books, comp, memory } from './harness.ts'
 
-// The optional projection deliberately returns ONLY requested facets, even
+// The optional projection deliberately returns only requested facets, even
 // though this test's backing map has whole rows. Count adapter crossings.
 let fixture = (async: boolean) => {
   let base = memory()
@@ -106,7 +106,7 @@ for (let async of [false, true]) {
       let held = holding(tx, books, snap)
       let retained = (await pick(held, ['b'], ['book']))[0]
       assertEquals(retained.doc, undefined)
-      // Even a write to a DIFFERENT owner must freeze the original view first.
+      // Even a write to a different owner must freeze the original view first.
       await held.patch([{ entity: { eid: 'other' }, doc: { title: 'Other' } }])
       assertEquals(comp(retained, 'doc').title, 'Before')
       assertEquals(calls, ['pick', 'whole', 'patch'])
@@ -204,7 +204,7 @@ for (let async of [false, true]) {
         select: ['book', 'created'],
       }])
       // Model a derived projection that changes between reads. Completion
-      // fills only previously unread facets, not values/absence FOUND earlier.
+      // fills only previously unread facets, not values/absence found earlier.
       let held = holding(
         {
           ...tx,

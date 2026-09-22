@@ -1,11 +1,11 @@
-// WHICH columns are content-addressed. The vocabulary carries the `store`
+// Which columns are content-addressed. The vocabulary carries the `store`
 // keyword; this module is the one place that reads it, so every other module
 // here calls a function ("is this column a body?", "which are they?") instead
 // of digging through schemas itself.
 //
 // A column marked `store: "blob"` is an ordinary string column in every other
 // respect — it is declared, validated, queried and written as text. Only where
-// the value LIVES differs, and that is this package's whole subject.
+// the value lives differs, and that is this package's whole subject.
 
 import type { Column, Vocab } from '@yaks/vocab'
 

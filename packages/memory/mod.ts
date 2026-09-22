@@ -1,5 +1,5 @@
 /**
- * @yaks/memory — what a person SAID, kept in their own words: the `memory`
+ * @yaks/memory — what a person said, kept in their own words: the `memory`
  * component domain for a {@link https://jsr.io/@yaks/graph | @yaks/graph},
  * with the two halves that make it useful — writing one down, and having it
  * read back at the start of the next conversation.
@@ -31,7 +31,7 @@
  * - {@link line} builds the read: a query string in the filter grammar every
  *   yaks store answers — with words in it, the store's full-text index ranks
  *   them; with none, newest first — and {@link Ranker} is the interface a
- *   server with a vector service implements to rank by MEANING instead, with
+ *   server with a vector service implements to rank by meaning instead, with
  *   {@link ordered} putting the store's result into that order;
  * - {@link passage} builds the text an agent is given at the start of a
  *   conversation: the newest few, whole, under one heading, bounded by

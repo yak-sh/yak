@@ -5,7 +5,7 @@
 // how a client learns about them.
 //
 // Frames sent before the socket opens are queued: an upgrade hands back a
-// socket that is still CONNECTING until its response has been returned to the
+// socket that is still connecting until its response has been returned to the
 // runtime, and a subscription opened on that first tick would otherwise throw
 // while sending its own initial result.
 
@@ -63,7 +63,7 @@ export let sink = (socket: Socket): Sink => {
  * under its own id.
  *
  * A relay is the only write that crosses this connection, and it leaves the
- * invariant that matters standing: no DURABLE write crosses it. Nothing in a
+ * invariant that matters standing: no durable write crosses it. Nothing in a
  * relay message is stored, and the connection it arrived on is what holds it
  * — which is precisely why it cannot go through `/apply`, a separate request
  * with no connection to name.

@@ -8,7 +8,7 @@ import { runs } from './tools.ts'
 let tools = runs()
 
 // A tool is a function from bundles to bundles: hand it the arguments and read
-// what it answered. Nothing here opens a store — what the answer LANDS as is
+// what it answered. Nothing here opens a store — what the answer lands as is
 // the runner's, tested where the runner is.
 let ctx = (args: Record<string, unknown>, at: Record<string, string> = {}) =>
   ({

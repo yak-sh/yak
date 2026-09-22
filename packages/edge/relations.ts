@@ -8,8 +8,8 @@
 // nothing is hardcoded, so adding a relation means adding one component, not
 // editing this file.
 //
-// A relation has two names, and they may differ. The COMPONENT NAME is the
-// component stored on the link entity (`references`); the QUERY NAME is what a
+// A relation has two names, and they may differ. The component name is the
+// component stored on the link entity (`references`); the query name is what a
 // query uses (`referenced`). Declaring `relation: true` makes them identical,
 // which is the common case; declaring a string gives the query name. The link's
 // id is derived from the component name, so the two maps below are not
@@ -21,7 +21,7 @@ import type { Vocab } from '@yaks/vocab'
 export let EDGE = 'edge'
 
 /**
- * Every relation the vocabulary declares, as QUERY NAME → component name:
+ * Every relation the vocabulary declares, as query name → component name:
  * `{ cites: 'cites', referenced: 'references' }`. Reads the `relation` keyword,
  * so the vocabulary must have been loaded with `edgeKeywords` registered — an
  * unregistered keyword is invisible to the loader.
@@ -42,7 +42,7 @@ export let relations = (v: Vocab): Record<string, string> => {
 }
 
 /**
- * The same declarations the other way round, as component name → QUERY NAME.
+ * The same declarations the other way round, as component name → query name.
  * This is what reads a stored link back: a bundle carrying `references` is a
  * `referenced` link.
  */

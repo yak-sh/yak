@@ -74,7 +74,7 @@ Deno.test('a composed host finds exactly the two states we broke', async () => {
       { entity: { eid: 'e2' }, entry: { session: 's1', seq: 2 }, stop: {} },
       { entity: { eid: 't1' }, claim: { session: 's1' } },
     ])
-    // A board written PAST the graph, which is how one stops routing: the
+    // A board written past the graph, which is how one stops routing: the
     // board guard refuses this query at the door, and another host's writer
     // never asked the door.
     h.storage.tx((tx) =>
@@ -90,7 +90,7 @@ Deno.test('a composed host finds exactly the two states we broke', async () => {
     assert(claim.includes('whose transcript stopped'), claim)
 
     let board = await ask(h, 'board_check')
-    // The numbers start at 2, not 1: this PROCESS is an entity too, and its
+    // The numbers start at 2, not 1: this process is an entity too, and its
     // row is the first thing composing the host writes.
     assert(board.includes('B-7 no longer routes'), board)
     assert(board.includes('.staus=open'), board)

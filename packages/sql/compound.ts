@@ -11,11 +11,11 @@
 // do.
 //
 // Two steps keep every compound SELECT under that limit, and they compose.
-// GROUP first — a component's columns become ONE term, combined with OR,
-// because terms are scarce and OR is not — then CUT what is left into
+// Group first — a component's columns become one term, combined with OR,
+// because terms are scarce and or is not — then cut what is left into
 // statements of {@link ARMS} terms each. What the caller does with the pieces
 // is its own business: the cascade asks them in rounds and unions the answers;
-// the `.refs=` predicate combines them with OR into one WHERE clause.
+// the `.refs=` predicate combines them with OR into one where clause.
 
 /** How many terms one compound SELECT may carry. Workerd allows five, and a
  * seeded recursion spends one of them on the seed. This is the lowest limit any

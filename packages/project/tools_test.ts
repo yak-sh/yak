@@ -24,7 +24,7 @@ let checkup = async (name: 'board_check' | 'project_check', g: Graph) => {
   }
 }
 
-// A graph WITHOUT the board guard — which is how a board stops routing in the
+// A graph without the board guard — which is how a board stops routing in the
 // first place: written by a host composing other words, or against a
 // vocabulary that has since moved.
 let unguarded = (): Graph =>

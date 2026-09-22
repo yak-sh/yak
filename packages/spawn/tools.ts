@@ -2,7 +2,7 @@
 // ./vocab.json, exported as `@yaks/spawn/tools`: hand an agent a task, wait for
 // it to finish, and read what it has said so far.
 //
-// SPAWN WRITES TO THE GRAPH ITSELF. Every other tool here returns rows and lets
+// Spawn writes to the graph itself. Every other tool here returns rows and lets
 // the tool runner commit them, but the child process does not exist until the
 // transaction has committed, because ./effects.ts runs after the commit. So a
 // tool that only returned the rows could not then watch what it started. This
@@ -10,7 +10,7 @@
 // session's id — or, with `wait`, how the run ended. @yaks/process's `shell`
 // tool works the same way, for the same reason.
 //
-// WAITING IS POLLING. There is no separate notification channel: the wait asks
+// Waiting is polling. There is no separate notification channel: the wait asks
 // the graph the same question a person would, on the same interval this package
 // already reads its logs on, until the run is over. Whether a run is over
 // depends on what is behind the session — one with a `process` component ends

@@ -2,7 +2,7 @@
 // the documents it includes in full, then a list of the ones it only mentions
 // by id. This is the text an agent is given at the top of its context.
 //
-// The persona's `doc` body IS the instruction text (./vocab.json declares it
+// The persona's `doc` body is the instruction text (./vocab.json declares it
 // that way), so it comes first and everything after it is a document the
 // persona links to. What it links to is a `doc` and nothing more specific: a
 // memory is @yaks/memory's component and a goal is @yaks/goal's, and a persona
@@ -11,20 +11,20 @@
 // restating another package's components is exactly what would stop this
 // document carrying the next kind of thing somebody writes.
 //
-// TWO SECTIONS, because there are two things a persona does with a document:
-// it INCLUDES one (the body appears in full, so the reader has read it before
-// starting) or it LISTS one (a line saying it exists, so the reader can ask
+// Two sections, because there are two things a persona does with a document:
+// it includes one (the body appears in full, so the reader has read it before
+// starting) or it lists one (a line saying it exists, so the reader can ask
 // for it). A third section would be a budget, and the budget belongs to the
 // caller: it is the one that knows the size of the context window.
 //
-// AUTHORED ORDER, and nothing cleverer. The fleet's materializer sorted these
+// Authored order, and nothing cleverer. The fleet's materializer sorted these
 // by a warmth score that decayed against the wall clock, so two documents
 // nobody had touched could swap places between renders, and a file written
 // from it went stale with no graph write behind it. An edge's `ord` is a
 // stored fact and the entity's number is another; both are stable, and a
 // reader who wants a different order moves the edge.
 //
-// Markdown assembled from PARTS, never pasted together: each body is its own
+// Markdown assembled from parts, never pasted together: each body is its own
 // small document under an H1 of its own with a `---` rule above it, so a body
 // may use `##` freely without colliding with the enclosing structure. Every
 // title and id this module writes goes through @yaks/text's `safe` first — a
@@ -88,7 +88,7 @@ let column = (b: Bundle, name: string): string => {
  * - M-9 tickets carry signal
  * ```
  *
- * A pure function: give it bundles and it returns text. Where that text GOES
+ * A pure function: give it bundles and it returns text. Where that text goes
  * — a file, a repo, the system prompt of a spawned agent — is the caller's
  * decision, which is why nothing here writes a file.
  */

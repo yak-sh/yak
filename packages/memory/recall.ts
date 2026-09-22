@@ -1,13 +1,13 @@
-// Getting them back. A recall answers memories WHOLE — the sentence and its
+// Getting them back. A recall answers memories whole — the sentence and its
 // context, never a snippet — because half of what somebody said is worse than
 // none of it. What is ranked is which ones, not how much of them.
 //
-// SEVERAL RANKINGS, ONE RESULT. Where the server has a vector service, a
-// {@link Ranker} returns which memories are nearest in MEANING to the words
+// Several rankings, one result. Where the server has a vector service, a
+// {@link Ranker} returns which memories are nearest in meaning to the words
 // asked about ("how do they like the pages to look"), and this package never
-// learns how that is done. A server whose STORE does the same thing answers
+// learns how that is done. A server whose store does the same thing answers
 // `.near=<entity>` in the query string itself (@yaks/embedding), and
-// {@link Asked.near} is where that goes. With neither, the words SELECT:
+// {@link Asked.near} is where that goes. With neither, the words select:
 // {@link line} builds a query string carrying the words, which every yaks store
 // answers as a full-text search over `doc` — where a memory's sentence lives —
 // and the newest of the selected rows come first, because a query string
@@ -33,7 +33,7 @@ export type Memory = {
 }
 
 /**
- * The memories of a space nearest in MEANING to some words, closest first —
+ * The memories of a space nearest in meaning to some words, closest first —
  * ids only, since the store returns the memories themselves. A server with a
  * vector service supplies one; a server with none supplies nothing, and
  * {@link line} ranks by word matching instead.
@@ -88,7 +88,7 @@ export type Asked = {
   feedback?: boolean
   /** the words to select by — the store's own index over `doc` */
   said?: string
-  /** an entity to rank by MEANING instead, where the server has embeddings */
+  /** an entity to rank by meaning instead, where the server has embeddings */
   near?: Eid
   /** particular ones, by id */
   eids?: Eid[]
@@ -97,7 +97,7 @@ export type Asked = {
 /**
  * The query string that finds memories: with words, the memories containing
  * every one of them, which is what somebody searching means; with a `near`,
- * ranked by meaning; otherwise newest first. WORDS DO NOT RANK: @yaks/fts
+ * ranked by meaning; otherwise newest first. Words DO not rank: @yaks/fts
  * compiles a word into a condition and keeps its bm25 score for the search
  * tool, so a query string carrying words is a filter and the newest still come
  * first. The components are named so a returned row carries them — a row

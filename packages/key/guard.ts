@@ -1,13 +1,13 @@
 // The refusal: an incomplete key is not a key.
 //
-// A key is three things — a kind, a value, and the entity the value is FOR —
+// A key is three things — a kind, a value, and the entity the value is for —
 // and any two of them mean nothing. A bundle with a value and no tag would land
 // as a row nothing can read; one with no `of` would identify nobody. Both are
 // caught here, at the `mint` phase, which runs after the graph has assigned an
 // id to every `$alias` — so the refusal can name the entity it is talking
 // about, and an `of` written as an alias is already the id it resolved to.
 //
-// A bundle with NEITHER a value nor an `of` is a patch of a key that already
+// A bundle with neither a value nor an `of` is a patch of a key that already
 // exists, and is left alone: it claims nothing, so it cannot claim half of
 // something.
 //

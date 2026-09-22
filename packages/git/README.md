@@ -393,7 +393,7 @@ refreshed at any time without changing anything.
   common Git directory. Independent clones are different repositories.
 - `worktree{repository,path,gitdir,head,branch,managed}` is a checkout. Its
   entity id is derived from the repository plus the canonical checkout root
-  path, so the branch and HEAD can change without changing its identity, and
+  path, so the branch and head can change without changing its identity, and
   paths that differ only by a symlink resolve to the same entity. Moving a
   checkout gives it a new identity; this deliberately avoids depending on Git's
   linked-worktree administrative directory names, which Git may reuse. These

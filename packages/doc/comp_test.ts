@@ -33,7 +33,7 @@ Deno.test('both columns are text, and both route bare', () => {
 Deno.test('store is carried only by whoever registered the keyword', () => {
   assertEquals(plain.column(DOC, BODY)!.keywords.store, undefined)
   assertEquals(addressed.column(DOC, BODY)!.keywords.store, 'blob')
-  // and it is an ordinary text column either way — where the value LIVES is
+  // and it is an ordinary text column either way — where the value lives is
   // @yaks/blob's business, never the meta-model's
   for (let v of [plain, addressed]) {
     assertEquals(v.column(DOC, BODY)!.scalar, 'text')

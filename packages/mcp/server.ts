@@ -10,7 +10,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 // and the runner records the call as it goes: a `call{to, args}` entity signed
 // as the identity this server authenticated, written before the function runs,
 // and a `result` entity after. The bundles the tool returned are applied as
-// the CALLER, so a tool cannot write in the client's name even if the client
+// the caller, so a tool cannot write in the client's name even if the client
 // asks it to, and every call this server handled is an entity somebody can
 // read afterwards.
 //
@@ -61,7 +61,7 @@ export type Options = {
    * so the `tool` rows are written once for the process rather than once per
    * request. Otherwise a runner is built here over `calls`. */
   runner?: Runner
-  /** the graph a call and its result are RECORDED in (default: `graph`). A
+  /** the graph a call and its result are recorded in (default: `graph`). A
    * server whose graph should not hold them — one composed over somebody
    * else's stores, or a connector that will not write a stranger's question
    * into them — passes a separate graph here; the tools still read and write
@@ -109,18 +109,18 @@ export type Options = {
   guide?: Guide
   /** ranked full-text search; without it there is no `search` tool */
   search?: Search
-  /** this server only READS: the generic tier's `graph_apply` is not listed at
+  /** this server only reads: the generic tier's `graph_apply` is not listed at
    * all — see {@link CoreOpts.readOnly}. A plugin's own tools are untouched:
-   * this constrains the GENERIC tier, not every tool. */
+   * this constrains the generic tier, not every tool. */
   readOnly?: boolean
-  /** extra arguments every generic READ tool takes here — see
+  /** extra arguments every generic read tool takes here — see
    * {@link CoreOpts.scope} */
   scope?: CoreOpts['scope']
   /** how a caller undoes a delete on this deployment, appended to
    * `graph_apply`'s description — see {@link CoreOpts.undo} */
   undo?: CoreOpts['undo']
   /** what every tool this server lists declares about signing in
-   * ({@link Security}), declared per TOOL because that is where a client reads
+   * ({@link Security}), declared per tool because that is where a client reads
    * it — a tool carrying `securitySchemes` in its own `meta` keeps that
    * instead. Pass a function to answer per tool, for a server where the answer
    * differs between them: a read anybody may make listed beside a write that
@@ -148,7 +148,7 @@ export type Options = {
   extend?: (server: McpServer) => void | Promise<void>
 }
 
-// The reply, built twice over from the BUNDLES the tool returned: the text
+// The reply, built twice over from the bundles the tool returned: the text
 // they carry (or the bundles themselves, as JSON) for a client that reads
 // text, and the bundles as `structuredContent` for one that reads structure.
 // MCP requires structured content to be an object, so the array is nested
@@ -171,7 +171,7 @@ let said = (answer: Bundle[], failed: boolean): CallToolResult => {
   }
 }
 
-// A refusal IS an error: `isError` is set on the reply so a client counts it
+// A refusal is an error: `isError` is set on the reply so a client counts it
 // as one instead of a success that reads like an apology.
 let failed = (err: unknown): CallToolResult => ({
   content: [{
@@ -296,7 +296,7 @@ export let listing = (opts: Options): Tool[] => [
   ...(opts.tools ?? []),
 ]
 
-/** The ROSTER this server serves: the tool names it lists, in listing order.
+/** The roster this server serves: the tool names it lists, in listing order.
  * This is what a client caches when it connects, and what
  * {@link rosterVersion} hashes. */
 export let roster = (opts: Options): string[] => listing(opts).map(toolName)
@@ -348,7 +348,7 @@ export let server = (opts: Options): McpServer => {
     version: opts.version ?? '0.0.0',
     // How the server presents itself, when the caller supplied any of it:
     // what `initialize` reports beside the server's name, so a client reading
-    // `serverInfo` needs nothing pasted into a form. Each field is OMITTED
+    // `serverInfo` needs nothing pasted into a form. Each field is omitted
     // when unset rather than sent empty — an absent field means the server
     // said nothing, an empty one means the server said its title is the empty
     // string.

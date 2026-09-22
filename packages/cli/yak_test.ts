@@ -9,7 +9,7 @@ import { own, YAK } from './yak.ts'
 
 type Call = { name: string; arguments: Record<string, unknown> }
 
-// One line aimed at a DOOR that lists `graph_apply` and answers anything.
+// One line aimed at a door that lists `graph_apply` and answers anything.
 // `YAKS_HOME` is where the tool list is cached, so it points at a scratch
 // directory this test takes away with it; `YAK_CONFIG`, `YAKS_HOST` and `HOME`
 // are all moved off the box's own, so the line opens no graph of its own

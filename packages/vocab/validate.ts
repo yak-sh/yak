@@ -1,11 +1,11 @@
-// Validating a vocabulary DOCUMENT — ordinary well-formedness, the checks a
+// Validating a vocabulary document — ordinary well-formedness, the checks a
 // store runs over a hand-written app manifest, expressed over JSON Schema.
 // Three kinds of error, each naming the offending entry and the fix, because
 // the agent reading it has no other source:
 //   storable  the shape a table can lower — a top-level object of scalar / ref /
 //             enum columns, no nesting, no arrays, no recursive $ref
 //   reserved  a name the base vocabulary already owns is rejected
-//   grow      evolution is ADDITIVE forever — never drop or retype a column,
+//   grow      evolution is additive forever — never drop or retype a column,
 //             the rows are already written under the old type
 //
 // This is not a new security story: a hosted store only creates tables for
@@ -81,7 +81,7 @@ let storableDefault = (comp: string, prop: string, s: PropSchema): string[] => {
 }
 
 // `search` declares that this column is full-text indexed (@yaks/fts builds
-// the index from the declaration). Only PROSE has words to index: a number, a
+// the index from the declaration). Only prose has words to index: a number, a
 // stamp, a reference and a closed set are matched by their value rather than
 // read, and a computed column has no stored value to index — so the keyword is
 // rejected anywhere but a stored text column, where it would otherwise declare
@@ -97,11 +97,11 @@ let searched = (comp: string, prop: string, s: PropSchema): string[] =>
       `${comp}.${prop} is searched but holds no prose — "search": true is for a stored text column`,
     ]
 
-// A component carrying the whole provenance triple is a MARK — `completed`,
+// A component carrying the whole provenance triple is a mark — `completed`,
 // `archived`, `created` — and the server writes a mark, never a client: the
 // graph fills all three from the batch's clock and actor (@yaks/graph
 // stamp.ts), so a client-writable one is a column anyone may forge and nothing
-// will correct. TWO of the three is somebody's own vocabulary — a letter's `at`
+// will correct. Two of the three is somebody's own vocabulary — a letter's `at`
 // and the address it went `via` — and means nothing here.
 let PROVENANCE = ['at', 'by', 'via']
 let signed = (comp: string, s: PropSchema): string[] => {
@@ -112,11 +112,11 @@ let signed = (comp: string, s: PropSchema): string[] => {
   )
 }
 
-// What a component declares about its own state, checked as a PAIR. Each
+// What a component declares about its own state, checked as a pair. Each
 // keyword is legal on its own — the meta-schema already rejects an unknown
 // value — but one combination is a contradiction: a relay does not own durable
 // data, so a component cannot ask the server both to forward a value without
-// storing it AND to keep it forever.
+// storing it and to keep it forever.
 let lived = (comp: string, s: PropSchema): string[] => {
   let errs: string[] = []
   if (s.sync != null && !SYNC.includes(s.sync as Sync)) {
@@ -144,7 +144,7 @@ let identified = (s: PropSchema): string[] =>
     .filter(([, c]) => object(c) && c.identity === true)
     .map(([prop]) => prop)
 
-// The storable profile over a whole document: every COMPONENT entry is an
+// The storable profile over a whole document: every component entry is an
 // object schema whose properties are storable columns.
 export let storable = (doc: VocabDoc): string[] => {
   let errs: string[] = []
@@ -199,7 +199,7 @@ export let storable = (doc: VocabDoc): string[] => {
         errs.push(`${comp}.${col} is computed — it cannot be required`)
       }
     }
-    // An id is derived from what the WRITER states, at the moment the entity is
+    // An id is derived from what the writer states, at the moment the entity is
     // minted: a column nothing writes — computed, or server-owned and stamped
     // after the fact — could never name the entity it identifies.
     for (let col of identified(schema)) {
@@ -230,7 +230,7 @@ export let reserved = (doc: VocabDoc, base: Iterable<string>): string[] => {
 }
 
 // A column's storage identity: what a retype would change under it. Enum values
-// may GROW (widening a closed set is additive); category, scalar and ref kind
+// may grow (widening a closed set is additive); category, scalar and ref kind
 // may not move, because the rows were written under the old type.
 let identity = (v: Vocab, comp: string, prop: string): string => {
   let c = v.column(comp, prop)!

@@ -3,8 +3,8 @@
 // A refused take is the most interesting thing that happens to a lock — two
 // workers wanted one thing, and one of them was told no. That fact is worth
 // keeping, and it is exactly the fact a rolled-back transaction destroys. So
-// the record is written on the `audit` phase, which runs AFTER the rollback,
-// through a DETACHED transaction: a row that condemns a batch cannot ride
+// the record is written on the `audit` phase, which runs after the rollback,
+// through a detached transaction: a row that condemns a batch cannot ride
 // inside it, and a row written into the dead transaction would roll back with
 // everything else.
 //

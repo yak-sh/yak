@@ -1,5 +1,5 @@
 // The death cascade, compiled. A reference column declares in the vocabulary
-// what happens to it when the entity it points AT is deleted — `cascade`
+// what happens to it when the entity it points at is deleted — `cascade`
 // deletes the row's owner too, `detach` sets the column to NULL, `release`
 // deletes the row — and @yaks/graph decides all of it. What it needs from a
 // storage backend is the answer to one question: given the entities this
@@ -18,16 +18,16 @@
 // columns become one term, combined with OR) and cut into statements of
 // {@link ARMS} terms each, all seeded the same way. A vocabulary {@link narrow}
 // enough to fit in one statement is answered whole; a wider one is asked in
-// ROUNDS — each statement is transitive within its own tables, so the caller
+// rounds — each statement is transitive within its own tables, so the caller
 // re-asks with whatever the last round turned up until nothing new comes back.
 // Two rounds answer the ordinary cascade, however deep it runs.
 //
-// The depth COUNT stops climbing where the walk would otherwise loop. A cycle
+// The depth count stops climbing where the walk would otherwise loop. A cycle
 // among cascade columns (an entity that exists to describe an entity that
 // exists to describe it) would increase the depth forever and never repeat a
 // row, so the rung number saturates at {@link DEEP}: past that, a row already
 // reached at that depth is a row the recursion has seen, and `union` drops it.
-// The SET of entities is complete at any depth — only the count stops.
+// The set of entities is complete at any depth — only the count stops.
 //
 // This lives in @yaks/sql because @yaks/sqlite and @yaks/d1 share one dialect
 // and must not each write it; @yaks/graph never sees SQL at all, and a storage
@@ -39,7 +39,7 @@ import { type Arm, ARMS, arms, cut } from './compound.ts'
 import type { Frag } from './ir.ts'
 import { type Dialect, sqlite } from './sqlite.ts'
 
-/** How far a cascade's rungs are COUNTED before the number stops climbing.
+/** How far a cascade's rungs are counted before the number stops climbing.
  * Depth only decides the order the deleted entities come back in; it never
  * limits which ones are deleted. */
 export let DEEP = 32
@@ -100,7 +100,7 @@ let named = (eids: string[]): Frag => ({
  * created in, which is the order the walk this replaces returned them in.
  *
  * One statement when the vocabulary is {@link narrow}, and otherwise one per
- * group of terms — each a complete closure over ITS own tables, to be re-asked
+ * group of terms — each a complete closure over its own tables, to be re-asked
  * with what the others turned up until nothing new comes back.
  */
 export let doomSql = (
@@ -121,7 +121,7 @@ export let doomSql = (
   })
 
 /**
- * Every soft reference into the closure of these entities: a SURVIVING row's
+ * Every soft reference into the closure of these entities: a surviving row's
  * `detach` or `release` column pointing at one of the deleted entities,
  * returned as (component, column, owner). Empty when the vocabulary declares no
  * soft reference at all.
@@ -129,7 +129,7 @@ export let doomSql = (
  * The closure is restated inside the statement when the vocabulary is
  * {@link narrow} — which is what lets this be sent in the same batch as
  * {@link doomSql}, before anyone has read either answer. When it is not, one
- * statement cannot express the closure, so what it is given IS the set it
+ * statement cannot express the closure, so what it is given is the set it
  * answers about: the caller passes a set that is already closed (the last
  * round's, which added nothing).
  *

@@ -26,7 +26,7 @@ and `pane` stays the name of the thing tmux addresses. See `packages/README.md`,
 
 This package declares a vocabulary and nothing else. Sending keys to a pane and
 finding the pane a session is running in are things an application does with
-`tmux` on its PATH, and the one caller doing them today drives tmux through a
+`tmux` on its path, and the one caller doing them today drives tmux through a
 child process. When a second caller needs the same operations they become this
 package's `./tools`; until then, a declared tool nobody calls would be an
 interface guessed at rather than one found by use.

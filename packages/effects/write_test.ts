@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 // The write door (T-34044): what an effect's own write goes through, and what
-// stops it looping. A write from an effect is a NEW batch through the graph's
+// stops it looping. A write from an effect is a new batch through the graph's
 // own apply() — journaled, seen by the other effects, cast to whoever the host
 // pushes to — never a row put straight into a transaction that has finished.
 
@@ -83,7 +83,7 @@ Deno.test("an effect's write is seen by the other effects", () => {
 Deno.test('a writing effect that triggers itself is stopped by the marker', () => {
   let { fx, g, apply } = fixture()
   let n = 0
-  // Each run writes a NEW post, so nothing about the data ever settles: only
+  // Each run writes a new post, so nothing about the data ever settles: only
   // the generation the door marks can end this.
   fx.created('post', (_e, _tx, write) => {
     n++

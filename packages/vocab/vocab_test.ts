@@ -1,5 +1,5 @@
 // The runtime over the hand-authored fleet slice: interrogation, routing,
-// kinds, deaths, and instance checks — every answer over the LOADED instance,
+// kinds, deaths, and instance checks — every answer over the loaded instance,
 // no global vocabulary anywhere.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
@@ -42,7 +42,7 @@ Deno.test('columns interrogate to their whole shape', () => {
     default: undefined,
     keywords: {},
   })
-  // What a schema SAYS about a word rides with it, so a door that hands an
+  // What a schema says about a word rides with it, so a door that hands an
   // agent the vocabulary hands over its meaning too.
   assertEquals(
     v.comp('doc')?.description,

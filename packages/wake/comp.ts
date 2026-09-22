@@ -6,22 +6,22 @@
 //
 // One entity, one alarm. `at` is the whole schedule for a one-shot — a
 // reminder on a calendar entry, a retry in ten minutes. Add `every` and the
-// same row recurs: `at` is then the NEXT instant, moved forward each time it
+// same row recurs: `at` is then the next instant, moved forward each time it
 // is consumed, and a wake with no `at` left is one that has finished.
 //
-// `target` is what the wake is ABOUT, which is not always the entity that
+// `target` is what the wake is about, which is not always the entity that
 // carries it: a wake on a calendar entry usually means that entry, while a wake
 // created by a sweep means whatever the sweep found. It is deleted with what it
 // points at (`death: cascade`), because a reminder about a deleted thing is not
 // a reminder about anything — cancel the entry and the alarm goes with it.
 //
-// `every` is declared LAST in the document on purpose, so that this table is an
+// `every` is declared last in the document on purpose, so that this table is an
 // existing `wake` table plus one appended column — which is what an additive
 // migration produces.
 //
 // `fired` records the last firing, not every one: it is overwritten each time,
 // so a recurring wake holds its most recent firing and a one-shot holds its
-// only one. What HAPPENED at that instant is for the application to record;
+// only one. What happened at that instant is for the application to record;
 // this package records only that it happened, which is what makes a repeated
 // run detectable.
 //

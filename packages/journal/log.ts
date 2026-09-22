@@ -1,18 +1,18 @@
 // The journal's tables: three of them, append-only, holding no entities of
-// their own. A TRANSACTION here is one call to `graph.apply()`, whose bundles
+// their own. A transaction here is one call to `graph.apply()`, whose bundles
 // all commit or none do.
 //
-//   journal_tx     one row per committed transaction — its id IS the total
+//   journal_tx     one row per committed transaction — its id is the total
 //                  order and the cursor
 //   journal_change one ordered operation per component patched or removed
 //   journal_field  one ordered after-image per column an operation wrote
 //
-// After-images ONLY: what a write left, never both sides of it. The before-
+// After-images only: what a write left, never both sides of it. The before-
 // value a history read needs is rebuilt from the entity's own rows in the log
 // (`before()`), a read bounded to one entity and never a table scan — which is
 // what keeps the log about a third of the size of one that stores both sides. A
 // column whose text the graph already keeps under a content address is recorded
-// by its ADDRESS ({@link Cas}), so logging every revision of every document
+// by its address ({@link Cas}), so logging every revision of every document
 // costs a row rather than the document.
 //
 // Nothing is read in order to write, so there is no precondition phase and
@@ -39,7 +39,7 @@ export type Rows = (
 
 /**
  * A column whose text the graph already stores once, under a content address.
- * The journal then records that ADDRESS and points at the graph's bytes instead
+ * The journal then records that address and points at the graph's bytes instead
  * of repeating them — the difference between a log that keeps every revision of
  * every document and one that keeps a row per revision.
  */
@@ -87,7 +87,7 @@ export type LogOpts = {
 }
 
 // The tables. Append-only, no eid of their own, never in a snapshot and never
-// in a client cache: this is the record OF what was applied, not part of it.
+// in a client cache: this is the record of what was applied, not part of it.
 //
 // `tx.id` is an integer primary key, so it is the next rowid — monotonic, which
 // is what lets the total order rest on something other than a clock, and what
@@ -99,7 +99,7 @@ export type LogOpts = {
 // outlives the entity it names, so every change can keep pointing at one.
 //
 // `field.present = 1` records a written value, JSON-encoded, so a value that is
-// null stays distinct from a tombstone; `present = 0` is the TOMBSTONE written
+// null stays distinct from a tombstone; `present = 0` is the tombstone written
 // for each column a component still held when it was removed, which keeps
 // column history, before-value lookup and undo self-contained and stops a value
 // leaking across a removal and a later recreation. `ref` names content-
@@ -287,7 +287,7 @@ export let log = (opts: LogOpts): Log => {
     )
     // The columns a component still holds, newest after-image per column: the
     // field id is monotonic, so the highest-id row per column is the latest in
-    // total order — and it reads THIS transaction's earlier upserts, which are
+    // total order — and it reads this transaction's earlier upserts, which are
     // uncommitted but visible on the same connection.
     let held = `select field from (
         select jf.field as field, jf.present as present,
@@ -332,7 +332,7 @@ export let log = (opts: LogOpts): Log => {
   }
 
   /**
-   * One entity's component state as of just BEFORE `seq`, rebuilt by merging,
+   * One entity's component state as of just before `seq`, rebuilt by merging,
    * column by column, that entity's own rows in the log — bounded to one
    * entity, never a table scan. This is where the before-value an after-image
    * log does not store comes from.
@@ -609,7 +609,7 @@ export { dec, enc }
  *
  * It registers a hook on the `journal` phase alone: an after-image log needs to
  * read nothing in order to write, so nothing is gathered beforehand and nothing
- * is passed forward to a later phase. The transaction is recorded as APPLIED —
+ * is passed forward to a later phase. The transaction is recorded as applied —
  * one row per component the bundles patched or removed, in the order they
  * arrived.
  */

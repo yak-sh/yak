@@ -7,16 +7,16 @@ import { home } from './paths.ts'
 // `:memory:` for a test), so an agent runs with the tasks daemon down and the
 // same rows can move into the fleet's graph later.
 //
-// What the harness is MADE of is declared once, in ./vocab.ts, ./rules.ts and
+// What the harness is made of is declared once, in ./vocab.ts, ./rules.ts and
 // ./runs.ts: the vocabulary documents it loads, the columns it computes rather
 // than stores, and the plugins that decide what a write means. This file
 // imports those same three for the harness's own SQLite file, and a server
 // composing the harness (@yaks/cli `compose`) imports them for a served
-// database. What is here and not there is STARTUP: the migrations an older file
+// database. What is here and not there is startup: the migrations an older file
 // needs, and the reconciliation an abnormal shutdown leaves behind.
 //
 // That reconciliation is `reapLeases`, which frees every lease whose holder is
-// not a session in this graph. What a half-finished STEP leaves behind is
+// not a session in this graph. What a half-finished step leaves behind is
 // reconciled one level up, by run.ts `resume()`, because waking a transcript
 // needs a model and this file has none.
 

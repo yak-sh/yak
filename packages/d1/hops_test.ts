@@ -6,8 +6,8 @@
 // here, against the counting stand-in (harness.ts `counting`), and held to a
 // number.
 //
-// THE NUMBERS ONLY GO DOWN. This table works like bench/baseline.json: a case
-// that comes in UNDER its pin is re-pinned in the same commit that earned it
+// The numbers only go down. This table works like bench/baseline.json: a case
+// that comes in under its pin is re-pinned in the same commit that earned it
 // (the test says so on the console), and a case that comes in over its pin is a
 // regression to fix, never a pin to raise. Raising one is a decision, with a
 // reason, not a way to get a suite green.
@@ -21,7 +21,7 @@
 //             and every component of it, each statement naming the hit set as
 //             a subquery so nothing has to be fetched before it can be bound.
 //             The backwards reads go through it (@yaks/graph `pointing`).
-//   tx.read   ONE `all()` for the compiled query, plus one `batch()` for the
+//   tx.read   one `all()` for the compiled query, plus one `batch()` for the
 //             gather of what it hit — so two, or one when it hits nothing.
 //   minting   nothing. A number is SQLite's to pick when the insert runs, and
 //             that insert's own RETURNING hands it back with the batch.
@@ -50,7 +50,7 @@
 //                             nothing is minted at all.
 //   a $delete with a cascade  the gather (two: the entities named, then what
 //                             points at them), then the cascade phase, which
-//                             reads AFTER the patches and asks its whole
+//                             reads after the patches and asks its whole
 //                             question at once (store.ts `doom`): the recursive
 //                             closure and the soft references into it, two
 //                             statements in one batch. Then one `learn` for the
@@ -68,7 +68,7 @@
 //                             it hit — the two `tx.read` costs. The vocabulary
 //                             here is wider than one compound SELECT may carry
 //                             (@yaks/sql `ARMS`), and a predicate cut to fit is
-//                             still ONE statement: the cut is OR'd groups, not
+//                             still one statement: the cut is OR'd groups, not
 //                             rounds.
 
 import { assert, assertEquals } from '@std/assert'
@@ -213,9 +213,9 @@ Deno.test('a .refs= read over a wide vocabulary', async () => {
     },
   ])
   reset()
-  // The club has EIGHT reference columns over six tables — more than one
+  // The club has eight reference columns over six tables — more than one
   // compound SELECT may carry on workerd (@yaks/sql `ARMS`), so the predicate
-  // is OR'd groups rather than one union. It is still ONE statement, which is
+  // is OR'd groups rather than one union. It is still one statement, which is
   // what the pin says: the read, and the gather of what it hit.
   let back = await g.read(`.refs=${c}`)
   assertEquals(back.map((b) => b.entity.eid).sort(), ['list', 'seat1'])
@@ -224,7 +224,7 @@ Deno.test('a .refs= read over a wide vocabulary', async () => {
 
 Deno.test('a batch of 50 bundles', async () => {
   let name = 'a batch of 50 bundles'
-  // The point of the row: the gather and the flush are each ONE round trip
+  // The point of the row: the gather and the flush are each one round trip
   // however wide the batch is, so 50 bundles cost what one does.
   holds(
     name,

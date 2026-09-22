@@ -16,7 +16,7 @@ export let onPaint = (fn: () => void): void => {
   paint.fn = fn
 }
 
-// Exported because not every change to the SCREEN is a change to the tree: a
+// Exported because not every change to the screen is a change to the tree: a
 // scroll and a resize move no nodes and still owe a repaint.
 let dirty = false
 

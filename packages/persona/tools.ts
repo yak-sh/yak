@@ -2,7 +2,7 @@
 // implementation behind the `persona_read` declaration in ./vocab.json. One
 // tool, because this package does one thing — render a persona.
 //
-// It returns TEXT — a `content{body}` entity with `output{source}` naming the
+// It returns text — a `content{body}` entity with `output{source}` naming the
 // call it came from (@yaks/tools' components, the shape every transport
 // already renders) — not a file and not a path. An agent that asked for a
 // persona gets the text; a caller that wants it on disk writes it there

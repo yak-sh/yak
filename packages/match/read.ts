@@ -8,7 +8,7 @@
 // column stores it), and a missing column and a missing component both read as
 // `null`.
 //
-// A question about ANOTHER entity — a reference followed to its target, the
+// A question about another entity — a reference followed to its target, the
 // backlinks of an id, the children pointing at a row — is answered from the
 // array of bundles the caller handed in. That array is all the data one run can
 // see: an entity outside it does not exist, the same way a row outside a table
@@ -24,10 +24,10 @@ export type Eid = string
  * A bundle, as this package reads one: the identity under `entity`, every
  * component under its own name, columns inside.
  *
- * It is the STRUCTURAL shape a matcher needs, and deliberately not an import of
+ * It is the structural shape a matcher needs, and deliberately not an import of
  * {@link https://jsr.io/@yaks/graph | @yaks/graph}'s `Bundle` — which is one of
  * these, and passes wherever this type is asked for. @yaks/graph imports this
- * package to compile its RULES, so the dependency between the two has to run
+ * package to compile its rules, so the dependency between the two has to run
  * one direction, and this is the leaf end of it.
  */
 export type Bundle = {
@@ -94,13 +94,13 @@ let held = (v: unknown): unknown =>
 export type Read = { read: (b: Bundle) => unknown; tag: Tag }
 
 /**
- * The computed-column registry, keyed `comp.prop`: the function that READS a
+ * The computed-column registry, keyed `comp.prop`: the function that reads a
  * column the vocabulary declares but never stores (`computed: true`). It is the
  * in-memory equivalent of
  * {@link https://jsr.io/@yaks/sql/doc/~/Derived | @yaks/sql}'s `derived` hook —
  * the formula belongs to the application rather than the schema, so both
  * compilers take it from the caller and one rule serves both sides. A
- * registration also works as a plain READ OVERRIDE for a stored column, the way
+ * registration also works as a plain read override for a stored column, the way
  * a `derived` entry does.
  */
 export type Computed = Record<string, (b: Bundle) => unknown>
@@ -128,7 +128,7 @@ export let column = (
   let col = v.column(name, prop)
   if (!col) return null
   // A registered rule wins, computed column or not — the same order the SQL
-  // binder consults its `derived` map in. The TYPE stays the vocabulary's: the
+  // binder consults its `derived` map in. The type stays the vocabulary's: the
   // vocabulary declares the column, the caller only supplies the read.
   let own = computed[`${name}.${prop}`]
   if (own) return { read: (b) => held(own(b)), tag: tagOf(col) }

@@ -3,7 +3,7 @@
 // images, attachments, anything measured in megabytes — and for a deployment
 // where the database is small and the content is not.
 //
-// The bucket is passed in as an argument and its type is STRUCTURAL: the three
+// The bucket is passed in as an argument and its type is structural: the three
 // methods this package calls, and nothing else. Cloudflare's `R2Bucket`
 // satisfies it as it stands (conform.ts type-checks that against the runtime's
 // own types), and so does any wrapper offering the same three — which is why

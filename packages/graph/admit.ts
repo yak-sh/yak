@@ -1,11 +1,11 @@
 // Admission: what a change is allowed to contain. Three rules, and each is a
 // deliberate choice about which mistakes are loud and which are silent.
 //
-//   an undeclared COMPONENT is dropped  forward compatibility: a newer client
+//   an undeclared component is dropped  forward compatibility: a newer client
 //                                       may send a component this graph has
 //                                       never heard of, and the rest of its
 //                                       change must still be applied
-//   an undeclared COLUMN is refused     on a component the vocabulary DOES
+//   an undeclared column is refused     on a component the vocabulary does
 //                                       declare, an unrecognized column is a
 //                                       typo, and silently dropping a title is
 //                                       worse than refusing the change
@@ -16,7 +16,7 @@
 //                                       and sending it again is a normal thing
 //                                       to do)
 //
-// Column VALUES are validated against the vocabulary too — an enum member, a
+// Column values are validated against the vocabulary too — an enum member, a
 // number where a number belongs, a scalar rather than a nested object. That is
 // the vocabulary's own `check`, not a JSON Schema validator: this package
 // depends on no validator, and a graph that wants full JSON Schema validation
@@ -59,7 +59,7 @@ let admitComp = (
   let declared = new Set(columns)
   let alien = Object.keys(patch).filter((c) => !declared.has(c))
   if (alien.length) {
-    // The refusal lists the VOCABULARY, not just the mistake: a caller writing
+    // The refusal lists the vocabulary, not just the mistake: a caller writing
     // a column that does not exist has the wrong idea of this component, and
     // the columns it actually has are the shortest way to correct that.
     throw new Refused(

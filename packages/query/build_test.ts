@@ -60,7 +60,7 @@ Deno.test('value nodes compose', () => {
   })
 })
 
-// `or` is builder-only — the text format is a flat AND-list.
+// `or` is builder-only — the text format is a flat and-list.
 Deno.test('or composes', () => {
   assertEquals(or(eq('a', '1'), eq('b', '2')), {
     kind: 'or',

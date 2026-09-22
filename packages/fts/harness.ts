@@ -55,7 +55,7 @@ let doc: VocabDoc = {
 
 export let shop: Vocab = loadVocab(doc)
 
-// A shop whose blurbs are stored elsewhere: the column holds a KEY and the
+// A shop whose blurbs are stored elsewhere: the column holds a key and the
 // prose is a row in `stash` under that key — the same arrangement @yaks/blob
 // uses, reproduced here without depending on it, so the tests exercise only
 // this package's side of it.

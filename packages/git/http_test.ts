@@ -244,7 +244,7 @@ Deno.test('git clones it, and finds nothing wrong with what it got', async () =>
 })
 
 // A pack past one packet, which is where a hand-written side-band goes wrong:
-// the last chunk is short, the ones before it are exactly BAND, and a client
+// the last chunk is short, the ones before it are exactly band, and a client
 // that reassembles them off by one byte gets a corrupt pack rather than an
 // error. Incompressible bytes, so the pack is as big as the file.
 Deno.test('a pack too big for one packet arrives whole', async () => {

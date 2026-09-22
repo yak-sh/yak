@@ -56,7 +56,7 @@ Deno.test('a manifest lands as a commit and the branch follows it', async () => 
   )
   assertEquals(await refAt(g, APP), one.oid)
 
-  // The parent is read from the REF, never carried: the second landing knows
+  // The parent is read from the ref, never carried: the second landing knows
   // nothing of the first.
   let two = await commitOnto(
     repo,

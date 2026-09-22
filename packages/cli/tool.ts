@@ -1,4 +1,4 @@
-// What a tool an MCP SERVER lists looks like to this client: the two fields
+// What a tool an MCP server lists looks like to this client: the two fields
 // `tools/list` always carries, the input schema it publishes, and nothing
 // about what the tool does. A `Listed` is not yet something to run —
 // platform.ts is what turns one into a @yaks/graph `Tool` whose `run` makes
@@ -62,7 +62,7 @@ export let COMMAND = 'yaks.sh/command'
 
 /**
  * The two words a tool is typed as, and how its arguments are written — what
- * the tool DECLARED, carried through `tools/list` in `_meta`. A listing
+ * the tool declared, carried through `tools/list` in `_meta`. A listing
  * without it is a tool with one flat name, which is what every other MCP
  * server sends.
  */

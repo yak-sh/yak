@@ -6,32 +6,32 @@
 //   @yaks/sql     compiles an AST + a vocabulary into SQL + bound params
 //
 // and adds the two halves those packages leave to a backend: DDL (the schema a
-// vocabulary implies) and WRITES (a patch applied to that schema). The reads it
+// vocabulary implies) and writes (a patch applied to that schema). The reads it
 // gets for free — it runs @yaks/sql's compiled statement and gathers the rows.
 //
 // Both halves are the reference every SQLite-shaped adapter shares. The schema
 // is one derivation, and so is the write: ./write.ts builds each write as a
-// SELF-SUFFICIENT statement — an owner id is a subquery, never a value looked up
+// self-sufficient statement — an owner id is a subquery, never a value looked up
 // first — so the same statements this package runs one at a time are the ones
 // @yaks/d1 gathers into a single batch.
 //
-// The model is the yaks entity graph: everything is an ENTITY (a string id)
-// carrying COMPONENTS (a row per component table). An entity is what its
+// The model is the yaks entity graph: everything is an entity (a string id)
+// carrying components (a row per component table). An entity is what its
 // components make it — a blog post is a `doc` plus a `post`; a product is a
 // `doc` plus a `price`. Each component covers one aspect of an entity; the set
-// of components an entity carries is its identity. A read returns a BUNDLE (an
+// of components an entity carries is its identity. A read returns a bundle (an
 // entity with its components gathered); a write takes a batch of bundles and
-// PATCHES them in — omitted columns untouched, a null column cleared, a null
+// patches them in — omitted columns untouched, a null column cleared, a null
 // component dropped.
 //
 // It implements @yaks/graph's `Storage`, which is where the responsibilities
-// divide: this package owns the BYTES (schema, rows, identity, transactions)
-// and @yaks/graph owns the DECISIONS (admission, preconditions, which entities
+// divide: this package owns the bytes (schema, rows, identity, transactions)
+// and @yaks/graph owns the decisions (admission, preconditions, which entities
 // a delete takes with it, provenance). Point `graph()` at a store from here
 // and the two halves are the whole thing.
 //
 // Beside the graph it keeps one thing of its own: `server_meta`, the key/value
-// a store writes about ITSELF — its lineage epoch, a sweep's mark — read and
+// a store writes about itself — its lineage epoch, a sweep's mark — read and
 // written through ./meta.ts, and carried by no bundle.
 //
 // The adapter is bound to a driver and a vocabulary once, by `storage()`, and
@@ -151,7 +151,7 @@ export type Tx = {
  */
 // A read here takes the compiler's whole options, not just @yaks/graph's
 // `ReadOpts`: a caller of this package may pass a query a derived-column
-// registry or an @yaks/sql EXTENSION — the extension point @yaks/fts and
+// registry or an @yaks/sql extension — the extension point @yaks/fts and
 // @yaks/embedding register through — and it would be unreachable if this
 // method only took `now`. `ReadOpts` is assignable to `BindOpts`, so the wider
 // signature still satisfies `Storage` wherever the generic contract is what is
@@ -160,7 +160,7 @@ export type Store = {
   /** the schema statements the bound vocabulary implies */
   ddl: () => string[]
   /**
-   * the `add column` statements the LIVE tables are missing — what `ddl()`
+   * the `add column` statements the live tables are missing — what `ddl()`
    * cannot emit, since `create table if not exists` does nothing to a table
    * that already exists (ddl.ts `grown`). Read after `ddl()` has run.
    */
@@ -185,14 +185,14 @@ export type Store = {
  */
 export type Opts = BindOpts & {
   text?: Text
-  /** Give new spines a human-readable number. OPT-IN: left out, an entity is
+  /** Give new spines a human-readable number. Opt-IN: left out, an entity is
    * its eid and nothing else, which is what a store whose entities nobody ever
    * types the number of wants. Identity, and reporting which entities were
    * created, still belong to storage either way. */
   number?: boolean | { except: readonly string[] }
   /** Adopt the `num` a patch's identity carries instead of minting one — a
    * given number for the entity to take, an explicit `null` for one that is to
-   * have none. What a store MIRRORING another graph needs, and the same option
+   * have none. What a store mirroring another graph needs, and the same option
    * name @yaks/ram uses: a batch from another store is stating the identity,
    * not requesting one. Off by default, because a store nobody mirrors owns
    * its own numbering. */
@@ -231,7 +231,7 @@ export let storage = (
       for (let stmt of grown(driver, vocab)) driver.exec(stmt)
       // Then the tables whose foreign keys the vocabulary has since changed
       // its mind about (ddl.ts `refit`). A rebuild drops the table, so it runs
-      // OUTSIDE the enforcement — a copy that re-checks every key it is
+      // outside the enforcement — a copy that re-checks every key it is
       // dropping would reject the rows it exists to keep — and before the
       // indexes, which the drop took with the old table.
       let rebuilt = refit(driver, vocab)
@@ -256,7 +256,7 @@ export let storage = (
             : base.number,
         )
       }
-      // And the SIZES those tables are read with (ddl.ts `analyzed`). An index
+      // And the sizes those tables are read with (ddl.ts `analyzed`). An index
       // the planner cannot size is half an index: it costs a scan of the whole
       // spine to find the fifty thousand rows that carry a component. Last,
       // because it measures what the statements above just raised.

@@ -4,7 +4,7 @@
 // `git index-pack` is the whole of the format's checking in one command — the
 // header, the count, each entry's type and unpacked size, every zlib stream,
 // and the SHA-1 trailer over all of it. `git rev-list --objects` then proves
-// the pack is COMPLETE, because it cannot walk a tree that is not there.
+// the pack is complete, because it cannot walk a tree that is not there.
 
 import { assertEquals, assertRejects } from '@std/assert'
 import { objects } from './objects.ts'

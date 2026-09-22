@@ -60,7 +60,7 @@ let doc: VocabDoc = {
       before: ['doc'],
       properties: { joined: { type: 'string', format: 'date-time' } },
     },
-    // A TAG: a component with no columns at all, where having it is the whole
+    // A tag: a component with no columns at all, where having it is the whole
     // fact. It records that the shop signed this copy; there is nothing else to
     // record about it, so `.signed!` and `.signed=` are the only questions it
     // answers.

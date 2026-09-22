@@ -4,7 +4,7 @@
 // `WebSocketPair`: a Worker keeps one half and returns the other on a 101
 // response.
 //
-// The global is LOOKED UP rather than imported, so this module loads and
+// The global is looked up rather than imported, so this module loads and
 // type-checks anywhere — outside Workers it throws when called, which is the
 // right behaviour for a package named after the runtime it requires.
 

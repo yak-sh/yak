@@ -26,7 +26,7 @@ let g = (declared: { name: string; match: string; before?: string[] }[]) => {
 
 Deno.test('a gated rule fires once and writes what it said', () => {
   // Every product that is not on a shelf goes in aisle Z. The gate is what
-  // makes it fire once: after it writes, the product HAS a shelf.
+  // makes it fire once: after it writes, the product has a shelf.
   let one = g([{
     name: 'unshelved',
     match: '.product, +!shelf, +shelf.aisle=Z',
@@ -163,7 +163,7 @@ Deno.test('a rule declared in a vocabulary runs with no wiring at all', () => {
   assertEquals(at(out, 'p1', 'shelf'), { aisle: 'Z' })
 })
 
-// A TEMPLATE is the same object as a rule, and an invocation is that query
+// A template is the same object as a rule, and an invocation is that query
 // merged with the call's arguments as a bindings query (T-37570).
 
 Deno.test('a template invocation is the template merged with its arguments', () => {
@@ -208,7 +208,7 @@ Deno.test('a template with no argument for a variable still joins on it', () => 
   assertEquals(made.map((b) => b.entity.eid), ['r1'])
 })
 
-// A pattern EFFECT over the same store: a match is a query, and a storage
+// A pattern effect over the same store: a match is a query, and a storage
 // that answers bindings answers one that joins two entities.
 
 Deno.test('an effect on a joining pattern fires over a real store', async () => {
@@ -239,7 +239,7 @@ Deno.test('an effect on a removal beside a filter reads the batch overlay', asyn
   let fx = effects(shop)
   let g = graph({ storage: s, vocab: shop, plugins: [fx] })
   let seen: string[] = []
-  // A product taken off its shelf — a removal AND a filter, so it is not the
+  // A product taken off its shelf — a removal and a filter, so it is not the
   // event's to answer: the batch goes under the query, and the overlay's list
   // of what it took is what `-shelf` reads.
   fx.on('.product, -shelf', (e) => seen.push(e.entity.eid))

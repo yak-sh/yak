@@ -15,7 +15,7 @@ export type ArchetypeSet = (
 export type Matching = { matching: (predicate: Presence) => readonly string[] }
 
 /**
- * Combine cached, immutable matching on sets of component tables with a CURRENT
+ * Combine cached, immutable matching on sets of component tables with a current
  * map of eids to integer ids. The caller owns that map: never keep a database
  * id across a rollback or another writer's commit. The matching itself may
  * outlive both, because it is about content; the integer ids may not, because

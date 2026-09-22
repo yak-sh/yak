@@ -180,7 +180,7 @@ export let runs = (host, options) => ({
 })
 ```
 
-### A tool that acts on the MACHINE
+### A tool that acts on the machine
 
 Some tools change the machine running them instead of only changing the graph.
 For example, `land` updates a checkout and `hooks install` writes a settings

@@ -41,7 +41,7 @@ let asked = async (
 
 Deno.test('bare, it is the index: every word, its line, its columns', async () => {
   let { said } = await asked()
-  // The shop's words, and the words a CALL is written in — a graph that
+  // The shop's words, and the words a call is written in — a graph that
   // serves tools knows both (@yaks/tools `toolsDoc`).
   assertEquals(said.comps.map((c) => c.name), [
     'book',

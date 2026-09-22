@@ -1,12 +1,12 @@
-// One check over the packages as a SET: every vocabulary this repo publishes is
-// a FILE — `packages/<name>/vocab.json`, plain JSON Schema — and each package's
+// One check over the packages as a set: every vocabulary this repo publishes is
+// a file — `packages/<name>/vocab.json`, plain JSON Schema — and each package's
 // `comp.ts` only re-exports it under the name callers already say. That
 // re-export is what a compiler checks; nothing there proves the file still
 // stands on its own, readable by a reader that has no TypeScript. This does:
 // each file is read as text, parsed as plain JSON, and loaded through
 // `loadVocab` with the keyword vocabularies its own `$vocabulary` names.
 //
-// The one thing a document may need from outside itself is a KIND it sorts
+// The one thing a document may need from outside itself is a kind it sorts
 // against: `before` may only name a kind the load declares, so @yaks/mail's
 // `mail` — which sorts before @yaks/doc's `doc` — is loaded beside the file
 // that declares that word. Which file that is, is looked up in the walked set,
@@ -58,7 +58,7 @@ let words: Record<string, Keywords> = Object.fromEntries(
   ].map((k) => [k.uri, k]),
 )
 
-// The COMPONENTS a file declares. A `$defs` entry is not always one: a tool, a
+// The components a file declares. A `$defs` entry is not always one: a tool, a
 // rule and a bare enum (`task.statuses`) live there too, and only a component
 // answers `vocab.comp()`.
 let compsOf = (d: VocabDoc) =>
@@ -77,7 +77,7 @@ Deno.test('packages: every vocab.json is plain JSON that loads', () => {
   for (let [pkg, doc] of files) {
     assertEquals(storable(doc), [], `${pkg}/vocab.json is not storable`)
     let mine = new Set(compsOf(doc))
-    // A document says WORDS, and a tool is one: `@yaks/sqlite` and
+    // A document says words, and a tool is one: `@yaks/sqlite` and
     // `@yaks/embedding` declare only their checks, because a store and a
     // vector index are not component domains and nothing about them rides the
     // wire. What is refused is a file that declares nothing at all.

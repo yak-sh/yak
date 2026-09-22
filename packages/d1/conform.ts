@@ -1,20 +1,20 @@
 /// <reference types="@cloudflare/workers-types/index.d.ts" />
-// The shapes this package declares are SLICES of the runtime's own types. It
+// The shapes this package declares are slices of the runtime's own types. It
 // names them structurally so nothing here depends on Cloudflare at runtime —
 // and this file is where that claim is checked, against
 // @cloudflare/workers-types itself. Every assertion is an assignment: if the
 // runtime's types stop satisfying the slices, the check fails here rather than
 // `wrangler deploy` failing later.
 //
-// It is CHECKED ON ITS OWN (`deno task check:workers`) and excluded from the
-// repo-wide check, because @cloudflare/workers-types arrives as GLOBALS — the
+// It is checked on its own (`deno task check:workers`) and excluded from the
+// repo-wide check, because @cloudflare/workers-types arrives as globals — the
 // package declares them and exports nothing — and those globals merge into
 // whatever program includes them, redefining `Response`, `WebSocket` and the
 // rest for every other file in it. One file includes them; the rest of the repo
 // type-checks against the web platform. @yaks/durable-object and @yaks/workerd
 // use the same arrangement.
 //
-// The one shape that cannot be a narrow slice is the PREPARED STATEMENT: it is
+// The one shape that cannot be a narrow slice is the prepared statement: it is
 // both what `prepare` returns and what `batch` takes, so a slice would have to
 // be a supertype and a subtype of `D1PreparedStatement` at once. That is why
 // ./d1.ts makes it a type parameter — the binding's own statement type is used

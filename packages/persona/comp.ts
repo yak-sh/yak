@@ -3,7 +3,7 @@
 //
 //   person{}          a human being, as this graph knows them
 //   persona{home}     instructions an agent runs with — the `doc` body on the
-//                     same entity IS the instruction text
+//                     same entity is the instruction text
 //   role{state, …}    a persona assigned to standing work
 //
 // The declarations themselves are in `./vocab.json` — plain JSON Schema,

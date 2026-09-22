@@ -1,11 +1,11 @@
 // One clause of a query to one test over a bundle. This is the routing half:
-// where ./value.ts knows how a VALUE compares, this knows what a dotted path
-// NAMES — a column on this entity, a component it either has or does not, a
+// where ./value.ts knows how a value compares, this knows what a dotted path
+// names — a column on this entity, a component it either has or does not, a
 // reference followed to another entity, the children pointing back at it, the
 // kind it displays as, or a search term to look for in its text.
 //
 // Every route is resolved through the vocabulary, never guessed, and the tests
-// are built ONCE, when the query is compiled: a path that names no column, a
+// are built once, when the query is compiled: a path that names no column, a
 // comparison a column's type cannot answer, or a directive that needs an index
 // is refused there and then, before any bundle is read.
 
@@ -111,7 +111,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Test => {
     let present = op == '~' || op == EXISTS
     return (b) => wears(b, hop.comp) == present
   }
-  // On the identity component, `=` NAMES entities instead of comparing a
+  // On the identity component, `=` names entities instead of comparing a
   // column, so it is a set lookup — the same operand list @yaks/sql compiles to
   // `in (?, …)`.
   if (hop.comp == 'entity' && op == '') {
@@ -169,7 +169,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Test => {
   }
   let hit = scalar(ctx, leaf, p)
   // For the operators only a present value can satisfy, the entity must also
-  // have the path's ROOT component. The absent forms skip that check on
+  // have the path's root component. The absent forms skip that check on
   // purpose, so `.maker.title=` selects rows with no maker as well as rows
   // whose maker has no title. @yaks/sql narrows the same predicates the same
   // way (bind.ts, `needsRoot`).
@@ -208,12 +208,12 @@ let refs = (ctx: Ctx, r: Refs): Test => {
     cols.some(([c, p]) => comp(b, c)?.[p] === r.value)
 }
 
-// The WALK, in memory: `.cites[<=3]->p1` selects the bundles that reach the
+// The walk, in memory: `.cites[<=3]->p1` selects the bundles that reach the
 // target in at most `depth` hops; `<-` selects the bundles the target reaches.
 // A hop is one (from, to) pair, and a bundle can supply one in three ways — an
 // edge entity, which has the relation's tag component alongside `edge{from,to}`
 // (`cites {}` beside `edge`); an entity's own reference column (`fork.from`
-// reads as this entity → the entry); or a CHAIN of reference columns composed
+// reads as this entity → the entry); or a chain of reference columns composed
 // into one pair (`fork.from.session` reads as this entity → the session of the
 // entry it forked from). All three are resolved through the same vocabulary
 // @yaks/edge and @yaks/sql read. The closure is one breadth-first traversal per
@@ -340,11 +340,11 @@ let counted = (n: number, op: string, m: number): boolean =>
     ? n > m
     : n >= m
 
-// A REVERSE HOP: the entities whose child rows point back at them, named by the
+// A reverse hop: the entities whose child rows point back at them, named by the
 // vocabulary's derived association (`.reviews` = the reviews whose `product` is
 // this entity). `.reviews!` tests for at least one, `.reviews=` for none,
 // `.reviews>=5` counts them, and `.reviews.stars=5` asks whether any child
-// matches. A child predicate goes through the SAME clause compiler, over the
+// matches. A child predicate goes through the same clause compiler, over the
 // child bundle, so anything refused there refuses the whole hop.
 let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Test => {
   let kids = (b: Bundle, among: Index): Bundle[] =>
@@ -367,7 +367,7 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Test => {
     let n = Number(value)
     return (b, among) => counted(kids(b, among).length, op, n)
   }
-  // Inside the hop the identity component names the CHILD, not the entity being
+  // Inside the hop the identity component names the child, not the entity being
   // tested, so a child predicate that reached it would silently ask a different
   // question.
   if (

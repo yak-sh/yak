@@ -28,7 +28,7 @@ Deno.test('a bounce is written down after the rollback', () => {
 })
 
 Deno.test('the record survives the batch it condemns', () => {
-  // Written through a DETACHED transaction: the batch rolled back, and the
+  // Written through a detached transaction: the batch rolled back, and the
   // record of why did not.
   let s = store()
   collide(s)

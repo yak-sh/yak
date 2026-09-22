@@ -3,7 +3,7 @@
 // source (the keyword's schema and its documentation); this module gives it a
 // name and the shape `loadVocab(docs, [edgeKeywords])` expects.
 //
-// One keyword, because one thing is open: WHICH RELATIONS EXIST. The `edge`
+// One keyword, because one thing is open: which relations exist. The `edge`
 // component itself is fixed and ships with the package; the components stored
 // beside it belong to the application's vocabulary — a blog links post to post,
 // a bookstore has a book cite another book — so they are ordinary components

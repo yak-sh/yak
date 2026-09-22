@@ -1,13 +1,13 @@
 /// <reference types="@cloudflare/workers-types/index.d.ts" />
-// The shapes this package declares are SLICES of the runtime's own types. It
+// The shapes this package declares are slices of the runtime's own types. It
 // names them structurally so nothing here depends on Cloudflare at runtime —
 // and this file is where that claim is checked, against
 // @cloudflare/workers-types itself. Every assertion is an assignment: if the
 // runtime's types stop satisfying the slices, the check fails here rather than
 // `wrangler deploy` failing later.
 //
-// It is CHECKED ON ITS OWN (`deno task check:workers`) and excluded from the
-// repo-wide check, because @cloudflare/workers-types arrives as GLOBALS — the
+// It is checked on its own (`deno task check:workers`) and excluded from the
+// repo-wide check, because @cloudflare/workers-types arrives as globals — the
 // package declares them and exports nothing — and those globals merge into
 // whatever program includes them, redefining `Response`, `WebSocket` and
 // rest for every other file in it. One file includes them; the rest of the

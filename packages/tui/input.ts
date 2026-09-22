@@ -95,7 +95,7 @@ let tildes: Record<string, Name> = {
   '8': 'end',
 }
 
-// deno-lint-ignore no-control-regex -- the ESC that opens a sequence IS the subject
+// deno-lint-ignore no-control-regex -- the ESC that opens a sequence is the subject
 let csiU = /^\x1b\[(\d+)(?:;(\d+))?u/
 // deno-lint-ignore no-control-regex -- ditto
 let sgr = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/

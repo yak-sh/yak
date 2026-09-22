@@ -5,7 +5,7 @@
 //
 // They write components that are not this package's, and that is the point: a
 // task with a title carries @yaks/doc's `doc`, and one filed in a portfolio
-// carries @yaks/project's `filed`. A tool returns BUNDLES, which are plain
+// carries @yaks/project's `filed`. A tool returns bundles, which are plain
 // data, so naming a neighbour's component costs no import — and a server that
 // composes neither package simply has those columns dropped when the write is
 // admitted.
@@ -13,7 +13,7 @@
 // There is no `task show`, no `task search` and no `task tree` here. Showing an
 // entity whole is `graph_show`, and ranked text search is `search`; both are in
 // @yaks/mcp's generic tier and work over any vocabulary at all, so a second
-// name for either would be two implementations of one thing. A PLAN is the same
+// name for either would be two implementations of one thing. A plan is the same
 // story: a tree is a list of bundles — tasks under `$alias` ids, and the links
 // between them, whose ids are derived from their two ends and the relation
 // (@yaks/edge) — applied in one transaction, and `graph_apply` with `check`
@@ -54,7 +54,7 @@ let docIn = (ctx: ToolCtx): Comp | undefined => {
 }
 
 /**
- * A status, as the marks that MEAN it. Nothing writes `task.status` — it is
+ * A status, as the marks that mean it. Nothing writes `task.status` — it is
  * computed from these — so moving a task means adding one mark and removing
  * the other, which is why finishing something records when and by whom instead
  * of overwriting a value.

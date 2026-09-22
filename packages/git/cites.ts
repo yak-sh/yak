@@ -11,13 +11,13 @@
 // touched the place the citation names. `git log <commit>..HEAD` answers it,
 // narrowed by `-L :<symbol>:<path>` or `-L <start>,<end>:<path>` when the
 // citation named a place, so a commit elsewhere in the same file is not
-// reported. The commit is checked with `cat-file` FIRST, because a commit this
+// reported. The commit is checked with `cat-file` first, because a commit this
 // checkout does not have (rebased away, or from another clone) makes `log`
 // fail the same way an empty range succeeds-empty would look, and that must
 // read as unknown rather than current: a citation that reads fresh on an
 // answer nothing could establish is worse than one that admits it cannot tell.
 //
-// For a citation of an ENTITY rather than a file, the journal is the same
+// For a citation of an entity rather than a file, the journal is the same
 // question asked of the graph: what changed about B after `verified.at`. This
 // module does not read the journal itself — a host that has one fills the
 // `changed` seam (@yaks/journal `entries`), and one that does not gets
@@ -66,7 +66,7 @@ export type Status =
   | { state: 'unknown'; why: string }
 
 /**
- * What changed about a cited ENTITY after a moment, as lines a reader can act
+ * What changed about a cited entity after a moment, as lines a reader can act
  * on. A host fills this from @yaks/journal; without it a citation of an entity
  * reads unknown, because nothing else in a graph records what moved.
  */

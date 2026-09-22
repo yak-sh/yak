@@ -1,7 +1,7 @@
 // The other way a Worker is deployed: the graph does not live in the Worker at
 // all. A Durable Object is one graph's home — single-threaded, with its own
 // SQLite and its own open sockets — so the Worker in front of it is a router:
-// work out WHICH graph this request is for, and forward the request to that
+// work out which graph this request is for, and forward the request to that
 // object without reading it.
 //
 // Not reading it matters. The object runs the same `api()` handler, so a
@@ -30,7 +30,7 @@ export type Namespace = {
  *
  * ```ts
  * export default {
- *   fetch: (request: Request, env: { GRAPHS: Namespace }) =>
+ *   fetch: (request: Request, env: { graphs: Namespace }) =>
  *     forward(env.GRAPHS, new URL(request.url).hostname.split('.')[0], request),
  * }
  * ```

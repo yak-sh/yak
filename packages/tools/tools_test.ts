@@ -1,6 +1,6 @@
 // The runner, end to end over a graph: what a host's call records, what the
 // claim stops, what a throw lands, whose name the tool writes in — and the
-// same rules registered as EFFECTS, which is how a call nobody is waiting on
+// same rules registered as effects, which is how a call nobody is waiting on
 // (one another process wrote, one that was scheduled) gets run.
 
 import { assertEquals, assertRejects } from '@std/assert'
@@ -60,8 +60,8 @@ let world = (tools: Tool[] = [echo], owner?: string) => {
   return { g, r: runner(g, { tools, owner, report: () => {} }) }
 }
 
-// The same graph with the runner's rules registered as EFFECTS: one
-// registration each, and then a call is run because it was WRITTEN, not
+// The same graph with the runner's rules registered as effects: one
+// registration each, and then a call is run because it was written, not
 // because somebody awaited it.
 let watched = (tools: Tool[] = [echo], extra = {}) => {
   let vocab = words(extra)
@@ -93,7 +93,7 @@ Deno.test('a call is the transcript: the ask, the answer, the result beside it',
   assertEquals(body(result), 'hi 2')
   assertEquals(typeof (result.result as Comp).ms, 'number')
   assertEquals((await g.read('.execution'))[0].execution, { state: 'done' })
-  // The result is the RULE's own entity, so answering again is the same one.
+  // The result is the rule's own entity, so answering again is the same one.
   let again = await r.run((await g.read('.call'))[0].entity.eid)
   assertEquals(again.find((b) => b.result)!.entity.eid, result.entity.eid)
 })
@@ -223,7 +223,7 @@ Deno.test('a tool that ANSWERS a fault has not failed', async () => {
     readOnly: true,
     inputSchema: { type: 'object', properties: {} },
     // A listing of what broke: entities wearing the very words a failure
-    // wears. The runner's own `execution` is what says whether the CALL
+    // wears. The runner's own `execution` is what says whether the call
     // failed, so a host reads that and not the shape of the answer.
     run: (_, ctx) => ctx.read('.error'),
   }])
@@ -270,7 +270,7 @@ Deno.test('two runners over one graph are one claimant and one answer', async ()
   let { g, r, fx } = watched()
   await r.ensure()
   // A door's runner beside a daemon's. The effect runs the call the moment it
-  // is written; the runner that WROTE it still reads back what was landed,
+  // is written; the runner that wrote it still reads back what was landed,
   // and the tool ran once between them.
   let other = runner(g, { tools: [echo] })
   for (let rule of other.rules) fx.on(rule.plan, (e) => other.run(e.entity.eid))
@@ -339,7 +339,7 @@ Deno.test('a call waiting on a wake that has not fired is not this tick', async 
 Deno.test('a recurring call is a standing ask: one invocation per firing', async () => {
   let { g, r } = watched([echo], clock)
   await r.ensure()
-  // The SCHEDULE: a call that wears a recurrence. It is never answered
+  // The schedule: a call that wears a recurrence. It is never answered
   // itself — each firing writes its own call, so the row keeps asking.
   await g.apply([{
     entity: { eid: 'daily' },

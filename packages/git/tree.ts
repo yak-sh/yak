@@ -10,7 +10,7 @@
 //   object.
 // - **A directory sorts as though its name ended in `/`.** So `a.txt` comes
 //   before the directory `a`, because `.` (0x2e) is below `/` (0x2f) — the
-//   reverse of a plain name sort. Names are compared as UTF-8 BYTES, which is
+//   reverse of a plain name sort. Names are compared as UTF-8 bytes, which is
 //   what Git compares; JavaScript's own string order is UTF-16 and disagrees
 //   above the BMP.
 //

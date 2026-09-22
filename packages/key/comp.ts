@@ -2,7 +2,7 @@
 //
 // It is to a has-many VALUE what `edge{from, to}` is to a link. An entity does
 // not hold its identifying values in a column; each value is a key entity of
-// its own — `key{of, value}` plus a KIND TAG component naming which kind of
+// its own — `key{of, value}` plus a kind tag component naming which kind of
 // value it is — so a recipe is identified by both `lemon-cake` and
 // `recipe:2019-07` because two rows point at it, adding one is a write, and
 // retiring one means deleting that row. A list column would have been the other
@@ -11,12 +11,12 @@
 // one.
 //
 // `of` is a reference declared `death: release`, which is the whole of a key's
-// lifecycle: a value for a deleted thing identifies nothing, and the ROW is
+// lifecycle: a value for a deleted thing identifies nothing, and the row is
 // removed rather than the entity, so the value can be claimed again. (A cascade
 // would tombstone an id derived from the value, and a tombstone is forever —
 // the value could never be used again by anyone.)
 //
-// THE VALUE IS UNIQUE WITHIN ITS KIND, and nothing declares that — the key's
+// The value is unique within its kind, and nothing declares that — the key's
 // own id is `sha256("<tag>|<value>")` (./eid.ts), so two writers giving the same
 // value in the same kind land on one row by construction. A `unique` on the
 // column would have been wrong anyway: two kinds may hold the same string, and

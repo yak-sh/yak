@@ -6,10 +6,10 @@
 // the plugin is built with that app named, the way an application names its own
 // subject — and, optionally, the space whose owners own it.
 //
-// SEEDING. A graph with the guard installed and an empty roster admits nobody:
+// Seeding. A graph with the guard installed and an empty roster admits nobody:
 // there is no owner yet, so there is nobody allowed to write the row that makes
 // one. That is not a bug to route around, it is what a bootstrap is — so write
-// the first owner BEFORE installing the guard, and install it after:
+// the first owner before installing the guard, and install it after:
 //
 //   let g = graph({ storage, vocab })
 //   g.apply([{ entity: { eid: 'm1' }, member: { space, person: dana,
@@ -36,7 +36,7 @@ import { type Guard, guarding, wanting } from './guard.ts'
  * let g = graph({ storage, vocab, plugins: [members({ app: list, space: club })] })
  * ```
  *
- * Reads are NOT checked here — a query never reaches `apply()`. The HTTP layer
+ * Reads are not checked here — a query never reaches `apply()`. The HTTP layer
  * calls
  * {@link https://jsr.io/@yaks/member/doc/~/policy | policy}`(storage).canRead`
  * before it answers one.

@@ -1,6 +1,6 @@
 // The AST the yaks query format parses into, and the builders that construct
-// the SAME shape from code. Everything here is plain serializable data — no
-// class, no method, no schema. A node records the FORMAT (an operator, a list,
+// the same shape from code. Everything here is plain serializable data — no
+// class, no method, no schema. A node records the format (an operator, a list,
 // a range, a directive) and never what a field means; deciding whether
 // `status` is a column, a reference or an enum is left to a compiler that has
 // a schema.
@@ -16,10 +16,10 @@
 // a compiler that has a schema, never built in here.
 export type Op = '=' | '!=' | '~=' | '<' | '<=' | '>' | '>=' | '!' | '?'
 
-// A VALUE — the right-hand side of a predicate. A scalar carries its raw token
+// A value — the right-hand side of a predicate. A scalar carries its raw token
 // verbatim (the schema decides whether it is a number, an id, an enum or a time
 // phrase). A list means any-of (`a,b,c`); a range is inclusive unless
-// `exclusiveEnd` (`x..y` against `x...y`); a time node is an EXPLICIT time
+// `exclusiveEnd` (`x..y` against `x...y`); a time node is an explicit time
 // phrase, built either by a builder or by a compiler promoting a scalar —
 // `parse` never emits one, because telling a time literal from a plain word
 // (`.domain=today`) needs the column's type. `timeSpan` (time.ts) is the
@@ -35,7 +35,7 @@ export type Range = {
 export type Time = { kind: 'time'; raw: string }
 export type Value = Scalar | List | Range | Time
 
-// A PREDICATE: the dotted path as raw segments (never resolved to a
+// A predicate: the dotted path as raw segments (never resolved to a
 // component), an operator, and a value — null for the `!` and `?` forms, which
 // take none.
 export type Pred = {
@@ -43,7 +43,7 @@ export type Pred = {
   path: string[]
   op: Op
   value: Value | null
-  /** Negate a reverse association child test (NONE rather than ANY). */
+  /** Negate a reverse association child test (none rather than any). */
   not?: boolean
   /** Builder-only: the last path segment names a component, not a column. */
   facet?: boolean
@@ -57,7 +57,7 @@ export type Pred = {
 export type Text = { kind: 'text'; value: string }
 export type Never = { kind: 'never' }
 
-// The reserved DIRECTIVES — reserved names that sit in the clause list but
+// The reserved directives — reserved names that sit in the clause list but
 // rank, project, aggregate or bound the answer rather than filter it. Each
 // carries only its raw tokens; a directive's path is raw segments, like a
 // predicate's.
@@ -74,14 +74,14 @@ export type Tally = { kind: 'tally'; path: string[] }
 // segments.
 export type FieldSel = { path: string[]; wake: boolean }
 export type Fields = { kind: 'fields'; fields: FieldSel[] }
-// `*` — carry EVERY component of each selected entity. The widest projection
+// `*` — carry every component of each selected entity. The widest projection
 // there is, and a projection only: it does not affect which entities the query
 // selects, so an evaluator reads it beside `fields` and never as a filter. It
 // is a directive rather than a bare word precisely so it cannot fall through to
 // the full-text term `*`, which matches nothing anywhere.
 export type Every = { kind: 'every' }
 export type Limit = { kind: 'limit'; n: number }
-// The paging cursor: the spine NUMBER of the entity to continue past. It names
+// The paging cursor: the spine number of the entity to continue past. It names
 // an entity, never a position or an order key, so this one form pages any
 // ordering — an evaluator works out where that entity sits.
 export type After = { kind: 'after'; n: number }
@@ -96,13 +96,13 @@ export type Edges = {
   peers: string[][]
   limit?: number
 }
-// A QUALIFIER: one argument of the bracket a path may carry (`.p[<=3]`,
+// A qualifier: one argument of the bracket a path may carry (`.p[<=3]`,
 // `.p[key=v]`, `.p[word]`). The bracket binds to the path and is read before
 // any operator, so each kind of clause declares which qualifiers it accepts and
 // refuses the rest by name; today only the walk takes one (its depth cap).
 export type Qual = { key?: string; op?: string; value: string }
 
-// A transitive WALK: `.requires[<=3]->T-42` selects what reaches `target`
+// A transitive walk: `.requires[<=3]->T-42` selects what reaches `target`
 // through at most `depth` hops of `path`; `<-` walks the other way. The path is
 // raw segments — a relation name or a reference column, which is schema. The
 // optional cap bounds the hops; without it the walk is bounded by WALK_LIMIT
@@ -120,14 +120,14 @@ export let WALK_DEPTH = 16
 export const WALK_LIMIT = 10_000
 
 // ---- rule prefixes ----
-// A component name may carry a PREFIX CHARACTER saying what a rule does with
+// A component name may carry a prefix character saying what a rule does with
 // it. Two of those are ordinary predicates, because an evaluator can answer
 // them from stored data alone: `.comp` is present, `!comp` is absent. The four
-// below mean something only a RULE can act on — the component to add before it
+// below mean something only a rule can act on — the component to add before it
 // runs, the gate that makes it run once, the components it writes, and the
 // singleton resource it reads — and `$name` binds a variable, the way `$alias`
 // names an entity in a bundle. An evaluator with no rule engine refuses them
-// rather than guessing. A `+` or `*` may name a COLUMN and a value as well as
+// rather than guessing. A `+` or `*` may name a column and a value as well as
 // a component — `+result.call=$call` — because the prefix already means "this
 // is written", and naming the column is part of the same statement. A gate has
 // no such form: an absence has no value.
@@ -145,7 +145,7 @@ export type Mutable = {
   value?: Value
 }
 export type Resource = { kind: 'resource'; comp: string }
-// `-comp` — this WRITE removed the component from the bound entity. The one
+// `-comp` — this write removed the component from the bound entity. The one
 // clause no committed row can answer: what was removed leaves nothing to read,
 // so only the write itself knows it (a rule's overlay, or an effect reading
 // back what it just committed), and an evaluator with no such write available
@@ -311,7 +311,7 @@ export let fields = (...specs: (string | FieldSel)[]): Fields => ({
 export let every = (): Every => ({ kind: 'every' })
 
 // The rule prefixes. `ensure` adds a component before the rule runs; `gate`
-// adds one that had to be ABSENT, which is what makes a rule run once;
+// adds one that had to be absent, which is what makes a rule run once;
 // `mutable` declares a component the rule writes; `resource` names a
 // singleton; and `variable` binds a name. Presence and absence have builders
 // already (`present`, `absent`) — they are predicates, not rule instructions.

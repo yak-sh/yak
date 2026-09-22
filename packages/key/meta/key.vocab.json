@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yaks.sh/vocab/key",
   "title": "yaks key keyword vocabulary",
-  "description": "The keyword @yaks/key adds to a component vocabulary. A component declaring `key` is a TAG that goes on the `key{of, value}` carrier: a key entity carrying both holds a value unique among that tag's values, so an `email` component beside `key{of, value}` records that a person is identified by that address. The keyword is named after the carrier it tags — a tag on an edge declares `edge`, a tag on a key declares `key` — so one rule reads every carrier. Which tags exist is the application's to declare.",
+  "description": "The keyword @yaks/key adds to a component vocabulary. A component declaring `key` is a tag that goes on the `key{of, value}` carrier: a key entity carrying both holds a value unique among that tag's values, so an `email` component beside `key{of, value}` records that a person is identified by that address. The keyword is named after the carrier it tags — a tag on an edge declares `edge`, a tag on a key declares `key` — so one rule reads every carrier. Which tags exist is the application's to declare.",
   "$comment": "A vocabulary declaration in the JSON Schema sense: a URI naming this keyword set, plus the schema of each keyword. A vocabulary file declares it under $vocabulary; a loader registers it with loadVocab(docs, [keyKeywords]).",
   "$defs": {
     "key": {

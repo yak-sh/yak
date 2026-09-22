@@ -1,7 +1,7 @@
 // Subscriptions: a saved query whose result is pushed again whenever a
 // committed transaction changes it.
 //
-// The registry registers a hook on the graph's own `effect` phase, so EVERY
+// The registry registers a hook on the graph's own `effect` phase, so every
 // commit is seen — the ones that arrived through `POST /apply` and the ones
 // the application wrote straight to the graph. A commit is handled in two
 // steps: read the changed entities once, whole, then test them against each
@@ -9,12 +9,12 @@
 //
 // Two modes, chosen when the subscription opens:
 //
-//   INCREMENTAL  the query asks only about each entity itself, so
+//   Incremental  the query asks only about each entity itself, so
 //                @yaks/match's `filter` decides membership one bundle at a
 //                time — the query is never run again, however large the set
 //                is.
-//   REFRESH      the query follows a reference, counts, orders or limits, so
-//                its RESULT can change when an entity the query never named
+//   Refresh      the query follows a reference, counts, orders or limits, so
+//                its result can change when an entity the query never named
 //                does. These run the query again and compare it against the
 //                membership set.
 //
@@ -45,7 +45,7 @@ import { type Relay, relay as relaying, type Timer } from './relay.ts'
  * One push to one subscriber. `bundles` are whole entities that are now in
  * the set — for the raw feed (`subscribe: true`), the committed transaction
  * as it was applied, one bundle per entity, exactly as its writer's `/apply`
- * response read. `gone` names the entities that LEFT the set, whether they
+ * response read. `gone` names the entities that left the set, whether they
  * were deleted or merely stopped matching. `refused` replaces both when the
  * subscription could not be opened.
  */
@@ -121,8 +121,8 @@ type Sub = {
 // Whether a clause can be decided against one entity on its own: a column of
 // the entity itself, a term in its own text, nothing at all. A path that hops
 // through a reference or a backlink, an ordering, a limit or an aggregate is
-// a question about the SET, and answering it means running the query again.
-// `*` selects which components a result CARRIES — it is not a question about
+// a question about the set, and answering it means running the query again.
+// `*` selects which components a result carries — it is not a question about
 // membership at all — so it leaves a subscription incremental.
 let local = (c: Clause, v: Vocab): boolean =>
   c.kind == 'and' || c.kind == 'or'
@@ -166,7 +166,7 @@ export let subscriptions = (graph: Graph, opts: {
   let held = new Map<Sink, Map<string, Sub>>()
   let all = () => [...held.values()].flatMap((m) => [...m.values()])
 
-  // A subscription whose query is refused is CLOSED, not kept: a query the
+  // A subscription whose query is refused is closed, not kept: a query the
   // graph cannot answer would otherwise throw on every commit for the life of
   // the socket.
   let cut = (sub: Sub, err: unknown) => {
@@ -282,7 +282,7 @@ export let subscriptions = (graph: Graph, opts: {
   let commit = (applied: Bundle[]) => {
     flush()
     let subs = all()
-    // A raw feed sends the transaction to a CLIENT, and this hook is handed
+    // A raw feed sends the transaction to a client, and this hook is handed
     // what the phases passed to each other — one patch each, with the `$`
     // keys still on them. So it is composed here, the same way `apply()`
     // composes what it returns: a subscriber receives exactly what the writer

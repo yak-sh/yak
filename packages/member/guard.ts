@@ -9,7 +9,7 @@
 // It asks two questions, in this order:
 //
 //   1. May this principal write this app at all? (`open` mode, or owner/editor)
-//   2. Do the changes touch the ACCESS ROWS themselves? Then owner, and only
+//   2. Do the changes touch the access rows themselves? Then owner, and only
 //      owner.
 //
 // The second is not a new level — it is the rule that an editor writes the
@@ -54,7 +54,7 @@ export let governs = (bundles: Bundle[]): boolean =>
 /**
  * Everything the permission check is about to read, declared before it reads
  * any of it: the app (its mode decides for a principal with no level),
- * the principal's own entity (a share link's bearer IS a grant), and everything
+ * the principal's own entity (a share link's bearer is a grant), and everything
  * filed about the principal — their membership rows, their grants. @yaks/graph
  * fetches all of it in one gather, so the four steps of the check cost no round
  * trip of their own.

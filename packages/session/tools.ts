@@ -2,14 +2,14 @@
 // `@yaks/session/tools` — the code behind the `tool: true` declarations in
 // ./vocab.json.
 //
-// Two things live here. The LEASE is the pair every worker calls: take the lock
+// Two things live here. The lease is the pair every worker calls: take the lock
 // on the thing you are about to work on, release it when you are done. The
-// INJECTION LOOP is the other, and it is the same idea one level up — a session
+// injection loop is the other, and it is the same idea one level up — a session
 // starts by reading back what it was in the middle of, and ends by recording
 // what it did and releasing what it held. `hooks install` is what makes a
 // harness run those two at the right moments (./hooks.ts).
 //
-// WHAT A SESSION SHOULD BE TOLD IS UNDECIDED. `session_context` returns what a
+// What A session should be told is undecided. `session_context` returns what a
 // hook needs and nothing else: the transcript becomes an entity under the
 // harness's own id for it, and what comes back is that entity's id and the work
 // it holds a lock on. There was a composed digest here — the owner's turns, a
@@ -23,10 +23,10 @@
 // from it, the session's own id, and a payload that is not JSON at all is no
 // reason to fail — a hook that fails is a session that will not start.
 //
-// The third thing here is the two CHECKS — tools whose verb is `check`, which
+// The third thing here is the two checks — tools whose verb is `check`, which
 // is all a "doctor" command is (@yaks/tools ./check.ts).
 //
-// A LOCK OUTLIVES ITS HOLDER. ./effects.ts frees the locks whose holder is not
+// A lock outlives its holder. ./effects.ts frees the locks whose holder is not
 // a session in this graph, at the one moment there is a reliable answer — this
 // process starting — so any lock the check finds appeared since then, and the
 // board is misreporting who is working. The other half is the lock held by a
@@ -35,7 +35,7 @@
 // Neither is corruption, so both are `warn`; and a `settled` transcript is NOT
 // one of them — a run between turns still holds what it holds (./reap.ts).
 //
-// A TRANSCRIPT STALLS. `pending` means the model owes a turn and `running`
+// A transcript stalls. `pending` means the model owes a turn and `running`
 // means a model or a tool owes an answer; both are moments, not states to live
 // in. One that has been waiting for hours means the daemon died mid-turn, or
 // the answer came back to a process that was gone — the transcript just stops,
@@ -167,10 +167,10 @@ export let runs = (
     let id = idIn(ctx)
     if (!id) throw new Error('which session? say --session')
     let s = await sessionOf(ctx, id)
-    // A transcript nobody has created yet is created HERE, carrying its own
+    // A transcript nobody has created yet is created here, carrying its own
     // name, the way `session_context` reifies one. Never on the word the
     // caller typed: `--session S-37703` is a human id, not an eid, and taking
-    // it for one mints an entity whose eid IS `S-37703` (./who.ts is what
+    // it for one mints an entity whose eid is `S-37703` (./who.ts is what
     // tells the two apart).
     return [
       s ? briefed(s.entity.eid, ctx.args.text) : {

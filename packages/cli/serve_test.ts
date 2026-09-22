@@ -18,7 +18,7 @@ import {
   writer,
 } from './serve.ts'
 
-// The host of these tests, as its own writes are signed: THIS PROCESS, whose
+// The host of these tests, as its own writes are signed: this process, whose
 // row every composition here writes on the way in.
 let me = selfEid()
 
@@ -85,18 +85,18 @@ let doc: VocabDoc = {
 
 // A plugin's facets, written here rather than on disk: `compose` takes how a
 // plugin's subpath becomes a module, so a test never writes a package to be
-// imported. What a plugin does NOT export is what it does not have.
+// imported. What a plugin does not export is what it does not have.
 type Plugged = Partial<Facets>
 
 let shop: Plugged = {
   // …and the process words, because a host signs with the row it writes for
-  // ITSELF: a graph that cannot say what a process is has nobody to sign as.
+  // itself: a graph that cannot say what a process is has nobody to sign as.
   vocab: { docs: [doc, processDoc] },
   tools: {
     // A factory, like every facet: what a run needs from the host, it takes
     // here.
     runs: () => ({
-      // A tool answers BUNDLES: the entities it found, and nothing else.
+      // A tool answers bundles: the entities it found, and nothing else.
       book_list: (_, ctx) => ctx.read('.book'),
       // And a writing one answers the entity it wants made. It never writes
       // itself: what it answers is landed for it, as whoever asked.
@@ -439,7 +439,7 @@ Deno.test('a start-up pass is an effect on this process being born', async () =>
   }
   let host = await compose({ db: ':memory:', plugins: ['m'] }, only({ m: mod }))
   try {
-    // It has already run: composing the host IS the start, and the pass ran
+    // It has already run: composing the host is the start, and the pass ran
     // inside the batch that wrote the row.
     assertEquals(booted, [me])
     // A child's row wakes the same effect and is left alone.
@@ -450,7 +450,7 @@ Deno.test('a start-up pass is an effect on this process being born', async () =>
   }
 })
 
-// The whole host path, in one place: a word calls the tool HERE, the ask and
+// The whole host path, in one place: a word calls the tool here, the ask and
 // the answer are written down as they go, and a call somebody else wrote is
 // run by the effect the server registers.
 
@@ -507,7 +507,7 @@ Deno.test('a call written through the door is run by the effect', async () => {
     await host.runner.ensure()
     // Nobody is waiting on this one: it is a write like any other, through
     // the door a client uses. The rules are registered as effects, so the
-    // call is run because it MATCHED, not because somebody awaited it.
+    // call is run because it matched, not because somebody awaited it.
     let wrote = await host.handler(
       new Request('http://h/apply', {
         method: 'POST',
@@ -867,7 +867,7 @@ Deno.test('an option written {env} is read from the environment', () => {
       use: `file://${dir}/plugins/mail`,
       with: { sender: { token: 'hunter2' }, keep: [1, 2] },
     }])
-    // And it is read EVERY time it is asked for, not once: a key exported
+    // And it is read every time it is asked for, not once: a key exported
     // after the host booted is a facet that starts on its next pass rather
     // than one that has to be restarted (T-37699).
     let token = () =>
@@ -883,7 +883,7 @@ Deno.test('an option written {env} is read from the environment', () => {
 })
 
 Deno.test('a body kept in the store is still found by its own words', async () => {
-  // The index is cut from the WORDS, and a column that says `store: blob`
+  // The index is cut from the words, and a column that says `store: blob`
   // holds an address where its text was. An index raised over the raw column
   // would hold hashes, so the host hands its computed reads to the index the
   // same way it hands them to the store — a search over a long body is what

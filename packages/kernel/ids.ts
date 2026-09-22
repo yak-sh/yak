@@ -1,5 +1,5 @@
 // The id a person types, resolved to the eid it names. `T-37580` is stored
-// nowhere: what is stored is the NUMBER beside the entity, and the letter is
+// nowhere: what is stored is the number beside the entity, and the letter is
 // derived from the components the entity has (@yaks/id). So resolving one is a
 // read — find the entity carrying that number, and check which letters it could
 // be printed with.

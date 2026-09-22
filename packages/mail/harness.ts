@@ -53,7 +53,7 @@ let doc: VocabDoc = {
         role: { enum: ['owner', 'member'], default: 'member' },
       },
     },
-    // The two components ./tools.ts WRITES and does not declare —
+    // The two components ./tools.ts writes and does not declare —
     // @yaks/kernel's `opened` and `archived` — declared here for the same
     // reason `member` is: a test needs the component, not the package.
     opened: {

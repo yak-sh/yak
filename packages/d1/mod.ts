@@ -21,7 +21,7 @@
  *
  * Because `Storage` may be either asynchronous or synchronous, and @yaks/graph
  * handles either (its `then` awaits a promise and passes a plain value straight
- * through), the SAME `apply()` is synchronous over @yaks/sqlite and
+ * through), the same `apply()` is synchronous over @yaks/sqlite and
  * asynchronous here. No caller in between has to know which.
  *
  * ## The transaction, in plain terms
@@ -30,7 +30,7 @@
  * runs a list of statements sequentially in one implicit transaction and rolls
  * the whole list back if any fails. So {@link storage}'s `tx` defers: reads run
  * immediately against the committed database, writes are gathered as
- * statements, returning flushes them as ONE atomic batch, and throwing discards
+ * statements, returning flushes them as one atomic batch, and throwing discards
  * them unsent. Reads inside the transaction see its own pending writes through
  * an in-memory overlay evaluated by
  * {@link https://jsr.io/@yaks/match | @yaks/match}.

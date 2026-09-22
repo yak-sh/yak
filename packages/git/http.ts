@@ -1,34 +1,34 @@
 // Git's smart HTTP protocol, version 2, read-only: the two endpoints a
 // `git clone` calls, written as a `Request` in and a `Response` out. Whatever
-// mounts them decides what a repository IS — a set of refs and an object
+// mounts them decides what a repository is — a set of refs and an object
 // reader — and this file decides nothing else.
 //
 //   GET  <repo>/info/refs?service=git-upload-pack   what this server supports
 //   POST <repo>/git-upload-pack                     ls-refs, and fetch
 //
-// VERSION 2 IS TWO ROUND TRIPS AND NOTHING IS DISCOVERED TWICE. The
+// Version 2 is two round trips and nothing is discovered twice. The
 // advertisement lists only what the server supports — no refs, unlike version
 // 0, which sent every ref to a client that wanted one of them. The refs are
 // the response to `ls-refs`, and a packfile is the response to `fetch`, both
 // POSTed to the one endpoint with a `command=` line saying which.
 //
-// WE ADVERTISE WHAT WE IMPLEMENT. No `shallow`, no `filter`, no
+// We advertise what we implement. No `shallow`, no `filter`, no
 // `packfile-uris`, no `wait-for-done`, no `object-format=sha256`: a capability
 // named here is one a client may rely on, and a client that is never told
 // about shallow clones never asks for one. `server-option` is named because
 // ignoring the options is the whole of implementing it.
 //
-// WE DO NOT NEGOTIATE, WE SUBTRACT (./objects.ts). A `fetch` that has sent
+// We DO not negotiate, we subtract (./objects.ts). A `fetch` that has sent
 // `done` gets the objects its wants reach minus the ones its haves reach, in
 // one packfile. A `fetch` that is still negotiating gets the acknowledgments
 // section with `NAK` — never a false `ready` — and the client sends `done` on
 // the next round, resending its haves, which is where the subtraction happens.
 // One extra round trip, and no state kept between requests.
 //
-// A WANT MUST BE REACHABLE FROM A REF. Anything else would serve an object
+// A want must be reachable from A ref. Anything else would serve an object
 // that was unlinked or never published to whoever guessed its id — the same
 // rule as Git's own `uploadpack.allowAnySHA1InWant=false`. The common case is
-// a want that IS a ref, checked against a set; only a want that is not a
+// a want that is a ref, checked against a set; only a want that is not a
 // branch tip pays for the walk.
 //
 // The packfile section is side-band framed, as version 2 requires: band 1 is

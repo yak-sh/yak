@@ -1,7 +1,7 @@
 // Boot reconciliation: the locks whose holder is gone.
 //
 // A session that lets go of what it holds releases its claims; a session whose
-// ENTITY is deleted takes its locks with it (`death: 'release'` in the
+// entity is deleted takes its locks with it (`death: 'release'` in the
 // vocabulary). What neither covers is a lock naming a session the graph has no
 // entity for at all — a holder that was never committed, or was removed on
 // another store — so the graph reports that somebody is working on a document

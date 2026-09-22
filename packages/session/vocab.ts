@@ -3,7 +3,7 @@
 // browser tab that loads this vocabulary loads nothing else.
 //
 // Two computed columns, not one. A transcript's status is read off its newest
-// entry; a TASK's status is read off its marks, and a graph that leases its
+// entry; a task's status is read off its marks, and a graph that leases its
 // tasks has a state @yaks/task cannot know about — a held claim reads `wip`.
 // That state belongs to whoever owns `claim`, which is this package, so this
 // module restates `task.status` with the claim included. An application

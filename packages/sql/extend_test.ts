@@ -130,7 +130,7 @@ Deno.test('a cursor pages within an extension ranking', () => {
   let { sql } = compile(parse('.order=similar&.after=3'), v, {
     extend: [ranks],
   })
-  // the hook is asked a second time with the ANCHOR's owner id, so the cursor
+  // the hook is asked a second time with the anchor's owner id, so the cursor
   // is the anchor's own place in the ranking — no second seam, no new spelling
   assert(
     sql.includes(
@@ -141,7 +141,7 @@ Deno.test('a cursor pages within an extension ranking', () => {
   )
 })
 
-// A ranking extension is told what the REST of the line selects, so it ranks
+// A ranking extension is told what the rest of the line selects, so it ranks
 // among those rows instead of cutting its answer before they are filtered.
 Deno.test('an extension is handed the screen for the rest of the line', () => {
   let seen: (string | null)[] = []

@@ -1,13 +1,13 @@
 // What every agent reads at the start of every conversation: the person's own
 // sentences, newest first, under one heading per space.
 //
-// BOUNDED, because it is paid for on every connection — {@link LAST} of them
+// Bounded, because it is paid for on every connection — {@link LAST} of them
 // and {@link BYTES} bytes, whichever runs out first, and then a line saying
 // that there are more and which tool returns the rest. A person who has said
 // forty things is not owed forty of them at the top of every context; they are
 // owed the last few and a way to reach the others.
 //
-// Each entry is the SENTENCE, whole and in quotes, with its context indented
+// Each entry is the sentence, whole and in quotes, with its context indented
 // under it. Whole, because half of what somebody said is worse than none of it
 // — a snippet is for finding a thing, and this is the thing.
 

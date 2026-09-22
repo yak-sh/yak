@@ -3,7 +3,7 @@
 // is the right one for large or binary content — nothing reads it but this
 // package, and a filesystem is very good at handing back a big file.
 //
-// The runtime's file API is LOOKED UP rather than imported, so this module
+// The runtime's file API is looked up rather than imported, so this module
 // loads and type-checks anywhere — in a browser bundle, in a Worker — with no
 // platform types in the package's compile at all. Where there is no filesystem
 // it throws when called, which is the correct answer: use a store that exists

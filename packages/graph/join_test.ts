@@ -1,4 +1,4 @@
-// A rule's match, READ: the patterns a source says, the variables they share,
+// A rule's match, read: the patterns a source says, the variables they share,
 // and the components a batch overlay has to cover for it. What the plan lowers
 // to is a storage's business (@yaks/sqlite's rules_test.ts runs it).
 
@@ -79,7 +79,7 @@ Deno.test('a removal of a word this vocabulary lacks is inert', () => {
   assertEquals(asked(m, vocab), m)
 })
 
-// A TEMPLATE is the same object as a rule, and an invocation is that query
+// A template is the same object as a rule, and an invocation is that query
 // merged with a bindings-only query built from the arguments (T-37570).
 
 Deno.test('a bindings query is a query, and it is nothing but bindings', () => {
@@ -95,7 +95,7 @@ Deno.test('a bound variable in a write position supplies the value', () => {
     prop: 'ms',
     value: { kind: 'scalar', raw: '5' },
   }])
-  // With no `+` comp matched, the pattern still MAKES its entity.
+  // With no `+` comp matched, the pattern still makes its entity.
   assertEquals(m.patterns[0].makes, true)
   assertEquals(m.vars, [])
 })

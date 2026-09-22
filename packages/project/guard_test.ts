@@ -51,7 +51,7 @@ Deno.test("the ladder is the vocabulary's, unless marks name one", () => {
   // the rung a host that leases its tasks adds included — so a board filtering
   // on `wip` routes without @yaks/project being told about leases.
   assertEquals(unroutable('.status=wip', team), null)
-  // Naming marks NARROWS it to exactly that ladder, which is what a graph with
+  // Naming marks narrows it to exactly that ladder, which is what a graph with
   // no lease at all wants.
   assertEquals(typeof unroutable('.status=wip', team, MARKS), 'string')
   assertEquals(

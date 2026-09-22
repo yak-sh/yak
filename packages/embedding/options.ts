@@ -1,10 +1,10 @@
-// What a CONFIG declares to this plugin, and the embedder it names. "The
+// What a config declares to this plugin, and the embedder it names. "The
 // server" below means whichever process opened the graph and loaded this
 // package.
 //
-// The vectors are this package's business; the MODEL is not. So the config
+// The vectors are this package's business; the model is not. So the config
 // names one beside the plugin, and both exports build what they need from that
-// one declaration — `./rules` needs the vector SPACE it names (a stored vector
+// one declaration — `./rules` needs the vector space it names (a stored vector
 // is only comparable with others in the same space), `./effects` needs the
 // embedding function itself:
 //
@@ -18,8 +18,8 @@
 //             "text": ["doc.title", "doc.body"] } }
 // ```
 //
-// MISSING CONFIG NEVER PREVENTS STARTUP. A server that composes this plugin
-// and has not been given a key yet is a server WAITING for one: it starts, it
+// Missing config never prevents startup. A server that composes this plugin
+// and has not been given a key yet is a server waiting for one: it starts, it
 // stores no vectors, its check reports what it is waiting for, and the first
 // pass after the key appears is the one that embeds. So nothing here throws —
 // a config amounts to a {@link Ready} value, read on every pass rather than
@@ -72,7 +72,7 @@ export type Options = {
 /** What the config amounts to: the embedder it names, or the single message
  * explaining why there is none yet. */
 export type Ready = {
-  /** the vector SPACE — the model name stored on every row. It comes from the
+  /** the vector space — the model name stored on every row. It comes from the
    * config alone, so a query can rank `.near` over what is already stored
    * while the sweep is still waiting for a key. */
   model?: string
@@ -83,7 +83,7 @@ export type Ready = {
 }
 
 /** The embedder a config named, or what it is waiting for. Missing config
- * means WAITING: the server starts with no vectors and begins embedding the
+ * means waiting: the server starts with no vectors and begins embedding the
  * moment the config appears. A `via` nothing here implements never will, so
  * that is an error — reported here, where it is read, and not at startup. */
 export let embedderOf = (options: Options): Ready => {
@@ -99,7 +99,7 @@ export let embedderOf = (options: Options): Ready => {
     return { model: embedder.model, embedder }
   }
   if (said.via == 'ollama' || said.via == 'openai') {
-    // A config that NAMES a key but has no value for it is waiting: the
+    // A config that names a key but has no value for it is waiting: the
     // environment does not have one yet, and every request until it does would
     // be a 401 paid for once per entity. A config that names no key never
     // wanted one — a machine on your own network — and goes straight through.
@@ -134,7 +134,7 @@ export let chosen = (vocab: Vocab, options: Options): Field[] => {
 }
 
 /**
- * Everything a pass needs, as the config stands AT THIS MOMENT: the text a
+ * Everything a pass needs, as the config stands at this moment: the text a
  * vector is made from, the embedder that makes it, and the message to report
  * when there is none.
  *

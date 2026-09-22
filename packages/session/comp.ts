@@ -1,8 +1,8 @@
 // The vocabulary this package ships, as one document to load beside your own
-// (./vocab.json — plain JSON Schema). A session is a TRANSCRIPT: no process is
+// (./vocab.json — plain JSON Schema). A session is a transcript: no process is
 // launched — entries appear, and a daemon reacts to the newest one. The
 // components are the session's identity, its lock, and the kinds of entry; the
-// components a run's PROCESS needs (pid, pane, a log to tail) belong to the
+// components a run's process needs (pid, pane, a log to tail) belong to the
 // application that runs processes, never here.
 //
 //   session{id, status}      identity only; `status` is computed, never stored
@@ -12,7 +12,7 @@
 //   conflict{target, loser, holder, at}
 //                            two sessions wanted one thing (stamped: audit)
 //   entry{session, seq}      one line; the component beside it is its kind
-//     + content{body}        its prose, when it has any. Alone, an INPUT: an
+//     + content{body}        its prose, when it has any. Alone, an input: an
 //                            instruction (the first one is the request).
 //                            Beside a result, error or exception, theirs
 //     + output{source}       what produced the prose beside it: the ask, for
@@ -47,11 +47,11 @@
 // `loadVocab` refuses to load.
 //
 // The shape worth noticing is the CLAIM. A lock is not a row about a document
-// somewhere else — it is a component ON the document, so "who holds this?" is
+// somewhere else — it is a component on the document, so "who holds this?" is
 // answered by the entity itself, one lock per entity by construction, and a
 // query for locked documents is a query for entities that have a `claim`.
 // `claim.session` is declared `death: 'release'`: when a session's entity is
-// deleted its lock ROW goes and the document it was on survives — declared
+// deleted its lock row goes and the document it was on survives — declared
 // here, carried out by @yaks/graph's cascade, with no code in this package at
 // all. Every `conflict` column is server-owned: the audit row is written by
 // the graph after a refusal, never sent by a client.

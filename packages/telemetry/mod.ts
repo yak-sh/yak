@@ -1,5 +1,5 @@
 /**
- * @yaks/telemetry — RETIRED. The graph now holds what this log held: a tool
+ * @yaks/telemetry — retired. The graph now holds what this log held: a tool
  * call is a `call` entity, claimed by an `execution` and completed as a
  * `result` carrying its `ms` and its `created.by`, and a failure is the `error`
  * or `exception` component beside it
@@ -13,7 +13,7 @@
  *
  * The errors callers hit are the documentation not yet written, and the errors
  * nobody hits are the ones that quietly break and are repaired by hand months
- * later. This log shows both. It is stored BESIDE a graph, deliberately outside
+ * later. This log shows both. It is stored beside a graph, deliberately outside
  * it: rows carry no entity id and no component, nothing references them, and no
  * client cache ever holds them. They only accumulate.
  *

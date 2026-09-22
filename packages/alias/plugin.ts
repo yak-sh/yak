@@ -2,11 +2,11 @@
 // writes one, and the lookup that accepts one wherever an eid is accepted.
 //
 // It contributes no `key` component and no deduplication of its own —
-// @yaks/key has both, and this plugin is registered BESIDE it
+// @yaks/key has both, and this plugin is registered beside it
 // (`plugins: [keys(vocab), aliases(vocab)]`). What is left is exactly what is
 // particular to a name: how you write one, and that a name resolves to an id.
 //
-// It is given the loaded vocabulary because the hook rewrites REFERENCES, and
+// It is given the loaded vocabulary because the hook rewrites references, and
 // which columns are references is something only a loaded vocabulary knows.
 
 import type { Hook, Plugin } from '@yaks/graph'
@@ -18,7 +18,7 @@ import { addressed, pointed } from './refs.ts'
 
 // The `normalize` phase, both halves: names resolved to ids first, then the
 // shorthand turned into key entities. That order, because one bundle may be
-// addressed BY a name and claim another name at the same time.
+// addressed by a name and claim another name at the same time.
 let spelled = (vocab: Vocab): Hook => {
   let by = pointed(vocab)
   let sugar = split()

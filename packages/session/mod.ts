@@ -9,7 +9,7 @@
  * one line of the transcript, `{session, seq}`, and the component beside it is
  * what makes it one kind rather than another:
  *
- * - `content{body}` — prose. Alone it is an INPUT, an instruction from a
+ * - `content{body}` — prose. Alone it is an input, an instruction from a
  *   person or a system; with an `output{source}` beside it (the ask it answers)
  *   it is what a model returned. A `result`, `error` or `exception` carries its
  *   prose the same way.
@@ -36,10 +36,10 @@
  * `Model` and a table of tools and imports no platform API.
  *
  * ## A lock is a lease, not a patch
- * A `claim{session}` is a session's LOCK, stored on the entity it locks.
+ * A `claim{session}` is a session's lock, stored on the entity it locks.
  * Writing one over somebody else's fails the whole batch loudly
  * ({@link Bounced}) — release, then claim. The same session re-claiming is a
- * no-op refresh, and a RELEASE is unguarded, because releasing is how a lock is
+ * no-op refresh, and a release is unguarded, because releasing is how a lock is
  * handed over. The collision is recorded as a `conflict` row on the `audit`
  * phase, after the rollback. `claim.session` is declared `death: 'release'`:
  * delete a session's entity and its locks go while the documents live —

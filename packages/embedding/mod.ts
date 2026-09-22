@@ -1,6 +1,6 @@
 /**
  * @yaks/embedding — semantic search for a yaks graph: the entities nearest in
- * MEANING, beside the literal matches full-text gives.
+ * meaning, beside the literal matches full-text gives.
  *
  * Full-text search finds the word you typed. This finds the book you meant. A
  * vector is stored for every entity that has text, and `.near=<entity>` ranks
@@ -11,7 +11,7 @@
  * It is generic over the text, exactly as
  * {@link https://jsr.io/@yaks/fts | @yaks/fts} is: a vocabulary declares
  * components, some of their columns hold prose, and {@link fields} chooses
- * which of them a vector is made from. An entity gets ONE vector, made from all
+ * which of them a vector is made from. An entity gets one vector, made from all
  * of its text fields joined together — a vector is a point in a space of
  * meanings, and an entity is one thing.
  *
@@ -54,7 +54,7 @@
  * early development never reach a network. Everything a query touches is
  * synchronous; only the sweep, which may be calling a hosted model, is not.
  *
- * As a PLUGIN it is two exports and nothing else: `./rules` creates the vector
+ * As a plugin it is two exports and nothing else: `./rules` creates the vector
  * table and registers the `.near` compiler, `./effects` schedules a sweep when
  * embedded text changes, and the model, endpoint and key are the options named
  * beside the plugin in the config. It declares no component — no client ever

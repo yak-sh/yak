@@ -227,7 +227,7 @@ Deno.test('an async handler makes that one apply a promise', async () => {
   assertEquals(seen, ['late'])
 })
 
-// A PATTERN registration: any query over what the batch committed, with
+// A pattern registration: any query over what the batch committed, with
 // nothing derived into the graph to trigger it.
 
 Deno.test('a pattern fires where this batch made it hold', () => {
@@ -277,11 +277,11 @@ Deno.test('a pattern names its component, and lists beside the rest', () => {
 
 Deno.test('a word this vocabulary has no entry for says nothing, or nothing at all', () => {
   let { fx, seen, apply } = fixture()
-  // Nothing here can wear `archived`, so requiring its ABSENCE is no
+  // Nothing here can wear `archived`, so requiring its absence is no
   // constraint — one sentence, right in a graph that has the word and in one
   // that does not.
   fx.on('.post, !archived', (e) => seen.push(`open ${e.entity.eid}`))
-  // Requiring its PRESENCE can never hold: registered, listed, never woken.
+  // Requiring its presence can never hold: registered, listed, never woken.
   fx.on('.post, .archived', (e) => seen.push(`gone ${e.entity.eid}`))
   apply([post('p1')])
   assertEquals(seen, ['open p1'])

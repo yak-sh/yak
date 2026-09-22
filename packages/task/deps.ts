@@ -4,13 +4,13 @@
 // They are deliberately different questions with different answers, because
 // conflating them is what makes a board shout.
 //
-// GATED is the alarm. `blocked{on}` records that something OUTSIDE the graph
+// Gated is the alarm. `blocked{on}` records that something outside the graph
 // has stopped this — a vendor, a decision, a person who has not replied. Nobody
 // here can move it, so it is worth a mark on the row.
 //
-// OPEN DEPS is not an alarm. A task with three unfinished `requires` children
+// Open deps is not an alarm. A task with three unfinished `requires` children
 // is a task with three unfinished children: ordinary work, in progress, exactly
-// as it should be. It is a COUNT — "3 left" — and zero renders nothing at all.
+// as it should be. It is a count — "3 left" — and zero renders nothing at all.
 // Showing it in red would mean flagging every plan the moment somebody made
 // one.
 //
@@ -101,7 +101,7 @@ export let openDeps = (
     kidsOf(tx, eid, opts.relations ?? [REQUIRES, CONTAINS]),
     (kids) =>
       kids.length == 0 ? 0 : then(tx.get(kids), (bundles) => {
-        // Counted by what HAS settled, so a child the storage does not hold —
+        // Counted by what has settled, so a child the storage does not hold —
         // and which therefore cannot be shown to have finished — stays counted.
         let done = bundles.filter((b) => {
           let s = statusOf(b, marks)
@@ -113,7 +113,7 @@ export let openDeps = (
 }
 
 /**
- * Has this task settled AND finished its dependencies? Completion alone does
+ * Has this task settled and finished its dependencies? Completion alone does
  * not release a parent while `requires` or `contains` children remain open.
  * Like {@link openDeps}, this counts direct far ends, not a recursive walk.
  * A missing entity, or an entity without a `task` component, is never done.

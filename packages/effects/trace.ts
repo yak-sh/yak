@@ -1,4 +1,4 @@
-// What HAPPENED, worked out from what was committed. The changes a client
+// What happened, worked out from what was committed. The changes a client
 // sends record only what to write: the same bundle patches a component that
 // already existed and creates one that did not, and a cascade's casualty comes
 // back as a bare tombstone with none of the components it used to carry. A
@@ -8,7 +8,7 @@
 // It takes two readings. BEFORE the patches go in, `before()` reads which
 // components each entity in the batch already carries, plus the same for
 // everything the batch is about to delete (@yaks/graph's own `doomed()` walk,
-// so the death rule is reused, never re-implemented). AFTER the commit,
+// so the death rule is reused, never re-implemented). After the commit,
 // `events()` replays the applied batch against that reading: a component
 // absent before is a creation, one present before is a change carrying only
 // the columns that moved, and a component or an entity that went is a removal.
@@ -23,13 +23,13 @@ import { comps, dead, doomed, then } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 
 /** What triggered a handler: one of the three things that can happen to a
- * component, or a PATTERN that is now true over what the batch committed. */
+ * component, or a pattern that is now true over what the batch committed. */
 export type Kind = 'created' | 'changed' | 'removed' | 'matched'
 
 /**
  * One committed component change, as an effect sees it.
  *
- * `comp` is the patch AS APPLIED, which is what makes a change readable: on a
+ * `comp` is the patch as applied, which is what makes a change readable: on a
  * `created` event it is the whole birth row, on a `changed` event only the
  * columns that moved, and on a `removed` event there is nothing left to carry.
  */

@@ -3,7 +3,7 @@
 // The subject is @yaks/sync's recipe box, and so is the server: this package
 // sits on top of that one, so its tests are best run against the same graph,
 // the same request handler and the same stand-in sockets. What is added here
-// is a CLIENT built by `client()` rather than by hand, an in-process socket
+// is a client built by `client()` rather than by hand, an in-process socket
 // for it, and a stand-in IndexedDB.
 //
 // Nothing here touches a network, a timer or a browser. `fire()` runs a

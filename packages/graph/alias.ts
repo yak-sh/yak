@@ -1,13 +1,13 @@
 // Aliases: how a change refers to an entity it is about to create, before it
-// knows the entity's id. A bundle's `entity.eid` may be an ALIAS — any id
+// knows the entity's id. A bundle's `entity.eid` may be an alias — any id
 // starting with `$` — and every reference to that alias elsewhere in the same
 // change points at the same entity:
 //
 //   [{ entity: { eid: '$dune' }, doc: { title: 'Dune' } },
 //    { entity: { eid: 'r1' }, review: { stars: 5, book: '$dune' } }]
 //
-// An alias means THE SERVER PICKS THE ID. For an ordinary entity that is a
-// freshly generated uuid. For a CONTENT-ADDRESSED one it is derived from the
+// An alias means the server picks the ID. For an ordinary entity that is a
+// freshly generated uuid. For a content-addressed one it is derived from the
 // content itself — a blob's id is the hash of its bytes, an edge's is derived
 // from the two entities and the relation — because two writers writing the
 // same fact must end up with one entity rather than two. Which components are
@@ -90,9 +90,9 @@ let rewrite = (
  * identified by one of these ids, and every reference to one, rewritten to the
  * id it maps to. Anything the map does not mention is left exactly alone.
  *
- * It is exported for a plugin that resolves ids of its OWN.
+ * It is exported for a plugin that resolves ids of its own.
  * {@link https://jsr.io/@yaks/key | @yaks/key} is one: a bundle claiming a
- * value some entity already holds is really a patch OF that entity, so the id
+ * value some entity already holds is really a patch of that entity, so the id
  * the mint phase just picked has to be replaced by the existing holder's — in
  * the bundle itself and in everything referencing it — which is what this
  * function does.
@@ -163,7 +163,7 @@ export let resolve = (
         if (named) break
       }
       // `||`, not `??`: a component that could not derive an id returns the
-      // EMPTY string (an edge missing an endpoint, a partly supplied
+      // empty string (an edge missing an endpoint, a partly supplied
       // identity), and the documented meaning of that is a freshly generated
       // id — which the hook that owns the component then refuses by name. Used
       // as the eid, an empty string would create an entity with no id at

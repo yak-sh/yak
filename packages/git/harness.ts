@@ -3,7 +3,7 @@
 // and a byte store that is nothing but a Map.
 //
 // The byte store is a Map rather than @yaks/blob's SQLite backend because a
-// tree body is BINARY — raw ids, not text — and that backend stores text. A
+// tree body is binary — raw ids, not text — and that backend stores text. A
 // deployment uses the file or object backend for the same reason.
 
 import { Database } from '@yaks/sqlite/db'
@@ -63,7 +63,7 @@ export let store = (): Blobs & { reads: () => number } => {
 /**
  * The whole stack: a graph, a byte store, and the index over both.
  *
- * A caller testing the PLUGIN supplies the components its own releases are
+ * A caller testing the plugin supplies the components its own releases are
  * described with, and the plugin that watches for them. Those are the two
  * things the application contributes, and the only things a fixture cannot
  * guess.
@@ -111,14 +111,14 @@ export let file = (bytes: Blobs, text: string): string => {
 //   git hash-object -w hello.txt lib/a.txt
 //   printf '100644 blob <a.txt>\ta.txt\n' | git mktree               -> LIB
 //   printf '100644 blob <hello>\thello.txt\n040000 tree <LIB>\tlib\n'
-//     | git mktree                                                   -> ROOT
+//     | git mktree                                                   -> root
 //   printf '040000 tree <LIB>\ta\n100644 blob <hello>\ta.txt\n'
-//     | git mktree                                                   -> SORT
+//     | git mktree                                                   -> sort
 //   GIT_AUTHOR_NAME=yaks GIT_AUTHOR_EMAIL=a6433884@users.yaks.app \
 //   GIT_AUTHOR_DATE='1757000000 +0000' GIT_COMMITTER_NAME=yaks.app \
 //   GIT_COMMITTER_EMAIL=git@yaks.app GIT_COMMITTER_DATE='1757000000 +0000' \
-//     git commit-tree <ROOT> -m 'deploy 1'                           -> ONE
-//   …the same at 1757000060, `-p <ONE>`, `-m 'deploy 2'`             -> TWO
+//     git commit-tree <root> -m 'deploy 1'                           -> one
+//   …the same at 1757000060, `-p <ONE>`, `-m 'deploy 2'`             -> two
 //
 // If one of these ever fails, the format moved, not the fixture.
 
@@ -145,7 +145,7 @@ export let ROOT_OID256 =
   '133367cabc1b9be778cb8ea2c153968ea1b4500d8fc43775ed85861d59310361'
 
 /** A tree holding the directory `a` and the file `a.txt` — the sort rule in
- * one object: `a.txt` comes FIRST, because `a` sorts as `a/`. */
+ * one object: `a.txt` comes first, because `a` sorts as `a/`. */
 export let SORT_OID = 'ad94769f8d8ffb761d45605960041a5a43a3fe24'
 
 /** The two commits over the root tree, the second following the first. */

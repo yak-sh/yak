@@ -3,7 +3,7 @@
 // links out.
 //
 // It is given the loaded vocabulary because the relations belong to the
-// APPLICATION, not to this package: which components name a relation is
+// application, not to this package: which components name a relation is
 // something only a loaded vocabulary knows. So a graph is built in two steps —
 // load the documents, then pass that same vocabulary to the plugin.
 

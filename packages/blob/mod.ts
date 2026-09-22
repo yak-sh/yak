@@ -44,7 +44,7 @@
  *   the schema a body column is a plain string column, and it stays one for
  *   validation, routing and queries.
  * - **One plugin.** {@link blobs} replaces the text with its address on the way
- *   in and puts it back before `apply()` returns. It runs INSIDE the
+ *   in and puts it back before `apply()` returns. It runs inside the
  *   transaction, so the bytes and the row that addresses them commit together.
  * - **One byte-store interface.** {@link Blobs} is `has`, `get` and `put` over
  *   `Uint8Array`, keyed by {@link address}. Three implementations ship with the

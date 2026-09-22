@@ -7,12 +7,12 @@
 // Two things about the runtime shape the code here, both checked against
 // workerd rather than the docs alone:
 //
-//   VALUES ARE NARROW. A binding must be an ArrayBuffer, a string, a number or
+//   Values are narrow. A binding must be an ArrayBuffer, a string, a number or
 //   null. A boolean would bind as the text 'true' and a bigint throws, so both
 //   are converted before they reach the engine, and a blob comes back as an
 //   ArrayBuffer where every other adapter hands back bytes.
 //
-//   TRANSACTIONS ARE NOT SQL. `begin`, `savepoint` and their friends are
+//   Transactions are not SQL. `begin`, `savepoint` and their friends are
 //   refused as statements; `transactionSync` is the transaction, and it nests.
 //   That is what `Driver.tx` exists for.
 
@@ -22,12 +22,12 @@ import type { Driver, Param, Row } from '@yaks/sqlite'
 export type SqlValue = ArrayBuffer | string | number | null
 
 /**
- * A table CLOUDFLARE owns inside the object's SQLite. `_cf_KV` is the one
+ * A table Cloudflare owns inside the object's SQLite. `_cf_KV` is the one
  * behind `ctx.storage.kv` — the docs spell it `__cf_kv` and the engine reports
  * it as `_cf_KV`, so neither the case nor the number of underscores is worth
  * trusting — and `_cf_METADATA` is its neighbour.
  *
- * These are not merely uninteresting: workerd's SQL authorizer REFUSES them to
+ * These are not merely uninteresting: workerd's SQL authorizer refuses them to
  * the object's own statements — `access to _cf_KV.key is prohibited:
  * SQLITE_AUTH` — while still listing them in `sqlite_master`. So anything that
  * enumerates tables and then reads them must skip these or throw (T-34019).

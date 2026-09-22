@@ -1,11 +1,11 @@
 // How a wake recurs, read from one string. Two grammars, because people mean
 // two different things by "again":
 //
-//   A DURATION — "every two hours", `2h`, `30m`, `1w`. It counts FROM the last
+//   A DURATION — "every two hours", `2h`, `30m`, `1w`. It counts from the last
 //   instant, so a wake set at 09:17 keeps landing at :17. Nobody who says
 //   "remind me every two hours" means "on the even hours".
 //
-//   A CRON LINE — `0 9 * * 1-5`, `@daily`. It names positions on a calendar,
+//   A cron line — `0 9 * * 1-5`, `@daily`. It names positions on a calendar,
 //   so it lands at nine whatever time of day you wrote it. Parsed by croner,
 //   which has no dependencies and runs unchanged in a browser, a Worker and a
 //   server — the one thing here worth not hand-rolling, since a cron parser is
@@ -104,10 +104,10 @@ let cron = (every: string, tz: string): Cron | null => {
  * The first instant a recurrence lands on strictly after `now`, counting a
  * duration from `from`.
  *
- * The two moments are different clocks on purpose. A CRON line ignores `from`
+ * The two moments are different clocks on purpose. A cron line ignores `from`
  * — nine in the morning is nine in the morning. A DURATION counts from
  * `from`, the last instant the wake was due, so a cadence keeps its phase and
- * a long outage catches up in ONE step instead of firing once per missed tick.
+ * a long outage catches up in one step instead of firing once per missed tick.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'

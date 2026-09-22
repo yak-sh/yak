@@ -9,7 +9,7 @@
       "component": true,
       "type": "object",
       "key": true,
-      "description": "the kind of key whose value is a NAME: a stable name for an entity, unique in the store and accepted wherever an eid is. Write it as alias{name} on the entity itself — `{entity: {eid: '$r'}, alias: {name: 'recipe:lemon-cakes'}, doc: {…}}` — and the key entity is created for you; write the same name again and it resolves to the same entity",
+      "description": "the kind of key whose value is a name: a stable name for an entity, unique in the store and accepted wherever an eid is. Write it as alias{name} on the entity itself — `{entity: {eid: '$r'}, alias: {name: 'recipe:lemon-cakes'}, doc: {…}}` — and the key entity is created for you; write the same name again and it resolves to the same entity",
       "properties": {}
     }
   }

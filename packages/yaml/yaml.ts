@@ -5,7 +5,7 @@
 // loader written against `read` keeps its `.json` callers and gains `.yml` for
 // free.
 //
-// An error names the FILE. A loader is usually reading a dozen of them and the
+// An error names the file. A loader is usually reading a dozen of them and the
 // parser only knows the text it was given, so the name is passed in and used in
 // the one message that has to say which file was wrong.
 import { parse } from '@std/yaml'
@@ -49,7 +49,7 @@ export let fill = (text: string, slots: Record<string, string> = {}): string =>
 /**
  * What a content file holds: the bundle at the top, and the document under it.
  *
- * `meta` is PARTIAL because two ordinary kinds of file have no `entity` in
+ * `meta` is partial because two ordinary kinds of file have no `entity` in
  * them — one with no frontmatter at all (`{}`), and one whose frontmatter names
  * only components, which is a bundle whose identity has not been given yet.
  * Whether that is acceptable is the loader's decision, not this function's.
@@ -62,7 +62,7 @@ export type Front = { meta: Partial<Bundle>; body: string }
 let BLOCK = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/
 
 /**
- * A markdown file, split: the frontmatter as a BUNDLE — `{entity: {eid},
+ * A markdown file, split: the frontmatter as a bundle — `{entity: {eid},
  * <comp>: {…}}`, the same structure `graph.apply()` accepts — and the body
  * under it.
  *

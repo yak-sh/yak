@@ -64,7 +64,7 @@ let doc: VocabDoc = {
 /** The blog vocabulary, loaded with the `store` keyword registered. */
 export let blog: Vocab = loadVocab(doc, [blobKeywords])
 
-/** The same vocabulary with the keyword NOT registered — what a loader that
+/** The same vocabulary with the keyword not registered — what a loader that
  * never heard of this package sees. */
 export let plain: Vocab = loadVocab(doc)
 

@@ -150,7 +150,7 @@ export let remote = async (
     }
   }
   // Only summaries and tasks are global. Entry subscriptions follow selection.
-  // BOUNDED, both of them: these two mirror whole bundles — prose and all —
+  // Bounded, both of them: these two mirror whole bundles — prose and all —
   // into the replica and re-send the set whenever a commit invalidates it, so
   // an unbounded pair is a whole-graph sync on every keystroke. A graph
   // holding an archive (the fleet's 5,463 transcripts and 5,806 tasks landed

@@ -10,7 +10,7 @@
 // `{embeddings: [[…]]}`, and an OpenAI-compatible one answers `/v1/embeddings`
 // with `{data: [{embedding: […]}]}`; `via` names which, and nothing else here
 // differs. A failure — an error status, an unexpected body, a timeout — is
-// THROWN, because the sweep is what decides what an unreachable embedder means
+// thrown, because the sweep is what decides what an unreachable embedder means
 // (it stops, and the corpus stays stale), and a vector invented here to avoid
 // the error would be worse than no vector at all.
 

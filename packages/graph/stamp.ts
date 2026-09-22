@@ -3,13 +3,13 @@
 // is absent until the first edit after creation. Both are server-owned: a
 // caller may not write them, and this phase is their only writer.
 //
-// A MARK is the third form, and records an EVENT rather than the entity's
+// A mark is the third form, and records an event rather than the entity's
 // lifecycle: `completed`, `archived`, `notified` — a component a client writes
 // empty and the server fills in with the same `{at, by, via}` columns. There is
 // no list of marks here either; any component whose vocabulary declares that
-// trio server-owned IS a mark, and gets filled in.
+// trio server-owned is a mark, and gets filled in.
 //
-// The actor travels IN the change, as the `$actor` key. That is deliberate:
+// The actor travels in the change, as the `$actor` key. That is deliberate:
 // whatever received the write — an HTTP handler that authenticated a session, a
 // CLI that knows who is at the keyboard, a test that states it outright — is
 // the only thing that can know who is writing, and it is that code's job to
@@ -30,7 +30,7 @@ import type { Bound, Patch, Rule } from './rules.ts'
  * request, never by the client — @yaks/api's `/apply` handler, or @yaks/tools'
  * runner applying what a tool returned.
  *
- * An actor is a PAIR, because a write has two answers to "whose is this": the
+ * An actor is a pair, because a write has two answers to "whose is this": the
  * identity it acts for (`by`) and the instrument it came through (`via`) — a
  * session, a run, a connector. A caller that knows only one passes only one.
  *
@@ -92,7 +92,7 @@ export type StampPolicy = (bundle: Bound) =>
   } & Attribution)
   | null
 
-/** Default provenance is two rules evaluated against ONE frozen state: a newly
+/** Default provenance is two rules evaluated against one frozen state: a newly
  * created entity gets `created`, a later write gets `updated`. A policy may
  * choose the component or write none at all, but both paths use the same
  * timestamp, attribution and column narrowing. `#Now`, `#Actor` and `#Vocab`
@@ -129,7 +129,7 @@ export let provenance = (policy?: StampPolicy): Rule[] =>
 
 export let stamps: Rule[] = provenance()
 
-/** Whether a component is a MARK: one a client writes empty and the server
+/** Whether a component is a mark: one a client writes empty and the server
  * fills in — `completed`, `archived`, `notified` — recognized by its declared
  * columns, so a new one is picked up with no edit here. `created` and
  * `updated` declare the same columns but fire when the entity is created or
@@ -145,12 +145,12 @@ export let marked = (vocab: Vocab, comp: string): boolean => {
  * One rule per mark: its `{at, by, via}` are filled the first time the mark is
  * written.
  *
- * A mark is recorded ONCE — the rule's condition is that its own `at` is
+ * A mark is recorded once — the rule's condition is that its own `at` is
  * empty, so a later patch of the same component leaves the original values
  * alone, and archiving something again does not rewrite who archived it first.
  * That is the whole difference from `updated`, which is meant to change.
  *
- * The rules are derived from the VOCABULARY, not from a list of component
+ * The rules are derived from the vocabulary, not from a list of component
  * names: a graph that declares those three columns server-owned gets the rule,
  * and one that does not gets no rule at all.
  */
@@ -180,7 +180,7 @@ let wear = (
 
 /**
  * Add the identities storage created to the change, so a client that generated
- * an eid learns the `num` assigned to it. Each entity is added BY REFERENCE,
+ * an eid learns the `num` assigned to it. Each entity is added by reference,
  * not copied — an adapter whose numbers the database picks (@yaks/d1) fills
  * the `num` in when its statements run, which happens after this phase and
  * before the caller sees the return value.

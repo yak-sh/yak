@@ -1,4 +1,4 @@
-// What a batch MEANS about a transcript: the graph plugins exported as
+// What a batch means about a transcript: the graph plugins exported as
 // `@yaks/session/rules` — entry sequencing, the reference checks a fork and a
 // `using` must pass, the lease on any entity, and the conflict row written when
 // two sessions want the same thing.

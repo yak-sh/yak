@@ -237,7 +237,7 @@ export let render = <Node>(tokens: Token[], host: H<Node>): Node => {
       case 'escape':
         return [(t as Tokens.Escape).text]
       case 'html': {
-        // Markup is text here, never markup. A COMMENT is not even that: it
+        // Markup is text here, never markup. A comment is not even that: it
         // is the author writing to whoever opens the file, which every other
         // renderer drops and this one used to paint as words on the page.
         let { text } = t as Tokens.HTML

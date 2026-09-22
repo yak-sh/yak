@@ -11,7 +11,7 @@ let job = {
 Deno.test('a provider is its argv: the thread it is told to be, and -- last', () => {
   let argv = claude.argv(job)
   assertEquals(argv[0], 'claude')
-  // The session entity IS the provider's thread name, so a resume knows it.
+  // The session entity is the provider's thread name, so a resume knows it.
   assertEquals(argv[argv.indexOf('--session-id') + 1], 'S1')
   assertEquals(argv[argv.indexOf('--model') + 1], 'opus-5')
   // A dash-leading instruction is content, never an unknown flag.

@@ -1,6 +1,6 @@
 // The batch as a set of tables. A rule is a query, and a query reads tables —
 // so for a rule to be evaluated against a batch that has not been written yet,
-// the batch has to BE a table. This file makes it one: a `with` prefix of common
+// the batch has to be a table. This file makes it one: a `with` prefix of common
 // table expressions, one per component the batch moved, each selecting
 //
 //   the committed rows the batch did not touch    +    the batch's own rows
@@ -22,23 +22,23 @@
 // no row of its own. A deleted entity leaves the spine the same way, so every
 // membership loses it.
 //
-// What the batch DROPPED is a second reading of the same batch, and it needs
+// What the batch dropped is a second reading of the same batch, and it needs
 // its own table: once a row is out of the overlay, "it is not there" and "the
 // batch removed it" look identical, and `-comp` (@yaks/query) asks the second.
 // So each dropped component gets a list of the entities it was removed from —
 // the only question here a committed table can never answer, since the answer
 // is exactly what is no longer in one. A tombstoned entity's own components are
-// NOT enumerated: nothing matches a deleted entity anyway (every statement here
+// not enumerated: nothing matches a deleted entity anyway (every statement here
 // is `live()`-guarded), and which components a bare tombstone carried is known
 // to whoever read it before the batch, not to the batch.
 //
 // The SPINE is overlaid too, because a batch mints entities that have no
-// integer id yet. They get a NEGATIVE one here — the id space storage hands
+// integer id yet. They get a negative one here — the id space storage hands
 // out is positive, so the two can never collide — and every reference to a
 // fresh entity resolves to it, which is what lets a rule join across two
 // entities the same batch created.
 //
-// COST is a property of the batch, never of the database: the CTE names the
+// Cost is a property of the batch, never of the database: the CTE names the
 // committed table for everything it did not touch, so nothing is copied. Two
 // statements and a handful of bound parameters, whatever is already in the
 // file. See overlay_test.ts, which measures it.
@@ -54,12 +54,12 @@ import type { Driver, Param } from './driver.ts'
 
 /** What an overlaid component's CTE is called. */
 export let OVER = '_over_'
-/** What the list of entities a batch DROPPED a component from is called. */
+/** What the list of entities a batch dropped a component from is called. */
 export let GONE = '_gone_'
 
 /**
  * A batch, made readable. `with` is the prefix a statement carries, `params`
- * the parameters it binds FIRST, and `at` names the source each component reads
+ * the parameters it binds first, and `at` names the source each component reads
  * from — the overlay's where there is one, the committed table where the batch
  * touched nothing.
  */
@@ -156,7 +156,7 @@ export let overlay = (
       if (!vocab.comp(comp) || (wanted && !wanted.has(comp))) continue
       let rows = touched.get(comp) ?? new Map()
       let held = rows.get(b.entity.eid)
-      // Dropped, and dropped LAST: a batch that removes a component and then
+      // Dropped, and dropped last: a batch that removes a component and then
       // writes it again has not removed it, so the second patch takes the
       // entity back off the list the same way it puts the row back.
       if (patch == null) {
@@ -172,7 +172,7 @@ export let overlay = (
   }
 
   // Every id the overlay speaks in. A committed entity keeps the one storage
-  // gave it; a fresh one is numbered DOWNWARD from zero, where nothing else
+  // gave it; a fresh one is numbered downward from zero, where nothing else
   // ever is.
   let ids = new Map<Eid, number>()
   let eids = named(vocab, bundles)

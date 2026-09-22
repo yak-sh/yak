@@ -1,8 +1,8 @@
-// @yaks/vocab — the vocabulary format: a way to DESCRIBE a set of components
+// @yaks/vocab — the vocabulary format: a way to describe a set of components
 // as a JSON Schema (2020-12) document plus a small set of custom keywords, and
 // the runtime that loads such a document and answers questions about it.
 //
-// It declares ZERO components. The components you declare are an instance of
+// It declares zero components. The components you declare are an instance of
 // the format; a small app is a smaller instance in the same format — an app
 // just composes fewer documents.
 //

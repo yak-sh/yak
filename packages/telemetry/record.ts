@@ -1,4 +1,4 @@
-// Writing a row. Recording is best-effort BY DESIGN: a telemetry failure must
+// Writing a row. Recording is best-effort by design: a telemetry failure must
 // never break what it is measuring, so `record` catches the error and logs a
 // warning. A `record` that tried to record its own failed insert would turn one
 // broken call into a loop, so a `record` call made from inside another one is
@@ -10,7 +10,7 @@ import { scrub } from './scrub.ts'
 
 /**
  * What a caller reports. `ok` is the only verdict: a tool that returned an
- * error is a call that happened AND failed, and both facts matter.
+ * error is a call that happened and failed, and both facts matter.
  */
 export type Call = {
   source: Source

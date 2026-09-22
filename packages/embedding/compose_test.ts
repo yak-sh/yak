@@ -1,4 +1,4 @@
-// The plugin as a HOST composes it (@yaks/cli `compose`): a config names the
+// The plugin as a host composes it (@yaks/cli `compose`): a config names the
 // embedder and the text, the sweep is an effect, and `.near` is a query the
 // door answers — nobody wires an extension up by hand. The package depends on
 // nothing up here; the test does, because what it is checking is the wiring.
@@ -84,7 +84,7 @@ Deno.test('a config composes the vectors, and asking the door ranks by them', as
 
 // T-37699: a host whose key has not arrived comes up anyway. It keeps no
 // vectors, its check says what it is waiting for, and `.near` still compiles —
-// the config names the SPACE even where it cannot reach the model yet.
+// the config names the space even where it cannot reach the model yet.
 Deno.test('a config with no key composes, and nothing about the boot is different', async () => {
   let warn = console.warn
   console.warn = () => {}

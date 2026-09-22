@@ -37,7 +37,7 @@ import { transcriptViews } from './transcript.ts'
 // them, and the four operations a caller needs — start a session, send it a
 // message, list sessions, read one back.
 //
-// Everything in and out of here is a BUNDLE or a QUERY. Nothing writes SQL,
+// Everything in and out of here is a bundle or a query. Nothing writes SQL,
 // nothing reads a table, and no state lives in this process that the graph does
 // not already hold: which sessions are running is `.session.status=running`,
 // what was written is `.entry.session=<s>`, and the harness could be pointed at
@@ -45,7 +45,7 @@ import { transcriptViews } from './transcript.ts'
 // in memory is the daemon's queue, which is a position in a queue rather than
 // state.
 //
-// Seeding is idempotent because the ids are DERIVED from the names — a provider
+// Seeding is idempotent because the ids are derived from the names — a provider
 // is `provider:openai`, a model `model:gpt-6-astra`, a tool `tool:shell` — so a
 // second startup patches the rows the first one wrote instead of creating a
 // second set. That is what makes `using{model}` on an entry mean the same thing
@@ -210,7 +210,7 @@ let byBirth = (a: Bundle, b: Bundle) =>
 
 /** How many transcripts — and how many tasks — the panels list. Naming a
  * transcript costs a read of its first line and mirroring one costs its whole
- * bundle, so the lists are the RECENT ones: a graph holding years of archive
+ * bundle, so the lists are the recent ones: a graph holding years of archive
  * (the fleet's 5,463 transcripts and 5,806 tasks landed in this one) would
  * otherwise be mirrored end to end on every refresh, and the panels time out
  * and paint nothing at all. A week of work is well inside this. */
@@ -264,10 +264,10 @@ export let agent = (opts: Opts = {}): Agent => {
   const mcp = mcpTools(h.g)
   h.fx.created('mcp_server', mcp.refresh).changed('mcp_server', mcp.refresh)
     .removed('mcp_server', mcp.refresh)
-  // A child's own checkout is garbage the moment its session is OVER: no
+  // A child's own checkout is garbage the moment its session is over: no
   // further step runs in it until somebody resumes it, and a resume cuts it
   // again where it stood (worktrees.ts). The path is the one workspace.ts cut
-  // — named after the child — so a child that merely INHERITED its parent's
+  // — named after the child — so a child that merely inherited its parent's
   // home is not mistaken for the owner of it, and one without a checkout of
   // its own finds nothing there.
   collecting(
@@ -487,7 +487,7 @@ export let agent = (opts: Opts = {}): Agent => {
       }
       // What abnormal endings left in the worktree root, taken back by the
       // same test one child's end applies — plus the checkouts Git itself has
-      // forgotten. Only the harness running out of its OWN home sweeps: a
+      // forgotten. Only the harness running out of its own home sweeps: a
       // store somebody named explicitly (a test, a probe) is not this one, and
       // its run must never reach the live root.
       if (h.path == dbPath()) {

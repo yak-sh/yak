@@ -21,7 +21,7 @@
  *
  * What it is made of:
  *
- * - **An object's entity id IS its Git object id.** {@link oid} computes Git's
+ * - **An object's entity id is its Git object id.** {@link oid} computes Git's
  *   SHA-1 id over `"<type> <size>\0<body>"`, so the same object written by two
  *   apps is one row, and a `want` line in a fetch request is a lookup by id.
  * - **Every object also has a SHA-256 object id**, from the first write:

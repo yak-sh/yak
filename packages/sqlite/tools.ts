@@ -1,19 +1,19 @@
 // The tools an agent can call here: the module exported as
 // `@yaks/sqlite/tools`, holding the implementations behind the `tool: true`
-// declarations in ./vocab.json. Both are CHECKS: tools whose verb is `check`,
+// declarations in ./vocab.json. Both are checks: tools whose verb is `check`,
 // which is all a "doctor" command is (@yaks/tools ./check.ts).
 //
 // These are the checks that cannot be run as graph queries. An orphaned
 // component row and a reference to an entity that is gone are invisible to
 // every query by construction — a read starts from the spine, so a row with no
 // spine is not there to be found, which is exactly why the fleet's copies of
-// them went unnoticed for months. They are questions about the FILE, so they
+// them went unnoticed for months. They are questions about the file, so they
 // belong to the package that owns the file, and they are run against the
 // connection (`host.sql`), not the store.
 //
-// WHAT THE SCHEMA ALREADY PREVENTS is most of it: every component table keys
+// What the schema already prevents is most of it: every component table keys
 // to `entity(id)` and every reference carries a foreign key, so neither state
-// can be WRITTEN while foreign keys are on (./ddl.ts). That makes this check
+// can be written while foreign keys are on (./ddl.ts). That makes this check
 // cheap and precise instead of a scan: ask SQLite whether enforcement is on,
 // and ask it which rows violate a key. A file that was written by a connection
 // with `foreign_keys` off is how the impossible gets in, and that is the one
@@ -21,7 +21,7 @@
 // outlives the row it names, which is what "kept as history" means — so it is
 // never a finding here.
 //
-// THE ARCHETYPE POINTER is the same kind of question. @yaks/archetype
+// The archetype pointer is the same kind of question. @yaks/archetype
 // maintains it inside the transaction, and ./archetype.ts `drift` reads the
 // physical presence it should describe; a raw writer that inserts rows without
 // naming the owners it touched leaves a pointer both the read path and the

@@ -1,11 +1,11 @@
-// The vocabulary the harness uses, both as separate DOCUMENTS and as one
+// The vocabulary the harness uses, both as separate documents and as one
 // loaded vocabulary, exported as `@yaks/harness/vocab`.
 //
 // The list is here and nowhere else — a server composing the harness (@yaks/cli
 // `compose`) imports it through that subpath, and `store.ts` loads it for the
 // harness's own SQLite file — so a component added here is available to both.
 //
-// Every document is imported from another package's OWN `./vocab` subpath,
+// Every document is imported from another package's own `./vocab` subpath,
 // never from its main module: `@yaks/process`'s mod.ts starts child processes,
 // and the harness's vocabulary has to be loadable by anything that wants to
 // know which components and tools a harness has, including a browser tab that
@@ -48,7 +48,7 @@ export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
  * live, and its marks, which is where `archived` lives: a harness archives a
  * session, it does not own the component for putting something away.
  *
- * This is a LIST, package by package, because that is the only way each
+ * This is a list, package by package, because that is the only way each
  * component has exactly one home: no document here redeclares another's
  * components, so any of them also loads alongside this one
  * (`packages/facets_test.ts`). */

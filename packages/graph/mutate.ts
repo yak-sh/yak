@@ -3,7 +3,7 @@
 // declares, and the preconditions held — so what is left is to hand the live
 // bundles to the transaction and record the ids storage assigned.
 //
-// The one rule this phase owns is that A DELETE IS FINAL. A deleted entity is
+// The one rule this phase owns is that A delete is final. A deleted entity is
 // tombstoned, never erased: its identity row is kept forever so the id can
 // never be reused, and a patch for it — arriving late, replayed from a queue,
 // or sitting later in this very change — is discarded. An edit racing a delete

@@ -1,18 +1,18 @@
 // The lock rule, as one hook on the `precondition` phase.
 //
-// WHY THAT PHASE. `precondition` runs inside the batch's own transaction and
+// Why that phase. `precondition` runs inside the batch's own transaction and
 // before a single row has moved. Both facts are load-bearing. Inside the
 // transaction, so the holder this hook reads is the holder the batch is about
 // to write against — a check outside it is a check against a graph somebody
 // else may have moved in between. Before any write, so the holder is read
-// BEFORE the cascade phase can remove it: a batch that deletes a session and
+// before the cascade phase can remove it: a batch that deletes a session and
 // takes its lock in the same breath must still bounce, and a check that ran
 // after the cascade would find an empty lock and admit the take.
 //
-// THE LOCK. A claim is a LEASE, not a patch. Writing one over another session's
+// The lock. A claim is a lease, not a patch. Writing one over another session's
 // fails the whole batch loudly — release, then claim. The same session
 // re-claiming is a no-op refresh, so a worker replaying its own take is
-// idempotent. A RELEASE (`claim: null`) is deliberately unguarded: releasing is
+// idempotent. A release (`claim: null`) is deliberately unguarded: releasing is
 // how a lock is handed over, and the start-up pass frees a dead session's locks
 // without impersonating that session.
 //
@@ -37,7 +37,7 @@ let of = (b: Bundle | undefined, name: string): Comp | undefined =>
   (b?.[name] ?? undefined) as Comp | undefined
 
 /** The locks a batch takes: the entity, and the session it hands the lock to.
- * A bundle that DROPS a lock states no take and is not here. */
+ * A bundle that drops a lock states no take and is not here. */
 export let takes = (bundles: Bundle[]): [Eid, Eid][] =>
   bundles.flatMap((b) => {
     let s = of(b, CLAIM)?.session
@@ -58,7 +58,7 @@ export let leasing = (opts: LeaseOpts = {}): Hook => (bundles, tx) => {
   let want = [...new Set(taken.map(([on]) => on))]
   return then(tx.get(want), (found) => {
     let at = new Map(found.map((b) => [b.entity.eid, b]))
-    // The holder of each contested entity, as the batch FOUND it — then as the
+    // The holder of each contested entity, as the batch found it — then as the
     // batch itself leaves it, so two bundles taking one lock for two sessions
     // collide with each other and not only with the graph.
     let held = new Map<Eid, Eid>()

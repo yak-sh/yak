@@ -2,7 +2,7 @@
 // handler, so the same server runs on Deno, on Node, and in a Cloudflare
 // Worker.
 //
-// It is STATELESS. One JSON-RPC request in, one JSON reply out, with no MCP
+// It is stateless. One JSON-RPC request in, one JSON reply out, with no MCP
 // session to strand: a restart loses nothing, and two isolates answering the
 // same client need to agree about nothing. That costs the server→client half
 // of the protocol — there is no SSE stream here, so a `GET` is answered 405,
@@ -10,7 +10,7 @@
 // and it buys a handler that mounts beside @yaks/api's HTTP routes with no
 // runtime-specific code between them.
 //
-// The route is not decided here either. This handler answers EVERY HTTP
+// The route is not decided here either. This handler answers every HTTP
 // request it is given, so the calling program mounts it on whatever path it
 // likes:
 //
@@ -84,7 +84,7 @@ let ask = async (
  */
 export let mcp = (opts: MountOptions): Handler => {
   let ms = opts.timeout ?? 60_000
-  // ONE runner for the whole handler, not one per HTTP request: the `tool`
+  // One runner for the whole handler, not one per HTTP request: the `tool`
   // rows a call references are written once for the process, and a call still
   // running is one run however many requests ask about it.
   let runs = opts.runner ?? runner(opts.calls ?? opts.graph, {

@@ -40,7 +40,7 @@
           "description": "the project it works for"
         }
       },
-      "description": "instructions an agent runs with: the doc body on the same entity IS the instruction text"
+      "description": "instructions an agent runs with: the doc body on the same entity is the instruction text"
     },
     "role": {
       "component": true,

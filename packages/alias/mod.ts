@@ -7,7 +7,7 @@
  * other kind of name — one that is stored and outlives the write:
  *
  * ```ts
- * // written twice, a week apart, and there is ONE lemon cake
+ * // written twice, a week apart, and there is one lemon cake
  * // { entity: { eid: '$r' },
  * //   alias: { name: 'recipe:lemon-cakes' },
  * //   doc: { title: 'Lemon cakes', body: '3 lemons…' } }
@@ -33,7 +33,7 @@
  * ```
  * A reference column accepts a name, a bundle's own `entity.eid` accepts one,
  * and callers resolve one explicitly through `graph.address(ids)`. An id that
- * IS an entity always wins; an id shaped like a UUID or a content hash is never
+ * is an entity always wins; an id shaped like a UUID or a content hash is never
  * looked up at all, so ordinary eid references cost nothing.
  *
  * ```ts

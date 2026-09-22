@@ -63,7 +63,7 @@ let doc: VocabDoc = {
       },
     },
     // Where a product sits on the floor: one product per slot, and an aisle
-    // read by the shelf order. The COMPOSITE index, declared on the
+    // read by the shelf order. The composite index, declared on the
     // component.
     shelf: {
       component: true,
@@ -76,7 +76,7 @@ let doc: VocabDoc = {
         height: { type: 'number' },
       },
     },
-    // A review exists ABOUT a product — deleting the product takes its reviews
+    // A review exists about a product — deleting the product takes its reviews
     // with it (cascade).
     review: {
       component: true,
@@ -87,7 +87,7 @@ let doc: VocabDoc = {
         product: { type: 'string', ref: 'product', death: 'cascade' },
       },
     },
-    // A bookmark IS a reference: the row's whole reason to exist is to point at
+    // A bookmark is a reference: the row's whole reason to exist is to point at
     // something, so deleting the target releases the row (the owner survives).
     bookmark: {
       component: true,

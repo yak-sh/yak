@@ -1,7 +1,7 @@
 // Where a branch points, and how a manifest lands on it: the one step between
 // "here are some files" and "this repository has a new commit".
 //
-// A REF IS A ROW, one per repository and branch name ({@link refEid}), so
+// A ref is A row, one per repository and branch name ({@link refEid}), so
 // moving a branch updates the row that is already there rather than adding a
 // second row someone has to notice is stale. It is the one part of a
 // repository that belongs to exactly one repository — objects are named by the
@@ -9,16 +9,16 @@
 // graph and the object graph are two separate arguments here ({@link Repo})
 // and may be two separate stores.
 //
-// A LANDING HOLDS WHAT A COMMIT NEEDS AND NOTHING ELSE: the manifest, the two
-// signatures, the message. The PARENT is not among them — it is read from the
+// A landing holds what A commit needs and nothing else: the manifest, the two
+// signatures, the message. The parent is not among them — it is read from the
 // ref, so a commit written by whatever watches for releases and a commit
 // written later by a repair pass are built the same way and land on the same
 // chain.
 //
-// WRITING A COMMIT IS REPEATABLE, which is what makes a repair pass cheap:
+// Writing A commit is repeatable, which is what makes a repair pass cheap:
 // every id is a digest of the bytes, and the bytes are the manifest and the
 // timestamps the caller hands over, so landing the same release twice produces
-// the same objects. What it must not do twice is APPEND — hence `beside`,
+// the same objects. What it must not do twice is append — hence `beside`,
 // where the caller writes the rows it has already checked are not there.
 
 import type { Blobs } from '@yaks/blob'
@@ -55,7 +55,7 @@ let id = (v: unknown): string =>
  *
  * `refs` and `objects` may be the same graph — nothing here needs them
  * separate — but they are two arguments because a server that decides read
- * ACCESS per repository keeps its branches where that decision is made, and
+ * access per repository keeps its branches where that decision is made, and
  * its objects, which are global, in a store of their own.
  */
 export type Repo = {
@@ -82,7 +82,7 @@ export type Landing = {
   /** the commit message */
   message: string
   /**
-   * Rows the caller wants recorded ABOUT this commit, written in the same
+   * Rows the caller wants recorded about this commit, written in the same
    * transaction as the moved ref. This package writes no row joining a commit
    * to whatever it was built from: those rows belong to whoever builds it.
    */

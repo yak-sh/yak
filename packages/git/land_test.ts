@@ -1,6 +1,6 @@
 // Landing against disposable git repositories, with no graph and no server
 // anywhere: land reads every coordinate from git alone. A base that has not
-// moved fast-forwards; a base that moved makes land rebase and RETURN without
+// moved fast-forwards; a base that moved makes land rebase and return without
 // merging, so a second land fast-forwards cleanly. No gate runs. No remote is
 // needed except the two publish cases, which wire a real bare upstream.
 //
@@ -74,7 +74,7 @@ let setup = async (): Promise<Repo> => {
 
 // A rival lands on `main` first — exactly what land does from another worktree:
 // its own branch, fast-forwarded into the shared checkout. This is how the base
-// MOVES out from under a pending lander.
+// moves out from under a pending lander.
 let rivalLands = async (r: Repo, file: string, body: string) => {
   let rival = `${r.root}/rival`
   await command(r.repo, 'worktree', 'add', '-b', 'rival', rival, 'main')
@@ -93,7 +93,7 @@ let mainCommits = async (r: Repo, file: string, body: string, msg: string) => {
 }
 
 // A bare remote wired as `main`'s real upstream — a genuine push establishes
-// both the tracking config `@{u}` reads AND the remote-tracking ref, which a
+// both the tracking config `@{u}` reads and the remote-tracking ref, which a
 // config-only stub cannot fake. `reachable: false` then breaks the remote's URL
 // (tracking survives; connecting to it does not), the shape the refusal wants.
 let withUpstream = async (r: Repo, reachable = true) => {
@@ -145,7 +145,7 @@ slow(
   async () => {
     let r = await setup()
     try {
-      // The tool acts on the checkout its CALL stands in — `ctx.cwd`, which a
+      // The tool acts on the checkout its call stands in — `ctx.cwd`, which a
       // command line fills with where the person typed.
       let ctx = { args: {}, cwd: r.tree } as unknown as ToolCtx
       await rivalLands(r, 'rival.txt', 'rival\n')
@@ -207,7 +207,7 @@ slow(
       let out: string[] = []
       let first = await land({ cwd: r.tree, write: (t) => out.push(t) })
       assert('diverged' in first && !first.conflict, JSON.stringify(first))
-      // The base is UNTOUCHED — land did not merge.
+      // The base is untouched — land did not merge.
       assertEquals(await command(r.repo, 'rev-parse', 'main'), moved)
       let text = out.join('\n')
       assert(text.includes('moved'), text)
@@ -277,7 +277,7 @@ slow(
         Error,
         'git merge failed',
       )
-      // The base is untouched, the local edit preserved, and NO rebase
+      // The base is untouched, the local edit preserved, and no rebase
       // happened.
       assertEquals(await command(r.repo, 'rev-parse', 'main'), before)
       assertEquals(
@@ -541,7 +541,7 @@ slow('land refuses a rebase that rewound a file past the base', async () => {
     let said = (e as Error).message
     assert(said.includes('base.txt'), said)
     assert(said.includes('--allow-revert=base.txt'), said)
-    // Refused BEFORE the merge: the base still holds the rival's content.
+    // Refused before the merge: the base still holds the rival's content.
     assertEquals(await command(r.repo, 'show', 'main:base.txt'), 'rival')
   } finally {
     Deno.removeSync(r.root, { recursive: true })
@@ -583,7 +583,7 @@ slow('a clean rebase still lands', async () => {
   }
 })
 
-// main grew a gadget after this branch forked, and the branch DELETES it. The
+// main grew a gadget after this branch forked, and the branch deletes it. The
 // file lands at the content it held before the gadget — a blob the base moved
 // past — but the branch's diff adds not one line, and a hunk that only takes
 // lines away reintroduces nothing. Deleting is the whole point of some
@@ -607,7 +607,7 @@ slow('a pure deletion of content main added still lands', async () => {
   }
 })
 
-// The other side of that coin: main REMOVED a line after the branch forked,
+// The other side of that coin: main removed a line after the branch forked,
 // and a stale rebase's resolution puts it back. Those are added lines matching
 // content the base deleted — the revert the guard exists for.
 slow('a rebase that re-adds a line main removed is still refused', async () => {

@@ -13,13 +13,13 @@
 // `GET /page/<eid>` returns the archive. The bytes are content-addressed and
 // `GET /blob/<sha>` (@yaks/blob) already serves them, but nothing there knows
 // they are a document or where they came from, so this endpoint answers by the
-// PAGE: the restrictive headers, the media type, and the two headers that let a
+// page: the restrictive headers, the media type, and the two headers that let a
 // reader date a snapshot without querying the graph (RFC 7089 —
 // `Memento-Datetime` is the moment these bytes were what the page said, and the
 // `rel="original"` link is the address they were read from).
 //
 // The restrictive headers come from @yaks/blob's `served()`: a sandbox CSP with
-// no scripts, plus nosniff. They are defence in DEPTH — ./scrub.ts already
+// no scripts, plus nosniff. They are defence in depth — ./scrub.ts already
 // removed every external reference before these bytes were stored, and it had
 // to, because an archive mailed, copied or opened from a file has no header in
 // front of it.
@@ -94,7 +94,7 @@ export let routes = (
         ...(title && !comp(page, DOC) ? { [DOC]: { [TITLE]: title } } : {}),
       }
       try {
-        // `frozen_at` and `bytes` are server-owned columns: this handler IS the
+        // `frozen_at` and `bytes` are server-owned columns: this handler is the
         // server, and a client could otherwise claim an archive that does not
         // exist.
         return Response.json(
@@ -121,7 +121,7 @@ export let routes = (
       let bytes = await blobs.get(String(web.bytes))
       if (!bytes) return gone()
       let out = served(bytes, { mime: 'text/html; charset=utf-8' })
-      // Not immutable: this URL names the PAGE, and a page archived again is
+      // Not immutable: this URL names the page, and a page archived again is
       // new bytes at the same URL. The immutable one is `/blob/<sha>`.
       out.headers.set('cache-control', 'no-cache')
       let at = new Date(String(web.frozen_at ?? ''))

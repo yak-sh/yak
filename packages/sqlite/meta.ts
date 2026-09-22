@@ -1,9 +1,9 @@
-// The store's own key/value: the few facts a store keeps ABOUT itself rather
+// The store's own key/value: the few facts a store keeps about itself rather
 // than about the entities in it — the sync epoch a returning client checks its
 // cursor against, a sweep's high-water mark, the marker recording that a
 // one-shot repair has already run.
 //
-// It sits BESIDE the graph on purpose. A row here has no entity id and no
+// It sits beside the graph on purpose. A row here has no entity id and no
 // component, so nothing that walks the vocabulary can carry it: not a read, not
 // a bundle, not a client cache. An application that needs a durable scalar and
 // does not want clients to read it writes it here instead of inventing a
@@ -44,14 +44,14 @@ export let meta = (driver: Driver): Meta => ({
 export let EPOCH = 'epoch'
 
 /**
- * The store's lineage identity: a string minted ONCE and persisted, so it
+ * The store's lineage identity: a string minted once and persisted, so it
  * survives a restart, a deploy and a handover — a returning client whose cursor
  * carries this epoch may resume where it left off, and a client holding another
  * store's epoch (or none) must start over, because rows from a different
  * lineage can never be replayed against it.
  *
  * `install()` mints it, and this is idempotent (`insert or ignore`): a store
- * that already has one keeps it and reads it back. It WRITES, so a read-only
+ * that already has one keeps it and reads it back. It writes, so a read-only
  * path calls `meta(driver).get(EPOCH)` instead and treats an absent one as a
  * store no cursor can be trusted against.
  */

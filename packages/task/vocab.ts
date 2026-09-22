@@ -20,6 +20,6 @@ export let docs: VocabDoc[] = [taskDoc]
 
 /** A task's status, computed from the default ladder of marks rather than
  * stored. A graph that adds a rung — a held lease reading `wip` — declares it
- * in the plugin that OWNS the rung (@yaks/session), whose own `vocab` module is
+ * in the plugin that owns the rung (@yaks/session), whose own `vocab` module is
  * imported after this one. */
 export let derived = (): Derived => ladder(MARKS)

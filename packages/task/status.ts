@@ -1,4 +1,4 @@
-// The computed status, written ONCE and read by both evaluators.
+// The computed status, written once and read by both evaluators.
 //
 // `task.status` is declared `computed: true` — there is no column holding it.
 // Its value is the first mark the task carries (./words.ts), and that one list
@@ -16,7 +16,7 @@
 // The SQL is a `case` over `exists` per mark, in ladder order, and it opens
 // with a null guard: an entity that is not a task reads NULL, not `open`, so
 // `.status=open` cannot match a comment. That mirrors how a stored column reads
-// through a LEFT join, which is what every other column in the query does.
+// through a left join, which is what every other column in the query does.
 //
 // The in-memory side behaves the same way: a bundle without a `task` component
 // reads null. Its shape — a map from `comp.prop` to a function of the bundle —

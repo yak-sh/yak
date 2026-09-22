@@ -1,7 +1,7 @@
 // The small interface @yaks/sqlite needs from a SQLite connection, and nothing
 // more. Naming just these two methods keeps the adapter explicit about what it
 // touches and lets it sit over any driver: an embedded in-process SQLite, a
-// pooled server handle, a remote HTTP-backed database. A driver is DATA-LAST
+// pooled server handle, a remote HTTP-backed database. A driver is data-last
 // config passed to `storage()` — the adapter never constructs one.
 //
 // The interface is deliberately synchronous: SQLite is a synchronous engine,
@@ -32,13 +32,13 @@ export type Driver = {
    * omit this and the store opens a SAVEPOINT with plain SQL; a Cloudflare
    * Durable Object rejects `savepoint` as a statement and provides
    * `transactionSync` instead, which is what this method is for. It must nest,
-   * and it is SYNCHRONOUS: a body that returns a promise commits when the body
+   * and it is synchronous: a body that returns a promise commits when the body
    * returns, not when the promise settles.
    */
   tx?: <R>(body: () => R) => R
   /**
-   * This driver owns a whole SQLite FILE, which other processes may have open
-   * at the same time. The outermost unit then takes the write lock UP FRONT
+   * This driver owns a whole SQLite file, which other processes may have open
+   * at the same time. The outermost unit then takes the write lock up front
    * (`begin immediate`) instead of letting a deferred transaction try to
    * upgrade: a transaction that read first and writes second cannot upgrade
    * once another connection has committed, and SQLite reports that as a
@@ -55,7 +55,7 @@ export type Driver = {
    * SQLite under a Durable Object — is built with SQLITE_MAX_COMPOUND_SELECT =
    * 5 and rejects a sixth term with `too many terms in compound SELECT`, where
    * an embedded SQLite carries the stock 500. The adapter cuts its
-   * vocabulary-wide probes to this, and the DEFAULT is workerd's (@yaks/sql
+   * vocabulary-wide probes to this, and the default is workerd's (@yaks/sql
    * `ARMS`), so a driver that omits it runs more statements rather than one the
    * engine rejects. A driver over an embedded SQLite sets @yaks/sql `STOCK` and
    * gets its whole vocabulary in one probe.
@@ -64,7 +64,7 @@ export type Driver = {
 }
 
 /**
- * Run a parameterized statement for EFFECT over either driver shape: `run`
+ * Run a parameterized statement for effect over either driver shape: `run`
  * where the driver has one, otherwise `query` with the rows thrown away.
  * `exec` cannot serve here — it takes no parameters, and a value always rides
  * as a bind.

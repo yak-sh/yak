@@ -3,10 +3,10 @@ import type { Driver } from './driver.ts'
 let quote = (name: string) => `"${name.replaceAll('"', '""')}"`
 
 /**
- * Component TABLES actually in the file, irrespective of the loaded vocabulary.
+ * Component tables actually in the file, irrespective of the loaded vocabulary.
  * Virtual/FTS shadow tables and infrastructure are not component tables. A
  * component table has an integer entity primary key. Tombstone and archetype
- * ARE component tables (the latter's own archetype is the one-element fixed
+ * are component tables (the latter's own archetype is the one-element fixed
  * point).
  */
 export function componentTables(driver: Driver): string[] {

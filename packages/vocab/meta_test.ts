@@ -1,6 +1,6 @@
 // The meta-schema, used the way a document author uses it: ajv over
 // metaSchema, one $defs entry at a time. What is checked here is the
-// DISCRIMINATOR — an entry is a component, a tool, or neither, and the shape
+// discriminator — an entry is a component, a tool, or neither, and the shape
 // it must have follows from which it said.
 
 import { assert, assertEquals } from '@std/assert'

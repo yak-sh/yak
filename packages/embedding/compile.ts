@@ -4,9 +4,9 @@
 // A query mixes a neighbourhood with ordinary filters — `.near=cake-01
 // .price<20` — and @yaks/query parses `.near` as a directive that @yaks/sql
 // refuses on its own, because the vectors are here and not there. This module
-// is the @yaks/sql EXTENSION that answers it, registered through
+// is the @yaks/sql extension that answers it, registered through
 // `compile(ast, vocab, { extend: [semantic(db, embedder)] })`. It takes the
-// embedder only for the vector space its model NAMES, which is all a query
+// embedder only for the vector space its model names, which is all a query
 // needs of one.
 //
 // It compiles in three steps. The anchor's stored vector is read; the ranking
@@ -17,9 +17,9 @@
 // needs no bound parameter (the IR's ORDER BY carries none) and why the rest of
 // the query still pages normally.
 //
-// NEAREST AMONG WHAT the rest of the query selects. The ranking is cut down to
+// Nearest among what the rest of the query selects. The ranking is cut down to
 // `limit`, so cutting it before the other clauses filter would answer with the
-// memories among the eight nearest entities of ANY kind — almost always none.
+// memories among the eight nearest entities of any kind — almost always none.
 // @yaks/sql hands each extension the query's `Screen` (a statement selecting
 // the eids the rest of the query admits) when it begins, and the scan reads
 // only those vectors: filter, then rank, then cut.
@@ -74,7 +74,7 @@ export type Semantic = Extension & {
 /**
  * A semantic query extension over a database's stored vectors.
  *
- * What it needs is the vector SPACE, not the embedder: a `.near` anchor reads
+ * What it needs is the vector space, not the embedder: a `.near` anchor reads
  * the vector already stored for it and never calls the network, because
  * compiling a query is synchronous. Embedding text that has no entity yet is
  * the sweep's job — which is why a server whose embedder is still waiting for a
@@ -133,9 +133,9 @@ export let semantic = (
         )
       }
       // An empty neighbourhood selects no rows, so there is nothing to put in
-      // order — and a CASE with no arms is not a statement.
+      // order — and a case with no arms is not a statement.
       if (!held.length) return 'null'
-      // The neighbours are already in order, so their POSITION is the sort key.
+      // The neighbours are already in order, so their position is the sort key.
       // Integer ids are the one value an ORDER BY can carry here, and they were
       // assigned by the store rather than typed by anyone.
       let arms = held.map((n, i) => `when ${n.owner} then ${i}`).join(' ')

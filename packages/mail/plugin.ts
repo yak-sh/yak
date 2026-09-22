@@ -22,7 +22,7 @@ export type Mailbox = {
   /** your own mail domain — the addresses this graph canonicalizes on write */
   domain?: string
   /** register `created(mail)` on this registry, so letters actually go. The
-   * registry needs a WRITE FUNCTION — `effects(vocab, { write })`, applied
+   * registry needs a write function — `effects(vocab, { write })`, applied
    * trusted — since that is how the outcome is written back onto the
    * letter. */
   effects?: Effects
@@ -65,14 +65,14 @@ let clean = (fix: (a: string) => string) => (b: Bundle): Bundle => {
  * })
  * ```
  *
- * {@link https://jsr.io/@yaks/doc | @yaks/doc} is composed BESIDE this plugin
+ * {@link https://jsr.io/@yaks/doc | @yaks/doc} is composed beside this plugin
  * rather than inside it: a letter's subject and body are `doc{title, body}`, and
  * a vocabulary rejects a component declared twice — so `doc` keeps one home and
  * an application that already declares it is not fought over it.
  *
  * Pass `effects` and a `sender` together and outbound letters are sent
  * automatically; pass neither and this is the vocabulary and the canonicalizer,
- * which is all a graph that only RECEIVES mail needs.
+ * which is all a graph that only receives mail needs.
  */
 export let mailbox = (
   { domain, effects, sender, now, local }: Mailbox = {},

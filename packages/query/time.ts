@@ -1,4 +1,4 @@
-// Time phrases people write, resolved to numbers. A phrase names a RANGE; a
+// Time phrases people write, resolved to numbers. A phrase names a range; a
 // caller that wants a single moment takes the relevant edge of it
 // (`timeInstant`). This is the schema-independent half of time in a query:
 // recognizing the literal forms (today, 1 hour ago, in 60m, 9am, an ISO
@@ -10,7 +10,7 @@
 // clock in their own local zone, so the phrase stays authored (`today` must
 // advance tomorrow) and `now` rides in as a parameter tests can fix.
 
-// `forward` marks a phrase that BEGINS at now and names its end (`in 5m`) —
+// `forward` marks a phrase that begins at now and names its end (`in 5m`) —
 // the kind `timeInstant` reads the end of. It records how the phrase was
 // written, not anything about the numbers.
 export type Span = { start: number; end: number; forward?: boolean }

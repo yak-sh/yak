@@ -2,9 +2,9 @@
 //
 // A blob's id is the hash of its bytes, an edge's is derived from the two
 // entities and the relation, a key's from the pair it holds — three packages,
-// three derivations, one idea: where an entity IS its content, two writers
+// three derivations, one idea: where an entity is its content, two writers
 // that write the same thing must end up with one entity rather than two. This
-// file makes that idea DECLARATIVE, so an ordinary component gets it without a
+// file makes that idea declarative, so an ordinary component gets it without a
 // package of its own — @yaks/vocab's `identity` keyword
 // (`{slug: {identity: true}}`), read here:
 //
@@ -16,7 +16,7 @@
 // instead of a race somebody has to remember to guard against. Nobody has to
 // have stored an eid, and nobody has to invent a meaningful `$alias`.
 //
-// IT USES THE SAME DERIVATION PATH the plugins use — `Derive` and the mint
+// It uses the same derivation path the plugins use — `Derive` and the mint
 // phase's `resolve` (alias.ts) — not a second one beside it. The only new part
 // is where the derivation comes from: the vocabulary, rather than a plugin
 // that owns the component. A plugin's own `derive` still takes precedence,
@@ -25,7 +25,7 @@
 //
 // The other half is the refusal. A derived id is only meaningful while the id
 // and the value agree, so a bundle that writes an identity value onto some
-// OTHER id is refused rather than quietly written: renaming creates a new
+// other id is refused rather than quietly written: renaming creates a new
 // entity, it never patches a column.
 
 import type { Vocab } from '@yaks/vocab'
@@ -41,7 +41,7 @@ import { sha256 } from './sha256.ts'
  * version) and the variant bits set, so it passes every uuid validator and can
  * never collide with a randomly generated one.
  *
- * This is THE derivation for everything content-addressed: @yaks/edge hashes
+ * This is the derivation for everything content-addressed: @yaks/edge hashes
  * `"<from>|<relation>|<to>"`, @yaks/key `"<kind>|<value>"`, and a declared
  * identity `"<component>|<value>"`. An id computed two different ways would be
  * two different ids, so they all compute it here.
@@ -141,7 +141,7 @@ export let identified = (bundles: Bundle[], vocab: Vocab): Bundle[] => {
   for (let b of bundles) {
     for (let [name, cols, values] of stating(b, vocab)) {
       if (!values) {
-        // Only for an entity this change CREATED: an id the caller supplied
+        // Only for an entity this change created: an id the caller supplied
         // names an existing entity being patched, and a patch may write
         // whatever it likes.
         if (!b.$alias) continue

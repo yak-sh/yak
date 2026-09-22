@@ -1,6 +1,6 @@
 // Bytes that are not text: a picture, a PDF, anything a column would only get
 // in the way of. They are stored the same way a body column is — under the
-// SHA-256 of the bytes themselves — so an artifact has ONE identity wherever it
+// SHA-256 of the bytes themselves — so an artifact has one identity wherever it
 // came from, and a row that names it names that exact object.
 //
 // The address is computed here rather than taken on trust, and the store is
@@ -41,7 +41,7 @@ export let addressOf = async (bytes: Uint8Array): Promise<string> => {
 }
 
 /** Put bytes under their address, once, and verify the store kept them. Writing
- * the same pair twice is a no-op — the second copy IS the first one — and a
+ * the same pair twice is a no-op — the second copy is the first one — and a
  * store that hands back anything else has not kept this object, which throws
  * here rather than returning corrupt bytes later. */
 export let keep = async (

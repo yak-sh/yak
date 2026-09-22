@@ -43,7 +43,7 @@ let doc: VocabDoc = {
         author: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },
-    // A review exists ABOUT a book — deleting the book takes its reviews too.
+    // A review exists about a book — deleting the book takes its reviews too.
     review: {
       component: true,
       type: 'object',
@@ -74,7 +74,7 @@ let doc: VocabDoc = {
   },
 }
 
-// The shop's own components, plus the components a CALL is written with: this
+// The shop's own components, plus the components a call is written with: this
 // server writes `call{to, args}` into the graph and waits for the result, so
 // the graph's vocabulary has to declare those too (@yaks/tools `toolsDoc`).
 /** The bookshop vocabulary the package's tests read and write against. */
@@ -102,7 +102,7 @@ export let comp = (b: Bundle, name: string): Record<string, unknown> => {
   return c && typeof c == 'object' ? { ...c } : {}
 }
 
-/** The BUNDLES a tool returned — what is nested under `result` in the reply's
+/** The bundles a tool returned — what is nested under `result` in the reply's
  * `structuredContent`. */
 export let result = (out: { structuredContent?: unknown }): unknown => {
   let said = out.structuredContent

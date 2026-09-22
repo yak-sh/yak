@@ -15,11 +15,11 @@ import { runs } from './runs.ts'
 let reads = { file: () => '', stdin: () => '' }
 
 Deno.test('the facet subpaths say the harness once, and one declaration reaches both doors', async () => {
-  // Every facet a host takes (@yaks/cli `compose`) is a SUBPATH of the package
+  // Every facet a host takes (@yaks/cli `compose`) is a subpath of the package
   // — no manifest, no registration, no activation step — so a subsystem
   // imports only the one it needs.
   assertEquals(docs.some((d) => d.title == 'harness'), true)
-  // Every declaration the harness SPEAKS, wearing its run — the checks the
+  // Every declaration the harness speaks, wearing its run — the checks the
   // packages it composes bring included, since a word it lists has to work.
   const declarations = loadTools(docs, runs({ vocab }))
   const h = open(':memory:')
@@ -38,7 +38,7 @@ Deno.test('the facet subpaths say the harness once, and one declaration reaches 
     ],
   )
   await h.g.apply([{ entity: { eid: 'session-one' }, session: { id: 'one' } }])
-  // Nothing calls a tool function: a word typed here is a CALL in the graph,
+  // Nothing calls a tool function: a word typed here is a call in the graph,
   // and @yaks/tools' runner is what answers it.
   const r = runner(h.g, { tools: declarations })
   await r.ensure()

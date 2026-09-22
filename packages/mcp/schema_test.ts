@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-// The WRITE door's schema, as a client receives it. A tool's ANSWER has no
+// The write door's schema, as a client receives it. A tool's answer has no
 // schema any more — it is bundles, and what a bundle is the vocabulary
 // already says — so what is published is the one schema a client writes
 // against, and it is the vocabulary: every component, every writable column
@@ -9,7 +9,7 @@ import { assertEquals } from '@std/assert'
 import { z } from 'zod'
 import { connect } from './harness.ts'
 
-// graph_apply's published INPUT schema — the write door as a client reads it.
+// graph_apply's published input schema — the write door as a client reads it.
 let writing = async () => {
   let client = await connect()
   let { tools } = await client.listTools()
@@ -58,7 +58,7 @@ Deno.test('graph_apply takes the vocabulary, typed and described', async () => {
   assertEquals(at(items, 'entity', 'required'), ['eid'])
 })
 
-// A host whose door TAKES a column differently than the vocabulary declares
+// A host whose door takes a column differently than the vocabulary declares
 // says so once, and the write schema is derived through it — yaks.app takes an
 // id for a reference (agent.ts `reading`).
 Deno.test('a host spells its own reading of a column on the write door', async () => {
@@ -104,7 +104,7 @@ Deno.test('the write door names its own words, and stays open to newer ones', as
   // never typed: a client that read a bundle and sent it back is not punished
   // for the stamps riding along, and nothing invites it to write one.
   assertEquals(at(comp('created'), 'properties'), { at: {}, by: {} })
-  // And each component is OPEN (T-34277): a client caches this schema with the
+  // And each component is open (T-34277): a client caches this schema with the
   // tool list it came in and the vocabulary grows under it, so a closed one
   // would have that stale copy refuse a column that now exists. The schema
   // describes; the server decides, and says which columns are declared.

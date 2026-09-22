@@ -71,7 +71,7 @@ Deno.test('heal leaves a true index alone and rebuilds a drifted one', () => {
   )
 })
 
-// A column whose stored value is an ADDRESS, not its own words (@yaks/blob's
+// A column whose stored value is an address, not its own words (@yaks/blob's
 // `store: "blob"`). The index has to hold the prose, or a search finds a book
 // by its title alone.
 

@@ -50,7 +50,7 @@ Deno.test('no embedder named is no space to rank in, and no extension', () => {
 })
 
 Deno.test('a key that has not arrived still names the space it will fill', async () => {
-  // Waiting for a key is the SWEEP's problem: what a query needs is the model
+  // Waiting for a key is the sweep's problem: what a query needs is the model
   // name, and the config says that whether or not the environment has a token.
   let db = await stocked()
   let [near] = extend({ sql: db }, {

@@ -7,10 +7,10 @@
 // here reads that declaration off a loaded vocabulary; nothing is hardcoded, so
 // adding a kind is one component declaration, not an edit here.
 //
-// A kind has two names, and they may differ. The TAG is the component a key
-// entity carries; the NAME is what a query uses. Declaring `key: true` makes
+// A kind has two names, and they may differ. The tag is the component a key
+// entity carries; the name is what a query uses. Declaring `key: true` makes
 // them the same, which is the common case; declaring a string names the kind
-// separately. The key's id is derived from the TAG, so the two maps below are
+// separately. The key's id is derived from the tag, so the two maps below are
 // not interchangeable.
 
 import type { Vocab } from '@yaks/vocab'
@@ -20,7 +20,7 @@ import type { Vocab } from '@yaks/vocab'
 export let KEY = 'key'
 
 /**
- * Every kind the vocabulary declares, as NAME → tag component:
+ * Every kind the vocabulary declares, as name → tag component:
  * `{ alias: 'alias', mailbox: 'email' }`. It reads the `key` keyword, so the
  * vocabulary must have been loaded with `keyKeywords` registered — an
  * unregistered keyword is invisible to the loader.
@@ -36,8 +36,8 @@ export let kinds = (v: Vocab): Record<string, string> => {
 }
 
 /**
- * The same declarations the other way round, as tag component → NAME. This is
- * what reads a key BACK: a bundle carrying `email` holds a `mailbox` value.
+ * The same declarations the other way round, as tag component → name. This is
+ * what reads a key back: a bundle carrying `email` holds a `mailbox` value.
  */
 export let names = (v: Vocab): Record<string, string> => {
   let out: Record<string, string> = {}

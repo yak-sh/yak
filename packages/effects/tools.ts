@@ -1,12 +1,12 @@
 // The tool an agent can call here: the module exported as
 // `@yaks/effects/tools`, holding the implementation behind the `effect_check`
-// declaration in ./vocab.json. One tool, and it is a CHECK — a tool whose verb
+// declaration in ./vocab.json. One tool, and it is a check — a tool whose verb
 // is `check`, which is all a "doctor" command is (@yaks/tools ./check.ts).
 //
 // The ledger is written for exactly this. ./durable.ts retries a run that did
 // not complete, backing off between attempts, and when its last attempt is
-// spent marks the row `failed` with the error beside it and LEAVES IT FOR A
-// HUMAN. Nothing in that sequence tells the human. This does.
+// spent marks the row `failed` with the error beside it and leaves it for A
+// human. Nothing in that sequence tells the human. This does.
 //
 // The other half is a row that never got that far: `pending` is written before
 // the handler runs and marked after, so a row that has been waiting since long
@@ -29,7 +29,7 @@ import { EFFECT } from './durable.ts'
 
 /** What configuration this package's check accepts. */
 export type Options = {
-  /** how long a run may sit pending PAST ITS DUE INSTANT before that means
+  /** how long a run may sit pending past its due instant before that means
    * nothing is dispatching, in minutes (default 10) */
   minutes?: number
   /** how many of the failed runs to name (default 5) */
@@ -68,7 +68,7 @@ export let runs = (
     let failed = await ctx.read(and(eq(`${EFFECT}.state`, 'failed')))
     let stuck = (await ctx.read(and(eq(`${EFFECT}.state`, 'pending'))))
       .filter((b) => {
-        // Since WHEN it has been waiting: a failure that reported is owed its
+        // Since when it has been waiting: a failure that reported is owed its
         // next run at `next`, not at the instant the run was first written
         // down — a backoff is not a symptom.
         let row = comp(b)

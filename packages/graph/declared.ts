@@ -1,22 +1,22 @@
-// Running the DECLARED rules. A rule is a query (./join.ts parses one into a
+// Running the declared rules. A rule is a query (./join.ts parses one into a
 // plan); a storage adapter evaluates that query against the graph with the
 // pending change folded in (its `bindings` method, over an overlay of the
-// change); and this file is the other half — what a matched row WRITES, and
+// change); and this file is the other half — what a matched row writes, and
 // how the whole set of rules reaches a fixpoint.
 //
 // What a rule emits is deliberately small. Each of its patterns writes exactly
 // what its `+` and `*` clauses declared: a `+comp` or `+!comp` component
 // arrives as an empty component, and `+result.call=$call` fills a column with
-// whatever the variable was bound to. A pattern that only writes CREATES its
-// entity, and that entity's id is DERIVED from the rule's name and the
+// whatever the variable was bound to. A pattern that only writes creates its
+// entity, and that entity's id is derived from the rule's name and the
 // entities it matched (./identity.ts `derivedEid`) — so the same rule on the
 // same match always produces the same entity, in this change or a later one,
 // and a rule cannot create a second copy of what it already created.
 //
-// THE FIXPOINT, and why it terminates quickly. What a rule produces joins the
+// The fixpoint, and why it terminates quickly. What a rule produces joins the
 // change, the overlay is rebuilt, and every rule is evaluated again — so a rule
 // can fire on what another rule just wrote. It terminates because a rule fires
-// AT MOST ONCE per `(rule name, the entities it matched)`: a second firing with
+// at most once per `(rule name, the entities it matched)`: a second firing with
 // the same key is not slow convergence, it is a rule that failed to exclude
 // what it had already written, and it throws, naming the rule and the match,
 // rather than being looped over. That refusal is the whole termination
@@ -35,7 +35,7 @@ import type { Value } from '@yaks/query'
 import type { Column, Vocab } from '@yaks/vocab'
 
 /**
- * A rule as DECLARED: a name, the query it matches, and the rules it runs
+ * A rule as declared: a name, the query it matches, and the rules it runs
  * before. The name is not decoration — it is half of the key a rule may fire
  * only once per, and what a refusal names.
  */
@@ -56,7 +56,7 @@ export let ready = (rules: Declared[]): Ready[] =>
 
 // The order rules run in: alphabetical by name, then adjusted by `before` —
 // the same ordering a vocabulary uses for its kinds, so nothing depends on
-// which plugin was registered first. `before` names the rules that come AFTER
+// which plugin was registered first. `before` names the rules that come after
 // this one, so it is read as those rules depending on this one, and each rule
 // is emitted once every rule it depends on has been.
 let ordered = (rules: Declared[]): Declared[] => {
@@ -155,7 +155,7 @@ export let emitted = (
         made,
         resource,
       )
-      // A resource that converts to NOTHING writes nothing —
+      // A resource that converts to nothing writes nothing —
       // `+created.by=#Actor` on a change nobody signed leaves the column alone
       // rather than clearing it, so a rule needs no conditional around the
       // column it wanted to write.
@@ -222,7 +222,7 @@ export let settle = (
 }
 
 /**
- * A TEMPLATE, invoked: the template's query merged with its arguments as a
+ * A template, invoked: the template's query merged with its arguments as a
  * bindings query (./join.ts `filled`), matched against the graph once, and the
  * bundles it emits — for the caller to apply as an ordinary change.
  *

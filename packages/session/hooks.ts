@@ -3,14 +3,14 @@
 //
 // A harness (Claude Code, and anything else with the same shape) runs a
 // command at the edges of a session and hands it the event as JSON on stdin.
-// That is all a graph needs to be told: the START of a session is where a
+// That is all a graph needs to be told: the start of a session is where a
 // transcript becomes an entity and reads back what it was in the middle of,
-// and the END is where it records what it did and releases what it held. So
+// and the end is where it records what it did and releases what it held. So
 // each entry here is two `yak` subcommands and a `-`, which is the conventional
 // command-line argument for "read this value from stdin" — the tool parses the
 // payload, and nothing in between has to know the harness's own JSON format.
 //
-// NOTHING HERE MAY FAIL LOUDLY. A hook that exits non-zero is a session that
+// Nothing here may fail loudly. A hook that exits non-zero is a session that
 // will not start, so every entry ends `|| true`: a graph that is not there
 // means no context today, never a wedged harness.
 //
@@ -20,7 +20,7 @@
 // server-side module and the right side of that boundary for a settings file.
 //
 // The merge is the careful part. A settings file is the person's, with their
-// own entries in it, so an install REPLACES what an earlier install wrote and
+// own entries in it, so an install replaces what an earlier install wrote and
 // leaves everything else exactly where it was — identified by the commands,
 // which is the only durable marker a JSON file carries.
 
@@ -45,7 +45,7 @@ let cmd = (command: string, timeout?: number): Hook => ({
  * The entries this package owns, keyed by the harness event each responds to.
  *
  * `yak` is the path to the command on this machine — a full path where it is
- * not on the harness's PATH.
+ * not on the harness's path.
  */
 export let lifecycle = (yak = 'yak'): Record<string, Hook[]> => ({
   SessionStart: [cmd(`${yak} session context --hook - || true`)],

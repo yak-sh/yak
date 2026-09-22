@@ -19,7 +19,7 @@
 //                 the columns it covers. A unique one is the constraint a race
 //                 is decided by; the vocabulary is where it is declared.
 //   doc_value     a view over the `doc` component (when the vocabulary declares
-//                 one): its columns read as TEXT, plus a `rowid` alias. It is
+//                 one): its columns read as text, plus a `rowid` alias. It is
 //                 what @yaks/sql reads a `doc` row through.
 //   server_meta   the store's own key/value, beside the graph: what the store
 //                 knows about itself (its epoch, a sweep's mark), never about
@@ -29,7 +29,7 @@
 // its columns (that is what PATCH means), so a column requires a value only
 // where the vocabulary declares one — a `required` column is NOT NULL, and the
 // row that omits it is rejected by the engine unless a `default` fills it. An
-// `enum` becomes a CHECK, so a value outside the set is rejected where it is
+// `enum` becomes a check, so a value outside the set is rejected where it is
 // written. A reference carries a foreign key so a dangling id is rejected by
 // the engine, except a `keep` reference, which outlives the row it points at
 // and stays key-free.
@@ -97,7 +97,7 @@ let defaultSql = (c: Column): string | undefined => {
     : String(v)
 }
 
-// A closed set's CHECK. Every value the vocabulary admits on the way in is
+// A closed set's check. Every value the vocabulary admits on the way in is
 // admitted here too (an alias is an accepted input value), so the engine never
 // rejects what the loader accepted.
 let checkSql = (c: Column): string | undefined =>
@@ -125,7 +125,7 @@ let colDdl = (c: Column): string => {
   return parts.filter(Boolean).join(' ')
 }
 
-// The same column ADDED to a standing table. SQLite refuses `add column` a
+// The same column added to a standing table. SQLite refuses `add column` a
 // NOT NULL without a constant default and any default that is an expression,
 // so a grown column keeps its literal default and its CHECK, arrives NOT NULL
 // only when a literal fills the rows already there, and takes the clock only
@@ -144,7 +144,7 @@ let grownDdl = (c: Column): string => {
   return parts.filter(Boolean).join(' ')
 }
 
-// Which of a component's declared columns are STORED: everything the vocabulary
+// Which of a component's declared columns are stored: everything the vocabulary
 // lists except the computed ones (a computed column is read through a supplied
 // expression, never off a row).
 let stored = (v: Vocab, comp: string): Column[] =>
@@ -175,7 +175,7 @@ let tableDdl = (
 // One declared index, named `<comp>_<cols>` — derived from what it covers, so
 // the name is the same in every store that loads the vocabulary and a second
 // install finds its own index already there. `if not exists` is what makes a
-// re-install a no-op; a UNIQUE one is the constraint a race is decided by (the
+// re-install a no-op; a unique one is the constraint a race is decided by (the
 // loser's insert is rejected, and it re-reads to find the winner).
 // A partial one covers only the rows that hold its `present` columns: the
 // rows without them are as many as they like, the rows with them are one.
@@ -195,12 +195,12 @@ export type Text = Record<string, (stored: string) => string>
 let docDdl = (v: Vocab, text: Text): string[] => {
   if (!v.all.includes('doc')) return []
   // How one `doc` column reads as text, given SQL naming its stored value.
-  // Absent a resolution the value IS the text, which is every ordinary column.
+  // Absent a resolution the value is the text, which is every ordinary column.
   let read = (prop: string, s: string) => text[`doc.${prop}`]?.(s) ?? s
   let cols = stored(v, 'doc').map((c) => c.prop)
   // The view names its columns rather than selecting `*`, because `*` cannot
   // replace one with the expression that resolves it. `*` did have one virtue —
-  // it followed a table that gained columns — so the view is DROPPED and
+  // it followed a table that gained columns — so the view is dropped and
   // recreated rather than left in place: it holds no rows, so recreating it
   // costs nothing, and a view that lags its table is a read that fails at the
   // engine.
@@ -252,7 +252,7 @@ export let indexed = (vocab: Vocab): string[] => [
     .flatMap((name) => vocab.indexes(name).map((i) => indexDdl(name, i))),
 ]
 
-// The reference columns a component's table carries a foreign key FOR: the
+// The reference columns a component's table carries a foreign key for: the
 // stored references the vocabulary declares as constrained (a `keep` reference
 // outlives its target's tombstone, so it never is), plus the owner column
 // every component table is keyed by.
@@ -265,14 +265,14 @@ let bound = (v: Vocab, comp: string): Set<string> =>
   ])
 
 /**
- * What `grown()` cannot fix either: a reference whose declared DEATH behavior
+ * What `grown()` cannot fix either: a reference whose declared death behavior
  * changed after its table was created. That declaration is what decides whether
  * a column is constrained, so changing it changes the table's foreign keys —
  * and SQLite has no `alter table drop constraint`. The table is rebuilt
  * instead: a fresh one beside it, the rows copied across the columns both have,
  * the old one dropped and the new one renamed into its place.
  *
- * Only a table whose keys DISAGREE with the vocabulary is touched, so this is
+ * Only a table whose keys disagree with the vocabulary is touched, so this is
  * a no-op on every boot but the one after the vocabulary changed. It must run
  * before `indexed()`, which recreates the indexes the drop took with it.
  */
@@ -286,7 +286,7 @@ export let refit = (driver: Driver, vocab: Vocab): string[] =>
     if (want.size == has.size && [...want].every((c) => has.has(c))) return []
     let held = driver.query(`pragma table_info(${q(comp)})`, [])
     if (!held.length) return []
-    // Every column the table HAS comes across, not every column the vocabulary
+    // Every column the table has comes across, not every column the vocabulary
     // declares: a column the vocabulary has since dropped is still a column
     // this table's rows were written under, and a constraint change is no
     // reason to remove one. Its declaration is copied off the existing table,
@@ -317,7 +317,7 @@ export let refit = (driver: Driver, vocab: Vocab): string[] =>
     ]
   })
 
-// What `schema()` alone cannot do: add the columns a component GAINED after
+// What `schema()` alone cannot do: add the columns a component gained after
 // its table was already created. `create table if not exists` does nothing to a
 // table that exists, so a vocabulary that gained a column leaves the table at
 // the shape it was first created with, and every read naming the new column
@@ -350,8 +350,8 @@ export let grown = (driver: Driver, vocab: Vocab): string[] => [
 ]
 
 /**
- * How many rows of each index ANALYZE samples. Bounded, because the numbers the
- * planner needs are ORDERS OF MAGNITUDE — `call` holds fifty thousand rows and
+ * How many rows of each index analyze samples. Bounded, because the numbers the
+ * planner needs are orders of magnitude — `call` holds fifty thousand rows and
  * `entity` a million — and a sample of four hundred says that as well as a
  * whole scan does. On a 1 GB graph the bounded pass costs ~110 ms where the
  * unbounded one costs 5.4 s.
@@ -376,7 +376,7 @@ export let SAMPLE = 400
  * connection has already read — at install it has read none — and an older
  * SQLite that does not know that bit ignores it.
  *
- * Only for a driver over a FILE: an engine that hands out storage rather than a
+ * Only for a driver over a file: an engine that hands out storage rather than a
  * database (a Durable Object's SQLite) refuses the pragma, and a scratch
  * in-memory store is gone before a plan could be worth improving.
  */

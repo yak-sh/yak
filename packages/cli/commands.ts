@@ -1,4 +1,4 @@
-// The apps' own commands, on this command line. An app declares COMMANDS
+// The apps' own commands, on this command line. An app declares commands
 // rather than tools (workers/yak `tools.ts`, T-34541) — the tool list is the
 // same for everybody and must never change per user, so two fixed tools carry
 // all of them: `commands` lists what an app has and `command` runs one. That
@@ -14,7 +14,7 @@
 // is not known until something asks — and asking on every command line is the
 // round trip this client exists to avoid.
 //
-// The arguments belong to the APP, not to this program, so they are
+// The arguments belong to the app, not to this program, so they are
 // `key=value` words rather than `--name value` options. That is also what
 // keeps `--app`, `--json` and `--host` unambiguous beside them: anything
 // before an `=` belongs to somebody else's vocabulary.
@@ -45,7 +45,7 @@ let ABOUT =
   `where it parses as JSON, so serves=4 is a number and tags='["cake"]' is a ` +
   `list; @path is read from that file and - from stdin.`
 
-// The arguments belong to the APP, not to this program, so they arrive as the
+// The arguments belong to the app, not to this program, so they arrive as the
 // `rest` of the command line — `key=value` words rather than `--name value`
 // options. That is also what keeps `--app`, `--json` and `--host` unambiguous
 // beside them: anything before an `=` belongs to somebody else's

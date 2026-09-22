@@ -3,7 +3,7 @@
 //
 // The CLI calls `tools/list` once and caches the result (store.ts), because
 // listing on every command would double the round trips this program exists to
-// make cheap. That leaves one question, which the ROSTER answers (@yaks/mcp
+// make cheap. That leaves one question, which the roster answers (@yaks/mcp
 // `roster.ts`, T-34277): is the list I am holding still current? Two signals
 // answer it and both arrive for free — a tool result carrying the server's
 // roster notice, and an `about` result naming a version this cache is not

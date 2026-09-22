@@ -2,14 +2,14 @@
 // asked for, each one once, and the bytes of each — the other half of a
 // packfile, which ./pack.ts writes without looking anything up.
 //
-// TWO WALKS AND A READ. Commits are followed along `parent` edges, trees along
+// Two walks and A read. Commits are followed along `parent` edges, trees along
 // `tree_entry` edges, and a commit's own tree is read from the first line of
 // its body (`treeOf`, ./commit.ts), because that is where a commit records it.
 // Blobs are whatever the tree entries reach that is not itself a tree. Each
 // object is listed once: the same tree under two commits, or one blob under
 // two names, is one entry in the packfile.
 //
-// A `have` IS SUBTRACTION, NOT NEGOTIATION. Everything the client reports it
+// A `have` is subtraction, not negotiation. Everything the client reports it
 // holds is walked first into the same seen set, so those objects are simply
 // absent from the answer. One round, no deltas, no shallow clones: a first
 // clone is the full reachable set, and a fetch after it is the difference
@@ -86,7 +86,7 @@ export let objects = (g: Reads, store: Blobs): Objects => {
   let read = async function* (oids: string[]): AsyncIterable<Obj> {
     for (let i = 0; i < oids.length; i += BITE) {
       let bite = oids.slice(i, i + BITE)
-      // `.blob?` is not decoration: a query returns the components it NAMES,
+      // `.blob?` is not decoration: a query returns the components it names,
       // and a graph reached over @yaks/api's read endpoint returns exactly
       // those — so a read that asked only for `.gitobj!` came back with rows
       // that did not include where the bytes were, and every object was
@@ -122,7 +122,7 @@ export let objects = (g: Reads, store: Blobs): Objects => {
       found.push(...front)
     }
 
-    // A commit's tree is in its body; a `want` that IS a tree is its own root.
+    // A commit's tree is in its body; a `want` that is a tree is its own root.
     let tops = roots.filter((o) => kind.get(o) == 'tree')
     for await (let o of read(found)) {
       let tree = treeOf(o.bytes)

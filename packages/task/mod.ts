@@ -14,7 +14,7 @@
  * - **Where does it stand?** No column holds the answer. A task with a
  *   `completed` component is done, one with `cancelled` is cancelled, and one
  *   with neither is open. `status` is computed from those components, so
- *   finishing something records WHEN and BY WHOM instead of overwriting a
+ *   finishing something records when and by whom instead of overwriting a
  *   value, and reopening it means removing a component rather than guessing
  *   what the status used to be.
  * - **How do you look at the list?** A `board{query}` is a saved filter. Its

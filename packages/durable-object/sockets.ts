@@ -1,13 +1,13 @@
-// The socket plumbing, and only the plumbing. What a subscription MEANS — a
+// The socket plumbing, and only the plumbing. What a subscription means — a
 // saved query whose results are sent again when a committed write changes them
 // — belongs to @yaks/api; this file carries frames between that registry and a
 // Durable Object's WebSockets, which no standard covers.
 //
-// The whole difficulty is HIBERNATION. A socket accepted with
+// The whole difficulty is hibernation. A socket accepted with
 // `ctx.acceptWebSocket` outlives the object: the runtime evicts the object
 // between two frames and rebuilds it on the next one, so every subscription
 // held in memory is gone while the client still believes it is watching. The
-// only thing that survives is the socket's ATTACHMENT, so that is where what a
+// only thing that survives is the socket's attachment, so that is where what a
 // socket subscribed to is written, and a woken object rebuilds the registry
 // from it (`wake`) before doing anything else. A client's first frame after a
 // hibernation is answered with its current results again — a resync, not
@@ -70,7 +70,7 @@ export type Sockets = {
 // Declared structurally (the global is looked up at call time) so this package
 // needs no Cloudflare dependency to compile.
 //
-// A plain Worker's upgrade — a pair accepted in THIS isolate, for @yaks/api's
+// A plain Worker's upgrade — a pair accepted in this isolate, for @yaks/api's
 // own `/ws` route — is @yaks/workerd' `workerUpgrade`. Here the socket is
 // handed to the runtime instead, which is what hibernation means.
 declare let WebSocketPair: { new (): { 0: unknown; 1: Wire } }
@@ -80,7 +80,7 @@ declare let WebSocketPair: { new (): { 0: unknown; 1: Wire } }
 // there, so the subscriptions live under one key and the rest is left alone.
 type Held = { subs?: Record<string, Ask>; relay?: string[] }
 let CAP = 2048
-// A `sync: peers` value is held in MEMORY, and this object's memory does not
+// A `sync: peers` value is held in memory, and this object's memory does not
 // survive hibernation. What survives is the attachment, so the KEYS go there:
 // a value lost to an eviction cannot be re-sent, but its clearing still can,
 // and a peer left watching a cursor that will never move again is the worse
@@ -149,7 +149,7 @@ let asked = (data: unknown): { id: string; ask?: Ask } | null => {
  * // webSocketClose(ws)             → live.close(ws)
  * ```
  *
- * Frames go straight to the socket; no DURABLE write crosses it (a batch is
+ * Frames go straight to the socket; no durable write crosses it (a batch is
  * applied with `POST /apply`, and the socket is how everyone hears about it).
  * The one exception is a `sync: peers` relay, which crosses here because its
  * lifetime is this socket's — see @yaks/api's `receive`.
@@ -158,7 +158,7 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
   let sinks = new Map<Wire, Sink>()
 
   // The sink for a socket, created once. A socket this object has not seen
-  // before may still be one it INHERITED, so its stored subscriptions are
+  // before may still be one it inherited, so its stored subscriptions are
   // re-opened here — the client is sent its current results, which is the
   // resync.
   let sink = (ws: Wire): Sink => {
@@ -166,7 +166,7 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
     if (to) return to
     let fresh: Sink = (frame) => ws.send(JSON.stringify(frame))
     sinks.set(ws, fresh)
-    // The relay keys FIRST: whatever else this socket did, the registry has to
+    // The relay keys first: whatever else this socket did, the registry has to
     // know what it is saying before a close can stop saying it.
     subs.relayed(fresh, relayOf(ws))
     for (let [id, ask] of Object.entries(asksOf(ws))) subs.open(fresh, id, ask)
@@ -182,7 +182,7 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
         )
       }
       let pair = new WebSocketPair()
-      // Accepted for HIBERNATION: the runtime holds this socket while the
+      // Accepted for hibernation: the runtime holds this socket while the
       // object is evicted and wakes the object with the next frame, so an idle
       // client costs nothing.
       ctx.acceptWebSocket(pair[1])

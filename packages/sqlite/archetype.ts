@@ -168,7 +168,7 @@ export function backfill(driver: Driver, number = false): Backfill {
         if (row.eid != sha256(a.tables.join('|'))) {
           throw new Error(`Invalid archetype identity: ${row.eid}`)
         }
-        // A legacy blob could have been added AFTER this descriptor was born.
+        // A legacy blob could have been added after this descriptor was born.
         // Renaming that shared spine would steal the blob's content address.
         // References to a mixed entity are ambiguous: refuse rather than guess
         // which ones belong to the descriptor. Ordinary descriptors only
@@ -212,7 +212,7 @@ export function backfill(driver: Driver, number = false): Backfill {
       )
     }
 
-    // Snapshot the incomplete owners BEFORE minting descriptors. New descriptors
+    // Snapshot the incomplete owners before minting descriptors. New descriptors
     // are classified directly below; they never need another whole-file pass.
     let owners = new Map<number, string[]>(
       run('select id from entity where archetype is null').map((
@@ -243,9 +243,9 @@ let WINDOW = 20_000
 
 /**
  * The audit half of `reclassify`, and it writes nothing. A row written past
- * the graph must NAME its owners; a writer that forgets leaves a pointer that
+ * the graph must name its owners; a writer that forgets leaves a pointer that
  * no longer describes its entity, and both the read path and the query planner
- * trust that pointer — nothing else notices. So this reads presence for EVERY
+ * trust that pointer — nothing else notices. So this reads presence for every
  * owner, by the same rule and the same component list classification uses, and
  * reports where the two disagree. Descriptors are their own fixed point and
  * are left out, exactly as `reclassify` leaves them out.

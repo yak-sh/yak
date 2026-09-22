@@ -6,7 +6,7 @@
 // column that had to be kept in sync is exactly what the old session component
 // was, and why its views disagreed.
 //
-// Settled means NOTHING IS OUTSTANDING. The newest entry covers most of it, but
+// Settled means nothing is outstanding. The newest entry covers most of it, but
 // not all: a model that returns prose before it calls a tool leaves an `output`
 // as the newest entry in the middle of its turn, and reading that alone ended a
 // run 14 minutes early (T-35230). So an open call — one the newest ask made
@@ -22,7 +22,7 @@
 //                   else pending (the daemon retries)
 //   nothing       → empty
 //
-// A turn lands as ONE batch — the ask, the prose, and the calls together — so
+// A turn lands as one batch — the ask, the prose, and the calls together — so
 // no reader ever sees the prose without the calls that came with it.
 //
 // Prose is `content{body}`; alone it is an input, and an `output{source}`

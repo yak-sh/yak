@@ -65,7 +65,7 @@ export let editHunks = (op: unknown): EditHunk[] => {
 export let isEditOp = (v: unknown): v is { $edit: unknown } =>
   v != null && typeof v == 'object' && !Array.isArray(v) && '$edit' in v
 
-// Is this column value ANY field operator — a plain object with a `$`-prefixed
+// Is this column value any field operator — a plain object with a `$`-prefixed
 // key? Every real column value is a scalar, so a `$`-keyed object must be an
 // operator: one `apply()` knows and resolves, or a typo `apply()` should
 // refuse with a clear message rather than hand to storage as a non-scalar.
@@ -74,11 +74,11 @@ export let isFieldOp = (v: unknown): v is Record<string, unknown> =>
   Object.keys(v as object).some((k) => k.startsWith('$'))
 
 /** What the calling program must supply for field edits. Its reads have to
- * stay stable through the commit: `normalize` runs BEFORE the core opens its
+ * stay stable through the commit: `normalize` runs before the core opens its
  * transaction, so a program backed by a database must wrap `graph.apply` in a
  * write transaction of its own. Values come back as plain text. */
 export type EditHost = {
-  /** A declared component's value as it is STORED, never a value written
+  /** A declared component's value as it is stored, never a value written
    * earlier in the same change. */
   component: (eid: string, name: string) => Record<string, unknown> | undefined
   /** Whether this is a declared, client-writable text column. */
@@ -94,7 +94,7 @@ export type EditHost = {
  * literal written earlier in the change feeds a later edit to the same column;
  * removing a component discards the pending values for that entity, so the
  * next edit reads the stored value again. Each edit adds a `$was` precondition
- * describing the STORED value; a precondition the caller supplied is never
+ * describing the stored value; a precondition the caller supplied is never
  * overwritten. */
 export let resolveEdits = (bundles: Bundle[], host: EditHost): Bundle[] => {
   let pending = new Map<string, unknown>()

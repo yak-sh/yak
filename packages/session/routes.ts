@@ -1,7 +1,7 @@
 // Who is calling, for a graph that has transcripts: the `authenticate` function
 // exported as `@yaks/session/routes`.
 //
-// A client names which RUN it speaks for, and this decides what that means.
+// A client names which run it speaks for, and this decides what that means.
 // The id arrives in the `x-via` request header — the fleet's own header name,
 // naming the instrument behind a write rather than a credential — and it is
 // resolved the way every other id a caller types is resolved (./who.ts): an

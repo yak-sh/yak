@@ -245,8 +245,8 @@ export let own: Command[] = [
   },
 ]
 
-// A tool the VOCABULARY declares (declared.ts) runs against a graph rather
-// than a command line, so a line typed here becomes a CALL in that graph and
+// A tool the vocabulary declares (declared.ts) runs against a graph rather
+// than a command line, so a line typed here becomes a call in that graph and
 // what answered it is printed. The word order and the arguments are @yaks/cli's
 // either way — nothing about a graph tool is spelled twice.
 let overGraph = (tool: typeof declared[number]): Command => ({

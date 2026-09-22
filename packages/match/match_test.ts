@@ -31,7 +31,7 @@ Deno.test('a scalar filter selects, and an absent column is a value', () => {
 Deno.test('a component is worn or it is not', () => {
   assertEquals(sel('.review!'), ['r1', 'r2', 'r3'])
   assertEquals(sel('.member!'), ['m1'])
-  // a TAG — no columns at all, so wearing it is the whole fact
+  // a tag — no columns at all, so wearing it is the whole fact
   assertEquals(sel('.signed!'), ['b4'])
   assertEquals(sel('.signed~='), ['b4'])
   assertFalse(sel('.signed=').includes('b4'))
@@ -112,7 +112,7 @@ Deno.test('a window with no order pages newest first', () => {
 
 Deno.test('a window pages WITHIN the order it was asked for', () => {
   assertEquals(sel('.kind=book&.order=price&.limit=2'), ['b3', 'b4'])
-  // the cursor names an entity, and paging continues from ITS place in the
+  // the cursor names an entity, and paging continues from its place in the
   // order — b4 is the second cheapest, so the next page is the two dearest
   assertEquals(sel('.kind=book&.order=price&.limit=2&.after=6'), ['b1', 'b2'])
   assertEquals(sel('.kind=book&.order=-price&.after=4'), ['b1', 'b4', 'b3'])

@@ -1,6 +1,6 @@
 // The vocabulary, described as plain data. `graph_schema` returns what this
-// file builds: the INDEX when the call named no component — every component,
-// its one-line description, its column names — and one component IN FULL when
+// file builds: the index when the call named no component — every component,
+// its one-line description, its column names — and one component in full when
 // it named one: what each column is, the description the vocabulary gives it,
 // which columns are server-owned or unique or stored as bytes, what references
 // it and what it references, and an example bundle that writes it.
@@ -12,7 +12,7 @@
 // for in full to learn one component. It is the index, small enough to read,
 // and then the component asked for.
 //
-// Everything here is DERIVED: nothing is written down twice. A description is
+// Everything here is derived: nothing is written down twice. A description is
 // the one the vocab.json carries, and a column that has none is returned
 // without one rather than with a sentence invented here.
 
@@ -143,7 +143,7 @@ export let detail = (vocab: Vocab, name: string, guide?: Guide): Word => {
       ...(col.ref ? { ref: col.ref } : {}),
       ...(notesOf(vocab, col).length ? { notes: notesOf(vocab, col) } : {}),
     })),
-    // A kind sorts BEFORE the components it is usually stored with: an entity
+    // A kind sorts before the components it is usually stored with: an entity
     // carrying both `mail` and `doc` displays as mail, which is the same fact
     // as saying a letter is a `mail` that also has a `doc`.
     ...(info.kind && info.before.length ? { worn_with: info.before } : {}),
@@ -168,7 +168,7 @@ export let index = (vocab: Vocab): Said => ({
   kinds: vocab.kinds,
 })
 
-/** What an entity of one KIND is made of: the component that names the kind,
+/** What an entity of one kind is made of: the component that names the kind,
  * in full, and a line each for the components it is usually stored with — a
  * letter is a `mail` that also has a `doc`, which is the same fact as `mail`
  * sorting before `doc`. */

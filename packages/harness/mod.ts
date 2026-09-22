@@ -27,7 +27,7 @@
  * ```
  *
  * Everything it does is bundles in and queries out — the transcript IS
- * entities, the work IS `task` entities, what it ran IS `process` entities —
+ * entities, the work is `task` entities, what it ran is `process` entities —
  * so the same rows move into the fleet's graph the day the harness is pointed
  * at it, with no export step and no second model of anything.
  *

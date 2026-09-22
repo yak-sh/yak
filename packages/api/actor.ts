@@ -2,7 +2,7 @@
 // whose name is on it — so the request handler is the only place that can
 // know. Every array of bundles that arrives here has its `$actor` component
 // discarded and replaced by the identity the application's `authenticate`
-// returned for THIS request. A client that sends `$actor: { by: 'someone
+// returned for this request. A client that sends `$actor: { by: 'someone
 // else' }` is not refused; it is simply overwritten, because there is nothing
 // to argue about: the graph stamps what reached it, and what reaches it is
 // what this handler decided.
@@ -24,7 +24,7 @@ import type { Actor } from '@yaks/graph'
  * server itself. An application that knows only the identity returns only
  * `by`.
  *
- * It runs on EVERY request the handler answers — a read, a write and a
+ * It runs on every request the handler answers — a read, a write and a
  * WebSocket upgrade alike — so an application that restricts reads restricts
  * them here.
  *

@@ -67,7 +67,7 @@ export let printed = (
 }
 
 // One tool the server listed, as a subcommand this program runs: its published
-// input schema IS the command-line grammar, and running the subcommand makes
+// input schema is the command-line grammar, and running the subcommand makes
 // the call. The tool's two words and its argument layout come along where it
 // declared them (tool.ts `spelling`), so `yak task new 'ship it'` is typed the
 // way the tool declared, and a server that declares neither still lists the

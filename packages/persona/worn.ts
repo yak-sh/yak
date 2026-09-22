@@ -3,7 +3,7 @@
 // far ends, in the order they were authored in. {@link voice} renders what
 // this function collects, and neither knows how the other does its job.
 //
-// TWO RELATIONS, BORROWED RATHER THAN INVENTED. `contains` is @yaks/task's and
+// Two relations, borrowed rather than invented. `contains` is @yaks/task's and
 // `reads` is @yaks/kernel's, and both already mean what is needed here: this
 // persona contains that document, this persona reads that one. A relation the
 // composed vocabulary does not declare contributes nothing rather than
@@ -15,8 +15,8 @@
 // returns the far ends, and a far end no longer carries the edge's `ord`) —
 // the one column the authored order depends on.
 //
-// AN INCLUDED PERSONA IS FOLDED IN: its instruction text is included like any
-// other document, and the documents IT links to are added to the ones this
+// An included persona is folded in: its instruction text is included like any
+// other document, and the documents it links to are added to the ones this
 // persona links to, which is how a base persona reaches every persona built on
 // top of it without anybody copying its text. A persona reached by `reads` is
 // only listed: the edge records where it is, not that its text belongs here.
@@ -126,7 +126,7 @@ export let wear = (
                     seen.add(id)
                     carries.set(id, b)
                     // An included persona's text is included like any other
-                    // document; the documents IT links to are read on the
+                    // document; the documents it links to are read on the
                     // next level.
                     if (b[PERSONA]) {
                       next.push(id)

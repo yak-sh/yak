@@ -125,7 +125,7 @@ Deno.test('the overlay costs the batch, never the database', () => {
   }
   // One id lookup, one committed-row read for the one component a patch
   // folds into, and the read itself. Three, whatever is already in the file:
-  // the CTE NAMES the committed table for every row the batch never touched,
+  // the CTE names the committed table for every row the batch never touched,
   // so nothing is copied and nothing is counted.
   assertEquals(cost(0), 3)
   assertEquals(cost(2000), 3)

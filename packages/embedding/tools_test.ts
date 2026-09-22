@@ -10,7 +10,7 @@ import { clean } from './mark.ts'
 import { type Options, runs } from './tools.ts'
 
 // The offline embedder stands in for a host whose config is complete: what
-// these cases are about is the MARK, not what is missing.
+// these cases are about is the mark, not what is missing.
 let checkup = async (
   sql: Driver,
   options: Options = {},

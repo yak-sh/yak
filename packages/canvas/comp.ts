@@ -11,18 +11,18 @@
 //   fold{client, board}        the sections one window has collapsed
 //   shelf{client}              what one window is holding, off the wall
 //
-// A card is an ENTITY, not a private view model, which is what lets anything
+// A card is an entity, not a private view model, which is what lets anything
 // else read the interface and change it — a second window, a script, an agent.
 //
-// DELETION. `card.target` is `death: cascade`: a note about a thing that no
+// Deletion. `card.target` is `death: cascade`: a note about a thing that no
 // longer exists is not a note, so the card is deleted with what it shows, and
 // its `pin` (which cascades on the canvas) is deleted with the canvas. Nothing
 // sweeps for orphans, because none are left behind.
 //
-// SYNC. Every component declares where its data goes, through @yaks/vocab's
+// Sync. Every component declares where its data goes, through @yaks/vocab's
 // `sync` keyword. The per-window ones — `camera`, `cursor`, `fold`, `shelf`,
 // and the `client` they belong to — are the interesting decision: they describe
-// ONE window, so `sync: none` looks right, and it is wrong. They declare
+// one window, so `sync: none` looks right, and it is wrong. They declare
 // `server` because something else has to read and write them: a second tab
 // restoring the viewport it left, a directory of who is looking at what, a tool
 // that moves somebody's open card by writing their `cursor`. State that never
@@ -32,7 +32,7 @@
 // (`bare: false`): `parent` is far too ordinary a name for this component to
 // own vocabulary-wide, so a query writes it in full — `.pane.parent=<id>`.
 //
-// No component here declares `before`. A `before` names ANOTHER kind, and
+// No component here declares `before`. A `before` names another kind, and
 // `kindOrder` rejects one that no loaded document declares — so a package that
 // ordered itself against a kind it does not ship could not load on its own. A
 // vocabulary that combines these components with its own content component
@@ -75,7 +75,7 @@ export let FOLD = 'fold'
 /** The component naming what one window holds off the canvas. */
 export let SHELF = 'shelf'
 
-/** The components that describe ONE window rather than the shared space. */
+/** The components that describe one window rather than the shared space. */
 export let PER_CLIENT: string[] = [CLIENT, CAMERA, CURSOR, FOLD, SHELF]
 
 /** A `card` component: one entity shown on a canvas. */
@@ -105,7 +105,7 @@ export type Pin = {
 }
 
 /** A `camera` component: where one window is looking at one canvas. `x`/`y`
- * are the CENTRE of the viewport in canvas units, `zoom` its scale, and
+ * are the centre of the viewport in canvas units, `zoom` its scale, and
  * `w`/`h` the size of the window in screen pixels. */
 export type Camera = {
   /** the window doing the looking */
@@ -138,7 +138,7 @@ export type Cursor = {
  * The canvas vocabulary, to load beside your own:
  * `loadVocab([canvasDoc, ...mine], [idKeywords, nameKeywords])`.
  *
- * It declares nothing about what a card SHOWS — `card.target` points at any
+ * It declares nothing about what a card shows — `card.target` points at any
  * entity in your own vocabulary — only where things sit and who is looking.
  */
 export let canvasDoc: VocabDoc = doc

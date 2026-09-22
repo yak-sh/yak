@@ -2,7 +2,7 @@
 // in-memory SQLite driver over jsr:@db/sqlite, a small made-up vocabulary, and
 // just enough table-building to search it. The domain is a bookshop: books with
 // a title and a blurb, reviews with prose of their own, and a price that is not
-// text at all — so the tests can prove that a vector is made of EVERY text
+// text at all — so the tests can prove that a vector is made of every text
 // property and no others.
 
 import { Database } from '@yaks/sqlite/db'

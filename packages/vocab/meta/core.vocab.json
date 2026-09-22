@@ -2,19 +2,19 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yaks.sh/vocab/core",
   "title": "yaks core keyword vocabulary",
-  "description": "The keywords the yaks meta-model adds to JSON Schema 2020-12 to describe a component vocabulary. Native JSON Schema still carries type, format, enum, const, default, description, examples, $ref/$defs; these keywords add what a component table needs on top. Native keywords reach the table too: `type: integer` stores with integer affinity, a component's `required` list is NOT NULL, `default` is the column default (`{\"now\": true}` for the clock), and `enum` is a CHECK. `examples` is native and subsumes the old `well` concept: a text field's completion draws from its examples union the column's own live distinct values.",
+  "description": "The keywords the yaks meta-model adds to JSON Schema 2020-12 to describe a component vocabulary. Native JSON Schema still carries type, format, enum, const, default, description, examples, $ref/$defs; these keywords add what a component table needs on top. Native keywords reach the table too: `type: integer` stores with integer affinity, a component's `required` list is NOT NULL, `default` is the column default (`{\"now\": true}` for the clock), and `enum` is a check. `examples` is native and subsumes the old `well` concept: a text field's completion draws from its examples union the column's own live distinct values.",
   "$comment": "A vocabulary declaration in the JSON Schema sense: a URI that names this keyword set, plus the schema of each keyword. A vocabulary document declares it under $vocabulary.",
   "$defs": {
     "component": {
-      "description": "true = this $defs entry declares a COMPONENT: an object schema whose properties are the component's columns. Required \u2014 an entry marked neither this nor `tool` is an ordinary reusable subschema, and the loader creates no table for it.",
+      "description": "true = this $defs entry declares a component: an object schema whose properties are the component's columns. Required \u2014 an entry marked neither this nor `tool` is an ordinary reusable subschema, and the loader creates no table for it.",
       "const": true
     },
     "tool": {
-      "description": "true = this $defs entry declares a TOOL: one named operation an agent can ask the graph to perform. The implementation is a function the module exports, looked up by the entry name (or noun_verb); the declaration is the part that is sent to clients.",
+      "description": "true = this $defs entry declares a tool: one named operation an agent can ask the graph to perform. The implementation is a function the module exports, looked up by the entry name (or noun_verb); the declaration is the part that is sent to clients.",
       "const": true
     },
     "rule": {
-      "description": "true = this $defs entry declares a RULE: a query the graph runs over every batch of changes, and nothing else. There is no implementation anywhere \u2014 the `match` query IS the rule, and the components its `+` patterns name are what it writes.",
+      "description": "true = this $defs entry declares a rule: a query the graph runs over every batch of changes, and nothing else. There is no implementation anywhere \u2014 the `match` query is the rule, and the components its `+` patterns name are what it writes.",
       "const": true
     },
     "match": {
@@ -47,7 +47,7 @@
       ]
     },
     "sync": {
-      "description": "Who is told about a write to this component. \"server\" (the default) sends it to the server, which owns it and fans it out to subscribers; \"none\" keeps it on the writing node; \"peers\" sends it to the server, which RELAYS it to subscribers without storing it.",
+      "description": "Who is told about a write to this component. \"server\" (the default) sends it to the server, which owns it and fans it out to subscribers; \"none\" keeps it on the writing node; \"peers\" sends it to the server, which relays it to subscribers without storing it.",
       "enum": [
         "none",
         "server",
@@ -78,7 +78,7 @@
       "type": "boolean"
     },
     "before": {
-      "description": "Kind names this kind sorts before. kindOrder is alphabetical, topologically refined by these constraints. On a RULE it names the rules this one runs before, so order among rules touching one entity is declared rather than registration-incidental.",
+      "description": "Kind names this kind sorts before. kindOrder is alphabetical, topologically refined by these constraints. On a rule it names the rules this one runs before, so order among rules touching one entity is declared rather than registration-incidental.",
       "type": "array",
       "items": {
         "type": "string"
@@ -102,7 +102,7 @@
       }
     },
     "unique": {
-      "description": "A uniqueness constraint, which is what decides a race between two writers. On a COLUMN, true = no two rows of the component may share the value. On a COMPONENT, the composite uniques as column lists: [[\"space\", \"slug\"]], or {\"cols\": [\"key\"], \"present\": [\"key\"]} for a unique over the rows that hold the key (a partial index).",
+      "description": "A uniqueness constraint, which is what decides a race between two writers. On a column, true = no two rows of the component may share the value. On a component, the composite uniques as column lists: [[\"space\", \"slug\"]], or {\"cols\": [\"key\"], \"present\": [\"key\"]} for a unique over the rows that hold the key (a partial index).",
       "anyOf": [
         {
           "type": "boolean"
@@ -119,7 +119,7 @@
       ]
     },
     "identity": {
-      "description": "What the entity's own id is DERIVED from. On a COLUMN, true = this component's entities are identified by this value: the eid is sha256(\"<component>|<value>\") formatted as a UUID, so writing the same value twice writes one entity and uniqueness is a property of the id rather than the outcome of a race. On a COMPONENT, the column list a composite identity spans, in derivation order: [\"space\", \"slug\"]. One tuple, never a list of them \u2014 an entity has one id.",
+      "description": "What the entity's own id is derived from. On a column, true = this component's entities are identified by this value: the eid is sha256(\"<component>|<value>\") formatted as a UUID, so writing the same value twice writes one entity and uniqueness is a property of the id rather than the outcome of a race. On a component, the column list a composite identity spans, in derivation order: [\"space\", \"slug\"]. One tuple, never a list of them \u2014 an entity has one id.",
       "anyOf": [
         {
           "type": "boolean"
@@ -133,7 +133,7 @@
       ]
     },
     "index": {
-      "description": "An index to read by, with no uniqueness constraint. On a COLUMN, true = index it. Stored references are always indexed: true is redundant and false does not opt out. On a COMPONENT, the composite indexes as column lists: [[\"app\", \"version\"]], or {\"cols\": [...], \"present\": [...]} for a partial index over the rows that hold those columns.",
+      "description": "An index to read by, with no uniqueness constraint. On a column, true = index it. Stored references are always indexed: true is redundant and false does not opt out. On a component, the composite indexes as column lists: [[\"app\", \"version\"]], or {\"cols\": [...], \"present\": [...]} for a partial index over the rows that hold those columns.",
       "anyOf": [
         {
           "type": "boolean"

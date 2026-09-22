@@ -370,7 +370,7 @@ Deno.test('a render can close its watch during an optimistic write without evict
   c.close()
 })
 
-// A frame that lands BEFORE validation is what an addressed boot paints from
+// A frame that lands before validation is what an addressed boot paints from
 // (the fleet seeds its entity, then validates): the disk floor still hydrates
 // behind it, and never over it.
 Deno.test('same epoch validation never overwrites an already newer RAM row', async () => {

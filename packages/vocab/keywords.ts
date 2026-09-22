@@ -1,10 +1,10 @@
 // The extension point. JSON Schema 2020-12 already has an extension mechanism —
-// a KEYWORD VOCABULARY: a URI naming a set of keywords, a document describing
+// a keyword vocabulary: a URI naming a set of keywords, a document describing
 // each keyword's schema, and a `$vocabulary` declaration in the files that use
 // them. This module lets a package outside @yaks/vocab add its own keywords
 // through that same mechanism.
 //
-// The core keyword set (meta.ts) describes what a component TABLE needs.
+// The core keyword set (meta.ts) describes what a component table needs.
 // Anything beyond that — an id prefix, a name column, a unit of measure — is
 // somebody else's concern, so it arrives as a `Keywords` registration:
 // `loadVocab(docs, [myKeywords])` makes the loader copy those keywords onto the
@@ -12,8 +12,8 @@
 // the published meta-schema so a vocabulary document using them still
 // validates.
 //
-// The loader COPIES an extension keyword through; it never interprets one. What
-// a keyword MEANS belongs to the package that declared it.
+// The loader copies an extension keyword through; it never interprets one. What
+// a keyword means belongs to the package that declared it.
 
 import type { JsonSchema } from './meta.ts'
 import { metaSchema } from './meta.ts'

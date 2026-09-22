@@ -1,5 +1,5 @@
 // SHA-256, in about sixty lines, because the precondition check has to be
-// SYNCHRONOUS. The platform's own digest (`crypto.subtle.digest`) returns a
+// synchronous. The platform's own digest (`crypto.subtle.digest`) returns a
 // promise, and hashing through it would make every guarded write async —
 // including one over an embedded database that is otherwise synchronous end to
 // end (see ./pipe.ts). A precondition hashes a handful of small strings per

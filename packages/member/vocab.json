@@ -51,7 +51,7 @@
         },
         "token": {
           "type": "string",
-          "description": "an unguessable secret standing in for a person: whoever opens the link acts AS this grant"
+          "description": "an unguessable secret standing in for a person: whoever opens the link acts as this grant"
         },
         "access": {
           "enum": [

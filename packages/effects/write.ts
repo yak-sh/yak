@@ -1,17 +1,17 @@
 // How an effect writes back, and what stops it looping.
 //
-// A handler that only READS is served by the detached transaction it already
-// holds. A handler that WRITES is a different matter: `tx.patch` puts rows
+// A handler that only reads is served by the detached transaction it already
+// holds. A handler that writes is a different matter: `tx.patch` puts rows
 // straight into storage, underneath the whole pipeline — no admission, no
 // stamped columns, no journal row, no subscriber notified, and no other effect
 // ever hearing about it. That is how the outcome of a letter became a row a
 // page only found on its next query, instead of an update it was pushed
-// (T-34044). So an effect's write is a NEW BATCH — a list of changes applied in
+// (T-34044). So an effect's write is a new batch — a list of changes applied in
 // one transaction — through the graph's own `apply()`, after the commit that
 // triggered the handler.
 //
-// That invites a loop, and the loop is stopped HERE rather than by a rule in
-// every handler. Each batch records how many effect-written GENERATIONS deep it
+// That invites a loop, and the loop is stopped here rather than by a rule in
+// every handler. Each batch records how many effect-written generations deep it
 // is, under `$effect`: a `$`-prefixed key, so it belongs to `apply()`'s
 // pipeline and is never a column — the same mechanism `$before` uses to carry a
 // reading from one phase to a later one. The registry triggers nothing for a
@@ -26,7 +26,7 @@ import type { Bundle } from '@yaks/graph'
  * `apply()`, post-commit, returning the batch as applied.
  *
  * The application supplies it ({@link Opts.write}), because only it knows which
- * graph and in whose name. It writes as the KERNEL — the server itself, not the
+ * graph and in whose name. It writes as the kernel — the server itself, not the
  * client whose batch triggered the effect — so it must be applied `trusted`: an
  * outcome an effect records (`delivered`, `bounced`) is a server-owned column,
  * and an untrusted apply would drop exactly the columns the effect exists to

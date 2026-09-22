@@ -5,7 +5,7 @@
  * A **host** here means whichever process opened the graph: a one-shot `yak`
  * command, or a long-running `yak serve`.
  *
- * THERE IS NO SERVER PROCESS TO START. A config file names a GRAPH, and
+ * There is no server process to start. A config file names a graph, and
  * {@link compose} is what opens it: a command line calls it to run one tool in
  * its own process (local.ts) and exits, and `yak serve` calls the same
  * function and then puts `/apply`, `/query`, `/ws`, `/mcp` and the plugins'
@@ -13,7 +13,7 @@
  * once, so serving HTTP is one more process rather than the process everything
  * else waits on.
  *
- * A host is not written; it is ASSEMBLED. This module reads a config naming
+ * A host is not written; it is assembled. This module reads a config naming
  * plugin packages and imports six modules from each, one per subpath: the
  * components and tools it declares (`@yaks/mail/vocab`), what a write means
  * (`/rules`), the functions behind the tools an agent may call (`/tools`),
@@ -33,7 +33,7 @@
  * // Deno.serve(host.handler)
  * ```
  *
- * A PLUGIN is a PACKAGE — no registry, no manifest, no activation step, and
+ * A plugin is a package — no registry, no manifest, no activation step, and
  * nothing to implement on its main entry point. Its `exports` map names the
  * subpaths it has, and each part of the system imports only the subpath it
  * needs, so a browser loading `@yaks/task/vocab` never reaches the SQL that
@@ -116,7 +116,7 @@ export type Host = {
   storage: Store
   sql: Driver
   graph: Graph
-  /** THIS PROCESS, as an entity (@yaks/process `started`): the row it wrote on
+  /** This PROCESS, as an entity (@yaks/process `started`): the row it wrote on
    * the way in, what everything it writes is attributed to, and what a
    * start-up effect compares against to tell its own creation from a child
    * process's. */
@@ -126,7 +126,7 @@ export type Host = {
    * instead of writing as nobody. At most one plugin may answer it; where it
    * names nobody, the answer is this host process itself ({@link writer}). */
   who: Authenticate
-  /** THIS HOST SHUTTING DOWN, as one fact: aborted by {@link Served.close}
+  /** This host shutting down, as one fact: aborted by {@link Served.close}
    * before the last transaction and before the database is closed. A plugin
    * that arms a timer — a settle, a retry, a poll — hangs it off this signal,
    * or its callback fires into a closed store and the process is held open by
@@ -161,7 +161,7 @@ export type VocabFacet = {
   derived?: (vocab: Vocab) => Derived
 }
 
-/** `<plugin>/rules` — what a write MEANS, and what a query may ask for.
+/** `<plugin>/rules` — what a write means, and what a query may ask for.
  * `rules` runs while the host is being assembled and may create tables of its
  * own through `host.sql`; `extend` contributes the clause compilers every read
  * path consults (@yaks/sql `Extension`), which is how a package holding an
@@ -176,11 +176,11 @@ export type RulesFacet = {
 /** `<plugin>/tools` — the functions behind its `tool: true` declarations,
  * keyed by tool name.
  *
- * A FACTORY, like every other plugin export, because a tool function needs the
+ * A factory, like every other plugin export, because a tool function needs the
  * same things the others do: a check over a package's own SQL table reaches it
  * through `host.sql` (@yaks/sqlite's storage scan, @yaks/embedding's vector
  * index), and a threshold or a relation name belongs in the config, not the
- * code. What a tool function is handed per CALL — the graph, the caller, the
+ * code. What a tool function is handed per call — the graph, the caller, the
  * arguments — still arrives on the tool context. */
 export type ToolsFacet = { runs?: (host: Host, options: Options) => Runs }
 
@@ -194,7 +194,7 @@ export type EffectsFacet = {
 /** `<plugin>/routes` — the HTTP routes it adds beside @yaks/api's own, and,
  * for at most one plugin per host, who is calling.
  *
- * `authenticate` is a FACTORY like every other plugin export, because naming a
+ * `authenticate` is a factory like every other plugin export, because naming a
  * caller is a read: @yaks/session resolves a request to the session it claims
  * to speak for, which it can only do through the host's own graph. It is
  * handed the host with nothing open on it yet — keep the reference, do not
@@ -211,11 +211,11 @@ export let SWEEP = '@yaks/effects'
 
 /** The longest the sweep sleeps between passes (ms). It already knows the
  * exact time everything it owns comes due; this cap only ensures a row written
- * by ANOTHER process is picked up without waiting for a write here. */
+ * by another process is picked up without waiting for a write here. */
 let CAP = 60_000
 
 /** One background job that exactly one process at a time runs: the lease name
- * to hold it under, and the work. `run` does at least ONE PASS and then keeps
+ * to hold it under, and the work. `run` does at least one pass and then keeps
  * going until the signal aborts — a loop on a timer, or a single pass followed
  * by a wait — so the lease stays this process's for as long as it is up. */
 export type Duty = {
@@ -224,13 +224,13 @@ export type Duty = {
   run: (signal: AbortSignal) => void | Promise<void>
 }
 
-/** `<plugin>/service` — the work this plugin KEEPS DOING while the host is up:
+/** `<plugin>/service` — the work this plugin keeps doing while the host is up:
  * a timer, a poll, a sweep. It is neither a request nor a post-commit
  * observation, which is why neither `routes` nor `effects` could hold it: a
  * scheduled wake coming due, and a mailbox that has to be polled, are things
  * nobody is calling about.
  *
- * It does at least ONE PASS and then keeps going until the signal aborts, so
+ * It does at least one pass and then keeps going until the signal aborts, so
  * one function serves a process of either shape: an HTTP server holds it open
  * for as long as it is up, and a one-shot command hands it a signal that has
  * already aborted and gets the single pass. Which process is doing it is
@@ -265,7 +265,7 @@ export type Load = <F extends FacetName>(
 
 // A subpath a package does not export is a module it does not have. Anything
 // else that goes wrong importing one — a syntax error, a missing dependency, a
-// throw at module scope — is that module FAILING, and is rethrown: a host that
+// throw at module scope — is that module failing, and is rethrown: a host that
 // quietly runs without its rules is worse than one that refuses to start.
 let unexported = (error: unknown, spec: string, facet: string): boolean =>
   error instanceof TypeError &&
@@ -303,13 +303,13 @@ export type Served = Host & {
    * and takes over when a killed holder's lease expires.
    *
    * Runs until `signal` aborts; left out, that signal is this host's own, so
-   * it stops with {@link Served.close}. Pass an ALREADY-ABORTED signal for one
+   * it stops with {@link Served.close}. Pass an already-aborted signal for one
    * pass each and no waiting, which is what a one-shot command does on its way
    * in. */
   duties: (signal?: AbortSignal) => Promise<void>
   /** close the graph: every lease this process holds released and its `exit`
    * stamped — with the code it is given, or with none where nobody knows how
-   * it ended. AWAIT IT when the process is about to end, or that last write
+   * it ended. Await it when the process is about to end, or that last write
    * races the exit and the row reads as still running forever. */
   close: (code?: number) => void | Promise<void>
 }
@@ -344,7 +344,7 @@ let said = (docs: VocabDoc[]): VocabDoc[] => {
     : docs
 }
 
-// The JSON Schema keywords that belong to the HOST rather than to any plugin:
+// The JSON Schema keywords that belong to the host rather than to any plugin:
 // which letter an entity's id carries (`prefix`, @yaks/id) and which column is
 // a name somebody may type (`by_name`, @yaks/names). Every package uses them
 // in its `$vocabulary`, none registers them — and an unregistered keyword is
@@ -363,7 +363,7 @@ let understood = (brought: Keywords[]): Keywords[] => {
 }
 
 /**
- * Who a host writes as when no request named a caller: THIS PROCESS, acting
+ * Who a host writes as when no request named a caller: this PROCESS, acting
  * for itself through itself.
  *
  * There is no configured actor name. A run of a program is not a singleton and
@@ -453,10 +453,10 @@ export let compose = async (
   let served = taken('routes')
   let running = taken('service')
 
-  // The components a tool call is recorded in belong to the HOST, not to
+  // The components a tool call is recorded in belong to the host, not to
   // whichever plugin happened to declare them: what was asked of this host is
   // its own record. A plugin that already declares them — a harness, whose
-  // transcripts ARE calls — keeps its own definitions, so only the components
+  // transcripts are calls — keeps its own definitions, so only the components
   // nobody supplied are added.
   let docs = said(vocabs.flatMap(([v]) => v.docs ?? []))
   let vocab = loadVocab(
@@ -483,7 +483,7 @@ export let compose = async (
       ...vocabs.map(([v]) => v.derived?.(vocab) ?? {}),
     )
     let store: Store | undefined
-    // SEARCH is a property of the DECLARATION: a column marked `search: true`
+    // Search is a property of the declaration: a column marked `search: true`
     // is indexed, whoever declared it, so wiring @yaks/fts here rather than in
     // a plugin is what takes the vocabulary at its word. Two things follow
     // from that one list of columns — a bare word in any query compiles to a
@@ -518,8 +518,8 @@ export let compose = async (
       },
     }
     authenticate = doorman(served, host, self)
-    // The clause compilers belong to the STORE, so they are gathered before it
-    // is built: what a query may ASK FOR is settled once, while the host is
+    // The clause compilers belong to the store, so they are gathered before it
+    // is built: what a query may ask for is settled once, while the host is
     // assembled, and every read path — `/query`, `/ws`, a tool, the command
     // line — goes through them. A factory is handed the host with nothing open
     // on it yet, the same promise `graph` makes: keep the reference, do not
@@ -535,7 +535,7 @@ export let compose = async (
     })
     store.install()
 
-    // The LEDGER, where this vocabulary declares the component for one: every
+    // The ledger, where this vocabulary declares the component for one: every
     // effect written down before it runs and marked after, so a crash between
     // the commit and the handler leaves a row the sweep finds, and a handler
     // that threw is retried on the terms its registration set. A graph with no
@@ -584,7 +584,7 @@ export let compose = async (
         return hits.map((h) => at.get(h.entity)).filter((b) => !!b)
       }
       : undefined
-    // THE GENERIC TOOLS BELONG TO THIS GRAPH, not to the HTTP layer.
+    // The generic tools belong to this graph, not to the HTTP layer.
     // `graph_apply` over this graph is one tool whether a person typed it or
     // an agent requested it, so it is assembled here beside the plugins' own
     // (@yaks/mcp `core`) and `/mcp` is told not to add a second copy. That is
@@ -599,9 +599,9 @@ export let compose = async (
         ) as Runs,
       ),
     ]
-    // The one tool RUNNER over this graph. A caller runs a tool and the runner
+    // The one tool runner over this graph. A caller runs a tool and the runner
     // records the request and the result as it goes; what this registration
-    // adds is the calls NOBODY here is waiting on — one written by another
+    // adds is the calls nobody here is waiting on — one written by another
     // process through `/apply`, or one whose scheduled wake has now fired.
     // Each rule is one post-commit effect registration, and a call this graph
     // has no tool for is left alone for whoever does have it. The `tool` rows
@@ -614,7 +614,7 @@ export let compose = async (
       // own interrupted calls and leaves alone another runner's, or those an
       // imported transcript recorded as already run.
       ...(self ? { owner: self.by } : {}),
-      // This process's working directory, for a tool that acts on the MACHINE
+      // This process's working directory, for a tool that acts on the machine
       // rather than the graph: `yak land` fast-forwards the checkout the
       // person typed in, because the tool runs in the same process that read
       // the command line (local.ts). A host answering HTTP reports its own
@@ -662,7 +662,7 @@ export let compose = async (
           // this re-runs work that may well have run already.
           await fx.relay(unfinished(host.graph))
           if (!log) return await until(signal)
-          // Then the LEDGER: what a crash left between a commit and its
+          // Then the ledger: what a crash left between a commit and its
           // handler, and every failure whose retry backoff has elapsed. One
           // pass, then a sleep until the soonest of them is due — so an
           // already-aborted signal gets one pass including the retries that
@@ -684,7 +684,7 @@ export let compose = async (
         run: (signal) => mod.service!(host, options, signal),
       })),
     ]
-    // THIS PROCESS, written in. Last in this function, because the creation of
+    // This PROCESS, written in. Last in this function, because the creation of
     // this row is what start-up work hangs off — a `created(process)` effect
     // comparing the entity against `host.me` is a plugin's one pass at start,
     // and the registrations above have to be in place before it fires. First
@@ -715,14 +715,14 @@ export let compose = async (
             ).catch((e) => console.error(`duty failed — ${d.name}`, e))
           ),
         ).then(() => {}),
-      // The LAST transaction, then the file: every lease this process holds
+      // The last transaction, then the file: every lease this process holds
       // released, and its ending stamped. One transaction, because they are
       // one fact — a process that is over is not doing any work, and the next
       // process to ask should not have to wait out a lease nobody is using.
-      // Last, because an ABSENT `exit` is what running means, so a process
+      // Last, because an absent `exit` is what running means, so a process
       // that closed without stamping one reads as still running forever.
       //
-      // FIRST of all, the abort: the background jobs stop and every timer a
+      // First of all, the abort: the background jobs stop and every timer a
       // plugin hung off {@link Host.stopping} is cancelled, so nothing is
       // still pending over a database that is about to be closed.
       close: (code?: number) => {
@@ -782,11 +782,11 @@ export let serve = async (
   let host = await compose(config)
   // Write the `tool` rows a call points at, then finish what a crash left
   // claimed and unanswered. Here rather than in `compose`, because this is the
-  // SERVER starting — a one-shot command assembles the same host and must not
+  // server starting — a one-shot command assembles the same host and must not
   // reach into calls another process is running.
   await host.runner.ensure()
   await reconcile(host.runner)
-  // And then the BACKGROUND JOBS: the effect sweep and the plugins' timers,
+  // And then the background jobs: the effect sweep and the plugins' timers,
   // each taken under its own lease and held for as long as this process is up
   // ({@link Served.duties}). It is the same call a one-shot command makes,
   // with a live signal instead of an aborted one — an HTTP server is not a

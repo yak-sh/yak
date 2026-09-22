@@ -3,10 +3,10 @@
 // back. workspace.ts creates `<root>/<child id>` per delegated session and
 // nothing ever removed them: 412 of them at 167M each filled the root disk
 // twice in one day (T-37640). A worktree can be removed when its session is
-// OVER and holds nothing — a clean working tree whose HEAD already exists on
+// over and holds nothing — a clean working tree whose HEAD already exists on
 // some other branch: the base it was created from, the parent's branch, main.
 // Its own branch never counts; that is what "unlanded" means. Anything dirty or
-// ahead of those branches is KEPT and listed in the result, so a leak has
+// ahead of those branches is kept and listed in the result, so a leak has
 // nowhere to hide but that list. Nothing here passes `--force`, so Git's own
 // refusal is a second guard behind ours.
 //
@@ -16,7 +16,7 @@
 // a turn that asked for nothing. `collecting()` connects every one of those
 // endings to the same test.
 //
-// A session that is over can still be RESUMED, and then it needs its work back.
+// A session that is over can still be resumed, and then it needs its work back.
 // So the row is brought up to date before the files are deleted — `discover`
 // records the commit the worktree is checked out at — and `restore()` creates
 // it again at that commit, on the same branch, at the same path. Nothing new
@@ -131,7 +131,7 @@ export let ENDED = ['settled', 'stopped', 'failed']
 
 /** A session that will not run anything again: its transcript has ended — a
  * `stop` entry, an exception, or a turn that asked for nothing — and where the
- * session IS a child process, that process has exited. A settled transcript
+ * session is a child process, that process has exited. A settled transcript
  * counts: it can be resumed, and resuming it creates its worktree again. */
 export let over = (b: Bundle): boolean =>
   ENDED.includes(String((b.session as Comp | undefined)?.status)) &&
@@ -239,7 +239,7 @@ export let restore = async (g: Graph, tree: Bundle): Promise<string> => {
 
 /** The worktrees these sessions are still using — never swept. Both halves are
  * needed: the path covers a child whose worktree is being created right now and
- * has no `home` row yet, and the row covers a descendant that INHERITED an
+ * has no `home` row yet, and the row covers a descendant that inherited an
  * ancestor's home and so lives under a path that is not named after it. */
 export let homes = async (
   g: Graph,
@@ -262,7 +262,7 @@ export let homes = async (
 /** Remove every worktree under the root directory, returning the ones kept and
  * why. A missing root directory is an empty sweep, not an error.
  *
- * A sweep is about what an earlier run LEFT behind, so a directory that
+ * A sweep is about what an earlier run left behind, so a directory that
  * appeared after the sweep began is never its business: that is a session still
  * starting, and its new worktree looks clean and merged exactly as an
  * abandoned one does. */

@@ -1,10 +1,10 @@
 // Which SQLite library the FFI driver opens, set before the driver loads.
 //
-// @db/sqlite reaches a NATIVE library through FFI, and when nothing names one
+// @db/sqlite reaches a native library through FFI, and when nothing names one
 // it downloads a prebuilt. On Linux x86_64 that prebuilt kills the process the
 // moment it initializes: `sqlite3_initialize` calls through a null pointer
 // inside `sqlite3MallocInit` under Deno 2.9 — a SIGSEGV with an empty stderr,
-// before a line of ours runs. Every platform's SYSTEM library is fine, so name
+// before a line of ours runs. Every platform's system library is fine, so name
 // that instead.
 //
 // This is its own module because ES evaluation runs a module's dependencies

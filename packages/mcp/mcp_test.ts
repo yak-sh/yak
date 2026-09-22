@@ -146,7 +146,7 @@ Deno.test('a checked batch says what would land and keeps none of it', async () 
   })
   assertEquals(out.isError, undefined)
   // A rehearsal cannot answer bundles — the runner lands what a tool answers
-  // — so it answers what WOULD have landed, in words.
+  // — so it answers what would have landed, in words.
   let said = JSON.parse(
     String(comp(bundles(result(out))[0], 'content').body),
   ) as Bundle[]
@@ -193,7 +193,7 @@ Deno.test('the server signs the batch, never the client', async () => {
   await called(client, 'graph_apply', {
     change: [{ ...spring, $actor: { by: 'villain' } }],
   })
-  // What LANDED is what this is about: the call was written as the door's
+  // What landed is what this is about: the call was written as the door's
   // actor, and the runner signed the tool's bundles with the same name.
   assertEquals(comp((await graph.read('.price=12'))[0], 'created').by, 'm1')
 })
@@ -256,7 +256,7 @@ Deno.test('graph_show answers only bundles, including what points at the entity'
   await client.close()
 })
 
-// The backlinks are asked as `.refs=`, which is ONE term per reference column,
+// The backlinks are asked as `.refs=`, which is one term per reference column,
 // and workerd's SQLite takes five terms in a compound (@yaks/sql `ARMS`). So
 // the shape that broke — backrefs on, over a compiled store whose vocabulary
 // references more than five ways — is held here, through the tool.
@@ -335,7 +335,7 @@ Deno.test('graph_schema hands over the words of this graph', async () => {
 
 Deno.test('a refusal is the tool error the agent reads, not a broken call', async () => {
   let client = await connect()
-  // The write door's schema IS the vocabulary (T-34153), so a bundle with no
+  // The write door's schema is the vocabulary (T-34153), so a bundle with no
   // identity and a value of the wrong type are each refused where they were
   // typed — with the path that names them.
   let said = async (change: unknown) => {
@@ -345,7 +345,7 @@ Deno.test('a refusal is the tool error the agent reads, not a broken call', asyn
     return String(out.content[0].text)
   }
   assert((await said([{ book: {} }])).includes('"entity"'))
-  // A column nobody declared is the SERVER's refusal, not the schema's: the
+  // A column nobody declared is the server's refusal, not the schema's: the
   // schema is open so a client's cached copy cannot refuse a word this graph
   // has since learned. It names the columns that do exist, and where to read
   // them (T-34277).
@@ -428,7 +428,7 @@ Deno.test('a tool whose answer is words says them as content, and its bundles be
   await client.close()
 })
 
-// The ROSTER (T-34277): a client lists the tools once and holds that list, so
+// The roster (T-34277): a client lists the tools once and holds that list, so
 // a tool a release added is one it will never call and one that went is one it
 // calls into a refusal. The version names the list, the host remembers which
 // one a session connected under, and every result carries the diff.
@@ -518,7 +518,7 @@ Deno.test('every tool says how a client signs in for it', async () => {
   )
   await plain.close()
 
-  // A door that needs signing in says so on EVERY tool it lists — the generic
+  // A door that needs signing in says so on every tool it lists — the generic
   // tier included, which no host writes out — and a tool that declares its own
   // schemes keeps them, which is how one mixed-auth surface offers an open
   // tool beside closed ones.
@@ -562,7 +562,7 @@ Deno.test('every tool says how a client signs in for it', async () => {
     scopes: ['shop'],
   }])
   assertEquals(said.get('about')?.securitySchemes, [{ type: 'noauth' }])
-  // The schemes JOIN what the tool already said; they never replace it.
+  // The schemes join what the tool already said; they never replace it.
   assertEquals(said.get('shelve')?.ui, { resourceUri: 'ui://shelf' })
   assertEquals(said.get('shelve')?.securitySchemes, [{
     type: 'oauth2',

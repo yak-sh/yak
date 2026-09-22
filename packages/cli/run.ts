@@ -5,10 +5,10 @@
 //
 // A command is a @yaks/graph `Tool` declaration and nothing else. There is no
 // registration format between a tool and the command line that runs it: a
-// program that wants more subcommands passes more commands, and the FIRST to
-// claim a name wins, so the order of the list IS the precedence.
+// program that wants more subcommands passes more commands, and the first to
+// claim a name wins, so the order of the list is the precedence.
 //
-// WHERE A COMMAND RUNS is {@link aimed}: the graph a config FILE names, opened
+// Where a command runs is {@link aimed}: the graph a config file names, opened
 // in this process, or an MCP server to call over `/mcp`. The file is the
 // ordinary case — a graph this machine can open needs nothing listening — and
 // an MCP server is for a graph it cannot open.
@@ -37,7 +37,7 @@ export type Ctx = {
   /** The MCP server this command talks to, where it talks to one — and the
    * name its bearer token is stored under either way. */
   host: string
-  /** The config file naming the graph this command OPENS, in this process.
+  /** The config file naming the graph this command opens, in this process.
    * Absent where the command named an MCP server instead ({@link aimed}). */
   config?: string
   json: boolean
@@ -55,7 +55,7 @@ export type Ctx = {
 }
 
 /**
- * One command this program can run: a tool's DECLARATION — its name, its
+ * One command this program can run: a tool's declaration — its name, its
  * schema, how it is written on a command line — with a run of its own.
  *
  * A graph tool is `(bundles, ctx) => bundles` and only @yaks/tools' runner
@@ -106,13 +106,13 @@ export type Opts = {
 
 /**
  * The tools, refused where two of them answer to one command line. A two-word
- * tool is reachable in EITHER order, so `session list` and `list session` are
+ * tool is reachable in either order, so `session list` and `list session` are
  * the same tool, and a second tool using either pair is a command line that
  * means two things.
  *
- * `cli` does NOT apply this to the whole list, because shadowing is the point
+ * `cli` does not apply this to the whole list, because shadowing is the point
  * of the order: a program that carries its own `login` means it. A contributor
- * runs this over its OWN list, where two tools of one name are a mistake.
+ * runs this over its own list, where two tools of one name are a mistake.
  */
 export let unique = <T extends ToolId>(tools: readonly T[]): readonly T[] => {
   let said = new Set<string>()
@@ -165,7 +165,7 @@ let once = <T extends Grammar>(tools: readonly T[]): T[] => {
 }
 
 /**
- * The tools grouped under the NOUN each is typed with: `graph` holds `apply`,
+ * The tools grouped under the noun each is typed with: `graph` holds `apply`,
  * `query` and the rest, and a tool that declared one word alone — or none — is
  * grouped under `''`, which is the page's own first block. Nouns come in the
  * order they were first named, so the order of the list is still the order of
@@ -243,7 +243,7 @@ export let nounUsage = (
 }
 
 /** The flags a program keeps for itself, lifted off the command line before a
- * command ever sees it. `host` and `config` are what the COMMAND LINE gave and
+ * command ever sees it. `host` and `config` are what the command line gave and
  * nothing else — where a command runs when it gives neither is
  * {@link aimed}'s answer. */
 export let globals = (
@@ -279,10 +279,10 @@ export let globals = (
 }
 
 /**
- * Where this command runs what it was asked: the graph a config FILE names,
- * which it OPENS in this process, or an MCP server it calls over `/mcp`.
+ * Where this command runs what it was asked: the graph a config file names,
+ * which it opens in this process, or an MCP server it calls over `/mcp`.
  *
- * A CONFIG NAMES A GRAPH. `yak --config yak.json task list` reads that file,
+ * A config names A graph. `yak --config yak.json task list` reads that file,
  * composes its plugins over the SQLite file it names, runs the tool here and
  * exits — no server, and nothing to wait for. `--host` is for a graph this
  * machine cannot open as a file; given together the two name two places, which
@@ -395,7 +395,7 @@ export let cli = async (
         return hit ? { verb: hit, args: rest.slice(1) } : undefined
       })()
     if (!found) {
-      // A NOUN on its own is a question, not a mistake: `yak graph` (and
+      // A noun on its own is a question, not a mistake: `yak graph` (and
       // `yak graph --help`, which is the same command line with the flag
       // lifted off) asks what that word can do, and the answer is its verbs.
       let page = nounUsage(await c.all(), rest[0])

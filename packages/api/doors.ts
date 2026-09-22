@@ -96,7 +96,7 @@ let asked = (held: Bundle[], applied: Bundle[]): Bundle[] => {
  *
  * The status is 200 whatever happens, because the first bundles have already
  * been written to the response before a later line can be refused. So a
- * refusal is the LAST line of the body instead — what `apply()` threw, plus
+ * refusal is the last line of the body instead — what `apply()` threw, plus
  * two numbers:
  *
  * ```json
@@ -206,7 +206,7 @@ let lineOf = (body: unknown): string | null => {
   return null
 }
 
-/** The three query clauses that reduce a selection to a VALUE instead of
+/** The three query clauses that reduce a selection to a value instead of
  * naming its members. A query carrying one is asking a different question, so
  * `/query` reads it off the parsed query before anything gathers a bundle
  * nobody asked for. */
@@ -233,7 +233,7 @@ let reduced = (op: Agg, rows: Row[]): unknown => {
  * `GET /query?q=…` or `POST /query` — a query string in, the bundles it
  * selects out.
  *
- * Unless the query asks for a REDUCTION. `.count!`, `.distinct=col` and
+ * Unless the query asks for a reduction. `.count!`, `.distinct=col` and
  * `.tally=col` are questions about the selection rather than about its
  * members, and the store answers each with one SQL statement (`rows()` rather
  * than `read()`); the response body is then `{"count":n}`, `{"distinct":[…]}`

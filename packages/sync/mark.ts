@@ -10,7 +10,7 @@
 //           deletions that later phases add have no such mark — and its
 //           contents are what to patch back if the server refuses the write.
 //
-//   $echo   added to every list of bundles that CAME FROM the server: the
+//   $echo   added to every list of bundles that came from the server: the
 //           response to a POST, and a push over the socket. The outbound hook
 //           skips any bundle carrying it, which is how a client can apply what
 //           it just received without sending it straight back.
@@ -20,7 +20,7 @@ import type { Bundle } from '@yaks/graph'
 /** The mark on a bundle a caller sent, carrying the entity as it then stood. */
 export let SENT = '$sent'
 
-/** The mark on a batch that arrived FROM the server and must not go back. */
+/** The mark on a batch that arrived from the server and must not go back. */
 export let ECHO = '$echo'
 
 /** Mark a bundle as the caller's, with a copy of the entity it patches

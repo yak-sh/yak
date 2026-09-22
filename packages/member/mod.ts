@@ -26,16 +26,16 @@
  *
  * ## The two checks
  * ```text
- * read    the mode is not `private`, OR the principal holds any level
- * write   the mode is `open`,        OR the principal holds owner or editor
+ * read    the mode is not `private`, or the principal holds any level
+ * write   the mode is `open`,        or the principal holds owner or editor
  * ```
  * A `viewer` never writes, under any mode. A `member` who was never granted
  * anything holds no level at all.
  *
  * ## Where each check runs
- * A WRITE is refused inside `apply()`: {@link members} registers a
+ * A write is refused inside `apply()`: {@link members} registers a
  * `precondition` hook, which runs inside the transaction before any row has
- * moved, so a refused set of changes rolls back whole ({@link Denied}). A READ
+ * moved, so a refused set of changes rolls back whole ({@link Denied}). A read
  * never reaches `apply()`, so the HTTP layer checks first —
  * {@link policy}`(storage).canRead(who, app)`.
  *
@@ -59,12 +59,12 @@
  *
  * ## Share links
  * A grant may name a `token` instead of a person. Whoever opens that link acts
- * AS the grant, so the HTTP layer signs their changes with the grant's own
+ * as the grant, so the HTTP layer signs their changes with the grant's own
  * entity id and everything above works unchanged — no account, no roster row,
  * one revocable row.
  *
  * ## What is deliberately not here
- * Authentication: establishing who someone IS belongs to the HTTP layer.
+ * Authentication: establishing who someone is belongs to the HTTP layer.
  * Invitations: a new `member` row usually means messaging somebody, which is a
  * `created('member')` handler on
  * {@link https://jsr.io/@yaks/effects | @yaks/effects} — the hook this package

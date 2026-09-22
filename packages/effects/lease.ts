@@ -1,4 +1,4 @@
-// A BACKGROUND JOB, and the one process running it.
+// A background job, and the one process running it.
 //
 // Some work is not about a batch at all: picking back up the agents a restart
 // left running, freeing the locks a dead session held, firing the wakes that
@@ -8,10 +8,10 @@
 //
 //   lease{name, holder, until}
 //
-// The eid is derived from the NAME, the way an edge's eid is derived from its
+// The eid is derived from the name, the way an edge's eid is derived from its
 // endpoints and relation, so one job is one row in every graph and two
 // processes reaching for it address the same row. Taking it is a write with a
-// `$was` precondition — the holder and the expiry as the taker READ them — so
+// `$was` precondition — the holder and the expiry as the taker read them — so
 // the loser is refused inside the transaction rather than overwriting the
 // winner a moment later. Nothing here polls a lock table; the graph's own
 // precondition is the lock.
@@ -197,7 +197,7 @@ export let sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
 /** How a lease is held for a while: {@link HoldOpts}, plus what signals that
  * we are done and how often to retry while somebody else holds it. */
 export type HoldingOpts = HoldOpts & {
-  /** abort to release the lease. ALREADY ABORTED means one pass and out — a
+  /** abort to release the lease. Already aborted means one pass and out — a
    * CLI command does what nobody else is doing and never queues for what
    * somebody else is. */
   signal?: AbortSignal
@@ -254,7 +254,7 @@ export let holding = async (
 }
 
 /** A promise that keeps a lease held and does nothing else, until the signal
- * reports that we are done — what a pass that has ALREADY finished its work
+ * reports that we are done — what a pass that has already finished its work
  * waits on, so the lease stays this process's while it is up. */
 export let until = (signal: AbortSignal): Promise<void> =>
   signal.aborted

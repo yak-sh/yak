@@ -1,16 +1,16 @@
 // The canonical form of a page's address, and the entity id derived from it.
 //
 // A page recorded from a browser and the same page looked up an hour later have
-// to resolve to ONE entity, or a citation is a guess and a "what references
+// to resolve to one entity, or a citation is a guess and a "what references
 // this?" query lies by omission. So canonicalization happens in one place —
-// here — and the entity's id is DERIVED from the result (`web.url` is declared
+// here — and the entity's id is derived from the result (`web.url` is declared
 // `identity`, ./vocab.json): recording a page twice writes one row by
 // construction, with no lookup to race and no uniqueness index anybody has to
 // remember. Nothing else rewrites an address, and every code path gets the
 // canonical form, because the plugin canonicalizes in the `normalize` phase
 // (./plugin.ts) — the earliest one, before the id is minted from the value.
 //
-// What carries no identity is dropped: a fragment names a spot INSIDE a page,
+// What carries no identity is dropped: a fragment names a spot inside a page,
 // campaign parameters name the trip rather than the destination, credentials
 // are never part of a page's name, and a trailing slash is a server's habit.
 // What might carry identity is kept: query parameters stay, in the order they
@@ -19,7 +19,7 @@
 //
 // Anything that is not an http(s) URL is returned exactly as it came. Canonical
 // form is a fact about the web's own schemes; for a `file:` address, or an
-// application's own scheme, the text IS the address and rewriting it would be
+// application's own scheme, the text is the address and rewriting it would be
 // the bug.
 
 import { type Eid, identityEid } from '@yaks/graph'
@@ -55,7 +55,7 @@ export let canon = (raw: string): string => {
   for (let k of [...u.searchParams.keys()]) {
     if (JUNK.test(k)) u.searchParams.delete(k)
   }
-  // The root keeps its slash — that IS the canonical root — and every deeper
+  // The root keeps its slash — that is the canonical root — and every deeper
   // path drops one: `/a` and `/a/` are one page everywhere it matters, and a
   // refetch follows the redirect either way.
   if (u.pathname != '/') u.pathname = u.pathname.replace(/\/+$/, '')

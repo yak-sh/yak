@@ -202,7 +202,7 @@ Deno.test('a wait answers "still running" rather than killing anything', async (
 })
 
 // The whole machine, with a provider that is a shell script: the request
-// starts it, the wait blocks on the PROCESS ending rather than the transcript,
+// starts it, the wait blocks on the process ending rather than the transcript,
 // and the peek reads back what it said.
 slow('spawn --wait runs the provider and answers what it came to', async () => {
   let { g, fx } = host()

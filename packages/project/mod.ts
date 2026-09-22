@@ -1,5 +1,5 @@
 /**
- * A portfolio. A `project` is what work is filed UNDER — `filed{project,
+ * A portfolio. A `project` is what work is filed under — `filed{project,
  * priority, domain, assignee}` is that filing, kept separate from being a task
  * so that a task can have none. A `board` is a saved filter over the portfolio
  * rather than a stored list of members, and the one piece of machinery here

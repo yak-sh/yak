@@ -1,8 +1,8 @@
-// `@yaks/journal/tools` — what an agent may ASK the log: the function behind
+// `@yaks/journal/tools` — what an agent may ask the log: the function behind
 // the `history` declaration in ./vocab.json. One tool, because the log answers
 // one question people actually ask: what happened to this, and who did it.
 //
-// The answer is BUNDLES, and each bundle IS the transaction: `applied()`
+// The answer is bundles, and each bundle is the transaction: `applied()`
 // rebuilds what a write committed out of the log's own record, so a history row
 // has the same shape as the write that produced it — the components it patched,
 // or `$delete` if it deleted the entity. Who wrote it is carried on
@@ -12,7 +12,7 @@
 // columns dropped when the bundles are admitted.
 //
 // There is no `undo` tool here and no feed. Undo is `undo(g, j)` in ./undo.ts —
-// a WRITE, and one a server has to decide it offers — and a feed is a cursor a
+// a write, and one a server has to decide it offers — and a feed is a cursor a
 // consumer holds, not a question anybody types.
 
 import {

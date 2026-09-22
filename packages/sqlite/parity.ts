@@ -2,7 +2,7 @@
 // published package — see deno.json): one list of batches, two storages, no
 // disagreement.
 //
-// This adapter is the REFERENCE. A new adapter — a Map, a Durable Object's
+// This adapter is the reference. A new adapter — a Map, a Durable Object's
 // embedded SQLite, a remote SQL service — proves itself by running the same
 // script through @yaks/graph's own `apply()` and agreeing with this one on
 // every step: the same bundles returned (new entities with the same numbers,
@@ -30,7 +30,7 @@ export let bookmarks: Plugin = {
   derive: { bookmark: (comp) => `mark:${comp.of}` },
 }
 
-/** The batch nobody wants: a hook that refuses at the last moment INSIDE the
+/** The batch nobody wants: a hook that refuses at the last moment inside the
  * transaction, after the patches have gone in. Whatever it wrote must be
  * gone. */
 export let doorman: Plugin = {
@@ -157,7 +157,7 @@ export let script: Step[] = [
   },
 ]
 
-// What both stores must read back — checked after EVERY step, so a difference
+// What both stores must read back — checked after every step, so a difference
 // is caught by the batch that made it rather than by the end of the script.
 let READS = [
   '.kind=product',

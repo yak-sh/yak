@@ -7,9 +7,9 @@
  * rather than for anyone right now.
  *
  * Besides those components, this package does one thing: when a dream's floor
- * has passed it opens a DESK — one agent session, asked the dream's own body
- * text, holding the dream's `claim` while it runs. WHAT is opened is named in
- * the configuration beside the plugin (`@yaks/dreaming/effects`); WHEN it
+ * has passed it opens a desk — one agent session, asked the dream's own body
+ * text, holding the dream's `claim` while it runs. What is opened is named in
+ * the configuration beside the plugin (`@yaks/dreaming/effects`); when it
  * opens is this package's decision.
  *
  * ```ts

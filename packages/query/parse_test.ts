@@ -70,7 +70,7 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['+created', and(ensure('created'))],
   ['+!created', and(gate('created'))],
   ['*created', and(mutable('created'))],
-  // `-comp` is a REMOVAL: what the batch took, which no row can be asked
+  // `-comp` is a removal: what the batch took, which no row can be asked
   ['-created', and(gone('created'))],
   ['-.created', and(gone('created'))],
   ['.task -claim', and(present('task'), gone('claim'))],

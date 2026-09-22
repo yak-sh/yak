@@ -1,4 +1,4 @@
-// The graph THIS PROCESS opens. `yak --config yak.json task list` reads that
+// The graph this process opens. `yak --config yak.json task list` reads that
 // config file, imports the plugins it names over the SQLite file it names,
 // runs the tool right here and exits — no server, no socket, nothing
 // listening.
@@ -55,7 +55,7 @@ export let opened = (path: string): Promise<Served> => {
 /** Close every graph this process opened, stamping how the command ended on
  * the `process` row each of them holds. */
 export let close = async (code?: number): Promise<void> => {
-  // Awaited, because the last batch is a WRITE: a command that closed the file
+  // Awaited, because the last batch is a write: a command that closed the file
   // without waiting would leave its own row saying it is still running.
   for (let host of held.values()) await (await host).close(code)
   held.clear()

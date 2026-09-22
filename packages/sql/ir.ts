@@ -1,12 +1,12 @@
-// The relational representation: a SELECT statement held as a VALUE, sitting
+// The relational representation: a SELECT statement held as a value, sitting
 // between the binder (which routes an @yaks/query AST through an @yaks/vocab
 // schema) and the SQL text a dialect renders. It is shaped like Arel and
 // deliberately borrows Arel's names — project, join, where, group, order, take,
 // distinct — because anyone who has used Arel or ActiveRecord already knows
 // what they do.
 //
-// It is BACKEND-INDEPENDENT by design: a relation carries its projected
-// columns, its joins, a boolean CONDITION TREE, grouping, ordering and row
+// It is backend-independent by design: a relation carries its projected
+// columns, its joins, a boolean condition tree, grouping, ordering and row
 // limit as plain data, and `render` is the one place that turns that data into
 // a SQL string plus the parameters to bind. A new backend (D1, Postgres) is
 // another renderer over the same value — the structure never changes, only how
@@ -14,7 +14,7 @@
 // and, for a backend whose placeholders are not `?`, a renumbering of the
 // parameters it emits.
 //
-// The SHAPE is functional, not Arel's mutable manager object: a relation is a
+// The shape is functional, not Arel's mutable manager object: a relation is a
 // plain object built up field by field, and a condition is a small tree —
 // and/or/not/raw/lit — whose leaves (raw) are fragments a dialect has already
 // lowered. Keeping AND/OR/NOT explicit rather than joining them into text early
@@ -45,7 +45,7 @@ export let FALSE: Cond = { t: 'lit', v: false }
 export let raw = (frag: Frag): Cond => ({ t: 'raw', frag })
 export let not = (c: Cond): Cond => ({ t: 'not', c })
 
-// AND/OR that fold their identity value away: an empty AND is TRUE, an empty OR
+// AND/OR that fold their identity value away: an empty and is TRUE, an empty OR
 // is FALSE, and a single child collapses to itself — so the binder can combine
 // conditions without special-casing zero or one of them, and a FALSE
 // short-circuits an AND.
@@ -69,12 +69,12 @@ export let or = (...parts: Cond[]): Cond => {
 }
 
 // One joined table: the source as it appears after `join` (a component's own
-// table) and the whole ON expression. Every join made here is a LEFT JOIN — a
+// table) and the whole on expression. Every join made here is a LEFT JOIN — a
 // component table is joined to read a column that may be absent, and "the
 // column is NULL" must be the same answer as "the component is absent".
 export type Join = { source: string; on: string }
 
-// A relation. `from` is the source after FROM; `cols` are the whole projected
+// A relation. `from` is the source after from; `cols` are the whole projected
 // expressions; `where` is the condition tree; the rest are the optional
 // grouping, ordering and row limit (a bound parameter, never a literal written
 // into the SQL).
@@ -120,12 +120,12 @@ export let renderCond = (c: Cond): Frag => {
   }
 }
 
-// The joined tables, written out as they appear after FROM.
+// The joined tables, written out as they appear after from.
 export let joined = (joins: Join[]): string =>
   joins.map((j) => ` left join ${j.source} on ${j.on}`).join('')
 
 // The relation as one statement. Parameters come out in the order SQLite binds
-// them: the WHERE conditions in tree order, then the LIMIT. A relation with no
+// them: the WHERE conditions in tree order, then the limit. A relation with no
 // projected columns selects `*`; one with no condition renders `where 1`.
 export let render = (r: Rel): Frag => {
   let where = renderCond(r.where)

@@ -1,8 +1,8 @@
-// What a commit MEANS about a transcript: the effect handlers exported as
+// What a commit means about a transcript: the effect handlers exported as
 // `@yaks/session/effects`.
 //
 // One component so far, and it is not one of this package's. A `process` row
-// created here, where it is the row THIS RUN wrote for itself (@yaks/process
+// created here, where it is the row this run wrote for itself (@yaks/process
 // `started`), means the application is starting up — and start-up is the one
 // moment there is a fresh, reliable answer about the locks in this graph.
 //

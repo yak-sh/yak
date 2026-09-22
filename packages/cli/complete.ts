@@ -3,7 +3,7 @@
 //
 // Nothing here declares anything a second time. The subcommand names are the
 // tools' nouns and verbs, the options are their input schemas' properties, and
-// what a VALUE may be is whatever the property declares about itself — an
+// what a value may be is whatever the property declares about itself — an
 // `enum` offers its members, a boolean offers true and false, `examples` offer
 // themselves. The two that need the graph — `ref`, which names a component,
 // and `search`, which marks full-text indexed text — are delegated to the
@@ -43,7 +43,7 @@ let wordsIn = (line: string | readonly string[]): string[] =>
 let props = (t: Grammar): Record<string, Prop> =>
   ((t.inputSchema ?? {}) as Schema).properties ?? {}
 
-// Every word a tool answers to as its FIRST: a two-word tool answers to both
+// Every word a tool answers to as its first: a two-word tool answers to both
 // of its words, because the two may be typed in either order.
 let firsts = (tools: readonly Grammar[]): string[] =>
   tools.flatMap((t) => t.noun && t.verb ? [t.noun, t.verb] : [commandOf(t)])

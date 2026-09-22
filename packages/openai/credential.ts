@@ -4,7 +4,7 @@
 // environment on its own — both are handed in — so the same code decides for a
 // CLI, a server, and a test, and a token is never printed by anything here.
 //
-// WHICH IS WHY THE EXPIRY CHECK IS NOT HERE. The fleet's doctor watched its
+// Which is why the expiry check is not here. The fleet's doctor watched its
 // Codex credential run out (a sign-in nothing but a person can renew, and
 // every spawn failing `credential unavailable` until they do) by reading one
 // file on one box against that box's clock. That is a deployment's health, not

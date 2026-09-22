@@ -1,10 +1,10 @@
-// Addresses, and the one rule about them worth writing down: the CANONICAL
+// Addresses, and the one rule about them worth writing down: the canonical
 // form of an address at your own domain.
 //
 // Everyone else's domain is nobody's business but theirs — `ana@example.com`
 // passes through this file untouched, because only the mail server behind
 // example.com knows whether that is the same mailbox as `Ana@example.com`. At
-// YOUR domain you do know, and knowing is worth something: canonicalize on the
+// your domain you do know, and knowing is worth something: canonicalize on the
 // way in and a club's address book cannot end up holding two rows for one
 // person.
 //

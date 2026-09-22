@@ -7,7 +7,7 @@
 // one function to replace: {@link Rank} is its shape, and the query extension
 // takes one, so an ANN swaps in without touching anything else here.
 //
-// A {@link Screen} is the other half of "nearest": nearest AMONG WHAT. The
+// A {@link Screen} is the other half of "nearest": nearest among what. The
 // eight nearest entities of any kind are the wrong eight for `.near=X&.memory`
 // — intersecting them with "and a memory" usually leaves nothing — so the rest
 // of the query comes in as a statement selecting the eids it admits, the scan

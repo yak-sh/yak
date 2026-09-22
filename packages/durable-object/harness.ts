@@ -1,7 +1,7 @@
 // The stand-in (not part of the published package — see deno.json): a Durable
 // Object's storage surface over jsr:@db/sqlite, so the adapter can be tested
 // without Cloudflare. The surface is small enough to imitate exactly — one
-// `exec`, one `transactionSync` — and imitating it EXACTLY is the point:
+// `exec`, one `transactionSync` — and imitating it exactly is the point:
 //
 //   it takes only SqlStorageValues     a boolean, a bigint or a byte array
 //                                      that reached the engine unconverted
@@ -31,7 +31,7 @@ let REFUSED =
   /^\s*(begin|commit|end|rollback|savepoint|release|attach|detach|vacuum)\b/i
 
 // workerd's SQL authorizer, at the one place it bites an object that reads its
-// own schema: a statement that NAMES a table Cloudflare owns is refused — read,
+// own schema: a statement that names a table Cloudflare owns is refused — read,
 // write or drop alike — while `sqlite_master` still lists it. There is no
 // authorizer callback to hang off @db/sqlite, so the identifiers a statement
 // mentions are what is checked; the runtime names the column too, which nothing
@@ -65,7 +65,7 @@ let out = (row: Record<string, unknown>) => {
  * them and an object may ask: `databaseSize`, how many bytes it holds, and
  * `deleteAll`, the one way to empty it — dropping the tables leaves metadata
  * behind, and an object whose storage is empty ceases to exist. The object's
- * one ALARM is here for the same reason: an object that schedules its own
+ * one alarm is here for the same reason: an object that schedules its own
  * return arms it, and a test that drives `alarm()` by hand reads the instant
  * back off `getAlarm` rather than waiting for a runtime to deliver it.
  * `beneath` is the runtime's own hand rather than the object's.
@@ -198,7 +198,7 @@ export let durable = (): DurableStorage & {
     getAlarm: () => Promise.resolve(alarm),
     setAlarm: (at: number) => Promise.resolve(void (alarm = at)),
     deleteAlarm: () => Promise.resolve(void (alarm = null)),
-    // A statement run BELOW the authorizer, as the runtime itself does:
+    // A statement run below the authorizer, as the runtime itself does:
     // creating `_cf_KV` and reading it back are both things workerd refuses to
     // an object and does itself. This is the only way a test can see what every
     // deployed object actually contains.

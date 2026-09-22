@@ -7,7 +7,7 @@
 // means loosening the cache's permissions can never loosen the token's, and a
 // cache that has to be deleted takes nothing else with it.
 //
-// The cache is keyed by host and stamped with the ROSTER VERSION (T-34277) —
+// The cache is keyed by host and stamped with the roster version (T-34277) —
 // the eight hex characters the `about` tool names its tool list by. Nothing
 // here checks that version, because checking would cost the round trip the
 // cache exists to save. The cache is dropped instead on the two signals that

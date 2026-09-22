@@ -9,12 +9,12 @@
 import type { Sync } from './lifetime.ts'
 
 // What the cascading delete (@yaks/graph cascade.ts) does to a reference column
-// when its TARGET entity is deleted. These four values are the whole set — a
+// when its target entity is deleted. These four values are the whole set — a
 // reference that declares none is rejected, so an undeclared behavior cannot
 // exist.
 //   cascade  the referencing entity is deleted with the target
 //   detach   the column is set null and clients are told about it
-//   release  the ROW is deleted but its entity lives (a tag whose existence IS
+//   release  the row is deleted but its entity lives (a tag whose existence IS
 //            the reference)
 //   keep     the reference stands as history (no FK; the tombstone is the mark)
 export type Death = 'cascade' | 'detach' | 'release' | 'keep'
@@ -26,7 +26,7 @@ export type Death = 'cascade' | 'detach' | 'release' | 'keep'
 //   url    string, format:uri         bool    boolean
 //   query  string, format:query       json    string, format:json
 //
-// Where a string column KEEPS its value is a separate question, and not this
+// Where a string column keeps its value is a separate question, and not this
 // format's: @yaks/blob owns the `store` keyword and answers it.
 export type Scalar =
   | 'text'
@@ -46,7 +46,7 @@ export type Scalar =
 export type Column = {
   comp: string
   prop: string
-  /** what the column MEANS, as its schema describes it — the text a schema
+  /** what the column means, as its schema describes it — the text a schema
    * listing hands an agent, so a column is not read off its name alone */
   description?: string
   category: 'scalar' | 'enum' | 'ref'
@@ -107,7 +107,7 @@ export type Identity = string[]
 // One index over a component's table: the columns it covers, in order, and
 // whether it also promises uniqueness. Derived from the `unique`/`index`
 // keywords (a column's own flag, plus the component's composite lists), identity,
-// and automatic reference indexes — see `Vocab.indexes`. A PARTIAL index names
+// and automatic reference indexes — see `Vocab.indexes`. A partial index names
 // the columns a row must hold for the index to see it (`present`): a unique
 // over an optional key, where absent rows may be many and present ones one.
 export type Index = { cols: string[]; unique: boolean; present?: string[] }
@@ -120,12 +120,12 @@ export type Composite = string[] | { cols: string[]; present?: string[] }
 // column it named. `.comment.target.doc.title` → [{comment,target},{doc,title}].
 export type Hop = { comp: string; prop: string }
 
-// A reverse ASSOCIATION: one component's reference column, seen from the far
+// A reverse association: one component's reference column, seen from the far
 // side. `.reviews` on a book is the `review` rows whose `book` column points at
 // it, so the association is that (comp, prop) pair under a plural name.
 export type Assoc = { comp: string; prop: string }
 
-// Which components an entity HAS, with no column value: all of these present,
+// Which components an entity has, with no column value: all of these present,
 // none of those. Both the storage binder (@yaks/sql) and the table-set cache
 // (@yaks/archetype) take this type, so it lives under neither of them.
 export type Presence = { all?: readonly string[]; none?: readonly string[] }
@@ -174,10 +174,10 @@ export type PropSchema = {
   // string; the storable check is what rejects a value outside the four)
   ref?: string
   death?: string
-  // true = derived, never stored (on a COLUMN)
+  // true = derived, never stored (on a column)
   computed?: boolean
   stamped?: boolean
-  // On a COMPONENT: who is told about a write, and how long the value lives
+  // On a component: who is told about a write, and how long the value lives
   // (lifetime.ts).
   sync?: string
   durable?: string
@@ -187,14 +187,14 @@ export type PropSchema = {
   before?: string[]
   wire?: boolean
   bare?: boolean
-  // On a COLUMN a boolean (this column alone); on a COMPONENT the composite
+  // On a column a boolean (this column alone); on a component the composite
   // column lists. `Vocab.indexes` merges the two forms. Stored references are
   // always indexed: index: true is redundant and false does not opt out.
   unique?: boolean | Composite[]
   index?: boolean | Composite[]
-  // native: the columns a row must hold (NOT NULL), on the COMPONENT
+  // native: the columns a row must hold (NOT NULL), on the component
   required?: string[]
-  // What the entity's id is DERIVED from. On a COLUMN, true; on a COMPONENT,
+  // What the entity's id is derived from. On a column, true; on a component,
   // the column list a composite identity is written across. One tuple, not a
   // list of them: an entity has one id. `Vocab.identity` merges the two forms.
   identity?: boolean | string[]

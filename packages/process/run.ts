@@ -3,7 +3,7 @@
 // Four entry points over one loop — watch the pid, write what the process
 // prints, record how it ended.
 //
-// EXACTLY ONE SUPERVISOR SITS ABOVE THIS ONE, and it is not this one. In the
+// Exactly one supervisor sits above this one, and it is not this one. In the
 // fleet that is systemd, which owns the daemon this code runs inside; this
 // code owns everything below it and nothing above. So `supervise` refuses a
 // service whose command would start its own program: a supervisor that
@@ -12,15 +12,15 @@
 // a restart and never a downed web server — every child outlives us (below),
 // so this process dying leaves everything it started running.
 //
-// THE CHILD OUTLIVES US, through two layers, because the process supervising
+// The child outlives US, through two layers, because the process supervising
 // another process must be restartable without taking that process with it. The
 // technique is the fleet's (src/sessions.ts, T-7127/T-9261), reused rather than
-// reinvented: our direct child is a LAUNCHER that backgrounds the rest and
+// reinvented: our direct child is a launcher that backgrounds the rest and
 // exits immediately, so a supervisor that kills the pids it tracks finds
 // nothing to kill; `setsid` moves the wrapper into a session and process group
 // of its own; and `systemd-run --user --scope` lifts the whole thing out of
 // our cgroup, which is what survives a full restart of our systemd unit. The
-// wrapper starts ignoring INT and TERM strictly AFTER forking the child — so
+// wrapper starts ignoring INT and TERM strictly after forking the child — so
 // the child does not inherit them ignored — writes "$$ $!" (the group to
 // signal, and the child to watch) to the pidfile, and writes the exit code
 // when the child ends. That pidfile and those two output files are enough to
@@ -31,7 +31,7 @@
 // manager are what buy those two layers. A machine without them needs a
 // different launcher, not a weaker one.
 //
-// What the loop does NOT do yet: resume reading a launched process's output
+// What the loop does not do yet: resume reading a launched process's output
 // files after a restart. `watch` adopts the process again and records its exit
 // code; the lines printed while we were away stay in the files. Importing them
 // exactly once needs a per-file read position on the row, and nothing asks for
@@ -79,7 +79,7 @@ export type Opts = {
   poll?: number
   /** mint the process entity's eid (default a uuid) */
   mint?: () => string
-  /** write the process row on THIS entity instead of a fresh one — what a
+  /** write the process row on this entity instead of a fresh one — what a
    * supervisor passes so the attempt is recorded on the service row that
    * wanted it. The previous attempt's `exit` is deleted by the same
    * transaction, so nothing ever reads a fresh pid beside a stale exit code. */
@@ -106,7 +106,7 @@ export type Adoption = Opts & {
   command?: string | null
   /** where it runs, if the adopter knows it */
   cwd?: string | null
-  /** the exit code, read by whoever DID launch it (the fleet's session
+  /** the exit code, read by whoever did launch it (the fleet's session
    * launcher keeps an exit-code file of its own) */
   code?: () => number | null
 }
@@ -161,14 +161,14 @@ export let paths = (
   files(dirOf(o), eid)
 
 // The wrapper script, run inside the scope by `setsid sh <this file>`. It is
-// kept in a FILE, not passed as `sh -c '<script>'`, because systemd-run
+// kept in a file, not passed as `sh -c '<script>'`, because systemd-run
 // applies systemd's own $-expansion to the command line it launches and `$$`
 // is its escape for a literal `$` — a bare path has nothing in it for systemd
 // to expand.
 let WRAPPER = '"$@" >> "$TASKS_OUT" 2>> "$TASKS_ERR" & trap "" INT TERM; ' +
   'echo "$$ $!" > "$TASKS_PID"; wait $!; code=$?; ns=$(date +%s%N); echo $((ns / 1000000)) > "$TASKS_ENDED"; echo $code > "$TASKS_CODE"'
 
-// A transient scope name, unique per LAUNCH: systemd refuses a name whose
+// A transient scope name, unique per launch: systemd refuses a name whose
 // previous unit is still loaded, and --collect frees a finished scope but not
 // synchronously, so starting the program again would race the name it just
 // released.
@@ -194,7 +194,7 @@ let userBus = () => {
 // every `${…}` deleted and systemd's "Referenced but unset environment
 // variable" note in its stderr (T-37332). `$$` is systemd's escape for a
 // literal `$`, so the program receives exactly the argv the caller passed.
-// Only the command LINE is expanded — `%` specifiers are not — so this is the
+// Only the command line is expanded — `%` specifiers are not — so this is the
 // whole quoting rule.
 export let literal = (arg: string): string => arg.replaceAll('$', '$$$$')
 
@@ -247,10 +247,10 @@ let pids = (path: string) => {
   }
 }
 
-// The CHILD is the pid to test for liveness.
+// The child is the pid to test for liveness.
 let pidOf = (path: string) => pids(path).at(-1) ?? 0
 
-// The wrapper is what a SIGNAL should be sent to: setsid made it the process
+// The wrapper is what a signal should be sent to: setsid made it the process
 // group leader, so signalling the negated group id reaches the wrapper, the
 // child and anything the child started — nothing is left holding a port. A
 // process we only adopted has no pidfile, and then the pid we were given is
@@ -298,7 +298,7 @@ let kill = async (target: number, sig: string) =>
 let alive = (pid: number) => kill(pid, '0')
 
 /**
- * Send a signal to a tracked run: to its process GROUP where we launched it —
+ * Send a signal to a tracked run: to its process group where we launched it —
  * the wrapper leads that group, so the child and anything the child started
  * get the signal too — and to the bare pid where we only adopted it.
  *
@@ -340,7 +340,7 @@ let clear = (path: string) => {
 }
 
 // One output file, read forward from wherever it already stands. Starting at
-// the END is what keeps a restart onto the same entity correct: the output
+// the end is what keeps a restart onto the same entity correct: the output
 // files are appended to across attempts (one service, one log), so reading
 // from byte 0 would import every earlier line a second time. Taking the size
 // before the child can write a byte makes the boundary exact. The decoder is
@@ -406,7 +406,7 @@ let drain = async (
 
 // The wrapper writes the exit-code file just after the child it waited on is
 // gone, so we know the process ended a moment before we know its code. This is
-// the reader for runs whose files are OURS; a caller that adopted a process
+// the reader for runs whose files are ours; a caller that adopted a process
 // and keeps its own exit code reads that once, with no delay to wait out.
 let reported = (path: string, poll: number) => async () => {
   for (let i = 0; i < 20; i++) {
@@ -418,7 +418,7 @@ let reported = (path: string, poll: number) => async () => {
 }
 
 // The one loop: watch the pid, write what the process printed, record how it
-// ended. Whether the process is gone is checked BEFORE the last read, so that
+// ended. Whether the process is gone is checked before the last read, so that
 // read sees the final bytes.
 let follow = async (
   store: Store,
@@ -468,7 +468,7 @@ export let launch = async (
   let cwd = spec.cwd ?? Deno.cwd()
   // Deal with everything the last attempt on this row left behind before this
   // one starts: the output files are read on from where they stand, and the
-  // pidfile and exit-code file are DELETED — read as if they belonged to this
+  // pidfile and exit-code file are deleted — read as if they belonged to this
   // attempt, they would report the previous process both alive and already
   // finished.
   let tails = o.stream === false ? [] : [tail(f.out), tail(f.err)]
@@ -571,7 +571,7 @@ export type Care = Opts & {
 
 // What a pass remembers between passes — the only state here that is not in
 // the graph, and it is all timestamps. The graph holds the count
-// (`service.attempts`); turning that count into a WAIT also needs the time of
+// (`service.attempts`); turning that count into a wait also needs the time of
 // the last attempt, and a column for that would be a timestamp rewritten on
 // every restart. A supervisor that has just restarted forgets these waits,
 // which is what we want anyway: a restart is a fair reason to try again now.

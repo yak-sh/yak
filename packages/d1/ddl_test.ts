@@ -1,4 +1,4 @@
-// D1 is SQLite behind an async binding, so its schema IS @yaks/sqlite's: the
+// D1 is SQLite behind an async binding, so its schema is @yaks/sqlite's: the
 // same statements, constraints included, and a store over the stand-in holds
 // what the vocabulary said the way the reference adapter does.
 

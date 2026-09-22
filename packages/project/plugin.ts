@@ -2,7 +2,7 @@
 // over a board's saved query.
 //
 // It takes the loaded vocabulary as an argument because a board's query is
-// checked against the SCHEMA, not against this package — a board filtering
+// checked against the schema, not against this package — a board filtering
 // `.author=dana` is only valid if the graph has an author column, and only the
 // loaded vocabulary knows whether it does. So a graph is built in two steps,
 // the way @yaks/edge's is: load the documents, then pass the same vocabulary to
@@ -20,7 +20,7 @@ import { guarding } from './guard.ts'
  * quietly match nothing.
  *
  * Passing no `marks` checks a board's statuses against the set the loaded
- * VOCABULARY declares — every package's `statuses` enum — so a server that
+ * vocabulary declares — every package's `statuses` enum — so a server that
  * loads leases gets `wip` without this package being told about them. Pass
  * `marks` to check against exactly that list instead.
  */

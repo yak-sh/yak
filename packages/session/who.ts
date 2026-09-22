@@ -2,11 +2,11 @@
 // for both, because the CLI and the HTTP server are asking the same question.
 //
 // `--session` used to mean two things: an eid or a human-readable id to
-// `claim take`, and the harness's OWN id for the run to
+// `claim take`, and the harness's own id for the run to
 // `session brief|wrap|context`. So `claim take --session S-37703` locked
 // something for the session a person could see, and `session wrap S-37703`
 // returned `[]` and released nothing — the same id, two different entities. It
-// means the SESSION ENTITY now, resolved the way any id is resolved here:
+// means the SESSION entity now, resolved the way any id is resolved here:
 // addressed first (an eid, `S-37703`, a name the graph resolves), and where
 // nothing matches, read as the harness's own id for a transcript — which is the
 // only one of the three that may not exist yet, and the one

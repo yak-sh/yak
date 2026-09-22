@@ -63,7 +63,7 @@ Deno.test('words are terms, so they need not be adjacent or in order', () => {
     find(db, text, 'burglar dragon').map((h) => h.entity),
     ['book-1'],
   )
-  // The same words as a PHRASE say the stronger thing, and find nothing.
+  // The same words as a phrase say the stronger thing, and find nothing.
   assertEquals(find(db, text, '"burglar dragon"'), [])
   assertEquals(
     find(db, text, '"leaves home"').map((h) => h.entity),

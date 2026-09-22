@@ -1,6 +1,6 @@
 // A key's identity: the kind and the value.
 //
-// A key entity is CONTENT-ADDRESSED, the way an edge's id is derived from the
+// A key entity is content-addressed, the way an edge's id is derived from the
 // two entities it links and a blob's from the hash of its bytes. Here the
 // content is the pair — kind, value — so two writers giving the same value land
 // on one entity, a writer retiring a value can name its entity without a
@@ -26,7 +26,7 @@ import { VALUE } from './comp.ts'
  * component shares, so an id computed here and an id computed elsewhere are the
  * same id).
  *
- * `kind` is the TAG component the key carries, not the name a query uses for
+ * `kind` is the tag component the key carries, not the name a query uses for
  * it: the id is derived from what the entity carries.
  */
 export let keyEid = (kind: string, value: string): Eid =>

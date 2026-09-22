@@ -106,7 +106,7 @@ export let extend = <R extends Registration>(
   registry.renderers = [...renderers, ...registry.renderers]
 }
 
-// Selection asks the SAME registered queries again on every resolve, so
+// Selection asks the same registered queries again on every resolve, so
 // compiling one per test made matching, not rendering, the cost of a view — a
 // property row resolves its editor on each paint. The AST and the vocabulary
 // are stable objects, so key the compiled predicate on the pair: each compiles
@@ -175,11 +175,11 @@ let walk = <R extends Registration>(
   return pick('JSON')
 }
 
-// A column ask throws the entity away — the projection is the DECLARATION, so
+// A column ask throws the entity away — the projection is the declaration, so
 // the chosen control depends only on the registry, the vocabulary and the
 // column's address, while a property row asks again on every paint. Remember
 // the pick, and drop the whole memo when any of those three moves: define and
-// extend ASSIGN the lists rather than splice them, so a re-registration (or a
+// extend assign the lists rather than splice them, so a re-registration (or a
 // second vocabulary through the same registry) is honoured at once.
 type Memo = {
   renderers: unknown

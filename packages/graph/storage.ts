@@ -3,10 +3,10 @@
 // queries as bundles, and opens transactions. `apply()` never writes a row
 // itself; it decides what should happen and tells a transaction to do it.
 //
-// Two rules keep this interface small. First, every method is async OR sync:
+// Two rules keep this interface small. First, every method is async or sync:
 // an embedded database returns immediately, a remote one returns a promise,
-// and `apply()` handles either (see ./pipe.ts). Second, IDENTITY BELONGS TO
-// STORAGE: `patch` creates whatever identity row an eid needs and returns the
+// and `apply()` handles either (see ./pipe.ts). Second, identity belongs to
+// storage: `patch` creates whatever identity row an eid needs and returns the
 // entities it created, including the `num` if the adapter assigns one.
 
 import type { Query as Ast } from '@yaks/query'
@@ -28,7 +28,7 @@ export type ReadOpts = { now?: number; durable?: boolean }
  * are depth 1, and so on. This is also the order they are returned in. */
 export type Gone = { eid: Eid; depth: number }
 
-/** One reference to clear: a SURVIVING entity's `detach` or `release` column
+/** One reference to clear: a surviving entity's `detach` or `release` column
  * pointing at one of the deleted entities. */
 export type Loose = { eid: Eid; comp: string; prop: string }
 
@@ -48,11 +48,11 @@ export type Doom = { gone: Gone[]; loose: Loose[] }
 export type Tx = {
   /** a query → the matching entities as whole bundles */
   read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
-  /** the same result as `read`, in ONE round trip: an adapter that talks over
-   * a network embeds the matching set as a SUBQUERY in each statement of its
+  /** the same result as `read`, in one round trip: an adapter that talks over
+   * a network embeds the matching set as a subquery in each statement of its
    * read, so the whole result is one request instead of one request to learn
    * the eids and another to fetch them. Only valid for a query that selects a
-   * SET — a windowed query would be re-evaluated per statement and could break
+   * set — a windowed query would be re-evaluated per statement and could break
    * a tie differently in each — so the reverse-reference reads (./gather.ts
    * `pointing`) use it and nothing else does. An adapter with nothing to gain
    * leaves it out and `read` is used instead, which is why every read here is
@@ -66,7 +66,7 @@ export type Tx = {
    * components than asked for; a caller that needs the whole entity still uses
    * `get`. An adapter with no cheaper way to read a subset leaves this out. */
   pick?: (eids: Eid[], names: string[]) => Bundle[] | Promise<Bundle[]>
-  /** the reverse direction: the entities whose reference columns point AT one
+  /** the reverse direction: the entities whose reference columns point at one
    * of these, narrowed to the components named. Present only on the
    * transaction `apply()` hands its hooks, where the gather has already read
    * it (./gather.ts `holding`); read it through `about()` rather than calling
@@ -74,13 +74,13 @@ export type Tx = {
   about?: (eids: Eid[], comps?: string[]) => Bundle[] | Promise<Bundle[]>
   /** the whole delete cascade question, asked once: what else gets deleted
    * with these, and which references have to be cleared (see {@link Doom}).
-   * Optional, and it may DECLINE by returning `null` — a storage adapter that
+   * Optional, and it may decline by returning `null` — a storage adapter that
    * can compile the whole closure into one statement (@yaks/sql's `doomSql`)
    * answers; one that cannot, or whose answer would be about rows it has not
    * written yet, returns null and ./cascade.ts walks the references
    * itself. */
   doom?: (eids: Eid[]) => Doom | null | Promise<Doom | null>
-  /** what the DECLARED rules run through: evaluate each match against this
+  /** what the declared rules run through: evaluate each match against this
    * graph with `batch` folded in, as though it had already been applied.
    * `covers` names the components the matches read, so a store building an
    * overlay of the pending change builds only those. A storage adapter without
@@ -91,7 +91,7 @@ export type Tx = {
     batch: Bundle[],
     covers: string[],
   ) => Binding[][] | Promise<Binding[][]>
-  /** write the bundles → the entities this patch CREATED, with their `num`
+  /** write the bundles → the entities this patch created, with their `num`
    * when the adapter assigns one. An adapter whose numbers are picked by the
    * database may not know them yet — it fills each `num` into the very entity
    * object it returned, before its `tx()` settles. `apply()` reads them only
@@ -120,7 +120,7 @@ export type Storage = {
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: ReadOpts) => Row[] | Promise<Row[]>
   /** run `body` in a transaction: commit on return, roll back on throw. Like
-   * every other member it is async OR sync — an embedded adapter returns
+   * every other member it is async or sync — an embedded adapter returns
    * whatever the body returned, an adapter over a network returns a promise
    * that settles once the transaction has committed. */
   tx: <R>(body: (tx: Tx) => R) => R | Promise<Awaited<R>>
@@ -128,7 +128,7 @@ export type Storage = {
 
 /**
  * A `Tx` that is not a transaction: each call is its own unit of work against
- * the storage. This is what a hook receives in the phases that run OUTSIDE the
+ * the storage. This is what a hook receives in the phases that run outside the
  * change's transaction — `normalize` before it opens, `effect` after it
  * commits, `audit` after it rolled back — where writing into the change's
  * transaction is either impossible or exactly the wrong thing.
@@ -137,7 +137,7 @@ export let detached = (storage: Storage): Tx => ({
   read: (query, opts) => storage.read(query, opts),
   get: (eids) => storage.tx((tx) => tx.get(eids)),
   // A match is a question about committed data, which is exactly what there
-  // is to ask out here: an effect registered on a PATTERN (@yaks/effects) asks
+  // is to ask out here: an effect registered on a pattern (@yaks/effects) asks
   // it after the change has been applied. A store that cannot evaluate one
   // throws when it is asked rather than omitting the method, because whether
   // it can is not known until a transaction is open.

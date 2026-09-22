@@ -4,22 +4,22 @@
 // been claimed is a row sitting at an id anyone can compute. Two things follow,
 // and they are this file.
 //
-// RESOLVING ONTO THE HOLDER. A write that mints an entity under a `$alias` and
+// Resolving onto the holder. A write that mints an entity under a `$alias` and
 // gives it a value — which is what a seed, a chunked import and a page that
 // saves the same row every time it opens all do — should land on the entity
 // that already holds that value rather than beside it. So after @yaks/graph has
-// assigned an id to every `$alias`, the derived rows are READ (one `get` by id
+// assigned an id to every `$alias`, the derived rows are read (one `get` by id
 // for the whole write; no query), and where a value is already held the minted
 // id gives way to the holder's, in the bundle and in everything pointing at it
 // (`substitute`). The rest of the write then patches the entity that was
 // already there.
 //
-// THE REFUSAL. A key whose `of` was NOT minted in this write — a caller who
+// The refusal. A key whose `of` was not minted in this write — a caller who
 // wrote an id down — is refused instead, naming the holder. The caller named
 // both the entity and the value and the two disagree; swapping the id underneath
 // them would be a lie, and the holder's id is the one they wanted.
 //
-// The read happens in `mint`, which runs OUTSIDE the transaction. That leaves a
+// The read happens in `mint`, which runs outside the transaction. That leaves a
 // window: two processes claiming one free value at the same instant both find
 // nothing and both write. The derived id closes it — both writes address the
 // same row, so the second patches the first rather than creating a second row,
@@ -61,7 +61,7 @@ export let held = (
  * `death: release`, and this removes the kind tag beside it, so no entity is
  * left holding half a key.
  *
- * It is a RELEASE and not a cascade on purpose. A cascade would tombstone the
+ * It is a release and not a cascade on purpose. A cascade would tombstone the
  * key entity, and that id is derived from the value — so the value could never
  * be claimed again, by anyone, for the life of the store. Deleting a recipe
  * must free its name.

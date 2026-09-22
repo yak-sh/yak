@@ -141,7 +141,7 @@ export function migrations(db: Driver): MigrationControl {
     apply,
     fail,
     /** Explicit operator recovery after inspecting/repairing failed or abandoned
-     * work. This does NOT undo a migration or decide whether retry is safe. */
+     * work. This does not undo a migration or decide whether retry is safe. */
     acknowledge: (generation: number) =>
       transaction(() => {
         const current = read()

@@ -65,7 +65,7 @@
           "type": "string",
           "format": "date-time",
           "stamped": true,
-          "description": "when the next attempt falls due; set means a failure that REPORTED and is waiting out its backoff, absent means a run in progress (or one nobody has picked up)"
+          "description": "when the next attempt falls due; set means a failure that reported and is waiting out its backoff, absent means a run in progress (or one nobody has picked up)"
         },
         "lease_owner": {
           "type": "string",

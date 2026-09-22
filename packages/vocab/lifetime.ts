@@ -12,7 +12,7 @@
 // no one else is told about it, and this browser keeps it across a reload. A
 // task is the default, `sync: server, durable: forever`.
 //
-// Both keywords are CORE, not @yaks/sync's, because the server reads them: the
+// Both keywords are core, not @yaks/sync's, because the server reads them: the
 // write allowlist, the subscription registry and the store all decide from
 // them, and a keyword only a browser package declared would not be on the
 // meta-schema a server validates against.

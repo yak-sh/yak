@@ -62,7 +62,7 @@ export let loop = async (
   if (!Number.isFinite(cap) || cap <= 0 || cap > 2_147_483_647) {
     throw new RangeError('wake loop cap must be within setTimeout range')
   }
-  // ONE PASS FIRST, always: a signal that is already aborted means a
+  // One pass first, always: a signal that is already aborted means a
   // short-lived process — a one-off command run to fire whatever is overdue —
   // and it still owes the graph the tick it was started for.
   do {

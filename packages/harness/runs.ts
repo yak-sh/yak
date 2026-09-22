@@ -1,4 +1,4 @@
-// What an agent may CALL here, exported as `@yaks/harness/tools` (and imported
+// What an agent may call here, exported as `@yaks/harness/tools` (and imported
 // by @yaks/cli's `compose`) — the functions behind the `tool: true`
 // declarations in the documents ./vocab.ts loads, keyed by tool name.
 // `declared.ts` imports the same list for the harness's own command line, so
@@ -8,7 +8,7 @@
 // and @yaks/session's vocabularies, so it has to implement their tools too:
 // `loadTools` refuses a declaration nobody implements, and the way to implement
 // one is to call the package's own function rather than write a second. Their
-// CHECKS come with them: a harness answers for the leases it holds and the
+// checks come with them: a harness answers for the leases it holds and the
 // boards it saved, because it is what created them.
 
 import type { Runs } from '@yaks/graph/tools'

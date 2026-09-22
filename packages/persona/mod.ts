@@ -21,7 +21,7 @@
  * if (worn) console.log(voice(vocab)(worn))
  * ```
  *
- * It returns TEXT. Where that text goes — a file, a repo, the system prompt
+ * It returns text. Where that text goes — a file, a repo, the system prompt
  * of a spawned agent — is the caller's decision, which is why nothing here
  * writes a file, and why the package has no `./effects` export: an effect
  * would have to know that destination to be worth registering.

@@ -1,30 +1,30 @@
 // What a delete takes with it. Each reference column declares in the
-// vocabulary what should happen to it when the entity it points AT is deleted,
+// vocabulary what should happen to it when the entity it points at is deleted,
 // and this phase implements all four possibilities:
 //
 //   cascade  the referencing entity is deleted too — a review of a deleted
 //            book has nothing left to be about
 //   detach   the column is set to null and the referencing entity survives — a
 //            book whose publisher is deleted is still a book
-//   release  the referencing component ROW is deleted, its entity survives — a
+//   release  the referencing component row is deleted, its entity survives — a
 //            bookmark whose whole reason to exist was to point at something
 //   keep     the reference stays as history — the tombstone is the record
 //
-// The GRAPH decides what is deleted; storage only removes what it is told to.
+// The graph decides what is deleted; storage only removes what it is told to.
 // That split is the point: a cascade rule is about meaning, it is written in
 // the vocabulary, and every storage adapter gets it without reimplementing it
 // in SQL. Every surviving entity's change is added back into the change the
 // caller gets, so a client cache that applies the return value keeps no stale
 // rows.
 //
-// It reads references BACKWARDS — what points at the entities being deleted —
-// and that is ONE question: everything deleted along with these, and every
+// It reads references backwards — what points at the entities being deleted —
+// and that is one question: everything deleted along with these, and every
 // reference that has to be cleared (`Doom`, ./storage.ts). A storage adapter
 // that can compile the whole closure asks it as one statement (@yaks/sql's
 // `doomSql`); one that cannot is walked here instead, with one reverse read
 // per level through `about()` (./gather.ts). Either way the question is asked
-// AFTER the patches are written, because what points at the entities being
-// deleted is a question about the graph as this change LEAVES it.
+// after the patches are written, because what points at the entities being
+// deleted is a question about the graph as this change leaves it.
 
 import type { Death, Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Eid } from './bundle.ts'
@@ -51,7 +51,7 @@ let at = (b: Bundle, comp: string, prop: string): Eid | null => {
   return v == null ? null : String(v)
 }
 
-// Sort a reverse read's results in the order the entities were CREATED, not
+// Sort a reverse read's results in the order the entities were created, not
 // the order the read happened to return them in — which is per column, so an
 // entity referencing a deleted one through two columns would land wherever the
 // first column put it. The single-statement version returns that order too, so
@@ -94,13 +94,13 @@ let walk = (
 
 /**
  * The transitive closure of `cascade` references over a set of entities being
- * deleted: everything that exists ABOUT one of them is deleted with it, and so
- * is anything that exists about THAT.
+ * deleted: everything that exists about one of them is deleted with it, and so
+ * is anything that exists about that.
  *
  * This is the phase's own worklist, exported because a plugin sometimes has to
- * know which entities are about to be deleted BEFORE they are — an observer
+ * know which entities are about to be deleted before they are — an observer
  * that reads a doomed entity's components has one chance, before the rows go.
- * It always WALKS the references: a plugin calls it in the phases that read
+ * It always walks the references: a plugin calls it in the phases that read
  * from the gather, where storage's own single-statement answer would be about
  * rows this change has not written yet.
  */
@@ -108,7 +108,7 @@ export let doomed = (
   tx: Tx,
   vocab: Vocab,
   killed: Eid[],
-  // Which components the walk reads through. It only ever DECIDES by the
+  // Which components the walk reads through. It only ever decides by the
   // cascade columns; a caller that will also need the detach/release
   // references of the same entities passes a wider set, so one read serves
   // both.
@@ -117,7 +117,7 @@ export let doomed = (
   then(walk(tx, vocab, killed, look), (gone) => gone.map((g) => g.eid))
 
 // The detach/release references into a set of deleted entities, read out of
-// the bundles that point at them. Only SURVIVING entities need their
+// the bundles that point at them. Only surviving entities need their
 // references cleared — a deleted entity's own tombstone covers the rest.
 let letting = (
   vocab: Vocab,

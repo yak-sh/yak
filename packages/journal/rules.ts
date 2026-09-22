@@ -4,7 +4,7 @@
 // component every transaction touched.
 //
 // `logFor` is here rather than inside `rules` because `@yaks/journal/tools`
-// READS the same tables this plugin writes, and both build their reader the
+// reads the same tables this plugin writes, and both build their reader the
 // same way: one server, one log, bound in one place.
 
 import type { Plugin } from '@yaks/graph'

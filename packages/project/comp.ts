@@ -8,19 +8,19 @@
 //   paused{at}                                  work on it is suspended
 //   repo{repository, base_branch, gate, push}   where it lands its source
 //
-// FILING IS SEPARATE FROM BEING A TASK. A task with no `filed` component at all
+// Filing is separate from being A task. A task with no `filed` component at all
 // is still a task, and the filing is the optional component that puts one in a
 // portfolio. `filed.project` is declared `death: detach`: deleting a project
-// frees its tasks rather than deleting them, because they are not ABOUT the
+// frees its tasks rather than deleting them, because they are not about the
 // project, they were only filed under it.
 //
-// A BOARD IS ITS QUERY. `board{query}` holds a filter, and membership is never
+// A board is its query. `board{query}` holds a filter, and membership is never
 // stored — there is no row saying this task is on that board. So a board is
 // always current: a task that starts matching is on it, with nothing to
 // reconcile. The empty query selects nothing, which is what a board nobody has
 // written a filter for should show, and ./guard.ts refuses the rest.
 //
-// A VENTURE HAS A PHASE, NOT A STATUS. It is never done: it is incubating, or
+// A venture has A phase, not A status. It is never done: it is incubating, or
 // building, or live, or shuttered. Suspending work on it is the separate
 // `paused` component, so the phase underneath is untouched and resuming means
 // removing that component — there is no column remembering which phase to put
@@ -47,7 +47,7 @@ export let VENTURE = 'venture'
 /**
  * The portfolio vocabulary, to load beside {@link https://jsr.io/@yaks/task |
  * @yaks/task}'s: `loadVocab([taskDoc, projectDoc, ...mine])`. It declares
- * nothing about what a task IS — only what one is filed under and looked at
+ * nothing about what a task is — only what one is filed under and looked at
  * through.
  */
 export let projectDoc: VocabDoc = doc as VocabDoc

@@ -63,7 +63,7 @@ slow(
           session: { id: 'one' },
         }]),
       }).then((r) => r.json())
-      // The door signs the batch with this PROCESS, which is the floor where
+      // The door signs the batch with this process, which is the floor where
       // no plugin named a caller.
       assertEquals(applied[0].created.by, host.me)
 

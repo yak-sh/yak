@@ -64,7 +64,7 @@ Deno.test('the filter line names what a row must carry', () => {
     line({ space: 's1', limit: 8 }),
     '.memory.space=s1&.doc?&.created?&.order=-entity.num&.limit=8',
   )
-  // Words SELECT; a query line carries no bm25, so the newest still lead.
+  // Words select; a query line carries no bm25, so the newest still lead.
   assertEquals(
     line({ space: 's1', limit: 3, said: 'measurements' }),
     'measurements&.memory.space=s1&.doc?&.created?' +

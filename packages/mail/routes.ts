@@ -2,19 +2,19 @@
 // route a mail edge posts a letter to this graph on.
 //
 // Mail lands at the edge of the world, in front of a domain, and the graph is
-// usually somewhere that edge cannot reach back into. So the letter is POSTED
+// usually somewhere that edge cannot reach back into. So the letter is posted
 // here, as the message itself: the envelope, the headers exactly as they
 // arrived, and the body as text once something upstream has parsed the MIME.
-// The subject, the Message-ID, the date and the DKIM verdict are READ OUT of
+// The subject, the Message-ID, the date and the DKIM verdict are read out of
 // those headers (./inbound.ts) rather than repeated in the request body — two
 // copies of one fact is how they come to disagree.
 //
-// Who may post is this plugin's OPTION, not a server-wide setting: which
+// Who may post is this plugin's option, not a server-wide setting: which
 // senders a mailbox trusts is a fact about the mailbox. Set no secret and the
 // route is as open as the `/apply` beside it, which is right for a server
 // behind a perimeter and wrong for anything else.
 //
-// Nothing here decides what a letter MEANS. It records one, responds with its
+// Nothing here decides what a letter means. It records one, responds with its
 // id, and the effects registered on `mail` do the rest — which is why posting
 // the same letter twice needs no lock: the Message-ID already identifies which
 // letter this is (./arrive.ts).

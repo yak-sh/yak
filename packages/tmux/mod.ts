@@ -8,7 +8,7 @@
  * running there and where tmux can find it:
  *
  * - **`of`** names whatever the pane is showing — a session, a process,
- *   anything that runs. It is `death: keep`, because a pane OUTLIVES what ran
+ *   anything that runs. It is `death: keep`, because a pane outlives what ran
  *   in it: the window is still open, and what it shows next is the next thing
  *   somebody starts there.
  * - **`pane`** is the target string tmux itself accepts — a pane id like `%42`,
@@ -18,7 +18,7 @@
  *
  * Most processes have no pane at all, which is the other reason this is a
  * component and not a column: a graph that never touches a terminal never loads
- * this vocabulary. Enabling tmux support IS loading it.
+ * this vocabulary. Enabling tmux support is loading it.
  *
  * ## Why the component is `tmux` and the column is `pane`
  * Component names share one flat namespace, and `pane` is already
@@ -32,7 +32,7 @@
  * ## Declarations only, for now
  * This package declares a vocabulary and nothing else. Sending keys to a pane,
  * finding the pane a session is running in, and attaching to one are things an
- * APPLICATION does with `tmux` on its PATH; the one caller that does them today
+ * application does with `tmux` on its path; the one caller that does them today
  * (the fleet's `src/tmux.ts`) drives tmux through a child process, and every
  * check it needs is about its own terminal rather than about a graph. When a
  * second caller needs the same operations they become this package's `./tools`

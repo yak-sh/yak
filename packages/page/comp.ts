@@ -18,7 +18,7 @@
 // for one component to claim vocabulary-wide, so a query names it in full —
 // `.web.bytes=<sha>`.
 //
-// THE TITLE IS NOT HERE. A page's title and prose are `doc{title, body}` from
+// The title is not here. A page's title and prose are `doc{title, body}` from
 // @yaks/doc, which this package loads beside its own rather than redefining: a
 // vocabulary refuses a component declared twice, so the component keeps one
 // home and a page is rendered by whatever already renders a `doc`.

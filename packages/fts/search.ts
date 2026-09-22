@@ -1,6 +1,6 @@
 // Ranked results, with a snippet.
 //
-// The extension (./compile.ts) decides MEMBERSHIP — which entities a search
+// The extension (./compile.ts) decides membership — which entities a search
 // selects. This module answers the other question a search box asks: of those,
 // which come first, and what text matched? That is FTS5's `bm25` relevance and
 // its `snippet()`, both of which can only be read in a statement that queries
@@ -8,7 +8,7 @@
 //
 // `hits()` only builds it: it returns SQL and params the caller may run through
 // anything, sync or async. `find()` runs it through a driver and returns
-// {@link Hit}s. Ranking is by relevance ALONE; mixing in recency, popularity or
+// {@link Hit}s. Ranking is by relevance alone; mixing in recency, popularity or
 // anything else is an application's policy, applied to the results it gets
 // back.
 
@@ -21,7 +21,7 @@ import type { Driver } from './driver.ts'
 export type Hit = {
   // the matched entity
   entity: Eid
-  // the relevance rank — FTS5's bm25, where a LOWER number is a closer match
+  // the relevance rank — FTS5's bm25, where a lower number is a closer match
   rank: number
   // the matching text with each match wrapped in OPEN…CLOSE, for display
   snippet: string
@@ -51,7 +51,7 @@ let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 // One subquery per index, combined with `union all`; the outer statement joins
 // the `entity` table for the eid, excludes deleted entities, and keeps one row
 // per entity. `min(rank)` picks an entity's best-matching index, and the
-// snippet selected alongside it comes from THAT row — SQLite returns a bare
+// snippet selected alongside it comes from that row — SQLite returns a bare
 // column selected next to a single `min()` from the row the minimum came from,
 // which is exactly the pairing wanted here.
 export let hits = (
@@ -74,12 +74,12 @@ export let hits = (
   let screen = opts.screen ? ` and "entity"."eid" in (${opts.screen.sql})` : ''
   if (opts.screen) params.push(...opts.screen.params)
   params.push(opts.limit ?? 20)
-  // MATERIALIZED, and it is not decoration: FTS5's `bm25` and `snippet` may
+  // Materialized, and it is not decoration: FTS5's `bm25` and `snippet` may
   // only be used in a statement that matches the index, and SQLite's query
   // flattener would fold a plain subquery into the join above it, moving them
   // out of that context and raising "unable to use function bm25 in the
   // requested context". Two or more indexes produce a `union all`, which is
-  // never flattened, so the error only ever appeared for a vocabulary with ONE
+  // never flattened, so the error only ever appeared for a vocabulary with one
   // indexed component.
   return {
     sql: `with "hit" as materialized (${union})` +

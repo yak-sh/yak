@@ -11,7 +11,7 @@ import { descriptor } from './catalog.ts'
 export let keyed = (driver: Driver, vocab: Vocab, opts: BindOpts) => {
   let names = vocab.all.filter((c) => c != 'entity')
   let probes: string[] = []
-  // Cut to what THIS engine's compound SELECT carries (`Driver.arms`): workerd
+  // Cut to what this engine's compound SELECT carries (`Driver.arms`): workerd
   // refuses a sixth term where an embedded SQLite takes hundreds, so a probe
   // sized for the latter is a broken read on a Durable Object, not a slow one.
   let wide = driver.arms ?? ARMS

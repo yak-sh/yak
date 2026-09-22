@@ -1,7 +1,7 @@
 // Creating the indexes, and keeping them correct.
 //
 // One FTS5 index per indexed component, named `<comp>_fts`. Each is an
-// EXTERNAL-CONTENT index (`content='<comp>'`): it stores the inverted index and
+// external-content index (`content='<comp>'`): it stores the inverted index and
 // nothing else, reading the text itself back out of the component's own table,
 // so the prose is never stored twice. `content_rowid='entity'` makes the
 // index's rowid the component's integer owner column — the entity's id in the
@@ -9,12 +9,12 @@
 // and no join is needed to get there.
 //
 // Three triggers keep each index current. External-content indexes impose one
-// rule: a delete must be given EXACTLY the values the matching insert was
+// rule: a delete must be given exactly the values the matching insert was
 // given, or the index keeps terms for text that is no longer there. So both
 // sides read the column the same way — the stored text, or '' for a null — and
 // an update is written as a delete followed by an insert.
 //
-// WHEN A COLUMN DOES NOT HOLD ITS OWN TEXT. @yaks/blob stores a body's SHA-256
+// When A column does not hold its own text. @yaks/blob stores a body's SHA-256
 // and keeps the prose in a separate table, so a trigger reading the column
 // would index the hash and a search would only ever find the body by its title.
 // A {@link Text} entry describes how to resolve such a column, and it is
@@ -22,7 +22,7 @@
 //
 //   - the triggers insert the resolved text, so every write path indexes prose
 //     — the plugin's writes, a plain `insert into doc`, a restore;
-//   - the index's content source becomes a VIEW that resolves the same way
+//   - the index's content source becomes a view that resolves the same way
 //     (`<comp>_text`), because FTS5 reads the content back for `snippet()` and
 //     for `rebuild`, and both would otherwise see the hash.
 //
@@ -36,7 +36,7 @@
 // trigger that did not run, a file restored around it) returns wrong results
 // quietly, so it is checked and rebuilt rather than trusted.
 //
-// `adopt()` is for a database that already HAS search objects — created by an
+// `adopt()` is for a database that already has search objects — created by an
 // earlier version of this package, or by an application before it used one. It
 // makes what is there match what `schema()` returns, keeping an index whose
 // columns already match (its terms need no re-indexing) and re-creating one
@@ -64,7 +64,7 @@ let index = (comp: string, props: string[], text: Text): string[] => {
   let fts = indexName(comp)
   let cols = props.map(q).join(', ')
   // How one column reads as text, given a SQL expression for its stored value.
-  // With no resolution the stored value IS the text, which is every ordinary
+  // With no resolution the stored value is the text, which is every ordinary
   // column.
   let read = (prop: string, stored: string) =>
     text[`${comp}.${prop}`]?.(stored) ?? stored
@@ -182,7 +182,7 @@ export type HealOpts = {
 
 // Check every index and rebuild the ones that have drifted; returns the names
 // of the indexes rebuilt (usually none). A rebuild that does not fix the
-// problem throws an error naming BOTH results — the first reports what was
+// problem throws an error naming both results — the first reports what was
 // wrong, the second whether the damage extends beyond the index.
 export let heal = (
   db: Driver,
@@ -276,7 +276,7 @@ let strays = (db: Driver, fts: string): string[] => {
 // that is not one of this package's three is dropped, and the three are
 // created again. A view holds no rows, so the text view is re-created whenever
 // the one in the database differs from what `schema()` returns — but only
-// then: dropping a view is a schema WRITE, and a process that calls `adopt()`
+// then: dropping a view is a schema write, and a process that calls `adopt()`
 // on every start-up should be able to start up without writing anything.
 // Finally `heal` checks the row counts, so an index that was kept but is
 // missing rows — one created after part of its table already existed — is

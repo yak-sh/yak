@@ -4,7 +4,7 @@ import { scrollbar } from './scrollbar.ts'
  * The ANSI backend: a tree of fake-DOM nodes becomes lines, and lines become
  * bytes on a terminal.
  *
- * THE SEAM. A `Backend` is `{size, start, draw, reset, stop}` — five calls,
+ * The seam. A `Backend` is `{size, start, draw, reset, stop}` — five calls,
  * the whole contract `run()` knows. `draw(root)` is handed the rendered tree
  * and returns `{written, metrics}`: how many screen lines it actually wrote
  * (diagnostics, and what the snappiness test asserts on) and what it measured
@@ -13,14 +13,14 @@ import { scrollbar } from './scrollbar.ts'
  * OpenTUI's renderable tree, say — means implementing those five, not touching
  * the widgets.
  *
- * LAYOUT is four structural attributes, because only the painter knows how
+ * Layout is four structural attributes, because only the painter knows how
  * wide and tall the terminal is: `row` lays element children side by side
  * (`width` fixed, `grow` takes the rest), `col` stacks them (`grow` takes the
  * leftover rows), `height` fixes a box, and `scroll` windows a box's content
  * from that offset. Everything else flows: block elements stack as lines,
  * inline elements run into them, class names look up the sheet.
  *
- * THE BOUNDARY. Every text node and every href loses the C0/DEL/C1 class
+ * The boundary. Every text node and every href loses the C0/DEL/C1 class
  * before anything is painted (`@yaks/text`'s `safe`, with `\n` kept because a
  * newline inside a text node means a line break here). Every escape the
  * terminal sees is emitted by `ansi()` or by `draw()` — never by content.
@@ -576,7 +576,7 @@ export let screenful = (
 let enc = new TextEncoder()
 
 /**
- * OSC 52: hand text to the clipboard THROUGH the terminal — the escape travels
+ * OSC 52: hand text to the clipboard through the terminal — the escape travels
  * the tty like any output, so it works across ssh (tmux needs set-clipboard on).
  */
 export let clipboard = (text: string): string =>

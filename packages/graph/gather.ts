@@ -5,21 +5,21 @@
 // how much SQL it runs — it is how many times the caller has to wait. D1 has no
 // interactive transaction, so every question a hook asks is its own round trip,
 // and all those questions arrive before any row has changed. They are also all
-// KNOWABLE before any row has changed: the `$was` check names its columns, a
+// knowable before any row has changed: the `$was` check names its columns, a
 // membership check names the app and the actor, a delete names the entity whose
-// dependents have to be found. So a plugin DECLARES what it is about to read —
+// dependents have to be found. So a plugin declares what it is about to read —
 // `wants` in ./plugin.ts — and everything declared is read together.
 //
-// TWO KINDS OF ASK, because two are all a hook has ever needed. `eids` means
+// Two kinds of ask, because two are all a hook has ever needed. `eids` means
 // these entities, whole. `about` is the reverse direction: the entities whose
-// reference columns point AT these — the delete cascade's question, and a
+// reference columns point at these — the delete cascade's question, and a
 // membership check's too, since a grant is an entity that references both an
 // app and a person, so "everything about this actor" is one read where "their
 // grant, and their seat" would be two. `comps` narrows which components an
 // `about` looks through, so asking about a person does not drag back everything
 // they ever created.
 //
-// FORGETTING TO DECLARE A READ IS NOT AN ERROR. `wants` is written by a plugin
+// Forgetting to declare A read is not an error. `wants` is written by a plugin
 // this package has never seen, and one that forgets an eid must still get a
 // correct answer — so the transaction built here falls back to the storage for
 // anything it was not asked for, and caches the result. The cost of a forgotten
@@ -29,7 +29,7 @@
 //
 // The gather is also where an asynchronous storage becomes a single await: one
 // `tx.get`, plus one reverse read when something asked `about`. That second one
-// is a ROUND TRIP, not just a query: an `about` finds the matching entities
+// is a round trip, not just a query: an `about` finds the matching entities
 // with one statement and then has to read them whole, which over a network is
 // two waits unless the read of those entities can identify them by the query
 // that found them. `Tx.whole` (./storage.ts) is the method for that, and `seek`
@@ -56,7 +56,7 @@ export type Ask = {
    * entity or writes to it. Omit it to read the whole entity; an ask for the
    * whole entity always wins over an ask for a subset. */
   select?: string[]
-  /** the entities whose reference columns point AT these */
+  /** the entities whose reference columns point at these */
   about?: Eid[]
   /** which components an `about` looks through (default: every component that
    * declares a reference column) */
@@ -111,7 +111,7 @@ let want = (
 export let pointing = (pairs: [string, string, Eid][]): Ast | null =>
   pairs.length ? and(or(...pairs.map(([c, p, e]) => eq(`${c}.${p}`, e)))) : null
 
-// Run a pointing query. It selects a SET — a disjunction of equalities, never
+// Run a pointing query. It selects a set — a disjunction of equalities, never
 // a windowed query — which is exactly what `Tx.whole` promises to answer in a
 // single round trip, so every reverse read goes through here rather than
 // `read`. An adapter without `whole` falls back to `read` and gets the same
@@ -149,7 +149,7 @@ let once = (rows: Bundle[]): Bundle[] => {
  * A patch folded into what the snapshot holds: a null component removes it,
  * anything else merges in, so an omitted column keeps its value and a null one
  * clears it. That is the same rule ./mutate.ts gives the storage, implemented
- * again here because a hook that WRITES in a gathered phase has to be visible
+ * again here because a hook that writes in a gathered phase has to be visible
  * to the hook after it (yaks.app's vouch writes the grant its own membership
  * check then reads), and because a rule is evaluated against exactly this
  * merge (./rules.ts).
@@ -265,15 +265,15 @@ export let complete = (tx: Tx, snap: Snap): void | Promise<void> => {
  * a query is the storage's job, and doing it here would mean a second query
  * engine in the core.
  *
- * Only the phases that run BEFORE the change is written get one — a snapshot
- * of the graph as the change FOUND it is exactly what a precondition needs,
+ * Only the phases that run before the change is written get one — a snapshot
+ * of the graph as the change found it is exactly what a precondition needs,
  * and exactly what a phase reading after the write must not have. That is why
  * the cascade does a fresh gather of its own.
  */
 export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
   ...tx,
   // Not the storage's own delete cascade: it would answer about the rows the
-  // storage HOLDS, and this transaction is the one place where a hook's
+  // storage holds, and this transaction is the one place where a hook's
   // pending write is not among them. A phase reading through the snapshot
   // walks the references instead (./cascade.ts `doomed`).
   doom: undefined,

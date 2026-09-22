@@ -1,13 +1,13 @@
 /// <reference types="@cloudflare/workers-types/index.d.ts" />
-// The types this package declares describe only the PARTS of the runtime's own
+// The types this package declares describe only the parts of the runtime's own
 // types that it uses. It declares them structurally so nothing here depends on
 // Cloudflare at runtime — and this file is where that claim is checked, against
 // @cloudflare/workers-types itself. Every assertion is an assignment: if the
 // runtime's types stop satisfying ours, the type check fails here rather than
 // a letter failing to arrive in production.
 //
-// It is CHECKED ON ITS OWN (`deno task check:workers`) and excluded from the
-// repo-wide check, because @cloudflare/workers-types arrives as GLOBALS — the
+// It is checked on its own (`deno task check:workers`) and excluded from the
+// repo-wide check, because @cloudflare/workers-types arrives as globals — the
 // package declares them and exports nothing — and those globals merge into
 // whatever program includes them, redefining `Response`, `Headers` and friends
 // for every other file in it. This one file includes them; the rest of the
@@ -17,7 +17,7 @@ import type { Head, Received } from './inbound.ts'
 import type { Fetch } from './cloudflare.ts'
 import { author, cloudflare, inbound, messageId } from './mod.ts'
 
-// The inbound types: a message an Email Worker is handed IS a `Received`, and
+// The inbound types: a message an Email Worker is handed is a `Received`, and
 // its headers are a `Head`.
 let message = null as unknown as ForwardableEmailMessage
 let _received: Received = message

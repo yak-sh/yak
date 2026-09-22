@@ -1,7 +1,7 @@
 // The gather, counted: what a batch asks the storage, and how often.
 //
 // The unit that matters is not "is the answer right" — the parity script
-// already holds every adapter to that — it is HOW MANY CALLS the answer took.
+// already holds every adapter to that — it is how many calls the answer took.
 // So every case here runs over a storage that tallies its own doors, and
 // asserts the tally.
 

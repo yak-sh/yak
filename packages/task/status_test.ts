@@ -50,7 +50,7 @@ Deno.test('an added rung reaches every reader at once', () => {
   let marks = [...MARKS, { status: 'wip', comp: 'claim', settled: false }]
   assertEquals(statusOf(task({ claim: { person: 'p1' } }), marks), 'wip')
   assertEquals(statuses(marks), ['cancelled', 'done', 'wip', OPEN])
-  // a lease means somebody is ON it, which is not the same as finished
+  // a lease means somebody is on it, which is not the same as finished
   assert(!settled('wip', marks))
   // and the ladder still ranks: a completed task that is also claimed is done
   assertEquals(statusOf(task({ claim: {}, completed: {} }), marks), 'done')

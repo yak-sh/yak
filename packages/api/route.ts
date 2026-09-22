@@ -1,7 +1,7 @@
 // The route table. Three paths, one `try`, and the two callbacks the
 // application supplies.
 //
-// Attribution is decided here. `authenticate` runs on EVERY request — a read,
+// Attribution is decided here. `authenticate` runs on every request — a read,
 // a write and a WebSocket upgrade alike — and what it returns is what signs
 // the write; whatever `$actor` a client sent is discarded before the graph
 // sees it. `upgrade` is the only step no web standard covers, so a runtime
@@ -18,7 +18,7 @@ import { type Subs, subscriptions } from './subs.ts'
 /** A web-standard request handler: a `Request` in, a `Response` out. */
 export type Handler = (request: Request) => Response | Promise<Response>
 
-/** One path served ALONGSIDE this package's three endpoints — a plugin's
+/** One path served alongside this package's three endpoints — a plugin's
  * route. `path` is matched exactly, or ends in `*` to match a prefix, which
  * is what content-addressed bytes (`/blob/<sha>`) need; `method` is the HTTP
  * method, or `*` for any. Whoever mounts the routes decides which one wins a

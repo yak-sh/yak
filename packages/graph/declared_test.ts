@@ -1,4 +1,4 @@
-// What a declared rule WRITES, and in what order rules run. The fixpoint and
+// What a declared rule writes, and in what order rules run. The fixpoint and
 // the refusal are exercised end to end over a real store (@yaks/sqlite's
 // declared_test.ts); these are the pure halves.
 

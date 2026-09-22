@@ -118,7 +118,7 @@ Deno.test('a rule writing a resource refuses the batch', () => {
 })
 
 // A resource is not vocabulary, so naming one nobody provides is a mistake
-// where naming an unknown COMPONENT is inert — and it is one before the match,
+// where naming an unknown component is inert — and it is one before the match,
 // not only where a rule would have fired.
 Deno.test('a rule naming a resource nobody provides is refused', () => {
   let one = g([{

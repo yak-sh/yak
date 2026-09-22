@@ -1,7 +1,7 @@
 // The `precondition` hook that refuses a board whose query would quietly match
 // nothing.
 //
-// A board IS its query — membership is never stored — and that is what makes
+// A board is its query — membership is never stored — and that is what makes
 // this worth refusing over. An empty board looks exactly like a board whose
 // filter is right and whose answer happens to be nothing, so a typo in a query
 // is invisible forever: no error, no empty state explaining itself, just a
@@ -11,14 +11,14 @@
 //
 // Two ways a query is wrong, both caught in one walk over its clauses:
 //
-//   ROUTING   `.staus=open` names no column. The vocabulary refuses it.
-//   MEMBERS   `.status=complete` names no status. The status set refuses it.
+//   Routing   `.staus=open` names no column. The vocabulary refuses it.
+//   Members   `.status=complete` names no status. The status set refuses it.
 //
 // The second is what a closed set of statuses buys: `complete` and `completed`
 // and `done` are all plausible, exactly one is a status, and a query naming
 // either of the others is indistinguishable from a board with nothing on it.
 //
-// The EMPTY query stays legal. It selects nothing on purpose — that is what a
+// The empty query stays legal. It selects nothing on purpose — that is what a
 // board nobody has written a filter for should show.
 //
 // Writing `task.status` itself needs no refusal here: it is declared
@@ -67,7 +67,7 @@ export let unroutable = (
   marks?: Mark[],
 ): string | null => {
   // Pass the marks and the status set is theirs; pass none and it is the one
-  // the VOCABULARY declares, which is how a board in a graph that leases its
+  // the vocabulary declares, which is how a board in a graph that leases its
   // tasks knows `wip` without @yaks/project being told about @yaks/session.
   let known = marks ? statuses(marks) : declared(vocab)
   try {

@@ -26,7 +26,7 @@ export { sqlitePath } from './sqlitepath.ts'
  * preparing each one afresh costs a compile for nothing; the cache is bounded
  * and `Database.close()` finalizes what it holds.
  *
- * A database on DISK is a file other processes may have open too, so the
+ * A database on disk is a file other processes may have open too, so the
  * driver reports that ({@link Driver.file}) and the outermost unit takes the
  * write lock up front. An in-memory one belongs to this process alone and sets
  * nothing.

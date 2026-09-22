@@ -65,7 +65,7 @@ Deno.test('an undo guards every column it restores', () => {
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Two' } }])
   let [back] = undone(f.j.at(2)!, { guard: true })
   assertEquals(back.page, { title: 'One' })
-  // The guard names the value the batch LEFT, so a column somebody else has
+  // The guard names the value the batch left, so a column somebody else has
   // moved since refuses the reversal instead of clobbering it.
   assert(back.$was?.page?.title)
 })
@@ -105,9 +105,9 @@ Deno.test('applied() rebuilds a death as a death', () => {
   assertEquals(applied(f.j.at(2)!), [{ entity: { eid: 'p1' }, $delete: true }])
 })
 
-// A log written elsewhere can hold a patch to the SPINE — the fleet's own
+// A log written elsewhere can hold a patch to the spine — the fleet's own
 // journal recorded `entity{num}` rows and the import carried them over. The
-// spine IS the bundle's identity, so such a patch merges into `entity` rather
+// spine is the bundle's identity, so such a patch merges into `entity` rather
 // than landing on top of the eid.
 Deno.test('a recorded spine patch merges into the identity', () => {
   let f = fixture()

@@ -1,27 +1,27 @@
 // The stand-in (not part of the published package — see deno.json): D1's API
 // over jsr:@db/sqlite, so the adapter can be tested without Cloudflare. The
-// surface is small enough to imitate exactly, and imitating it EXACTLY is the
+// surface is small enough to imitate exactly, and imitating it exactly is the
 // point — every rule below is one the runtime enforces, so a bug this stand-in
 // cannot see is a bug the runtime would not have shown either:
 //
-//   IT IS ASYNC-ONLY          `all()` and `batch()` return promises. An adapter
+//   It is async-only          `all()` and `batch()` return promises. An adapter
 //                             that accidentally relied on a synchronous answer
 //                             fails here, as it would in a Worker.
-//   A BATCH IS THE ONLY
-//   TRANSACTION               `begin`/`commit`/`savepoint` are refused as
+//   A batch is the only
+//   transaction               `begin`/`commit`/`savepoint` are refused as
 //                             statements; `batch()` runs its list in one
 //                             transaction and rolls the whole list back if any
 //                             statement fails.
-//   ONE STATEMENT PER PREPARE a `;`-separated pair is refused, the way D1's
+//   One statement per prepare a `;`-separated pair is refused, the way D1's
 //                             parser refuses one.
-//   VALUES ARE D1'S TABLE     null, number, string, boolean and ArrayBuffer
+//   values are D1's table     null, number, string, boolean and ArrayBuffer
 //                             bind; `undefined` and a bigint are errors.
-//   A BLOB COMES BACK AS AN
-//   ARRAY OF BYTE VALUES      which is what D1 hands back, and what the
+//   A blob comes back as an
+//   array of byte values      which is what D1 hands back, and what the
 //                             adapter's `unbind` converts.
 //
 // `counting()` is the same stand-in with a tally attached: over D1 the cost of
-// a write is the number of ROUND TRIPS it takes, and a number nothing counts is
+// a write is the number of round trips it takes, and a number nothing counts is
 // a number that quietly grows. hops_test.ts holds each shape of batch to a
 // pinned count.
 
@@ -58,7 +58,7 @@ let multiple = (sql: string): boolean =>
 
 /** The stand-in's prepared statement. It carries the SQL and bindings it was
  * given, which is how `batch` reads back what it was handed. `all`, `first` and
- * `run` are the three methods D1 offers for ONE round trip; the adapter uses
+ * `run` are the three methods D1 offers for one round trip; the adapter uses
  * `all`, and the other two are here so that a count of round trips
  * ({@link counting}) cannot be dodged by switching methods. */
 export type Prepared = {
@@ -143,7 +143,7 @@ export let store = async (vocab: Vocab = shop): Promise<Store> => {
 
 /**
  * What a stretch of work asked of the binding. `trips` is the number that
- * matters: over D1 a `batch()` and a statement run on its own are each ONE
+ * matters: over D1 a `batch()` and a statement run on its own are each one
  * network round trip, however many statements ride in the batch, while
  * preparing a statement costs nothing until it is run.
  */

@@ -1,17 +1,17 @@
 // Receiving, with a graph: the questions ./inbound.ts deliberately does not
 // ask. That file is pure — a message in, bundles out — and stays that way,
-// because a letter's other two columns are LOOKUPS: whom it is about
+// because a letter's other two columns are lookups: whom it is about
 // (`mail.target`), and which earlier letter it answers (`mail.reply_to`).
 // Both are questions for the address book and the letters already stored, so
 // they live in this file instead.
 //
-// The address book is read in ONE direction here: which entity has this
-// address. A sender nobody here knows resolves to NOBODY — never to whatever
+// The address book is read in one direction here: which entity has this
+// address. A sender nobody here knows resolves to nobody — never to whatever
 // a routing fallback would have picked, or a stranger's letter joins the
 // journal attributed to whoever runs the mailbox.
 //
 // The id grammar is the address grammar: an address whose local part is an id
-// this graph knows names THAT entity, resolved by the same call that resolves
+// this graph knows names that entity, resolved by the same call that resolves
 // an id a person typed (`graph.address`). Derived, never stored — an
 // address-book row per short-lived entity is bookkeeping nobody would keep
 // accurate, and writing to an agent should not require creating one.
@@ -113,7 +113,7 @@ export type Arrivals = {
  * is the one identity a letter carries between mail systems, so recording it
  * twice would be the error, not the second delivery.
  *
- * The transaction is attributed to the AUTHOR where the address book knows
+ * The transaction is attributed to the author where the address book knows
  * them, and to nobody where it does not — an unattributed write is the truth
  * about a stranger's letter, and far better than the mailbox's owner appearing
  * to have written it.

@@ -3,7 +3,7 @@
  * file's frontmatter as a {@link https://jsr.io/@yaks/graph | bundle}.
  *
  * A vocabulary, a seed, a page of a guide, a tool's own description — each is a
- * DECLARATION, and each is better as a file somebody can read and edit than as
+ * declaration, and each is better as a file somebody can read and edit than as
  * a string inside a module. This package is the single entry point for all of
  * them:
  *
@@ -25,7 +25,7 @@
  *
  * ## Frontmatter is a bundle
  * `{entity: {eid}, <comp>: {…}}` — the same JSON structure `graph.apply()`
- * accepts. So the metadata ABOUT a page is written in the same vocabulary as
+ * accepts. So the metadata about a page is written in the same vocabulary as
  * everything else in the graph, and a page's title is `doc.title` because a
  * page is a doc.
  *

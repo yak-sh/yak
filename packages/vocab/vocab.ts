@@ -4,7 +4,7 @@
 // to {comp, prop} hops, the derived kindOrder and the kind an entity carries,
 // and whether an instance is well-formed. These are the same questions a
 // hand-generated set of types answers over one hardcoded vocabulary, answered
-// here over a LOADED document instead — parameterized, not hardcoded.
+// here over a loaded document instead — parameterized, not hardcoded.
 //
 // This package declares zero components: the components you declare are an
 // instance of the format, and a small app is a smaller instance of the same
@@ -43,7 +43,7 @@ export class Unknown extends Error {
 }
 
 /** A bare name several components declare. The vocabulary alone cannot decide
- * which is meant, so it reports WHICH ONES, and a caller that holds more than
+ * which is meant, so it reports which ones, and a caller that holds more than
  * the one name picks between them (@yaks/graph's `meaning`, which reads the
  * component off the rest of the query). Unresolved, it reaches the caller as
  * this error: the name, the candidates, and a qualified name to use
@@ -181,14 +181,14 @@ export type Vocab = {
   /** Declared indexes plus automatic reference indexes — see
    * {@link Index}. A storage adapter renders them; nothing else reads them. */
   indexes: (comp: string) => Index[]
-  /** The columns this component's entities are IDENTIFIED by — the tuple the
+  /** The columns this component's entities are identified by — the tuple the
    * id is derived from, in derivation order, or `[]` for the ordinary
    * component whose entities take a minted id. @yaks/graph does the
    * derivation. */
   identity: (comp: string) => Identity
   route: (prop: string) => { comp: string; prop: string }
   /** A dotted path → the hops it names. Pass `facet` when the predicate is the
-   * bare presence test (`.name!`): a single segment naming a COMPONENT is then
+   * bare presence test (`.name!`): a single segment naming a component is then
    * a test for that component, even if a column of the same name would
    * otherwise claim the bare name. A name no column claims is read as a
    * component too, since a presence test needs no column schema. */
@@ -206,7 +206,7 @@ export type Vocab = {
 
 // The composite lists a component declares under one keyword, each entry read
 // to its columns and the columns it needs present. A boolean there is the
-// COLUMN form of the keyword misplaced, and means nothing about the whole
+// column form of the keyword misplaced, and means nothing about the whole
 // table, so it reads as no list rather than as an error the meta-schema
 // already raises.
 export let composite = (
@@ -215,14 +215,14 @@ export let composite = (
 let lists = (v: unknown): { cols: string[]; present?: string[] }[] =>
   Array.isArray(v) ? (v as Composite[]).map(composite) : []
 
-// The columns a component's entities are identified BY, from the two forms
+// The columns a component's entities are identified by, from the two forms
 // that declare them: a column's own `identity` flag, or the component's list
 // when the identity spans several columns. The list wins when both are there,
-// because the list is what fixes the ORDER, and the order is part of the
+// because the list is what fixes the order, and the order is part of the
 // string the id is derived from.
 //
 // One tuple per component and never a list of them — `unique` may hold several
-// because a row can be unique several ways, but an entity has ONE id.
+// because a row can be unique several ways, but an entity has one id.
 let identityOf = (comp: PropSchema | undefined): Identity => {
   if (!comp) return []
   let said = comp.identity
@@ -235,7 +235,7 @@ let identityOf = (comp: PropSchema | undefined): Identity => {
 // A component's indexes, from the two forms that declare them: a column's own
 // `unique`/`index` flag is that one column's index, and the component's lists
 // are the composites. Column flags come first, in declaration order, then
-// the composites; a pair of columns declared twice is ONE index, unique if
+// the composites; a pair of columns declared twice is one index, unique if
 // either form asked for uniqueness. Every stored reference is indexed too,
 // unless it already leads a declared index (including a composite identity).
 let indexesOf = (
@@ -278,8 +278,8 @@ let indexesOf = (
 }
 
 // The spine component, and the identity column no vocabulary declares. A
-// document declares what `entity` STORES beside it (the number a store mints);
-// the `eid` is built in — every entity has one — so the loader ROUTES it
+// document declares what `entity` stores beside it (the number a store mints);
+// the `eid` is built in — every entity has one — so the loader routes it
 // (`.eid=`, `.entity.eid=`) rather than making each vocabulary re-declare it.
 // It stays out of `columns()` on purpose: an id is not prose and has no column
 // of its own, so it never reaches a text index, an embedding, or a component's
@@ -326,13 +326,13 @@ export let loadVocab = (
   let docs = Array.isArray(input) ? input : [input]
   let compWords = new Set(keywords.flatMap((k) => k.comp ?? []))
   let colWords = new Set(keywords.flatMap((k) => k.column ?? []))
-  // Merge every document's COMPONENT entries into one table; a name declared
+  // Merge every document's component entries into one table; a name declared
   // twice is a conflict (one name, one home). `$defs` is JSON Schema's own
   // reuse slot, so an entry carries a marker saying what it is:
   // `component: true` is a component, `tool: true` is a tool declaration
   // (tools.ts `toolsIn` reads those) and `rule: true` is a rule (rules.ts
   // `rulesIn` reads those), both of which this loader skips, and anything else
-  // is an ordinary subschema somebody `$ref`s. An entry with COLUMNS and no
+  // is an ordinary subschema somebody `$ref`s. An entry with columns and no
   // marker is the one case that throws rather than being skipped: it is a
   // component whose marker was forgotten, and creating no table for it would
   // silently lose the component.
@@ -413,12 +413,12 @@ export let loadVocab = (
     }
   }
 
-  // A plural that is a NAME, not English: uniqueness is the goal, so 'shelf' →
+  // A plural that is a name, not English: uniqueness is the goal, so 'shelf' →
   // 'shelfs' is fine and 'series' → 'series' stays put.
   let plural = (s: string) =>
     s.endsWith('y') ? `${s.slice(0, -1)}ies` : s.endsWith('s') ? s : `${s}s`
 
-  // The reverse associations, DERIVED from the reference columns and never hand
+  // The reverse associations, derived from the reference columns and never hand
   // listed, so a new reference column earns its reverse name for free. A
   // component with one reference is named by its plural (`review.book` →
   // `.reviews`); several references disambiguate with the column (`loan.book`,
@@ -457,7 +457,7 @@ export let loadVocab = (
     // sessions carry a stamped status), so non-stamped owners are preferred
     // first. A single owner wins; several owners that are all references mean
     // one thing to a reader (comp '' — the filter scans every owner); any other
-    // collision throws {@link Ambiguous}, which NAMES the candidates so a
+    // collision throws {@link Ambiguous}, which names the candidates so a
     // caller holding the rest of the query can pick among them. A bare name
     // that is itself a component name routes as a presence test for that
     // component.
@@ -479,12 +479,12 @@ export let loadVocab = (
       throw new Unknown(prop)
     },
     // A dotted path → the hops it names, one rule per step: a segment naming a
-    // COMPONENT with another segment after it is the explicit `comp.prop`
+    // component with another segment after it is the explicit `comp.prop`
     // form and consumes two segments; anything else is a bare prop routed by
     // name and consumes one. Every non-final hop must be a reference for the
     // dereference to stand.
     //
-    // `facet` is the one exception, and it belongs to the PRESENCE test alone
+    // `facet` is the one exception, and it belongs to the presence test alone
     // (`.name!`): a trailing `!` tests for a component, so the component wins
     // over a column of the same name. It has to — a presence test has no other
     // form, while the column keeps its qualified one (`.camera.canvas!`).
@@ -524,7 +524,7 @@ export let loadVocab = (
     // kindOrder, else the bare spine component.
     kindOf: (has) => kinds.find((k) => has[k]) ?? 'entity',
     // The cascading-delete worklist (@yaks/graph cascade.ts): every
-    // CLIENT-WRITABLE reference that declares a `death`, as (comp, col) pairs.
+    // client-writable reference that declares a `death`, as (comp, col) pairs.
     // Stamped refs stay out — server-owned rows are deleted by server code,
     // never by a cascade a client set off (types.ts Death).
     deaths: (word) =>
@@ -536,7 +536,7 @@ export let loadVocab = (
             : []
         })
       ),
-    // Every reference column, client-writable OR stamped — index derivation
+    // Every reference column, client-writable or stamped — index derivation
     // and reverse-hop grammar key off this one list.
     refCols: () =>
       names.flatMap((comp) =>

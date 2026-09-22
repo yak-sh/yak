@@ -6,11 +6,11 @@
 //
 // Two facts about D1 shape everything above this file:
 //
-//   IT IS ASYNC. There is no synchronous API. Every read is a round trip, so
+//   It is async. There is no synchronous API. Every read is a round trip, so
 //   the adapter collects what it can into one `batch()` rather than issuing one
 //   statement at a time.
 //
-//   A BATCH IS THE ONLY TRANSACTION. `begin`, `savepoint` and their friends are
+//   A batch is the only transaction. `begin`, `savepoint` and their friends are
 //   not statements you may send; `batch()` runs its list sequentially inside one
 //   implicit transaction and rolls the whole list back if any statement fails.
 //   There is no interactive transaction — nothing holds a lock open while your
@@ -29,7 +29,7 @@ export type D1Result<T> = { results: T[] }
 
 /**
  * A prepared statement, generic over the type the binding hands back. The
- * adapter treats one as OPAQUE: it binds values, runs it for rows, or passes it
+ * adapter treats one as opaque: it binds values, runs it for rows, or passes it
  * straight back to {@link D1Like.batch}. Keeping the type a parameter is what
  * lets a `D1PreparedStatement` be used as itself rather than narrowed to a
  * slice — a statement appears both as a return and as an argument, and a

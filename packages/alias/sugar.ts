@@ -1,7 +1,7 @@
 // The shorthand: a name written on the entity it names.
 //
 // A key is its own entity — `{key: {of, value}, alias: {}}` — which is the
-// right shape to STORE and the wrong shape to write by hand. What people
+// right shape to store and the wrong shape to write by hand. What people
 // actually write is the name beside the entity:
 //
 //   { entity: { eid: '$r' }, alias: { name: 'recipe:lemon-cakes' },

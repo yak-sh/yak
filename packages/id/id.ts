@@ -2,7 +2,7 @@
 // beside it is what a person reads and types, and the letter names the series
 // the number belongs to — a book's `B`, an author's `A`.
 //
-// The NUMBER is the identity here: `B-7` and `7` name the same entity, so a
+// The number is the identity here: `B-7` and `7` name the same entity, so a
 // letter typed from memory (or in the wrong case) still resolves. The letter is
 // how a reader tells a book from an author at a glance, which is why it comes
 // from the vocabulary — a component declares `prefix`, and every id in that
@@ -87,7 +87,7 @@ export type Wearing = {
 }
 
 /**
- * The id of an entity read as a BUNDLE: its components determine the prefix,
+ * The id of an entity read as a bundle: its components determine the prefix,
  * and its `entity` row carries the eid and the number. Use this to display a
  * row just read from the store — `let id = human(vocab)`, then `id(row)` — so
  * that no caller has to assemble a {@link Named} by hand.

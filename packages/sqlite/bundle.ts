@@ -6,7 +6,7 @@
 //   { entity: { eid: 'cake-01' }, doc: { title: 'Lemon cake' }, recipe: { serves: 8 } }
 //
 // The shape itself is @yaks/graph's — the graph core owns the bundle format
-// every yaks package shares, so this Layer-0 storage adapter DEPENDS on it
+// every yaks package shares, so this Layer-0 storage adapter depends on it
 // rather than keeping a second definition that could drift. The identity is
 // the `entity`
 // component (`entity.eid` is the id, never a bare root `eid`); every other key is
@@ -16,7 +16,7 @@
 // fields this adapter carries but does not enforce (that check is a phase of
 // @yaks/graph's apply(), not of a storage adapter).
 //
-// On the way OUT a bundle holds only the components the entity actually has, each
+// On the way out a bundle holds only the components the entity actually has, each
 // a plain object of column values — references already resolved back to eids.
 
 export type { Bundle, Change, Comp, Entity, Was } from '@yaks/graph'

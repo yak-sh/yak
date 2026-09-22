@@ -9,7 +9,7 @@
 // `error{code}` when it found something, `fail` for a measured violation of a
 // contract the package keeps, `warn` for a leak or for a verdict it could not
 // establish. Reporting faults is not itself a failure (`faulted` in
-// ./runner.ts reads the CALL's own `execution.state`), so a check that finds a
+// ./runner.ts reads the call's own `execution.state`), so a check that finds a
 // broken graph still succeeded, and the caller reads the level instead of
 // guessing from an exit code.
 //
@@ -49,7 +49,7 @@ let worst = (found: Finding[]): Level | undefined =>
     : undefined
 
 /**
- * What a check returns: ONE bundle, however much it found. The text leads with
+ * What a check returns: one bundle, however much it found. The text leads with
  * what was checked, so the answer reads the same whether it is empty or long,
  * and `error{code}` carries the level for a caller that has to act on it.
  *

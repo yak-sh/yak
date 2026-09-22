@@ -3,7 +3,7 @@
 //
 // A socket dies for reasons that have nothing to do with the client — a laptop
 // lid, a deploy, a proxy timeout — so "connected" is a state this module keeps
-// track of rather than something the caller checks. There is ONE reconnect
+// track of rather than something the caller checks. There is one reconnect
 // timer per instance: a second one turns a server that is merely slow into a
 // client that hammers it, which is how a wedged server stays wedged.
 //
@@ -11,7 +11,7 @@
 // each subscription's membership per connection, so a subscription opened again
 // answers with the set as it stands and reports nothing about what left while
 // the client was away. This module therefore tracks each subscription's members
-// itself and treats the first frame after a reopen as a RESET: whatever it was
+// itself and treats the first frame after a reopen as a reset: whatever it was
 // holding and did not hear about again is reported as gone.
 
 import type { Bundle, Eid } from '@yaks/graph'
@@ -62,7 +62,7 @@ export type Frame = {
   /** Rider coverage, independent even when an eid has both roles in a frame.
    * Omitted entries cover only delivered columns. */
   peerCoverage?: Record<Eid, Coverage>
-  /** Payload riders, pinned by this subscription but NEVER query members. */
+  /** Payload riders, pinned by this subscription but never query members. */
   peers?: Bundle[]
   /** Rider departures, independent of result membership. reset replaces both. */
   peerGone?: Eid[]
@@ -114,11 +114,11 @@ export type Wire = {
   /** drop one subscription */
   unsubscribe: (id: string) => void
   /**
-   * Send `sync: peers` components to the server to RELAY. It is the only write
+   * Send `sync: peers` components to the server to relay. It is the only write
    * sent over the socket rather than posted, and it goes here because its
    * lifetime is this socket's: the server holds it under this connection and
    * clears it when the connection closes. A relay message sent while the socket
-   * is down is DROPPED, never queued — this state is short-lived, there is no
+   * is down is dropped, never queued — this state is short-lived, there is no
    * backlog worth replaying, and the next write carries the current value.
    */
   relay: (bundles: Bundle[]) => void
@@ -170,7 +170,7 @@ export let wire = (opts: WireOpts): Wire => {
 
   // A frame, with the reopen bookkeeping done: a reset frame reports whatever
   // the client was holding and did not hear about again as gone, and every
-  // frame keeps the membership set current so the NEXT reset can do the same.
+  // frame keeps the membership set current so the next reset can do the same.
   let landed = (frame: Frame) => {
     // An unsubscribe can race a frame already in transit. It must not refill
     // the cache or recreate membership bookkeeping after its last owner left.

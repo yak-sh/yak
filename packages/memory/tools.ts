@@ -3,7 +3,7 @@
 // Two tools, and together they are one loop: keep what somebody said, and get
 // it back the next time it matters.
 //
-// THE LOOP IS WHY THE READ RETURNS A TOKEN. A memory is edited by replacing the
+// The loop is why the read returns A token. A memory is edited by replacing the
 // words in it, and words replaced by somebody who never read the ones already
 // there is a lost update — the one failure a fleet of agents writing to one
 // graph produces on its own. So a recall returns each memory with a `$was`
@@ -12,7 +12,7 @@
 // back. A caller that read is a caller that may write; one that did not is
 // rejected before it costs anybody the sentence.
 //
-// NOTHING HERE RANKS. `line()` (./recall.ts) builds the query string, and the
+// Nothing here ranks. `line()` (./recall.ts) builds the query string, and the
 // store answers it: its full-text index over `doc` selects the memories
 // containing the words — all of them, which is what somebody searching means —
 // and its vectors order those results where a `near` was named and the server

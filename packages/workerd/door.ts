@@ -3,7 +3,7 @@
 // a Worker carries the answer: a session cookie a browser sends on its own, and
 // a bearer token a script sends deliberately.
 //
-// Reading the credential is all that belongs here. What a credential MEANS
+// Reading the credential is all that belongs here. What a credential means
 // depends on the application's own secret — a signed JWT, a KV lookup, a member
 // row — so `verify` is supplied by the caller, and this package never sees a
 // key.

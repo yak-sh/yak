@@ -3,11 +3,11 @@
 // Compiling a query produces three things — a test every bundle must pass, an
 // ordering, and a window — and this file is where they meet. The test is built
 // once, in ./clause.ts, so a query that cannot be answered exactly is rejected
-// HERE, at compile time, rather than halfway through an array of bundles.
+// here, at compile time, rather than halfway through an array of bundles.
 //
 // Results come back in the order the query asks for: `.order=field` sorts by
 // that column (a leading `-` descending), the entity number breaks ties, and a
-// `.limit`/`.after` window pages WITHIN that order — `.after` naming the entity
+// `.limit`/`.after` window pages within that order — `.after` naming the entity
 // to continue past, wherever it sits in the sequence. A window with no `.order`
 // is newest-first by entity number, the way a database answers the same
 // directives. With neither, the bundles keep the order they were given.
@@ -53,7 +53,7 @@ export type Select = (bundles: readonly Bundle[]) => Bundle[]
 
 /**
  * A compiled filter, applied to one bundle at a time. `among` is the array that
- * answers questions about OTHER entities — a reference followed to its target,
+ * answers questions about other entities — a reference followed to its target,
  * the backlinks of an id, the children of a reverse hop — and defaults to the
  * bundle alone. Ordering and windowing are not its job: a filter reports whether
  * one bundle matches, and nothing about where it ranks.
@@ -129,9 +129,9 @@ let field = (ctx: Ctx, path: string): Read => {
 }
 
 // The sort a query asks for, or null to keep the order given. An explicit
-// `.order` SURVIVES a window — a window sets how much of a sequence to return,
+// `.order` survives a window — a window sets how much of a sequence to return,
 // never which sequence — and the entity number breaks its ties, so the order is
-// TOTAL and a page cut here holds the rows a page cut in SQL holds. A window
+// total and a page cut here holds the rows a page cut in SQL holds. A window
 // with no `.order` is that tiebreak alone: newest first.
 let sorter = (
   ctx: Ctx,
@@ -182,7 +182,7 @@ export let matcher = (
 
 // The `.after` cursor: the rows strictly past the anchor entity's own place in
 // the order. The anchor is found by its entity number — one cursor form for
-// every ordering — and it is looked up in the WHOLE array rather than among the
+// every ordering — and it is looked up in the whole array rather than among the
 // matches, because an anchor that no longer matches the query still names a
 // place in the order. An anchor that is not in the array at all leaves the page
 // whole, which is the first page. @yaks/sql compiles the same rule as a keyset
@@ -198,7 +198,7 @@ let past = (
 }
 
 /**
- * Compile a query into its FILTER alone — does this one bundle match? — for a
+ * Compile a query into its filter alone — does this one bundle match? — for a
  * caller that already keeps its own order, or that is re-testing the single
  * bundle that just changed rather than sweeping a whole array.
  *

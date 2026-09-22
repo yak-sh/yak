@@ -1,11 +1,11 @@
-// The query half: a bare word in a query compiles to an FTS5 MATCH.
+// The query half: a bare word in a query compiles to an FTS5 match.
 //
 // A query mixes words and filters — `hobbit .price<20` — and @yaks/query parses
 // each bare word as a `text` clause. @yaks/sql compiles every clause except
-// that one; this module is the @yaks/sql EXTENSION that compiles it, registered
+// that one; this module is the @yaks/sql extension that compiles it, registered
 // through `compile(ast, vocab, { extend: [search(fields)] })`.
 //
-// One clause is ONE word, or one run somebody quoted (@yaks/query splits on
+// One clause is one word, or one run somebody quoted (@yaks/query splits on
 // whitespace), so `term` converts it — a word matches as a prefix, a quoted run
 // stays a phrase — and several words are ANDed together the way every other
 // clause is.

@@ -2,21 +2,21 @@
 // are ordinary; the transaction is where D1's shape has to be faced squarely,
 // so what it does and does not promise is written out here rather than implied.
 //
-// WHAT D1 GIVES. `batch()` runs a list of statements sequentially inside one
+// What D1 gives. `batch()` runs a list of statements sequentially inside one
 // implicit transaction and rolls the whole list back if any of them fails.
-// That is a true atomic write. What D1 does NOT give is an INTERACTIVE
+// That is a true atomic write. What D1 does not give is an interactive
 // transaction: there is no call that opens a transaction, lets your code read,
 // decide, and write inside it, and commits at the end. Nothing holds a lock
 // while you think.
 //
-// WHAT `tx()` DOES ABOUT IT. A transaction here is deferred-write:
+// What `tx()` does about it. A transaction here is deferred-write:
 //
 //   reads run immediately, against the committed database;
 //   writes are gathered as statements, not sent;
-//   returning flushes the gathered statements as ONE `batch()` — atomic;
+//   returning flushes the gathered statements as one `batch()` — atomic;
 //   throwing discards them — nothing was ever sent.
 //
-// So the WRITE half is genuinely all-or-nothing, and a rejected batch (a failed
+// So the write half is genuinely all-or-nothing, and a rejected batch (a failed
 // `$was` precondition, a hook that rejects it at commit) leaves the database
 // untouched, because it was never written to. The writes can wait like that
 // because they need nothing read first: @yaks/sqlite builds every one as a
@@ -24,9 +24,9 @@
 // first), and this package collects those same statements rather than keeping a
 // write path of its own.
 //
-// READ-YOUR-OWN-WRITES, which `apply()` needs — a cascading delete has to find
-// who points at a deleted entity AFTER the batch's own patches — is served from
-// an in-memory OVERLAY rather than from the database: every entity this
+// Read-your-own-writes, which `apply()` needs — a cascading delete has to find
+// who points at a deleted entity after the batch's own patches — is served from
+// an in-memory overlay rather than from the database: every entity this
 // transaction wrote is held in the state it will have once the batch commits,
 // and a read inside the transaction returns the committed result with those
 // entities replaced by their pending state (evaluated with @yaks/match, the
@@ -34,16 +34,16 @@
 // through the overlay, so a transaction that has not written yet reads exactly
 // as the database does.
 //
-// WHAT IS NOT PROMISED, precisely. The reads are not part of the write's
+// What is not promised, precisely. The reads are not part of the write's
 // transaction, because D1 has nowhere to put them. Between a read and the flush
 // another writer may change what was read: this is read-committed with an
-// atomic write batch, NOT serializable isolation. A check that must not lose a
+// atomic write batch, not serializable isolation. A check that must not lose a
 // race — `$was` — is therefore best-effort against a concurrent writer here,
 // where it is exact over @yaks/sqlite. The failure it cannot prevent is a lost
 // update that nothing detects, not a half-written batch; atomicity holds
 // either way.
 //
-// ASSIGNING A NUMBER IS NOT A READ. An entity's `num` is SQLite's to pick, at
+// Assigning A number is not A read. An entity's `num` is SQLite's to pick, at
 // the moment
 // the insert runs and so inside the batch's own transaction — exact under a
 // concurrent writer, and nothing has to ask for a high-water mark first. The
@@ -93,7 +93,7 @@ export type { Query }
  * A bound store: @yaks/graph's `Storage` over D1, every answer a promise.
  *
  * `tx` is declared as the seam declares it — the seam is async-or-sync and a
- * synchronous adapter returns a plain value — but over D1 it ALWAYS returns a
+ * synchronous adapter returns a plain value — but over D1 it always returns a
  * promise, and it resolves only once the write batch has committed.
  */
 export type Store = {
@@ -159,7 +159,7 @@ let deadly = (v: Vocab): Set<string> =>
   )
 
 /** What a D1 store is bound with: @yaks/sql's read options, plus whether new
- * spines get a human-readable number. A number is OPT-IN, under the same option
+ * spines get a human-readable number. A number is opt-IN, under the same option
  * name @yaks/sqlite uses: left unset, an entity is its eid and nothing else. */
 export type Opts = BindOpts & {
   number?: boolean | { except: readonly string[] }
@@ -216,7 +216,7 @@ export let storage = <S extends Stmt<S>>(
     )
   }
 
-  // The same answer as `read` in ONE trip, for a query that names a set: the
+  // The same answer as `read` in one trip, for a query that names a set: the
   // query and the gather of what it hits go as one batch, each statement
   // naming the hit set as a subquery rather than binding eids a first trip
   // went and found. What @yaks/graph's backwards reads ask for — see
@@ -230,9 +230,9 @@ export let storage = <S extends Stmt<S>>(
   // what this transaction has written. See the header for what that buys.
   let open = () => {
     let pending: Sql[] = []
-    // Entities this transaction WROTE, as they will be once the batch lands.
+    // Entities this transaction wrote, as they will be once the batch lands.
     let dirty = new Map<Eid, Bundle>()
-    // Entities it merely READ, faithful to the database. Kept apart from the
+    // Entities it merely read, faithful to the database. Kept apart from the
     // overlay so a read that changed nothing never routes a query through
     // @yaks/match.
     let held = new Map<Eid, Bundle>()
@@ -244,7 +244,7 @@ export let storage = <S extends Stmt<S>>(
     // Whether this transaction has written something the database cannot see
     // that the death cascade would have to read: a patch touching a component
     // that bears a death column, or a removal. Until it has, the rows the
-    // database holds ARE the rows the batch leaves behind, and the cascade's
+    // database holds are the rows the batch leaves behind, and the cascade's
     // question is one statement; once it has, that statement would be
     // answering about rows that have moved, so the question is declined and
     // @yaks/graph walks it through the overlay instead.
@@ -271,7 +271,7 @@ export let storage = <S extends Stmt<S>>(
     let buried = (eid: Eid): boolean => known.get(eid)?.dead == true
 
     // Mint an identity for an eid that has none, so a reference may name a
-    // target created in the same batch, in any order. NOTHING IS ASKED: the
+    // target created in the same batch, in any order. Nothing is asked: the
     // number is SQLite's to pick when the insert runs, inside the batch's own
     // transaction, and the statement returns it. So the entity handed out here
     // has no `num` yet — `flush` fills it into this very object, before the
@@ -308,13 +308,13 @@ export let storage = <S extends Stmt<S>>(
 
     // Who dies with these entities, and what has to let go of them: the
     // recursive closure over the cascade columns and the soft references into
-    // it (@yaks/sql), sent as ONE batch where the walk they replace cost a read
+    // it (@yaks/sql), sent as one batch where the walk they replace cost a read
     // per rung and another per frontier. The casualties' identities are kept as
     // they come back, so `remove`, which is the next thing that happens to
     // them, asks nothing more.
     //
     // A vocabulary too wide for one statement (workerd caps a compound SELECT
-    // at five terms) is asked in ROUNDS, each still one batch: the arms are cut
+    // at five terms) is asked in rounds, each still one batch: the arms are cut
     // into statements, so a round is complete only when it turns up nothing the
     // last one had not. The soft references ride every round bound to what was
     // known when it began — which is the whole of the dead exactly when the

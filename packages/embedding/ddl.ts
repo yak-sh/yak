@@ -8,7 +8,7 @@
 // rows are stale and a search never mixes two vector spaces; the vector itself
 // as a blob; and when it was written.
 //
-// It is DERIVED data. Nothing here is a source of truth: drop the table and the
+// It is derived data. Nothing here is a source of truth: drop the table and the
 // next sweep rebuilds it from the text it was made from. That is why it carries
 // no history, no journal, and is never sent to a client — and why a graph with
 // no embedder at all is a graph that simply has no vectors, not a broken one.

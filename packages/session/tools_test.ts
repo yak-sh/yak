@@ -20,7 +20,7 @@ let tools = runs({ vocab })
 // a get by eid, which is the first rung of reaching a session by the word a
 // caller said (./who.ts).
 //
-// `actor` is the RUN a door signed the call with: `via` the transcript, `by`
+// `actor` is the run a door signed the call with: `via` the transcript, `by`
 // whoever it speaks for.
 let ctx = (
   args: Record<string, unknown>,
@@ -86,7 +86,7 @@ Deno.test('one word means one run: the lock and the wrap take the same --session
     [],
     ctx({ target: 't1', session: 'abc' }, rows),
   ) as Bundle[]
-  // The lock names the SESSION, never the word the caller typed.
+  // The lock names the session, never the word the caller typed.
   assertEquals(comp(took, 'claim'), { session: 's1' })
 
   let [, freed] = await tools.session_wrap!(

@@ -10,7 +10,7 @@
 // is another object of this shape. The representation does not change — only
 // these lowerings.
 //
-// The layout, in one paragraph: every component has a TABLE named for it, keyed
+// The layout, in one paragraph: every component has a table named for it, keyed
 // by an integer `entity` column pointing at `entity(id)`. A reference column
 // stores the referent's integer id, so reading it back as an eid is a
 // correlated lookup in the entity table, and comparing an eid to it is an
@@ -37,7 +37,7 @@ export type Dialect = {
   membership: string
   // The condition excluding deleted entities, ANDed into every query.
   live: () => Frag
-  // The join source for a component and the ON key.
+  // The join source for a component and the on key.
   table: (comp: string) => string
   // The bare table expression for a component, with no alias — what a
   // correlated subquery refers to. A dialect that reads a component from
@@ -184,7 +184,7 @@ let eq = (c: string, value: string, tag: Tag): Frag | null => {
   return { sql: `${asText(c)} = ?`, params: [value] }
 }
 
-// != is `not eq`, and eq(null, …) is FALSE — but SQL's `not (null = ?)` is
+// != is `not eq`, and eq(null, …) is false — but SQL's `not (null = ?)` is
 // NULL, which drops the rows whose component is absent. coalesce brings them
 // back.
 let ne = (c: string, value: string, tag: Tag): Frag | null => {

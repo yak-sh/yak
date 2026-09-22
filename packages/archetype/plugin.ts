@@ -199,7 +199,7 @@ function tracking(
         let defining = new Set(made.map((b) => b.entity.eid))
         assignments = assignments.filter((b) => !defining.has(b.entity.eid))
         // The underlying transaction bypasses this tracker for its own
-        // metadata. It is still inside the SAME rollback/journal boundary.
+        // metadata. It is still inside the same rollback/journal boundary.
         return then(tx.patch([...made, ...assignments]), (born) => {
           let numbered = new Map(born.map((e) => [e.eid, e]))
           for (let b of made) {

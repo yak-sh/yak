@@ -19,7 +19,7 @@
  * live(bundles) // the matching bundles, most expensive first
  * ```
  *
- * {@link matcher} compiles a query into a selection over an ARRAY of bundles,
+ * {@link matcher} compiles a query into a selection over an array of bundles,
  * which is also where references, backlinks and reverse hops are looked up, and
  * which the ordering and the `.limit`/`.after` window apply to. {@link filter}
  * compiles the same query into a test on one bundle, for a caller re-checking
@@ -31,7 +31,7 @@
  * rule once and both evaluators return the same rows.
  *
  * ## Refusals
- * A question this package cannot answer EXACTLY throws
+ * A question this package cannot answer exactly throws
  * {@link https://jsr.io/@yaks/sql/doc/~/Unsupported | Unsupported} — the error
  * @yaks/sql throws too, so a caller using both has one error type to catch.
  * What it refuses, and why, is in the README.

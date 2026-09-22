@@ -1,5 +1,5 @@
 /**
- * @yaks/page — records a web page as it was SEEN, not as it is now.
+ * @yaks/page — records a web page as it was seen, not as it is now.
  *
  * Cite a URL and you have cited something that can change tonight and be gone
  * by Friday. This package records the other reading. Its `web` component holds
@@ -23,7 +23,7 @@
  * @yaks/graph's `normalize` phase, so every code path gets the canonical form.
  *
  * ## An archived page renders from its own bytes
- * {@link scrub} removes every external reference AT FREEZE TIME — scripts,
+ * {@link scrub} removes every external reference at freeze time — scripts,
  * embedded documents, `link` tags, inline event handlers, every URL-bearing
  * attribute that is not `data:`, and `url()` in CSS. That is the mechanism. A
  * Content-Security-Policy header at serving time is defence in depth and

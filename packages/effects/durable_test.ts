@@ -175,7 +175,7 @@ Deno.test('a handler that is not idempotent is retried for a failure, never a la
   let row = f.row('r1')
   assertEquals(row.state, 'failed')
   assert(String(row.error).includes('not idempotent'), String(row.error))
-  // A failure it REPORTED is another matter: it threw before doing anything,
+  // A failure it reported is another matter: it threw before doing anything,
   // so that one is tried again.
   f.tx.patch([{
     entity: { eid: 'r2' },

@@ -1,6 +1,6 @@
 // What one run of `apply()` learns as it goes. The bundles carry the data —
 // every phase takes bundles and returns bundles — but three facts are about
-// the RUN rather than about any one bundle: which entities this change
+// the run rather than about any one bundle: which entities this change
 // deleted, which it created, and which it wrote to. The stamp phase needs all
 // three (a created entity gets `created`, a written one gets `updated`, a
 // deleted one gets neither), so they are collected here rather than smuggled

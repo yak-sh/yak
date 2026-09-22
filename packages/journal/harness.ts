@@ -1,6 +1,6 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // wiki, written as a vocabulary. Pages several people edit, and notes that
-// exist ABOUT a page — so a deleted page takes its notes with it, and the
+// exist about a page — so a deleted page takes its notes with it, and the
 // entities a cascading delete takes down are something the tests can watch the
 // journal record.
 //
@@ -69,7 +69,7 @@ export let wiki: Vocab = loadVocab([doc])
 export let NOW = '2026-01-01T00:00:00.000Z'
 
 // The actors and instruments the tests write as. A `journal_tx` row names them
-// by their id in the entity table, so they have to BE entities before anything
+// by their id in the entity table, so they have to be entities before anything
 // can be attributed to them — inserted straight into that table, so seeding
 // them is not itself a transaction the tests then have to count past.
 let ACTORS = ['ada', 'bob', 'cli']

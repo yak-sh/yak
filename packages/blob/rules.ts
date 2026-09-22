@@ -1,4 +1,4 @@
-// Where a stored value LIVES: the module a server imports from
+// Where a stored value lives: the module a server imports from
 // `@yaks/blob/rules`. This is the one that needs a database — it creates the
 // blob tables through the server's own connection before returning the plugin
 // that writes to them — which is why the schema declarations are in ./vocab.ts,

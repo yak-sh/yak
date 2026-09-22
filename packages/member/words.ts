@@ -1,9 +1,9 @@
 // The three enumerated values this package defines, the helpers that read one
 // out of storage, and the two access rules stated once.
 //
-// A ROLE is what a `member` row records: you are a space's owner, or one of its
-// members. A LEVEL is what a `grant` gives one principal on one app: owner,
-// editor, viewer. A MODE is what an app allows everyone else — the people with
+// A role is what a `member` row records: you are a space's owner, or one of its
+// members. A level is what a `grant` gives one principal on one app: owner,
+// editor, viewer. A mode is what an app allows everyone else — the people with
 // no membership and no grant at all.
 //
 // Roles and levels are kept apart on purpose. `owner` and `member` record
@@ -24,7 +24,7 @@ export type Level = 'owner' | 'editor' | 'viewer'
 /** What an app allows everyone with no grant on it:
  *
  * - `public` — anyone with the link reads it; only the granted write.
- * - `open` — anyone with the link reads it AND writes it, signed in or not.
+ * - `open` — anyone with the link reads it and writes it, signed in or not.
  * - `private` — only principals holding a permission see it at all.
  */
 export type Mode = 'public' | 'open' | 'private'
@@ -55,20 +55,20 @@ export let mode = (v: unknown): Mode =>
  * a `viewer`, and a principal holding nothing, do not. */
 export let writes = (l: Level | null): boolean => l == 'owner' || l == 'editor'
 
-// THE TWO RULES, stated once. Everything else in this package — the `policy`
+// The two rules, stated once. Everything else in this package — the `policy`
 // helpers the HTTP layer calls, the `precondition` hook a transaction passes —
 // reads a mode and a level out of storage and then calls one of these two
 // functions. A service that already knows both (one that authenticated the
 // caller at its edge and keeps modes in a directory) calls them directly, with
 // no storage at all, and so cannot drift from the graph that enforces them.
 
-/** May a principal holding this level READ an app in this mode? Anything not
+/** May a principal holding this level read an app in this mode? Anything not
  * `private` is readable by anyone with the link; a `private` app is readable by
  * whoever holds any level on it. */
 export let reads = (m: Mode, l: Level | null): boolean =>
   m != 'private' || l != null
 
-/** May a principal holding this level WRITE an app in this mode? An `open` app
+/** May a principal holding this level write an app in this mode? An `open` app
  * is written by anyone, signed in or not; anything else requires owner or
  * editor. */
 export let edits = (m: Mode, l: Level | null): boolean =>

@@ -1,10 +1,10 @@
-// WHICH text is searchable. Search is not limited to a single "document"
+// Which text is searchable. Search is not limited to a single "document"
 // component: a vocabulary declares components, some of their columns hold
 // prose, and any of those can be indexed. This module makes that selection — a
 // `Field` is one `comp.prop` pair, `fields()` reads them off a vocabulary, and
 // a `Pick` narrows the default when an application wants only some of them.
 //
-// The fields are grouped into one INDEX PER COMPONENT (`indexes()`), because an
+// The fields are grouped into one index per component (`indexes()`), because an
 // FTS5 external-content index mirrors exactly one table.
 
 import type { Column, Vocab } from '@yaks/vocab'
@@ -17,7 +17,7 @@ export type Field = { comp: string; prop: string }
 // less than the vocabulary marked — say, titles only.
 export type Pick = (column: Column) => boolean
 
-// The default selection: the columns the VOCABULARY marked searchable with
+// The default selection: the columns the vocabulary marked searchable with
 // `"search": true` (@yaks/vocab). Deciding which prose is worth finding belongs
 // to the vocabulary, not to this package: a repository path and a provider name
 // are text nobody goes looking for, and indexing them only adds terms a search
@@ -38,7 +38,7 @@ export let fields = (vocab: Vocab, pick: Pick = searched): Field[] =>
       .map((c) => ({ comp, prop: c.prop }))
   )
 
-// How a STORED column is turned into the text to index, keyed `comp.prop`:
+// How a stored column is turned into the text to index, keyed `comp.prop`:
 // given a SQL expression for the stored value, the entry returns a SQL
 // expression for the text that value stands for. A column with no entry is
 // indexed as stored, which covers every ordinary text column.
@@ -64,7 +64,7 @@ export let indexes = (fields: Field[]): Index[] => {
 // The name of the index mirroring a component: `book` → `book_fts`.
 export let indexName = (comp: string): string => `${comp}_fts`
 
-// The name of the view that presents a component's columns as TEXT: `doc` →
+// The name of the view that presents a component's columns as text: `doc` →
 // `doc_text`. It is created only for a component where at least one indexed
 // column has to be resolved (see {@link Text}); an index whose columns hold
 // their own text mirrors the component table itself.

@@ -139,7 +139,7 @@
       }
     },
     "statuses": {
-      "description": "every value a task's computed status can take, including marks other plugins add: a task under a live claim reads `wip`, contributed by the plugin that owns the claim component (see MARKS).",
+      "description": "every value a task's computed status can take, including marks other plugins add: a task under a live claim reads `wip`, contributed by the plugin that owns the claim component (see marks).",
       "enum": [
         "open",
         "wip",

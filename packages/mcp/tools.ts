@@ -1,16 +1,16 @@
-// The generic tool tier, shaped for one server. The TOOLS themselves are
+// The generic tool tier, shaped for one server. The tools themselves are
 // @yaks/graph's — `graph apply`, `graph query`, `graph show`, `graph schema`
 // and `search` are declared in its vocab.json and implemented in
 // `@yaks/graph/tools` — and this file restates their arguments in the form
 // this transport accepts, plus everything a declaration cannot know because it
-// is written before there is a server: the bundles THIS vocabulary accepts,
+// is written before there is a server: the bundles this vocabulary accepts,
 // the way back out of a delete this store offers, the extra arguments an
 // endpoint scopes its reads by, and whether the write tool is listed at all.
 //
 // So the command line and an MCP tool list describe the same tools, and each
 // description is written in one place.
 //
-// The arguments are carried as ZOD rather than as the JSON Schema the
+// The arguments are carried as Zod rather than as the JSON Schema the
 // declaration wrote, because Zod is the one form every server here can
 // validate: the MCP SDK takes Zod, `inputSchemaOf` converts it back to JSON
 // Schema for a `tools/list` reply, and nothing has to compile a schema at call
@@ -42,7 +42,7 @@ export type CoreOpts = {
   guide?: Guide
   /** the ranked search function; without it there is no `search` tool */
   search?: Search
-  /** this server only READS: `graph_apply` is not listed at all. For an
+  /** this server only reads: `graph_apply` is not listed at all. For an
    * endpoint anybody may call — where the write is not a tool that refuses,
    * but a tool that is not there. */
   readOnly?: boolean
@@ -54,7 +54,7 @@ export type CoreOpts = {
    * where there is no way back, since a promise nobody can keep is worse than
    * silence. */
   undo?: string
-  /** extra arguments every READ here accepts, merged into each read tool's
+  /** extra arguments every read here accepts, merged into each read tool's
    * input, for a server whose reads are scoped by something of its own —
    * yaks.app's signed-out endpoint names which app to read.
    *
@@ -67,13 +67,13 @@ export type CoreOpts = {
 /**
  * A refusal naming a column this graph does not declare, with a pointer to
  * `graph_schema` appended — the tool that reports what this graph declares
- * right now. The write tool's input schema is OPEN (schema.ts) precisely so
+ * right now. The write tool's input schema is open (schema.ts) precisely so
  * that a client's cached copy cannot refuse a column declared since it
  * connected, which leaves the server the only authority on what a component
  * accepts and makes this the only place a caller learns its copy is out of
  * date.
  *
- * It matches on the refusal's TEXT rather than on an error class: the runner
+ * It matches on the refusal's text rather than on an error class: the runner
  * stores a refusal as an entity's text long before any transport renders it,
  * and a graph may be composed over stores of its own, where admission ran on
  * the far side of a network hop and only its message comes back.
@@ -142,7 +142,7 @@ let zodInput = (
  */
 export let core = (opts: CoreOpts): Tool[] => {
   let { vocab, column } = opts
-  // What a write ACCEPTS: the same bundle, narrowed to what a client may
+  // What a write accepts: the same bundle, narrowed to what a client may
   // write. Always `full` — a write tool that leaves a column's type to the
   // reader is a tool an agent guesses at (T-34153).
   let writes = z.array(
@@ -160,7 +160,7 @@ export let core = (opts: CoreOpts): Tool[] => {
       }
       let input = zodInput(said)
       if (t.name == 'graph_apply') {
-        // The bundles a write accepts are THIS graph's, so the declaration
+        // The bundles a write accepts are this graph's, so the declaration
         // names only "an array of bundles" and the vocabulary fills in what
         // one IS — every component, every writable column and every type
         // (T-34153). No fixed schema could state it: the shape comes from one
@@ -172,7 +172,7 @@ export let core = (opts: CoreOpts): Tool[] => {
       return {
         ...t,
         // The declaration's JSON Schema is dropped: a tool declares its
-        // arguments ONCE, and here that is the Zod above. Declaring both is
+        // arguments once, and here that is the Zod above. Declaring both is
         // refused outright (@yaks/vocab `validateToolInput`), and rightly.
         inputSchema: undefined,
         // A server whose reads are scoped by something of its own declares

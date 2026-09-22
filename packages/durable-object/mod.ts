@@ -21,7 +21,7 @@
  * {@link https://jsr.io/@yaks/api | @yaks/api}'s subscriptions — accept a
  * socket for hibernation, pass its frames to the registry, and rebuild the
  * subscriptions of a woken object from what its sockets hold. What a
- * subscription MEANS lives in @yaks/api; only the Cloudflare-specific plumbing
+ * subscription means lives in @yaks/api; only the Cloudflare-specific plumbing
  * is here.
  *
  * ```ts

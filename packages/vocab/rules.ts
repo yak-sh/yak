@@ -1,8 +1,8 @@
-// Rules a vocabulary DECLARES. A `$defs` entry marked `rule: true` is a query
+// Rules a vocabulary declares. A `$defs` entry marked `rule: true` is a query
 // the graph runs over every batch of changes — and that is the whole
 // declaration. There is no implementation to join it to, which is what makes it
 // different from a tool: a tool declaration names the tool and a module
-// implements it, while a rule's `match` IS the implementation. An app ships one
+// implements it, while a rule's `match` is the implementation. An app ships one
 // in its vocab.json and the graph runs it; nobody writes any code.
 //
 // It has the same shape as `toolsIn` and a fraction of the weight: reading a
@@ -36,7 +36,7 @@ export type RuleDecl = {
   before?: string[]
   /** the phase it runs in. `rules` — the default — is the declarative half of
    * `apply()`, running before anything is persisted. `effect` is a rule
-   * nothing in `apply()` runs: it is a PATTERN to register a post-commit
+   * nothing in `apply()` runs: it is a pattern to register a post-commit
    * handler on (@yaks/effects `on`), or to run once as a sweep — @yaks/tools
    * declares two of those, which select the calls that still need running. */
   phase?: string

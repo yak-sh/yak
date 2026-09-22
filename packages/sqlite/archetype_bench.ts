@@ -1,4 +1,4 @@
-// The SAME deterministic corpus and prepare-per-call driver as throughput_bench.
+// The same deterministic corpus and prepare-per-call driver as throughput_bench.
 // Backfill measures a fresh migration (including descriptor creation), not a
 // warmed no-op. Reset/rollback are outside the timed interval.
 import { assertEquals } from '@std/assert'

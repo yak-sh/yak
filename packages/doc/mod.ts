@@ -12,7 +12,7 @@
  * //   minutes: { chaired_by: ana } }
  * ```
  *
- * `doc` describes ONE ASPECT of an entity, not the whole entity. Adding it to
+ * `doc` describes one aspect of an entity, not the whole entity. Adding it to
  * something makes that thing readable without making it stop being what it
  * was, and one search index, one editor and one card renderer are written
  * against `doc` rather than against twenty tables that each grew a `title`
@@ -25,7 +25,7 @@
  * component on the same entity.
  *
  * ## The body may be content-addressed, and `doc` never knows
- * `body` declares `store: "blob"`, a keyword this package NAMES but does not
+ * `body` declares `store: "blob"`, a keyword this package names but does not
  * import. Load the vocabulary without
  * {@link https://jsr.io/@yaks/blob | @yaks/blob}'s `blobKeywords` and `body` is
  * an ordinary text column; load it with them and compose `blobs()`, and the

@@ -82,7 +82,7 @@ export let stale = (
 
 /**
  * Delete the vectors of entities that should no longer have one: deleted,
- * emptied, or no longer carrying an embedded component. It uses the SAME
+ * emptied, or no longer carrying an embedded component. It uses the same
  * statement {@link sources} embeds from, so the table can never keep a vector
  * the sweep would never refresh.
  */

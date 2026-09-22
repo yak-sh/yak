@@ -1,5 +1,5 @@
 // A component that names its own entity: what `identity` buys (identity.ts).
-// The subject is a GUIDE PAGE, because that is what asked for it — a file
+// The subject is a guide page, because that is what asked for it — a file
 // loaded twice must be one entity, with no eid written down anywhere and no
 // `$alias` that means anything outside its own batch.
 

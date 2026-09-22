@@ -1,5 +1,5 @@
 // The query half: the two clauses @yaks/sql cannot compile on its own because
-// they follow LINKS, supplied here as an
+// they follow links, supplied here as an
 // {@link https://jsr.io/@yaks/sql | @yaks/sql} Extension.
 //
 //   `.cites[<=3]->p1`   the posts that reach p1 through at most 3 cites
@@ -8,7 +8,7 @@
 //
 // The walk is a filter, and @yaks/sql compiles it — one recursive CTE, seeded
 // at the target and stepped along the arrow (`walkSql`). What that package
-// cannot know is the STEP for a relation: which rows of the edge table carry
+// cannot know is the step for a relation: which rows of the edge table carry
 // the component a relation name refers to. Only the vocabulary knows that, so
 // this extension supplies the step when the walk's path names a relation and
 // returns null when it does not, leaving the binder to try the path as a
@@ -33,7 +33,7 @@ import { EDGE, relations } from './relations.ts'
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
 // The links of one relation, as the pairs of integer ids they join. Joining
-// against the relation's own table IS the filter, so there is no union and
+// against the relation's own table is the filter, so there is no union and
 // nothing for the planner to prefer over the endpoint seek.
 let linked = (tag: string): string =>
   `select l."from" as "from", l."to" as "to" from ${q(EDGE)} l` +

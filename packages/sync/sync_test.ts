@@ -3,7 +3,7 @@
 // pointed at each other: a write on one appears on the other, the server's
 // answer reconciles the client, a refusal puts the client back, and a dropped
 // socket catches up on what it missed. No network, no timers, no sleeps — the
-// harness IS the wire.
+// harness is the wire.
 
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, dead, Refused } from '@yaks/graph'

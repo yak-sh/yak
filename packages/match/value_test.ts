@@ -74,6 +74,6 @@ Deno.test('a question the column cannot answer is refused, not guessed', () => {
   assertEquals(check('>=', 'cheap', 'number', NOW), null)
   assertEquals(check('<', '10', 'text', NOW), null)
   assertEquals(check('nonsense', 'x', 'text', NOW), null)
-  // an operand no number can equal is a constant false, which IS exact
+  // an operand no number can equal is a constant false, which is exact
   assertFalse(hit('', 'cheap', 'number', 3))
 })

@@ -9,25 +9,25 @@
 //   bounced{at, reason}                                it did not
 //   notified{at, by, via}                              they were told
 //
-// THE SUBJECT AND THE BODY ARE NOT HERE. They are `doc{title, body}`, from
+// The subject and the body are not here. They are `doc{title, body}`, from
 // {@link https://jsr.io/@yaks/doc | @yaks/doc}, which this package depends on
 // (Jeff, 2026-09-05: "the mail package can't require the package that installs
 // doc?"). A letter is an entity like any other, and the words a person reads
 // belong in the one component every readable thing has — so a letter is
 // searched, rendered and edited by whatever already handles a `doc`, instead of
 // by a second copy of the same two columns. What is left on `mail` is the
-// ENVELOPE: who it is from, where it went, when, what it is about, what it
+// envelope: who it is from, where it went, when, what it is about, what it
 // answers.
 //
-// `mail` does not DECLARE `doc` — a vocabulary rejects a component declared
+// `mail` does not declare `doc` — a vocabulary rejects a component declared
 // twice, so composing it is the application's choice: `loadVocab([docDoc,
 // mailDoc, ...mine])`, `plugins: [docs(), mailbox({...})]`. `target` is what
-// makes this a GRAPH's mail — the entity the letter is about, which may be any
+// makes this a graph's mail — the entity the letter is about, which may be any
 // entity at all, so a reply about the potluck hangs off the potluck.
 //
-// TWO WAYS TO RECORD WHO IT IS FOR, on purpose. `mail.to` is the To: line — an
+// Two ways to record who it is for, on purpose. `mail.to` is the To: line — an
 // address, written by whoever composed the letter. `deliver.to` is a
-// RECIPIENT: an entity in your graph, whose address is looked up when the
+// recipient: an entity in your graph, whose address is looked up when the
 // letter goes out. Addressing a person rather than a string is what lets them
 // change their address without rewriting the mail that has not left yet.
 //
@@ -36,7 +36,7 @@
 // (`deliver.to`), and `.at` is stamped by half a dozen components. Write those
 // two in full — `.mail.to`, `.mail.at`.
 //
-// `verified` is the RECEIVING side's verdict on an arrival: whether the sending
+// `verified` is the receiving side's verdict on an arrival: whether the sending
 // domain signed for the letter (DKIM). It is a column and not a gate — a letter
 // nobody signed for is recorded with `verified: false` rather than dropped,
 // because dropping it is silence and the reader is the one who decides what an
@@ -76,8 +76,8 @@ export let NOTIFIED = 'notified'
  * The mail vocabulary document, to load beside
  * {@link https://jsr.io/@yaks/doc | @yaks/doc}'s and your own:
  * `loadVocab([docDoc, mailDoc, ...mine])`. It declares nothing about what a
- * person or a club IS — those are plain entities in your own vocabulary — only
- * the ENVELOPE of a letter, who it is for, and what became of it. The subject
+ * person or a club is — those are plain entities in your own vocabulary — only
+ * the envelope of a letter, who it is for, and what became of it. The subject
  * and the body are `doc.title` and `doc.body`.
  *
  * The `prefix` keywords are {@link https://jsr.io/@yaks/id | @yaks/id}'s: load

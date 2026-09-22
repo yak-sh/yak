@@ -7,8 +7,8 @@
 //   a component set to null is dropped  the row goes, the entity stays
 //   a tombstoned entity takes no patch  deletion is final; ids never recycle
 //
-// Every write here is a STATEMENT, built before it is sent, and every statement
-// is SELF-SUFFICIENT: an owner id is a subquery (`select id from entity where
+// Every write here is a statement, built before it is sent, and every statement
+// is self-sufficient: an owner id is a subquery (`select id from entity where
 // eid = ?`) rather than a value looked up first, and an insert whose owner does
 // not exist writes nothing instead of inventing a row. Nothing is read between
 // two writes.
@@ -22,22 +22,22 @@
 // single all-or-nothing unit, which is exactly what @yaks/d1 does with the ones
 // built here.
 //
-// The one read that remains is about IDENTITY, not about ids: which of the
+// The one read that remains is about identity, not about ids: which of the
 // named eids are already tombstoned, queried once for the whole batch. What
 // numbers the new ones were given is not queried at all — every mint statement
-// RETURNS its own row, so an insert that minted returns one and an insert that
+// returns its own row, so an insert that minted returns one and an insert that
 // found the eid already there returns none. That is why @yaks/d1 can mint
 // without knowing a number in advance: its batch comes back statement by
 // statement, and the numbers are in it.
 //
 // What is NOT here is which entities a delete takes with it. A reference's
 // declared death behavior (`cascade`, `detach`, `release`, `keep`) is a rule
-// about MEANING, declared in the vocabulary, and @yaks/graph reads it — through
+// about meaning, declared in the vocabulary, and @yaks/graph reads it — through
 // the same transaction — to decide which entities go. This file removes exactly
 // the entities it is given. One decision, in one place, shared by every storage
 // adapter.
 //
-// IDENTITY IS STORAGE'S: `patch` mints a spine for every eid the batch touches
+// Identity is storage's: `patch` mints a spine for every eid the batch touches
 // or points at (so a reference may name a target created in the same batch, in
 // any order), numbers each new one, and reports the entities it minted.
 
@@ -107,13 +107,13 @@ export let buried = (driver: Driver, eids: string[]): Set<string> =>
  * takes the next number at insert time — inside whatever transaction the
  * statement runs in, so it is exact under a concurrent writer — and RETURNING
  * passes it straight back. `do nothing` on an eid that already has an identity,
- * so minting twice is not an error; RETURNING then emits NO row, which is also
- * how the caller knows whether this one was new. A number is OPT-IN: left out,
+ * so minting twice is not an error; RETURNING then emits no row, which is also
+ * how the caller knows whether this one was new. A number is opt-IN: left out,
  * the spine is minted with a NULL number, which is what a store whose entities
  * nobody ever types the number of wants. `number = true` gives it a
  * human-readable number.
  *
- * `number` may also be a NUMBER, and then it is the one the entity takes: a
+ * `number` may also be a number, and then it is the one the entity takes: a
  * store seeded from another store's export adopts the numbers that export
  * already carries, because an entity read as `T-37574` somewhere is `T-37574`
  * everywhere. The sequence follows — `entity_number_insert` raises its high
@@ -149,7 +149,7 @@ export let minted = (rows: Row[]): Entity | undefined =>
  * id in the statement. A component whose patch names no stored column is a tag
  * — its row's existence is the whole fact.
  *
- * An INSERT…SELECT is what makes the owner a subquery: no owner row, no
+ * An INSERT…select is what makes the owner a subquery: no owner row, no
  * inserted row. Its WHERE is also what lets SQLite parse the upsert clause.
  *
  * A tag insert is `or ignore` in both forms: existence is the whole fact it
@@ -234,9 +234,9 @@ export let patchSql = (v: Vocab, b: Bundle): Sql[] => [
   }),
 ]
 
-// One component's plan: a drop, a bare insert, or UPDATE then absent INSERT.
+// One component's plan: a drop, a bare insert, or update then absent insert.
 // An interactive driver uses the UPDATE's affected-row count to omit its
-// fallback. A batched driver sends both; INSERT's WHERE is the same no-op.
+// fallback. A batched driver sends both; insert's where is the same no-op.
 let patchOne = (
   v: Vocab,
   eid: string,
@@ -244,7 +244,7 @@ let patchOne = (
   comp: Comp | null,
 ): { first: Sql; fallback?: () => Sql } => {
   if (comp == null) return { first: dropSql(eid, name) }
-  // INSERT checks NOT NULL before ON CONFLICT. Update existing rows first,
+  // Insert checks NOT NULL before ON CONFLICT. Update existing rows first,
   // then insert only absent ones: partial patches need no invented defaults
   // or read/merge, and the same ordered statements work in a D1 batch.
   let cols = Object.keys(comp).filter((c) =>
@@ -272,7 +272,7 @@ let patchOne = (
  * The statements that remove one entity: every component row it has, then the
  * tombstone that keeps its id from ever being reused. Components go in reverse
  * declaration order, so a dependent is gone before what it references and no
- * foreign key blocks the delete. The tombstone is an INSERT…SELECT, so an eid
+ * foreign key blocks the delete. The tombstone is an INSERT…select, so an eid
  * no entity uses tombstones nothing.
  */
 export let removeSql = (v: Vocab, entity: Entity, at: string): Sql[] => [
@@ -302,7 +302,7 @@ export let touched = (v: Vocab, bundles: Bundle[]): string[] =>
 
 /**
  * Patch a batch of bundles in, in order, and return the entities this patch
- * MINTED — each with the `num` it was given, as the minting insert itself
+ * minted — each with the `num` it was given, as the minting insert itself
  * reported it. A bundle for a tombstoned entity is skipped: death is final.
  */
 export let patch = (
@@ -345,7 +345,7 @@ export let patch = (
       )
     }
   }
-  // What each bundle STATES its entity's number to be, where the store is
+  // What each bundle states its entity's number to be, where the store is
   // adopting rather than minting: a number to take, or `null` for none. Only a
   // birth honours it — a number in use is not something a later batch may
   // reassign.

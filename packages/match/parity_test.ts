@@ -23,7 +23,7 @@ import { bundles, corpus, DEAD, NOW, shop } from './harness.ts'
 // Bundles in a fresh in-memory database, read through the vocabulary they were
 // written under and whatever computed columns it declares.
 //
-// Straight into storage: this test is about READS, so it skips the graph's
+// Straight into storage: this test is about reads, so it skips the graph's
 // apply() and puts the rows where the two evaluators can be held against each
 // other.
 let loaded = (
@@ -83,7 +83,7 @@ let QUERIES = [
   '.signed!',
   '.signed=',
   '.signed~=',
-  // a bare bang completes a COMPONENT sentence even where a column of the same
+  // a bare bang completes a component sentence even where a column of the same
   // name claims the bare spelling: `.book!` is the books, `.book=b1` is still
   // review.book, and `.review.book!` still reaches the column.
   '.book!',
@@ -155,7 +155,7 @@ let QUERIES = [
   'nothingatall',
   // the empty query selects nothing
   '',
-  // `*` is a PROJECTION — every component of every row it selects — so it
+  // `*` is a projection — every component of every row it selects — so it
   // filters nothing and the line means what it would without it. Both
   // evaluators read it off the clause list rather than as a text term, which
   // is what a `/query` line and a `/ws` subscription's line have in common.
@@ -168,7 +168,7 @@ let QUERIES = [
   '.kind=book&.order=title',
   '.kind=book&.order=released',
   '.kind=book&.order=-released',
-  // windows: newest first when nothing else is asked, and WITHIN the asked
+  // windows: newest first when nothing else is asked, and within the asked
   // order when there is one — `.after` naming the entity to continue past,
   // wherever it sits in that order.
   '.kind=book&.limit=2',
@@ -207,7 +207,7 @@ let fromSql = (s: ReturnType<typeof sql>, q: string) => {
 
 // A query that names no ordering leaves the order to the evaluator: a database
 // hands back whatever its plan yields, this package hands back the order it was
-// given. Membership is what both promise there; ORDER is compared for the
+// given. Membership is what both promise there; order is compared for the
 // queries that ask for one.
 let asks = (q: string) => /\.order=|\.limit=|\.after=/.test(q)
 
@@ -232,7 +232,7 @@ Deno.test('a query neither side can answer is declined by both', () => {
 
 // ---- the walk over edges, both evaluators ----------------------------------
 //
-// A relation is an edge BUNDLE (`edge{from,to}` beside the tag), and a walk over
+// A relation is an edge bundle (`edge{from,to}` beside the tag), and a walk over
 // one is @yaks/edge's to compile for SQL and this package's to answer in memory.
 // The same chain, both directions, the cap, and a cycle.
 
@@ -314,9 +314,9 @@ Deno.test('a walk over nothing declares is declined by both', () => {
   }
 })
 
-// ---- the walk over a CHAIN of reference columns, both evaluators ------------
+// ---- the walk over a chain of reference columns, both evaluators ------------
 //
-// `.fork.from.session->S-1` is ONE step over a composed relation: a session's
+// `.fork.from.session->S-1` is one step over a composed relation: a session's
 // `fork` names the entry it forked from, and that entry names the session it
 // was written in — so the pair is (session, the session it forked out of), and
 // the walk over it is the fork lineage. Three levels of it, both directions,
@@ -406,7 +406,7 @@ Deno.test('a chain with a hop that is no reference is declined by both', () => {
 //
 // `task.status` (@yaks/task) is declared `computed: true`: no row holds it, and
 // its value is read off the marks a task wears. The package states that rule
-// ONCE and hands each side its own reader — `derived()` the SQL expression,
+// once and hands each side its own reader — `derived()` the SQL expression,
 // `compute()` the function over a bundle — so this is the agreement that makes
 // a status board portable: the same filter, the same tasks, database or page.
 

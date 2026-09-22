@@ -1,7 +1,7 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // shared document editor, written as a vocabulary.
 //
-// Two people keep a handful of pages. Each of them works through a RUN — an
+// Two people keep a handful of pages. Each of them works through a run — an
 // editor window, or an agent turn — and a run locks a page while it edits it.
 // The store is @yaks/ram, which is how a page or a test composes this
 // package: a Map holding the bundles, the same `apply()` and the same rules as

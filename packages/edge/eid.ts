@@ -1,12 +1,12 @@
 // A link's identity, derived from the link itself.
 //
-// A link entity is CONTENT-ADDRESSED, the way a blob is named by the hash of
+// A link entity is content-addressed, the way a blob is named by the hash of
 // its bytes. Its content is the three things a link is — from, relation, to —
 // so two writers who create the same link land on one entity instead of two,
 // and a writer removing a link computes its id without looking it up. Direction
 // is part of that content: `a cites b` and `b cites a` are two links.
 //
-// This is THE derivation. Every caller computes it here — the browser page that
+// This is the derivation. Every caller computes it here — the browser page that
 // creates a link, the server that accepts it, the code that removes it —
 // because an id computed two different ways is two different ids.
 
@@ -48,7 +48,7 @@ export let tagOf = (
  * graph calls when an edge bundle arrives under a `$alias`, so that the write
  * creating a link also learns the id it landed on.
  *
- * An INCOMPLETE link derives nothing (it returns `''`) and the entity is given
+ * An incomplete link derives nothing (it returns `''`) and the entity is given
  * an ordinary generated id, at which point the {@link stated} hook rejects the
  * write and names the missing part — a far better error than a link quietly
  * identified by half of itself.

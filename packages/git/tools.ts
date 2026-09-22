@@ -8,7 +8,7 @@
 // (@yaks/cli local.ts). Nothing here reads or writes a row; the result is
 // Git's own output, returned as the text of the call's answer.
 //
-// A DIVERGED BASE IS A FAILURE. Landing ends in one of two ways (./land.ts):
+// A diverged base is A failure. Landing ends in one of two ways (./land.ts):
 // it landed, or the base moved and the branch was rebased and left waiting for
 // its tests to be re-run. The second is not a landing, so it is thrown as a
 // `CallError` carrying Git's whole account of it as the message, which the

@@ -4,21 +4,21 @@
 // it has to know any of this happened — that is the whole point, and it is why
 // the substitution happens inside `apply()` rather than in a caller.
 //
-// WHICH PHASE, and why it is the only one that works. The bytes and the row
+// Which phase, and why it is the only one that works. The bytes and the row
 // must land together — a row pointing at bytes that were never written is a
 // broken document, so the store write cannot happen before the transaction
 // opens (`normalize`, `admit` and `mint` are all outside it). Inside the
 // transaction the phases run precondition → mutate → cascade → stamp → journal
-// → commit, and within a phase the CORE runs first and plugin hooks after it.
+// → commit, and within a phase the core runs first and plugin hooks after it.
 // So `mutate` is already too late: by the time a `mutate` hook is called, the
 // core has handed the bundles to storage and the text is in the row. The last
 // moment before that is a hook on `precondition`, which is also the correct
 // side of the `$was` precondition guard: the guard hashes the value the caller
-// read, and what a caller reads is the TEXT, so it has to run against text —
+// read, and what a caller reads is the text, so it has to run against text —
 // and it does, because the core's guard runs first and this hook substitutes
 // after it.
 //
-// The substitution is UNDONE at `commit`, the last phase inside the
+// The substitution is undone at `commit`, the last phase inside the
 // transaction, so what `apply()` returns is what the caller wrote. A client
 // that applies the return value to its cache gets its document back, not a hash
 // of it. The text is carried between the two hooks on the bundle itself, under
@@ -119,7 +119,7 @@ export type BlobOpts = {
  * // g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay…' } }])
  * ```
  *
- * The write side is here. The READ side belongs to the storage adapter, which
+ * The write side is here. The read side belongs to the storage adapter, which
  * is the half that knows its own layout: over SQL, register
  * {@link blobRead}'s column overrides and a row resolves in the statement
  * itself; over any other store, {@link hydrate} resolves the bundles a read
@@ -139,7 +139,7 @@ export let blobs = (
     name: '@yaks/blob',
     hooks: {
       precondition: (bundles) => {
-        // Intern equal text once per transaction, BEFORE hashing it. The store
+        // Intern equal text once per transaction, before hashing it. The store
         // deduplicates bytes anyway, but repeatedly hashing one shared large
         // body still costs its size times the number of rows. This map is
         // transaction-local on purpose: a rollback (or an unrelated apply) must

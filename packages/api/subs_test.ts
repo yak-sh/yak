@@ -51,7 +51,7 @@ Deno.test('a commit pushes what the query selects, and nothing else', () => {
   assertEquals(take(), [])
 })
 
-// `*` asks which components an answer CARRIES, not which entities belong, so a
+// `*` asks which components an answer carries, not which entities belong, so a
 // line wearing it subscribes exactly as the line without it does — incremental,
 // judged per bundle. Read as a text term instead, it matched nothing and the
 // subscription went silent (T-34070).

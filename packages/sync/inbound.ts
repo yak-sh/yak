@@ -3,7 +3,7 @@
 // server is where the stamped columns and the numbers were written — and marked
 // as an echo so the outbound hook does not send it straight back.
 //
-// `gone` is the part no client could work out for itself: an entity that LEFT a
+// `gone` is the part no client could work out for itself: an entity that left a
 // subscription's set, whether it was deleted or merely stopped matching. The
 // frame does not distinguish the two, so this module removes the entity's
 // components rather than tombstoning it: an entity with no components matches

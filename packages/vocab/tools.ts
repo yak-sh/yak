@@ -196,7 +196,7 @@ let inputOf = (entry: PropSchema): Record<string, unknown> => ({
   ...entry.required?.length ? { required: entry.required } : {},
 })
 
-// The keywords in a declaration that belong to the TOOL, not to the schema.
+// The keywords in a declaration that belong to the tool, not to the schema.
 let HINTS = [
   'title',
   'options',
@@ -211,12 +211,12 @@ let HINTS = [
  * The tool declarations one or more vocabulary documents carry, read without
  * validating them: every `$defs` entry marked `tool: true`, with its `input`
  * map converted to the one object schema everything downstream reads. The
- * entry's NAME is the tool's name, so an implementation is looked up by the
+ * entry's name is the tool's name, so an implementation is looked up by the
  * name the vocabulary used.
  *
  * Nothing is validated here. {@link toolsIn} is the same read with validation,
  * and it is what a program loading somebody else's plugin wants; this one is
- * for a document whose declarations are validated where they are AUTHORED (a
+ * for a document whose declarations are validated where they are authored (a
  * package's own vocab.json, against the meta-schema, in its tests). It is also
  * the only read that works where generating code from strings is forbidden,
  * such as in a Cloudflare Worker, since ajv validates a schema by compiling it
@@ -249,7 +249,7 @@ export let toolsSaid = (input: VocabDoc | VocabDoc[]): ToolDefinition[] => {
   return out
 }
 
-/** The tool declarations one or more vocab documents carry, CHECKED: every
+/** The tool declarations one or more vocab documents carry, checked: every
  * entry {@link toolsSaid} read, put through {@link toolDefinition} — the
  * meta-schema, the dialect of each argument schema, and the options naming
  * properties that exist. */

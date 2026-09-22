@@ -1,5 +1,5 @@
 // The `yak` command. It has five subcommands of its own — `help`, `login`,
-// `logout`, `serve`, `apply` — and every other subcommand is a TOOL: one of
+// `logout`, `serve`, `apply` — and every other subcommand is a tool: one of
 // the tools of the graph this command opens (local.ts), or one an MCP server
 // lists (platform.ts), with the apps' own commands (commands.ts) beside them.
 // Either list costs something to gather, so run.ts asks for it only when the
@@ -14,7 +14,7 @@
 //   yak land                          # the same, on the checkout you are in
 //   yak serve --config yak.json       # an HTTP server over the same graph
 //
-// THERE IS NO SERVER PROCESS TO START. A config file names a GRAPH — a SQLite
+// There is no server process to start. A config file names a graph — a SQLite
 // file and the plugins that read and write it — and a `yak` command opens it,
 // imports them, runs the tool in this process and exits. SQLite in WAL mode
 // accepts as many writers as there are commands running, so nothing waits on a
@@ -60,7 +60,7 @@ stdin. $YAKS_TOKEN is the bearer token when set; otherwise the one
 
 // `apply` is `graph_apply` fed from a stream. One batch is applied in one
 // transaction, and a file of fifty thousand bundles is a bulk load rather than
-// one transaction, so it is sent in chunks. It calls the SAME `graph_apply`
+// one transaction, so it is sent in chunks. It calls the same `graph_apply`
 // every other subcommand would — the one implemented by the graph this command
 // opened, or the one the MCP server it named lists — so a load goes wherever
 // the rest of the session went.
@@ -78,7 +78,7 @@ let applied = async (
   let asked = (change: unknown) =>
     tool.run({ change, ...(dry ? { check: true } : {}) }, c)
   if (args.change) return await asked(args.change)
-  // This is already the BODY: `@path` is read from that file and `-` from
+  // This is already the body: `@path` is read from that file and `-` from
   // stdin for every argument value of every subcommand (args.ts `inflate`), so
   // what arrives here is the bundles themselves. Given no argument at all,
   // read stdin.

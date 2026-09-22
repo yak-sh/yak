@@ -1,19 +1,19 @@
 // The implementations of the tools declared with `tool: true` in
 // ./vocab.json, exported as `@yaks/project/tools` — the entry point a server
-// imports to register them. Both are CHECKS: tools whose verb is `check`,
+// imports to register them. Both are checks: tools whose verb is `check`,
 // which is all a "doctor" is (@yaks/tools ./check.ts).
 //
 // Two invariants, and both are about a portfolio quietly stopping being one:
 //
-// A BOARD IS ITS QUERY. ./guard.ts refuses an unroutable query as it is
+// A board is its query. ./guard.ts refuses an unroutable query as it is
 // written, while whoever typed it is still there — but that is not the only way
-// a query stops routing. The VOCABULARY moves: a column is renamed, a status
+// a query stops routing. The vocabulary moves: a column is renamed, a status
 // retires, a component this server used to load is gone. Every board written
 // against the old declarations now matches nothing and reports no error, which
 // is exactly the failure the precondition hook exists to prevent, arriving from
 // the other direction.
 //
-// GOVERNED WORK IS UNDER A PROJECT. `governed` is the keyword a component
+// Governed work is under A project. `governed` is the keyword a component
 // declares to mean that a project answers for the entities carrying it
 // (@yaks/kernel): a task, a memory, a design. One that is filed under no
 // project, and that no project reaches along a containment edge, is work

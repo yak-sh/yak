@@ -5,7 +5,7 @@
 //
 // What it reports is deliberately the same to a stranger and to a member who is
 // merely not allowed: which act, which app, and which level would have been
-// enough. What it does NOT report is whether the app exists, or who else may
+// enough. What it does not report is whether the app exists, or who else may
 // reach it — a private app is its owner's to disclose. A caller that would
 // rather tell a stranger nothing at all still can: this carries the facts, and
 // what to put in the response is the caller's decision.

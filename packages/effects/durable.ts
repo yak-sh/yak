@@ -1,4 +1,4 @@
-// The durability tier, and it is OPTIONAL. An effect in memory is at-most-once
+// The durability tier, and it is optional. An effect in memory is at-most-once
 // by construction: the transaction committed, the process died, the handler
 // never ran, and nothing anywhere records that it was supposed to. For most
 // effects that is the right trade — a re-render, a cache eviction, a log line.
@@ -9,8 +9,8 @@
 //
 //   effect{handler, target, comp, kind, state, attempts, error, next, lease_*}
 //
-// One row per handler run, written BEFORE the handler runs and marked after.
-// A run that did not complete is TRIED AGAIN — `tries` attempts in all, each
+// One row per handler run, written before the handler runs and marked after.
+// A run that did not complete is tried again — `tries` attempts in all, each
 // one waiting out a backoff — and after the last it is left `failed` with the
 // error it last threw beside it, for a person to look at. That is the whole
 // retry, and it is here rather than in any handler: nothing an effect could do
@@ -18,18 +18,18 @@
 //
 // There are two ways a run does not complete, and they are not the same thing:
 //
-//   IT REPORTED. The handler threw, so it got to report the failure, and
+//   It reported. The handler threw, so it got to report the failure, and
 //   whatever it had done before that it undid or never started. The row is
 //   marked with the error and `next` — the instant its backoff is up — and the
 //   sweep runs it again then.
 //
-//   IT WAS INTERRUPTED. The process died mid-run, or its lease expired while
+//   It was interrupted. The process died mid-run, or its lease expired while
 //   it held it: nothing records how far it got. A row with no `next` is one of
 //   these, and it is tried again too — unless its registration set
 //   `idempotent: false`, in which case a second run could duplicate something
 //   that already reached an external system, and it is left failed instead.
 //
-// How many attempts a run gets is the REGISTRATION's to declare (`tries` in a
+// How many attempts a run gets is the registration's to declare (`tries` in a
 // Policy) and never one call's, so no effect anywhere carries retry code of
 // its own.
 //
@@ -37,7 +37,7 @@
 // a row for a while (owner, token, expiry) before running it, and skips a row
 // whose claim belongs to somebody else and has not expired.
 //
-// A PATTERN effect is written down the same way, as `matched` on the entity
+// A pattern effect is written down the same way, as `matched` on the entity
 // its first pattern bound. What a retry reconstructs is that entity, not the
 // bindings a join produced — enough for a handler that is about one entity,
 // which is what a pattern registration almost always is.
@@ -140,7 +140,7 @@ export let ledger = (opts: LedgerOpts): Ledger => {
   let stamp = (ms: number) => new Date(ms).toISOString()
   let wait = opts.backoff ?? backoff
   // What a registration declared about being retried, and about being run
-  // TWICE. The slot is the only place either is ever read from.
+  // twice. The slot is the only place either is ever read from.
   let limit = (slot?: Policy) => slot?.tries ?? opts.tries ?? TRIES
   let safe = (slot?: Policy) => slot?.idempotent != false
 
@@ -159,7 +159,7 @@ export let ledger = (opts: LedgerOpts): Ledger => {
   let rest = (tx: Tx, eid: Eid, error: string | null) =>
     write(tx, eid, { state: 'failed', error, next: null, ...free })
 
-  // A run that did not complete, in ONE rule — the same one for a handler
+  // A run that did not complete, in one rule — the same one for a handler
   // that threw inline and for a retry that threw again, which is why neither
   // writes an outcome of its own. Another attempt if its registration allows
   // one, due once its backoff is up; left failed otherwise.
@@ -179,7 +179,7 @@ export let ledger = (opts: LedgerOpts): Ledger => {
       })
       : rest(tx, eid, said(err))
 
-  // The row a RETRY is for, handed to the wrapper below. `reconcile` claimed
+  // The row a retry is for, handed to the wrapper below. `reconcile` claimed
   // it and wrote the attempt down already, so the wrapper reuses that row
   // instead of minting a second one for the same run. The handoff is
   // synchronous — `fx.attempt` calls `fire`, and `fire` calls `around`, before
@@ -250,7 +250,7 @@ export let ledger = (opts: LedgerOpts): Ledger => {
         () => false,
       )
     }
-    // No `next` and it is here: the run was INTERRUPTED rather than reported,
+    // No `next` and it is here: the run was interrupted rather than reported,
     // so how far it got is unknown. A handler that declared running it twice
     // is not the same as running it once does not get a second attempt.
     if (!row.next && !safe(slot)) {
@@ -263,7 +263,7 @@ export let ledger = (opts: LedgerOpts): Ledger => {
     return then(
       write(tx, eid, {
         attempts: attempts + 1,
-        // It is RUNNING now, not waiting — and that is what tells the next
+        // It is running now, not waiting — and that is what tells the next
         // reconciler an interrupted run apart from a reported failure.
         next: null,
         lease_owner: opts.owner,

@@ -96,7 +96,7 @@ export const authorizedMCP = (
       for (const a of auths.values()) a.cancel()
     },
     control,
-    // Each tool wearing the connection that LISTED it (`reply`). A tool on
+    // Each tool wearing the connection that listed it (`reply`). A tool on
     // another server is a request to that server, not a function this graph
     // holds, and the harness renders the reply whole — artifacts and all — so
     // it asks here rather than through the graph-tool projection. The capture

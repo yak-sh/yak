@@ -7,7 +7,7 @@
 //   0001                  delim — the end of a command's capabilities
 //   0002                  response-end — the end of a multiplexed response
 //
-// THE LENGTH INCLUDES ITSELF, which is the one thing a hand-written encoder
+// The length includes itself, which is the one thing a hand-written encoder
 // gets wrong, and the reason `0000`-`0003` can be markers at all: no real
 // packet can be shorter than its own header. `0003` is unused, and `0004` is a
 // legal empty line rather than a marker.

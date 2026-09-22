@@ -6,15 +6,15 @@
 // runtime's own types. Any other source that can say from, to and headers
 // works the same way.
 //
-// Two things this deliberately does NOT do:
+// Two things this deliberately does not do:
 //
-//   IT DOES NOT PARSE MIME. The body arrives as a stream of RFC 5322 and
+//   It does not parse MIME. The body arrives as a stream of RFC 5322 and
 //   turning that into text is a parser's job, not this package's — so pass the
 //   text in (`postal-mime` is the usual choice in a Worker) and this composes
 //   the entity around it.
 //
-//   IT DOES NOT QUERY THE GRAPH. It is pure: a message in, bundles out. Whom
-//   the letter is FOR, and which earlier letter it answers, are lookups — see
+//   It does not query the graph. It is pure: a message in, bundles out. Whom
+//   the letter is for, and which earlier letter it answers, are lookups — see
 //   below — and a pure function is what makes this testable without a storage
 //   adapter anywhere.
 //
@@ -80,7 +80,7 @@ export let verdict = (m: Head): boolean | null => {
 }
 
 /**
- * Who WROTE the letter, from the `From:` header.
+ * Who wrote the letter, from the `From:` header.
  *
  * The envelope `from` is not the author: a relay stamps its own bounce address
  * there, so a reply aimed at it reaches a bounce sink rather than a person.

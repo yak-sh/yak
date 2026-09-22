@@ -44,7 +44,7 @@ export let recent = (
   return cohort(rows).slice(0, n)
 }
 
-/** Latency per (source, name): the count of TIMED calls and their percentiles. */
+/** Latency per (source, name): the count of timed calls and their percentiles. */
 export type Stat = {
   source: string
   name: string

@@ -3,20 +3,20 @@
 //
 // Three facts hold it up, and two of them belong to other packages.
 //
-// 1. THE CHILD OUTLIVES US. @yaks/process owns that: a launcher that exits
+// 1. The child outlives US. @yaks/process owns that: a launcher that exits
 //    immediately, a `setsid` wrapper inside its own `systemd-run --user
 //    --scope` unit, a pidfile, and a file holding the exit code — enough to
 //    pick the run back up later. The `process` component is stored on the
 //    session's own entity: one entity, one run. Nothing here reaps child
 //    processes.
-// 2. THE FILE IS THE LOG. The child's stdout is written to @yaks/process's
+// 2. The file is the log. The child's stdout is written to @yaks/process's
 //    `<eid>.out` by the wrapper, and survives every restart of the server. The
 //    graph stores the transcript read out of it: one entry per line the adapter
 //    recognizes, each with an `imported` component recording the source file
 //    and the line number. That also serves as the read position — the highest
 //    line number already imported is where a resume begins — so every line is
 //    imported exactly once, with no cursor column to keep up to date.
-// 3. THE REQUEST IS AN ENTRY. A session asks for a provider, a model and an
+// 3. The request is an entry. A session asks for a provider, a model and an
 //    effort through the `using` component on its first entry, and the text next
 //    to it is the instruction. There is no HTTP endpoint that launches an agent
 //    and no `launch` column: the transaction that writes that entry is the
@@ -24,7 +24,7 @@
 //
 // Killing a run means writing a `stop` component on the session's own entity,
 // next to its `process` — the same component @yaks/process reads next to a
-// `service` row. A `stop` on an ENTRY means something else: the end of a
+// `service` row. A `stop` on an entry means something else: the end of a
 // transcript. The two never conflict, because one is written on a session and
 // the other on an entry.
 
@@ -137,7 +137,7 @@ export let asked = async (
 }
 
 // How far the transcript has already read its own log: the highest line
-// imported, which is where the next read starts. The stamp IS the cursor, so
+// imported, which is where the next read starts. The stamp is the cursor, so
 // nothing has to be kept current for a resume to be exact.
 let consumed = async (g: Graph, session: string): Promise<number> => {
   let [last] = await g.read(
@@ -227,7 +227,7 @@ export let imported = (
       entity: { eid: mint() },
       entry: { session },
       imported: { source, line },
-      // Everything a provider prints is OUTPUT: the run produced it, and the
+      // Everything a provider prints is output: the run produced it, and the
       // run is the session's own entity. Prose with no `output` beside it is
       // an input, which is the one thing this stream never contains.
       ...(comps.content && !comps.output
@@ -252,7 +252,7 @@ export let imported = (
  *
  * It resumes where the transcript stands, so the same call serves a fresh
  * launch and a run adopted back after a restart; and it reads the ending
- * BEFORE the last bytes, so nothing written just before an exit is lost.
+ * before the last bytes, so nothing written just before an exit is lost.
  */
 export let follow = async (
   g: Graph,
@@ -273,7 +273,7 @@ export let follow = async (
     let over = comp(await one(g, session), EXIT) != null
     let bundles = lines(tail, over)
       .flatMap((text) => imported(session, path, ++line, text, adapter, mint))
-    // Trusted: `imported` is server-owned, and this IS the server reading its
+    // Trusted: `imported` is server-owned, and this is the server reading its
     // own file. One apply per pass, so a run of lines lands in one
     // transaction.
     if (bundles.length) await g.apply(bundles, { trusted: true })
@@ -313,7 +313,7 @@ export let start = async (
     env: o.env ?? Deno.env.toObject(),
   }, {
     ...o,
-    eid: session, // one entity: the transcript IS the thing running
+    eid: session, // one entity: the transcript is the thing running
     stream: false, // the lines are entries, not anonymous output
   })
   follow(g, session, adapter, o).catch(told(o))
@@ -356,7 +356,7 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
 // A run that ended without saying so. A provider prints a terminal event when
 // it finishes a turn; one that was killed, crashed, or simply stopped talking
 // prints nothing, and a transcript whose newest line is a `say` reads as
-// RUNNING forever. So the ending is written down — the process ending is
+// running forever. So the ending is written down — the process ending is
 // observed, not inferred from the conversation, which is the difference
 // between evidence and a guess.
 let ended = async (g: Graph, session: string, o: Opts): Promise<void> => {

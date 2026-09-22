@@ -1,4 +1,4 @@
-// Tools a VOCABULARY declares. A `$defs` entry marked `tool: true` declares
+// Tools a vocabulary declares. A `$defs` entry marked `tool: true` declares
 // what the tool is called and what arguments it takes; the implementation
 // lives in the module. This file joins the two: declarations from the
 // documents, implementations from the module, one `Tool[]` out — so a
@@ -7,7 +7,7 @@
 //
 //   let tools = loadTools([vocab], { session_list: (args, ctx) => ... })
 //
-// A declaration nothing implements throws AT LOAD TIME, rather than producing
+// A declaration nothing implements throws at load time, rather than producing
 // a tool that returns "not implemented" when it is called: the vocabulary is
 // what a client lists, and a tool it lists has to work. (An app manifest is
 // the other half of the same rule — there a template takes the place of the
@@ -86,7 +86,7 @@ export type Seams = {
   guide?: Guide
 }
 
-// A result that is not entities, returned as the one entity it CAN be: text
+// A result that is not entities, returned as the one entity it can be: text
 // (here, JSON) that records which call produced it. The schema is the only
 // such result in this tier — a vocabulary is not rows in the store it
 // describes.
@@ -103,7 +103,7 @@ let strings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x) => typeof x == 'string') : []
 
 // The bundles `graph_apply` was handed, checked before anything is applied.
-// The input SCHEMA is the vocabulary itself
+// The input schema is the vocabulary itself
 // (@yaks/mcp `bundleSchema` at `write`), so a client knows every component,
 // every writable column and every type before it writes one — this is the
 // check the schema cannot make, the identity every bundle must carry.
@@ -162,13 +162,13 @@ let gather = async (
 export let runs = (seams: Seams = {}): Runs => {
   let find = seams.search
   return {
-    // The tool does not write: the bundles it answers ARE the write, landed by
+    // The tool does not write: the bundles it answers are the write, landed by
     // the runner signed as the caller, and the batch as applied is what comes
     // back.
     //
-    // A DRY RUN is the exception, and it has to be: bundles answered here are
+    // A dry run is the exception, and it has to be: bundles answered here are
     // landed, so a rehearsal that answered them would be the write it was
-    // rehearsing. So the check is made HERE — `apply({check})` runs every phase
+    // rehearsing. So the check is made here — `apply({check})` runs every phase
     // and rolls the transaction back — and what it would have committed is
     // returned as text, the way every other question about a graph is answered
     // in this tier.
@@ -242,7 +242,7 @@ export let runs = (seams: Seams = {}): Runs => {
  * with {@link runs}. A graph with no ranked search has no `search` tool at
  * all — the declaration is left unread rather than listed unable to run.
  *
- * The declarations are READ rather than checked ({@link toolsSaid}), because
+ * The declarations are read rather than checked ({@link toolsSaid}), because
  * they are this package's own and its tests check them against the
  * meta-schema; the check is an ajv compile, and a Cloudflare Worker forbids
  * building a function from a string. Each transport restates the arguments in

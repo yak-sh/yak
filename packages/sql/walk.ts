@@ -1,20 +1,20 @@
 // The transitive walk compiled: `.requires[<=3]->T-42` becomes one recursive
 // CTE, seeded at the target entity and stepped backward along the reference, so
 // every step is an index seek on the step relation's own endpoint column rather
-// than a scan. The default UNION deduplicates on id alone, so cycles terminate
+// than a scan. The default union deduplicates on id alone, so cycles terminate
 // and a node reachable by two paths of different lengths is never expanded
-// twice. The outer LIMIT stops the queue at the nearest WALK_LIMIT nodes,
+// twice. The outer limit stops the queue at the nearest WALK_LIMIT nodes,
 // excluding the seed. Only an explicit depth cap in the query adds a depth
 // column; its arithmetic then bounds the recursion.
 //
-// The only difference between the two kinds of walk is the STEP: the relation
+// The only difference between the two kinds of walk is the step: the relation
 // of `"from"`/`"to"` integer id pairs that one hop follows. For an edge-typed
 // walk the step is the edge table narrowed to one edge type, which @yaks/edge
 // supplies as an extension; for a column walk it is a component's reference
 // column beside its owner column, which bind.ts supplies. Both end up here, so
 // the CTE is written once.
 //
-//   ->  the candidate REACHES the target: seed the target, follow `to` → `from`
+//   ->  the candidate reaches the target: seed the target, follow `to` → `from`
 //   <-  the target reaches the candidate: seed the target, follow `from` → `to`
 
 import { type Walk, WALK_LIMIT } from '@yaks/query'

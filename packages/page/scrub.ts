@@ -1,11 +1,11 @@
-// Self-containment, enforced at FREEZE TIME.
+// Self-containment, enforced at freeze time.
 //
-// THE INVARIANT: a frozen page renders from its OWN bytes. An archiver inlines
+// The invariant: a frozen page renders from its own bytes. An archiver inlines
 // what it could reach, but everything it could not — an asset that 404'd, a
 // preload hint, a `srcset` variant, a favicon, a tracking pixel — keeps its URL
 // and would fetch the live web the moment somebody opened the archive, years
 // later, announcing the reader to whoever is still serving it. So every
-// remaining external reference is REMOVED here, once, before the bytes are
+// remaining external reference is removed here, once, before the bytes are
 // stored. The Content-Security-Policy header sent when the archive is served is
 // defence in depth and never the mechanism: an archive handed to a person,
 // mailed, or opened from a file has no header in front of it.
@@ -66,7 +66,7 @@ let cssScrub = (css: string): string =>
 export let scrub = (raw: string): Scrubbed => {
   let { document } = parseHTML(raw)
   let all = (sel: string) => [...document.querySelectorAll(sel)]
-  // A document this page EMBEDS is a document it cannot vouch for, and a script
+  // A document this page embeds is a document it cannot vouch for, and a script
   // is the one thing no attribute sweep can make inert.
   for (let el of all('script, base, iframe, frame, embed, object')) el.remove()
   for (let el of all('link')) {

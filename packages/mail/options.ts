@@ -1,4 +1,4 @@
-// What a config passes TO this plugin, in one place, because all three of its
+// What a config passes to this plugin, in one place, because all three of its
 // entry points read it: `./rules` reads the domain, `./effects` reads the
 // transport, `./routes` reads the HTTP route settings. One options type, one
 // file — putting the type in one of those modules would give it fields it
@@ -24,9 +24,9 @@ import type { Eid } from '@yaks/graph'
 export type Options = {
   /** your own mail domain — the addresses this graph canonicalizes on write */
   domain?: string
-  /** whether `domain` belongs to this GRAPH rather than to a mail server: a
+  /** whether `domain` belongs to this graph rather than to a mail server: a
    * letter to an address there is delivered by writing it, never handed to the
-   * transport. True where the addresses at your domain ARE entities here (an
+   * transport. True where the addresses at your domain are entities here (an
    * agent, a project); false where somebody reads them in a mail client. */
   local?: boolean
   /** the transport outbound letters go through; with none, none are sent */

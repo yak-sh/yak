@@ -10,7 +10,7 @@
 // this file.
 //
 // The depth is a choice with a price. The tool list is sent to the agent
-// BEFORE it asks anything, so every byte of schema is context spent up front:
+// before it asks anything, so every byte of schema is context spent up front:
 // over a ninety-component vocabulary the fully typed bundle is ~30 KB per tool
 // and the names-only one ~11 KB. `graph_apply` always uses `full`, because the
 // alternative is an agent guessing at a column's type (T-34153) — and a guess
@@ -37,12 +37,12 @@ export type Depth = 'names' | 'full'
 export type BundleOpts = {
   /** how much of each column to describe (default: `names`) */
   depth?: Depth
-  /** allow a null component — the shape of an APPLIED transaction, which
+  /** allow a null component — the shape of an applied transaction, which
    * echoes `comp: null` for a component the transaction removed. A read never
    * returns one, so a read tool leaves this off (default: `false`) */
   nulls?: boolean
   /** `graph_apply`'s input schema: the writable components and their writable
-   * columns, each typed and described. It is OPEN, like a read schema: a
+   * columns, each typed and described. It is open, like a read schema: a
    * client caches this schema when it connects and the vocabulary grows
    * afterwards, so a schema that refused an undeclared column would refuse a
    * column that now exists. The schema describes; the server decides (default:
@@ -60,7 +60,7 @@ export type BundleOpts = {
 // A column's value as it reads back. Every column is nullable (a cleared
 // column reads back null) and optional (a patch only touches the columns it
 // names), and an enum reads back as one of its members. `.catch` is
-// deliberately absent: this schema DESCRIBES the reply, and a reply that does
+// deliberately absent: this schema describes the reply, and a reply that does
 // not match is a bug to see, not to coerce.
 let typed = (col: Column): z.ZodTypeAny =>
   col.category == 'enum' && col.values?.length
@@ -73,7 +73,7 @@ let typed = (col: Column): z.ZodTypeAny =>
 
 // Attach the vocabulary's description of a component or column, when it has
 // one. Only at `full`: a description is the other half of a type, and `names`
-// is the depth that spends context on neither. It is attached to the OUTERMOST
+// is the depth that spends context on neither. It is attached to the outermost
 // wrapper a value has, because a description set inside a nullable is emitted
 // at both levels — the same sentence, twice, for every component there is.
 let saying = <T extends z.ZodTypeAny>(
@@ -84,13 +84,13 @@ let saying = <T extends z.ZodTypeAny>(
 
 // One component as it appears in a bundle: a flat object of its columns, each
 // carrying the vocabulary's type and description for it. Both the read and the
-// write schema are PASSTHROUGH, never strict. A reader must not break on a
+// write schema are passthrough, never strict. A reader must not break on a
 // column the server started sending after this client was written — and a
 // writer keeps this schema for the whole conversation, cached along with the
 // tool list it arrived in, while the vocabulary grows (roster.ts). A closed
 // write schema would make that stale copy refuse a column that exists, inside
-// the client, where no server can explain it. So the schema DESCRIBES — every
-// declared column typed, named and described — and the server DECIDES:
+// the client, where no server can explain it. So the schema describes — every
+// declared column typed, named and described — and the server decides:
 // @yaks/graph's `admit` refuses a column nobody declared and lists the ones
 // that are declared.
 //
@@ -106,7 +106,7 @@ let compSchema = (
   let shape = Object.fromEntries(
     vocab.columns(name).map((prop) => {
       let col = vocab.column(name, prop)!
-      // A server-owned column is NAMED in the write schema but left untyped: a
+      // A server-owned column is named in the write schema but left untyped: a
       // caller that reads a bundle and sends it back will include one, and
       // @yaks/graph's `admit` drops it rather than refusing the transaction.
       // The caller's own `column` function is consulted only where a type is
@@ -148,7 +148,7 @@ let sugar = {
 }
 
 /**
- * THE bundle, derived whole from a vocabulary: `{entity: {eid, num}, <comp>:
+ * The bundle, derived whole from a vocabulary: `{entity: {eid, num}, <comp>:
  * {<columns>}}` — the shape every interface in this family speaks, for reads
  * and for writes.
  *
@@ -170,7 +170,7 @@ export let bundleSchema = (
         return [name, saying(one, vocab.comp(name)?.description, opts)]
       }),
     ),
-    // `entity` and `kind` are declared AFTER the vocabulary and override it:
+    // `entity` and `kind` are declared after the vocabulary and override it:
     // `entity` is a declared component too, but its `eid` is the row key
     // rather than a column, and a read returns the derived display kind beside
     // it.
@@ -178,7 +178,7 @@ export let bundleSchema = (
       kind: z.string().optional().describe(
         'the derived display kind — what the components make this entity',
       ),
-      // The one `$` key `apply()` RETURNS (@yaks/graph `composed`), and only
+      // The one `$` key `apply()` returns (@yaks/graph `composed`), and only
       // on the transaction it echoes back: the caller's own placeholder for an
       // entity whose id it could not know. `nulls` marks that case — a read
       // returns neither a null component nor an alias.
@@ -202,7 +202,7 @@ export let bundleSchema = (
     }).passthrough(),
     // Open at the top level as well as per component: the `$` keys are the
     // calling program's to add — yaks.app puts `$app` on a bundle — and a
-    // vocabulary GROWS mid-connection, so a component declared after this
+    // vocabulary grows mid-connection, so a component declared after this
     // schema was derived still reaches the graph. The server announces the
     // growth with `tools/list_changed` and the roster sentence (roster.ts),
     // and the client re-reads the tool list.

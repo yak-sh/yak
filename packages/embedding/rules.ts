@@ -1,4 +1,4 @@
-// Where the vectors are KEPT and READ: the `rules` export
+// Where the vectors are kept and read: the `rules` export
 // (`@yaks/embedding/rules`) — the vector table created through the server's own
 // database connection, and the `.near` compiler the read path consults. "The
 // server" here means whichever process opened the graph and loaded this
@@ -11,11 +11,11 @@
 // plugin can ask for a neighbourhood, and one that did not gets the compiler's
 // own refusal. Nobody wires it up by hand.
 //
-// This package declares no COMPONENT. No client ever writes a vector: it is
+// This package declares no component. No client ever writes a vector: it is
 // derived from text another package's vocabulary declares, it is never sent to
 // a client, and no patch creates one — which is why the table is created in SQL
 // here rather than by the store. The one thing `./vocab` does declare is the
-// index's CHECK (./tools.ts), which is a tool and not a component.
+// index's check (./tools.ts), which is a tool and not a component.
 
 import type { Plugin } from '@yaks/graph'
 import type { Extension } from '@yaks/sql'
@@ -38,7 +38,7 @@ export let rules = (host: { sql: Driver }): Plugin[] => {
  * (@yaks/sql `Begin`), so a neighbourhood never outlives the query that
  * resolved it.
  *
- * What it needs is the vector SPACE, not the embedding function — compiling a
+ * What it needs is the vector space, not the embedding function — compiling a
  * query reads the vector an entity already has and never embeds anything — so
  * a server still waiting for a key can still answer `.near` over whatever is
  * stored. Only a config that names no embedder at all has no space to rank in;

@@ -1,4 +1,4 @@
-// The parser: a yaks query STRING to the AST. It knows the format — the prefix
+// The parser: a yaks query string to the AST. It knows the format — the prefix
 // characters on a component name, the operators, the bracket a path may carry,
 // the list and range forms of a value, the reserved directives, and how `&`,
 // whitespace and quotes separate tokens — and nothing about any schema. Where a
@@ -7,7 +7,7 @@
 // a reverse association), the parser keeps the raw tokens and leaves the
 // reading to a compiler that has a schema. See README for the full division.
 //
-// A token is one of three things BY HOW IT IS WRITTEN, so nothing is ever
+// A token is one of three things by how it is written, so nothing is ever
 // parsed by trying one reading and falling back to another: a clause on a
 // component (it starts with a prefix character, or it contains an operator), a
 // quoted text term, or a bare word, which is a text term. A malformed clause —
@@ -188,7 +188,7 @@ export let cursor = (val: string): number | undefined => {
 // `!comp` and `.comp` are ordinary predicates — absence and presence are
 // questions any evaluator answers from stored data — and the rest mean
 // something only a write or a rule engine can act on. `-comp` is the newest of
-// them: absence is a question about a row, a REMOVAL is a question about the
+// them: absence is a question about a row, a removal is a question about the
 // write that took it away, and no amount of reading the stored rows tells them
 // apart.
 let sigil = (token: string): Clause[] | null => {
@@ -241,7 +241,7 @@ let edgeSelect = (quals: Qual[]): Clause => {
   }
 }
 
-// One TOKEN to the clauses it contributes, or null when it is not a clause at
+// One token to the clauses it contributes, or null when it is not a clause at
 // all (a bare word) — which the caller reads as a text term. A directive is one
 // clause; an ordinary predicate is one clause too.
 export let parseDot = (token: string): Clause[] | null => {
@@ -402,7 +402,7 @@ export let parseDot = (token: string): Clause[] | null => {
     }
     return [{ kind: 'limit', n: Number(val) }]
   }
-  // `.after=13882` / `.after=T-13882` — the paging cursor. It names an ENTITY
+  // `.after=13882` / `.after=T-13882` — the paging cursor. It names an entity
   // by its spine number, never a position or an order key: an evaluator works
   // out where that entity sits in whatever order the query asked for, so this
   // one form pages every ordering. A human id is that same number with a
@@ -461,12 +461,12 @@ export let parseDot = (token: string): Clause[] | null => {
 // ---- tokenizing a whole query ----
 
 // The token split: whitespace and `&` both end a token; a quoted run is one
-// token even across them, and so is a bracket on a path. A quote OPENS only at
+// token even across them, and so is a bracket on a path. A quote opens only at
 // a token's start or immediately after an operator, so an apostrophe inside a
 // word (`jeff's`) stays a letter; a bracket opens only after a bare path, so
 // one inside a value is just a character of the value. An unclosed quote or
 // bracket is refused: the rest of the query was not what the caller meant.
-// A `(` opening a token starts a GROUP: everything to its matching `)` is one
+// A `(` opening a token starts a group: everything to its matching `)` is one
 // token, parsed on its own (parse below), so `|` and `&` inside it bind there.
 // A `|` outside quotes, brackets and groups is its own token, the OR separator.
 let tokens = (q: string): string[] => {
@@ -523,13 +523,13 @@ export type ParseOpts = {
 }
 
 // A token that has already taken an operator, so every comma after it is part
-// of its VALUE rather than a separator.
+// of its value rather than a separator.
 let VALUED = new RegExp(
   `^\\.?${WORD}(?:\\[[^\\]]*\\])?(?:!=|~=|<=|>=|->|<-|<|>|=)`,
 )
 
 // The clause parts of one token. A `,` between clauses is an optional
-// separator; a `,` inside a value means any-of, and POSITION is what tells them
+// separator; a `,` inside a value means any-of, and position is what tells them
 // apart: commas separate until a clause takes an operator, and from there the
 // rest of the token is that clause's value (`.entity,+!created` is two clauses,
 // `.p=a,b` is one). A comma inside a path's bracket belongs to the bracket. A
@@ -594,12 +594,12 @@ let clauses = (toks: string[], opts: ParseOpts): Clause[] =>
  * `*` on a word (`lemo*`) is still the full-text prefix term it has always
  * been.
  *
- * The empty query selects NOTHING: an empty string, or one with no clauses,
+ * The empty query selects nothing: an empty string, or one with no clauses,
  * returns a single `never`, so a blank saved query does not load the whole
  * graph.
  */
 export let parse = (q: string, opts: ParseOpts = {}): And => {
-  // `|` is OR and binds LOOSER than the AND of adjacent terms: `.a=1 .b=2|.c=3`
+  // `|` is OR and binds looser than the AND of adjacent terms: `.a=1 .b=2|.c=3`
   // is (a and b) or c. A parenthesised group is one term, so `.a=1 (.b=2|.c=3)`
   // is a and (b or c). An empty alternative is refused rather than read as
   // "nothing", which would quietly select nothing.

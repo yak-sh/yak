@@ -41,7 +41,7 @@ let doc: VocabDoc = {
         author: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },
-    // A review exists ABOUT a book — deleting the book deletes its reviews
+    // A review exists about a book — deleting the book deletes its reviews
     // too.
     review: {
       component: true,

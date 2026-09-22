@@ -7,7 +7,7 @@ import type { Driver } from './driver.ts'
 // outer savepoint can never be released by an inner one's name.
 let seq = 0
 
-// How many units are open on each driver. A driver that owns a FILE needs to
+// How many units are open on each driver. A driver that owns a file needs to
 // know whether it is the outermost one, because that is the one that takes the
 // write lock (see `Driver.file`); everything inside it is a savepoint, since
 // one connection has one transaction however deeply the calls nest.

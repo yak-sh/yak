@@ -5,7 +5,7 @@
  *
  * A caller invokes a tool directly: `call()` writes the `call` entity, runs
  * the function named by `call.to` with the call's bundles and a context
- * carrying the CALLER's identity, and applies what the function returned
+ * carrying the caller's identity, and applies what the function returned
  * together with a `result{call, ms}` entity whose id is derived from the rule
  * that emits it. Nothing polls the graph — a call another process wrote, or
  * one deferred by a `wake` component, is picked up by registering those same

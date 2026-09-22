@@ -107,7 +107,7 @@ Deno.test('the whole write goes as one batch', async () => {
     { entity: { eid: 'b1' }, doc: { title: 'Dune' } },
     { entity: { eid: 'b2' }, doc: { title: 'Emma' } },
   ])
-  // Reads gather in batches too, so what matters is that the WRITE was one:
+  // Reads gather in batches too, so what matters is that the write was one:
   // the last batch of the apply is the flush, and it carries every statement.
   assert(sizes.at(-1)! > 1, `the flush should carry the batch: ${sizes}`)
 })

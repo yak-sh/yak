@@ -1,6 +1,6 @@
 /// <reference types="npm:@cloudflare/workers-types@^4" />
 // The Cloudflare gate (not published — see deno.json). `objectBlobs` takes a
-// bucket typed STRUCTURALLY, so the shipped source imports nothing and
+// bucket typed structurally, so the shipped source imports nothing and
 // `deno check` reads it with no Cloudflare package installed. This file is
 // where that hand-written type is checked against the runtime's own: it is
 // compiled with `@cloudflare/workers-types` in scope, so the bucket here is the

@@ -57,10 +57,10 @@ export let rows = (
   return indexed || opts.archetypes ? unit(driver, ask) : ask()
 }
 
-// The columns a gather READS: the stored ones, plus any computed column the
+// The columns a gather reads: the stored ones, plus any computed column the
 // caller registered an expression for. A computed column has no row to read, so
 // without a registration there is nothing to select — but with one it is a
-// column like any other, and leaving it out of the bundle while the FILTER
+// column like any other, and leaving it out of the bundle while the filter
 // resolves it would make `.task.status=open` select rows whose `status` the
 // result does not carry.
 let read1 = (v: Vocab, comp: string, derived: Derived): Column[] =>
@@ -71,7 +71,7 @@ let read1 = (v: Vocab, comp: string, derived: Derived): Column[] =>
 // reference joined back to its target's eid, keyed by the owner eid. A
 // component with no columns reads a bare presence flag.
 //
-// A column whose READ differs from its storage is read through its registered
+// A column whose read differs from its storage is read through its registered
 // expression instead — the same `derived` registry @yaks/sql consults when it
 // compiles a query (see @yaks/sql/derived.ts). That is what keeps the two
 // readers agreeing: a value the filter resolves one way cannot come back
@@ -79,8 +79,8 @@ let read1 = (v: Vocab, comp: string, derived: Derived): Column[] =>
 // @yaks/blob registers one override per body column, and the gather returns the
 // text rather than the address the row holds.
 //
-// So the component table is aliased by its OWN NAME here, exactly as the binder
-// joins it, and an override's `deps` are LEFT JOINed the same way: a registered
+// So the component table is aliased by its own name here, exactly as the binder
+// joins it, and an override's `deps` are left-joined the same way: a registered
 // expression is written once and reads the same in both places.
 let project = (
   v: Vocab,
@@ -146,7 +146,7 @@ export let compSql = (
 export let OWNER = '@eid'
 
 /**
- * The same read widened from ONE entity to a SET: every entity `sub` names,
+ * The same read widened from one entity to a set: every entity `sub` names,
  * each row carrying its owner's eid under {@link OWNER}. `sub` is a subquery
  * selecting one `eid` column, and its params bind first.
  *
@@ -176,7 +176,7 @@ export let get = (
   opts: BindOpts = {},
 ): Bundle[] => {
   let found = new Map<string, Bundle>()
-  // Bound parameter count and SQL-cache size; gather a COMPONENT per set,
+  // Bound parameter count and SQL-cache size; gather a component per set,
   // never every component per entity (a 1,000-entry transcript is otherwise
   // tens of thousands of queries). A JSON array uses one bind and one stable
   // prepared statement shape regardless of cardinality (SQLite 3.38+).
@@ -251,7 +251,7 @@ export let get = (
     // Every membership probe uses the same bound owner set.
     let names = vocab.all.filter((c) => c != 'entity')
     let present: string[] = []
-    // One arm per table, cut to what THIS engine's compound SELECT carries
+    // One arm per table, cut to what this engine's compound SELECT carries
     // (`Driver.arms`): workerd refuses a sixth term where an embedded SQLite
     // takes hundreds, so a probe sized for the latter is a broken read on a
     // Durable Object rather than a slow one.
@@ -308,12 +308,12 @@ export let get = (
  * gets.
  *
  * A vocabulary too wide for one statement (@yaks/sql `narrow`) is queried in
- * ROUNDS: each statement is transitive within its own tables, so the result
+ * rounds: each statement is transitive within its own tables, so the result
  * is complete when a round turns up nothing the last one had not.
  *
- * Asked INSIDE the transaction, after the batch's patches have gone in, which
+ * Asked inside the transaction, after the batch's patches have gone in, which
  * is what makes the result the one the cascade wants: who points at the dying
- * as the batch LEAVES the graph.
+ * as the batch leaves the graph.
  */
 export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
   let ask = (s: { sql: string; params: (string | number)[] }) =>

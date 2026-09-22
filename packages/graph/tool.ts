@@ -21,7 +21,7 @@ export let addressed = async (
   return ids.map((id) => at.get(id) ?? id)
 }
 
-/** The three fields that decide what a tool is CALLED — all `toolName` reads,
+/** The three fields that decide what a tool is called — all `toolName` reads,
  * so it can be called on a tool whose context and result types belong to
  * another package. */
 export type ToolId = { name?: string; noun?: string; verb?: string }

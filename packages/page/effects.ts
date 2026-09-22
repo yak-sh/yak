@@ -1,4 +1,4 @@
-// What the server DOES about a page, exported as `@yaks/page/effects`: one
+// What the server does about a page, exported as `@yaks/page/effects`: one
 // `created(web)` handler that fetches a page recorded by its address alone and
 // stores its bytes.
 //

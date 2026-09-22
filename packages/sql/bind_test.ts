@@ -1,6 +1,6 @@
-// Self-contained unit tests: @yaks/sql over a TINY inline vocab, no fleet, no
+// Self-contained unit tests: @yaks/sql over a tiny inline vocab, no fleet, no
 // src/. They pin the public contract the integration builds on — the shape of
-// the compiled statement, the derived-column hook, that values are BOUND never
+// the compiled statement, the derived-column hook, that values are bound never
 // inlined, and that a gap declines loudly.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
@@ -9,7 +9,7 @@ import { loadVocab, Unknown } from '@yaks/vocab'
 import type { VocabDoc } from '@yaks/vocab'
 import { ARMS, compile, type Derived, raw, Unsupported } from './mod.ts'
 
-// The spine, a doc, and a task with a stored priority and a COMPUTED status
+// The spine, a doc, and a task with a stored priority and a computed status
 // (computed: true) — the smallest vocab that exercises routing, a scalar, and
 // the derived hook.
 let doc: VocabDoc = {
@@ -102,7 +102,7 @@ Deno.test('a computed column with no registration declines loudly', () => {
   )
 })
 
-// A derived read builds on rows of its OWN choosing — @yaks/session's
+// A derived read builds on rows of its own choosing — @yaks/session's
 // `session.status` is computed from the entries a session has, and answers
 // `empty` for an owner with none. Every entity in a graph has none, so
 // `.session.status=empty` selected all of them (T-37730). A qualified path
@@ -134,7 +134,7 @@ Deno.test('a derived read is NULL where the component is not worn', () => {
   )
 })
 
-// The read that ANSWERS for a row wearing nothing says so: the fleet's
+// The read that answers for a row wearing nothing says so: the fleet's
 // `updated.at` coalesces to `created.at`, because being made is the last time
 // an untouched row changed, and 1,656 of 10,767 entities were invisible to
 // `.updated.at>=…` before it did.
@@ -153,7 +153,7 @@ Deno.test('a read marked worn: false keeps its value without the component', () 
 })
 
 Deno.test('the .kind scope expands to present-and-earlier-absent', () => {
-  // task sorts before doc, so `.kind=doc` is doc present AND task absent.
+  // task sorts before doc, so `.kind=doc` is doc present and task absent.
   let { sql } = compile(parse('.kind=doc'), v)
   assert(sql.includes('"doc"."entity" is not null'), sql)
   assert(sql.includes('"task"."entity" is null'), sql)
@@ -224,7 +224,7 @@ Deno.test('a reverse child filter screens the child row', () => {
   let { sql, params } = compile(parse('.notes.stars=5'), v)
   assert(sql.includes('"note"."stars" = ?'), sql)
   assertEquals(params, [5])
-  // a child column in another component is LEFT JOINed inside the subquery
+  // a child column in another component is left-joined inside the subquery
   let joinSql = compile(parse('.notes.title~=hi'), v).sql
   assert(
     joinSql.includes(
@@ -238,7 +238,7 @@ Deno.test('a reverse child filter screens the child row', () => {
 Deno.test('a reverse hop with no count and no child filter declines', () => {
   let e = assertThrows(() => compile(parse('.notes~=lots'), v), Unsupported)
   assertEquals((e as Unsupported).feature, 'a reverse hop')
-  // and one reaching for the spine, whose name means the OUTER row down there
+  // and one reaching for the spine, whose name means the outer row down there
   assertThrows(() => compile(parse('.notes.num=3'), v), Unsupported)
 })
 
@@ -261,7 +261,7 @@ Deno.test('a rule sigil throws Unsupported rather than compiling', () => {
 Deno.test('ordering by an unfiltered column still joins its table', () => {
   let { sql } = compile(parse('.priority=1&.order=title'), v)
   assert(sql.includes('left join "doc"'), sql)
-  // the spine num breaks ties, so the order a query asks for is TOTAL and a
+  // the spine num breaks ties, so the order a query asks for is total and a
   // page of it is the same page wherever it is cut
   assert(sql.endsWith('order by "doc"."title", "entity"."num" desc'), sql)
 })
@@ -283,7 +283,7 @@ Deno.test('an explicit .order survives a window', () => {
 
 Deno.test('.after pages within the asked order, keyed on the anchor', () => {
   let { sql, params } = compile(parse('.order=title&.limit=2&.after=7'), v)
-  // the cursor names an ENTITY by its num — the same spelling whatever the
+  // the cursor names an entity by its num — the same spelling whatever the
   // order — and the anchor's own value is read back to page past it
   assert(sql.includes('where "__cur"."num" = 7'), sql)
   assert(sql.includes('"doc"."title" > (select'), sql)
@@ -345,7 +345,7 @@ Deno.test('an OR compiles as a union of indexed selections of spine ids', () => 
 
 Deno.test('a wide OR is cut into compounds workerd will take', () => {
   // Six alternatives is a sixth term, which workerd refuses (compound.ts) —
-  // the tray's own OR is seven. Each group stays one indexed `in`.
+  // the tray's own or is seven. Each group stays one indexed `in`.
   let wide = compile(
     parse(
       '.doc.title=a|.doc.body=b|.task.priority=1|.note.stars=2|.doc.title=c|.task.priority=3',
@@ -372,7 +372,7 @@ Deno.test('the membership statement excludes graves and answers one eid', () => 
 })
 
 Deno.test('.refs= groups its arms and cuts them to what a compound may carry', () => {
-  // A vocabulary WIDER than one compound SELECT may carry: seven tables bear a
+  // A vocabulary wider than one compound SELECT may carry: seven tables bear a
   // reference column and one of them bears two, where workerd would refuse the
   // sixth term (./compound.ts). Every group is its own `in`, so no compound
   // here carries more than ARMS.
@@ -403,7 +403,7 @@ Deno.test('.refs= groups its arms and cuts them to what a compound may carry', (
   })
   let { sql, params } = compile(parse('.refs=a1'), wide)
   // Eight columns, one bound param each; seven arms, because a table's two
-  // columns are ONE term, OR'd.
+  // columns are one term, OR'd.
   assertEquals(params, Array(8).fill('a1'))
   assert(
     sql.includes(

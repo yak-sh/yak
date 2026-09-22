@@ -16,7 +16,7 @@
 // A component that declares neither is sent to the server and kept forever,
 // because the common case is data the server owns.
 //
-// What is sent OUTWARD is narrower than what was written locally: only
+// What is sent outward is narrower than what was written locally: only
 // components that leave this node, only the columns a client is allowed to
 // write (a stamped column is the server's to write), and only the bundles the
 // caller actually passed in — the entities a cascade deleted and the
@@ -36,9 +36,9 @@ export let outbound = (vocab: Vocab, comp: string): boolean =>
   syncOf(vocab, comp) != 'none'
 
 /**
- * Where a component's state has to be kept on THIS node, for the components no
- * server will ever send back: the VAULT when it is durable forever (it
- * survives a reload), process MEMORY otherwise (it goes with the tab, or with
+ * Where a component's state has to be kept on this node, for the components no
+ * server will ever send back: the vault when it is durable forever (it
+ * survives a reload), process memory otherwise (it goes with the tab, or with
  * its timer). A component that is sent to the server is neither, because the
  * server is what sends it back.
  */
@@ -88,7 +88,7 @@ let leaving = (
   })
 
 /**
- * One committed list of bundles, reduced to what the SERVER should be told —
+ * One committed list of bundles, reduced to what the server should be told —
  * the `sync: server` components, the ones it owns and stores. A write that is
  * entirely local returns an empty list and nothing is posted at all.
  *
@@ -100,7 +100,7 @@ export let outward = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
   leaving(bundles, vocab, 'server', true)
 
 /**
- * One committed list of bundles, reduced to what the PEERS should be told —
+ * One committed list of bundles, reduced to what the peers should be told —
  * the `sync: peers` components, which the server passes on without storing.
  *
  * These are sent over the WebSocket, not to `POST /apply`. Their lifetime is

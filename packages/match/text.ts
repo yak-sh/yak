@@ -1,7 +1,7 @@
 // Bare words: how a search term tests against text, with no index.
 //
 // A bare word in a query is a full-text term, and a full-text index matches it
-// by TOKEN, not by substring: `cat` finds "the cat sat" and not "catalogue".
+// by token, not by substring: `cat` finds "the cat sat" and not "catalogue".
 // This module is that rule in miniature — a token is a run of letters and
 // digits, lowercased — so a search answered from memory selects what an index
 // over the same words would select. Text outside that alphabet (a script whose

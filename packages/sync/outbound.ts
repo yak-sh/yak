@@ -2,7 +2,7 @@
 // response.
 //
 // The local commit has already happened — this runs in the `effect` phase, and
-// an effect is by definition post-commit — so every write here is OPTIMISTIC:
+// an effect is by definition post-commit — so every write here is optimistic:
 // the page has already rendered it, and the server's response reconciles it
 // rather than permitting it. Three responses are possible:
 //
@@ -12,7 +12,7 @@
 //              back again.
 //   refused    the server would not take it. The optimistic change is undone
 //              from the copy taken before it, and the refusal is reported. A
-//              write that was HELD (a delete — see sync.ts) was never applied
+//              write that was held (a delete — see sync.ts) was never applied
 //              locally, so there is nothing to undo.
 //   unreachable  nothing is undone. The write may have been applied on the
 //              server with only the response lost, and a client that guesses

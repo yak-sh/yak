@@ -1,4 +1,4 @@
-// The other direction: a NAME used where an eid is expected.
+// The other direction: a name used where an eid is expected.
 //
 // Once an entity has the name `lemon-cake`, that name is accepted anywhere its
 // id is — in a reference column (`comment: {target: 'lemon-cake'}`), as a
@@ -8,12 +8,12 @@
 // ambiguity, since a name is unique in the store, so exactly one entity has it
 // or none does.
 //
-// EIDS ARE CHECKED FIRST. An id that IS an entity here means that entity, even
+// EIDS are checked first. An id that is an entity here means that entity, even
 // if some other entity has the same string as a name. A caller who wrote an id
 // down must never find their write land on a different row because a name was
 // later created over it.
 //
-// AND IT TAKES ONE ROUND TRIP, because a name's key entity has an id derived
+// And it takes one round trip, because a name's key entity has an id derived
 // from the name (@yaks/key): the lookup is `get([the id, the id's key entity])`
 // and a check of which came back. No query, no index, no scan. A value shaped
 // like an id these packages generate — a UUID, a content hash — is not looked
@@ -32,7 +32,7 @@ export let wordish = (id: string): boolean =>
   !!id && !id.startsWith('$') && !minted(id)
 
 /**
- * Resolves these ids to the eids they name. The returned map holds ONLY the ids
+ * Resolves these ids to the eids they name. The returned map holds only the ids
  * that changed, so a caller reads it as `at.get(id) ?? id`, and an empty map
  * means every id was already an eid.
  *

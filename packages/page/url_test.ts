@@ -6,7 +6,7 @@ let same = (a: string, b: string) => assertEquals(canon(a), b)
 Deno.test('one address, canonically spelled', () => {
   // the spot inside a page is not the page
   same('https://a.com/x#top', 'https://a.com/x')
-  // a trailing slash is a server's habit; the root's slash IS the root
+  // a trailing slash is a server's habit; the root's slash is the root
   same('https://a.com/x/', 'https://a.com/x')
   same('https://a.com/', 'https://a.com/')
   same('https://a.com', 'https://a.com/')

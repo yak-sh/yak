@@ -10,7 +10,7 @@
       "type": "object",
       "governed": true,
       "properties": {},
-      "description": "what stands: the structure a system HAS, rather than one being proposed"
+      "description": "what stands: the structure a system has, rather than one being proposed"
     },
     "design": {
       "component": true,

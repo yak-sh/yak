@@ -2,7 +2,7 @@
 // one record per entity that has a browser-owned component.
 //
 // IndexedDB is an event-based API, so everything here is a small promise
-// wrapper around a request, plus one rule: a WRITE resolves on the
+// wrapper around a request, plus one rule: a write resolves on the
 // transaction, not on the request. A request succeeds as soon as the object
 // store accepts the value; the transaction is what makes it durable, and a
 // caller writing through after a commit wants the second one.

@@ -2,7 +2,7 @@
  * @yaks/process — a running program as an entity, so whatever needs one can
  * point at it instead of keeping a pid of its own.
  *
- * - `service{command, cwd, restart, attempts}` — a program that SHOULD run,
+ * - `service{command, cwd, restart, attempts}` — a program that should run,
  *   stored on the same entity its process lands on. The supervisor acts on
  *   this component, and a `stop` component beside it means the program is no
  *   longer wanted.
@@ -13,7 +13,7 @@
  *   `source` names the process.
  *
  * The program doing the launching is one too: {@link started} and
- * {@link ended} return the components a process writes about ITSELF on the way
+ * {@link ended} return the components a process writes about itself on the way
  * in and the way out (./self.ts). That is the entity the server signs its
  * writes with, and the one a start-up effect handler fires on.
  *

@@ -11,7 +11,7 @@
 // its depth argument is required — an uncapped walk is a full graph scan under
 // a friendlier name.
 //
-// Each returns a set of ENTITY ids rather than links: the far endpoints,
+// Each returns a set of entity ids rather than links: the far endpoints,
 // deduplicated, which is what a caller almost always wants. To read the links
 // themselves, call `storage.read` with the same query.
 //

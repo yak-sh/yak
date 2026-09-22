@@ -1,14 +1,14 @@
 // The config file, read. It is the one statement of where a graph IS: the
 // SQLite file, the plugins that read and write it, and how the host behaves.
 //
-// A config file names a GRAPH, not a server. `yak --config yak.json task list`
+// A config file names a graph, not a server. `yak --config yak.json task list`
 // opens that file, imports those plugins and runs the tool in this process —
 // SQLite in WAL mode accepts as many writers as there are `yak` commands
 // running, so nothing has to be listening for a command line to work.
 // `yak serve` is one more process over the same file, the one that serves HTTP
 // requests.
 //
-// That is why this is its own module. A command that only needs to know WHERE
+// That is why this is its own module. A command that only needs to know where
 // the graph is must not import serve.ts, which pulls in every plugin a config
 // names — a cost `yak login` should not pay. So the config is read here, by a
 // module that imports nothing.
@@ -37,7 +37,7 @@ export type Config = {
   /** which interface it binds (default Deno's own) */
   hostname?: string
   /** whether the store mints a short human-readable number beside each entity
-   * id. OPT-IN: left out, no entity gets one, because a number exists for a
+   * id. Opt-IN: left out, no entity gets one, because a number exists for a
    * person to type and most hosts have nobody typing. `{ except: [comp, …] }`
    * turns them on for everything except entities carrying those components —
    * what a host using @yaks/archetype wants, since a descriptor is bookkeeping
@@ -61,7 +61,7 @@ export type Config = {
 export let OWN_CONFIG = '.yak/yak.json'
 
 /** The config a command opens: the path it was given, else `$YAK_CONFIG`,
- * else the one this machine keeps for its own graph. A machine that HAS a
+ * else the one this machine keeps for its own graph. A machine that has a
  * graph is the ordinary case, so a bare `yak task list` there reads from it
  * rather than reaching for a remote server it was never told about. No file
  * there means no config. */
@@ -85,7 +85,7 @@ export let configPath = (
 
 // A specifier belonging to the config file — `./plugins/mail`, `/srv/mail` —
 // is resolved against the config, so a config file is movable and a bare
-// `@yaks/…` is left to the import map. It names a PACKAGE, never a file: a
+// `@yaks/…` is left to the import map. It names a package, never a file: a
 // plugin's modules are its subpaths, and only a package has those.
 let near = (spec: string, base: URL): string =>
   spec.startsWith('.') || spec.startsWith('/') ? new URL(spec, base).href : spec
@@ -109,7 +109,7 @@ let named = (value: unknown): string | undefined => {
 }
 
 // `{"env": "NAME"}` anywhere in an options object reads the environment
-// variable AT THE MOMENT THE VALUE IS ACCESSED — the one thing a config file
+// variable at the moment the value is accessed — the one thing a config file
 // cannot hold in the open, and the one thing that can arrive after the host is
 // already running. A plugin that re-reads its options on each pass therefore
 // starts the moment a key is exported, rather than needing the process

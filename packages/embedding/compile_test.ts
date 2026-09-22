@@ -66,7 +66,7 @@ Deno.test('the rest of the query line still filters', async () => {
   assertEquals(ask(db, '.near=book-1&.kind=review', near), ['review-4'])
 })
 
-// The defect this replaced: the neighbourhood was cut to `limit` BEFORE the
+// The defect this replaced: the neighbourhood was cut to `limit` before the
 // rest of the line filtered, so `.near=X&.kind=review` answered the reviews
 // among the nearest two of any kind — almost always none of them.
 Deno.test('the neighbourhood is taken among what the rest of the line selects', async () => {

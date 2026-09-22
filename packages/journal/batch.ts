@@ -4,7 +4,7 @@
 // those movements: a column that changed, or a whole component that appeared or
 // went.
 //
-// These are the shapes the log DERIVES, not the shapes it stores: the tables
+// These are the shapes the log derives, not the shapes it stores: the tables
 // keep after-images only (`./log.ts`), and the before-side of every movement is
 // rebuilt at read time from the entity's own rows in the log. They live in
 // their own file so `./undo.ts` can walk a transaction in either direction
@@ -14,7 +14,7 @@ import type { Comp, Eid } from '@yaks/graph'
 
 /**
  * One thing that moved. A delta with a `column` names the column that moved and
- * carries the value on each side of the write; a delta with NO column is about
+ * carries the value on each side of the write; a delta with no column is about
  * the component as a whole — `after` set means the component appeared, `before`
  * set means it went, and either way the set side holds the columns it had.
  */

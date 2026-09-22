@@ -2,7 +2,7 @@
 // list of bundles in one transaction, ask which processes have not exited, and
 // ask which programs are wanted.
 //
-// It is a named interface rather than a whole `Graph` because those two READS
+// It is a named interface rather than a whole `Graph` because those two reads
 // are the only ones this package makes, and a caller that keeps its processes
 // in a database of its own (the fleet's src/processes.ts does) can implement
 // them with one statement each instead of standing up a query engine. Over a

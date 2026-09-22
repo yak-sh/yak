@@ -7,13 +7,13 @@
 // running its query again. A relayed value is a message that happens to be
 // shaped like a patch.
 //
-// What makes it more than a broadcast is the LIFETIME the component declares
+// What makes it more than a broadcast is the lifetime the component declares
 // (@yaks/vocab `durable`). The relay holds the last value per (entity,
-// component) under the CONNECTION that sent it, so three things are possible
+// component) under the connection that sent it, so three things are possible
 // that a plain broadcast cannot do:
 //
-//   a subscriber that connects LATE is sent what is already there
-//   a connection that CLOSES clears every value it was relaying
+//   a subscriber that connects late is sent what is already there
+//   a connection that closes clears every value it was relaying
 //   a value with a duration clears itself, its timer restarted on each write
 //
 // All three send the same thing — a `{comp: null}` bundle to the other
@@ -54,7 +54,7 @@ export type Relay<C> = {
   /** Take those keys back, without their values, so a close can still clear
    * them. */
   adopt: (conn: C, keys: string[]) => void
-  /** What a subscriber connecting now should be sent: every OTHER
+  /** What a subscriber connecting now should be sent: every other
    * connection's held values, for the entities it can see. */
   snapshot: (mine: C, sees: (eid: Eid) => boolean) => Bundle[]
   /** A connection went away: forget it, and return the nulls to forward. */

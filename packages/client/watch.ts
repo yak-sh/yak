@@ -12,15 +12,15 @@
 // changed entities once, whole, then test them once per watch, in one of two
 // modes chosen when the watch opens.
 //
-//   INCREMENTAL  the query asks only about each entity itself, so
+//   Incremental  the query asks only about each entity itself, so
 //                @yaks/match's `filter` decides membership one bundle at a
 //                time and the result is edited in place — the query is never
 //                run again, however large the store is.
-//   REFRESH      the query follows a reference, orders, limits or counts, so
+//   Refresh      the query follows a reference, orders, limits or counts, so
 //                its result can change when an entity it never named does.
 //                These run the query again and compare.
 //
-// An incremental result keeps FIRST-MATCH order: the order the entities were
+// An incremental result keeps first-match order: the order the entities were
 // read in, with a new match appended at the end. A query that cares about
 // order states it (`.order=title`), and stating it puts the watch in refresh
 // mode, where the order is the one the store returned.
@@ -108,7 +108,7 @@ let plain: Make = <T>(value: T) => ({ value })
 // Whether a clause can be decided against one entity on its own: a column of
 // its own, a term in its own text, nothing at all. A path that hops through a
 // reference, an ordering, a limit or an aggregate is a question about the
-// SET, and answering it means running the query again.
+// set, and answering it means running the query again.
 let alone = (c: Clause, v: Vocab): boolean =>
   c.kind == 'and' || c.kind == 'or'
     ? c.clauses.every((k) => alone(k, v))
@@ -224,7 +224,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
       listeners: new Set(),
     }
     // The first result, read before the watch is registered: a query the
-    // graph cannot answer throws HERE, out of `watch()`, rather than on every
+    // graph cannot answer throws here, out of `watch()`, rather than on every
     // later commit for the life of the page.
     then(graph.read(query, { now, durable: true }), (set) => {
       if (!active || closed) return

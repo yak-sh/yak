@@ -150,7 +150,7 @@ Deno.test('a value held through a lost memory can still be cleared', () => {
   after.open(four.to, 's', '.book')
   three.take(), four.take()
   after.relayed(three.to, keys)
-  // The VALUE is gone, so a later subscriber is told nothing …
+  // The value is gone, so a later subscriber is told nothing …
   let five = ear()
   after.open(five.to, 's', '.book')
   assert(!five.take()[0].relay)

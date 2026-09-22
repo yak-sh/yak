@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 // The plumbing: a frame opens a subscription, a commit reaches the socket, and
-// — the whole reason this file exists — an object that HIBERNATED between two
+// — the whole reason this file exists — an object that hibernated between two
 // batches still serves the same client, because what it asked for was written
 // on the socket rather than kept in the object's memory.
 

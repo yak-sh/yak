@@ -1,10 +1,10 @@
-// WHICH text is embedded. Semantic search here is not tied to one "document"
+// Which text is embedded. Semantic search here is not tied to one "document"
 // component: a vocabulary declares components, some of their columns hold prose,
 // and a vector can be made from any of them. This module is that choice — a
 // `Field` is one `comp.prop` pair, `fields()` reads them off a vocabulary, and
 // a `Pick` narrows that default when an application wants only some of them.
 //
-// The difference from a search index: an entity gets ONE vector, not one per
+// The difference from a search index: an entity gets one vector, not one per
 // component. A vector is a point in a space of meanings, and an entity is one
 // thing — so all of its text fields are read and joined into a single string,
 // in vocabulary order, before being embedded. That is also why this rule lives
@@ -24,7 +24,7 @@ export type Field = { comp: string; prop: string }
 export type Pick = (column: Column) => boolean
 
 /**
- * The default choice: every STORED text column. A computed column has no row to
+ * The default choice: every stored text column. A computed column has no row to
  * read, and a number, a stamp or a reference is not prose.
  */
 export let textual: Pick = (c) =>
@@ -54,7 +54,7 @@ export let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
  * Every embeddable piece of text in the graph, as one row per (entity, field):
  * the owner's integer id, the field's position in the join order, and the text.
  * Blank fields are dropped here, so an entity appears in this result exactly
- * when it has something to embed — which makes this the ONE statement both the
+ * when it has something to embed — which makes this the one statement both the
  * sweep and the prune read, so the two cannot disagree. Returns null for a
  * vocabulary with no text columns at all: there is no statement to write.
  */

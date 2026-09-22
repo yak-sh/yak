@@ -1,7 +1,7 @@
 // Cloudflare Email Sending, as a {@link Sender}.
 //
 // It is one HTTP call, so this file is a payload shape and a `fetch`. It holds
-// NO credentials and reads no environment: the account and the token are
+// no credentials and reads no environment: the account and the token are
 // arguments, which is what lets the same code run in a Worker (where secrets
 // arrive on `env`), on a server (where they arrive from the process), and in a
 // test (where they are made up and the `fetch` is a stub).
@@ -89,7 +89,7 @@ let parse = (raw: string): Answer => {
  * // in a Worker: cloudflare({ account: env.CF_ACCOUNT, token: env.CF_EMAIL_TOKEN })
  * ```
  *
- * A failure REJECTS with the status and the start of the response body, which
+ * A failure rejects with the status and the start of the response body, which
  * is what gets written to the letter as `bounced.reason` — so a bounce records
  * what the API reported, not just "send failed".
  */

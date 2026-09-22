@@ -55,7 +55,7 @@ export let named = (v: Vocab, opts: Opts = {}): Record<string, Hop> => {
  * An entity's name, or nothing when it has none. Config-first over a loaded
  * vocabulary: `let name = nameOf(v)`, then `name(author)`. An entity has a name
  * when it carries a component declared `by_name` and the column that
- * declaration points at holds a string — so the same `doc.title` is a NAME on
+ * declaration points at holds a string — so the same `doc.title` is a name on
  * an author and merely text on a review.
  */
 export let nameOf = (

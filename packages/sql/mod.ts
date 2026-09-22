@@ -7,29 +7,29 @@
 // representation:
 //   bind(ast, vocab, opts) → Rel     route paths, coerce values, build joins
 //   render(rel)            → {sql}   the dialect turns that into SQL text
-// and `compile` is the two composed. A value is ALWAYS a bound parameter, never
+// and `compile` is the two composed. A value is always a bound parameter, never
 // a literal concatenated into the SQL.
 //
 // The representation (./ir.ts) is shaped like Arel and holds the statement as
 // data, so a new backend (D1, Postgres) is another renderer over the same
-// value. The storage layout and the value lowerings that ARE backend-specific
+// value. The storage layout and the value lowerings that are backend-specific
 // live behind a `Dialect` (./sqlite.ts); the SQLite layout is the one shipped.
 //
 // Computed columns — a vocabulary marks them `computed: true`, meaning the
 // value is computed by the application rather than stored — are supplied by the
-// caller through the DERIVED hook (./derived.ts). A registered expression is
+// caller through the derived hook (./derived.ts). A registered expression is
 // what lets a computed column (a status rolled up from other rows, say) be
 // filtered in SQL, through an index, instead of scanning every row in
 // JavaScript.
 //
-// A clause this package declines may still be compiled by ANOTHER package: an
+// A clause this package declines may still be compiled by another package: an
 // `Extension` (./extend.ts) claims a clause kind and lowers it to a condition
 // over the same representation, and may also supply an `.order=` expression for
 // a value that names no column. That is the extension point a full-text,
 // vector, or graph-walk package registers through —
 // `compile(ast, vocab, { extend: [...] })`.
 //
-// One thing here is not a query at all. The DEATH CASCADE (./cascade.ts) is a
+// One thing here is not a query at all. The death cascade (./cascade.ts) is a
 // question about what the vocabulary declares should happen to a reference
 // column when the entity it points at is deleted, rather than about a filter,
 // and it compiles to a `with recursive` closure — the answer @yaks/graph's

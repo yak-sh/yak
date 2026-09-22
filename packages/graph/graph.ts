@@ -2,7 +2,7 @@
 // `apply()` does. This file is the assembly — the phase list, the core's own
 // work at each phase, and the transaction the middle of the list runs inside.
 //
-// Everything here is per INSTANCE. There is no module-global registry of
+// Everything here is per instance. There is no module-global registry of
 // plugins, effects or hooks: two graphs in one process (a page's local graph
 // and its mirror of the server's, or a test fixture beside a live store) share
 // nothing, and a plugin registered on one is invisible to the other.
@@ -28,10 +28,10 @@
 //   effect      rules/hooks post-commit observers, each isolated
 //   audit       hooks    after a rollback, with the error that caused it
 //
-// `apply()` returns the change AS APPLIED plus everything it generated —
+// `apply()` returns the change as applied plus everything it generated —
 // entities the cascade deleted, entities created with their assigned number,
 // stamps — so a client that applies the return value to its cache ends up
-// exactly where the graph is. It returns ONE BUNDLE PER ENTITY
+// exactly where the graph is. It returns one bundle per entity
 // (./compose.ts): each phase adds its own patch, and composing them is the
 // last thing this file does, so no caller has to merge three bundles to see
 // the one entity it just wrote. The `$` keys belong to the write pipeline and
@@ -89,7 +89,7 @@ export type ApplyOpts = {
   trusted?: boolean
   /** the timestamp every stamp in this change uses, ISO-8601 (default: now) */
   now?: string
-  /** a DRY RUN: every phase runs and the transaction is rolled back instead of
+  /** a dry run: every phase runs and the transaction is rolled back instead of
    * committed, so nothing is written and no effect observes it. The return
    * value is the change the phases produced, composed like any other — a
    * refusal still throws, which is the whole point of asking. The audit hooks
@@ -106,11 +106,11 @@ export type ApplyOpts = {
  * It reaches the `audit` hooks, which is the whole reason it is an exported
  * class a hook can check for: a hook that wrote inside the transaction — or
  * that recorded somewhere that it had written — must be told the rows are
- * gone, and `audit` is where that is reported. A hook that RECORDS refusals
+ * gone, and `audit` is where that is reported. A hook that records refusals
  * should ignore it: nothing was refused, and a dry run is not an incident.
  */
 export class Checked extends Error {
-  /** the change as the phases produced it, UNCOMPOSED — one patch per phase,
+  /** the change as the phases produced it, uncomposed — one patch per phase,
    * with the `$` keys still on it. `apply()` composes it (./compose.ts) before
    * returning. */
   bundles: Bundle[]
@@ -143,7 +143,7 @@ export type Options = {
    * time the apply started. */
   clock?: () => string
   /** a calling program with an enclosing transaction of its own may queue
-   * observers until THAT transaction commits. Discard the queue on rollback.
+   * observers until that transaction commits. Discard the queue on rollback.
    * Deferred observers do not change what this apply returns; any writes they
    * make are separate operations. */
   deferEffects?: (run: () => void | Promise<void>) => void
@@ -173,7 +173,7 @@ export type Graph = {
   /** a query → the compiled statement's raw rows */
   rows: (query: Query, opts?: ReadOpts) => Row[] | Promise<Row[]>
   /** the ids a caller passed → the eids they refer to, for the ones that are
-   * not eids already (see {@link Plugin.address}). Only the ids that CHANGED
+   * not eids already (see {@link Plugin.address}). Only the ids that changed
    * are in the returned map, so a caller reads it as `at.get(id) ?? id`; with
    * no plugin resolving names, every id is itself and this costs nothing. */
   address: (ids: string[]) => Map<string, Eid> | Promise<Map<string, Eid>>
@@ -200,7 +200,7 @@ export let graph = (opts: Options): Graph => {
   let report = opts.report ?? failed
   let mint = opts.mint ?? (() => fresh() as Eid)
 
-  // What the VOCABULARY derives for itself: every component declaring an
+  // What the vocabulary derives for itself: every component declaring an
   // `identity` derives its entity's id from that value (identity.ts). Fixed
   // for the life of this graph, because the vocabulary is.
   let declared = identities(vocab)
@@ -237,21 +237,21 @@ export let graph = (opts: Options): Graph => {
 
   // The rules registered on a phase: the core's own (the stamps), then each
   // plugin's, in registration order.
-  // The marks come from the VOCABULARY, so a program that replaces the
+  // The marks come from the vocabulary, so a program that replaces the
   // created/updated pair with a policy of its own still gets them.
   let stamping = [...provenance(opts.provenance), ...marks(vocab)]
-  // The DECLARED rules, read once per apply: a plugin registered since the
+  // The declared rules, read once per apply: a plugin registered since the
   // last apply is included, and a rule that will not parse throws before the
   // change opens a transaction.
   //
-  // Most of them come from the graph's OWN vocabulary, because that is where
+  // Most of them come from the graph's own vocabulary, because that is where
   // an app's `vocab.json` ends up — so an app that ships a `rule: true` entry
   // runs it with no wiring at all. A plugin registered after the graph was
   // built carries documents the loaded vocabulary never saw, so those are read
   // too.
   let declaring = () => {
     let seen = new Set(vocab.docs)
-    // A rule that DECLARES another phase is not run by this one: @yaks/tools'
+    // A rule that declares another phase is not run by this one: @yaks/tools'
     // call/result rules name `effect`, and the runner that asks them for their
     // bindings runs post-commit. A rule that declares no phase belongs to the
     // `rules` phase, which is what a rule means unless it declares otherwise.
@@ -285,7 +285,7 @@ export let graph = (opts: Options): Graph => {
       },
     ])
 
-  // A change that names no writer is this graph's OWN — nobody authenticated
+  // A change that names no writer is this graph's own — nobody authenticated
   // it because there was no request: a rule's effect, a startup pass, a bulk
   // import by the process that holds the file. It is attributed to the calling
   // program rather than to nobody, so every write has an author and the
@@ -405,7 +405,7 @@ export let graph = (opts: Options): Graph => {
 
     // After a rollback: the audit hooks, with the error that caused it — a
     // refusal, or the {@link Checked} error a dry run rolls back with. They
-    // run OUTSIDE the rolled-back transaction, because an audit row cannot be
+    // run outside the rolled-back transaction, because an audit row cannot be
     // written in the transaction it is recording the failure of. Every
     // rollback runs them, because a hook that wrote inside the transaction has
     // to be told its rows are gone, whatever ended it.
@@ -437,7 +437,7 @@ export let graph = (opts: Options): Graph => {
     let inside = (bundles: Bundle[]) => {
       let run = (tx: Tx) =>
         // Every read the phases before the write will make, taken as one call.
-        // It is handed to THOSE phases alone — a snapshot of the graph as the
+        // It is handed to those phases alone — a snapshot of the graph as the
         // change found it is exactly what a precondition needs, and exactly
         // what a phase reading after the write must not have. `mutate` is one
         // of them: it reads which entities are already deleted before it
@@ -472,7 +472,7 @@ export let graph = (opts: Options): Graph => {
                   (b) => {
                     let rules = declaring()
                     if (!rules.length) return b
-                    // A resource a declared rule WRITES (`+result.at=#Now`)
+                    // A resource a declared rule writes (`+result.at=#Now`)
                     // is the same singleton the rules written in code read,
                     // built at most once and only if something asks for it.
                     let kept = new Map<string, unknown>()
@@ -563,7 +563,7 @@ export let graph = (opts: Options): Graph => {
     }
 
     // The run, end to end: the phases before the transaction, the transaction,
-    // and then the RETURN VALUE — composed once, at the point every exit from
+    // and then the return value — composed once, at the point every exit from
     // `apply()` passes through, the commit and a dry run's rollback alike.
     return each(
       [

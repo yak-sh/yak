@@ -2,14 +2,14 @@
 // that is not `crypto.subtle`'s.
 //
 // A packfile ends in the SHA-1 of every byte before it, and a packfile is a
-// STREAM: objects arrive one at a time and leave as soon as they are deflated.
+// stream: objects arrive one at a time and leave as soon as they are deflated.
 // `crypto.subtle.digest` wants the whole message in one buffer, so computing
 // the trailer with it would mean holding the finished packfile in memory to
 // write twenty bytes at the end — a clone's worth of bytes, for a trailer.
 // Here the digest is fed as the stream goes past, so a packfile of any size
 // costs one 64-byte block.
 //
-// SHA-1 is a NAME here and never a security claim, the same as the object ids
+// SHA-1 is a name here and never a security claim, the same as the object ids
 // in ./oid.ts: it is what the packfile format specifies, so it is what we
 // write.
 //

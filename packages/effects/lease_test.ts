@@ -53,7 +53,7 @@ Deno.test('letting go hands it over without waiting, and only the holder may', a
   assertEquals((await held(graph, 'sweep'))?.holder, 'p1')
   await drop(graph, 'sweep', { holder: 'p1' })
   assertEquals((await held(graph, 'sweep'))?.holder, null)
-  // The row stays — what the duty IS outlives who was doing it.
+  // The row stays — what the duty is outlives who was doing it.
   assertEquals((await held(graph, 'sweep'))?.name, 'sweep')
   assertEquals(
     await take(graph, 'sweep', { holder: 'p2', now: at(1) }),

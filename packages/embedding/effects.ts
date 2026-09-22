@@ -9,16 +9,16 @@
 // `apply()` — a graph that waited for a model to respond before it could record
 // that a title changed would be a graph nobody could write to.
 //
-// The sweep reconciles the WHOLE corpus rather than the one entity that
+// The sweep reconciles the whole corpus rather than the one entity that
 // triggered it, which is what makes a model change repair itself: under the new
 // model's name every vector is stale, and the first write after the change
 // starts re-embedding them (`sweep.ts` decides "stale" from a content hash, so
 // an unchanged corpus costs one query and no calls to the embedder). What this
-// export does NOT have is a clock — it is a list of watches and owns no
+// export does not have is a clock — it is a list of watches and owns no
 // lifecycle, so a server that wants to reconcile on a schedule rather than on a
 // write calls `sweep()` from a wake (@yaks/wake) or from cron.
 //
-// The CONFIG is read on every pass, never once when the plugin is composed
+// The config is read on every pass, never once when the plugin is composed
 // (./options.ts). A server whose key has not arrived starts up, stores no
 // vectors, reports what it is waiting for once, and keeps the timer running —
 // so the first pass after the key appears is the one that embeds, and nothing
@@ -44,7 +44,7 @@ export let AFTER = 3_000
 export let AGAIN = 1_000
 
 // The handler a watch calls: it starts a timer and returns, so the commit that
-// triggered it is never held open. A burst of writes produces ONE sweep — the
+// triggered it is never held open. A burst of writes produces one sweep — the
 // timer is reset, never stacked — and one pass runs at a time, because a pass
 // may be a long series of model calls and a second one over the same backlog
 // would pay for every vector twice. A request that arrives mid-pass is

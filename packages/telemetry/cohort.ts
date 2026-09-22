@@ -1,5 +1,5 @@
-// Grouping repeats. N copies of one crash are returned as ONE counted row: a
-// cohort key is an error's CLASS, its source, and the SHAPE of its top stack
+// Grouping repeats. N copies of one crash are returned as one counted row: a
+// cohort key is an error's class, its source, and the shape of its top stack
 // frames, never the message, which varies. Frames drop their line:column, so a
 // rebuild that shifts every line still groups them together. Successful calls
 // pass through untouched: each timed call is its own measurement.

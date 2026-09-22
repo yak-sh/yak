@@ -202,7 +202,7 @@ Deno.test('numeric gather ownership stays internal; present is an ordinary colum
 Deno.test("a driver that declares no compound width is probed within workerd's", () => {
   // Workerd — the SQLite under a Durable Object — carries five terms in a
   // compound SELECT and answers a sixth with `too many terms in compound
-  // SELECT`, which is what stopped every yaks.app space. A driver says what its
+  // select`, which is what stopped every yaks.app space. A driver says what its
   // engine carries (`Driver.arms`); one that says nothing is cut to ARMS, so a
   // vocabulary wider than the cap is more statements and never a refused one.
   let raw = mem()

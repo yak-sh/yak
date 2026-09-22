@@ -1,6 +1,6 @@
-// What an agent can ASK about here: the `tools` export
+// What an agent can ask about here: the `tools` export
 // (`@yaks/embedding/tools`) — the implementation behind the `vector_check`
-// declaration in ./vocab.json. One tool, and it is a CHECK: a tool whose verb
+// declaration in ./vocab.json. One tool, and it is a check: a tool whose verb
 // is `check`, which is all a "doctor" is (@yaks/tools ./check.ts). "The server"
 // below means whichever process opened the graph and loaded this package.
 //
@@ -21,7 +21,7 @@
 // reports that rather than passing: asking the question is what tells the two
 // apart.
 //
-// The other invisible failure is a server that is WAITING: missing config never
+// The other invisible failure is a server that is waiting: missing config never
 // prevents startup (./options.ts), so a graph with no key starts perfectly well
 // and quietly embeds nothing. This is where that is reported, and it is
 // reported every time the tool is called rather than once into a log nobody

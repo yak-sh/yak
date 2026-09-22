@@ -1,4 +1,4 @@
-// The ROSTER: the tool list a client cached when it connected, identified by a
+// The roster: the tool list a client cached when it connected, identified by a
 // version string it can be compared against, plus the one sentence a reply
 // carries when the list has changed since.
 //
@@ -12,7 +12,7 @@
 // server repeats it where the agent is certainly reading: in the next tool
 // result.
 //
-// The version is a HASH of the tool names plus the server's release id, so it
+// The version is a hash of the tool names plus the server's release id, so it
 // changes when either changes and is identical on every isolate of one deploy.
 // The sentence names the tools that changed, because "the list changed" tells
 // an agent nothing it can act on and "new: mail_send" tells it everything.

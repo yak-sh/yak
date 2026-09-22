@@ -63,7 +63,7 @@ let doc: VocabDoc = {
         of: { type: 'string', ref: 'entity', death: 'release' },
       },
     },
-    // A MARK: a component a client writes empty and the graph fills in, once.
+    // A mark: a component a client writes empty and the graph fills in, once.
     // Declaring these three columns server-owned is what makes it a mark
     // (@yaks/graph stamp.ts).
     sold: {

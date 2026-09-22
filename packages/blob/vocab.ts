@@ -6,7 +6,7 @@
 // vocabulary: a text column marked with it keeps its value's hash, and the
 // value itself lives wherever the configured store puts it. `derived` is the
 // read back — the SQL that resolves the row's hash to the text — which is part
-// of what the keyword MEANS rather than a rule about how a write is applied.
+// of what the keyword means rather than a rule about how a write is applied.
 
 import type { Keywords, Vocab, VocabDoc } from '@yaks/vocab'
 import type { Derived } from '@yaks/sql'

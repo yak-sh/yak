@@ -9,14 +9,14 @@
 // local store is synchronous, and staying synchronous is most of the reason to
 // run a graph in a page at all.
 //
-// One exception: a write that DELETES is not applied optimistically. Deletion
+// One exception: a write that deletes is not applied optimistically. Deletion
 // is final in this model, so a refused delete could never be put back; the
 // precondition hook holds the whole list of bundles out of the transaction and
 // sends it as it stands, and the server's response is applied here marked as an
 // echo, carrying its own tombstones — exactly as the response to an accepted
 // write is.
 //
-// Requests are SERIALIZED. Two writes posted at once could reach the server in
+// Requests are serialized. Two writes posted at once could reach the server in
 // either order, and the second one's response could then reconcile the first
 // one's columns backwards. One promise chain, in the order the writes
 // committed.

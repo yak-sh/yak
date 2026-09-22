@@ -1,10 +1,10 @@
-// WHAT turns text into a vector, and how a stored vector records which text and
+// What turns text into a vector, and how a stored vector records which text and
 // which model it came from.
 //
 // An `Embedder` is injected — a local model, a hosted API, whatever an
 // application already pays for — because this package has an opinion about
 // storing and searching vectors and none at all about producing them. It names
-// its MODEL beside the function: two vectors are only comparable within one
+// its model beside the function: two vectors are only comparable within one
 // model's space, so the name is stored on every row, filters every search, and
 // is part of the content hash that decides what needs re-embedding.
 //
@@ -66,7 +66,7 @@ export let hashEmbedder = (dim = 64): Embedder => ({
   embed: (text) => {
     let v = new Float32Array(dim)
     // Counts, never signed: two words sharing a bucket then make two texts look
-    // MORE alike, which is the harmless direction to be wrong in. A signed
+    // more alike, which is the harmless direction to be wrong in. A signed
     // sketch cancels instead, and a cancelled word is one the embedder stops
     // being able to see at all.
     for (let w of words(text)) v[fnv(w) % dim] += 1

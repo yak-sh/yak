@@ -1,4 +1,4 @@
-// Resolving the ids written in a QUERY to the eids they refer to.
+// Resolving the ids written in a query to the eids they refer to.
 //
 // A person types the id they can remember — `T-37584`, `jeff` — while the
 // store keys rows by eid, and every entry point owes them that translation:
@@ -12,8 +12,8 @@
 // `.status=done` is an enum, and a value that happens to be somebody's name
 // must not be turned into their eid just because it sat on a scalar column.
 //
-// Which columns are references is the VOCABULARY's to say, so this takes one;
-// which entity a name belongs to is a PLUGIN's, so `addressing` takes an
+// Which columns are references is the vocabulary's to say, so this takes one;
+// which entity a name belongs to is a plugin's, so `addressing` takes an
 // `address` function between its two halves.
 
 import { type Clause, parse, type Query as Ast, type Value } from '@yaks/query'
@@ -26,7 +26,7 @@ import { then } from './pipe.ts'
  * traversal with two different functions of this type. */
 type Says = (id: string) => string
 
-/** Whether a predicate's LEAF is a reference column — the only kind of
+/** Whether a predicate's leaf is a reference column — the only kind of
  * predicate whose value is an entity. A path's earlier segments dereference
  * through columns; its leaf is what the value is compared against. */
 let refs = (vocab: Vocab, c: Clause & { kind: 'pred' }): boolean => {
@@ -76,7 +76,7 @@ let mapped = (vocab: Vocab, c: Clause, f: Says): Clause =>
  * it names replaced by the eid it refers to, resolved through `address` in one
  * round trip.
  *
- * The query comes back UNCHANGED when it names no entity, and when nothing it
+ * The query comes back unchanged when it names no entity, and when nothing it
  * names resolved to something else — a query written with plain eids costs one
  * traversal and no lookup, and the exact text the caller passed is what
  * storage still sees.

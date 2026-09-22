@@ -1,5 +1,5 @@
 // Staying synchronous when nothing forces a promise. Every interface in this
-// package is async OR sync: a storage adapter over an embedded database
+// package is async or sync: a storage adapter over an embedded database
 // returns immediately, one over a network returns a promise, and the same
 // pipeline has to serve both. So instead of making everything `async` (which
 // would turn every embedded write into a promise, and every caller into an

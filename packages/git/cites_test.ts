@@ -1,5 +1,5 @@
 // What a citation's status is derived from, proved twice: against a stubbed
-// git, where the interesting part is WHICH question git is asked, and against
+// git, where the interesting part is which question git is asked, and against
 // a disposable repository, where the interesting part is that git's answer
 // means what this module says it means.
 //

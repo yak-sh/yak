@@ -1,4 +1,4 @@
-// The RUNNER: the one place a tool function is called, and the record it
+// The runner: the one place a tool function is called, and the record it
 // leaves behind. A tool is a function `(bundles, ctx) => bundles`, and knows
 // nothing about the `call` and `result` components. A caller can invoke one
 // directly and get its bundles back; what this file adds is the stored record,
@@ -7,7 +7,7 @@
 // `execution{state}` recording that a run is in flight.
 //
 // The result entity is emitted by a declared rule (./vocab.json, @yaks/graph
-// `emitted`), so its id is DERIVED from the match — `call_ready(<the call>)` —
+// `emitted`), so its id is derived from the match — `call_ready(<the call>)` —
 // and the same call names the same result entity in this process, in another
 // process, or a year later. Running a call twice patches one entity, never
 // two.
@@ -22,13 +22,13 @@
 // one registration each, nothing more. `drive()` runs those same two queries
 // once, which is what a boot sweep is.
 //
-// AT MOST ONCE, and how a crash is recovered: `execution{state, by}` on the
+// At most once, and how a crash is recovered: `execution{state, by}` on the
 // call is the claim. The runner writes `running` with a `$was` precondition
 // that the column was absent, so a second server loses the race instead of
 // running the tool twice; it writes `done` or `failed` when the result is
 // applied. A call left `running` by a process that died has no result, so the
 // same rules still select it, and `reconcile()` at boot runs it again,
-// claiming over the stale `running`. `by` records WHOSE claim it is: a runner
+// claiming over the stale `running`. `by` records whose claim it is: a runner
 // re-runs its own claims and leaves another process's alone, which is what a
 // transcript imported from another machine needs — every call in it arrives
 // already executed. The exception is a holder that has finished: a process
@@ -38,7 +38,7 @@
 // what makes a crash recoverable now that a restarted process is a new entity
 // rather than a reused name.
 //
-// THE IDENTITY IS THE CALLER'S. The bundles a tool returns are stamped with
+// The identity is the caller's. The bundles a tool returns are stamped with
 // whoever wrote the call, never with the process running it, so authorization
 // is decided about the caller. The runner's own bookkeeping — the result and
 // the execution rows — belongs to the server and carries no identity at all.
@@ -68,7 +68,7 @@ import { validateToolInput } from '@yaks/vocab/tools'
 import { toolsDoc } from './vocab.ts'
 
 // What each call is doing right now in this process, and what the last few
-// returned — keyed per GRAPH, not per runner. When a request handler calls a
+// returned — keyed per graph, not per runner. When a request handler calls a
 // tool and an effect finds the same call, there is one claimant and one answer
 // between them: the second finds the first's promise instead of racing it, and
 // reads the bundles that were written for it whichever one ran. This memo is
@@ -121,7 +121,7 @@ export let toolEid = (name: string): Eid => derivedEid(`tool:${name}`)
 export type Opts = {
   /** what it can run */
   tools: Tool[]
-  /** the graph the TOOLS read and write, when that is not the graph the calls
+  /** the graph the tools read and write, when that is not the graph the calls
    * are recorded in (a server that keeps its call records separately) */
   host?: Graph
   /** where unexpected defects are reported; they are not thrown, because the
@@ -137,7 +137,7 @@ export type Opts = {
    * this runner claims anonymously and takes any call nobody else holds. */
   owner?: Eid
   /** the working directory the process running these calls is in, for a tool
-   * that acts on the MACHINE rather than the graph. The caller supplies it;
+   * that acts on the machine rather than the graph. The caller supplies it;
    * this package touches no runtime API and never looks it up. */
   cwd?: string
 }
@@ -271,7 +271,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   let by = new Map(tools.map((t) => [t.eid ?? toolEid(t.name), t]))
   let now = opts.now ?? (() => performance.now())
   let host = opts.host ?? g
-  // The rules as THIS graph can query them (@yaks/graph `asked`). A graph that
+  // The rules as this graph can query them (@yaks/graph `asked`). A graph that
   // schedules nothing never loaded the wake components: there `!wake` matches
   // everything and drops out, and `call_woken`, which requires them, never
   // matches — one rule text, correct in both graphs.
@@ -318,7 +318,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     return [...made, ...result]
   }
 
-  // The result entity, built the way the RULE would write it: one match of
+  // The result entity, built the way the rule would write it: one match of
   // `call_ready`, emitted. Its id is derived from that match, so it is the
   // same entity however many times a call is run.
   let attached = (id: Eid, ms: number, sleeps = false): Bundle => {
@@ -338,7 +338,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let [call] = await g.storage.tx((tx) => tx.get([id]))
     if (!call?.call) throw new CallError('call', 'Not a call: ' + id)
     // A recurring call is not one invocation: it is the row that keeps asking
-    // for one. Each firing writes its OWN call entity, with an id derived from
+    // for one. Each firing writes its own call entity, with an id derived from
     // the schedule and the instant it fired, and that new call is what runs —
     // so a finished call is never re-run, the record shows how many times the
     // schedule fired, and the schedule itself stays a standing request. A
@@ -491,7 +491,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         })),
       )),
     call: async (change) => {
-      // The call is written FIRST, because it is the record: what was asked
+      // The call is written first, because it is the record: what was asked
       // stands whether or not an answer ever does. Then the tool runs — here,
       // in this process, for this caller — unless an effect on the same commit
       // got there first, in which case its answer is this caller's answer.

@@ -5,14 +5,14 @@
 // written, and there is no second thing to back up.
 //
 // It also gives the read side something no other store can: the resolution is a
-// SQL EXPRESSION, so a query and a whole-entity read both get text without a
+// SQL expression, so a query and a whole-entity read both get text without a
 // second round trip. {@link blobRead} builds that expression as an @yaks/sql
 // read override, one per content-addressed column; {@link blobText} builds its
 // smaller half — an address resolved to its text — for the places that already
 // hold an address, chiefly a full-text index's triggers and the view it reads
 // back through.
 //
-// The table holds TEXT, not bytes — which is what lets the read be an ordinary
+// The table holds text, not bytes — which is what lets the read be an ordinary
 // string expression — so this store is for prose. Binary content belongs in the
 // file or object stores, whose bytes never have to be read by SQL.
 //
@@ -50,7 +50,7 @@ let named = (l: Layout = {}): Named => ({
 
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
-// This table's column is TEXT, so bytes that are not valid UTF-8 have no
+// This table's column is text, so bytes that are not valid UTF-8 have no
 // representation in it. Refusing them here is the difference between a store
 // that cannot hold an object and one that holds a mangled copy: the address
 // would return bytes that do not hash to it, breaking the one thing content
@@ -111,13 +111,13 @@ export let sqliteBlobs = (driver: Driver, layout: Layout = {}): Blobs => {
 
 /**
  * How a stored address reads as its text, keyed `comp.prop`: given SQL naming
- * the ADDRESS, each entry returns SQL naming the text it stands for. It is the
+ * the address, each entry returns SQL naming the text it stands for. It is the
  * smaller half of a read override — no entity, no join, just the value — which
  * is the form needed wherever the address is already in hand: an FTS5 trigger
  * (`new."body"`), a view column, a report.
  *
  * @yaks/fts and @yaks/sqlite accept a map of this shape so their indexes hold
- * WORDS rather than addresses; both declare the type structurally, so neither
+ * words rather than addresses; both declare the type structurally, so neither
  * has to depend on this package to be handed one.
  */
 export type Text = Record<string, (address: string) => string>

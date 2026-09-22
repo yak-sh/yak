@@ -1,7 +1,7 @@
 // Shared test fixtures (not part of the published package — see deno.json): a
 // small team's portfolio, as a vocabulary.
 //
-// The same team @yaks/task's harness describes, plus what its tasks are FILED
+// The same team @yaks/task's harness describes, plus what its tasks are filed
 // in. Storage is @yaks/ram, so a test builds exactly what a browser page
 // would.
 

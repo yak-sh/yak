@@ -3,7 +3,7 @@
 // long name gets abbreviated to its first word — so an exact string comparison
 // returns "no such author" far too often.
 //
-// This is scoring only. WHICH entities are addressable by name, and which
+// This is scoring only. Which entities are addressable by name, and which
 // column holds the name, is names.ts; what to do with the winner is up to the
 // caller.
 
@@ -31,11 +31,11 @@ let dist = (a: string, b: string) => {
   return row[b.length]
 }
 
-// What a SUBSTRING match is worth, and 0 when there is none. It earns its place
+// What a substring match is worth, and 0 when there is none. It earns its place
 // because edit distance alone treats a longer name as unrelated — `earthsea`
 // against `A Wizard of Earthsea` scores close to nothing. Two conditions keep it
-// from firing on coincidence: the shorter string must COVER most of the longer
-// one (otherwise `le` is inside half the shelf), and a PREFIX scores higher than
+// from firing on coincidence: the shorter string must cover most of the longer
+// one (otherwise `le` is inside half the shelf), and a prefix scores higher than
 // a substring appearing anywhere else, because a prefix is how a name usually
 // gets abbreviated.
 let within = (a: string, b: string) => {

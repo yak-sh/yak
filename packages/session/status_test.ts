@@ -145,7 +145,7 @@ Deno.test('statusOf reads the newest entry', () => {
 })
 
 // A whole tool-using turn, read as it lands. The daemon appends an ask with
-// everything the model said and asked for in ONE batch, so the prefixes below
+// everything the model said and asked for in one batch, so the prefixes below
 // are the states a reader can actually see: running while the tool is owed an
 // answer, and settled only at the last output, which asked for nothing.
 Deno.test('a turn that uses a tool is running until its last output', () => {
@@ -204,7 +204,7 @@ Deno.test('the SQL view answers the same word as the rule', () => {
   }
 })
 
-// The status is computed from the ENTRIES, and an entity that is not a session
+// The status is computed from the entries, and an entity that is not a session
 // at all has none: the model and the tool rows read `empty` too, so
 // `.session.status=empty` answered with the whole graph (T-37730). A qualified
 // path names the component as much as the column, and @yaks/sql says so for
@@ -213,7 +213,7 @@ Deno.test('a status filter answers only the entities wearing session', () => {
   let g = store()
   let eids = (q: string) => (g.read(q) as Bundle[]).map((b) => b.entity.eid)
   assertEquals(eids('.session.status=empty'), [S])
-  // and a session that HAS entries leaves the empty answer, without the
+  // and a session that has entries leaves the empty answer, without the
   // model and the tool ever joining it
   g.apply([input(1)], { trusted: true })
   assertEquals(eids('.session.status=empty'), [])

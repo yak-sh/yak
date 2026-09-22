@@ -3,7 +3,7 @@
 //
 // A `fork.from` names an entry that exists. A `using` names a provider and a
 // model that exist. Both are references, so the vocabulary already rejects a
-// dangling id at the engine on SQLite; this hook explains WHY in the error
+// dangling id at the engine on SQLite; this hook explains why in the error
 // message, and works on a store with no foreign keys (@yaks/ram, a browser
 // tab). A target minted in the same batch counts: the check is against the
 // graph as the batch will leave it.

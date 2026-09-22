@@ -1,12 +1,12 @@
 // The precondition: a write that states the value it was based on. `$was`
-// carries, per column, the SHA-256 of the value the caller READ (or `null` for
+// carries, per column, the SHA-256 of the value the caller read (or `null` for
 // "I read no value"); if the stored value has changed since, the whole change
 // is refused and the committed value is reported back, so the caller can merge
 // onto it rather than overwriting a writer it never saw. It works like git's
 // `--ff-only`.
 //
 // Two details matter, and both are the difference between a check that works
-// and one that only looks like it does. The change is refused AS A WHOLE: a
+// and one that only looks like it does. The change is refused as A whole: a
 // change guarding two columns that loses one of them must apply neither, or
 // you end up with a title from one writer and a body from another. And every
 // column named must be declared — a check on a column that does not exist
@@ -48,7 +48,7 @@ export let token = (value: unknown): string | null =>
 
 /**
  * The precondition phase: check every `$was` the change carries against the
- * state as the change FOUND it, and throw {@link Stale} on the first column
+ * state as the change found it, and throw {@link Stale} on the first column
  * that changed. It reads through the transaction, before anything in the
  * change has been written — a check made after the change's own writes would
  * refuse a value the change itself had just written.

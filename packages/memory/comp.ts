@@ -10,14 +10,14 @@
 //     doc: { body: 'use grams, never cups' },
 //     memory: { space: s, about: 'recipes', context: 'about the recipe app' } }
 //
-// The WORDS are `doc.body`. That is not indirection for its own sake: `doc` is
+// The words are `doc.body`. That is not indirection for its own sake: `doc` is
 // what a store indexes for search, so the person's sentence is findable the
 // same way every other text is, and a memory renders through the same renderer
 // as everything else. `memory` holds the rest — whose space, which app, and the
 // line or two of context somebody needs to make sense of the sentence six weeks
 // later.
 //
-// The BYLINE is the graph's own `created{at, by}`. Who said it and when are
+// The byline is the graph's own `created{at, by}`. Who said it and when are
 // facts every entity already carries, and a second copy of them here would
 // drift from the first.
 //
@@ -34,7 +34,7 @@ export let MEMORY = 'memory'
 /**
  * The memory vocabulary document, to load beside @yaks/doc's and your own:
  * `loadVocab([docDoc, memoryDoc, ...mine])`. It declares nothing about what a
- * space IS — that component is your own document's — only that a memory
+ * space is — that component is your own document's — only that a memory
  * belongs to one.
  */
 export let memoryDoc: VocabDoc = doc

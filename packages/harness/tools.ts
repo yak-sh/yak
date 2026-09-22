@@ -11,10 +11,10 @@ import { valueTools } from '@yaks/blob'
 // arguments as a Zod schema, because that is what the MCP SDK takes; a model
 // wants JSON Schema. So this file is one conversion and one adapter:
 // `parametersOf` renders a tool's arguments as JSON Schema, and `graphTools`
-// WRITES A CALL entity for each one and records what it returned.
+// writes A call entity for each one and records what it returned.
 //
 // The model never calls a tool function directly here either. A call is an
-// entity attributed to the SESSION that asked for it, so what the tool writes
+// entity attributed to the session that asked for it, so what the tool writes
 // is written in the agent's name and not the daemon's, and the transcript's own
 // record of the call is the same entity @yaks/tools' runner answered.
 //
@@ -85,7 +85,7 @@ export let graphTools = (
 }
 
 /** The shell, delegation, and the graph, with one wait for all three targets.
- * react records every tool's wall-clock and projects it AFTER output bounding;
+ * react records every tool's wall-clock and projects it after output bounding;
  * these raw answers remain parseable JSON for non-model callers. */
 export let harnessTools = (
   g: Graph,

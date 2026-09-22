@@ -3,7 +3,7 @@
 // resolution that makes claiming a value twice land on one entity.
 //
 // It takes the loaded vocabulary as an argument because the kinds are the
-// APPLICATION's, not this package's: which components tag a key is something
+// application's, not this package's: which components tag a key is something
 // only a loaded vocabulary knows. So a graph is built in two steps — load the
 // documents, then pass the same vocabulary to the plugin.
 

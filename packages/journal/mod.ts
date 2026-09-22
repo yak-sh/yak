@@ -5,29 +5,29 @@
  *
  * Take a page several people edit. Somebody renames it, somebody else rewrites
  * a paragraph, somebody deletes a note attached to it. Afterwards the page
- * holds only where it ENDED UP — which is the question a graph answers well,
+ * holds only where it ended up — which is the question a graph answers well,
  * and not the question being asked. This package writes the other one down.
  *
- * Throughout, a TRANSACTION is one call to `graph.apply()`: a list of bundles
+ * Throughout, a transaction is one call to `graph.apply()`: a list of bundles
  * that all commit or none do. The type for a recorded one is {@link Batch},
  * and its `seq` is its position in the total order.
  *
  * ## What it records
  * Three append-only tables beside the graph's own. They hold no entities of
  * their own — no eid, no minted id, never in a bundle or a client cache: they
- * are the record OF what was applied, not part of it.
+ * are the record of what was applied, not part of it.
  *
  * - `journal_tx` — one row per committed transaction: its id is both the total
  *   order and the cursor, with the timestamp and the actor from the
  *   transaction's `$actor`;
  * - `journal_change` — one ordered row per component that transaction patched
  *   or removed;
- * - `journal_field` — one ordered AFTER-IMAGE per column that row wrote.
+ * - `journal_field` — one ordered after-image per column that row wrote.
  *
  * After-images only. The before-value a history read needs is rebuilt from the
  * entity's own rows in the log, a read bounded to one entity and never a table
  * scan, which is what keeps the log about a third of the size of one that
- * stores both sides. The rows go in INSIDE the caller's transaction: a
+ * stores both sides. The rows go in inside the caller's transaction: a
  * transaction that was refused leaves no trace, and one that committed always
  * has a row.
  *

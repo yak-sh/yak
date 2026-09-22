@@ -2,7 +2,7 @@
 // and, where the config names a domain, the canonicalizer that normalizes an
 // address on the way in.
 //
-// The domain is this plugin's OPTION rather than a server-wide setting: which
+// The domain is this plugin's option rather than a server-wide setting: which
 // domain an address belongs to is a fact about this plugin, and a server that
 // composes two mailboxes would otherwise have one domain between them.
 //

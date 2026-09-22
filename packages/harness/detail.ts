@@ -1,4 +1,4 @@
-/** Explicit SOURCE inspection, independent of transcript rendering and search. */
+/** Explicit source inspection, independent of transcript rendering and search. */
 import { valueTools } from '@yaks/blob'
 import type { Comp, Graph } from '@yaks/graph'
 import { transcriptSegments } from '@yaks/session'

@@ -1,10 +1,10 @@
 // The data format. Everything that passes between packages in this family — a
 // read's result, a write request, a plugin's contribution to a transaction —
-// is a BUNDLE: one entity plus the components to write to it or read from it.
+// is a bundle: one entity plus the components to write to it or read from it.
 //
 //   { entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { pages: 412 } }
 //
-// The identity is INSIDE the bundle, under the `entity` key; every other key
+// The identity is inside the bundle, under the `entity` key; every other key
 // names a component. A write is a PATCH — an omitted column is left alone, a
 // `null` column is cleared, a `null` component is removed — so a bundle
 // contains what changes and nothing else.
@@ -85,7 +85,7 @@ export type Bundle =
     $alias?: Eid
     /** written, but not worth reporting: a bundle a plugin generated for its
      * own bookkeeping. It is patched, journaled and cascaded like any other,
-     * and an entity that ONLY quiet bundles touched is left out of what
+     * and an entity that only quiet bundles touched is left out of what
      * `apply()` returns (see ./compose.ts) */
     $quiet?: boolean
   }

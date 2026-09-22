@@ -1,12 +1,12 @@
 // The object index: Git objects written into a graph, once each.
 //
-// An object's entity id IS its SHA-1 object id, so the same object written by
+// An object's entity id is its SHA-1 object id, so the same object written by
 // two deploys, two apps or two runs is one row — there is no lookup, no
 // uniqueness constraint and nothing to reconcile. Beside each row goes an
 // @yaks/key holding the same object's SHA-256 object id, so a client that asks
 // for `object-format=sha256` is answered by a single read.
 //
-// WHAT IS A ROW AND WHAT IS BYTES. The body is the truth about a tree or a
+// What is A row and what is bytes. The body is the truth about a tree or a
 // commit — byte for byte, because Git's ids are digests of it — so the body
 // goes to the @yaks/blob store and the row keeps only what a query has to
 // follow: the type and size a packfile entry header needs, the `blob{sha}`
@@ -15,7 +15,7 @@
 // order and mode are all in the body already; a column for them would be a
 // second copy free to drift.
 //
-// A GIT BLOB IS THE BLOB YOU ALREADY HAVE. The bytes an app deployed are
+// A git blob is the blob you already have. The bytes an app deployed are
 // already in the store under their SHA-256 address; a Git blob object is those
 // same bytes with a header hashed over them, so nothing is re-encoded and the
 // row simply points at what is there. Naming a manifest's file twice, or
@@ -75,9 +75,9 @@ export type Index = {
  * `tree_entry|<tree>|<name>`.
  *
  * Not @yaks/edge's own derivation, for a reason a duplicate file makes
- * obvious: two names in one tree may point at ONE blob (two empty files, say),
+ * obvious: two names in one tree may point at one blob (two empty files, say),
  * and `from|relation|to` is the same string for both, so one link would
- * overwrite the other. Within a tree it is the NAME that is unique, so the
+ * overwrite the other. Within a tree it is the name that is unique, so the
  * name is what the id is derived from.
  */
 export let entryEid = (tree: Eid, name: string): Eid =>

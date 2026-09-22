@@ -11,7 +11,7 @@
 // Writes follow the patch rules every adapter implements — omitted columns
 // untouched, a null column cleared, a null component dropped, a tombstoned
 // entity taking no patch — and identity belongs to storage: `patch` creates a
-// record for every eid the write touches OR points at, numbers each new one in
+// record for every eid the write touches or points at, numbers each new one in
 // the order it was first touched, and returns what it created.
 //
 // A record is never mutated in place: a patch builds the next record and puts
@@ -33,12 +33,12 @@ export type RamOpts = {
   /** the reference moment for time phrases (default: the read's own `now`) */
   now?: number
   /** keep the `num` a patch's identity already carries instead of assigning a
-   * new one. This is what a store MIRRORING another graph needs — a client
+   * new one. This is what a store mirroring another graph needs — a client
    * applying the changes a server returned is being told the identity, not
    * choosing it. Off by default: a store that mirrors nothing owns its own
    * numbering. */
   adopt?: boolean
-  /** Give new entities a human-readable number. OPT-IN, with the same option
+  /** Give new entities a human-readable number. Opt-IN, with the same option
    * name @yaks/sqlite uses: left out, an entity has its eid and nothing else.
    * `{ except: [comp, …] }` turns numbering on while leaving the entities of
    * the named components unnumbered. */
@@ -56,7 +56,7 @@ export type Tx = {
   /** lookup by id, not search: these entities as they stand, whole. A deleted
    * one carries `tombstone`; an unknown one is simply absent. */
   get: (eids: Eid[]) => Bundle[]
-  /** apply these patches → the entities they CREATED, each with its `num` */
+  /** apply these patches → the entities they created, each with its `num` */
   patch: (bundles: Bundle[]) => Entity[]
   /** Evict live payloads, not identities. A later patch keeps the same number.
    * Tombstones remain permanent; eviction is never deletion. */

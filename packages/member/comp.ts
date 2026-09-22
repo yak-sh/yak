@@ -45,7 +45,7 @@ export let GOVERNED: string[] = [MEMBER, GRANT, ACCESS]
 /**
  * The membership vocabulary, to load beside your own:
  * `loadVocab([memberDoc, ...mine])`. It declares nothing about what a space or
- * an app IS — both are plain entities in your own vocabulary — only who belongs
+ * an app is — both are plain entities in your own vocabulary — only who belongs
  * to one and who may reach the other.
  */
 export let memberDoc: VocabDoc = doc

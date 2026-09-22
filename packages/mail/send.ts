@@ -6,7 +6,7 @@
 // whole rule, and it is why an inbound letter (which carries the address it was
 // delivered to, in `mail.to`) can never echo itself back out.
 //
-// The effect runs POST-COMMIT, which is the right place for it: the letter is
+// The effect runs post-commit, which is the right place for it: the letter is
 // durable before anyone tries to send it, a mail server that is down cannot
 // fail the write, and the outcome — `delivered` or `bounced` — is written back
 // through the graph's own `apply()` as a transaction of its own. So "what
@@ -14,12 +14,12 @@
 // and pushed to whoever is subscribed, rather than a row found on the next read
 // (T-34044).
 //
-// The transport itself is SUPPLIED BY THE CALLER. This package composes a
+// The transport itself is supplied by the caller. This package composes a
 // message and hands it over; whether that is Cloudflare, an SMTP relay, or an
 // array in memory is the caller's business (./cloudflare.ts and ./stash.ts are
 // two implementations).
 //
-// A letter is TWO components: the envelope is `mail` and the words a person
+// A letter is two components: the envelope is `mail` and the words a person
 // reads are @yaks/doc's `doc{title, body}`. So the composition works from the
 // whole entity, which is what the effect reads anyway.
 
@@ -55,7 +55,7 @@ export type Receipt = {
 
 /**
  * A transport: the one thing this package does not implement. `send` resolves
- * when the message is away and REJECTS when it is not — the rejection's message
+ * when the message is away and rejects when it is not — the rejection's message
  * is what lands in `bounced.reason`, so make it worth reading.
  */
 export type Sender = {
@@ -69,7 +69,7 @@ export type Post = {
   sender: Sender
   /** the clock, passed in so a test can hold it still (default: now) */
   now?: () => string
-  /** a domain whose addresses belong to this GRAPH rather than to a mail
+  /** a domain whose addresses belong to this graph rather than to a mail
    * server. A letter to one is delivered by writing it — see below. */
   local?: string
 }
@@ -146,14 +146,14 @@ export let message = (
  * not care which component triggered it. It is idempotent either way: a letter
  * that already carries `delivered` or `bounced` is left alone.
  *
- * The outcome is written back through @yaks/effects' WRITE function — a new
+ * The outcome is written back through @yaks/effects' write function — a new
  * transaction through the graph's own `apply()` — so "this letter left" is
  * journaled and pushed to whoever is subscribed to the letter, rather than a
  * row they find next time they read. The registry needs that function:
  * `effects(vocab, { write })`, applied trusted, since `delivered` and
  * `bounced` are the sender's report and therefore server-owned.
  *
- * `local` names a domain whose addresses belong to this GRAPH — an agent, a
+ * `local` names a domain whose addresses belong to this graph — an agent, a
  * project, anything reachable here and nowhere else. A letter to one is
  * already where it is going, so it is stamped `delivered{via: 'local'}` and
  * never handed to the transport; sending it out would bring it back as a

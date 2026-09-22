@@ -56,7 +56,7 @@ export function satisfies(predicate: Presence, archetype: Archetype): boolean {
 }
 
 /**
- * Process-local immutable set/transition/predicate cache. It caches CONTENT,
+ * Process-local immutable set/transition/predicate cache. It caches content,
  * never a claim that a row committed: rollback and other writers cannot poison
  * it. Repeated moves use the (from, +/-table) edge without hashing again.
  */

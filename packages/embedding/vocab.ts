@@ -1,10 +1,10 @@
 // The vocabulary this package contributes, and nothing else
-// (`@yaks/embedding/vocab`). It declares no COMPONENT — no client ever writes
+// (`@yaks/embedding/vocab`). It declares no component — no client ever writes
 // a vector: it is derived from text another package's vocabulary declares, it
 // is never sent to a client, and no patch creates one, which is why the table
 // is created in SQL by ./rules.ts.
 //
-// What it does declare is one TOOL: the check in ./tools.ts. A tool is
+// What it does declare is one tool: the check in ./tools.ts. A tool is
 // declared in a vocabulary and listed by the server, so the index's own
 // invariant can be asked about the same way every other package's is.
 import type { VocabDoc } from '@yaks/vocab'

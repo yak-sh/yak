@@ -2,7 +2,7 @@
 // command, wait for one that outlived its tool call, stop one. Every command
 // is a tracked process from the first moment — `launch` writes the row before
 // anything is waited on — so the only thing the timeout decides is whether the
-// tool RETURNS the output or the entity id.
+// tool returns the output or the entity id.
 //
 // That is the whole idea. A tool call that blocks until a `deno task dev`
 // exits hangs the session forever; one that kills the child when the timeout
@@ -12,7 +12,7 @@
 // when it restarts — and the session (or an operator reading the same graph)
 // reaches it again by that id.
 //
-// `wait` and `stop` read the EXIT CODE from the graph rather than from a
+// `wait` and `stop` read the EXIT code from the graph rather than from a
 // handle held in memory, so a process the server launched before a restart
 // behaves exactly like one it launched a moment ago: `watch()` adopts it again
 // and writes the exit code to the same row these tools poll.

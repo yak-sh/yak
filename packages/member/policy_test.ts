@@ -67,7 +67,7 @@ Deno.test('open: anyone reads and anyone writes, nobody included', () => {
 Deno.test('private: only someone holding a level sees it at all', () => {
   let s = store()
   setMode(s, ids.list, 'private')
-  // Mo is only a viewer — a viewer still READS a private thing.
+  // Mo is only a viewer — a viewer still reads a private thing.
   assertEquals(reads(s, ids.list), {
     dana: true,
     raj: true,

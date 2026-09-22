@@ -3,7 +3,7 @@
 // A client graph holds three kinds of state at once, and two keywords in the
 // vocabulary decide which is which (@yaks/vocab's `sync` and `durable`): a
 // `sync: server` component belongs to the server; a `sync: none` component
-// belongs to THIS browser, and of those the ones that are `durable: forever`
+// belongs to this browser, and of those the ones that are `durable: forever`
 // go in the vault — no server will ever send them back, so if this process
 // does not write them down they are gone at the next reload. A `sync: none`
 // component that only lasts as long as the `connection` stays in memory and
@@ -20,7 +20,7 @@
 // Writes are write-through, not write-behind: the graph commits first (a
 // local write against a local map is synchronous, which is most of the reason
 // to run a graph in a page), and the vault is called on the `effect` phase
-// afterwards. What is written is the entity's WHOLE set of local components,
+// afterwards. What is written is the entity's whole set of local components,
 // read back from the store rather than taken from the patch, so merging is
 // the store's job and not the vault's.
 
@@ -182,7 +182,7 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
   graph.use(plugin)
 
   // Loading is applied like any other change: trusted (these values were
-  // admitted once already), marked as an echo so @yaks/sync does not POST
+  // admitted once already), marked as an echo so @yaks/sync does not post
   // browser-owned components to a server, and marked as this package's own so
   // the hook above does not write back what it just read.
   let ready = vault.load().then((recs) => {

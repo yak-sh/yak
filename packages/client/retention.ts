@@ -1,7 +1,7 @@
 // The working set: which entities this client keeps, and which columns of
 // them it can be said to have loaded.
 //
-// Entity data lives ONLY in the in-memory @yaks/ram store. What this file
+// Entity data lives only in the in-memory @yaks/ram store. What this file
 // keeps beside it is bookkeeping — ids, the order the server delivered them
 // in, and which subscription covers which columns — never a second copy of
 // the data. Closing a subscription releases its rows to be evicted later;
@@ -37,7 +37,7 @@ export const RETENTION_ROWS = 20_000
  * shown from the previous page load under the same server epoch. */
 export type Retained = Replica & {
   /** Whether an open subscription covers this column. False means not
-   * loaded, NOT deleted. A subscription restored from disk that the server
+   * loaded, not deleted. A subscription restored from disk that the server
    * has not answered yet covers only the columns actually present in
    * memory. */
   loaded: (eid: Eid, component: string, property?: string) => boolean
@@ -299,7 +299,7 @@ export let retention = (
   // never a deletion from the graph and never a write to the server.
   let trim = (eids: Eid[]) => {
     // Some applications render a one-off field beside a standing query that
-    // projects only a few columns. Keep that value in the SAME row rather
+    // projects only a few columns. Keep that value in the same row rather
     // than in a second cache or under a permanent owner. loaded() still
     // consults open subscriptions only; snapshot() still clears a column a
     // covering subscription omitted; and ordinary row eviction bounds this
@@ -638,7 +638,7 @@ export let retention = (
       for (let answer of saved) {
         if (!answers.get(answer.key)) answers.put(answer)
       }
-      // A reopened watch owns the rows restored for it BEFORE the first
+      // A reopened watch owns the rows restored for it before the first
       // frame arrives. Rows that finish loading later must join that same
       // subscription, not create a second one.
       await then(snapshot(graph, bundles), () => {

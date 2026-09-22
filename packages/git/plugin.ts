@@ -1,5 +1,5 @@
 // The package as a graph plugin: the `ref` component, and the post-commit step
-// that writes a Git commit when a RELEASE lands.
+// that writes a Git commit when a release lands.
 //
 // It needs nothing from the application, because everything it would otherwise
 // have to know about a release — what a release is called, where its manifest
@@ -8,7 +8,7 @@
 // the factory ({@link Releases}). What is left is Git's: the objects, the
 // branch, and the order they are written in.
 //
-// It hooks `effect` and only `effect`. A Git commit is written ABOUT data that
+// It hooks `effect` and only `effect`. A Git commit is written about data that
 // is already durable — the release stands whether or not its history was
 // written — so a failure here costs that release its Git commit and nothing
 // else, which is exactly what the phase promises. It also means an application

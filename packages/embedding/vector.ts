@@ -5,7 +5,7 @@
 // and a vector from a different model, with a different dimension, is refused by
 // arithmetic rather than by bookkeeping.
 //
-// Comparison is COSINE similarity: 1 identical, 0 unrelated, negative opposed.
+// Comparison is cosine similarity: 1 identical, 0 unrelated, negative opposed.
 // For unit-length vectors that is just the dot product, and everything stored
 // here is normalized on the way in, so ranking a corpus is one multiply-add
 // pass per vector.

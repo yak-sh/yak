@@ -10,7 +10,7 @@
 import { type Grammar } from './args.ts'
 import { commandOf, type Prop, type Schema, titleOf, typeOf } from './tool.ts'
 
-// deno-lint-ignore no-control-regex -- control characters ARE the subject
+// deno-lint-ignore no-control-regex -- control characters are the subject
 let ctrl = /[\x00-\x1f\x7f-\x9f]/g
 
 /** Text from a server, with every escape sequence a terminal could act on

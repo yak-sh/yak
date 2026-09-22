@@ -1,6 +1,6 @@
 // Writes patch: a bundle names only what changes. These pin the storage half —
 // the four patch rules, the identity a patch mints, and the row-level removal
-// @yaks/graph asks for. WHICH entities a delete takes with it is the graph's
+// @yaks/graph asks for. Which entities a delete takes with it is the graph's
 // decision, held in ./graph_test.ts.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
@@ -150,11 +150,11 @@ Deno.test('a composite unique refuses only the whole pair', () => {
 })
 
 // The write path is shared with @yaks/d1, which cannot read mid-batch, so it
-// must not ask the database a BLOCKING question to build a write. A `select` is
+// must not ask the database a blocking question to build a write. A `select` is
 // such a question — its answer has to arrive before the next statement is
 // built — while a write's own RETURNING rides back with the batch, which is why
 // the numbers a mint hands out cost nothing here. What is left is one question
-// about IDENTITY: which of the named eids are already in the grave. It does not
+// about identity: which of the named eids are already in the grave. It does not
 // multiply with the batch.
 Deno.test('a patch asks once about identity, whatever the batch is', () => {
   let seen: string[] = []

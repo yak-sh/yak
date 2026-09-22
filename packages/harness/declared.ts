@@ -1,4 +1,4 @@
-// The tools this harness DECLARES in its vocabulary, paired with the functions
+// The tools this harness declares in its vocabulary, paired with the functions
 // that implement them. The declarations — noun, verb, description, arguments —
 // are in vocab.json beside the components, because they are the same kind of
 // thing: what this graph declares about itself. The implementation is code and
@@ -12,7 +12,7 @@ import { runs } from './runs.ts'
 import { vocab } from './vocab.ts'
 import doc from './vocab.json' with { type: 'json' }
 
-// The harness's OWN document, so its command line lists the harness's own
+// The harness's own document, so its command line lists the harness's own
 // tools; the implementations are built against the whole loaded vocabulary,
 // which is more than this document declares and harmless here — `loadTools`
 // takes only the ones it needs.

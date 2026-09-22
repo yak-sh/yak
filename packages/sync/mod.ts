@@ -18,11 +18,11 @@
  * ```
  *
  * ## Writes are optimistic
- * A write commits locally FIRST — the page renders it before anything crosses
+ * A write commits locally first — the page renders it before anything crosses
  * the network — and is then sent as `POST /apply`. The list of bundles the
  * server responds with is applied back through the same local graph, which is
  * how the numbers it assigned, the columns it stamped and the entities it
- * deleted reach the client. If the server REFUSES the write, the optimistic
+ * deleted reach the client. If the server refuses the write, the optimistic
  * change is undone from the copy {@link sync} took of those entities
  * beforehand, and the refusal is reported. If the server is merely
  * unreachable, nothing is undone: the write may have been applied there and
@@ -45,7 +45,7 @@
  *
  * ## Reading is a subscription
  * {@link Sync.subscribe} opens a stored query on the server's `/ws`. Its
- * answer — and every later change to it, including what LEFT the set — is
+ * answer — and every later change to it, including what left the set — is
  * applied to the local graph, so a render reads the local store and never
  * awaits. A dropped socket reconnects with a widening backoff, sends every
  * subscription again, and treats the first frame after a reopen as the whole
