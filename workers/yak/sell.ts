@@ -256,12 +256,12 @@ export let selling = (space: Space): 'none' | 'setup' | 'ready' =>
     ? 'ready'
     : 'setup'
 
-// New payments require Plus. Existing orders and Stripe events still settle
-// after a downgrade, and the seller can always disconnect their account.
+// New payments require the Plus plan. Existing orders and Stripe events still
+// settle after a downgrade, and the seller can always disconnect their account.
 export let refusedSell = (space: Space, env: Host = {}) =>
   space.tier == 'plus'
     ? null
-    : `Taking payments requires Plus. Compare plans: ${
+    : `Taking payments requires the Plus plan. Compare plans: ${
       hostUrl(env, '/pricing')
     }`
 
