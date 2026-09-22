@@ -114,7 +114,7 @@ let listing = (ctx: Ctx): Tool => ({
     `outcome is not confirmation of delivery. ${scope(ctx.env)} ` +
     `direction selects received, sent, or all (the default, including ` +
     `drafts). Returns up to limit records (20 by default), with the returned ` +
-    `records sorted newest first.`,
+    `records sorted newest first. Documentation: https://yaks.app/docs/mail.`,
   input: {
     app: z.string().describe(address(ctx.env)),
     space: z.string().optional().describe(SPACE),
@@ -157,7 +157,8 @@ let sending = (ctx: Ctx): Tool => ({
     `requires a member who may write, even in an app anyone can write to. ` +
     `Cannot be undone: an email that has been sent cannot be recalled, ` +
     `which makes this one of the very few things here where a mistake is ` +
-    `final. Read it back to the person before you send it.`,
+    `final. Read it back to the person before you send it. ` +
+    `Documentation: https://yaks.app/docs/mail.`,
   input: {
     app: z.string().describe(address(ctx.env)),
     space: z.string().optional().describe(SPACE),
