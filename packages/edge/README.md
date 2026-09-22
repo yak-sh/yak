@@ -1,13 +1,14 @@
 # @yaks/edge
 
-Relations stored as entities. Each link is its own entity carrying an `edge`
-component with its two endpoints and an optional sort order, plus a second
-component naming the relation — `cites`, `requires`, and so on. Because a link
-is an entity, it can carry further components and is written, deleted and
-synchronized through the same graph API as anything else.
+Stores typed, directed links between graph entities. Each link is a separate
+entity with an `edge` component containing its endpoints and optional sort
+order, plus a component naming the relation, such as `cites`. Link entities can
+also carry application metadata and use the ordinary graph write and sync APIs.
 
-For bundle structure, write phases, and adapter responsibilities, see the
-[graph architecture](../graph/ARCHITECTURE.md).
+A **bundle** is one entity's components as a JSON object. A **batch** is a list
+of changes applied in one transaction. See the
+[graph architecture](../graph/ARCHITECTURE.md) for the write phases and storage
+interface.
 
 ## Install
 
@@ -18,140 +19,164 @@ deno add jsr:@yaks/edge
 
 ## A link is an entity
 
-A link is a separate entity with an `edge` component and a relation component:
-
-```ts
-{ entity: { eid: "link-1" }, edge: { from: "p1", to: "p2" }, cites: {} }
-```
-
-The endpoints are entity references. Add other components to record metadata
-such as a date or a note. Link entities are patched, deleted, and synchronized
-through the graph API.
-
-## The `relation` keyword
-
-Applications declare relations as components carrying the `relation` keyword:
+This bundle records that `p1` cites `p2`:
 
 ```json
 {
-  "$vocabulary": {
-    "https://yaks.sh/vocab/core": true,
-    "https://yaks.sh/vocab/edge": true
-  },
-  "$defs": {
-    "post": { "type": "object", "kind": true },
-    "cites": { "type": "object", "relation": true },
-    "links": { "type": "object", "relation": "linked" }
-  }
+  "entity": { "eid": "link-1" },
+  "edge": { "from": "p1", "to": "p2" },
+  "cites": {}
 }
 ```
 
-`true` means the relation is named after the component itself; a string gives it
-a different name in queries, for a vocabulary that stores `links` but is queried
-as `linked`. Register this keyword vocabulary when you load your schema. The set
-of relations is open: adding one is a new component in your own vocabulary, not
-a change to this package.
+The package uses the graph's existing storage adapter. With SQLite, `edge` and
+`cites` have ordinary component tables; there is no separate relationship store.
+The `edge.ord` number can record a position, but the traversal helpers do not
+sort by it.
+
+## The `relation` keyword
+
+Declare each relation in your application's vocabulary and register
+`edgeKeywords` when loading it:
+
+```ts
+let blog = {
+  $defs: {
+    entity: {
+      component: true,
+      type: 'object',
+      properties: { num: { type: 'number', stamped: true } },
+    },
+    post: {
+      component: true,
+      type: 'object',
+      kind: true,
+      properties: { title: { type: 'string' } },
+    },
+    cites: { component: true, type: 'object', relation: true },
+    links: { component: true, type: 'object', relation: 'linked' },
+  },
+}
+```
+
+`relation: true` uses the component name in queries. A string gives it a
+different query name: `links` is stored as a component but queried as `linked`.
+`link()` and `unlink()` take the **component name**; `walk()` takes the **query
+name**. The package declares no application relations of its own.
 
 ## Creating a link
+
+Continuing with `blog` above:
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
 import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
 import { edgeDoc, edgeKeywords, edges, link, unlink } from '@yaks/edge'
 
 let vocab = loadVocab([edgeDoc, blog], [edgeKeywords])
-let g = graph({ storage, vocab, plugins: [edges(vocab)] })
+let store = ram(vocab)
+let g = graph({ storage: store, vocab, plugins: [edges(vocab)] })
 
-g.apply([link('p1', 'cites', 'p2')])
+g.apply([
+  { entity: { eid: 'p1' }, post: { title: 'First post' } },
+  { entity: { eid: 'p2' }, post: { title: 'Second post' } },
+  link('p1', 'cites', 'p2'),
+])
+```
+
+`edgeEid(from, relation, to)` hashes `from|relation|to` with SHA-256 and formats
+it as the graph's derived UUID. Repeated calls identify the same link. Direction
+matters: `p1 cites p2` and `p2 cites p1` have different IDs. `link()` computes
+this ID; the plugin also derives it for writes using `$alias`. An explicit
+entity ID is not rewritten into a derived ID.
+
+`link(from, relation, to, ord?)` sets `ord` when supplied and leaves an existing
+order unchanged when omitted. To remove and later recreate a link:
+
+```ts
 g.apply([unlink('p1', 'cites', 'p2')])
+g.apply([link('p1', 'cites', 'p2')])
 ```
 
-A link's entity id is derived from the link itself: it is a hash of
-`from | relation | to`. Two writers who create the same link therefore land on
-one entity rather than two, and removing a link needs no lookup — `unlink`
-derives the same id. Direction is part of that id, so `a cites b` and
-`b cites a` are two different links.
+`unlink()` removes the `edge` and relation components, leaving the entity ID
+available for reuse and any other components intact. Deleting the link entity
+instead permanently tombstones its ID.
 
-Both endpoints are references declared `death: cascade`, which is the whole of a
-link's lifecycle: the link exists only while both of its endpoints do. Delete a
-post and its links are deleted with it — there is no orphan sweep to run, and a
-reader never finds a link with one end missing.
-
-An edge component with no relation component beside it is rejected:
-
-```
-Refused: edge d91e2b12-… declares no relation — an edge carries a relation tag
-         beside edge{from, to} (this vocabulary knows cites, linked)
-```
+Both endpoints declare `death: cascade`: deleting either endpoint through the
+graph deletes the link entity. The plugin rejects an edge without endpoints or a
+declared relation component. The graph enforces reference validity.
 
 ## Following links
 
 ```ts
 import { walk } from '@yaks/edge'
 
-let w = walk(storage, vocab)
-w.out('p2', 'cites') // ['p1'] — what p2 cites
-w.in('p1', 'cites') // ['p2'] — who cites p1
-w.reach('p1', 'cites', 3, 'in') // everything citing it within three hops
+let w = walk(store, vocab)
+await w.out('p1', 'cites') // ['p2']
+await w.in('p2', 'cites') // ['p1']
+await w.reach('p2', 'cites', 3, 'in') // ['p1']
 ```
 
-Each of these is a storage query rather than a separate mechanism, and each
-returns synchronously when the storage is synchronous. The depth argument is
-required, so that traversal is always bounded.
+These helpers issue ordinary storage reads and return endpoint IDs. Synchronous
+storage produces synchronous results; asynchronous storage produces promises.
+`reach()` requires a depth limit, defaults to outgoing traversal, and
+deduplicates visited IDs. It includes the start only if a path of at least one
+hop returns to it. Unknown relation names throw.
 
 ## In a query
 
-Register the [@yaks/sql](https://jsr.io/@yaks/sql) extension this package
-exports and two query clauses that @yaks/sql cannot compile on its own start
-working:
+For SQL storage, register `traverse(vocab)` as a compiler extension:
 
 ```ts
+import { parse } from '@yaks/query'
+import { compile } from '@yaks/sql'
 import { traverse } from '@yaks/edge'
 
-compile(parse('.cites[<=3]->p1'), vocab, { extend: [traverse(vocab)] })
+let statement = compile(parse('.cites[<=3]->p2'), vocab, {
+  extend: [traverse(vocab)],
+})
 ```
 
-- `.cites[<=3]->p1` — the entities that reach `p1` through at most three `cites`
-  links; `.cites<-p1` is what `p1` reaches; with no bracket the limit is 16
-  hops. @yaks/sql owns the recursive CTE (`walkSql`) — seeded at the target, one
-  index seek per step, with the hop limit as the recursion's own guard so a
-  cycle terminates arithmetically. This extension supplies only the step: the
-  edge table narrowed to rows carrying the component the relation name refers
-  to. A path that names no relation is left to @yaks/sql, which walks it as a
-  reference column instead (`.fork.from->S-7`).
-- `.edges[cites]!` — this does not change which entities the query selects; it
-  asks for each selected entity's links to be returned alongside it. It compiles
-  to a condition that filters nothing, and `walk` fetches the links.
+- `.cites[<=3]->p2` selects entities that reach `p2` through at most three
+  `cites` links. `.cites<-p1` selects entities reachable from `p1`. Without a
+  bracketed depth, traversal has no hop limit: the recursive CTE deduplicates
+  entity IDs, excludes the starting entity, and limits the result to 10,000 IDs
+  (`WALK_LIMIT`). An explicit depth bounds recursion by hops and can include the
+  start when a cycle returns to it.
+- `.edges[cites]!` requests links alongside selected entities. The extension
+  accepts this clause without filtering the selection; fetching those links is
+  the caller's responsibility. It does not itself add links to returned rows.
+- A reference-column traversal such as `.fork.from->S-7` remains the SQL
+  compiler's responsibility. An undeclared relation is rejected.
 
-A relation the vocabulary does not declare is rejected rather than answered — a
-clause naming nothing is a typo, not a query that matches everything.
+Pass the same extension to the SQLite adapter's `extend` option to enable these
+clauses on its reads.
 
 ## Exports
 
-| export                       | is                                                          |
-| ---------------------------- | ----------------------------------------------------------- |
-| `edgeKeywords`, `EDGE_URI`   | the `relation` keyword vocabulary, to register              |
-| `edgeDoc`, `EDGE`            | the `edge` component, to load beside your own               |
-| `relations(v)`, `names(v)`   | the declared relations, each way round                      |
-| `link`, `unlink`             | the bundle that creates a link, and the one that removes it |
-| `edgeEid`, `derive`, `tagOf` | the id derived from a link's endpoints and relation         |
-| `edges(v)`                   | the @yaks/graph plugin (component, id, rejection)           |
-| `stated(v)`                  | the rejection hook on its own                               |
-| `walk(storage, v)`           | `out`, `in`, and a bounded `reach`                          |
-| `traverse(v)`                | the @yaks/sql extension for the walk and `.edges`           |
+| Export                             | Purpose                                                       |
+| ---------------------------------- | ------------------------------------------------------------- |
+| `edgeKeywords`, `EDGE_URI`         | Register the `relation` keyword                               |
+| `edgeDoc`, `EDGE`                  | Component declaration and component name                      |
+| `relations(vocab)`, `names(vocab)` | Relation-to-component and component-to-relation maps          |
+| `link`, `unlink`, `edgeEid`        | Create/remove link bundles and compute their IDs              |
+| `tagOf`, `derive`                  | Find a bundle's relation component and build an ID derivation |
+| `edges(vocab)`, `stated(vocab)`    | Graph plugin and its validation hook                          |
+| `walk`, `traverse`                 | Storage traversal and SQL extension                           |
+
+`@yaks/edge/vocab` exports `docs` and `keywords` for plugin loading, plus
+`edgeDoc` and `edgeKeywords`. `@yaks/edge/rules` exports `rules(host)`, where
+the **host** is the process that opened the graph; its vocabulary is used to
+create `edges(vocab)`.
 
 ## Composition
 
-A component package over [@yaks/graph](https://jsr.io/@yaks/graph), built the
-same way an application's own plugin is. It reads its declarations through
-[@yaks/vocab](https://jsr.io/@yaks/vocab)'s keyword extension API, as
-[@yaks/id](https://jsr.io/@yaks/id) and
-[@yaks/names](https://jsr.io/@yaks/names) do, and adds two clauses to
-[@yaks/sql](https://jsr.io/@yaks/sql) through the same extension API
-[@yaks/fts](https://jsr.io/@yaks/fts) uses for search.
+The package uses `@yaks/vocab` keyword extensions, `@yaks/graph` plugins and
+`@yaks/sql` compiler extensions. Applications declare their relations and choose
+the storage adapter.
 
 ## Compatibility
 
-Pure TypeScript, no platform API — traversal goes through @yaks/graph's
-`Storage` interface and the SQL through @yaks/sql's IR. Runs on **Deno**,
-**Node**, and in the **browser**.
+The core has no platform-specific APIs and can run in Deno, Node and browsers.
+SQL traversal requires a compatible SQL storage adapter.

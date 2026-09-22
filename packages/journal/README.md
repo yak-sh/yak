@@ -1,20 +1,17 @@
 # @yaks/journal
 
-A [@yaks/graph](../graph) plugin that records every committed transaction in
-three append-only SQL tables beside the graph's own. From that record it serves
-an entity's history, an undo, and a cursor-based feed of changes. The rows are
-written inside the same transaction as the write they describe.
+Records graph transactions in SQL tables and provides entity history, undo, and
+a cursor-based change feed. Install the journal plugin on the same database
+connection as the graph so its records commit or roll back with the changes they
+describe.
 
-For bundle structure, write phases, and adapter responsibilities, see the
-[graph architecture](../graph/ARCHITECTURE.md).
+A **bundle** is one entity's components as a JSON object. A **batch** is a list
+of changes applied in one transaction, normally one `graph.apply()` call. The
+journal represents a recorded transaction as a `Batch`, identified by its
+increasing `seq`. The **host** is the process that opened the graph, such as
+`yak serve` or a CLI command.
 
-Two terms are used throughout this README:
-
-- A **transaction** is one call to `graph.apply()`: a list of bundles — one
-  per-entity patch each — that all commit or none do. The package's type for a
-  recorded one is `Batch`, and its `seq` is its position in the total order.
-- The **server** is whichever process opened the database and loaded this
-  plugin: usually a long-running `yak serve`, sometimes just the CLI.
+See the [graph architecture](../graph/ARCHITECTURE.md) for the write phases.
 
 ## Install
 
@@ -25,191 +22,185 @@ deno add jsr:@yaks/journal
 
 ## What it is for
 
-Use the journal to find out who changed an entity and what the values were
-before, to reverse a transaction, or to consume changes incrementally. History
-starts when the plugin is enabled; it does not reconstruct changes made before
-that.
+Use the journal to inspect who changed an entity and its previous values,
+reverse a recorded transaction, or consume committed changes incrementally.
+History starts when recording is enabled; earlier state cannot be reconstructed
+unless it was imported into the journal.
 
 ## What it records
 
-The plugin registers one hook, on the `journal` phase of `apply()`. That phase
-runs inside the transaction that has just written, and the hook records the
-transaction as applied.
+| Table            | Contents                                                            |
+| ---------------- | ------------------------------------------------------------------- |
+| `journal_tx`     | Transaction sequence, timestamp, actor references and optional note |
+| `journal_change` | Ordered component upserts/removals, or an entity deletion           |
+| `journal_field`  | Ordered column values after each change                             |
 
-| table            | one row per                                       |
-| ---------------- | ------------------------------------------------- |
-| `journal_tx`     | committed transaction — its id is the total order |
-| `journal_change` | component that transaction patched or removed     |
-| `journal_field`  | column that change wrote — its after-image        |
+An empty component still has a change row. Component removal records null values
+for the fields known to the journal, keeping their history continuous across
+removal and recreation. Previous values are reconstructed from the entity's own
+indexed history rather than stored alongside each new value.
 
-For one write, then: one `journal_tx` row holding the timestamp, the identity
-the write was for (`by`), the instrument it came through (`via`), and an
-optional note; one `journal_change` row per component the transaction patched or
-removed — plus one naming the entity itself when the transaction deleted it —
-numbered in the order they were applied and marked `upsert` or `remove`; and,
-under each of those, one `journal_field` row per column, holding the value that
-column was left with. An empty component writes no field rows — its change row
-alone records that it is present. Removing a component writes one tombstone
-field row per column it still held, so a column's history stays self-contained
-across a removal and a later recreation.
+These tables do not contain graph entities of their own and are not included in
+ordinary graph snapshots or client caches. Normal writes append records;
+explicit redaction methods can modify stored history.
 
-These tables hold no entities: no eid of their own, no minted id, and they never
-appear in a bundle or in a client's cache. They are the record of what was
-applied, not part of the data a client reads back.
-
-They store after-images only — what a write left, never both sides of it. The
-before-value that a history read needs is rebuilt from that entity's own rows in
-the log, a read bounded to one entity and never a table scan. That is what keeps
-the log about a third of the size of one that stores both sides.
-
-Because the rows go in inside the transaction, a transaction that was refused
-leaves no trace, and one that committed always has a row.
-
-Nothing is read in order to write, so this plugin registers no `precondition`
-hook and passes nothing forward to a later phase. It asks its caller for one
-function — `rows(sql, params)` — and opens no transaction of its own; the caller
-owns the transaction.
+The plugin skips a transaction with no recorded component changes. Its `journal`
+hook runs inside the graph's transaction. It opens no transaction and uses the
+synchronous `rows(sql, params)` callback supplied to `log()`. Atomic recording
+requires that callback to use the graph's active transaction on the same
+connection. A separate unrelated database connection does not provide that
+guarantee.
 
 ## Who a recorded write is attributed to
 
-Each `journal_tx` row is stamped with the transaction's `$actor`: `by`, the
-identity the write acts for, and `via`, the instrument it came through — a
-session, a run, a connector. Both are stored as references into the entity
-table, so an actor has to be an entity before anything can be attributed to it,
-and both are read back as eids. A transaction that named neither records nulls
-for both.
+The graph passes the resolved `$actor` to the journal: `by` identifies whom the
+write acts for, and `via` identifies the session, connector or other entity
+through which it was made. Both are stored as references into `entity`, then
+read back as public eids. Create those entities before attributing writes to
+them. Unspecified actors are recorded as null.
 
-`$actor` is set by whatever received the write — @yaks/api's `/apply` handler
-after it has authenticated the request, the tool runner when it applies what a
-tool returned, the CLI when it knows who is at the keyboard — and `apply()`
-stamps what reached it, never what a client claimed for itself. The journal
-records that same resolved pair, so a history line and the entity's own
-`created`/`updated` components always agree.
+Authentication and actor selection belong to the API, CLI or tool caller; the
+journal records what the graph passes to it. `created` and `updated` components
+are skipped by default because the transaction already records attribution and
+time. `journal(log, { skip })` changes that component list.
 
-The fourth column, `trace`, is a free-text note. The plugin never sets one; it
-is there for a caller writing to the log directly through `log.write()`.
+The SQL `trace` column is an optional note. The graph plugin leaves it unset;
+`log.write({ at, by, via, note }, patches)` can supply it directly.
 
 ## In a server
 
-`@yaks/journal/rules` exports `rules(host)`. It creates the three tables over
-the server's own database connection and returns the plugin that writes them.
-`@yaks/journal/tools` exports the function behind the `history` tool, which
-reads the tables `rules` writes. `@yaks/journal/vocab` declares no component:
-the journal is the record of what was applied rather than part of it, so it
-appears in no snapshot. The only name it declares is that one tool.
+Add the package to a compatible `yak` plugin configuration:
 
 ```json
 { "plugins": ["@yaks/kernel", "@yaks/journal"] }
 ```
 
+`@yaks/journal/rules` creates the SQL tables on the host's connection and
+returns the journal plugin. `@yaks/journal/vocab` declares the `history` tool,
+and `@yaks/journal/tools` implements it. The package declares no graph
+component.
+
 ```sh
 yak history T-5 -n 10
 ```
 
-That prints every transaction that touched the entity, newest first, each as the
-patch it applied — the components it wrote, or `$delete` for a deletion —
-stamped with `updated{at, by, via}`: when it committed, the identity it was
-written for, and the instrument it came through. The tool returns bundles, so
-the CLI and the MCP server report the same thing.
+The tool returns the entity's latest transactions first, each as the patch
+applied to that entity, with `updated: { at, by, via }` metadata. Entity
+deletion appears as `$delete`. A transaction that changed other entities
+includes only the requested entity's changes in this response. The low-level
+`history()` method instead returns transactions oldest first.
 
 ## What it returns
+
+This example assumes `vocab` declares a `page` component with a string `title`,
+and `driver` implements `@yaks/sqlite`'s synchronous `query`/`exec` interface.
+Both graph storage and journal use that same connection.
 
 ```ts
 import { graph } from '@yaks/graph'
 import { storage } from '@yaks/sqlite'
-import { ddl, journal, log, undo } from '@yaks/journal'
+import { ddl, journal, undo } from '@yaks/journal'
+import { logFor } from '@yaks/journal/rules'
 
-db.exec(ddl())
-let j = log({ rows: (sql, p) => db.prepare(sql).all(...p) })
+let store = storage(driver, vocab)
+store.install()
+driver.exec(ddl())
+let j = logFor({ sql: driver })
 let g = graph({ storage: store, vocab, plugins: [journal(j)] })
 
-g.apply([
-  { entity: { eid: 'p1' }, page: { title: 'Kickoff' }, $actor: { by: 'ada' } },
-])
-g.apply([
-  { entity: { eid: 'p1' }, page: { title: 'Retro' }, $actor: { by: 'bo' } },
-])
+g.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
+g.apply([{ entity: { eid: 'p1' }, page: { title: 'Retro' } }])
 
-j.history('p1')
-// [ { seq: 1, at: '…', by: 'ada', via: null, deltas: [
-//       { target: 'p1', comp: 'page', column: null,    before: null, after: {} },
-//       { target: 'p1', comp: 'page', column: 'title', before: null,
-//         after: 'Kickoff' } ] },
-//   { seq: 2, …, by: 'bo', deltas: [ { …, before: 'Kickoff',
-//                                      after: 'Retro' } ] } ]
-
-undo(g, j)(2) // the title is 'Kickoff' again — and that undo is transaction 3
-j.since(0) // every transaction after the cursor, oldest first
+let history = j.history('p1')
+let changed = history.at(-1)!
+undo(g, j)(changed.seq) // restores 'Kickoff' and records the undo
+let entries = j.since(0) // Entry[], oldest first
 ```
 
-- **`j.history(eid)`** — every transaction that touched one entity, oldest
-  first, each with the identity that wrote it, when it committed, and the deltas
-  about that entity. A delta names one column and both of its values; a delta
-  with no column is the component as a whole appearing or going.
-- **`undo(g, j)(seq)`** — the inverse of a transaction, applied through the
-  graph. See below.
-- **`j.since(cursor)`** — the transactions after a cursor, oldest first, with
-  `j.at` and `applied(batch)` turning one back into the bundles it committed,
-  which a server can push to its subscribers. A consumer that stores the cursor
-  BEFORE it does the work runs effects at most once.
-- **`j.before(eid, seq)`**, **`j.wrote(comp, column)`**, **`j.seek(text)`** —
-  the state an entity was in just before a transaction, every value one column
-  has ever held on any entity, and every recorded value containing some text
-  (where a redaction starts; `j.scrubValue` and `j.scrubRef` rewrite one
-  recorded value in place).
+`Batch` carries `seq`, `at`, `by`, `via` and `deltas`. Each `Delta` identifies a
+`target` eid, `comp`, optional `column`, and `before`/`after` values. A null
+`column` describes a whole component's addition or removal.
 
-A column whose text the graph already stores once under a content address is
-recorded by that address (`cas`), so the log points at the graph's bytes instead
-of keeping every revision of every document twice.
+`Entry` is the recorded operation format: `seq`, attribution, `note` and
+`patches`. Each `Patch` contains `target`, `comp` and `value`, with null meaning
+removal. `since()` returns entries, while `at()` and `history()` reconstruct
+batches with before/after deltas.
+
+| Method                                                 | Result                                                       |
+| ------------------------------------------------------ | ------------------------------------------------------------ |
+| `j.history(eid, n?)`                                   | Latest `n` transactions for an entity, returned oldest first |
+| `j.entries(eid, n?)`                                   | Latest entries for an entity, newest first                   |
+| `j.by(via, n?)`                                        | Entries written through an instrument, newest first          |
+| `j.since(cursor?)`                                     | Entries strictly after the cursor, oldest first              |
+| `j.at(seq)`                                            | One reconstructed `Batch`, or `undefined`                    |
+| `j.patches(seq, target?)`                              | Recorded operations, optionally restricted to one entity     |
+| `j.before(eid, seq)`                                   | Components just before a transaction                         |
+| `j.latest(eid)`, `j.tip()`                             | Latest sequence for an entity or the whole log               |
+| `j.touchedSince(eid, seq)`                             | Whether the entity changed after a sequence                  |
+| `j.wrote(comp, column)`                                | Recorded values for a column across entities                 |
+| `j.seek(text)`                                         | Recorded values containing text                              |
+| `j.scrubValue(field, value)`, `j.scrubRef(field, ref)` | Explicit history redaction                                   |
+| `j.holds(ref)`                                         | Whether history still references stored content              |
+
+To turn a feed entry into graph changes, load its batch with `j.at(entry.seq)`
+and pass that to `applied(batch)`. `applied()` reconstructs the changes without
+reading current graph state. It does not repeat transaction attribution in the
+returned bundles.
+
+The consumer owns its cursor and delivery policy. Saving the cursor before doing
+the work can lose work after a crash; saving it afterward can repeat work. The
+journal alone does not guarantee exactly-once external effects.
 
 ## Undo
 
-`undo(g, j)(seq)` reads the recorded transaction back out of the log, builds the
-change that reverses it, and applies that change through `graph.apply()`. The
-inverse puts every column back to the value it held, restores every component
-the transaction removed with the columns it had, and removes every component the
-transaction created. Because it goes through `apply()`, the undo is admitted,
-stamped and journaled like any other write, which makes undoing an undo a redo.
-It is applied as trusted, since restoring a column the server owns is the
-graph's own reconstruction rather than a client's write.
+`undo(g, j)(seq, actor?)` reconstructs an inverse and applies it through the
+graph, with trusted access to server-owned columns. It restores previous column
+values and removed components, and removes components created by the original
+transaction. The undo is validated, stamped and journaled as another write;
+undoing that write provides redo.
 
-Every restored column carries a `$was` precondition, hashed from the value the
-original transaction left in that column. If somebody else has changed that
-column since, the graph refuses the whole reversal rather than overwriting their
-work.
+Column deltas restored by `undo()` carry `$was` preconditions hashed from the
+original transaction's after-values. If those columns changed in the meantime,
+the graph rejects the reversal. Whole-component operations do not have the same
+per-column guard, so this is not a general conflict check for every possible
+intervening edit.
 
-Two things it cannot reverse:
+`undone(batch, { guard? })` builds the inverse without applying it; guards are
+off by default there. `applied(batch)` reconstructs the forward change.
 
-- **A deletion.** `undone()` and `undo()` throw `Final` when the transaction
-  deleted an entity. A deleted entity is tombstoned, never erased, and its id
-  can never be reused, so there is nothing to restore it into.
-- **Anything the log does not hold.** Changes made before the plugin was
-  enabled, and the `created`/`updated` stamps it skips, are not in the record
-  and so are not restored — the undo is stamped fresh, with its own actor and
-  timestamp.
-
-`undo()` throws a plain `Error` if no transaction has that `seq`, and returns an
-empty array if the recorded transaction moved nothing.
+Entity deletion is permanent. `undone()` and `undo()` throw `Final` if the batch
+deleted an entity, including a cascade. A nonexistent sequence makes `undo()`
+throw an `Error`; a batch with no reversible changes returns `[]`.
 
 ## Limitations and recording rules
 
-- **The provenance stamps are not recorded twice.** `created` and `updated`
-  repeat, column for column, what the `journal_tx` row already holds, so they
-  are skipped by default; the `skip` option sets which components are skipped.
-- **A deletion reads back whole.** What is stored is one removal of the entity
-  row, and a history read expands it, out of that entity's own rows in the log,
-  into every component the entity had with the values it held, followed by the
-  `tombstone` that marks it dead. History outlives the entity — a change row
-  keeps its reference to the entity row after the entity itself is gone.
-- **It is not a backup.** It records what moved, not the whole entity, so a
-  graph journaled from its first write can answer anything about its past, and
-  one that started journaling later answers only from there on.
-- **It needs a SQL store.** The rows are tables, not bundles, so the caller has
-  to hand in a database — the same one the graph is stored in, or another. The
-  journal only ever asks it to run a statement.
+- History can reconstruct only recorded state. Enabling the plugin after data
+  already exists does not capture that data's earlier values.
+- Entity deletion is stored as an entity removal; history expands the known
+  components and a tombstone from that entity's journal records. The retained
+  entity row keeps references valid after deletion.
+- Skipped components, including the default `created` and `updated` stamps, are
+  not restored by undo. Undo receives fresh stamps when the graph supplies them.
+- An optional `log({ cas })` configuration records selected text by a reference
+  to a content store. Supply its lookup layout, selection function and writer;
+  this is not enabled automatically by `rules(host)`.
+- The journal records changes rather than complete snapshots. Back up its
+  tables, the graph and any referenced content together when preserving history.
+
+## Exports
+
+The root exports `ddl`, `log`, `journal`, `applied`, `undone`, `undo`, `Final`,
+value encoding helpers, and types including `Log`, `LogOpts`, `Batch`, `Entry`,
+`Patch`, `Delta` and `Cas`.
+
+| Sub-module export     | Purpose                                                          |
+| --------------------- | ---------------------------------------------------------------- |
+| `@yaks/journal/vocab` | `journalDoc` and `docs`, declaring the history tool              |
+| `@yaks/journal/rules` | `rules(host)` installs tables/plugin; `logFor(host)` binds a log |
+| `@yaks/journal/tools` | `runs(host)` implements the history tool                         |
 
 ## Compatibility
 
-Browser-compatible: no platform API, no Deno or Node namespace — the caller
-hands in `rows(sql, params)` and the journal calls nothing else. Synchronous
-throughout, like the embedded databases it is written against.
+The journal requires synchronous SQLite-compatible SQL over the graph's entity
+table. It imports no platform-specific storage API, so a suitable
+caller-supplied binding can run it in Deno, Node or a browser.

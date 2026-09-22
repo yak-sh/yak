@@ -1,17 +1,17 @@
 # @yaks/effects
 
-Post-commit handlers for graph changes, such as notifications or external API
-calls. A handler is a function registered against a component name, and it runs
-after the storage transaction has committed — so it cannot reject the write, and
-a handler that throws does not roll the committed data back. Applications supply
-both the handlers and the component vocabulary.
+Runs application handlers after graph changes commit, for work such as updating
+an index, notifying subscribers or calling an external API. Handler failures are
+reported separately and cannot roll back the committed change.
 
-Throughout this README, a **batch** is a list of changes applied in one
-transaction: the array you pass to `graph.apply()`, which is written in full or
-not at all.
+A **bundle** is one entity's components as a JSON object. A **batch** is a list
+of changes applied in one transaction, such as the array passed to
+`graph.apply()`. See the [graph architecture](../graph/ARCHITECTURE.md) for the
+write phases.
 
-For bundle structure, write phases, and adapter responsibilities, see the
-[graph architecture](../graph/ARCHITECTURE.md).
+The default registry is in memory and stores no graph data. Optional `effect`
+and `lease` components support retry records and coordination of background
+jobs. Applications supply the handlers and their domain components.
 
 ## Install
 
@@ -22,303 +22,288 @@ deno add jsr:@yaks/effects
 
 ## Register handlers
 
-This package ships **no effect and no component**. It is the registry, the write
-phase the handlers run in, and the rules for running a handler safely. The
-components are your vocabulary's; the handlers are yours.
-
 ```ts
 import { graph } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
 
+let vocab = loadVocab([{
+  $defs: {
+    entity: {
+      component: true,
+      type: 'object',
+      properties: { num: { type: 'number', stamped: true } },
+    },
+    post: {
+      component: true,
+      type: 'object',
+      kind: true,
+      properties: {
+        title: { type: 'string' },
+        published: { type: 'boolean' },
+      },
+    },
+  },
+}])
 let fx = effects(vocab)
 let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
 
-fx.created('post', (e) => index(e.entity.eid, e.comp?.title))
-fx.changed('post', 'published', (e) => notify(e.entity.eid))
-fx.removed('post', (e) => unindex(e.entity.eid))
+fx.created('post', (event) => console.log('created', event.entity.eid))
+fx.changed('post', 'published', (event) => console.log(event.comp?.published))
+fx.removed('post', (event) => console.log('removed', event.entity.eid))
+
+g.apply([{ entity: { eid: 'p1' }, post: { title: 'First post' } }])
+g.apply([{ entity: { eid: 'p1' }, post: { published: true } }])
 ```
 
-`effects()` returns a [@yaks/graph](https://jsr.io/@yaks/graph) plugin, so it is
-registered like any other. Handlers may be registered before or after the graph
-is built — after is what lets a handler close over the graph it writes back
-through.
+`effects()` returns a graph plugin with registration methods. Handlers can be
+registered before or after graph construction. Every handler receives
+`(event, tx, write)`: the event, a detached transaction interface for reading
+committed state, and a callback for new graph writes when configured.
 
 ## Or a pattern — any query over what committed
 
-A component name and one of three things happening to it is the narrow question.
-The wide one is a PATTERN: any query, in the ordinary query grammar, run
-wherever this batch just made it true.
-
 ```ts
-fx.on('$call .call, !results', (e) => run(e.entity.eid))
+fx.on('.post, !post.published', (event) => console.log(event.entity.eid))
 ```
 
-Nothing has to be derived into the graph to trigger that. "A call with no
-result" is a query the storage can already answer, so the query itself is the
-registration — no flag column, no `pending` component, no second write to record
-the first.
+A pattern is a query evaluated against the committed graph. It is checked only
+when a batch changes a component the query reads, and a result triggers a
+handler only if the batch touched the entity bound by its first pattern. This
+does not guarantee a false-to-true transition: an entity that already matched
+can trigger again when touched.
 
-The query is run once per batch, and only for a batch that moved one of the
-components the query reads; a result row is kept only where the batch touched
-the entity the query's first pattern bound, so a handler runs for what just
-happened rather than for every row that has always matched. Rows a crash left
-behind are for a boot sweep to find, by running the same query.
+Required components absent from the vocabulary make a pattern inactive. An
+absence condition on an undeclared component is dropped. Queries joining
+multiple entities require a storage adapter with `bindings`, such as
+`@yaks/sqlite` or `@yaks/durable-object`. Unsupported query execution is
+reported as an effect failure after commit.
 
-A component the vocabulary does not declare cannot be stored on anything in that
-graph, so a clause requiring it to be ABSENT is dropped and a clause requiring
-it to be PRESENT makes the whole pattern inert — registered, listed, never run.
-One pattern is therefore correct in two graphs: `!wake` is a no-op where nothing
-is scheduled and a real condition where something is.
-
-A pattern over more than one entity (a join) needs a storage adapter that
-implements `bindings` — @yaks/sqlite and @yaks/durable-object do, an in-memory
-map does not — and an adapter that cannot throws when asked, which the registry
-reports rather than failing the batch it has already committed.
+Rows missed during a process failure need application-driven reconciliation,
+such as running the query at startup; registering a pattern alone does not
+replay them.
 
 ## A removal is a clause too
 
 ```ts
-fx.on('-post', (e) => unindex(e.entity.eid))
-fx.on('.product, -shelf', (e) => relist(e.entity.eid))
+fx.on('-post', (event) => console.log('removed', event.entity.eid))
 ```
 
-`-comp` means **this batch removed the component**, which is the one thing no
-committed row can tell you: once the row is gone, "it was deleted" and "it was
-never there" read alike. So the batch itself is passed to the query —
-@yaks/sqlite's overlay keeps a list of what the batch removed, and the compiled
-match reads it.
-
-A pattern with no other clause (`-post`) needs none of that: it is exactly what
-a removal event already reports, so it is registered as that event, triggered by
-the registry's own reading of the batch like a creation or a change, and
-supported by every storage adapter. That is also what keeps a cascade's
-casualties firing — they are events, tombstone and all, long after their rows
-are unreadable.
+`-post` means the current batch removed that component. Alone, it registers the
+same event as `removed('post', handler)` and works with every supported adapter,
+including cascaded deletions. A mixed pattern such as `.product, -shelf` also
+needs an adapter that can query the batch's removal overlay; ordinary committed
+rows cannot show which removed components were present before the write.
 
 ## Three things happen to a component
 
-| registration                 | fires when                                      |
-| ---------------------------- | ----------------------------------------------- |
-| `created(comp, run)`         | an entity gains that component                  |
-| `changed(comp, column, run)` | a patch moves that column                       |
-| `changed(comp, run)`         | a patch moves any column of it                  |
-| `removed(comp, run)`         | it goes — dropped, or with the entity that died |
-| `on(pattern, run)`           | a query holds where this batch touched          |
+| Registration                 | Trigger                                                  |
+| ---------------------------- | -------------------------------------------------------- |
+| `created(comp, run)`         | An entity gains the component                            |
+| `changed(comp, column, run)` | An applied patch includes that column                    |
+| `changed(comp, run)`         | An applied patch updates that component                  |
+| `removed(comp, run)`         | The component is removed, directly or by entity deletion |
+| `on(pattern, run)`           | A query matches an entity touched by the batch           |
 
-`removed(comp, run)` **is** `on('-comp', run)` — one line of sugar over the
-deletion clause (`@yaks/query`), producing the same slot, id and event as
-before. `created` and `changed` are not patterns and cannot become any: a
-pattern describes what is TRUE once the batch landed, while a creation or a
-column move describes what CHANGED, which no reading of the committed rows
-recovers. They stay their own registrations.
-
-The changes a client sends do not record which of these it is: the same bundle
-patches a component that existed and creates one that did not, and a cascade's
-casualty comes back as a bare tombstone carrying nothing. So the plugin reads
-what each entity carries **before** the patches go in — including everything the
-batch is about to delete — and compares the committed batch against that reading
-afterwards. That is the whole derivation, and it is why `removed` fires for a
-cascade's casualties and not only for the entity you named.
-
-An event carries what happened, to whom, and the patch as applied:
+The plugin reads component presence before applying changes, including
+components on entities about to be deleted by a cascade. After commit it
+interprets the applied patches in order to distinguish creation, change and
+removal. A changed event describes the applied patch, not a comparison of old
+and new values.
 
 ```ts
-{ kind: 'changed', entity: { eid: 'p1', num: 7 }, name: 'post',
-  comp: { published: true } }
+let event = {
+  kind: 'changed',
+  entity: { eid: 'p1', num: 7 },
+  name: 'post',
+  comp: { published: true },
+}
 ```
 
-On a `created` event `comp` is the whole new row; on a `changed` event it is
-**only the columns that moved**; on a `removed` event there is nothing left to
-carry.
+`comp` holds the new component on creation, the applied columns on change, and
+is absent on removal. Pattern events have `kind: 'matched'` and can carry `vars`
+with query variable bindings.
 
 ## The four promises
 
-**Post-commit only.** A handler runs after the transaction returned. It cannot
-reject a write, and a batch that was refused fires nothing at all — the effect
-phase is never reached. Rejecting a write is the precondition phase's job,
-earlier in `apply()`.
-
-**Isolated.** Every handler runs in its own `try`. A throw, or a rejected
-promise, is passed to `report` and the next handler still runs:
+- **After commit:** refused batches trigger no handlers. Handlers cannot reject
+  a write that already committed.
+- **Isolated failures:** thrown errors and rejected promises go to `report`;
+  other handlers still run. The default reporter uses `console.warn`.
+- **No automatic replay:** ordinary dispatch attempts handlers for that
+  invocation. A crash after commit can lose work. Repeated dispatch can repeat
+  work; there is no durable deduplication in the basic registry.
+- **Synchronous return when possible:** synchronous handlers preserve a
+  synchronous `apply()` result. Returning a promise makes that call
+  asynchronous. Work started without returning its promise does not delay the
+  caller, but the handler must then handle its own later failures.
 
 ```ts
-let fx = effects(vocab, {
-  report: (err, { handler, event }) => log.warn(handler, event.kind, err),
+let reported = effects(vocab, {
+  report: (error, { handler, event }) => {
+    console.warn(handler, event.kind, error)
+  },
 })
 ```
-
-**At most once.** A crash between the commit and the handler loses the run. That
-is the right default for a re-render or a cache eviction; where it is not
-acceptable, see the ledger below.
-
-**Sync stays sync.** Synchronous handlers keep `apply()` synchronous. The first
-handler that returns a promise makes that one call's return value a promise —
-@yaks/graph's sync pass-through, unchanged. A handler that must not delay its
-caller starts its own work and returns nothing.
 
 ## Writing back
 
-Effects write through the graph's `apply()` method.
+Configure `write` to apply a new batch through the graph. Use this setup instead
+of the previous registry construction:
 
 ```ts
-let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
-
-fx.changed('order', 'paid', (e, tx, write) => {
-  write([{ entity: { eid: receipt }, receipt: { order: e.entity.eid } }])
-})
+let fx = effects(vocab, { write: (changes) => g.apply(changes) })
+let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
+fx.created(
+  'post',
+  (event, _tx, write) =>
+    write([{ entity: event.entity, post: { published: false } }]),
+)
 ```
 
-So the write-back is admitted, stamped, cascaded, journaled, broadcast to
-subscribers, and seen by the other effects — none of which a write straight
-through `tx.patch` is. It is a **new batch**, applied after the commit that
-triggered the handler, never a row inserted into a transaction that has already
-finished. `trusted` is what lets an effect write a server-owned column, which is
-most of what effects write.
+Use `{ trusted: true }` in the configured `g.apply()` call if a handler must
+write server-owned columns. Return the callback's result when callers should
+await the write. It receives the usual graph validation, stamps, journal and
+notifications configured on that graph. Direct transaction patches do not run
+that pipeline.
 
-The `tx` a handler also receives stays the detached transaction it always was:
-each call its own unit of work, for **reading** the settled state.
+Writes carry a generation number under `$effect`: initial writes are generation
+0, handler writes are generation 1, and each further handler write increments
+it. Batches beyond `depth` (default 1) still commit but do not trigger more
+handlers. `depth: 0` disables handlers for all effect-generated writes.
 
-Effect writes can trigger more effects. Each batch carries a generation number
-under `$effect`: `0` for an initial write, `1` for an effect's write,
-incrementing for each subsequent handler write. Batches beyond `depth` (default
-`1`) still commit, are journaled, and are broadcast, but do not trigger
-handlers.
+<a id="the-durable-tier-optional"></a>
 
-```ts
-let fx = effects(vocab, { write, depth: 0 }) // an effect's write triggers nothing
-```
+## Durable execution records (optional)
 
-## The durable tier (optional)
-
-Load the `effect` component and wrap the runs, and every run is written down
-before it happens and marked after. A run that did not complete is **tried
-again** — `tries` attempts in all, with a backoff between them — and
-`reconcile()` is the pass that runs what is outstanding: the runs a crash
-interrupted, and the failures whose backoff has elapsed.
+Load `effectDoc` and wrap handler runs with `ledger().around` to persist
+attempts:
 
 ```ts
-import { loadVocab } from '@yaks/vocab'
 import { detached, graph } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
 import { effectDoc, effects, ledger } from '@yaks/effects'
 
-let vocab = loadVocab([effectDoc, blog])
+// appDocs includes the graph and application component declarations.
+let vocab = loadVocab([...appDocs, effectDoc])
 let log = ledger({ owner: 'worker-1' })
 let fx = effects(vocab, { around: log.around })
 let g = graph({ storage, vocab, plugins: [fx] })
 
-fx.created('order', receipt) // …and the rest of the handlers
-
-await log.reconcile(fx, detached(storage)) // at boot, and on a timer after
-```
-
-```
-effect{handler, target, comp, kind, state, attempts, error, next, lease_*}
-```
-
-The retry belongs to the LEDGER, so no handler anywhere carries retry code. How
-many attempts a handler gets is declared by the registration, never by one call:
-
-```ts
 fx.created('order', receipt, { tries: 5 })
-fx.created('agent', launch, { idempotent: false })
+await log.reconcile(fx, detached(storage))
 ```
 
-There are two ways a run does not complete, and they are not the same thing. It
-**reported** — the handler threw, so it got to report the failure before doing
-anything — and the row keeps the error and `next`, the instant its backoff is
-up. Or it was **interrupted**: the process died mid-run, or its lease expired
-while it held it, and nothing records how far it got. A row with no `next` is
-one of those, and it is tried again too, unless its registration set
-`idempotent: false` — a handler that reached an external system and died before
-its row was marked must not reach it twice. After the last attempt the row is
-left `failed` with the last error beside it, for a person to look at
-(`effect_check` is the tool that surfaces those).
+Supply storage created for this vocabulary and application handler `receipt`.
+Register the same handlers before reconciling persisted attempts. Run
+`reconcile()` at startup and subsequently when retries are due; the ledger
+starts no scheduler. `due(tx)` reports the earliest scheduled retry time.
 
-The lease keeps two processes off the same row — a reconciler claims a row
-before running it and skips one whose claim belongs to somebody else and has not
-expired. `due()` returns when the soonest waiting retry falls due, so a sweep
-can sleep until then rather than polling.
+An `effect` row records the handler ID, target, component, event kind, state,
+attempt count, error, next attempt time and lease information. The default is
+three attempts, with exponential backoff starting at one second and capped at
+five minutes. An exhausted run stays `failed`; the `effect_check` tool reports
+failed or overdue runs.
 
-An application that wants none of this loads no `effect` component and stores
-nothing; the in-memory tier needs no component at all.
+The ledger records an attempt **after the original graph commit**, before
+calling the handler, and marks it afterward. A crash between graph commit and
+creation of that record can still lose the event. A recorded attempt may be
+retried after a crash, so external operations need their own idempotency or
+reconciliation.
+
+A handler that throws is eligible for a scheduled retry until it exhausts its
+attempts. Set `{ idempotent: false }` to prevent retrying an interrupted attempt
+whose outcome is unknown. This setting does not prevent retries of reported
+failures, and throwing does not prove an external operation had no effect.
+
+Reconciliation claims pending rows with expiring leases and skips unexpired
+claims belonging to other owners. Retry records do not preserve the original
+column patch: reconciliation rebuilds the event using current target state.
+Handlers needing historical values must store or obtain those values separately.
 
 ## Background jobs, and the one process running each
 
-Some work is nobody's request: the sweep above, a clock that fires what has come
-due, picking back up the child processes a restart left running. Every process
-that opens the graph could do it, and if they all did it would happen twice. So
-each such job is a row.
-
-```
-lease{name, holder, until}
-```
-
-Its eid is derived from the `name`, the way an edge's eid is derived from its
-endpoints and relation, so two processes reaching for one job address the same
-row. Taking it is a write with a `$was` precondition naming the holder and the
-expiry as the taker READ them, so the loser is refused inside the transaction
-rather than overwriting the winner a moment later. Nothing here polls a lock
-table — the graph's own precondition is the lock — and a graph whose vocabulary
-does not declare `lease` has no other process to contend with, so every take
-succeeds and nothing is written.
+The optional `lease` component records `{ name, holder, until }`. Its ID is
+derived from the job name, so contenders address the same entity. `take()` uses
+`$was` preconditions on holder and expiry to decide ownership atomically. The
+holder is an entity reference and must name an existing entity.
 
 ```ts
 import { holding, until } from '@yaks/effects'
 
-// a process that stays up: take the lease, renew it, release it at the end
-await holding(graph, '@yaks/wake', { holder: me, signal }, (s) => clock(s))
-
-// a process passing through: one pass if nobody holds it, then release
-await holding(graph, '@yaks/wake', { holder: me }, (s) => clock(s))
+// g includes effectDoc; me is an existing holder entity.
+await holding(g, 'refresh-index', { holder: me, signal }, async (stopping) => {
+  await refreshIndex()
+  await until(stopping)
+})
 ```
 
-The only difference between the two is the state of the signal. `until` is what
-a pass that has already finished its work waits on, so the lease stays this
-process's while it is up. A holder still working pushes `until` out on a timer;
-one that was killed leaves a row that expires and the next process takes over,
-so nothing has to clean up after it.
+`holding()` waits for a lease, renews it while work runs, and releases it when
+the callback finishes. The callback should honor its signal. With no signal, or
+an already aborted signal, it makes one attempt and returns if another process
+owns the job. `until(signal)` lets completed startup work retain the lease until
+shutdown. A terminated holder's lease eventually expires.
+
+`take`, `drop`, `held`, `released` and `leaseEid` expose the individual
+operations. The default hold duration is 30 seconds. Without a `lease`
+declaration, taking a lease succeeds without storing anything; that mode
+provides no coordination between processes.
 
 ## Composition
 
-[@yaks/graph](../graph/README.md) supplies the write phases and committed
-batches. Effects can run with [@yaks/ram](../ram/README.md) or a database
-adapter. Application plugins register handlers for their components.
+The basic plugin works with `@yaks/ram` or database adapters. Durable attempts
+and leases are graph components stored by the chosen adapter; they survive
+process restarts only when that storage is persistent. Pattern features depend
+on the adapter's query support.
 
 ## External journals and split processes
 
-A journal consumer can feed committed `Event[]` to `fx.dispatch(events, tx)`
-without installing the graph plugin or adopting the package journal layout. The
-consumer owns its cursor and process lease; dispatch does not persist or replay
-anything. Handlers start eagerly and failures stay telemetry. Omit `tx` for
-event-only handlers; trying to read through it then is a reported error, never a
-made-up empty result. The configured `write` callback remains available.
+`fx.dispatch(events, tx?)` accepts committed `Event[]` from an external journal.
+The consumer owns its cursor and process coordination. Dispatch starts handlers
+eagerly and isolates their failures. Without `tx`, event-only handlers work, but
+attempts to read through the transaction are reported as errors. The configured
+`write` callback remains available.
+
+Grouped registrations can select a process class and declare startup work:
 
 ```ts
 let fx = effects(vocab, { want: (where) => where == 'do', write })
 fx.on('order', {
-  where: 'do', // default; applications name their own process classes
+  where: 'do',
   created: ship,
   changed: { address: reroute },
   sweep: { pending: 'shipped_at is null' },
-  doc: 'ship each pending order',
+  doc: 'Ship pending orders',
   wants: (bundles) => [{ eids: bundles.map((b) => b.entity.eid) }],
 })
 await fx.dispatch(events, tx)
 await fx.relay((comp, pending) => pendingRows(comp, pending), tx)
 ```
 
-`want` selects slots in plugin dispatch, external dispatch, `attempt`, and
-`relay`. A pass may override it (and `report`) with the third argument to
-`dispatch` or `relay`. Inline consumers omit it to run every class. `wants` is a
-graph-plugin read declaration, gathered once per grouped registration; an
-external consumer brings its own detached transaction.
+Here `ship`, `reroute`, `write` and `pendingRows` are application functions, and
+`events`/`tx` come from the consumer. The application interprets `pending`; SQL
+is one choice. `relay()` fetches once per sweep declaration and invokes only the
+created handler for each returned row, which must include `eid`. Declaring a
+sweep requires an idempotent handler because reconciliation can repeat work.
 
-A sweep re-runs only the created slot, one fetch per declaration. The reader
-interprets `pending` (SQL above is an application choice), and returns rows with
-`eid`. Sync readers start handlers synchronously; async readers do not block
-other declarations. Fetch failures and individual handler failures are isolated.
-Declaring a sweep promises an **idempotent** handler: this is at-least-once boot
-reconciliation, not an exactly-once delivery guarantee or the optional durable
-ledger. `fx.docs()` lists the actual grouped hooks, pending predicates, and
-descriptions; `fx.slots()` returns individual slots.
+`want` filters graph-plugin dispatch, external dispatch, `attempt` and `relay`.
+The default process class is `do`; without a filter all classes run. The third
+argument to `dispatch` or `relay` can override `want` and `report` for that
+pass. `wants` declares reads gathered for graph-plugin execution; external
+consumers supply their own transaction. `docs()` describes grouped hooks and
+`slots()` lists individual registrations.
+
+## Exports
+
+The root exports `effects`, registry/event/registration types, event derivation
+helpers, effect-write generation helpers, `ledger`, `effectDoc`, retry settings,
+and lease operations. `@yaks/effects/vocab` exports `docs` and `effectDoc`,
+which declare `effect`, `lease` and `effect_check`. `@yaks/effects/tools`
+exports the tool implementations. Loading declarations alone does not install a
+registry or start reconciliation.
+
+## Compatibility
+
+The registry uses TypeScript and standard web APIs. It can run in Deno, Node,
+Workers or browsers with a compatible graph storage adapter.

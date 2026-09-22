@@ -10,7 +10,7 @@ where its public interfaces allow it.
 
 ## Data model
 
-These five terms are used throughout this package and the rest of the family.
+These terms describe the data passed between the packages.
 
 - An **entity** is a thing with a stable id, `entity.eid`. It has no type of its
   own.
@@ -18,12 +18,14 @@ These five terms are used throughout this package and the rest of the family.
   `book: { title: 'Dune' }`. An entity may carry several components; adding one
   does not create a new entity or change its identity. What an entity _is_ is
   decided by which components it carries.
-- A **bundle** is one entity's identity together with its components:
+- A **bundle** is one entity's components as a JSON object, including its
+  identity:
   `{ entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { pages: 412 } }`.
   Bundles are what reads return and what writes are expressed in.
-- A **change** is a flat array of bundles, each acting as a patch: an omitted
-  column is left alone, a `null` column is cleared, a `null` component is
-  removed.
+- A **change** (`Change`) is a flat array of bundle patches. It forms a
+  **batch**: a list of changes applied in one transaction. In each patch, an
+  omitted column is left alone, a `null` column is cleared, and a `null`
+  component is removed.
 - A **transaction** is what `apply(change)` runs the whole array in. Either all
   of it is written or none of it is.
 
@@ -34,14 +36,15 @@ the relationship. The core does not require an application-specific class
 hierarchy for entities.
 
 `entity.num`, when storage assigns one, is a short human-facing number, not an
-identity. Do not use it in place of an eid. The fleet turns off implicit
-numbering with `number: false` and registers `numbers(allocate)` instead. Code
-that creates an entity asks for a number per entity, by writing
-`{ entity: { eid }, $num: true, task: {} }`; the same request later assigns a
+identity. Do not use it in place of an eid. An application can turn off
+automatic numbering in its storage adapter and register `numbers(allocate)`
+instead. Code that creates an entity asks for a number per entity, by writing
+`{ entity: { eid }, $num: true, book: {} }`; the same request later assigns a
 number to an entity that does not have one yet. The allocator runs inside the
 graph's write transaction and must return the existing number when asked again
-for the same entity. Components and display prefixes never request a number.
-`$num` is request-only metadata: it is never part of what `apply()` returns.
+for the same entity. This plugin assigns numbers only in response to `$num`; the
+presence of a component or display prefix does not request one. `$num` is
+request-only metadata: it is never part of what `apply()` returns.
 
 ## Install
 
@@ -61,6 +64,7 @@ const vocab = loadVocab({
   $defs: {
     book: {
       type: 'object',
+      component: true,
       properties: {
         title: { type: 'string' },
         pages: { type: 'number' },
@@ -105,6 +109,12 @@ selects entities that have that component, and `.book.pages>400` filters on a
 property. See [@yaks/query](../query/README.md) for the syntax and which parts
 each adapter supports. An empty query does not mean "dump the database".
 
+`apply(change, { check: true })` runs the write phases and rolls back instead of
+committing; it returns the proposed patches, runs audit hooks, and skips
+effects. `g.rows(query)` returns adapter-specific rows for aggregates and other
+raw query results. `g.ddl()` returns schema statements and `g.install()`
+installs the adapter schema.
+
 Both methods work with synchronous and asynchronous adapters. Using `await` is
 safe either way; a synchronous adapter can also return values directly.
 
@@ -143,7 +153,7 @@ writes themselves, and the observers that run after the commit. In particular:
   transaction.
 - `effect` observers run after the commit. One failing cannot undo a committed
   write.
-- `audit` handles refused transactions.
+- `audit` handles refusals and dry-run rollbacks.
 
 Use [@yaks/effects](../effects/README.md) when a committed state change should
 trigger further work. Do not perform irreversible external operations in a hook
@@ -157,6 +167,14 @@ they do not replace query-time derived properties. The vocabulary, the storage
 adapter, and the registered plugins determine which features are available.
 
 ## Ownership and composition
+
+The graph owns no persistent storage: all entity data is held by the adapter
+passed to `graph({ storage, vocab })`. The root export provides `graph`, the
+interfaces below, and helpers for identity, validation, rules, provenance,
+tools, and transient text. `@yaks/graph/vocab` exports tool declarations as
+`graphDoc` and `docs`; `@yaks/graph/tools` exports `loadTools`, `runs`, and
+`tier` to attach implementations to tool declarations. These are sub-module
+exports.
 
 This package exports the `Bundle`/`Change`, `Storage`/`Tx`, plugin, rule, and
 tool interfaces plus the graph implementation. It does not choose a database or
@@ -199,48 +217,45 @@ supply both. See [`@yaks/vocab` tool declarations](../vocab/README.md#tools) for
 the shared validation and the optional positional and short-flag presentation. A
 tool's noun is unrelated to any graph component name.
 
-### The generic tier's own tool declarations
+<a id="the-generic-tiers-own-tool-declarations"></a>
 
-`@yaks/graph/vocab` carries this package's `vocab.json`: the five tools every
-graph provides — `graph apply`, `graph query`, `graph show`, `graph schema` and
-`search` — declared the same way any other package declares its own, so one file
-states what they are called, what arguments they take and what they do. The
-implementations behind them are [@yaks/mcp](https://jsr.io/@yaks/mcp)'s `core`,
-which joins the two and shapes the tier for one server. No component is declared
-there: the tier describes a store, it does not add anything to one.
+### Built-in tool declarations
+
+`@yaks/graph/vocab` contains the declarations for `graph apply`, `graph query`,
+`graph show`, `graph schema`, and `search`. Their implementations live in
+`@yaks/graph/tools`; [@yaks/mcp](../mcp/README.md) exposes them through its
+`core` helper. `search` is included only when a ranked search function is
+supplied. These declarations add no components to the graph.
 
 ## Rules over more than one entity
 
-A rule about more than one entity is written as several ordinary query patterns
-separated by `;`, one per entity, joined by the variables they share:
+A rule can match several entities using ordinary query patterns separated by
+`;`. Shared variables join the patterns:
 
 ```text
 $call .call; .result, result.call=$call
 ```
 
-`match(source)` parses that into a PLAN — the patterns, their conditions, and
-where each variable's value comes from — and a storage adapter compiles the plan
-into ONE statement using its own compiler (`@yaks/sqlite`'s `statement()`,
-through `@yaks/sql`'s path-to-join lowering, where a `+!comp` condition becomes
-a `left join … is null`). Nothing was added to the query grammar for any of
-this: `$name` on its own is a clause the existing sigils already cover, and a
-value whose raw text begins with `$` is read as that same variable by the
-compiler, which is where `parse()` has always left the interpretation of raw
-tokens.
+`match(source)` parses the rule into a `Match` plan containing patterns,
+conditions, and variable bindings. An adapter's optional `Tx.bindings` method
+then evaluates the plan against stored data together with the pending patches.
+For example, SQLite compiles each plan into a SQL statement and uses temporary
+query sources to include the uncommitted patches; `+!comp` tests for an absent
+component through a left join. `reads(plan, vocab)` lists the components that
+must be included in those sources.
 
-`reads(match, vocab)` returns the components the plan touches — what storage's
-overlay of the pending change has to cover for the compiled statement to see a
-change that has not been written yet (`@yaks/sqlite`'s `overlay()`). That is all
-"rules run before anything is persisted" means: the same statement, reading a
-different source underneath.
+**These rules require `Tx.bindings`.** An adapter without it, including RAM,
+skips declared rules. Use a supporting adapter such as
+[@yaks/sqlite](../sqlite/README.md) when the application depends on them.
 
 ### A rule with no code at all
 
-A plugin can declare rules as data in its `declared` list — a name, the query,
-and the names of the rules it runs `before`:
+A plugin's `declared` list supplies rule names, match queries, and optional
+`before` dependencies. Given a graph `g` whose vocabulary declares `product` and
+`shelf.aisle`, register:
 
 ```ts
-graph.use({
+g.use({
   name: 'shop',
   declared: [{
     name: 'unshelved',
@@ -249,48 +264,47 @@ graph.use({
 })
 ```
 
-The `rules` phase runs them. A `+` or `*` clause may name a column and a value
-(`+result.call=$call`) — the sigil already means "this is written", so naming
-the column it writes is not a second concept — and the value is parsed as that
-column's own type, a `$name` as whatever the match bound it to, and a `#Name` as
-the resource it refers to. A pattern in which every clause writes MATCHES
-nothing: it CREATES its entity, and that entity's id is derived from the rule's
-name and the entities the rule matched, so the same rule on the same match
-produces the same entity, in this change or in a later one.
+This matches a product without a shelf, then adds `shelf: { aisle: 'Z' }`. Rules
+are evaluated during the `rules` phase. A `+` or `*` clause can specify a column
+and value, such as `+result.call=$call`. Literal values are parsed using the
+declared column type, `$name` reads a bound variable, and `#Name` reads a
+registered resource.
 
-Whatever a rule produces joins the change, the overlay is rebuilt, and every
-rule is evaluated again — so a rule can fire on what another rule just wrote.
-This terminates because a rule fires AT MOST ONCE per
-`(rule name, the entities it matched)`: a second firing with the same key is not
-slow convergence, it is a rule whose match does not exclude its own output, and
-it is refused by name and by match. That refusal is the entire termination
-argument.
+A pattern containing only write clauses creates an entity. Its id is derived
+from the rule name and matched entity ids, so repeated evaluation of the same
+match identifies the same created entity.
+
+Generated patches join the pending change and every rule is evaluated again,
+allowing one rule to react to another's output. A rule may fire only once per
+`(rule name, matched entities)` in one application. If it matches again, the
+transaction is refused with the rule name and binding. Write the match so its
+own output makes it stop matching, as `+!shelf` does above.
+
+Declared rules run alphabetically by name, adjusted for `before` dependencies.
+Registration order does not determine their order; cyclic dependencies are
+rejected. Rules can also come from vocabulary documents. Declarations without a
+phase, or with `phase: 'rules'`, run here; other phases need their corresponding
+runner.
 
 ### A template is a rule with its variables supplied
 
-There is no separate template type and no `{{placeholder}}` syntax — the graph
-already had variables. `filled(match, args)` merges a rule's match with the
-arguments, read as a query containing only bindings, and where a bound variable
-sits decides what it does:
+`filled(match, args)` binds arguments into a rule query, with no separate
+placeholder syntax:
 
 ```ts
-filled('+foo.bar=$x', { x: 5 }) // creates an entity with foo.bar = 5
-filled('$p .product, +!sale', { p: 'p1' }) // constrains: that product, no other
+import { filled } from '@yaks/graph'
+
+filled('+foo.bar=$x', { x: 5 }) // a plan that creates foo.bar = 5
+filled('$p .product, +!sale', { p: 'p1' }) // a plan restricted to product p1
 ```
 
-In a match clause a bound variable CONSTRAINS (the column must equal it); in a
-`+` clause it SUPPLIES (the column is written with it); in both, it does both.
-That was already how variables worked — this function only does the merge.
+A bound variable in a match clause constrains that column. In a write clause it
+supplies the value to write. Arguments can also be a query string containing
+bindings.
 
-`invoked(tx, vocab, template, args)` runs one: the same engine the `rules` phase
-runs, called directly with an empty change instead of being asked about a
-pending one. An empty change is also why an invocation has no entity to be about
-— there is nothing for it to be about.
-
-Nothing a rule writes is written by the rule itself. Its patches join the change
-and `mutate` writes them, so a rule's output is admitted, stamped, journaled,
-cascaded and returned exactly like anything a client sent.
-
-The order rules run in is declared, not incidental: alphabetical by name, then
-adjusted by `before`. Registration order never decides it, and two rules that
-each claim to run before the other are refused as the cycle they are.
+`invoked(tx, vocab, template, args)` evaluates the bound plan once, with no
+pending patches, and returns generated bundle patches for the caller to apply.
+It does not write them itself and returns an empty array if `tx.bindings` is
+unavailable. Rules running in the graph's pipeline instead add their patches to
+the current change: those patches receive admission checks, mutation, cascading
+reference handling, stamps, and journaling alongside the caller's changes.

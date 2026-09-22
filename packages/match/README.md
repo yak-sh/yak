@@ -1,33 +1,36 @@
 # @yaks/match
 
-Runs [@yaks/query](../query/README.md) queries against entity bundles held in
-memory — no database and no SQL. `matcher()` selects from an array of bundles,
-including ordering and paging; `filter()` tests a single bundle. Both read a
-[@yaks/vocab](../vocab/README.md) schema to find out which component a column
-belongs to and what type it holds.
+Runs [@yaks/query](../query/README.md) queries against bundles held in memory. A
+bundle is one entity's components as a JSON object. This package stores no data
+itself: callers supply the array to search, and no database is opened.
+`matcher()` selects from an array of bundles, including ordering and paging;
+`filter()` tests a single bundle. Both read a [@yaks/vocab](../vocab/README.md)
+schema to find out which component a column belongs to and what type it holds.
 
 The same query text can be run against a database by
 [@yaks/sql](../sql/README.md), which compiles it into a `SELECT`.
 `parity_test.ts` runs both over identical data and asserts they return the same
-rows. The queries this package refuses, and the two it answers that the SQL side
-refuses, are listed at the end.
+rows for the supported queries covered by those tests. Differences and
+unsupported queries are listed below.
 
 ## Install
 
 ```sh
-deno add jsr:@yaks/match
-# or: npx jsr add @yaks/match
+deno add jsr:@yaks/match jsr:@yaks/vocab
+# or: npx jsr add @yaks/match @yaks/vocab
 ```
 
 ## A bundle
 
-A bundle is one entity with everything stored about it: its identity under
-`entity`, and each component under its own name, columns inside.
+A bundle puts identity under `entity` and each component under its own name,
+with the component's columns inside. For example:
 
 ```ts
-{ entity: { eid: 'b1', num: 3 },
+const b1 = {
+  entity: { eid: 'b1', num: 3 },
   doc: { title: 'The Left Hand of Spring', body: 'a winter journey north' },
-  book: { price: 12, status: 'shelved', author: 'a1' } }
+  book: { price: 12, status: 'shelved', author: 'a1' },
+}
 ```
 
 That is the shape [@yaks/graph](https://jsr.io/@yaks/graph) writes and
@@ -36,15 +39,36 @@ the shape in its own types rather than importing @yaks/graph's `Bundle`, because
 @yaks/graph imports this package to compile its rules; the dependency has to run
 one direction. A @yaks/graph bundle passes wherever this type is asked for.
 
-Every example below runs against the bookshop fixture in `harness.ts`: four
-books (`b1`–`b4`), three reviews (`r1`–`r3`), two authors (`a1`, `a2`), a member
-and a plain document. Entity numbers are assigned in that order, so `b1` is
-number 3.
+The query reference below uses the repository's bookshop fixture in
+[`harness.ts`](./harness.ts): two authors (`a1`, `a2`), four books (`b1`–`b4`),
+three reviews (`r1`–`r3`), a member, a plain document and one deleted review.
+Authors precede books in the array, so `b1` has entity number 3. This fixture is
+not part of the package's public exports.
 
 ## matcher and filter
 
 ```ts
 import { matcher } from '@yaks/match'
+import { loadVocab } from '@yaks/vocab'
+
+const vocab = loadVocab({
+  $defs: {
+    book: {
+      component: true,
+      type: 'object',
+      properties: {
+        price: { type: 'number' },
+        status: { enum: ['draft', 'shelved', 'sold'] },
+        author: { type: 'string', ref: 'entity', death: 'detach' },
+      },
+    },
+  },
+})
+const b4 = {
+  entity: { eid: 'b4', num: 6 },
+  book: { price: 7.5, status: 'shelved', author: 'a1' },
+}
+const bundles = [b1, b4] // b1 is defined above
 
 let cheap = matcher('.status=shelved .price<20 .order=-price', vocab)
 cheap(bundles) // [b1, b4] — the shelved books under 20, most expensive first
@@ -61,7 +85,7 @@ skipped: a bundle with a `tombstone` component, or one carrying the `$delete`
 marker.
 
 `filter()` compiles the same query into a test on one bundle, for a caller that
-wants to re-check the single entity that just changed instead of sweeping the
+wants to re-check the single entity that just changed without searching the
 whole array:
 
 ```ts
@@ -69,11 +93,15 @@ import { filter } from '@yaks/match'
 
 let mine = filter('.status=shelved .author=a1', vocab)
 mine(b1) // true
-mine(b1, everything) // pass the array too when the query follows references or hops
+mine(b1, bundles) // include related entities when following references
 ```
 
 `filter()` ignores `.order`, `.limit` and `.after`. Those describe a sequence,
-and one bundle is not a sequence.
+and therefore do not affect a single-entity test.
+
+Both functions accept a query string or an AST from `@yaks/query`, followed by
+the vocabulary and an optional options object. They return complete input
+bundles: `.fields`, `*` and optional-column predicates do not trim the result.
 
 Both functions take an options object. `opts.now` is the millisecond timestamp
 that relative time phrases (`today`, `1 hour ago`) resolve against; it defaults
@@ -110,7 +138,7 @@ against.
 ### Time columns
 
 A column the vocabulary types as a timestamp reads its operand as a time phrase
-first. A phrase names a span of time, and the operator picks an edge of it:
+first. A phrase defines a time interval, interpreted by the operator:
 
 - `=` — inside the span (`.released=today`)
 - `>=` — from its start (`.released>=yesterday`)
@@ -119,23 +147,23 @@ first. A phrase names a span of time, and the operator picks an edge of it:
 
 A comma list of phrases under `=` is any-of, and under `!=` is none-of. When the
 operand is not a phrase at all, the ordinary rules apply, so
-`.released<2024-01-01` compares strings. Timestamps are stored as ISO 8601
-strings, over which lexicographic order is chronological; a value outside the
-range a canonical stamp lives in is not treated as a stamp and never matches a
-time comparison.
+`.released<2024-01-01` compares strings. The matcher expects canonical ISO 8601
+timestamps whose string order is chronological. Values outside the supported
+timestamp range do not match time comparisons.
 
 ### Components
 
 `.signed!` selects the entities that have the `signed` component, and `.signed=`
-the ones that do not. This works for a component with no columns at all — a tag,
-where having it is the whole fact — as well as for one with columns.
+the ones that do not. This works for a component with no columns at all — a tag
+that records a boolean property through its presence — as well as for one with
+columns.
 
 A trailing `!` on a bare name is resolved as a component before it is resolved
 as a column. In the bookshop `.book!` selects the four books (the entities with
 a `book` component), while `.book=b1` still resolves to `review.book`, the
-reference column of that name, and selects the two reviews of `b1`. Writing the
-component out reaches the column either way: `.review.book!` selects the reviews
-that name a book.
+reference column of that name, and selects the two reviews of `b1`. Use the
+qualified column name to avoid this ambiguity: `.review.book!` selects the
+reviews that name a book.
 
 ### Kinds
 
@@ -167,11 +195,11 @@ component of the path. The absent forms do not require it, so
 `.author.doc.title=` selects entities with no author at all as well as books
 whose author has no title: a missing entity anywhere along the path reads as an
 absent value. @yaks/sql emits the same narrowing, which also lets its query
-planner drive from the root component's table.
+planner start from the root component's table.
 
 ### Reverse hops
 
-A vocabulary derives an association from the far side of a reference: because
+A vocabulary derives a reverse association for a reference: because
 `review.book` points at a book, a book can be asked about its `reviews`.
 
 - `.reviews!` — has at least one review
@@ -183,23 +211,22 @@ A child predicate is compiled by the same clause compiler, over the child
 bundle, so anything refused there refuses the whole hop. A child predicate may
 not reach the identity component: inside the hop, `entity` names the child
 rather than the entity being tested, so `.reviews.entity.num=7` is refused
-rather than quietly answering a different question.
+because this form is unsupported.
 
 ### Backlinks
 
 `.refs=b1` selects every entity holding a reference to `b1`, across every
 reference column the vocabulary declares — in the bookshop, the two reviews of
-that book. Only the `=` form exists: `.refs!` and `.refs=` are refused, because
-"references anything" is a different question, and answering it as a union over
-all reference columns would not be what the query means.
+that book. Only a nonempty `=` operand is supported here. The parser accepts
+`.refs!` and `.refs=`, but this evaluator rejects both.
 
 ### Identity
 
 `.eid=b1`, `.eid=b1,b2` and `.num=3` name entities rather than filter them, and
 are answered as a lookup in the array. A human-readable id works in either
-column: `B-3` is read as the entity numbered 3 (the letter is display, the
-number is the identity), so one operand form fetches by eid, by entity number,
-or by the id a person types.
+column: `B-3` is read as the entity numbered 3 (the prefix is ignored for
+lookup), so one operand form fetches by eid, by entity number, or by the id a
+person types.
 
 ### Walks
 
@@ -220,18 +247,20 @@ One hop is a `(from, to)` pair, and a bundle can state one in three ways:
   `.fork.from.session->S-1` reads this entity → the session of the entry it
   forked from.
 
-The closure is computed breadth-first, once per bundle array, and cached against
-it. The target itself is selected only when a cycle leads back to it. A path
-that is neither a relation tag nor a chain of reference columns is refused.
+Reachable entities are computed breadth-first and cached within each evaluation
+of the supplied array. The target itself is selected only when a cycle leads
+back to it. A path that is neither a relation tag nor a chain of reference
+columns is refused.
 
 ### Full-text terms
 
 A bare word in the query is a full-text term over every stored text column of
-every component the entity has — the same fields a full-text index covers by
-default. It matches whole words, so `fables` finds "writes fables" while `fable`
-finds nothing. A trailing `*` prefix-matches the final word: `catalog*` finds
-"Spring Catalogue". The parser keeps a quoted run together as one term, whose
-words must then appear in that order: `"narrow kitchens"`.
+every component the entity has. This evaluator does not inspect the `search`
+keyword; `@yaks/fts` indexes only columns explicitly marked `search: true`. It
+matches whole words, so `fables` finds "writes fables" while `fable` finds
+nothing. A trailing `*` prefix-matches the final word: `catalog*` finds "Spring
+Catalogue". The parser keeps a quoted run together as one term, whose words must
+then appear in that order: `"narrow kitchens"`.
 
 A token is a run of Unicode letters and digits, lowercased. A term with no word
 in it at all matches nothing, never everything.
@@ -241,64 +270,69 @@ in it at all matches nothing, never everything.
 `.order=price` sorts ascending by that column and `.order=-price` descending.
 Values sort absent first, then numbers, then text — the order SQLite's
 `ORDER BY` gives over the same values — and the entity number breaks ties, so
-the order is total and a page cut here holds the rows a page cut in SQL holds.
+ties are deterministic. Ascending column order puts missing values first;
+descending order reverses that column order.
 
 `.limit=n` keeps the first n results. `.after=<num>` continues past the entity
 with that number, wherever it sits in the order. It is one cursor form for every
-ordering, so a caller pages without ever learning the order key:
+ordering, so callers need only the last entity number to request another page:
 
 - The anchor is looked up in the whole array rather than among the matches, so
   an anchor that no longer matches the query still names a place in the order.
-- An anchor with no value for the ordered column pages on its entity number
-  alone.
-- An anchor no entity in the array has leaves the page whole, which is the first
+- An anchor with no value for the ordered column sorts as an absent value, with
+  its entity number breaking ties.
+- An anchor not found in the array leaves the results unchanged, as on the first
   page.
 
-@yaks/sql compiles the same rule as a keyset predicate, and `parity_test.ts`
-pins the agreement.
+@yaks/sql uses keyset predicates for pagination, and `parity_test.ts` checks
+shared cases. One difference: with no explicit ordering, SQL compares entity
+numbers directly to `.after`, even if that entity is absent; this matcher
+returns the first page when its anchor is absent.
 
 With `.limit` or `.after` but no `.order`, results come back newest entity
-number first. With none of the three, they keep the order they were given. A
-database leaves an unordered result to its query plan, so for a query with no
-`.order` the two evaluators promise the same membership, not the same order.
+number first. With none of the three, this matcher keeps input order while
+`@yaks/sql` defaults to oldest entity number first. For a query without ordering
+or pagination, compare membership rather than result order.
 
 ## Computed columns
 
 A vocabulary can declare a column it never stores (`computed: true`), because
-its formula belongs to the application rather than the schema. No bundle holds a
-value for it, so this package takes the rule from the caller, keyed `comp.prop`
-— the in-memory equivalent of the `derived` hook
+its formula belongs to the application rather than the schema. The caller
+supplies its read function, keyed by `comp.prop`, through `opts.computed`. This
+corresponds to the `derived` SQL expression hook
 [@yaks/sql](https://jsr.io/@yaks/sql) takes:
 
 ```ts
-import { compute, derived } from '@yaks/task'
-
-// one rule, two evaluators
-matcher('.status=open', vocab, { computed: compute() }) // in memory
-compile(ast, vocab, { derived: derived() }) // in a database
+// With the book vocabulary above, override reads of a stored column.
+const discounted = matcher('.price<10', vocab, {
+  computed: {
+    'book.price': (b) => Number((b.book as { price: number }).price) / 2,
+  },
+})
+discounted(bundles) // [b1, b4]
 ```
 
 `opts.computed` maps `comp.prop` to a function of the bundle. The column's type
-still comes from the vocabulary — the vocabulary declares the column, the
-registration only supplies the read — and ordering by a computed column works
-the same way. A registration also serves as a plain read override for a stored
-column. A computed column nobody registered is refused.
+still comes from the vocabulary, and ordering uses the registered function too.
+A registration also serves as a plain read override for a stored column. A
+computed column nobody registered is refused.
 
 ## Refused queries
 
-A question this package cannot answer exactly throws
-[`Unsupported`](https://jsr.io/@yaks/sql/doc/~/Unsupported), the error @yaks/sql
-throws, with its `by` field set to `@yaks/match` to name which of the two
-refused. A caller using both therefore has one error type to catch. Every
-refusal happens when the query is compiled, before any bundle is read.
+Unsupported query features throw
+[`Unsupported`](https://jsr.io/@yaks/sql/doc/~/Unsupported), the error type also
+used by @yaks/sql, with `by` set to `@yaks/match`. A caller using both therefore
+has one error type to catch. Every refusal happens when the query is compiled,
+before any bundle is read.
 
 - **`.near=`** — nearest-neighbour search needs vectors, and **`.edges!`** asks
-  for links to be returned alongside the result. Neither is in a bundle. (Walks
-  are answered; see above.)
-- **`.count!`, `.distinct=`, `.tally=`** — an aggregate is a row shape, not a
-  selection of entities. Count what comes back instead.
-- **A computed column nobody registered** — no bundle holds its value and no
-  rule was handed in. Register it through `opts.computed` and it is answered;
+  for links to be returned alongside the result. This evaluator does not
+  implement either directive. Walks are supported using the supplied entities;
+  see above.
+- **`.count!`, `.distinct=`, `.tally=`** — these return aggregate rows rather
+  than entities. Count what comes back instead.
+- **A computed column nobody registered** — no function was supplied to
+  calculate it. Register it through `opts.computed` and it is answered;
   @yaks/sql refuses the same column for the same reason when its `derived` hook
   has no entry.
 - **`.refs!` and `.refs=`** — only `.refs=<id>` is a question about backlinks.
@@ -306,18 +340,26 @@ refusal happens when the query is compiled, before any bundle is read.
   whose root is not a reference column**, and **a reverse hop that is neither a
   count nor a child filter**.
 
-Two questions it answers that @yaks/sql refuses, because JavaScript can do what
-SQLite cannot:
+The evaluators also differ in their text behavior:
 
 - `~=` with a non-ASCII operand. SQLite's `lower()` folds ASCII only, so the SQL
-  compiler refuses rather than answer almost-right; here the fold is
-  JavaScript's `toLowerCase`.
-- A bare word searches every stored text column. @yaks/sql's built-in SQLite
-  lowering searches one `doc` index, so bare-word results agree for a vocabulary
-  whose prose is in `doc`, or for a compile that registers
-  [@yaks/fts](https://jsr.io/@yaks/fts), whose default field choice is the one
-  used here. Word breaking and case folding are JavaScript's, so text outside
-  the ASCII alphabet is where an index and this package can differ.
+  compiler rejects this operand; here case conversion uses JavaScript's
+  `toLowerCase`.
+- This evaluator can search stored text without a registered extension.
+  `@yaks/sql` requires a text extension such as [@yaks/fts](../fts/README.md).
+  FTS searches only selected columns, normally those marked `search: true`, and
+  treats an unquoted word as a prefix. This evaluator searches every stored
+  scalar text column and requires an explicit trailing `*` for prefix matching.
+  Even with identical fields, tokenization and Unicode case handling can differ.
+  Use the database search when exact agreement with its index is required.
+
+## Exports
+
+The root module exports `matcher`, `filter`, their function and options types,
+`Bundle`, `Eid`, `Computed`, and `live()` to test whether an entity is deleted.
+It also exports the lower-level value helpers `check`, `cmp`, `contains`, `eq`,
+`ne`, `time`, `EXISTS`, and `Check`; the text helpers `search` and `tokens`; and
+`Unsupported`.
 
 ## Compatibility
 

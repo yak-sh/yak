@@ -1,54 +1,60 @@
 # @yaks/d1
 
-A Cloudflare D1 storage adapter for [@yaks/graph](../graph/README.md). It uses
-the SQLite schema and write planning from [@yaks/sqlite](../sqlite/README.md),
-and implements asynchronous reads and batched writes through a D1 binding.
+A Cloudflare D1 storage adapter for [@yaks/graph](../graph/README.md). It stores
+graph data in the D1 database supplied by the application, using the schema and
+write statements from [@yaks/sqlite](../sqlite/README.md). Reads and
+transactions are asynchronous.
 
-For bundle structure, write phases, and adapter responsibilities, see the
+A **bundle** is one entity's components represented as a JSON object. A
+**batch** is a list of changes applied in one transaction. D1's `batch()` API
+executes the SQL statements implementing those changes atomically. Application
+reads made before that call are outside the database transaction; see
+[The transaction](#the-transaction).
+
+For graph write phases and adapter responsibilities, see the
 [graph architecture](../graph/ARCHITECTURE.md).
 
 ## Install
 
 ```sh
-deno add jsr:@yaks/d1
-# or: npx jsr add @yaks/d1
+deno add jsr:@yaks/d1 jsr:@yaks/graph jsr:@yaks/vocab
 ```
 
 ## What it is
 
-D1 is a serverless SQLite reachable only over an async API, so this adapter is
-**async end to end**: every read and every write returns a promise. It composes
-the yaks query → vocabulary → SQL stack over a D1 binding to satisfy the
-`Storage` interface:
+`storage(binding, vocab, base?)` implements the graph `Storage` interface over a
+D1 binding. It compiles queries, reads matching entities as bundles, and applies
+patches. The graph handles validation, plugins, and deletion policy.
 
-- **read** — a query in, matching entities out as whole bundles;
-- **write** — a change patched into rows, with the death cascade a delete
-  implies.
+This Worker example assumes an existing D1 binding named `DB`. Its type is
+expressed using the package's structural interface; a Cloudflare `D1Database`
+satisfies that interface.
 
 ```ts
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
-import { storage } from '@yaks/d1'
+import { type D1Like, type Stmt, storage } from '@yaks/d1'
 
-// A bookstore: an entity is whatever components it has. A book is a `doc`
-// plus a `book`; a review is a `doc` plus a `review` pointing at the book.
-let shelf = loadVocab({
+let vocab = loadVocab({
   $defs: {
     doc: {
+      component: true,
       type: 'object',
       kind: true,
       properties: { title: { type: 'string' }, body: { type: 'string' } },
     },
     book: {
+      component: true,
       type: 'object',
       kind: true,
+      before: ['doc'],
       properties: {
-        pages: { type: 'number' },
         price: { type: 'number' },
         status: { enum: ['draft', 'listed', 'sold'] },
       },
     },
     review: {
+      component: true,
       type: 'object',
       kind: true,
       properties: {
@@ -60,154 +66,152 @@ let shelf = loadVocab({
 })
 
 export default {
-  async fetch(_req: Request, env: { DB: D1Database }) {
-    let store = storage(env.DB, shelf)
-    await store.install() // create-if-not-exists; safe on every request
-
-    let g = graph({ storage: store, vocab: shelf })
-
+  async fetch<S extends Stmt<S>>(_req: Request, env: { DB: D1Like<S> }) {
+    let store = storage(env.DB, vocab)
+    await store.install()
+    let g = graph({ storage: store, vocab })
     await g.apply([
       { entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { price: 12 } },
       { entity: { eid: 'r1' }, review: { stars: 5, book: 'b1' } },
     ])
-
-    let cheap = await g.read('.kind=book&.price<20&.order=-price')
-    return Response.json(cheap)
+    return Response.json(await g.read('.kind=book&.price<20&.order=-price'))
   },
 }
 ```
 
+The example initializes the schema and writes sample data on every request for
+simplicity. Applications should initialize schema deliberately and map requests
+to their own authorized operations. `install()` runs vocabulary-derived DDL; it
+does not implement the embedded adapter's full schema-upgrade procedure.
+
+## API and exports
+
+The package has one import path, `@yaks/d1`. `storage` returns a `Store` with:
+
+| Method               | Result                                                    |
+| -------------------- | --------------------------------------------------------- |
+| `ddl()`              | SQL schema statements, synchronously                      |
+| `install()`          | Promise resolving after schema statements execute         |
+| `read(query, opts?)` | Promise of matching bundles                               |
+| `rows(query, opts?)` | Promise of raw rows, including aggregates and projections |
+| `tx(body)`           | Promise of the callback result after its writes commit    |
+
+Read options are `@yaks/sql`'s bind options, such as `derived`, `extend`, and
+`now`; per-call options override `base`. Human numbering is opt-in through
+`base.number: true`, or `{ except: ['entry'] }` for component exclusions.
+
+The root also exports `D1Like`, `Stmt`, `D1Stmt`, `D1Result`, value/row types,
+`bind`/`unbind`, query/gather helpers, shared SQL write builders, and graph
+`Storage`/`Tx` types. See [mod.ts](./mod.ts) for the complete list.
+
 ## Async, with sync pass-through
 
-`Storage` is async-**or**-sync, and @yaks/graph threads either: its `then`
-awaits a promise and passes a plain value straight through. So the **same**
-`apply()` — the same phases, the same plugins, the same death cascade — is
-synchronous over [@yaks/sqlite](https://jsr.io/@yaks/sqlite) and asynchronous
-here, and nothing in between has to know which.
+The graph accepts storage methods returning either values or promises. Over D1,
+`read()` and `tx()` always return promises, so await graph operations. With
+synchronous SQLite storage, graph operations can return immediately unless a
+plugin makes them asynchronous.
 
-`parity_test.ts` runs the conformance script that ships beside the reference
-adapter through a graph over D1 and a graph over in-process SQLite, and asserts
-they never disagree — same bundles returned, same batches refused, same entities
-read back — while asserting that this side did in fact go async.
+`parity_test.ts` runs the shared storage conformance cases over D1 and embedded
+SQLite, checking returned bundles, rejected changes, and asynchronous behavior.
+These shared cases do not remove the D1 transaction limitations below.
 
 ## The transaction
 
-**Read this before you rely on it.** D1's shape is not the shape an embedded
-database has, and this adapter does not pretend otherwise.
-
 ### What D1 gives
 
-`batch()` runs a list of statements sequentially inside one implicit
-transaction, and rolls the whole list back if any statement fails. That is a
-true atomic write.
-
-What D1 does **not** give is an _interactive_ transaction: there is no call that
-opens a transaction, lets your code read, decide, and write inside it, and
-commits at the end. Nothing holds a lock while your code thinks.
+D1's `batch()` executes statements sequentially in one implicit transaction and
+rolls them all back if a statement fails. It does not provide an interactive
+transaction in which application code reads, decides, and writes while retaining
+a database lock.
 
 ### What `tx()` does about it
 
-A transaction here is **deferred-write**:
+| Operation          | Behavior                                                                   |
+| ------------------ | -------------------------------------------------------------------------- |
+| Read               | Executes immediately against committed data, with pending changes overlaid |
+| Write              | Collects SQL statements without sending them                               |
+| Callback completes | Sends collected statements in one D1 `batch()`                             |
+| Callback fails     | Discards unsent statements                                                 |
 
-|        |                                                      |
-| ------ | ---------------------------------------------------- |
-| reads  | run immediately, against the committed database      |
-| writes | gathered as statements, not sent                     |
-| return | flushes the gathered statements as **one** `batch()` |
-| throw  | discards them — nothing was ever sent                |
+The callback may be asynchronous. Write statements resolve ids inside SQL, such
+as `select id from entity where eid = ?`, so references created in the same
+write resolve when the statements execute. Both this package and `@yaks/sqlite`
+use the same statement builders.
 
-Every statement is written to be self-sufficient so that it can wait: an owner
-id is a subquery (`select id from entity where eid = ?`) rather than a value
-looked up first, so a batch that creates an entity and then points at it
-resolves inside the batch, in order, with no round trip. Those statements are
-[@yaks/sqlite](https://jsr.io/@yaks/sqlite)'s — one write path, run one at a
-time over an embedded engine and gathered into a batch here — so a patch cannot
-mean one thing in one store and something else in another.
-
-**Read-your-own-writes** is served from an in-memory overlay, not from the
-database. `apply()` needs it — the cascading delete has to find who points at a
-deleted entity _after_ the batch's own patches have been applied — so every
-entity the transaction has written is held in memory in the state it will have
-once the batch commits, and a read inside the transaction returns the committed
-result with those entities replaced by their pending state, re-evaluated with
-[@yaks/match](https://jsr.io/@yaks/match) (the same query grammar the database
-implements). A transaction that has not written anything yet never routes a
-query through the overlay, and reads exactly as the database does.
+An in-memory overlay supplies read-your-own-writes: the adapter keeps the
+pending state of changed entities, replaces their committed results, and
+evaluates those entities with [@yaks/match](../match/README.md). This lets
+cascading deletion see reference changes made earlier in the same operation.
+Before any pending writes, reads use the database result directly. Overlay
+queries have the capabilities and limits of the in-memory matcher, including its
+available reference data and extensions; they are not a second execution of SQL
+against pending rows.
 
 ### What is not promised
 
-- **The write is atomic. The transaction is not serializable.** The reads are
-  not enrolled in the write batch, because D1 has nowhere to put them. Between a
-  read and the flush another writer may move what was read. This is
-  read-committed with an atomic write batch.
-- **`$was` is exact against your own concurrency, best-effort against a
-  simultaneous writer.** The precondition check reads the current value and
-  rejects the batch if it changed — which catches every stale write it can see —
-  but the window between that read and the flush is not locked, so a writer who
-  commits inside that window is not detected. Over @yaks/sqlite the same guard
-  is exact. If a lost update is unacceptable for a given column, D1 is the wrong
-  store for it.
-- **A new entity's `num` is not known until the batch commits.** SQLite assigns
-  it when the insert runs — inside the batch's own transaction, so it is exact
-  under a concurrent writer, and nothing has to read a high-water mark first.
-  `patch` returns each newly created entity without a number, and the flush
-  fills it in from that insert's `returning`, before `tx()` resolves.
-- **A nested `tx()` is a separate batch.** D1 has no savepoints. Nothing in
-  `apply()` nests one.
+- **Serializable reads and writes:** reads are outside the final write
+  transaction. Another writer may commit between a read and the flush.
+- **Complete concurrent `$was` protection:** the graph checks preconditions
+  against the values it can read, but a writer committing afterward and before
+  the flush can escape detection. Use storage with an interactive transaction
+  when these guards must prevent lost updates.
+- **Immediate numbers:** when numbering is enabled, a new identity's `num` is
+  assigned by the insert inside the write transaction. `patch` initially returns
+  the identity without its number; the adapter fills it from `RETURNING` before
+  `tx()` resolves.
+- **Nested rollback:** a nested `tx()` creates an independent write transaction;
+  D1 has no savepoints. The graph's normal `apply()` does not nest transactions.
 
-The failure D1 cannot prevent is a lost update that nothing detects. The failure
-it _does_ prevent — a half-written batch — it prevents completely.
+The write statements are atomic even though the preceding reads are not isolated
+from concurrent writes.
 
 ### Ordering within a transaction
 
-A read inside a transaction returns the committed matches in the database's
-order, then the transaction's own pending matches after them. A `.order=` over a
-set the batch itself changed is therefore ordered within each part rather than
-across both. Nothing in `apply()` orders a read; this matters only if your own
-hook does.
+Overlay reads return unchanged committed matches in database order, followed by
+matching pending entities in the matcher's order. Ordering and limits are
+therefore applied separately to these parts, not to the combined result. Hooks
+requiring a globally ordered or paginated view of pending changes cannot rely on
+this overlay behavior.
 
 ## Composition
 
-One of three interchangeable adapters behind the same `Storage` interface:
+`@yaks/d1`, `@yaks/sqlite`, and
+[@yaks/durable-object](../durable-object/README.md) implement the same graph
+storage interface, with different transaction guarantees. D1 uses the SQLite
+layout: an identity table, component tables with integer references, tombstones,
+declared indexes, and schema metadata. It does not open or provision the D1
+database.
 
-- **@yaks/d1** — Cloudflare D1, async (this package);
-- **[@yaks/durable-object](https://jsr.io/@yaks/durable-object)** — a Durable
-  Object's embedded, synchronous SQLite;
-- **[@yaks/sqlite](https://jsr.io/@yaks/sqlite)** — in-process SQLite, and the
-  reference every adapter is held to.
-
-The schema is @yaks/sqlite's: D1 _is_ SQLite, so the DDL a vocabulary implies is
-derived in one place and this package runs it. The per-component read is shared
-the same way, so a column the filter resolves one way cannot be read back
-differently — and so is the write path, statement for statement. What this
-package owns is the number of round trips — a whole bundle, however many
-components, is read in one `batch()` rather than one statement at a time — and
-the transaction described above.
+The adapter shares per-component read and write planning with SQLite. It sends
+component gathers together in one D1 call instead of making a separate remote
+call for each component. An ordinary query first selects matching ids and then
+fetches their components; that is more than one call, and the selection and
+gather are not one read snapshot.
 
 ## Types
 
-The published source uses only the Workers runtime API and standard web APIs;
-the D1 interface is declared structurally (`D1Like`, `Stmt`) so nothing here
-depends on Cloudflare at runtime. `conform.ts` checks those declarations against
-`@cloudflare/workers-types` itself, under its own `deno check` (the runtime's
-types are globals, so one file includes them and the rest of the repo does not).
+`D1Like<S>` describes `prepare` and `batch`. `Stmt<S>` describes statement
+`bind` and `all` methods. The statement is generic because it is both returned
+by `prepare` and accepted by `batch`; this preserves compatibility with the
+binding's own statement type.
 
-A prepared statement is a **type parameter** rather than a narrowed slice,
-because it is both what `prepare` returns and what `batch` takes — a slice would
-have to be a supertype and a subtype of `D1PreparedStatement` at once. The
-adapter treats a statement as opaque: it binds values, runs it, or passes it
-back.
+`conform.ts` checks these interfaces against `@cloudflare/workers-types` in an
+isolated type-check, keeping Workers globals out of other packages:
+
+```sh
+deno check --config packages/d1/workers.json packages/d1/conform.ts
+```
 
 ## Compatibility
 
-Runs anywhere a D1 binding does — **Cloudflare Workers** — and, because the
-binding is structural, on **Deno** and **Node** against any object with the same
-`prepare`/`batch` shape. The package imports no runtime-specific API.
+Designed for a Cloudflare Worker with a D1 binding. The package imports no
+Cloudflare runtime code and can also run under Deno or Node with an object
+implementing the same binding interface, as the test harness does.
 
 ## Values
 
-D1's own type table, applied at the edge: `null`, numbers, strings and booleans
-bind as they are (a boolean stores as 0/1); a `bigint` becomes a number, which
-D1 requires; a `Uint8Array` becomes the `ArrayBuffer` it is a window onto. On
-the way back, a BLOB — which D1 returns as an array of byte values — becomes
-bytes again, so a caller cannot tell which database served the read.
+`bind` passes strings, numbers, and booleans through, maps null/undefined to
+null, converts bigints to numbers, and copies the selected range of a
+`Uint8Array` into an `ArrayBuffer`. Converting a bigint to a number can lose
+precision outside JavaScript's safe-integer range. `unbind` converts
+array-valued BLOB results into `Uint8Array` values.

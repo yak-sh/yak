@@ -1,29 +1,33 @@
 # @yaks/sync
 
-Keeps a local [@yaks/graph](../graph/README.md) in step with a server. It is a
-graph plugin: it forwards local writes to the server as `POST /apply`, and it
-opens a WebSocket to `/ws` where it holds subscriptions and applies what the
-server pushes back.
+Synchronizes a local [@yaks/graph](../graph/README.md) with a server
+implementing [@yaks/api](../api/README.md). It registers a graph plugin that
+sends writes to `POST /apply`, opens query subscriptions on `/ws`, and applies
+server responses to the local graph. Use it when a UI needs local reads and live
+server updates.
 
-Each component declares whether the server ever sees it and how long its value
-lives, so a component the server owns and a component that never leaves the
-browser can be written in the same call. This package does not store the
-components that never leave; it only reports which ones those are.
+A **bundle** is one entity's components as a JSON object, including its identity
+under `entity`. A **batch** is a list of changes applied in one transaction;
+here it is an array of bundle patches passed to `apply()`.
 
-For the structure of a bundle, the phases of a write, and what a storage adapter
-is responsible for, see the [graph architecture](../graph/ARCHITECTURE.md).
+This package stores connection, subscription, and pending-request state in
+memory. Entity data lives in the graph's storage adapter. It provides neither
+persistent storage nor a durable queue for offline writes. Components can
+declare local-only state; retaining that state across restarts is the caller's
+responsibility. See the [graph architecture](../graph/ARCHITECTURE.md) for the
+write pipeline and storage interfaces.
 
 ## Install
 
 ```sh
-deno add jsr:@yaks/sync
-# or: npx jsr add @yaks/sync
+deno add jsr:@yaks/sync jsr:@yaks/graph jsr:@yaks/ram jsr:@yaks/vocab
+# Node projects can use: npx jsr add @yaks/sync @yaks/graph @yaks/ram @yaks/vocab
 ```
 
 ## Use
 
-The examples use a shared recipe box: recipes with a course and a serving count,
-notes about them, cooks who wrote them.
+The server and client must load compatible component definitions. This example
+expects an API server at `https://recipes.example`:
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -31,88 +35,89 @@ import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { sync } from '@yaks/sync'
 
-let vocab = loadVocab(recipeBox)
-let g = graph({ storage: ram(vocab, { adopt: true }), vocab })
-let link = sync(g, { url: 'https://recipes.example' })
+const vocab = loadVocab({
+  $defs: {
+    recipe: {
+      type: 'object',
+      component: true,
+      properties: {
+        title: { type: 'string' },
+        serves: { type: 'number' },
+        course: { type: 'string' },
+      },
+    },
+  },
+})
+const g = graph({ storage: ram(vocab, { adopt: true }), vocab })
+g.install()
+const link = sync(g, {
+  url: 'https://recipes.example',
+  report: (trouble) => console.error(trouble),
+})
+const id = link.subscribe('.recipe.course=dinner&.recipe.serves>4')
 
-link.subscribe('.course=dinner&.serves>4')
-```
-
-That is the whole setup. From then on:
-
-```ts
-g.apply([{
+await g.apply([{
   entity: { eid: crypto.randomUUID() },
-  doc: { title: 'Dal' },
-  recipe: { serves: 4, course: 'dinner' },
+  recipe: { title: 'Dal', serves: 6, course: 'dinner' },
 }])
-// → the bundles, immediately. No await: the page renders now, and the POST to
-//   the server happens in the background.
+console.log(await g.read('.recipe'))
+await link.idle() // wait for the queued HTTP requests to settle
+link.unsubscribe(id)
+link.close()
 ```
 
-`ram(vocab, { adopt: true })` matters: a client store has to accept the identity
-the server assigns rather than assign its own, so the `num` a recipe has here is
-the `num` it has everywhere.
+With synchronous storage and hooks, `g.apply()` commits locally and returns
+synchronously; `await g.apply()` does not wait for the server's response.
+`adopt: true` lets RAM accept server number corrections for existing entities.
+RAM numbering is off by default: use `{ number: true, adopt: true }` if new
+incoming entities must adopt supplied numbers on their first patch, accepting
+that local creations will receive provisional numbers.
 
 ## Writes are optimistic
 
-An `apply()` call takes a list of bundles and commits all of them or none of
-them; this README calls that list a batch. A batch commits **locally first** —
-that is what makes a render instant — and is then sent to the server as
-`POST /apply`. Three things can come back.
+A batch without deletions commits locally before the HTTP request completes.
+Requests are sent serially in local commit order. The outcome is handled as
+follows:
 
-**Applied.** The server responds with the batch as IT applied it: the numbers it
-assigned, the stamped columns it wrote, a tombstone for every entity its cascade
-deleted. That response is applied back through the local graph, so the client
-ends up holding exactly what a fresh read would return. It is marked on the way
-in, so the plugin that sent the write does not immediately send the response
-back out again.
+- **Applied:** server patches, including assigned numbers, stamps, and
+  tombstones, are applied locally with `trusted: true`. They are marked to
+  prevent the plugin from sending them back. A response is a set of applied
+  patches, not a complete snapshot of every affected entity.
+- **Refused:** an HTTP error response causes the plugin to apply inverse patches
+  from the state recorded before the local write. These restore touched columns,
+  clear previously absent values, and remove newly introduced components. The
+  `report` callback receives the refusal, sent batch, and whether it reverted
+  local data.
+- **Unreachable:** a failed request is reported with `reverted: false`. The
+  local change remains because the server may have applied it before the
+  connection failed. There is no automatic HTTP retry or guarantee that a later
+  response will resolve this uncertain outcome.
 
-**Refused.** The optimistic change is undone. Before the patches went in, the
-plugin recorded each entity the batch was about to change, as it then stood; the
-inverse of that batch restores every column it touched, clears the columns that
-had no value, and drops the components it introduced. The refusal is then
-reported, along with the batch that caused it.
+A batch containing any deletion waits for the server before applying locally.
+Graph tombstones are permanent, so an optimistic deletion could not be undone.
+The whole batch is held, including its other patches. A refusal therefore has
+nothing local to revert. The server's response supplies the tombstones for an
+accepted deletion.
 
-```ts
-let link = sync(g, {
-  url: 'https://recipes.example',
-  report: (t) => {
-    // t.reverted tells you whether the local change was undone
-    if (t.refused) toast(t.refused.message)
-  },
-})
-```
-
-**Unreachable.** Nothing is undone. A request that never got a response may
-still have been applied on the server, and a client that guesses wrong about
-that turns a network blip into data loss. The failure is reported with
-`reverted: false`, and the write stands locally until a later response
-reconciles it.
-
-One exception, and it comes from the graph model rather than from this package:
-**a delete is not optimistic.** Deletion is final in a yaks graph — an eid is
-tombstoned and can never be reused — so a refused delete could never be patched
-back. A batch that deletes anything is therefore held out of the local graph and
-sent as it stands; the server's response arrives carrying its own tombstones,
-and a refusal is reported with `reverted: false` because nothing was applied
-locally. The cost is one round trip before the delete renders.
+The plugin's inverse patches operate on the touched columns; they do not provide
+a general conflict-resolution algorithm for overlapping optimistic edits.
 
 ## Three kinds of state, one apply()
 
-A client holds three kinds of state at once: what the server owns, what this
-browser owns, and what dies with the tab. Each component declares which kind it
-is, using the two core [@yaks/vocab](https://jsr.io/@yaks/vocab) keywords:
+The vocabulary keywords `sync` and `durable` describe where component updates
+are sent and how they should be retained:
 
 ```json
 {
   "$defs": {
     "recipe": {
       "type": "object",
+      "component": true,
       "properties": { "serves": { "type": "number" } }
     },
     "draft": {
       "type": "object",
+      "component": true,
       "sync": "none",
       "properties": { "text": { "type": "string" } }
     }
@@ -120,149 +125,145 @@ is, using the two core [@yaks/vocab](https://jsr.io/@yaks/vocab) keywords:
 }
 ```
 
-| `sync`     | who is told about a write                               |
-| ---------- | ------------------------------------------------------- |
-| `"server"` | the server, which owns it and fans it out — **default** |
-| `"peers"`  | the server, which relays it without storing it          |
-| `"none"`   | nobody: it stays on the node that wrote it              |
+| `sync`               | Delivery                                                                        |
+| -------------------- | ------------------------------------------------------------------------------- |
+| `"server"` (default) | Sent through `POST /apply` for the server to store.                             |
+| `"peers"`            | Sent over the WebSocket for the server to relay as connection-associated state. |
+| `"none"`             | Kept in the local graph; never sent by this plugin.                             |
 
-| `durable`      | how long the value lives                                     |
-| -------------- | ------------------------------------------------------------ |
-| `"forever"`    | storage — the server's, or this client's vault — **default** |
-| `"connection"` | memory, for as long as the writing connection lives          |
-| `"5s"`, `"2m"` | the same, plus a timer restarted on each write               |
+| `durable`             | Intended lifetime                                                        |
+| --------------------- | ------------------------------------------------------------------------ |
+| `"forever"` (default) | Persistent storage on the server, or local persistence for `sync: none`. |
+| `"connection"`        | Memory associated with the writing connection.                           |
+| `"5s"`, `"2m"`        | Connection-associated memory with an expiry timer renewed on each write. |
 
-Both are core vocabulary keywords, so nothing has to be registered:
-`syncOf(vocab, 'draft')` and `durableOf(vocab, 'draft')` read them back, and for
-a component that never leaves this node, `local(vocab, 'draft')` returns
-`'vault'` or `'memory'` — where its value would have to be kept, since no server
-will send it back. All three kinds go through the same `apply()`: a batch that
-writes a recipe and its unsaved draft in one call commits once, and only the
-recipe is sent to the server.
+`syncOf(vocab, name)` and `durableOf(vocab, name)` read these keywords.
+`local(vocab, name)` returns `'vault'` for local-only persistent state,
+`'memory'` for other local-only state, and `null` for state sent to the server.
+Here `'vault'` is an API value meaning caller-provided local persistence; the
+helper does not implement it or enforce expiry timers.
 
-What is sent is narrower than what was written, in three ways. Each of them is
-the same idea — the server has no use for the local graph's conclusions about
-itself:
-
-- only components whose `sync` is not `none`;
-- only the columns a client is allowed to write (a `created` stamp is the
-  server's to write);
-- only the bundles a **caller** passed to `apply()` — the entities a local
-  cascade deleted and the provenance a local stamping phase wrote are
-  conclusions the server will reach again from the same patch.
+One `apply()` can contain both a recipe and its local draft. Both commit in the
+same local transaction, but only the recipe is posted. Outgoing data contains
+only caller-supplied patches and writable columns. Computed columns, server
+stamps, and patches generated by local cascading or provenance rules are
+excluded; the server computes its own results. `outward` selects `sync: server`
+components and preserves `$was` checks and deletion requests. Peer updates use
+the socket without those checks or deletion requests.
 
 ## Reading is a subscription
 
-`subscribe(query)` sends `{"subscribe": "<query>", "id": "s1"}` over the
-WebSocket at `/ws`. The server's answer, and every later change to the set it
-selects, arrives as a frame on that socket and is applied to the local graph —
-so a render reads the local store and never awaits.
+`subscribe(query)` sends `{"subscribe": "<query>", "id": "s1"}` over `/ws`. The
+server sends an initial answer followed by updates; the plugin applies them to
+the graph for local reads. Until the initial answer arrives, a local read can
+return cached or incomplete data.
 
-```ts
-let id = link.subscribe('.course=dinner')
-g.read('.course=dinner') // → bundles, synchronously, from the local map
-link.unsubscribe(id)
-```
+`subscribe(true)` requests the raw stream of committed patches instead of a
+query result. `ready(id)` indicates whether an answer has been successfully
+applied on the current connection. `onReady(fn)` reports readiness changes,
+including an empty initial answer; it does not call the listener immediately.
+`refresh(id)` resends a subscription, or all subscriptions when no id is given.
 
-`subscribe(true)` asks for the raw feed instead: every committed batch, exactly
-as `POST /apply` returned it.
+A frame's `gone` list names entities that left its result set. The plugin
+removes those entities' synchronized components while retaining their identity
+and any `sync: none` components. It preserves entities still held by another
+active subscription. Removal from a result set is not a deletion: only an
+incoming `tombstone` permanently deletes an entity. Retained local components
+can still match local queries.
 
-An entity that **leaves** the set arrives in a frame's `gone` list. The frame
-does not distinguish a deletion from an entity that merely stopped matching, so
-this package removes that entity's server-owned components rather than
-tombstoning it: an entity with no components matches no query — which is what
-leaving the set means — and it can come back whole when it matches again, where
-a tombstone could never be lifted. A deletion still tombstones, because a
-deletion arrives as a `tombstone` component inside the frame's bundles.
-
-`ready(id)` reports whether a subscription has applied an answer on the current
-connection, and `onReady(fn)` calls `fn` when that changes — rows left over from
-an earlier connection do not count as ready. `refresh(id)` re-sends one
-subscription (or all of them) to get a fresh full answer.
+For bounded retention or partial query results, supply a `replica` policy; see
+below. The standalone plugin applies incoming bundles as patches. Replacing
+omitted columns from complete snapshots requires the exported `snapshot` helper
+or a replica that uses it.
 
 ## Reconnecting
 
-A socket dies for reasons that have nothing to do with the client: a laptop lid,
-a deploy, a proxy timeout. So:
+The socket reconnects with a delay that doubles from 250 ms to 30 seconds and
+resets when it opens. `wait` and `most` customize these limits. One reconnect
+timer is scheduled per connection manager.
 
-- there is **one** reconnect timer per graph, with a delay that doubles from 250
-  ms to a 30 s ceiling and resets the moment a socket opens — a second timer is
-  how a server that is merely slow acquires a client that hammers it;
-- every subscription is sent again on the new socket;
-- the first frame of each is treated as a **reset**. The server tracks
-  membership per connection, so a fresh subscription answers with the set as it
-  stands and reports nothing about what left while the client was away. This
-  package therefore tracks each subscription's members itself, and reports
-  whatever it was holding and did not hear about again as gone.
+All subscriptions are resent after reconnecting. Their first successful frames
+are treated as complete replacement result sets. The connection manager compares
+new membership with the previous set and adds missing entities to `gone`,
+including entities that left while disconnected. Readiness resets on a new
+connection; old cached rows do not make a subscription ready.
 
 ## Both transports are injected
 
+`fetch` accepts a `Request` and returns a `Response` or promise, so an
+`@yaks/api` handler can be used directly in a test. `connect` accepts a socket
+URL and returns the package's `Socket` interface. Defaults use global `fetch`
+and `WebSocket`; `timer` defaults to `setTimeout`.
+
 ```ts
-sync(g, {
+const link = sync(g, {
   url: 'https://recipes.example',
-  fetch: (request) => myHandler(request), // default: the global fetch
-  connect: (url) => new MySocket(url), //    default: the global WebSocket
-  timer: (fn, ms) => setTimeout(fn, ms), //   default: setTimeout
+  fetch: (request) => myHandler(request),
+  connect: (url) => new MySocket(url),
+  timer: (fn, ms) => setTimeout(fn, ms),
   headers: { authorization: `Bearer ${token}` },
 })
 ```
 
-`fetch` takes a `Request` and returns a `Response`, which is exactly what an
-[@yaks/api](https://jsr.io/@yaks/api) handler is — so this package's own tests
-run a client graph and a server graph in one process, with no network and no
-sleeps.
+This example assumes the application supplies `g`, `myHandler`, `MySocket`, and
+`token`. `headers` applies to HTTP writes only. Socket authentication belongs to
+the supplied connection mechanism or the server's session handling.
 
 ## API
 
-```ts
-sync(graph, opts): Sync
-```
+`sync(graph, options)` registers a plugin and returns a `Sync` object:
 
-registers the plugin on `graph` and returns:
+| Member                         | Purpose                                                                     |
+| ------------------------------ | --------------------------------------------------------------------------- |
+| `plugin`                       | The registered graph plugin.                                                |
+| `subscribe(query, id?, opts?)` | Register a subscription and return its id.                                  |
+| `unsubscribe(id)`              | Remove a subscription.                                                      |
+| `refresh(id?)`                 | Request a fresh answer for one or all subscriptions.                        |
+| `ready(id)`                    | Check whether an answer has been applied on this connection.                |
+| `onReady(fn)`                  | Add a readiness listener and return its removal function.                   |
+| `open()`                       | Open the socket without adding a subscription.                              |
+| `connected()`                  | Check whether the socket is currently open.                                 |
+| `idle()`                       | Wait for the currently queued HTTP writes to settle, including failures.    |
+| `close()`                      | Close the socket, stop reconnecting, and clear subscriptions and listeners. |
 
-- `plugin` — the `Plugin` it registered, for a caller that wants to inspect it.
-- `subscribe(query, id?, opts?): string` — open a subscription; returns its id.
-- `unsubscribe(id): void` — close one.
-- `refresh(id?): void` — re-send one subscription, or all of them, to get a
-  fresh full answer.
-- `ready(id): boolean` — whether that subscription has applied an answer on the
-  current connection.
-- `onReady(fn): () => void` — register a callback for readiness changes,
-  including an empty first answer; the returned function removes it.
-- `open(): void` — open the socket without subscribing to anything.
-- `connected(): boolean` — whether the socket is open right now.
-- `idle(): Promise<void>` — resolves when every batch in flight has been
-  answered. Await it before unloading a page, and in tests.
-- `close(): void` — close the socket and stop reconnecting.
+`close()` does not abort queued HTTP writes or unregister the graph plugin.
+Finish pending work before discarding the graph. `idle()` does not imply that
+every write succeeded, and a browser unload does not guarantee time to await it.
 
-Pass a `replica` in the options to supply your own working-set policy —
-retention, ownership of which entities a subscription holds, and protection for
-entities with a write in flight. Frames that carry partial-row coverage or
-payload riders require one.
+A `replica` option supplies `subscribe`, `unsubscribe`, `land`, and `protect`
+methods to manage retained entities, subscription ownership, and pending-write
+protection. It is required for frames carrying `coverage` or `peerCoverage`
+(component/column scope), `peers` (additional related-entity data), or
+`peerGone` (departures from that additional data). The
+[@yaks/client](../client/README.md) package composes this policy for client
+state.
 
-The pieces are also exported on their own, so an application that is assembled
-differently can use them without calling `sync()`: `outward` (what a committed
-batch sends to the server) and `inverse` (how to undo it), `post` (send one
-batch and reconcile the response), `land` and `strip` (what an incoming frame
-does to a graph), `wire` (the socket and the subscriptions held open across it),
-and the marks `echo` and `asking` that keep the two directions apart.
+The root module also exports these lower-level helpers and their public types;
+there are no sub-module exports:
+
+- State selection: `syncOf`, `durableOf`, `local`, `outbound`, and `outward`.
+- HTTP reconciliation: `post` and `inverse`.
+- Incoming frames: `land`, `strip`, and `snapshot`.
+- Sockets: `wire` and `backoff`.
+- Internal request/response marks: `asked`, `asking`, `before`, `clean`, `echo`,
+  `echoed`, `ECHO`, and `SENT`.
+- Partial-result scope: `covers` and `delivered`, with the `Coverage` type.
+- Worker messages: `portLink`, described below.
 
 ## Compatibility
 
-**Browser, Deno, Node, Bun, and Cloudflare Workers.** The package imports no
-platform-specific API: `fetch` and `WebSocket` are read out of the injected
-options (the globals are only a default), and it type-checks under
-`lib: ["dom", "esnext"]` with no `Deno` types in the compilation at all. Its
-dependencies are the sibling packages: `@yaks/graph` for bundles, `apply()` and
-the plugin interface, and `@yaks/vocab` for the `sync` and `durable` keywords.
+The package targets browsers and server JavaScript runtimes with web transport
+APIs, including Deno, Node, Bun, and Cloudflare Workers. Inject `fetch` or
+`connect` when the runtime does not provide a compatible default. It is checked
+with `lib: ["dom", "esnext"]` and no Deno types. Runtime dependencies are
+`@yaks/graph` and `@yaks/vocab`.
 
 ## Related packages
 
-[@yaks/graph](https://jsr.io/@yaks/graph) owns bundles and `apply()`;
-[@yaks/ram](https://jsr.io/@yaks/ram) is the map a client keeps them in;
-[@yaks/api](https://jsr.io/@yaks/api) implements the server side of the
-subscriptions this package opens; [@yaks/query](https://jsr.io/@yaks/query) is
-the grammar a subscription is written in. This package connects the two ends.
+[@yaks/graph](../graph/README.md) defines graph writes;
+[@yaks/ram](../ram/README.md) supplies local in-memory storage;
+[@yaks/api](../api/README.md) implements the server protocol;
+[@yaks/query](../query/README.md) defines subscription query syntax.
 
 ## License
 
@@ -270,14 +271,15 @@ Apache-2.0
 
 ## Workers and MessagePorts
 
-`portLink(port, options)` carries the same requests and subscription frames over
-a `Worker` or a `MessagePort` instead — no HTTP, no JSON serialization, no
-sockets. Both ends use the same function. It supports request/reply calls and
-the `Frame` type described above. A receiver applies subscription frames with
-`land(graph, frame)`; on the server side those frames can come from @yaks/api's
-`subscriptions` registry.
+`portLink(port, options)` sends requests and subscription frames over a `Worker`
+or `MessagePort` using structured-clone messages. Both ends use the same helper.
+The receiver supplies an explicit `receive(method, value)` handler for supported
+operations. It can send subscription frames from the API's `subscriptions`
+registry; the client can apply them with `land`:
 
 ```ts
+import { land, portLink } from '@yaks/sync'
+
 const client = portLink(worker, {
   frame: (frame) => {
     void land(localGraph, frame)
@@ -286,32 +288,28 @@ const client = portLink(worker, {
 await client.request('subscribe', ['books', '.book'])
 ```
 
-The receiving end supplies an explicit `receive(method, value)` handler. Only
-expose the operations you intend the other end to call. This helper does not
-authorize queries, and it does not implement optimistic writes, reconnection, or
-subscription membership; those stay the responsibility of whoever assembles the
-two ends. In particular, `land` removes the components of `gone` entities, so
-overlapping subscriptions must not evict data another subscription still needs.
+This fragment assumes an existing `worker`, `localGraph`, and a server handler
+for `subscribe`. The helper does not provide authorization, optimistic writes,
+reconnection, or subscription ownership. Direct `land` calls remove synchronized
+components for `gone` entities; the caller must protect entities still held by
+overlapping subscriptions.
 
-Requests have a 30-second default timeout and a limit of 256 outstanding
-requests, both configurable through `timeout` and `maxPending`. A timeout
-rejects the caller; it **does not cancel an operation that may already have
-run**. Do not blindly retry writes. `close()` removes the message listeners and
-rejects pending requests, but does not terminate or close the port, which
-belongs to the caller. `stats` counts messages sent, messages received, and
-subscription frames. Frame streams have no credit-based backpressure yet.
+Requests time out after 30 seconds by default, with at most 256 outstanding
+requests. Configure these using `timeout` and `maxPending`. A timeout rejects
+the caller but does not cancel an operation already running at the other end.
+`close()` removes listeners and rejects pending requests without closing or
+terminating the caller-owned port. `stats` counts sent messages, received
+messages, and subscription frames. Frame streams do not implement credit-based
+backpressure.
 
 ### Request deadlines
 
-`portLink` requests use the link's configured timeout (30 seconds by default). A
-caller can override it per request:
+Override the timeout per request when an operation can take longer:
 
 ```ts
-await link.request('close', undefined, { timeout: null })
+await client.request('close', undefined, { timeout: null })
 ```
 
-`null` disables the deadline for that request only. Closing the link, the other
-end disconnecting, and worker errors all still reject it. This is for graceful
-drains whose duration is not known in advance, and it leaves deadlines in place
-on ordinary requests. A caller can still keep a separate explicit force-close
-action.
+`null` disables that request's deadline. Link closure, detected disconnection,
+and worker errors still reject it. This allows graceful shutdown to finish
+without changing the deadlines on ordinary requests.

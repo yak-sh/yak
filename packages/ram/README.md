@@ -1,169 +1,153 @@
 # @yaks/ram
 
-An in-memory [@yaks/graph](../graph/README.md) storage adapter backed by a Map.
-It evaluates queries with [@yaks/match](../match/README.md) and requires no
-database. State is lost when the store is discarded; use a persistent adapter or
-client persistence when data must survive a restart.
+An in-memory storage adapter for [@yaks/graph](../graph/README.md). It keeps
+entities in a JavaScript `Map` and evaluates queries with
+[@yaks/match](../match/README.md), without a database or index. Use it for
+tests, browser state, or a local copy of server data. Discarding the store loses
+its contents; persistence must be supplied separately.
 
-For bundle structure, write phases, and adapter responsibilities, see the
-[graph architecture](../graph/ARCHITECTURE.md).
+A **bundle** is one entity's components as a JSON object, including its identity
+under `entity`, for example `{ entity: { eid: 'b1' }, book: { pages: 412 } }`. A
+**batch** is a list of changes applied in one transaction. The graph accepts a
+batch of bundle patches through `apply()`; this adapter provides their storage.
+See the [graph architecture](../graph/ARCHITECTURE.md) for the write phases.
 
 ## Install
 
 ```sh
-deno add jsr:@yaks/ram
-# or: npx jsr add @yaks/ram
+deno add jsr:@yaks/ram jsr:@yaks/graph jsr:@yaks/vocab
+# Node projects can use: npx jsr add @yaks/ram @yaks/graph @yaks/vocab
 ```
 
 ## Use
 
 ```ts
 import { graph } from '@yaks/graph'
-import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
 
-let vocab = loadVocab({
+const vocab = loadVocab({
   $defs: {
-    entity: { type: 'object', wire: false, properties: {} },
-    doc: {
-      type: 'object',
-      kind: true,
-      properties: { title: { type: 'string' }, body: { type: 'string' } },
-    },
     book: {
       type: 'object',
-      kind: true,
-      before: ['doc'],
+      component: true,
       properties: {
+        title: { type: 'string' },
         pages: { type: 'number' },
-        author: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },
   },
 })
-
-let g = graph({ storage: ram(vocab), vocab })
-
-g.apply([
-  { entity: { eid: 'a1' }, doc: { title: 'Ursula Vale' } },
-  {
-    entity: { eid: 'b1' },
-    doc: { title: 'Dune' },
-    book: { pages: 412, author: 'a1' },
-  },
+const g = graph({ storage: ram(vocab), vocab })
+g.install()
+await g.apply([
+  { entity: { eid: 'b1' }, book: { title: 'Dune', pages: 412 } },
 ])
-
-g.read('.pages>300') // → the bundles, no await
+console.log(await g.read('.book.pages>300'))
 ```
 
-Nothing here returns a promise, so a browser page can run a query during a
-render and a test can write a whole corpus in one line.
+The adapter's reads and writes are synchronous. A graph using it also runs
+synchronously when its plugins do; `await` works with either return form.
 
-You can also use the store on its own, without a graph — but then you are
-patching rows rather than applying changes, and none of the rules `apply()` owns
-(admitting columns, checking `$was`, cascading deletes, recording provenance)
-are applied:
+You can use the adapter directly, but `tx.patch()` bypasses graph validation,
+`$was` preconditions, reference-deletion rules, plugins, and provenance stamps:
 
 ```ts
-import { ram } from '@yaks/ram'
-
-let store = ram(vocab)
+const store = ram(vocab)
 store.tx((tx) => tx.patch([{ entity: { eid: 'b1' }, book: { pages: 412 } }]))
-store.read('.kind=book')
+console.log(store.read('.book'))
 ```
 
 ## API
 
-```ts
-ram(vocab, base?) // bind a store to a vocabulary
-```
+The root export provides `ram` and the types `Store`, `Tx`, `RamOpts`, and
+`Query`. There are no sub-module exports.
 
-returns a `Store` — @yaks/graph's `Storage`, implemented synchronously:
+`ram(vocab, options?)` returns a `Store` implementing the graph's `Storage`
+interface:
 
-- `ddl(): string[]` — `[]`. A Map has no schema.
-- `install(): void` — a no-op, for the same reason. Both are here so a caller
-  can swap this adapter for a database one without changing a line.
-- `read(query, opts?): Bundle[]` — a query → the matching entities as bundles,
-  ordered and windowed as the query asks.
-- `rows(query, opts?): Row[]` — one raw `{ eid }` row per match, the same shape
-  a database adapter returns; `.count!` returns the single `{ value: '', n }`
-  row @yaks/sql returns.
-- `tx(body): R` — run `body` against a transaction, committing when it returns
-  and rolling back if it throws. Transactions nest: an inner one rolls back to
-  where it opened, and an outer rollback still undoes what it committed. The
-  transaction offers:
-  - `read(query, opts?): Bundle[]` — as above.
-  - `get(eids): Bundle[]` — lookup by id, not search: these entities, whole. A
-    deleted one comes back with a `tombstone` component; an unknown one is
-    absent.
-  - `patch(bundles): Entity[]` — apply these patches → the entities they
-    CREATED, each with the `num` it was given.
-  - `remove(entities): void` — drop their components and tombstone them.
+| Method               | Result                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| `ddl()`              | An empty array; there is no database schema to create.                                   |
+| `install()`          | Does nothing.                                                                            |
+| `read(query, opts?)` | Matching bundles, ordered and paginated as requested.                                    |
+| `rows(query, opts?)` | One `{ eid }` row per match, or a single `{ value: '', n }` row for `.count!`.           |
+| `tx(body)`           | The callback's result; commits on success and rolls back on a throw or rejected promise. |
 
-`base` (and a per-call `opts`) carries `now`, the moment a relative time phrase
-in a query resolves against, and `adopt`.
+A transaction provides `read`, `get(eids)`, `patch(bundles)`, `evict(eids)`, and
+`remove(entities)`. `get` returns complete stored bundles, includes tombstones,
+and omits unknown ids. `patch` returns the identities it created. `evict`
+removes live component data while reserving the identity for later reuse;
+`remove` permanently tombstones the entity. Eviction does not remove tombstones.
+
+Options are:
+
+- `now`: reference time for relative time expressions in queries. A read's
+  `opts.now` overrides it.
+- `number`: enable automatic numbering with `true`, or exclude specified
+  components with `{ except: ['componentName'] }`. Numbering is off by default.
+- `adopt`: accept numbers supplied by another store. Off by default. See below
+  for how this interacts with `number`.
 
 ### Writes are patches
 
-- **omitted columns are untouched** — a patch names only what changes,
-- **a column set to `null` is cleared**,
-- **a component set to `null` is dropped** — the entity stays,
-- **a tombstoned entity takes no patch** — death is final; ids never recycle.
+- An omitted column keeps its value.
+- A column set to `null` is cleared.
+- A component set to `null` is removed, leaving the entity's identity.
+- Undeclared and computed columns are not stored.
+- A tombstoned entity cannot receive component patches or be recreated.
 
 ### Identity, and `num`
 
-Identity belongs to storage. `patch` creates a record for every eid the write
-touches **or points at** — so a reference may name a target the same write
-creates, in any order — and numbers each new one in the order it was first
-touched, starting at 1. `num` is therefore always present, which is what makes
-`.limit`/`.after` paging and `.order` mean the same thing here as against a
-database. A rolled-back write releases the numbers it took.
+`entity.eid` is the identity. `entity.num` is an optional display number.
+`patch` creates an identity for every eid the write names or references,
+allowing references to entities created later in the same batch.
 
-`ram(vocab, { adopt: true })` reverses that: a patch whose identity already
-carries a `num` keeps it, and an entity this store numbered itself accepts the
-correction when one arrives. That is what a store MIRRORING another graph needs
-— a page using [@yaks/sync](https://jsr.io/@yaks/sync) is told its identities by
-the server rather than assigning them — so a recipe has the same number in the
-browser as it has in the database. Off by default: a store that mirrors nothing
-owns its own numbering.
+With `number: true`, new identities receive sequential numbers starting at 1, in
+first-reference order. Rollback restores the counter. With
+`number: { except: [...] }`, entities carrying an excluded component remain
+unnumbered; adding that component also removes an existing number.
+
+`adopt: true` accepts a supplied number as a correction to an existing identity.
+For a new identity, it adopts the supplied number only when numbering is
+enabled; without `number`, that new identity initially contains only its eid. A
+client that needs server numbers on the first incoming patch can use
+`ram(vocab, { number: true, adopt: true })`. Locally created entities then
+receive provisional numbers that later server responses can correct.
 
 ### Rollback
 
-A record is never mutated in place: a patch builds the next record and puts it
-in the map. So the transaction keeps an **undo log** — one entry per entity it
-is about to change, holding that entity's previous record — and rolls back by
-replaying it backwards (and restoring the number counter). Nothing the write did
-not touch is copied, so a rollback costs what the write changed, not what the
-map holds.
+Transactions record previous entity records and restore them on failure, along
+with the number counter and any evicted identity reservations. Nested
+transactions act as savepoints: an inner rollback undoes only its changes, and
+an outer rollback also undoes successful inner transactions. The undo log covers
+only changed records, without copying the entire store.
 
 ## Differences from a database adapter
 
-There are two, and both come from the map being simpler than a database rather
-than the adapter being lax:
+RAM returns the columns that were written, whereas a SQL adapter can return
+`null` for declared columns that have never been written. Missing and `null`
+values have the same meaning in query matching. RAM also preserves JavaScript
+value types; a SQL adapter may return an integer for a stored boolean.
 
-- **A read returns the columns that were written.** A database reads back every
-  declared column, with `null` for the ones never written; the map holds what it
-  was given. A missing column and a `null` one mean the same thing in this model
-  — including to `@yaks/match`, which is what answers the queries — so no query
-  can tell them apart.
-- **A value keeps its type.** A boolean stays `true`, where a database column
-  with integer affinity reads back as `1`.
+Unsupported queries throw `Unsupported` from `@yaks/match`. Examples include
+`.tally`, `.distinct`, `.near`, `.edges!`, and computed columns. Count is
+available through `rows()`, not `read()`. See the
+[matcher documentation](../match/README.md) for the supported subset. Text
+search matches tokens in stored text without a full-text index or relevance
+ranking; it does not promise the tokenization of every database's full-text
+engine.
 
-A query these reads cannot answer exactly — an aggregate other than a count
-(`.tally`, `.distinct`), a nearest-neighbour search (`.near`), the `.edges!`
-clause, a computed column — throws `@yaks/match`'s `Unsupported`, the same error
-`@yaks/sql` throws; that package's README lists every case. There is no
-full-text index either: a bare word is matched token by token over the text the
-bundles hold, which selects what an index over the same words would select,
-without the ranking.
+RAM does not implement `Tx.bindings`, so the graph's multi-entity declarative
+rules are skipped with this adapter. Ordinary graph hooks and per-entity rules
+still run.
 
 ## Compatibility
 
-Pure TypeScript. It imports no platform API — no `Deno`, no Node built-in, no
-DOM global — and type-checks under `lib: ["dom", "esnext"]`, so it runs
-unchanged in a **browser**, on **Deno**, and on **Node** (via JSR / npm). Its
-only dependencies are the sibling packages: `@yaks/graph`'s `Storage` interface
-and bundle types, `@yaks/match` for the reads, and a `@yaks/vocab` schema.
+Pure TypeScript, with no Deno, Node, or DOM-specific imports. The adapter is
+checked with `lib: ["dom", "esnext"]` and can run in browsers and server
+JavaScript runtimes. Its runtime dependencies are `@yaks/graph`, `@yaks/match`,
+and `@yaks/query`; `@yaks/vocab` supplies schema types.
 
 ## License
 

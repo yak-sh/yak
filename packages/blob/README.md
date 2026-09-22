@@ -1,13 +1,14 @@
 # @yaks/blob
 
-Content-addressed storage for long text columns, and for binary files. Mark a
-string column in the schema and its value moves out of the row: the row keeps
-the SHA-256 of the text, the bytes go to a byte store — a database table, a
-directory, or an object bucket — and writes and reads still deal in text. Two
-rows holding the same value share one stored copy.
+Stores text and binary content under SHA-256 addresses. A marked string property
+keeps its content address in the component row while its UTF-8 text is stored in
+a separate table, directory or object store. Configured graph writes and reads
+still accept and return text, and identical values share stored content.
 
-For bundle structure, write phases, and what a storage adapter is responsible
-for, see the [graph architecture](../graph/ARCHITECTURE.md).
+A **bundle** is one entity's components as a JSON object. A **batch** is a list
+of changes applied in one transaction. The **host** is the process that opened
+the graph, such as `yak serve` or a CLI command. See the
+[graph architecture](../graph/ARCHITECTURE.md) for the write phases.
 
 ## Install
 
@@ -18,47 +19,51 @@ deno add jsr:@yaks/blob
 
 ## Mark the column
 
-```json
-{
-  "$vocabulary": {
-    "https://json-schema.org/draft/2020-12/schema": true,
-    "https://yaks.sh/vocab/core": true,
-    "https://yaks.sh/vocab/blob": true
+Declare a string property with `store: 'blob'` and register `blobKeywords` when
+loading the schema:
+
+```ts
+let blog = {
+  $defs: {
+    entity: {
+      component: true,
+      type: 'object',
+      properties: { num: { type: 'number', stamped: true } },
+    },
+    post: {
+      component: true,
+      type: 'object',
+      kind: true,
+      properties: {
+        title: { type: 'string', search: true },
+        body: { type: 'string', store: 'blob', search: true },
+      },
+    },
   },
-  "$defs": {
-    "post": {
-      "type": "object",
-      "kind": true,
-      "properties": {
-        "title": { "type": "string" },
-        "body": { "type": "string", "store": "blob" }
-      }
-    }
-  }
 }
 ```
 
-That is the entire declaration. To validation, to query compilation, and to the
-JSON a client sends and receives, `body` is a plain string column and stays one.
+The property remains a string in validation and client JSON. `search: true` is
+optional and selects the property for `@yaks/fts`. Without `blobKeywords`, the
+schema's string columns still exist, but this package does not recognize them as
+blob-backed columns.
 
 ## What the address is
 
-An object's key is the lowercase-hex SHA-256 of its bytes, and a caller never
-chooses it:
+`address(text)` computes the lowercase hexadecimal SHA-256 of UTF-8 text
+synchronously using `@yaks/graph`'s digest. `addressOf(bytes)` computes the same
+kind of address for arbitrary bytes using asynchronous `crypto.subtle.digest`.
+`encode()` and `decode()` convert between strings and UTF-8 bytes.
 
-- For a text column, the address is the SHA-256 of the text's UTF-8 encoding.
-  `address(text)` computes it with @yaks/graph's synchronous digest rather than
-  `crypto.subtle`, whose promise would make every write to a body column
-  asynchronous — including one over an embedded database that is otherwise
-  synchronous end to end.
-- For binary bytes, the address is `addressOf(bytes)`, which uses
-  `crypto.subtle.digest('SHA-256', …)` and therefore returns a promise.
-
-Two things follow, and the rest of the package relies on both: writing the same
-value twice produces one stored object, and an object fetched under an address
-is always the one that hashes to it.
+The low-level store interface expects a valid address supplied by the caller; it
+does not itself prove that bytes match that address. `artifactStore()` computes
+addresses, and `keep()` verifies stored content. Use these helpers when storing
+binary artifacts rather than assuming every backend validates keys and data.
 
 ## Configure storage and the plugin
+
+This example continues with `blog` above. Supply a synchronous SQLite `driver`
+with `query(sql, params)` and `exec(sql)` methods:
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
@@ -74,41 +79,34 @@ import {
 
 let vocab = loadVocab([blog], [blobKeywords])
 let bytes = sqliteBlobs(driver)
-let db = storage(driver, vocab, { derived: blobRead(vocab) })
-for (let stmt of [...db.ddl(), ...blobSchema()]) driver.exec(stmt)
+let store = storage(driver, vocab, { derived: blobRead(vocab) })
+for (let statement of [...store.ddl(), ...blobSchema()]) driver.exec(statement)
+let g = graph({ storage: store, vocab, plugins: [blobs(vocab, bytes)] })
 
-let g = graph({ storage: db, vocab, plugins: [blobs(vocab, bytes)] })
-
-g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay…' } }])
-db.read('.post!')[0].post.body // 'a long essay…'
+g.apply([{ entity: { eid: 'p1' }, post: { body: 'A long essay.' } }])
+let [post] = store.read('.post!')
+console.log(post.post) // { body: 'A long essay.' }
 ```
 
-The caller writes and reads text. The component table stores an address, and
-`sqliteBlobs` stores the text in a separate table, deduplicated by address. A
-vocabulary loaded without `blobKeywords` declares no body columns at all, so the
-plugin is a no-op on it rather than a surprise.
+The component table contains the address; `blob_text` contains the text. Both
+use the same driver so their writes participate in the same transaction.
 
 ## When the swap happens
 
-The plugin replaces text with addresses in the `precondition` phase, and puts
-the text back into the bundles `apply()` returns at `commit`.
+The plugin replaces marked strings with stored references during `precondition`,
+inside the transaction and after the graph's `$was` guard checks the text the
+caller read. It restores text in the bundles returned from `apply()` during
+`commit`.
 
-It cannot run earlier: `normalize`, `admit` and `mint` are all outside the
-transaction, and a committed row must never point at bytes that were never
-written. It cannot run later: by the time a `mutate` hook is called, the core
-has already handed the rows to storage. `precondition` is also the correct side
-of the `$was` precondition guard — the guard hashes the value the caller read,
-and what a caller reads is the text, so it must run against text, and the core's
-guard runs before this hook.
+`normalize`, `admit` and `mint` run before the transaction, so they are too
+early to make transactional blob inserts. `mutate` hooks run after the graph has
+passed component rows to storage, so they are too late to replace the values.
 
-With `sqliteBlobs` on the same driver, the blob inserts and the component writes
-are in one transaction. The file and object stores are not, so a graph write
-that fails afterwards can leave bytes that no row references.
+SQLite blob inserts and component writes commit together only when they use the
+same active connection. Files and object stores are outside that transaction; a
+later graph failure can leave unreferenced content there.
 
 ## The byte stores
-
-`Blobs` is the interface a byte store implements: three methods keyed by
-address, over `Uint8Array`.
 
 ```ts
 type Blobs = {
@@ -118,159 +116,124 @@ type Blobs = {
 }
 ```
 
-Each method may return a value or a promise, the same rule @yaks/graph's
-`Storage` follows: a table in the database you are already writing answers
-immediately and keeps `apply()` synchronous, while a bucket across the network
-answers with a promise and makes it asynchronous. Three implementations ship:
+Methods can return values or promises. Synchronous storage preserves synchronous
+graph writes; an asynchronous backend makes those writes asynchronous.
 
-| function                       | where the bytes go                      | synchronous |
-| ------------------------------ | --------------------------------------- | ----------- |
-| `sqliteBlobs(driver, layout?)` | a `(sha, value)` table beside your rows | yes         |
-| `fileBlobs(dir)`               | one file per address, `<dir>/<sha>`     | no          |
-| `objectBlobs(bucket, prefix?)` | an S3-shaped bucket (R2, …)             | no          |
+| Backend                        | Storage                                       | Return style |
+| ------------------------------ | --------------------------------------------- | ------------ |
+| `sqliteBlobs(driver, layout?)` | A SQL table, default `blob_text(sha, value)`  | Synchronous  |
+| `fileBlobs(dir)`               | One file per address at `<dir>/<sha>`         | Asynchronous |
+| `objectBlobs(bucket, prefix?)` | Objects accessed through `head`, `get`, `put` | Asynchronous |
 
-`sqliteBlobs` is the one to reach for first: the bytes commit in the same
-transaction as the row that addresses them, there is no second thing to back up,
-and it is the only store SQL can read **through**, which is what `blobRead`
-needs. Its value column is TEXT, so it is for prose — it refuses bytes that are
-not valid UTF-8, because a text column has no representation for them and an
-address that answered mangled bytes would break the one promise content
-addressing makes. `blobSchema(layout?)` returns the `create table` statement.
+`sqliteBlobs` stores **text** and rejects bytes that are not valid UTF-8. Its
+inserts use `insert or ignore`. `blobSchema(layout?)` returns its DDL
+statements. `Layout` can rename `table`, `key` and `value`, whose defaults are
+`blob_text`, `sha` and `value`. Existing tables must have the matching shape.
 
-`fileBlobs` looks its runtime's filesystem up on `globalThis.Deno` rather than
-importing one, so the module type-checks with only the web platform in scope and
-throws when called where there is no filesystem. The file is named by the
-address this package computed, never by anything a caller sent, so no path can
-escape the directory.
+`fileBlobs` uses `globalThis.Deno` filesystem functions. It creates the
+directory on the first write; writes fail without those functions, while reads
+return `undefined` on filesystem errors. Pass only validated SHA-256 addresses
+to this low-level adapter: it joins the supplied key directly to the directory
+path.
 
-`objectBlobs` accepts any object with `head`, `get` and `put`. Cloudflare's
-`R2Bucket` satisfies that as it stands — `conform.ts` type-checks the
-hand-written `Bucket` against the R2 types under `deno task check:workers` — so
-this package depends on no cloud SDK and still runs inside one.
-
-Writing another store is those three functions.
-
-`Driver` (`./driver.ts`) is the SQLite handle `sqliteBlobs` runs statements
-through: `{ query(sql, params) => rows, exec(sql) }`. It is deliberately the
-smallest shape a SQLite binding can satisfy, so nothing here names a concrete
-library and an application that already has a database hands over the two
-methods it has. A @yaks/sqlite storage adapter's driver is one of these.
+`objectBlobs` accepts the exported `Bucket` interface. Cloudflare R2 bindings
+satisfy that interface; other object storage clients may need a wrapper. The
+package imports no cloud SDK.
 
 ## Reading it back
 
-Two ways, because a store the database can read into and one it cannot are
-different problems:
+`blobRead(vocab, layout?)` produces `@yaks/sql` derived read overrides. Pass
+these to `storage(..., { derived })` so both predicates and returned properties
+use the text. It requires a SQL-accessible text table such as `sqliteBlobs`; it
+cannot read an external directory or bucket inside a query.
 
-- **`blobRead(vocab, layout?)`** returns @yaks/sql read overrides, one per body
-  column, each resolving the address inside the SQL statement. Pass them to
-  `storage()` as `derived` and both a query predicate (`.body~=spain`) and a
-  whole-entity read come back as text, in one round trip. This works only for
-  `sqliteBlobs`, or for an existing table of the same shape.
-- **`hydrate(vocab, store, bundles)`** is for the file and object stores: it
-  takes bundles, fetches each address, and returns bundles. It is asynchronous
-  only when the store is. An address the store does not hold is left in place
-  rather than blanked — an unresolvable address is a better answer than a lost
-  row.
-
-Every name in `Layout` is configurable — `table` (default `blob_text`), `key`
-(`sha`), `value` (`value`) — because the table is often one an application
-already has. Point `Layout` at it and the existing rows are readable as they
-stand.
+`hydrate(vocab, store, bundles)` fetches marked values after a read and returns
+bundles containing text. It returns a promise only when the backend does. If an
+address is missing, it leaves the stored reference in place. Hydration alone
+does not make SQL predicates on externally stored text work.
 
 ## Indexing the text
 
-A swapped column stores its **address**, so a full-text index built straight
-over it holds hashes and a search matches titles alone.
-`blobText(vocab, layout?)` is the resolution — a `comp.prop` map from SQL that
-names an address to SQL that names its text — and both `@yaks/fts` and
-`@yaks/sqlite` accept one:
+An FTS index built directly from a blob-backed column would index addresses.
+Supply text-resolution expressions when creating the index:
 
 ```ts
 import { fields, schema } from '@yaks/fts'
 import { blobText } from '@yaks/blob'
 
-for (let stmt of schema(fields(vocab), blobText(vocab))) db.exec(stmt)
-// or, for the `doc` index @yaks/sqlite ships:
-// let store = storage(driver, vocab, { text: blobText(vocab) })
+for (let statement of schema(fields(vocab), blobText(vocab))) {
+  driver.exec(statement)
+}
 ```
 
-The words reach the index on every write path, because it is the table's own
-triggers that resolve them — the plugin's write, a plain `insert`, a restore.
-Resolving there is sound: a blob is immutable and content-addressed, so the
-delete side of an external-content index reads exactly what the insert side did.
+`blobText()` maps `component.property` to a function that turns a stored-address
+SQL expression into a text expression. The same map is accepted as
+`@yaks/sqlite`'s `text` option for its document index.
 
-`blobRead(vocab, layout)` is also accepted by `@yaks/fts`'s
-`schema(fields, reads)`: the same registry resolves query predicates, bundle
-reads and the indexed words. Each override carries a `text(stored)` expression
-as well as `expr(owner)`, because an FTS delete trigger has to resolve
-`old.body` rather than look the owner up after its row has changed or
-disappeared. `blobText()` is the address-only form, for callers that already
-hold a stored value.
+`blobRead()` is also accepted by `@yaks/fts`'s `schema()`. Its `text(stored)`
+expression resolves the old value in delete/update triggers, while `expr(owner)`
+handles ordinary reads. Triggers and the FTS content view resolve the same text,
+so graph writes, direct SQL writes and index rebuilds use consistent content.
+Store the content before inserting a referencing component row. For existing
+rows/indexes, use `@yaks/fts`'s `heal()` or `adopt()` as appropriate.
 
 ## Binary files
 
-`artifactStore(blobs)` takes bytes and a media type and returns
-`{ address, media_type, size }` once the store has been read back and confirmed
-to hold them. Use `fileBlobs` or `objectBlobs` for images and other binary
-content, not the SQLite text table. Identical bytes share one address.
+`artifactStore(store)` returns a function accepting `(bytes, mediaType)` and
+resolving to `{ address, media_type, size }` after storing and verifying the
+bytes:
 
-`keep(store, address, bytes)` is that store-and-verify step on its own: writing
-the same pair twice is a no-op, an existing corrupt or partial object is
-rewritten, and a store that hands back anything else throws instead of letting a
-row point at the wrong object.
+```ts
+import { artifactStore, fileBlobs } from '@yaks/blob'
 
-`sizeOf(bytes)` reads a picture's `{ w, h }` out of its own header — png, jpeg,
-gif and webp — without decoding it, and returns `undefined` for any other format
-and for a header stating a zero. A page can reserve a photo's space before the
-bytes arrive; a guess would be worse than nothing, because a page can ask the
-bitmap itself but cannot un-believe a row.
+let save = artifactStore(fileBlobs('/var/lib/blobs'))
+let artifact = await save(new Uint8Array([0, 255]), 'application/octet-stream')
+```
 
-`served(bytes, { mime, name })` wraps bytes in an HTTP `Response`:
-`cache-control: public, max-age=31536000, immutable` (content-addressed bytes
-can never change under their address), a `sandbox; script-src 'none'` content
-security policy, `x-content-type-options: nosniff`, and an inline
-`content-disposition` when a name is given. A stored HTML page or SVG opened in
-a tab therefore renders and runs nothing.
+Use a file or object store for arbitrary binary content.
+`keep(store, address,
+bytes)` performs the store-and-read-back check directly. A
+matching existing object needs no write; mismatched bytes cause another write
+and a verification failure throws. A backend that cannot overwrite corrupt
+content may still fail that repair.
 
-`vocab.json` declares two components, exported as `artifactDoc`.
-`artifact{address, media_type, size}` describes stored bytes; `attachment`
-references one and can record the provider call id and revised prompt that
-produced it. The server has to keep the configured binary store available
-alongside its database: nothing garbage-collects it, and external objects cannot
-be restored from a database backup alone.
+`sizeOf(bytes)` reads `{ w, h }` from PNG, JPEG, GIF and WebP headers without
+bitmap decoding. Unsupported or invalid headers, including zero dimensions,
+return `undefined`.
+
+`served(bytes, { mime?, name? })` creates an HTTP response with immutable
+one-year public caching, `content-security-policy: sandbox; script-src 'none'`,
+`x-content-type-options: nosniff`, and optional inline filename disposition.
+Scripts are blocked; the policy does not mean an HTML or SVG document cannot
+render. Use this response for immutable content addressed by its bytes.
+
+`artifactDoc` declares `artifact { address, media_type, size }` and an
+`attachment` component referencing an artifact. An attachment can also record
+the provider call ID and revised prompt associated with generation.
 
 ## The HTTP endpoints
 
-`@yaks/blob/routes` exports `routes(host, options)`. It is one of the six
-subpaths a server imports from a plugin (`yak serve`, see
-[@yaks/cli](../cli/README.md)), and it mounts one path, `/blob/<sha256>`, with
-two methods:
+`@yaks/blob/routes` exports `routes(host, options)` for plugin servers such as
+[`yak serve`](../cli/README.md). It mounts `/blob/<sha256>`:
 
-- **`GET /blob/<sha>`** — returns the bytes through `served()`: fenced and
-  cached immutably, typed by the `media_type` of the `artifact` entity whose eid
-  is that address, and `application/octet-stream` where no row names them. A
-  path that is not 64 lowercase hex digits, and an address the store does not
-  hold, both answer 404.
-- **`PUT /blob/<sha>`** — stores the bytes. The address in the path is the name,
-  so the server only has to agree: bytes hashing to anything else are refused
-  with 400, and the same file sent twice — or by two people, or by one client
-  retrying — is one stored object and one row. The request body is counted as it
-  arrives and a body over `limit` is refused with 413, on the bytes themselves
-  rather than on what a `content-length` header claimed. The `content-type`
-  header, with its parameters dropped, is recorded as the media type. The
-  response is the `artifact` as JSON.
+- `GET` returns bytes using `served()`. If an artifact entity with that address
+  as its eid exists, its media type is used; otherwise it uses
+  `application/octet-stream`. Invalid addresses and missing objects return 404.
+  The route itself performs no authentication check.
+- `PUT` requires 64 lowercase hex digits and bytes hashing to that address;
+  either mismatch returns 400. It counts streamed body bytes and returns 413
+  above the configured limit. It records a normalized media type from
+  `content-type` and returns artifact metadata as JSON.
 
-An upload writes that `artifact` row through the graph, and writes it twice:
-first with `{ check: true }`, which runs the write without committing, so
-whatever policy would refuse the write refuses the upload before any bytes are
-kept; then, once the bytes are stored, for real. The row is signed as whoever
-`host.who` reports is calling, the same attribution a write through `/apply`
-gets. This package has no upload permission of its own — who may upload is the
-graph's question, answered by a rule like any other. A PUT that dies in between
-leaves an object no row names, which is what a content-addressed store has
-instead of a mess, and repeating the PUT repairs it.
+An upload first checks its proposed artifact write with
+`graph.apply(...,
+{ check: true })`, then stores/verifies bytes, then applies
+the artifact write. The graph's write rules determine whether the artifact is
+allowed. `host.who`, when configured, supplies actor attribution as it does for
+`/apply`. This route adds no separate upload permission policy.
 
-Configuration:
+If the final graph write fails, stored content may remain without an artifact
+entity. Repeating a successful upload uses the same address and entity ID.
 
 ```json
 {
@@ -282,102 +245,80 @@ Configuration:
 }
 ```
 
-`limit` is the largest upload in bytes (default 25 MB, exported as `LIMIT`).
-`store` is where the objects live, and the GET reads the same one:
+`limit` defaults to 25 MiB (`LIMIT`). The routes use these backends:
 
-- `{"via": "sqlite"}` — the server's own table, the same one `@yaks/blob/rules`
-  keeps body text in. The default, and TEXT: bytes that are not UTF-8 are
-  refused, so a server accepting binary uploads names one of the others.
-- `{"via": "file", "dir": "…"}` — a directory, one file per address.
-- `{"via": "object", "bucket": …, "prefix": "…"}` — an S3-shaped bucket. The
-  value is the binding object itself, so this one is configured by a server
-  composing in code rather than from a JSON file.
+- `{ "via": "sqlite" }`: the default text table; rejects invalid UTF-8 uploads.
+- `{ "via": "file", "dir": "..." }`: a directory for binary or text uploads.
+- `{ via: 'object', bucket, prefix? }`: an object-store binding supplied in
+  code, not serializable JSON configuration.
 
-A store whose configuration is incomplete — `file` with no `dir`, `object` with
-no `bucket`, an unknown `via` — mounts no routes at all and logs why. A server
-that believes it is keeping uploads somewhere and is not is worse than one that
-does not come up, so it is reported; it is reported rather than thrown, because
-missing configuration never stops a server starting. With no routes mounted, an
-upload is refused where it is attempted rather than written into nothing.
+These route options choose the upload/download backend. The `rules` sub-module
+continues to use SQLite for marked graph text columns. Missing `dir`, missing
+`bucket` or an unknown backend logs a reason and returns no routes.
 
 ## Bounded text inspection for tools
 
-`valueTools(readEntity)` returns two provider-neutral tool declarations with
-executable `run` functions: `graph_value_read` and `graph_value_search`. Supply
-the same authorized entity reader the application's other graph tools use. The
-tools never accept filesystem paths or raw blob addresses as read capabilities,
-and they work for any string-valued graph property, not only blob-backed
-columns.
+`valueTools(readEntity)` returns provider-neutral `graph_value_read` and
+`graph_value_search` tool declarations with executable `run` functions. Supply
+the authorized entity reader used by the application's other graph tools. These
+tools accept entity/component/property names, not filesystem paths or raw blob
+addresses, and work with any string property.
 
-Both take `entity`, `component` and `property`. An optional `revision` is
-checked against the SHA-256 of the UTF-8 text and fails if it has changed. A
-missing, denied or non-text value fails; the tools do not serialize arbitrary
-objects.
+Both take `entity`, `component` and `property`. Optional `revision` must match
+the SHA-256 of the current UTF-8 text. Missing, denied or non-text values fail.
 
-- Read: `start` is a zero-based Unicode code-point offset; `count` defaults to
-  2048 and cannot exceed 8192 (exported as `VALUE_LIMIT`). The response carries
-  `start`, `end`, `total`, `revision`, `text` and `next` (null at the end).
-  Escaped JSON text is bounded as well, so a response can contain fewer
-  characters than were requested.
-- Search: `query` is a non-empty, case-sensitive literal of at most 256 UTF-16
-  code units — not a regular expression. `start` skips a range of characters and
-  `limit` defaults to 10, at most 20. Each match carries its offset and a short
-  excerpt. `next` is a continuation offset when the match limit was reached; a
-  further search may find nothing more.
+- Read uses a zero-based Unicode code-point `start`. `count` defaults to 2048,
+  with a maximum of 8192 (`VALUE_LIMIT`). Results contain `start`, `end`,
+  `total`, `revision`, `text` and `next` (null at the end). An additional
+  escaped-JSON bound can shorten the returned text.
+- Search uses a nonempty, case-sensitive literal `query` of at most 256 UTF-16
+  code units. `start` skips earlier characters; `limit` defaults to 10 and is at
+  most 20. Matches contain offsets and excerpts. `next` is a continuation offset
+  when the match limit was reached, even if no further match exists.
 
 Offsets count code points, not grapheme clusters or terminal columns. Both tools
-load the whole text through the reader before slicing or searching it: the
-output is bounded, the storage read is not.
+read the entire value before slicing/searching; only the output is bounded.
 
 ## What it does not do
 
-Nothing collects unreferenced bytes. A content-addressed object is cheap, cannot
-go stale under a reader, and is shared by every row that holds the same value,
-so deciding when one is truly unreachable is an application's call, not a
-default.
+There is no garbage collection for unreferenced content. Applications own
+retention and backups, including separate file or object stores. A database
+backup alone cannot restore external bytes.
 
-Removing the plugin does not strand your data either way: a body column is a
-text column holding a hash, and the store is a table of hashes and text.
+Removing the plugin leaves stored addresses and content intact, but ordinary
+reads need the configured resolver to return text. The underlying table/file
+format remains accessible to application code.
 
 ## Exports
 
-| export                                | is                                          |
-| ------------------------------------- | ------------------------------------------- |
-| `blobKeywords`, `BLOB_URI`            | the `store` keyword vocabulary, to register |
-| `bodies(v)`, `isBody(col)`            | which columns are content-addressed         |
-| `blobs(v, store)`                     | the @yaks/graph plugin — the swap           |
-| `Blobs`, `address`, `encode`/`decode` | the byte-store interface and its key        |
-| `Driver`                              | the SQLite handle `sqliteBlobs` runs on     |
-| `sqliteBlobs`, `blobSchema`           | the table store, and its DDL                |
-| `fileBlobs(dir)`                      | the directory store                         |
-| `objectBlobs(bucket, prefix?)`        | the bucket store                            |
-| `blobRead(v, layout)`                 | the @yaks/sql read overrides                |
-| `blobText(v, layout)`                 | an address resolved, for a search index     |
-| `hydrate(v, store, bundles)`          | the read side for a non-SQL store           |
-| `sizeOf(bytes)`                       | an image's `{w, h}`, read off its header    |
-| `served(bytes, {mime, name})`         | stored bytes as a fenced HTTP response      |
-| `addressOf(bytes)`, `keep(store, …)`  | an object's address, and storing it once    |
-| `artifactStore(blobs)`, `artifactDoc` | binary files, stored and declared           |
-| `valueTools(read)`, `VALUE_LIMIT`     | the two bounded text-inspection tools       |
+| Root export                                         | Purpose                                                  |
+| --------------------------------------------------- | -------------------------------------------------------- |
+| `blobKeywords`, `BLOB_URI`                          | Register the `store` keyword                             |
+| `bodies`, `isBody`                                  | Select marked columns                                    |
+| `blobs`, `BlobOpts`, `Reference`                    | Graph write plugin and optional stored-reference mapping |
+| `Blobs`, `address`, `encode`, `decode`              | Store interface and text addressing                      |
+| `Driver`, `sqliteBlobs`, `blobSchema`, `Layout`     | SQLite text storage                                      |
+| `fileBlobs`, `objectBlobs`, `Bucket`                | Filesystem and object storage                            |
+| `blobRead`, `blobText`, `hydrate`                   | SQL and post-read text resolution                        |
+| `addressOf`, `keep`, `artifactStore`, `artifactDoc` | Artifact storage and declarations                        |
+| `sizeOf`, `served`                                  | Image dimensions and HTTP responses                      |
+| `valueTools`, `VALUE_LIMIT`, `ValueTool`            | Bounded text-inspection tools                            |
 
-Three more subpaths are what a server imports, one module each:
-`@yaks/blob/vocab` (`docs`, `keywords`, `derived` — no storage and no runtime,
-so a browser tab can load it), `@yaks/blob/rules` (`rules(host)` — creates the
-blob tables on the server's own connection and returns the plugin), and
-`@yaks/blob/routes` (`routes(host, options)` — the two endpoints above).
+| Sub-module export   | Purpose                                                      |
+| ------------------- | ------------------------------------------------------------ |
+| `@yaks/blob/vocab`  | `docs`, `keywords`, `derived` and declaration/read helpers   |
+| `@yaks/blob/rules`  | `rules(host)` creates the SQLite text table and graph plugin |
+| `@yaks/blob/routes` | `routes(host, options)`, backend helpers and route settings  |
 
 ## Composition
 
-A plugin over [@yaks/graph](https://jsr.io/@yaks/graph), reading its one
-declaration through [@yaks/vocab](https://jsr.io/@yaks/vocab)'s keyword
-extension API the way [@yaks/id](https://jsr.io/@yaks/id) and
-[@yaks/names](https://jsr.io/@yaks/names) do, and teaching
-[@yaks/sql](https://jsr.io/@yaks/sql) how to read a body column through its
-derived-column API.
+The package extends `@yaks/vocab` with a keyword, `@yaks/graph` with write
+hooks, and `@yaks/sql` with derived read expressions. Full-text indexing is
+provided by `@yaks/fts` or the document index in `@yaks/sqlite`.
 
 ## Compatibility
 
-The keyword, the plugin, the `Blobs` interface and the SQLite store import no
-platform API. `fileBlobs` looks its runtime's filesystem up rather than
-importing one, and throws where there is none. Runs on **Deno**, **Node**, and
-in the **browser**.
+The core keyword, plugin and SQLite store use no platform-specific storage API.
+They work wherever the supplied driver and required standard web APIs work. The
+bundled filesystem adapter specifically requires Deno filesystem functions; use
+another `Blobs` implementation for Node, browsers or Workers without them.
