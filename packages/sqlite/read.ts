@@ -176,6 +176,12 @@ export let get = (
   opts: BindOpts = {},
 ): Bundle[] => {
   let found = new Map<string, Bundle>()
+  // Whether a number is this store's to show. The spine table holds the column
+  // in every layout, but the number is @yaks/id's word and a store that never
+  // loaded it has none to speak of — including one that was numbered before the
+  // plugin was opt in, whose old rows still carry the value. Read off the
+  // vocabulary, the way the archetype below is.
+  let numbered = !!vocab.column('entity', 'num')
   // Bound parameter count and SQL-cache size; gather a component per set,
   // never every component per entity (a 1,000-entry transcript is otherwise
   // tens of thousands of queries). A JSON array uses one bind and one stable
@@ -208,7 +214,7 @@ export let get = (
       let eid = String(row.eid)
       let entity = {
         eid,
-        ...row.num == null ? {} : { num: Number(row.num) },
+        ...!numbered || row.num == null ? {} : { num: Number(row.num) },
         ...(row.archetype == null ? {} : { archetype: String(row.archetype) }),
       }
       let bundle = row.dead == null ? { entity } : tombstoned(entity)

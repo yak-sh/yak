@@ -199,6 +199,37 @@ Deno.test('numeric gather ownership stays internal; present is an ordinary colum
   }])
 })
 
+// A store whose vocabulary never loaded @yaks/id says nothing about numbers,
+// including the ones its own column still holds — an app numbered before the
+// plugin was opt in (T-37831). One shape: what the vocabulary declares is what
+// a row comes back wearing, so the same store cannot answer a number for an
+// old row and none for a new one.
+Deno.test('a store with no number in its vocabulary shows none it has', () => {
+  let driver = mem()
+  let vocab = loadVocab({
+    $defs: {
+      entity: { component: true, type: 'object', wire: false },
+      sample: {
+        component: true,
+        type: 'object',
+        properties: { present: { type: 'string' } },
+      },
+    },
+  })
+  let s = storage(driver, vocab)
+  s.install()
+  driver.exec(`insert into entity(id,eid,num) values(47,'was-numbered',9);
+    insert into sample(entity,present) values(47,'stored')`)
+  assertEquals(s.read('.sample'), [{
+    entity: { eid: 'was-numbered' },
+    sample: { present: 'stored' },
+  }])
+  // The keyed read of one entity is the same answer (keyed.ts).
+  assertEquals(s.tx((tx) => tx.get(['was-numbered']))[0].entity, {
+    eid: 'was-numbered',
+  })
+})
+
 Deno.test("a driver that declares no compound width is probed within workerd's", () => {
   // Workerd — the SQLite under a Durable Object — carries five terms in a
   // compound SELECT and answers a sixth with `too many terms in compound
@@ -217,6 +248,9 @@ Deno.test("a driver that declares no compound width is probed within workerd's",
         component: true,
         type: 'object',
         wire: false,
+        // Numbered, since the store below mints numbers: a spine that does not
+        // declare the column does not show one (read.ts `numbered`).
+        properties: { num: { type: 'number', stamped: true } },
       },
       ...Object.fromEntries(
         Array.from({ length: 20 }, (_, i) => [`facet${i}`, {

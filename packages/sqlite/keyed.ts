@@ -10,6 +10,10 @@ import { descriptor } from './catalog.ts'
 
 export let keyed = (driver: Driver, vocab: Vocab, opts: BindOpts) => {
   let names = vocab.all.filter((c) => c != 'entity')
+  // A number is shown only where the vocabulary declares one (read.ts
+  // `numbered`): the column stands in every layout, and a store that never
+  // loaded @yaks/id has nothing to say with it.
+  let numbered = !!vocab.column('entity', 'num')
   let probes: string[] = []
   // Cut to what this engine's compound SELECT carries (`Driver.arms`): workerd
   // refuses a sixth term where an embedded SQLite takes hundreds, so a probe
@@ -42,7 +46,7 @@ export let keyed = (driver: Driver, vocab: Vocab, opts: BindOpts) => {
     if (!row) return []
     let entity = {
       eid,
-      ...row.num == null ? {} : { num: Number(row.num) },
+      ...!numbered || row.num == null ? {} : { num: Number(row.num) },
       ...(row.archetype == null ? {} : { archetype: String(row.archetype) }),
     }
     if (row.dead != null) return [tombstoned(entity)]
