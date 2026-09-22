@@ -1569,15 +1569,16 @@ export class Store {
       // An aggregate is not a listing — `.count!` answers one number — and
       // @yaks/api's read door answers bundles, which is the wrong half of the
       // compiled statement. So it is answered here, off the raw rows, in the
-      // shape every door on this platform says it in.
-      let agg = aggOf(line)
-      if (agg) {
-        try {
+      // shape every door on this platform says it in. A line that does not
+      // parse is the caller's to fix, answered 400 like any other refusal.
+      try {
+        let agg = aggOf(line)
+        if (agg) {
           await this.#auth(request)
           return await this.#counted(line, agg)
-        } catch (e) {
-          return refuse(e, request)
         }
+      } catch (e) {
+        return refuse(e, request)
       }
       return await this.#kinded(await this.#route(request), line)
     }

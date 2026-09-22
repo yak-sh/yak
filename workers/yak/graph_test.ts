@@ -136,6 +136,21 @@ for (let aggregate of [false, true]) {
   })
 }
 
+// A line that does not parse is the caller's mistake: a 400 in the parser's
+// words, and nothing logged as the store's failure.
+Deno.test('a malformed query is a 400 to the caller, not a failure', async () => {
+  let store = await cookbook()
+  using logged = stub(console, 'error')
+  for (let q of ['.recipe!"&.doc?"', '.recipe!"&.doc?"&.count!']) {
+    let response = await get(store, `/query?q=${encodeURIComponent(q)}`, owner)
+    assertEquals(response.status, 400, q)
+    let body = await response.json()
+    assertEquals(body.error, 'SyntaxError')
+    assertStringIncludes(body.message, 'presence filters end at !')
+  }
+  assertEquals(logged.calls.length, 0)
+})
+
 // The words a store declares, as it answers them.
 let words = async (store: Store) =>
   (await (await get(store, '/vocab')).json()).$defs

@@ -13,7 +13,8 @@
 // quoted text term, or a bare word, which is a text term. A malformed clause —
 // a directive with the wrong operand, two presence filters run together, a
 // qualifier the clause does not take — throws where it is read; it never falls
-// back to text.
+// back to text. It throws a `SyntaxError`, which is the caller's to fix: a door
+// answers it 400 (@yaks/api) rather than taking it for its own fault.
 //
 // A clause is `path [qualifiers]? operator value`. The bracket binds to the
 // PATH and is read before any operator, so `.requires[<=3]->T-42` is the path
@@ -98,7 +99,7 @@ let atom = (raw: string): Value => {
 let value = (raw: string): Value => {
   let items = splitOutside(raw, ',')
   if (items.length == 1) return atom(raw)
-  if (items.some((s) => !s)) throw new Error(LIST)
+  if (items.some((s) => !s)) throw new SyntaxError(LIST)
   return { kind: 'list', items: items.map((s) => atom(stripQuotes(s))) }
 }
 
@@ -136,7 +137,7 @@ let QUAL = new RegExp(`^(${WORD})?(!=|<=|>=|<|>|=)(.*)$`, 's')
 let qualifiers = (inside: string): Qual[] =>
   splitOutside(inside, ',').map((raw) => {
     let s = raw.trim()
-    if (!s) throw new Error(`an empty qualifier: [${inside}]`)
+    if (!s) throw new SyntaxError(`an empty qualifier: [${inside}]`)
     let m = s.match(QUAL)
     if (!m) return { value: stripQuotes(s) }
     let [, key, op, v] = m
@@ -146,7 +147,9 @@ let qualifiers = (inside: string): Qual[] =>
 // A clause that takes no qualifier refuses one by name — a bracket it does not
 // read is never dropped, because the caller meant something by it.
 let refuse = (word: string, quals: Qual[], raw: string | undefined) => {
-  if (quals.length) throw new Error(`.${word} takes no qualifier: [${raw}]`)
+  if (quals.length) {
+    throw new SyntaxError(`.${word} takes no qualifier: [${raw}]`)
+  }
 }
 
 // The walk's one qualifier: its depth cap, `<=N`, of at least one hop. With no
@@ -155,10 +158,12 @@ let cap = (word: string, quals: Qual[]): number => {
   if (!quals.length) return WALK_DEPTH
   let [q, ...more] = quals
   if (more.length || q.key || q.op != '<=' || !/^\d+$/.test(q.value)) {
-    throw new Error(`a walk takes one depth cap: .${word}[<=3]->T-42`)
+    throw new SyntaxError(`a walk takes one depth cap: .${word}[<=3]->T-42`)
   }
   let n = Number(q.value)
-  if (n < 1) throw new Error(`a walk needs at least one hop: <=${q.value}`)
+  if (n < 1) {
+    throw new SyntaxError(`a walk needs at least one hop: <=${q.value}`)
+  }
   return n
 }
 
@@ -229,7 +234,7 @@ let pres = (word: string): Clause => ({
 let edgeSelect = (quals: Qual[]): Clause => {
   let [type, via, ...more] = quals
   if (!type || more.length || quals.some((q) => q.op || q.key)) {
-    throw new Error(
+    throw new SyntaxError(
       '.edges selects one edge type and an optional endpoint reference: ' +
         '.edges[referenced,entry.session]!',
     )
@@ -268,7 +273,7 @@ export let parseDot = (token: string): Clause[] | null => {
       }
       return [c]
     }
-    throw new Error(`a reverse filter needs a child predicate: ${token}`)
+    throw new SyntaxError(`a reverse filter needs a child predicate: ${token}`)
   }
   let marked = sigil(token)
   if (marked) return marked
@@ -289,10 +294,14 @@ export let parseDot = (token: string): Clause[] | null => {
     let inner = parseDot(rest.startsWith('.') ? rest : `.${rest}`)
     let c = inner?.length == 1 ? inner[0] : undefined
     if (!c || c.kind != 'pred' || c.op != '=' || !c.value) {
-      throw new Error(`a written word takes a value: ${mark}doc.title=Dune`)
+      throw new SyntaxError(
+        `a written word takes a value: ${mark}doc.title=Dune`,
+      )
     }
     if (c.path.length != 2) {
-      throw new Error(`a written word names a component and a column: ${token}`)
+      throw new SyntaxError(
+        `a written word names a component and a column: ${token}`,
+      )
     }
     let [comp, prop] = c.path
     return [
@@ -304,7 +313,7 @@ export let parseDot = (token: string): Clause[] | null => {
   // A bracket belongs to a path, and a prefix character marks a whole component
   // name: `?doc[x]` is a broken clause, never a search term.
   if (/^(\+!|[!+*#$?])\.?[A-Za-z_][^\s]*\[/.test(token)) {
-    throw new Error(`not a clause: ${token}`)
+    throw new SyntaxError(`not a clause: ${token}`)
   }
   // The `.` prefix is accepted everywhere and required nowhere: it keeps a URL
   // query string's filters apart from its `page` and `per` parameters, and a
@@ -328,7 +337,7 @@ export let parseDot = (token: string): Clause[] | null => {
   let o = rest.match(OPS)
   if (!o) {
     if (!dotted && bracket == null) return null
-    throw new Error(`not a clause: ${token}`)
+    throw new SyntaxError(`not a clause: ${token}`)
   }
   let op: string = o[1]
   let rawValue = rest.slice(op.length)
@@ -343,7 +352,7 @@ export let parseDot = (token: string): Clause[] | null => {
   // three `requires`; `<-` walks the other way. One entity, by any id.
   if (op == '->' || op == '<-') {
     if (!val || val.includes(',')) {
-      throw new Error(`a walk names one entity: .${pathStr}[<=3]->T-42`)
+      throw new SyntaxError(`a walk names one entity: .${pathStr}[<=3]->T-42`)
     }
     return [{
       kind: 'walk',
@@ -366,7 +375,7 @@ export let parseDot = (token: string): Clause[] | null => {
   if (pathStr == 'refs') {
     if (op == '=') return [{ kind: 'refs', op: '=', value: val }]
     if (op == '!') return [{ kind: 'refs', op: '!', value: '' }]
-    throw new Error(
+    throw new SyntaxError(
       '.refs takes an id (.refs=T-3), presence (.refs) or absence (!refs)',
     )
   }
@@ -378,7 +387,7 @@ export let parseDot = (token: string): Clause[] | null => {
   // schema.
   if (pathStr == 'distinct' || pathStr == 'tally') {
     if (op != '=' || !val) {
-      throw new Error(`.${pathStr} names a column: .${pathStr}=domain`)
+      throw new SyntaxError(`.${pathStr} names a column: .${pathStr}=domain`)
     }
     return [{ kind: pathStr, path: path(val) }]
   }
@@ -386,7 +395,7 @@ export let parseDot = (token: string): Clause[] | null => {
   // waking a subscription. Each column stays raw segments.
   if (pathStr == 'fields') {
     if (op != '=' || !val) {
-      throw new Error('.fields names columns: .fields=pin.x,pin.y')
+      throw new SyntaxError('.fields names columns: .fields=pin.x,pin.y')
     }
     let fields = val.split(',').map((seg) => {
       let wake = !seg.endsWith('~')
@@ -398,7 +407,7 @@ export let parseDot = (token: string): Clause[] | null => {
   // than none, so a non-integer is refused rather than dropped.
   if (pathStr == 'limit') {
     if (op != '=' || !/^\d+$/.test(val)) {
-      throw new Error('.limit takes a whole number: .limit=200')
+      throw new SyntaxError('.limit takes a whole number: .limit=200')
     }
     return [{ kind: 'limit', n: Number(val) }]
   }
@@ -411,7 +420,7 @@ export let parseDot = (token: string): Clause[] | null => {
   if (pathStr == 'after') {
     let n = op == '=' ? cursor(val) : undefined
     if (n == null) {
-      throw new Error('.after takes an entity number or id: .after=T-200')
+      throw new SyntaxError('.after takes an entity number or id: .after=T-200')
     }
     return [{ kind: 'after', n }]
   }
@@ -423,14 +432,16 @@ export let parseDot = (token: string): Clause[] | null => {
     }
     if (segs.length == 2 && segs[1] == 'limit' && op == '=') {
       if (!/^\d+$/.test(val)) {
-        throw new Error('.edges.limit takes a whole number: .edges.limit=200')
+        throw new SyntaxError(
+          '.edges.limit takes a whole number: .edges.limit=200',
+        )
       }
       return [{ kind: 'edges', peers: [], limit: Number(val) }]
     }
     if (segs.length == 2 && segs[1] == 'peers' && op == '=' && val) {
       return [{ kind: 'edges', peers: val.split(',').map(path) }]
     }
-    throw new Error(
+    throw new SyntaxError(
       '.edges rides a query (.edges) and may project the far endpoint ' +
         '(.edges.peers=status,title)',
     )
@@ -439,7 +450,7 @@ export let parseDot = (token: string): Clause[] | null => {
   // A `!` in the middle of a path was parsed above as a reverse child test. Any
   // other operand on a presence filter is malformed.
   if (op == '!' && val) {
-    throw new Error(
+    throw new SyntaxError(
       `presence filters end at !: .${pathStr}!` +
         (val.startsWith('.')
           ? ` — separate filters with a space: .${pathStr}! ${val}`
@@ -450,7 +461,9 @@ export let parseDot = (token: string): Clause[] | null => {
   // An ordinary predicate. Presence (`!`) and the projection request (`?`)
   // carry no value; contains (`~=`) is deliberately literal, so its value is
   // one raw scalar; every other form parses list and range structure.
-  if (op == '?' && val) throw new Error(`a request ends at ?: .${pathStr}?`)
+  if (op == '?' && val) {
+    throw new SyntaxError(`a request ends at ?: .${pathStr}?`)
+  }
   if (op == '!' || op == '?') {
     return [{ kind: 'pred', path: segs, op, value: null }]
   }
@@ -507,9 +520,9 @@ let tokens = (q: string): string[] => {
       cur = ''
     } else cur += c
   }
-  if (quote) throw new Error(`unclosed quote: ${cur}`)
-  if (bracket) throw new Error(`unclosed bracket: ${cur}`)
-  if (depth) throw new Error(`unclosed group: ${cur}`)
+  if (quote) throw new SyntaxError(`unclosed quote: ${cur}`)
+  if (bracket) throw new SyntaxError(`unclosed bracket: ${cur}`)
+  if (depth) throw new SyntaxError(`unclosed group: ${cur}`)
   if (cur) out.push(cur)
   return out
 }
@@ -546,9 +559,9 @@ let parts = (tok: string, prev?: string, next?: string): string[] => {
   if (tok.startsWith('(')) return [tok]
   if (
     tok.startsWith(',') && prev && VALUED.test(prev) && !clauseish(tok)
-  ) throw new Error(LIST)
+  ) throw new SyntaxError(LIST)
   if (tok.endsWith(',') && VALUED.test(tok) && !(next && clauseish(next))) {
-    throw new Error(LIST)
+    throw new SyntaxError(LIST)
   }
   let out: string[] = []
   for (let p of splitOutside(tok.replace(/^,+|,+$/g, ''), ',', true)) {
@@ -568,7 +581,7 @@ let read = (tok: string, opts: ParseOpts): Clause[] => {
     let cs = parseDot(tok)
     if (cs) return cs
     if (opts.text === false) {
-      throw new Error(
+      throw new SyntaxError(
         `a query takes clauses, not words: ${tok} — quote it to search for it`,
       )
     }
@@ -610,7 +623,7 @@ export let parse = (q: string, opts: ParseOpts = {}): And => {
   }
   let groups = alts.map((toks) => clauses(toks, opts))
   if (groups.length > 1 && groups.some((g) => !g.length)) {
-    throw new Error(`an empty alternative beside |: ${q}`)
+    throw new SyntaxError(`an empty alternative beside |: ${q}`)
   }
   let out = groups.length == 1
     ? groups[0]
