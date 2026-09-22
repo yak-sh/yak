@@ -40,7 +40,7 @@ import {
   type Tools,
 } from '../../src/store/tools.ts'
 import { type Ctx, type Out, uiMeta, VIEW_MIME } from './tools.ts'
-import { once } from './tool.ts'
+import { once, refuse } from './tool.ts'
 import type { Who } from './session.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
 import { storeOf } from './door.ts'
@@ -173,7 +173,8 @@ export let runCommand = async (
   let all = await reachable(ctx)
   let mine = picked(all, said)
   if (said && !mine.length) {
-    throw new Error(
+    throw refuse(
+      'missing',
       `no app ${said} — ${
         all.length
           ? `you can reach ${all.map((r) => at(r.space, r.app)).join(', ')}`
@@ -187,7 +188,8 @@ export let runCommand = async (
     if (tool) found.push({ space, app, tool })
   }
   if (found.length > 1) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `${name} is a command of ${
         found.map((f) => at(f.space, f.app)).join(' and ')
       } — say which app`,
@@ -195,7 +197,8 @@ export let runCommand = async (
   }
   if (!found.length) {
     let there = await offered(ctx, mine)
-    throw new Error(
+    throw refuse(
+      'missing',
       `no command ${name}${said ? ` in ${said}` : ''} — ${
         there.length
           ? `your apps offer ${there.join('; ')}`

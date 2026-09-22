@@ -28,6 +28,7 @@
 // and the ceiling is a day.
 import { opened, seal } from '../../src/token.ts'
 import type { Directory } from './directory.ts'
+import { refuse } from './tool.ts'
 
 // What a grant token opens with, so identity.ts knows to open it here.
 export let GRANT = 'yaks_'
@@ -155,7 +156,7 @@ export let mint = async (
   // Refused, never clamped: a caller told "24" and handed one hour would
   // believe the answer it did not get.
   if (!(hours > 0) || hours > HOURS) {
-    throw new Error(`hours: more than 0 and at most ${HOURS}`)
+    throw refuse('arguments', `hours: more than 0 and at most ${HOURS}`)
   }
   let grant: Grant = {
     id: crypto.randomUUID().replaceAll('-', '').slice(0, 12),

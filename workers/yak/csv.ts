@@ -24,6 +24,7 @@
 import { parse } from '@std/csv'
 import type { Bundle } from '@yaks/graph'
 import type { Sown } from './seed.ts'
+import { refuse } from './tool.ts'
 
 /** A component's columns, as the type each takes: the word each column's type
  * is spelled with (vocab.ts `wordsOf`). */
@@ -76,7 +77,8 @@ let landing = (file: string, spec: Sheet, header: string): Lands => {
   }
   if (NAMES.includes(name)) return { named: true }
   if (DOC.includes(name)) return { comp: 'doc', col: name, type: 'text' }
-  throw new Error(
+  throw refuse(
+    'arguments',
     `${file}: ${JSON.stringify(header)}${
       name == header ? '' : ` maps to ${JSON.stringify(name)}, which`
     } is not a column of ${spec.as} — ${spec.as} takes ${
@@ -94,7 +96,8 @@ let landing = (file: string, spec: Sheet, header: string): Lands => {
  */
 export let sheet = (file: string, text: string, spec?: Sheet): Sown[] => {
   if (!spec) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `${file} is a CSV: say which component a row becomes — ` +
         "store_load(as: 'city'), and the headers are its columns",
     )
@@ -104,19 +107,28 @@ export let sheet = (file: string, text: string, spec?: Sheet): Sown[] => {
     // The BOM a spreadsheet writes is not part of the first header's name.
     rows = parse(text.replace(/^\uFEFF/, ''))
   } catch (e) {
-    throw new Error(`${file} is not a CSV: ${(e as Error).message} — ${SHAPE}`)
+    throw refuse(
+      'arguments',
+      `${file} is not a CSV: ${(e as Error).message} — ${SHAPE}`,
+    )
   }
   let [head, ...body] = rows
-  if (!head) throw new Error(`${file} is empty — ${SHAPE}`)
+  if (!head) throw refuse('arguments', `${file} is empty — ${SHAPE}`)
   let headers = head.map((h) => h.trim())
   headers.forEach((h, i) => {
-    if (!h) throw new Error(`${file}: column ${i + 1} has no header — ${SHAPE}`)
+    if (!h) {
+      throw refuse(
+        'arguments',
+        `${file}: column ${i + 1} has no header — ${SHAPE}`,
+      )
+    }
   })
   let lands = headers.map((h) => landing(file, spec, h))
   return body.map((cells, index) => {
     let where = `${file}[${index}]`
     if (cells.length > headers.length) {
-      throw new Error(
+      throw refuse(
+        'arguments',
         `${where} has ${cells.length} values for ${headers.length} ${
           headers.length == 1 ? 'header' : 'headers'
         }`,
@@ -132,7 +144,8 @@ export let sheet = (file: string, text: string, spec?: Sheet): Sown[] => {
       if ('named' in to) return void (name = cell.trim())
       let got = value(to.type, cell)
       if (got === undefined) {
-        throw new Error(
+        throw refuse(
+          'arguments',
           `${where}: ${headers[i]} is ${
             JSON.stringify(cell)
           }, not a ${to.type}`,

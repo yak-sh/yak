@@ -84,6 +84,7 @@ import { destroyed } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
 import { moved, own, type Pinner, pruned } from './versions.ts'
+import { refuse } from './tool.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
 // sign-in code's ten minutes, because nobody is standing at the form waiting
@@ -324,7 +325,7 @@ export let erase = async (
   who: Who,
 ) => {
   let no = refused(d.space)
-  if (no) throw new Error(no)
+  if (no) throw refuse('access', no)
   // Cloudflare before anything else, and only if it can be reached: a domain
   // whose row we buried and whose custom hostname we did not is a billable
   // hostname nothing here remembers (T-33038 domain_detach holds the same

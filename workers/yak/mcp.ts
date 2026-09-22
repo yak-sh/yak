@@ -102,6 +102,7 @@ import { type Entry, prompted, standing } from './standing.ts'
 import { type Ctx, inReach, VIEW_MIME } from './tools.ts'
 import { listen, rostered } from './stream.ts'
 import { type Clock, clock, timed } from './timing.ts'
+import { refuse } from './tool.ts'
 
 type Rpc = {
   jsonrpc: '2.0'
@@ -170,7 +171,7 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
       _meta: view._meta,
     }, async () => {
       let page = await readView(ctx, view.uri)
-      if (!page) throw new Error(`no resource ${view.uri}`)
+      if (!page) throw refuse('missing', `no resource ${view.uri}`)
       return { contents: [{ ...page, mimeType: VIEW_MIME }] }
     })
   }

@@ -10,6 +10,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { anonymous, opened, openly, READS, SCOPE } from './anon.ts'
+import { CallError } from '@yaks/tools'
 import { about } from './preauth.ts'
 import type { Ctx } from './tools.ts'
 import { TOOLS } from './tools.ts'
@@ -73,7 +74,7 @@ Deno.test('a read signed out is scoped to one app anybody can read', async () =>
 Deno.test('signed out, a private app is refused by name', async () => {
   await assertRejects(
     () => opened(ctx, { space: 'ada', app: 'diary' }),
-    Error,
+    CallError,
     'ada/diary is private',
   )
 })
@@ -82,13 +83,13 @@ Deno.test('signed out, an app that is not there says so', async () => {
   for (let app of ['nope', 'gone']) {
     await assertRejects(
       () => opened(ctx, { space: 'ada', app }),
-      Error,
+      CallError,
       `no app ada/${app}`,
     )
   }
   await assertRejects(
     () => opened(ctx, { space: 'nobody', app: 'runs' }),
-    Error,
+    CallError,
     'no app nobody/runs',
   )
 })
@@ -97,7 +98,7 @@ Deno.test('a read that names no app says it is needed signed out', async () => {
   for (let args of [{}, { app: 'runs' }, { space: 'ada' }, { app: '  ' }]) {
     await assertRejects(
       () => opened(ctx, args),
-      Error,
+      CallError,
       'signed out, a read answers for ONE app',
     )
   }

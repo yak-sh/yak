@@ -29,6 +29,7 @@ import type { Env } from './env.ts'
 import type { Plugin } from './plugin.ts'
 import { mailedTo } from './post.ts'
 import { reporting } from './wake.ts'
+import { refuse } from './tool.ts'
 
 /** The hourly reading: `fired` on this tagged wake runs the existing meter. */
 export let meterPlugin: Plugin = {
@@ -534,7 +535,7 @@ export let metering = (
     let space = await reaching(ns).space(box.space)
     if (!space) return await sender.send(m)
     if (spent(space).emails >= letters(space.tier)) {
-      throw new Error(atCeiling(space, 'emails', bind))
+      throw refuse('limit', atCeiling(space, 'emails', bind))
     }
     let receipt = await sender.send(m)
     await counted({ STORE: ns }, space)

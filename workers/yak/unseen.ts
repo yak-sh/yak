@@ -24,6 +24,7 @@ import { vouched, type Who } from './session.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import { told } from './stream.ts'
 import { level, standing } from './meter.ts'
+import { refuse } from './tool.ts'
 
 // A refusal is NOT a break (C-32652 item 3, T-32655; C-32869 item 5) — one
 // rule, read off whichever half of the answer the platform is holding.
@@ -396,7 +397,9 @@ export let archive = async (
   let hits = (await openIn(env, space, app, who, true)).filter((h) =>
     words.some((w) => named(w, h))
   )
-  if (!hits.length) throw new Error(`nothing open here by ${words.join(', ')}`)
+  if (!hits.length) {
+    throw refuse('missing', `nothing open here by ${words.join(', ')}`)
+  }
   return close(env, space, app, who, hits)
 }
 

@@ -52,6 +52,7 @@ import type { App, Directory } from './directory.ts'
 import { pinsOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { vouched, type Who } from './session.ts'
+import { refuse } from './tool.ts'
 
 // A version's file set: the path the app serves it at, and the name of its
 // bytes.
@@ -154,7 +155,7 @@ export let pins = (blobs: Blobs, prefix: string): Pins => ({
 // something else to do about one; a rollback does not.
 let must = async (store: Pins, sha: string) => {
   let bytes = await store.get(sha)
-  if (!bytes) throw new Error(`no blob for ${sha}`)
+  if (!bytes) throw refuse('missing', `no blob for ${sha}`)
   return bytes
 }
 
@@ -419,7 +420,8 @@ export let replaced = async (
 export let when = (said: string): Date => {
   let at = new Date(said)
   if (isNaN(at.getTime())) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `at: ${said} is not a time — write it as 2026-09-06T14:20:00Z`,
     )
   }

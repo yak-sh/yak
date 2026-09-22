@@ -21,6 +21,7 @@
 // line as the query string itself and the Store takes it as one parameter, and
 // three of the page's riders lost their leading dot on the way over.
 import type { Bundle } from '@yaks/graph'
+import { refuse } from './tool.ts'
 
 // The riders the page's grammar spells bare and the Store's spells dotted. They
 // are the same three words meaning the same three things; only the spelling
@@ -118,7 +119,10 @@ export let batched = (body: unknown): Bundle[] => {
     ? body
     : (body as { entities?: unknown })?.entities
   if (!Array.isArray(held)) {
-    throw new Error('/apply takes {"entities": [ … ]} — a list of bundles')
+    throw refuse(
+      'arguments',
+      '/apply takes {"entities": [ … ]} — a list of bundles',
+    )
   }
   return held.map(bundled)
 }

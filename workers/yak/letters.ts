@@ -28,6 +28,7 @@ import { type Reach, read, written } from './reach.ts'
 import { apex, type Host } from './host.ts'
 import { titling } from './session.ts'
 import { type Ctx, inApp } from './tools.ts'
+import { refuse } from './tool.ts'
 
 /**
  * The one sentence both tools carry, because the tool list is where a model
@@ -66,7 +67,9 @@ let side = (said: string, mine: string): string | null =>
     : null
 
 let str = (v: unknown, what: string): string => {
-  if (typeof v != 'string' || !v.trim()) throw new Error(`${what} is required`)
+  if (typeof v != 'string' || !v.trim()) {
+    throw refuse('arguments', `${what} is required`)
+  }
   return v.trim()
 }
 
@@ -130,7 +133,9 @@ let listing = (ctx: Ctx): Tool => ({
     let { space, app, who } = await inApp(ctx, args)
     let said = args.direction == null ? 'all' : String(args.direction)
     let which = side(said, mailbox(space, app, ctx.env))
-    if (which == null) throw new Error('direction: received, sent or all')
+    if (which == null) {
+      throw refuse('arguments', 'direction: received, sent or all')
+    }
     let rows = await read(
       ctx.env,
       [{ space, app, who }],

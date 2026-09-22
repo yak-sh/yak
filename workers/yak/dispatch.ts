@@ -58,6 +58,7 @@ import {
   WORKER,
   WRAPPER,
 } from './wrangler_app.ts'
+import { refuse } from './tool.ts'
 export { WORKER } from './wrangler_app.ts'
 
 // The namespace the account holds (`wrangler dispatch-namespace create
@@ -573,7 +574,8 @@ export let carried = async (
   let walk = async (name: string) => {
     if (seen.has(name)) return
     if (name == WRAPPER || name == 'metadata') {
-      throw new Error(
+      throw refuse(
+        'arguments',
         `refused module ${name}: reserved for the platform upload`,
       )
     }
@@ -627,7 +629,8 @@ export let upload = async (
   let names = new Set(['metadata', WRAPPER])
   for (let { name } of modules) {
     if (names.has(name)) {
-      throw new Error(
+      throw refuse(
+        'arguments',
         `refused module ${name}: the upload needs distinct module names`,
       )
     }
@@ -731,7 +734,7 @@ let noScript = (e: unknown) =>
 
 let onScript = <T>(work: Promise<T>) =>
   work.catch((e) => {
-    throw noScript(e) ? new Error(NO_WORKER) : e
+    throw noScript(e) ? refuse('missing', NO_WORKER) : e
   })
 
 export let setSecret = (

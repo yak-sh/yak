@@ -42,6 +42,7 @@
 import { opened, seal } from '../../src/token.ts'
 import { type Row, shelf } from './grants.ts'
 import { PLATFORM } from './route.ts'
+import { refuse } from './tool.ts'
 
 // Where a link is spent. Under `/login/`, so index.ts already routes it to the
 // identity part with the rest of the sign-in surface.
@@ -96,7 +97,7 @@ export let stand = async (
 ): Promise<{ standing: Standing; url: string }> => {
   let days = want.days ?? DAYS
   if (!(days > 0) || days > MOST) {
-    throw new Error(`days: more than 0 and at most ${MOST}`)
+    throw refuse('arguments', `days: more than 0 and at most ${MOST}`)
   }
   let standing: Standing = {
     id: crypto.randomUUID().replaceAll('-', '').slice(0, 12),

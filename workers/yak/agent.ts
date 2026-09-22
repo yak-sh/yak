@@ -55,6 +55,7 @@ import { ceiling, serve, unseenBlock } from './unseen.ts'
 import { appVocab, meant, PLATFORM_APART, wordOf } from './vocab.ts'
 import { lined } from './wire.ts'
 import { type Host, hosted } from './host.ts'
+import { refuse } from './tool.ts'
 
 // One JSON Schema property as Zod. The tool table spells plain shapes — a
 // string, a number, a flag, a list, an object — and the MCP SDK takes Zod, so
@@ -227,7 +228,8 @@ export let named = (ctx: Ctx, said: string, write = false): Promise<Reach> => {
   // cannot do it: signed out, the app a read answers for is the one the call
   // names and the door resolved (anon.ts `opened`), never a rider on the line.
   if (!ctx.person) {
-    throw new Error(
+    throw refuse(
+      'access',
       `signed out, a read cannot name an app on the query line (.in=${said}) ` +
         '— name space and app on the call itself',
     )
@@ -439,7 +441,8 @@ let aimed = async (ctx: Ctx, batch: Bundle[]) => {
     return rest as Bundle
   })
   if (slugs.size > 1) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `$app names ${[...slugs].join(' and ')} — one batch goes in one app`,
     )
   }

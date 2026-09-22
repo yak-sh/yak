@@ -226,6 +226,8 @@ import {
   inSpace,
   type Out,
   ownSpace,
+  refuse,
+  rejected,
   type Row,
   seatIn,
   type Shape,
@@ -378,7 +380,7 @@ let bytesOf = (f: Record<string, unknown>, at = '') => {
   try {
     return Uint8Array.from(atob(sent), (c) => c.charCodeAt(0))
   } catch {
-    throw new Error(`${at}base64: not base64`)
+    throw refuse('arguments', `${at}base64: not base64`)
   }
 }
 
@@ -390,11 +392,11 @@ let files = (
 ): { path: string; bytes: Uint8Array<ArrayBuffer> }[] => {
   if (v == null) return []
   if (!Array.isArray(v)) {
-    throw new Error('files: a list of {path, content}')
+    throw refuse('arguments', 'files: a list of {path, content}')
   }
   return v.map((one, i) => {
     if (!one || typeof one != 'object') {
-      throw new Error(`files[${i}]: {path, content}`)
+      throw refuse('arguments', `files[${i}]: {path, content}`)
     }
     let f = one as Record<string, unknown>
     return {
@@ -407,7 +409,7 @@ let files = (
 let access = (v: unknown): Access => {
   let s = text(v, 'access')
   if (!(appAccess as readonly string[]).includes(s)) {
-    throw new Error(`access: one of ${appAccess.join(', ')}`)
+    throw refuse('arguments', `access: one of ${appAccess.join(', ')}`)
   }
   return s as Access
 }
@@ -419,7 +421,9 @@ let access = (v: unknown): Access => {
 let CSS_COLOR = /^[#a-zA-Z0-9(),.%\s-]{1,64}$/
 let color = (v: unknown, what: string) => {
   let s = text(v, what).trim()
-  if (!CSS_COLOR.test(s)) throw new Error(`${what}: a CSS colour like #4c773e`)
+  if (!CSS_COLOR.test(s)) {
+    throw refuse('arguments', `${what}: a CSS colour like #4c773e`)
+  }
   return s
 }
 
@@ -430,13 +434,13 @@ let flag = (v: unknown, what: string) => {
   if (typeof v == 'boolean') return v
   if (v === 'true') return true
   if (v === 'false') return false
-  throw new Error(`${what}: true or false`)
+  throw refuse('arguments', `${what}: true or false`)
 }
 
 let role = (v: unknown): Role => {
   let s = text(v, 'role')
   if (!(ROLES as string[]).includes(s)) {
-    throw new Error(`role: one of ${ROLES.join(', ')}`)
+    throw refuse('arguments', `role: one of ${ROLES.join(', ')}`)
   }
   return s as Role
 }
@@ -446,7 +450,7 @@ let role = (v: unknown): Role => {
 let address = (v: unknown) => {
   let at = canon(text(v, 'email'))
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(at)) {
-    throw new Error('email: an address like name@example.com')
+    throw refuse('arguments', 'email: an address like name@example.com')
   }
   return at
 }
@@ -461,7 +465,8 @@ let hostname = (v: unknown) => {
     .replace(/[/?#].*$/, '')
     .replace(/\.$/, '')
   if (!HOST.test(s)) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       'hostname: a domain like herbusiness.com or www.herbusiness.com',
     )
   }
@@ -484,7 +489,9 @@ let serving = (host: string, app: App | null) =>
 
 let slug = (v: unknown, what: string) => {
   let s = text(v, what)
-  if (!SLUG.test(s)) throw new Error(`${what}: not a slug (a-z, 0-9, -)`)
+  if (!SLUG.test(s)) {
+    throw refuse('arguments', `${what}: not a slug (a-z, 0-9, -)`)
+  }
   return s
 }
 
@@ -493,7 +500,8 @@ let slug = (v: unknown, what: string) => {
 let secretName = (v: unknown) => {
   let s = text(v, 'name')
   if (!SECRET_NAME.test(s)) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       'name: the app reads it as env.NAME, so letters, digits and ' +
         'underscores, not starting with a digit — WEATHER_KEY',
     )
@@ -519,7 +527,9 @@ let needsToken = (ctx: Ctx) => {
 // editor writes the data and the files; they do not hand out keys.
 let owns = async (ctx: Ctx, args: Args) => {
   let { space, who } = await inSpace(ctx, args, true)
-  if (who.role != 'owner') throw new Error(`not the owner of ${space.slug}`)
+  if (who.role != 'owner') {
+    throw refuse('access', `not the owner of ${space.slug}`)
+  }
   return { space, who }
 }
 
@@ -529,7 +539,7 @@ let owns = async (ctx: Ctx, args: Args) => {
 let ownsApp = async (ctx: Ctx, args: Args) => {
   let it = await inApp(ctx, args, true)
   if (it.who.role != 'owner') {
-    throw new Error(`not the owner of ${it.space.slug}`)
+    throw refuse('access', `not the owner of ${it.space.slug}`)
   }
   return it
 }
@@ -545,7 +555,8 @@ let ownsApp = async (ctx: Ctx, args: Args) => {
 // whole mechanism depends on somebody reading.
 let toGallery = async (ctx: Ctx, space: Space, app: App) => {
   if (!app.published) {
-    throw new Error(
+    throw refuse(
+      'conflict',
       `${space.slug}/${app.slug} is not published — the gallery shows what ` +
         'people can install, so app_publish it first (or app_publish(app, ' +
         'gallery: true), which does both)',
@@ -669,7 +680,7 @@ let applying =
 let mapping = (v: unknown): Record<string, string> | undefined => {
   if (v == null) return undefined
   if (typeof v != 'object' || Array.isArray(v)) {
-    throw new Error('map: {"Serves how many": "serves"}')
+    throw refuse('arguments', 'map: {"Serves how many": "serves"}')
   }
   return Object.fromEntries(
     Object.entries(v as Record<string, unknown>).map(([header, col]) => [
@@ -695,7 +706,8 @@ let sheetOf = async (
   for (let doc of coreDocs) Object.assign(words, wordsOf(doc))
   Object.assign(words, mine)
   if (!(as in words)) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `as: ${as} is not a component — this app says ${
         Object.keys(mine).sort().join(', ') || 'none of its own yet'
       }, beside the platform's own words (doc, task, comment, …)${teach(env)}`,
@@ -884,7 +896,8 @@ let released = async (
     if (!await blobs.has(fileKey(space, app, file))) missing.push(file)
   }
   if (missing.length) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `tools.json: ${missing.join(', ')} — a view names a page in this ` +
         "app's own files; deploy the page beside index.html",
     )
@@ -1087,7 +1100,7 @@ export let inReach = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
 
 let answer = async (r: Response) => {
   let body = await r.text()
-  if (!r.ok) throw new Error(body)
+  if (!r.ok) throw rejected(r.status, body)
   return body
 }
 
@@ -1134,13 +1147,15 @@ let FORGET = str(
  * at. */
 let forgotten = (live: string, had: string[], drop: string) => {
   if (drop == live) {
-    throw new Error(
+    throw refuse(
+      'conflict',
       `${drop} is where it IS — move it first, and the address it leaves is ` +
         'the one there is to forget',
     )
   }
   if (!had.includes(drop)) {
-    throw new Error(
+    throw refuse(
+      'missing',
       `${live} does not answer at ${drop}${
         had.length ? ` — it answers at ${had.join(', ')}` : ' any more'
       }`,
@@ -1284,14 +1299,14 @@ export let wrote = async (
       bytes: f.bytes.byteLength,
     })),
   )
-  if (stopped) throw new Error(stopped)
+  if (stopped) throw refuse('limit', stopped)
   // The one file with a ceiling of its own (standing.ts): the app's notes are
   // handed whole to any agent that can reach the app, so they are refused
   // over the cap here — at the write, whichever door brought the bytes —
   // rather than truncated at the read.
   for (let f of files) {
     let no = tooLong(f.path, f.bytes.byteLength)
-    if (no) throw new Error(no)
+    if (no) throw refuse('limit', no)
   }
   // What each path held goes into its own history first, pinned by its content
   // (versions.ts `replaced`, T-34508), so the bytes about to be replaced can be
@@ -1375,7 +1390,8 @@ export let patched = (
   let parts = was.split(find)
   if (parts.length == 2) return parts.join(replace)
   let hits = parts.length - 1
-  throw new Error(
+  throw refuse(
+    'arguments',
     `find matched ${hits} times in ${path} — a patch replaces exactly one` +
       (hits
         ? ': lengthen find until it names one place'
@@ -1396,18 +1412,21 @@ export let fetched = async (said: string) => {
   try {
     at = new URL(said)
   } catch {
-    throw new Error(`url: ${said} is not a URL`)
+    throw refuse('arguments', `url: ${said} is not a URL`)
   }
   if (at.protocol != 'https:') {
-    throw new Error(`url: https only, not ${at.protocol.replace(':', '')}`)
+    throw refuse(
+      'arguments',
+      `url: https only, not ${at.protocol.replace(':', '')}`,
+    )
   }
   let big = (n: number) => `${at} is ${size(n)} — ${size(MAX)} at most`
   let r = await fetch(at)
-  if (!r.ok) throw new Error(`${at} answered ${r.status}`)
+  if (!r.ok) throw refuse('arguments', `${at} answered ${r.status}`)
   let claim = Number(r.headers.get('content-length') ?? 0)
-  if (claim > MAX) throw new Error(big(claim))
+  if (claim > MAX) throw refuse('limit', big(claim))
   let bytes = new Uint8Array(await r.arrayBuffer())
-  if (bytes.byteLength > MAX) throw new Error(big(bytes.byteLength))
+  if (bytes.byteLength > MAX) throw refuse('limit', big(bytes.byteLength))
   return {
     bytes,
     // What the response said it is, without its parameters. An app serves
@@ -1481,7 +1500,8 @@ let SHIP = /^[A-Za-z0-9._\-/*?[\]]+$/
 let shipPath = (v: unknown) => {
   let said = text(v, 'paths')
   if (!SHIP.test(said) || said.split('/').includes('..')) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `paths: ${said} — a path inside the sandbox, e.g. pkg/app.wasm or ` +
         'pkg/*.js',
     )
@@ -1526,7 +1546,8 @@ let noteOf = (v: unknown) => {
     .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
     .trim()
   if (said.length > NOTE) {
-    throw new Error(
+    throw refuse(
+      'limit',
       `note: ${said.length} characters, and a note is at most ${NOTE} — ` +
         'a line or two saying what this is, not a newsletter',
     )
@@ -1642,7 +1663,8 @@ let OURS: Row[] = [
       // it. Said here because minting one is the single act that does not go
       // through the directory's membership at all.
       if (ctx.who?.space) {
-        throw new Error(
+        throw refuse(
+          'access',
           `this grant reaches ${ctx.who.space} and no other space, so it ` +
             'cannot make one',
         )
@@ -1656,7 +1678,8 @@ let OURS: Row[] = [
         // which is all it ever was.
         let mine = taken.trashed &&
           await ctx.dir.role(taken, ctx.person) == 'owner'
-        throw new Error(
+        throw refuse(
+          'conflict',
           mine
             ? `${s} is in the trash, ${
               daysLeft(taken.trashed!)
@@ -1670,7 +1693,8 @@ let OURS: Row[] = [
       // level up.
       let was = await ctx.dir.formerly(s)
       if (was) {
-        throw new Error(
+        throw refuse(
+          'conflict',
           `${s} is where ${was.slug} used to be, and still points there — ` +
             'pick another slug',
         )
@@ -1720,25 +1744,30 @@ let OURS: Row[] = [
       let title = args.title == null ? null : text(args.title, 'title')
       let drop = args.forget == null ? null : slug(args.forget, 'forget')
       if (to == null && title == null && drop == null) {
-        throw new Error('nothing to change: pass slug, title, or forget')
+        throw refuse(
+          'arguments',
+          'nothing to change: pass slug, title, or forget',
+        )
       }
       let moving = to != null && to != space.slug
       if (drop != null) forgotten(space.slug, space.slugs, drop)
       // The trash holds the address for its thirty days, so a space in it
       // cannot move off one — and the meta space is the platform.
       let no = refused(space, ctx.env)
-      if (no) throw new Error(no)
+      if (no) throw refuse('access', no)
       if (space.trashed) {
-        throw new Error(
+        throw refuse(
+          'conflict',
           `${space.slug} is in the trash — space_restore(space: '${space.slug}') brings it back, and it can move after that`,
         )
       }
       if (moving) {
         let taken = await ctx.dir.space(to!)
-        if (taken) throw new Error(`space ${to} is taken`)
+        if (taken) throw refuse('conflict', `space ${to} is taken`)
         let was = await ctx.dir.formerly(to!)
         if (was) {
-          throw new Error(
+          throw refuse(
+            'conflict',
             `${to} is where ${was.slug} used to be, and still points there ` +
               '— pick another slug',
           )
@@ -1823,10 +1852,11 @@ let OURS: Row[] = [
         space: slug(args.space, 'space'),
       })
       let no = refused(space, ctx.env)
-      if (no) throw new Error(no)
+      if (no) throw refuse('access', no)
       let forever = args.forever != null && flag(args.forever, 'forever')
       if (space.trashed && !forever) {
-        throw new Error(
+        throw refuse(
+          'conflict',
           `${space.slug} is already in the trash, ${
             daysLeft(space.trashed)
           } days left — space_restore(space: '${space.slug}') brings it back, ` +
@@ -1849,7 +1879,7 @@ let OURS: Row[] = [
       // is an owner's — never one the agent named, so nothing an agent says
       // can point this letter at somebody else.
       let to = await ctx.dir.emailAt(ctx.person)
-      if (!to) throw new Error('we have no address to write to you at')
+      if (!to) throw refuse('missing', 'we have no address to write to you at')
       // What the link would do, in the words of the act it carries: `forever`
       // names what is destroyed, the trash names what stops (erase.ts).
       let bullets = (lines: string[]) => lines.map((l) => `  - ${l}`).join('\n')
@@ -1904,7 +1934,8 @@ let OURS: Row[] = [
         space: slug(args.space, 'space'),
       })
       if (!space.trashed) {
-        throw new Error(
+        throw refuse(
+          'conflict',
           `${space.slug} is not in the trash — it is serving at ` +
             `https://${spaceHost(ctx.env, space.slug)}/`,
         )
@@ -1942,7 +1973,10 @@ let OURS: Row[] = [
       let { space } = await owns(ctx, args)
       if (args.disconnect != null && flag(args.disconnect, 'disconnect')) {
         if (!space.stripe?.account) {
-          throw new Error(`${space.slug} is not selling through Stripe`)
+          throw refuse(
+            'conflict',
+            `${space.slug} is not selling through Stripe`,
+          )
         }
         await disconnect(ctx.env, space)
         return {
@@ -1953,10 +1987,10 @@ let OURS: Row[] = [
         }
       }
       if (!ctx.env.STRIPE_KEY) {
-        throw new Error('selling is not switched on here')
+        throw refuse('unavailable', 'selling is not switched on here')
       }
       let no = refusedSell(space, ctx.env)
-      if (no) throw new Error(no)
+      if (no) throw refuse('limit', no)
       if (selling(space) == 'ready') {
         return {
           text: `${space.slug} is already selling: Stripe has them ready to ` +
@@ -2010,7 +2044,7 @@ let OURS: Row[] = [
       // said they are done with, so it stands against nothing (erase.ts).
       let apps = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
       if (free?.apps != null && apps.length >= free.apps) {
-        throw new Error(atCeiling(space, 'apps', ctx.env))
+        throw refuse('limit', atCeiling(space, 'apps', ctx.env))
       }
       let taken = await ctx.dir.app(space, s)
       if (taken) {
@@ -2018,7 +2052,8 @@ let OURS: Row[] = [
         // (erase.ts): a second app born here is the one thing a restore
         // could not put back, so this address is not free until the person
         // says which of the two they want.
-        throw new Error(
+        throw refuse(
+          'conflict',
           taken.trashed
             ? `${s} is in the trash in ${space.slug}, ${
               daysLeft(taken.trashed)
@@ -2032,7 +2067,8 @@ let OURS: Row[] = [
       // is not free for a new app either.
       let moved = await ctx.dir.former(space, s)
       if (moved) {
-        throw new Error(
+        throw refuse(
+          'conflict',
           `${s} is where ${space.slug}/${moved.slug} used to be, and still ` +
             'points there — pick another slug',
         )
@@ -2125,7 +2161,8 @@ let OURS: Row[] = [
       // The refusal names the ops and the batch, because a bare "op is
       // required" leaves an agent guessing at both (C-32624 item 5).
       if (!OPS.includes(op)) {
-        throw new Error(
+        throw refuse(
+          'arguments',
           `op: one of ${OPS.join(', ')} — write takes path and content, or ` +
             'files: [{path, content}] for several at once',
         )
@@ -2150,7 +2187,9 @@ let OURS: Row[] = [
       }
       if (op == 'read' || op == 'delete') {
         let key = fileKey(space, app, text(args.path, 'path'))
-        if (!(await blobs.has(key))) throw new Error(`no file ${args.path}`)
+        if (!(await blobs.has(key))) {
+          throw refuse('missing', `no file ${args.path}`)
+        }
         let path = key.slice(prefix.length)
         if (op == 'read') {
           return { text: new TextDecoder().decode(await blobs.get(key)), space }
@@ -2205,7 +2244,8 @@ let OURS: Row[] = [
           .slice(prefix.length)
         let all = await history(blobs, prefix, path)
         if (!all.length) {
-          throw new Error(
+          throw refuse(
+            'missing',
             `no history for ${path} in ${space.slug}/${app.slug} — nothing ` +
               'has replaced it, so what is there is what there has been',
           )
@@ -2216,7 +2256,8 @@ let OURS: Row[] = [
           ? held(all, when(text(args.at, 'at')).getTime())
           : all[0]
         if (!want) {
-          throw new Error(
+          throw refuse(
+            'missing',
             args.sha != null
               ? `no ${args.sha} in ${path}'s history — op history lists what ` +
                 'it keeps'
@@ -2226,7 +2267,8 @@ let OURS: Row[] = [
         }
         let bytes = await pins(blobs, prefix).get(want.sha)
         if (!bytes) {
-          throw new Error(
+          throw refuse(
+            'missing',
             `${path}'s bytes from ${want.at} are no longer kept — the history ` +
               'goes back 30 days',
           )
@@ -2246,11 +2288,14 @@ let OURS: Row[] = [
       if (op == 'patch') {
         let path = text(args.path, 'path')
         let key = fileKey(space, app, path)
-        if (!(await blobs.has(key))) throw new Error(`no file ${path}`)
+        if (!(await blobs.has(key))) throw refuse('missing', `no file ${path}`)
         // Empty is a legal replacement — it is how a line is removed — so
         // this asks for a string rather than for something.
         if (typeof args.replace != 'string') {
-          throw new Error('replace is required (the empty string removes)')
+          throw refuse(
+            'arguments',
+            'replace is required (the empty string removes)',
+          )
         }
         let now = new TextEncoder().encode(patched(
           new TextDecoder().decode(await blobs.get(key)),
@@ -2434,7 +2479,9 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let { space, app, who } = await inApp(ctx, args, true)
       let asked = list(args.paths, 'paths').map(shipPath)
-      if (!asked.length) throw new Error('paths: at least one file to copy in')
+      if (!asked.length) {
+        throw refuse('arguments', 'paths: at least one file to copy in')
+      }
       let files = await bench(ctx, space, async (box) => {
         // One `ls` expands every glob at once, so a batch of artifacts costs
         // one command rather than one each.
@@ -2443,7 +2490,8 @@ let OURS: Row[] = [
           Boolean,
         )
         if (!paths.length) {
-          throw new Error(
+          throw refuse(
+            'missing',
             `nothing in the sandbox matches ${asked.join(', ')} — ` +
               'sandbox_exec `ls` to see what the build left',
           )
@@ -2537,7 +2585,8 @@ let OURS: Row[] = [
         (p) => asked(path, p),
       )
       if (!files.length) {
-        throw new Error(
+        throw refuse(
+          'missing',
           `no file ${path} in ${app.slug} — app_files(op: 'list') says what ` +
             'is there',
         )
@@ -2636,7 +2685,8 @@ let OURS: Row[] = [
         // newest, so "put it back" means the one under it.
         want = all[1]
         if (!want) {
-          throw new Error(
+          throw refuse(
+            'missing',
             `${space.slug}/${app.slug} has ${
               all.length ? 'only one deploy' : 'no deploys'
             } — there is nothing earlier to go back to`,
@@ -2646,7 +2696,8 @@ let OURS: Row[] = [
         let n = Number(args.version)
         want = all.find((v) => v.version == n)
         if (!want) {
-          throw new Error(
+          throw refuse(
+            'missing',
             `no v${args.version} of ${space.slug}/${app.slug} — it keeps ${
               all.slice(0, KEEP).map((v) => `v${v.version}`).join(', ') ||
               'none'
@@ -2807,7 +2858,8 @@ let OURS: Row[] = [
         first == null && show == null && drop == null &&
         themeColor == null && background == null
       ) {
-        throw new Error(
+        throw refuse(
+          'arguments',
           'nothing to change: pass title, slug, access, home, first, ' +
             'gallery, theme_color, background_color, forget, or all',
         )
@@ -2817,24 +2869,24 @@ let OURS: Row[] = [
       // editor writes the app rather than deciding what its addresses are.
       if (drop != null) {
         if (who.role != 'owner') {
-          throw new Error(`not the owner of ${space.slug}`)
+          throw refuse('access', `not the owner of ${space.slug}`)
         }
         forgotten(app.slug, app.slugs, drop)
       }
       // Being shown is the space owner's, the way publishing is: an editor
       // writes the app, and putting it on our own front page is not that.
       if (show != null && who.role != 'owner') {
-        throw new Error(`not the owner of ${space.slug}`)
+        throw refuse('access', `not the owner of ${space.slug}`)
       }
       // Which app the bare hostname opens is the SPACE's, not this app's:
       // everyone who is given the space lands there, so it is the owner's
       // to move, the way publishing and membership are (`ownsApp` above).
       if (home != null && who.role != 'owner') {
-        throw new Error(`not the owner of ${space.slug}`)
+        throw refuse('access', `not the owner of ${space.slug}`)
       }
       let moving = to != null && to != app.slug
       if (moving && await ctx.dir.app(space, to!)) {
-        throw new Error(`app ${to} exists in ${space.slug}`)
+        throw refuse('conflict', `app ${to} exists in ${space.slug}`)
       }
       // The address it leaves keeps answering, as a permanent redirect to the
       // new one: a page already open on a phone writes to the old address for
@@ -2881,10 +2933,14 @@ let OURS: Row[] = [
       // them — and routing another app's paths from a page nobody is served
       // is a rule that would never fire. Said rather than silently kept.
       if (first?.length && home == false) {
-        throw new Error('a front page routes first; home: false routes nothing')
+        throw refuse(
+          'arguments',
+          'a front page routes first; home: false routes nothing',
+        )
       }
       if (first != null && home == null && !app.home) {
-        throw new Error(
+        throw refuse(
+          'conflict',
           `${space.slug}/${app.slug} is not the front page — ` +
             'app_set(app, home: true) makes it one, and it routes from there',
         )
@@ -2984,7 +3040,7 @@ let OURS: Row[] = [
       // The value is read and never held anywhere else: no `text(...)` echo
       // in a refusal, and nothing about it in the answer.
       if (typeof args.value != 'string' || !args.value) {
-        throw new Error('value is required')
+        throw refuse('arguments', 'value is required')
       }
       needsToken(ctx)
       await setSecret(ctx.env, storeName(space, app), name, args.value)
@@ -3062,12 +3118,16 @@ let OURS: Row[] = [
       // take every space, app and membership with it, so it is not an app to
       // throw away, whoever owns `yak`.
       if (space.slug == META.space && app.slug == META.app) {
-        throw new Error(`${META.space}/${META.app} is the platform itself`)
+        throw refuse(
+          'access',
+          `${META.space}/${META.app} is the platform itself`,
+        )
       }
       let forever = args.forever != null && flag(args.forever, 'forever')
       if (!forever) {
         if (app.trashed) {
-          throw new Error(
+          throw refuse(
+            'conflict',
             `${space.slug}/${app.slug} is already in the trash, ${
               daysLeft(app.trashed)
             } days left — app_restore brings it back, or ` +
@@ -3116,7 +3176,8 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let { space, app, who } = await inApp(ctx, args, true)
       if (!app.trashed) {
-        throw new Error(
+        throw refuse(
+          'conflict',
           `${space.slug}/${app.slug} is not in the trash — it is serving at ${
             url(space, app, ctx.env)
           }`,
@@ -3423,7 +3484,8 @@ let OURS: Row[] = [
       // space already answers at one, and route.ts decides which without
       // reading anything.
       if (!foreign(host, ctx.env)) {
-        throw new Error(
+        throw refuse(
+          'arguments',
           `${host} is on ${
             platformHost(ctx.env)
           }, which is ours — a custom domain is one ` +
@@ -3446,7 +3508,8 @@ let OURS: Row[] = [
       // caller's to learn.
       let taken = await ctx.dir.serves(host)
       if (taken) {
-        throw new Error(
+        throw refuse(
+          'conflict',
           taken.space.eid == space.eid
             ? `${host} already serves ${place(taken.space, taken.app)} — ` +
               'domain_detach it first to move it'
@@ -3522,7 +3585,8 @@ let OURS: Row[] = [
       let rows = (await ctx.dir.hosts(space))
         .filter((h) => !want || h.name == want)
       if (want && !rows.length) {
-        throw new Error(
+        throw refuse(
+          'missing',
           `${space.slug} has no domain ${want} — domain_attach it, or ` +
             'domain_status with no hostname for the ones it has',
         )
@@ -3602,7 +3666,8 @@ let OURS: Row[] = [
       let { space, who } = await owns(ctx, args)
       let row = (await ctx.dir.hosts(space)).find((h) => h.name == host)
       if (!row) {
-        throw new Error(
+        throw refuse(
+          'missing',
           `${space.slug} has no domain ${host} — domain_status says which ` +
             'domains it has',
         )
@@ -3677,7 +3742,8 @@ let OURS: Row[] = [
       // `recipes` last week and the one installing it today get one app.
       let taken = await ctx.dir.offered(name)
       if (taken && taken.app.eid != app.eid) {
-        throw new Error(
+        throw refuse(
+          'conflict',
           `${name} is published by ${taken.space.slug}/${taken.app.slug} — ` +
             'a published name is one app on the whole platform, so offer ' +
             'this one under another (app_publish name: …)',
@@ -3687,7 +3753,8 @@ let OURS: Row[] = [
       // serves nothing an installer could copy.
       let version = app.version ?? 0
       if (!version) {
-        throw new Error(
+        throw refuse(
+          'conflict',
           `${space.slug}/${app.slug} has never been deployed — app_deploy ` +
             'it, then publish what is serving',
         )
@@ -3746,7 +3813,7 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let { space, app, who } = await ownsApp(ctx, args)
       if (!app.published) {
-        throw new Error(`${space.slug}/${app.slug} is not published`)
+        throw refuse('conflict', `${space.slug}/${app.slug} is not published`)
       }
       // A component off an entity, which is a null beside its name — the app
       // itself is untouched, and so is everyone who installed it.
@@ -3833,7 +3900,8 @@ let OURS: Row[] = [
       let name = slug(args.name, 'name')
       let offer = await ctx.dir.offered(name)
       if (!offer?.app.published) {
-        throw new Error(
+        throw refuse(
+          'missing',
           `nothing is published as ${name} — app_published lists what is on ` +
             'offer',
         )
@@ -3844,7 +3912,7 @@ let OURS: Row[] = [
       let free = ceilings(space.tier, space.slug)
       let apps = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
       if (free?.apps != null && apps.length >= free.apps) {
-        throw new Error(atCeiling(space, 'apps', ctx.env))
+        throw refuse('limit', atCeiling(space, 'apps', ctx.env))
       }
       // The address the copy takes: the source app's own slug, not the
       // published name. An app is written at its own address — a page that
@@ -3863,14 +3931,16 @@ let OURS: Row[] = [
         ? offer.app.slug
         : name
       if (await ctx.dir.app(space, s)) {
-        throw new Error(
+        throw refuse(
+          'conflict',
           `app ${s} exists in ${space.slug} — app_install(name, as: '…') ` +
             'puts the copy at another address',
         )
       }
       let moved = await ctx.dir.former(space, s)
       if (moved) {
-        throw new Error(
+        throw refuse(
+          'conflict',
           `${s} is where ${space.slug}/${moved.slug} used to be, and still ` +
             'points there — install it at another address (as:)',
         )
@@ -3941,14 +4011,16 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let { space, app, who, store } = await inApp(ctx, args, true)
       if (!app.installed) {
-        throw new Error(
+        throw refuse(
+          'conflict',
           `${space.slug}/${app.slug} was not installed from anywhere — it is ` +
             'their own app, and app_deploy releases what you write in it',
         )
       }
       let from = await ctx.dir.appAt(app.installed.of)
       if (!from?.app.published) {
-        throw new Error(
+        throw refuse(
+          'missing',
           `the app ${space.slug}/${app.slug} came from is no longer ` +
             'published — this copy keeps working, data and all, and there is ' +
             'nothing to update it to',
@@ -4043,7 +4115,7 @@ let OURS: Row[] = [
         ? null
         : await ctx.dir.app(space, text(args.app, 'app'))
       if (args.app != null && !app) {
-        throw new Error(`no app ${args.app} in ${space.slug}`)
+        throw refuse('missing', `no app ${args.app} in ${space.slug}`)
       }
       let link = app
         ? url(space, app, ctx.env)
@@ -4061,7 +4133,7 @@ let OURS: Row[] = [
       let person = await personOf(meta(ctx.env), email, name)
       let had = await ctx.dir.member(space, person)
       if (person == ctx.person && had) {
-        throw new Error(`${email} is you, and you own ${space.slug}`)
+        throw refuse('arguments', `${email} is you, and you own ${space.slug}`)
       }
       // One app, or the space (T-37615). A seat is read space-wide — that is
       // what the roster is — so the way to invite somebody to a single app is
@@ -4071,7 +4143,8 @@ let OURS: Row[] = [
       // the tool saying one thing and doing another.
       let held = app && await ctx.dir.grant(app, person)
       if (app && had) {
-        throw new Error(
+        throw refuse(
+          'conflict',
           `${email} is already ${
             had.role == 'owner' ? 'an' : 'a'
           } ${had.role}` +
@@ -4175,12 +4248,13 @@ let OURS: Row[] = [
         ? null
         : await ctx.dir.app(space, text(args.app, 'app'))
       if (args.app != null && !app) {
-        throw new Error(`no app ${args.app} in ${space.slug}`)
+        throw refuse('missing', `no app ${args.app} in ${space.slug}`)
       }
       let held = app && person && await ctx.dir.grant(app, person)
       if (app) {
         if (!held) {
-          throw new Error(
+          throw refuse(
+            'missing',
             `${email} is not a guest of ${space.slug}/${app.slug}`,
           )
         }
@@ -4193,9 +4267,11 @@ let OURS: Row[] = [
         }
       }
       let had = person && await ctx.dir.member(space, person)
-      if (!had) throw new Error(`${email} is not a member of ${space.slug}`)
+      if (!had) {
+        throw refuse('missing', `${email} is not a member of ${space.slug}`)
+      }
       if (had.role == 'owner' && (await ctx.dir.owners(space)) < 2) {
-        throw new Error(`${email} is the only owner of ${space.slug}`)
+        throw refuse('conflict', `${email} is the only owner of ${space.slug}`)
       }
       await ctx.dir.apply({
         entities: [{ entity: { eid: had.eid }, tombstone: {} }],
@@ -4244,7 +4320,8 @@ let OURS: Row[] = [
       // short life that renews itself is not a short life. One comes from
       // where the person actually signed in.
       if (ctx.who?.via == 'grant') {
-        throw new Error(
+        throw refuse(
+          'access',
           'This call is signed in with a grant, and a grant cannot mint ' +
             'another. Ask for one where you signed in — the connector, or ' +
             'the browser.',
@@ -4253,7 +4330,7 @@ let OURS: Row[] = [
       let secret = ctx.env.SESSION_SECRET
       let book = ledger(ctx.env.OAUTH_KV)
       if (!secret || !book) {
-        throw new Error('grants are not switched on here')
+        throw refuse('unavailable', 'grants are not switched on here')
       }
       if (args.revoke != null) {
         let said = text(args.revoke, 'revoke')
@@ -4334,7 +4411,8 @@ let OURS: Row[] = [
       let held = await recently(ctx)
       let cap = ctx.person ? HOURLY : STRANGERS
       if (held >= cap) {
-        throw new Error(
+        throw refuse(
+          'limit',
           `That is ${held} already this hour, and every one of them is kept ` +
             'and will be read — so this is a pause, not a no. Save the rest ' +
             `for later, or write to ${

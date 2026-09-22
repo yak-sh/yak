@@ -48,6 +48,7 @@ import {
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
+import { refuse, rejected } from './tool.ts'
 
 // The words the PLATFORM says in every store — core, member, edge, the twelve
 // relations. A word outside this list was declared by an app, which is what
@@ -95,7 +96,7 @@ let doorOf = (env: Env, r: Reach, said?: string) => async (line: string) => {
     vouched(r.who),
   )
   let body = await res.text()
-  if (!res.ok) throw new Error(body)
+  if (!res.ok) throw rejected(res.status, body)
   let bundles = JSON.parse(body)
   return Array.isArray(bundles)
     ? listed(bundles as Row[], said ?? asked) as Bundle[]
@@ -216,12 +217,12 @@ let asked = async (
       let out = await doorOf(env, r, said)(line)
       return { at: at(r), bundles: (Array.isArray(out) ? out : []) as Bundle[] }
     } catch (e) {
-      return { at: at(r), why: e instanceof Error ? e.message : String(e) }
+      return { at: at(r), why: e }
     }
   }))
   let heard = tried.filter((t) => 'bundles' in t) as Heard[]
   if (!heard.length && tried.length) {
-    throw new Error((tried[0] as { why: string }).why)
+    throw (tried[0] as { why: unknown }).why
   }
   return heard
 }
@@ -512,7 +513,8 @@ export let read = async (
   if (reach.length == 1) return await doorOf(env, reach[0])(line)
   let agg = aggOf(line)
   if (agg && agg != 'count') {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `a ${agg} reads one app at a time and this reads them all — ask for ` +
         'the rows and reduce them',
     )
@@ -674,7 +676,8 @@ let minted = (batch: Bundle[]) => {
     // (vocab.ts), so a bundle naming one names nothing, and minting an eid for
     // it would write a new entity where the caller meant an existing one.
     if (e.entity?.num != null) {
-      throw new Error(
+      throw refuse(
+        'arguments',
         'entity.num addresses nothing here — name the entity by its eid',
       )
     }
@@ -731,7 +734,7 @@ let sent = async (
 ) => {
   let r = part.r
   if (!edits(mode(r.app.access), r.who.role)) {
-    throw new Error(`not a writer of ${at(r)}`)
+    throw refuse('access', `not a writer of ${at(r)}`)
   }
   let door = appStore(env.STORE, r.space, r.app, env)
   let res = await door(`/apply${check ? '?check=1' : ''}`, {
@@ -739,7 +742,7 @@ let sent = async (
     body: JSON.stringify(part.entities),
   }, { ...vouched(r.who), ...headers })
   let body = await res.text()
-  if (!res.ok) throw new Error(`${at(r)}: ${body}`)
+  if (!res.ok) throw rejected(res.status, `${at(r)}: ${body}`)
   return JSON.parse(body) as Bundle[]
 }
 
@@ -767,7 +770,8 @@ let routed = async (
   let only = () => {
     if (named) return named
     if (reach.length == 1) return reach[0]
-    throw new Error(
+    throw refuse(
+      'arguments',
       `name the app this goes in with $app — ${
         reach.map((r) => r.app.slug).join(', ')
       }`,
@@ -791,7 +795,8 @@ let routed = async (
       // words: nothing here can pick between them, so the caller does.
       let spaces = [...new Set(declared.map((r) => r.space.slug))]
       if (apart.has(name) && spaces.length > 1) {
-        throw new Error(
+        throw refuse(
+          'arguments',
           `${name} means two things — ${spaces.join(' and ')} declare it ` +
             'differently; say which with $app on the bundle',
         )
@@ -808,7 +813,8 @@ let routed = async (
     // bundle, which is what makes writing a new entity one call.
     if (mates.length == 1) return mates[0]
     if (reach.length == 1) return reach[0]
-    throw new Error(
+    throw refuse(
+      'arguments',
       `which app should ${name} go in? say $app on the bundle — ${
         reach.map((r) => r.app.slug).join(', ')
       }`,
@@ -901,7 +907,7 @@ export let written = async (
   // named beside the graph's.
   requested(batch, ['$app'])
   let { parts, aliases } = await routed(env, reach, named, batch)
-  if (!parts.length) throw new Error('entities: nothing to write')
+  if (!parts.length) throw refuse('arguments', 'entities: nothing to write')
   if (parts.length > 1) {
     await Promise.all(parts.map((p) => sent(env, p, true, headers)))
   }

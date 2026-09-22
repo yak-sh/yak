@@ -14,6 +14,7 @@
 // is the vocabulary a row is written in.
 import type { Security } from '@yaks/mcp'
 import { writes } from '@yaks/member'
+import { CallError } from '@yaks/tools'
 import { fill } from '@yaks/yaml'
 import { WORDS } from './content.ts'
 import { appStore, type Directory, type Space } from './directory.ts'
@@ -142,6 +143,33 @@ export let worded = (row: Row): Tool => {
   }
 }
 
+/**
+ * A refusal: the caller asked for something this tool will not do, and the
+ * sentence says why. The runner records it as `error{code}` and reports
+ * nothing (@yaks/tools `CallError`); anything else a tool throws is a defect,
+ * mailed as an incident. The codes are few on purpose: `arguments` (what was
+ * passed is malformed), `access` (not this caller's to do), `missing` (no such
+ * thing), `conflict` (the thing is not in a state for this), `limit` (a plan,
+ * ceiling or rate says no), `unavailable` (switched off where this runs).
+ */
+export let refuse = (code: string, text: string) => new CallError(code, text)
+
+// The code a store's refusal carries, by its status; a 4xx not named here is
+// something malformed in what was asked.
+let STATUS: Record<number, string> = {
+  401: 'access',
+  403: 'access',
+  404: 'missing',
+  409: 'conflict',
+  413: 'limit',
+  429: 'limit',
+}
+
+/** What a door answered, as a throwable: a 4xx is its refusal of what the
+ * caller asked, and anything else is ours to fix. */
+export let rejected = (status: number, text: string) =>
+  status < 500 ? refuse(STATUS[status] ?? 'arguments', text) : new Error(text)
+
 export let str = (description: string) => ({ type: 'string', description })
 
 export let SPACE = str(
@@ -157,7 +185,9 @@ export let APP = str(
 )
 
 export let text = (v: unknown, what: string) => {
-  if (typeof v != 'string' || !v) throw new Error(`${what} is required`)
+  if (typeof v != 'string' || !v) {
+    throw refuse('arguments', `${what} is required`)
+  }
   return v
 }
 
@@ -188,7 +218,8 @@ export let ownSpace = async (ctx: Ctx, app?: unknown) => {
     }
     if (holding.length == 1) return holding[0]
     if (holding.length > 1) {
-      throw new Error(
+      throw refuse(
+        'arguments',
         `space: name one of ${
           holding.map((s) => s.slug).join(', ')
         } — each has an app ${app}`,
@@ -197,7 +228,8 @@ export let ownSpace = async (ctx: Ctx, app?: unknown) => {
   }
   let owned = await ctx.dir.spaces(ctx.person, 'owner')
   if (owned.length > 1) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `space: name one of ${owned.map((s) => s.slug).join(', ')}`,
     )
   }
@@ -209,14 +241,14 @@ export let inSpace = async (ctx: Ctx, args: Args, write = false) => {
   let space = args.space == null
     ? await ownSpace(ctx, args.app)
     : await ctx.dir.space(text(args.space, 'space'))
-  if (!space) throw new Error(`no space ${args.space}`)
+  if (!space) throw refuse('missing', `no space ${args.space}`)
   let who: Who = {
     person: ctx.person,
     role: await ctx.dir.role(space, ctx.person),
   }
-  if (!who.role) throw new Error(`not a member of ${space.slug}`)
+  if (!who.role) throw refuse('access', `not a member of ${space.slug}`)
   if (write && !writes(who.role)) {
-    throw new Error(`not a writer of ${space.slug}`)
+    throw refuse('access', `not a writer of ${space.slug}`)
   }
   return { space, who }
 }
@@ -226,9 +258,9 @@ export let inSpace = async (ctx: Ctx, args: Args, write = false) => {
 // (tools.ts `app_list`).
 export let seatIn = async (ctx: Ctx, slug: string) => {
   let space = await ctx.dir.space(slug)
-  if (!space) throw new Error(`no space ${slug}`)
+  if (!space) throw refuse('missing', `no space ${slug}`)
   let role = await ctx.dir.role(space, ctx.person)
-  if (!role) throw new Error(`not a member of ${space.slug}`)
+  if (!role) throw refuse('access', `not a member of ${space.slug}`)
   return [{ space, role }]
 }
 
@@ -236,7 +268,7 @@ export let inApp = async (ctx: Ctx, args: Args, write = false) => {
   let { space, who } = await inSpace(ctx, args, write)
   let slug = text(args.app, 'app')
   let app = await ctx.dir.app(space, slug)
-  if (!app) throw new Error(`no app ${slug} in ${space.slug}`)
+  if (!app) throw refuse('missing', `no app ${slug} in ${space.slug}`)
   return {
     space,
     app,

@@ -1,3 +1,5 @@
+import { refuse } from './tool.ts'
+
 export type MigrationMetadata = {
   old_tag?: string
   new_tag: string
@@ -16,12 +18,14 @@ export let migrationMetadata = (
   let tags = migrations.map((migration, i) => {
     let tag = migration.tag
     if (typeof tag != 'string' || !tag.trim()) {
-      throw new Error(
+      throw refuse(
+        'arguments',
         `refused migrations[${i}].tag: expected a nonempty migration tag`,
       )
     }
     if (seen.has(tag)) {
-      throw new Error(
+      throw refuse(
+        'arguments',
         `refused migrations[${i}].tag: ${JSON.stringify(tag)} is repeated; ` +
           'each migration needs its own tag',
       )
@@ -31,7 +35,8 @@ export let migrationMetadata = (
   })
   let applied = current ? tags.indexOf(current) : -1
   if (current && applied < 0) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `refused migrations: deployed tag ${JSON.stringify(current)} is ` +
         'missing from config; keep previously applied tags and append new migrations',
     )

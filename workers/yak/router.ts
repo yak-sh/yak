@@ -15,6 +15,7 @@
 // the router.
 
 import { MANAGE } from './route.ts'
+import { refuse } from './tool.ts'
 
 // Everything between the wildcards, as itself: a glob's own `.` is a dot and
 // not the regex's any-character.
@@ -79,24 +80,34 @@ let SHAPE = 'a list of path globs, like ["/recipes/*"]'
  */
 export let globs = (first: unknown, kernels: string[]): string[] => {
   if (first == null) return []
-  if (!Array.isArray(first)) throw new Error(`first is ${SHAPE}`)
+  if (!Array.isArray(first)) throw refuse('arguments', `first is ${SHAPE}`)
   let owned = [
     ...PLATFORM_PATHS,
     ...kernels.flatMap((k) => [`/${k}`, `/${k}/*`]),
   ]
   return first.map((glob) => {
     if (typeof glob != 'string' || !glob) {
-      throw new Error(`${JSON.stringify(glob)} is not a path glob — ${SHAPE}`)
+      throw refuse(
+        'arguments',
+        `${JSON.stringify(glob)} is not a path glob — ${SHAPE}`,
+      )
     }
     if (!glob.startsWith('/')) {
-      throw new Error(`${glob} does not start with / — a glob is a path`)
+      throw refuse(
+        'arguments',
+        `${glob} does not start with / — a glob is a path`,
+      )
     }
     if (!PATH.test(glob)) {
-      throw new Error(`${glob} is not a path — path characters and * only`)
+      throw refuse(
+        'arguments',
+        `${glob} is not a path — path characters and * only`,
+      )
     }
     let taken = owned.find((p) => overlaps(glob, p))
     if (taken) {
-      throw new Error(
+      throw refuse(
+        'arguments',
         `${glob} names ${taken}, which the platform answers itself — route ` +
           "a path of the app's own",
       )

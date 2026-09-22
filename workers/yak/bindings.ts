@@ -7,6 +7,7 @@ import { KERNEL, meta } from './meta.ts'
 import { sha256 } from './versions.ts'
 import { type Bound, type Config, requests } from './wrangler_app.ts'
 import { NAMESPACE, namespace } from './dispatch.ts'
+import { refuse } from './tool.ts'
 
 export type Binding = Bound & { eid: string; app: string }
 type Request = ReturnType<typeof requests>[number]
@@ -132,7 +133,8 @@ let made = async (env: Env, b: Bound, want: Request) => {
   if (
     b.type == 'vectorize' && !want.preset && !(want.dimensions && want.metric)
   ) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `vectorize.${b.name}: first creation needs dimensions and metric, or preset, ` +
         'on this vectorize entry in wrangler.jsonc',
     )
@@ -165,7 +167,8 @@ export let provision = async (
       !(want.dimensions && want.metric) &&
       !held.some((b) => matches(b, want))
     ) {
-      throw new Error(
+      throw refuse(
+        'arguments',
         `vectorize.${want.name}: first creation needs dimensions and metric, or preset, on this vectorize entry in wrangler.jsonc`,
       )
     }
@@ -226,7 +229,8 @@ export let provision = async (
         )
       ) {
         await discard(env, b)
-        throw new Error(
+        throw refuse(
+          'conflict',
           'the app was permanently deleted during resource creation',
         )
       }

@@ -55,6 +55,7 @@ import type { Space } from './directory.ts'
 import { retryOnce } from './door.ts'
 import { type Grant, ledger, mint, tokenOf } from './grants.ts'
 import { type Host, url } from './host.ts'
+import { refuse } from './tool.ts'
 
 /** One sandbox, as this file asks for it — the four things the tools do,
  * plus the one knob the deploy has no way to set. */
@@ -271,7 +272,7 @@ export let boxOf = (
 ): Box => {
   if (!env.SANDBOX) throw new Error(NO_BOX)
   let spent = seconds(spend, now())
-  if (spent >= BUDGET) throw new Error(overBudget(spent))
+  if (spent >= BUDGET) throw refuse('limit', overBudget(spent))
   let first = spend.since == null
   spend.since ??= now()
   let box = stub(env.SANDBOX, space)

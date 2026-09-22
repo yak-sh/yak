@@ -97,6 +97,7 @@ import { sha256 } from './versions.ts'
 import { DAYS, NOT_ON, type Stats, statsOf } from './views.ts'
 import { answered, watched } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
+import { refuse } from './tool.ts'
 
 // The runtime's streaming HTML rewriter, the slice this file asks for, so
 // `deno check` reads the Worker without @cloudflare/workers-types (env.ts).
@@ -837,7 +838,7 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
   // so; nobody reaches this door signed out, since the agent door has an
   // identity before it has a call (mcp.ts).
   let no = (what: string): never => {
-    throw new Error(who.person ? MEMBER[what] : SAYS[what])
+    throw refuse('access', who.person ? MEMBER[what] : SAYS[what])
   }
   return {
     apply: async (mutation: unknown) => {

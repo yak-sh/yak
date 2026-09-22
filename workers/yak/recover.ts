@@ -17,6 +17,7 @@
 import type { Bundle } from '@yaks/graph'
 import type { Door } from './door.ts'
 import { KERNEL } from './meta.ts'
+import { refuse, rejected } from './tool.ts'
 
 /**
  * How far back a store can be put. Cloudflare's own window on a Durable
@@ -53,18 +54,21 @@ export type Restore = {
 export let moment = (said: string, now = Date.now()): Date => {
   let at = new Date(said)
   if (isNaN(at.getTime())) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `at: ${said} is not a time — write it as 2026-09-06T14:20:00Z`,
     )
   }
   if (at.getTime() > now) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `at: ${at.toISOString()} is in the future — a store can be put back, ` +
         'not forward',
     )
   }
   if (at.getTime() < now - WINDOW) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `at: ${at.toISOString()} is outside the 30-day window — the oldest ` +
         `moment this store can be put back to is ${
           oldest(now).toISOString()
@@ -89,7 +93,7 @@ let asked = async (store: Door, path: string, init?: RequestInit) => {
         return ''
       }
     })()
-    throw new Error(said || body)
+    throw rejected(r.status, said || body)
   }
   return JSON.parse(body) as { from: string; to: string; undo?: string }
 }

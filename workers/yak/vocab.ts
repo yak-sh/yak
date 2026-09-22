@@ -1,4 +1,5 @@
 import { archetypeDoc } from '@yaks/archetype'
+import { refuse } from './tool.ts'
 // The vocabulary one app speaks (T-33811): the core documents every store on
 // the platform shares, plus the words that app declared for itself, loaded
 // through @yaks/vocab into one `Vocab` — the thing a Store reads its DDL, its
@@ -1149,7 +1150,8 @@ export let grew = (
     for (let [col, s] of Object.entries(schema.properties ?? {})) {
       let had = props[col]
       if (had && (had.type != s.type || had.format != s.format)) {
-        throw new Error(
+        throw refuse(
+          'arguments',
           `vocab.json: ${name}.${col} is already ${wordOf(had)} — a column ` +
             'keeps the type its rows were written under',
         )
@@ -1209,7 +1211,8 @@ export let homed = (next: VocabDoc, homes: Homes) => {
     for (let [col, s] of Object.entries(schema.properties ?? {})) {
       let had = home.props[col]
       if (had && (had.type != s.type || had.format != s.format)) {
-        throw new Error(
+        throw refuse(
+          'arguments',
           `vocab.json: ${name}.${col} is ${wordOf(s)} here and ${
             wordOf(had)
           } in ${home.at}, where ${name} lives — a column keeps the type its ` +
@@ -1276,18 +1279,21 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
     try {
       held = held.trim() ? read(held, file) : {}
     } catch (e) {
-      throw new Error(`${(e as Error).message} — ${EXAMPLE}`)
+      throw refuse('arguments', `${(e as Error).message} — ${EXAMPLE}`)
     }
   }
   if (held == null) held = {}
-  if (!object(held)) throw new Error(`${file} is an object — ${EXAMPLE}`)
+  if (!object(held)) {
+    throw refuse('arguments', `${file} is an object — ${EXAMPLE}`)
+  }
   let off = typeof held.tools == 'boolean' ? held.tools : undefined
   let body = off === undefined
     ? held
     : Object.fromEntries(Object.entries(held).filter(([k]) => k != 'tools'))
   let keys = Object.keys(body)
   if (keys.length && !keys.some((k) => k.startsWith('$'))) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `${file}: ${keys.join(', ')} — a manifest is a JSON Schema document, ` +
         `one $defs entry per component and one properties entry per column: ` +
         `${EXAMPLE}; the whole of it is in the guide under ` +
@@ -1312,7 +1318,8 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   // source.
   let taken = Object.keys(doc.$defs ?? {}).filter((n) => RESERVED.includes(n))
   if (taken.length) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       `${file}: ${taken.join(', ')} ${
         taken.length == 1 ? 'is a word' : 'are words'
       } the platform already says — pick another name; the whole list is in ` +
@@ -1320,7 +1327,7 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
     )
   }
   let errs = storable(doc)
-  if (errs.length) throw new Error(`${file}: ${errs.join('; ')}`)
+  if (errs.length) throw refuse('arguments', `${file}: ${errs.join('; ')}`)
   return doc
 }
 

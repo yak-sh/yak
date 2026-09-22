@@ -36,6 +36,7 @@ import { apex, type Host, url } from './host.ts'
 import { says } from './route.ts'
 import { nobody } from './session.ts'
 import { type Ctx, TOOLS } from './tools.ts'
+import { refuse } from './tool.ts'
 
 type Args = Record<string, unknown>
 
@@ -70,7 +71,7 @@ export let openly = (t: { security?: Security[] }) =>
 export let barred = (t: Tool, env: Host = {}): Tool => ({
   ...t,
   meta: { ...t.meta, securitySchemes: SIGNIN },
-  run: () => Promise.reject(new Error(says(env))),
+  run: () => Promise.reject(refuse('access', says(env))),
 })
 
 /**
@@ -136,14 +137,17 @@ let said = (v: unknown) => typeof v == 'string' ? v.trim() : ''
 export let opened = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
   let slug = said(args.app)
   let where = said(args.space)
-  if (!slug || !where) throw new Error(nameIt(ctx.env))
+  if (!slug || !where) throw refuse('arguments', nameIt(ctx.env))
   let space = await ctx.dir.space(where)
   let app = space && await ctx.dir.app(space, slug)
   // A trashed app answers nowhere else either (erase.ts): to a stranger it is
   // simply not there.
-  if (!space || !app || app.trashed) throw new Error(`no app ${where}/${slug}`)
+  if (!space || !app || app.trashed) {
+    throw refuse('missing', `no app ${where}/${slug}`)
+  }
   if (!reads(mode(app.access), null)) {
-    throw new Error(
+    throw refuse(
+      'access',
       `${where}/${slug} is private — only its members read it. Sign in at ` +
         `${url(ctx.env, '/login')} and ask its owner for a seat.`,
     )

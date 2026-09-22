@@ -30,6 +30,7 @@
 import type { Bundle } from '@yaks/graph'
 import { read } from '@yaks/yaml'
 import { type Sheet, sheet } from './csv.ts'
+import { refuse } from './tool.ts'
 
 /** What a seed is written in: YAML first — the warm path (M-34605) — then
  * JSON, which YAML reads anyway, and a spreadsheet (csv.ts). */
@@ -79,12 +80,14 @@ let bundles = (file: string, text: string): Bundle[] => {
   try {
     held = read(text, file)
   } catch (e) {
-    throw new Error(`${(e as Error).message} — ${SHAPE}`)
+    throw refuse('arguments', `${(e as Error).message} — ${SHAPE}`)
   }
-  if (!Array.isArray(held)) throw new Error(`${file} is not a list — ${SHAPE}`)
+  if (!Array.isArray(held)) {
+    throw refuse('arguments', `${file} is not a list — ${SHAPE}`)
+  }
   held.forEach((one, i) => {
     if (!one || typeof one != 'object' || Array.isArray(one)) {
-      throw new Error(`${file}[${i}] is not a bundle — ${SHAPE}`)
+      throw refuse('arguments', `${file}[${i}] is not a bundle — ${SHAPE}`)
     }
   })
   return held as Bundle[]
@@ -160,7 +163,10 @@ export let load = async (all: Sown[], apply: Applying): Promise<Sown[]> => {
   if (!all.length) return all
   let no = await apply(all.map((s) => s.bundle), false)
   if (no == null) return all
-  throw new Error(`${at(await blamed(all, apply, no))} was refused: ${no}`)
+  throw refuse(
+    'arguments',
+    `${at(await blamed(all, apply, no))} was refused: ${no}`,
+  )
 }
 
 /** The app's seed applied, once — the whole of it as one batch. */

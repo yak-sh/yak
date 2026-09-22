@@ -13,6 +13,7 @@ import {
 } from './bindings.ts'
 import { idReport, parse } from './wrangler_app.ts'
 import { meta } from './meta.ts'
+import { refuse } from './tool.ts'
 
 type Read = (path: string) => Promise<Uint8Array<ArrayBuffer> | null>
 
@@ -100,7 +101,10 @@ export let deployWorker = async (
   if (!(await meta(env).query(`.eid=${app.eid}&.app!`)).length) {
     await drop(env, store, true)
     for (let binding of bound) await discard(env, binding)
-    throw new Error('the app was permanently deleted during its worker upload')
+    throw refuse(
+      'conflict',
+      'the app was permanently deleted during its worker upload',
+    )
   }
   return {
     worker,

@@ -51,6 +51,7 @@ import { metaOf } from './meta.ts'
 import { managePath } from './route.ts'
 import { apex, type Host, url as hostUrl } from './host.ts'
 import { whoIs } from './session.ts'
+import { refuse } from './tool.ts'
 
 // ---- the fee ---------------------------------------------------------------
 
@@ -288,7 +289,7 @@ let wrote = (env: Env, space: Space, row: Record<string, unknown> | null) =>
  */
 export let connect = async (env: Env, space: Space, email: string) => {
   let no = refusedSell(space, env)
-  if (no) throw new Error(no)
+  if (no) throw refuse('limit', no)
   let id = space.stripe?.account
   if (!id) {
     let made = await ask(env, '/v1/accounts', account(space, email)) as Account
@@ -343,14 +344,21 @@ export type Item = { product: string; qty: number; options?: string }
 export let cart = (body: unknown): Item[] => {
   let items = (body as { items?: unknown })?.items
   if (!Array.isArray(items) || !items.length) {
-    throw new Error('items: a list of {product, qty} to sell, and not empty')
+    throw refuse(
+      'arguments',
+      'items: a list of {product, qty} to sell, and not empty',
+    )
   }
   return items.map((one, i) => {
     let it = one as Record<string, unknown>
     let product = String(it?.product ?? '')
-    if (!product) throw new Error(`items[${i}].product: name a product`)
+    if (!product) {
+      throw refuse('arguments', `items[${i}].product: name a product`)
+    }
     let qty = Math.floor(Number(it?.qty ?? 1))
-    if (!(qty > 0)) throw new Error(`items[${i}].qty: how many, at least one`)
+    if (!(qty > 0)) {
+      throw refuse('arguments', `items[${i}].qty: how many, at least one`)
+    }
     let options = String(it?.options ?? '').trim().slice(0, 60)
     return { product, qty, ...(options ? { options } : {}) }
   })
@@ -398,10 +406,12 @@ export let priced = (rows: Product[], items: Item[]) => {
   let total = 0
   let lines = items.map((one) => {
     let row = by.get(one.product)
-    if (!row?.product) throw new Error(`no product ${one.product} in this app`)
+    if (!row?.product) {
+      throw refuse('missing', `no product ${one.product} in this app`)
+    }
     let cents = Math.floor(Number(row.product.price_cents ?? 0))
     if (!(cents > 0)) {
-      throw new Error(`${row.doc?.title || one.product} has no price`)
+      throw refuse('conflict', `${row.doc?.title || one.product} has no price`)
     }
     let name = row.doc?.title || 'Item'
     total += cents * one.qty
@@ -416,7 +426,8 @@ export let priced = (rows: Product[], items: Item[]) => {
   })
   let meta = packed(items)
   if (meta.length > META) {
-    throw new Error(
+    throw refuse(
+      'limit',
       `that is too many different things in one order — about ` +
         `${Math.floor(items.length * META / meta.length)} lines fit`,
     )
@@ -450,10 +461,13 @@ export let backAt = (root: string, asked: unknown) => {
   try {
     out = new URL(at, root)
   } catch {
-    throw new Error(`${at} is not an address`)
+    throw refuse('arguments', `${at} is not an address`)
   }
   if (!out.href.startsWith(root)) {
-    throw new Error(`success and cancel stay inside this app (${root})`)
+    throw refuse(
+      'arguments',
+      `success and cancel stay inside this app (${root})`,
+    )
   }
   return out.href.replaceAll('%7B', '{').replaceAll('%7D', '}')
 }

@@ -26,6 +26,8 @@
 // `recipes`), and macOS's own leavings — `__MACOSX/` and `.DS_Store` — are
 // dropped rather than deployed.
 
+import { refuse } from './tool.ts'
+
 export type Entry = { path: string; bytes: Uint8Array<ArrayBuffer> }
 
 // The most one drop may unpack to. The same 20 MB apps.ts puts on one upload,
@@ -112,7 +114,8 @@ let index = (v: DataView, bytes: Uint8Array) => {
 }
 
 let big = () =>
-  new Error(
+  refuse(
+    'limit',
     `That unpacks to more than ${
       MAX / 1024 / 1024
     } MB — an app is pages and pictures, not an archive.`,
@@ -156,7 +159,8 @@ export let unzip = async (
   let bytes = new Uint8Array(buf)
   let v = new DataView(buf)
   if (v.byteLength < 30 || u32(v, 0) != LOCAL) {
-    throw new Error(
+    throw refuse(
+      'arguments',
       "That isn't a zip — drop a .zip of your app's files, or a single " +
         'index.html.',
     )
@@ -178,7 +182,8 @@ export let unzip = async (
     if (flags & 8) {
       let there = said.get(path)
       if (!there) {
-        throw new Error(
+        throw refuse(
+          'arguments',
           `${path} in that zip has no size recorded anywhere in it — make ` +
             'the zip again from the folder itself.',
         )
@@ -188,7 +193,8 @@ export let unzip = async (
       size = there.size
     }
     if (flags & 1) {
-      throw new Error(
+      throw refuse(
+        'arguments',
         `${path} in that zip is password-protected, and there is nowhere ` +
           'here to give it a password.',
       )
@@ -206,19 +212,21 @@ export let unzip = async (
       continue
     }
     if (escapes(path)) {
-      throw new Error(
+      throw refuse(
+        'arguments',
         `${path} in that zip points outside the app — a zip of the app's ` +
           'own files, with no ../ and no absolute paths.',
       )
     }
     if (method != 0 && method != 8) {
-      throw new Error(
+      throw refuse(
+        'arguments',
         `${path} in that zip is compressed a way this door cannot read ` +
           `(method ${method}) — zip it again with the ordinary settings.`,
       )
     }
     if (start + packed > v.byteLength) {
-      throw new Error(`That zip stops in the middle of ${path}.`)
+      throw refuse('arguments', `That zip stops in the middle of ${path}.`)
     }
     let room = max - total
     if (size > room) throw big()
@@ -230,7 +238,7 @@ export let unzip = async (
     out.push({ path, bytes: content })
     at = after
   }
-  if (!out.length) throw new Error('There are no files in that zip.')
+  if (!out.length) throw refuse('arguments', 'There are no files in that zip.')
   let top = shared(out.map((e) => e.path))
   return top
     ? out.map((e) => ({ ...e, path: e.path.slice(top.length) }))
