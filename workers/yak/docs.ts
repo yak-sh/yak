@@ -22,7 +22,7 @@
 //
 // `/technical` and the old `/guide` addresses answer 301, for the links
 // already in the world and the resource list a connector cached.
-import { headings, parse, render as drawn, type Token } from '@yaks/markdown'
+import type { Token } from '@yaks/markdown'
 import { front } from '@yaks/yaml'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -107,8 +107,14 @@ let titled = (tokens: Token[]) => {
   return lead && lead.type == 'heading' ? lead.text : ''
 }
 
-let markup = (tokens: Token[]) =>
-  tokens.length ? renderToString(drawn(tokens, h)) : ''
+// The renderer, loaded when a page is drawn: marked builds its grammar when
+// it loads, and seo.ts imports this file for the addresses alone, so a static
+// import had every cold start pay for it (T-37977).
+let marked = () => import('@yaks/markdown')
+type Md = Awaited<ReturnType<typeof marked>>
+
+let markup = (md: Md, tokens: Token[]) =>
+  tokens.length ? renderToString(md.render(tokens, h)) : ''
 
 // The contents: every subject with the phrase it is offered by, and the one
 // rule at the foot of it, since a reader who wants the file rather than the
@@ -154,8 +160,8 @@ ${
 // without scrolling it. The ids are the renderer's (@yaks/markdown
 // `headings`), which is why nothing here has to slugify anything itself. A
 // page with one section is a page that needs no contents list.
-let onPage = (tokens: Token[]) => {
-  let rows = headings(tokens).filter((v) => v.depth == 2 || v.depth == 3)
+let onPage = (md: Md, tokens: Token[]) => {
+  let rows = md.headings(tokens).filter((v) => v.depth == 2 || v.depth == 3)
   return rows.length < 2
     ? ''
     : `<nav class="Page_Aside Docs_Contents" aria-label="On this page">
@@ -176,6 +182,7 @@ ${
 // first so the page has exactly one h1; anything handed in as `under` sits
 // between it and the rest of the document.
 let page = (
+  md: Md,
   env: Host,
   at: string,
   title: string,
@@ -193,11 +200,11 @@ let page = (
 ${top}
 <main class="Page">
 ${side(slug)}
-${onPage(tokens)}
+${onPage(md, tokens)}
 <article class="Page_Body Prose">
-${markup(opening)}
+${markup(md, opening)}
 ${under}
-${markup(tokens.slice(lead + 1))}
+${markup(md, tokens.slice(lead + 1))}
 </article>
 </main>
 ${foot}
@@ -239,8 +246,10 @@ export let answer = async (
   if (path == PATH) {
     let text = await source(env, '/docs.md')
     if (!text) return null
-    let tokens = parse(linked(text), { breaks: false })
+    let md = await marked()
+    let tokens = md.parse(linked(text), { breaks: false })
     return page(
+      md,
       env,
       url(env, PATH),
       DOCS.title,
@@ -254,8 +263,10 @@ export let answer = async (
   if (!row) return null
   let text = await source(env, `/docs/${slug}.md`)
   if (!text) return null
-  let tokens = parse(linked(text), { breaks: false })
+  let md = await marked()
+  let tokens = md.parse(linked(text), { breaks: false })
   return page(
+    md,
     env,
     url(env, pathOf(slug)),
     `${titled(tokens) || row.title} · yaks.app`,

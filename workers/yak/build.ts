@@ -65,7 +65,7 @@
 // it.
 import type { DurableSql, Hibernation, Wire } from '@yaks/durable-object'
 import { type Level, level, writes } from '@yaks/member'
-import { type Beat, build, type Line } from './builder.ts'
+import type { Beat, Line } from './builder.ts'
 import { directory, type Space } from './directory.ts'
 import { fetchOf } from './door.ts'
 import * as dirPart from './directory.ts'
@@ -313,6 +313,9 @@ export class Builder {
       this.#keep([asked])
       this.#tell([{ said: 'person', text }])
       let end: Frame = { done: '' }
+      // The loop and its tools (zod among them) load with the first build,
+      // not with every isolate that wakes this object (T-37977).
+      let { build } = await import('./builder.ts')
       let out = await build(this.#env, who, space, [...was, asked], {
         on: (b) => {
           let cast = framed(b)

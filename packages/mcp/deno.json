@@ -4,6 +4,7 @@
   "exports": {
     ".": "./mod.ts",
     "./stdio": "./stdio.ts",
+    "./roster": "./roster.ts",
     "./routes": "./routes.ts"
   },
   "license": "Apache-2.0",

@@ -95,14 +95,12 @@ import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { customOf, reading, stageOf, type Step, steps } from './domains.ts'
 import * as drop from './drop.ts'
-import { bound, type Env, type Inbound } from './env.ts'
+import { bound, type Env, type Handler, type Inbound } from './env.ts'
 import * as docs from './docs.ts'
 import * as gallery from './gallery.ts'
+import { HANDOFF } from './handoff.ts'
 import { apex, hosted } from './host.ts'
-import * as identity from './identity.ts'
 import { sprite } from './icons.ts'
-import { arrived, Refused } from './inbox.ts'
-import * as mcp from './mcp.ts'
 import { lost, oops, provisioning } from './pages.ts'
 import { routed } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
@@ -186,6 +184,15 @@ class Filed extends WorkerEntrypoint {
 }
 export let Files = withSentry(options, Filed)
 
+// Doors loaded when a request first reaches one (T-37977). What they import —
+// the MCP SDK and zod, the OAuth provider — was evaluated by every cold start,
+// a Store waking for one query included; now only by an isolate that serves
+// one of them. The email handler loads inbox.ts (postal-mime) the same way.
+let identity: Handler = async (req, env) =>
+  (await import('./identity.ts')).fetch(req, env)
+let mcp: Handler = async (req, env) =>
+  (await import('./mcp.ts')).fetch(req, env)
+
 let serve = async (req: Request, env: Env, r: Route) => {
   let asked = new URL(req.url).pathname
   if (r.space != null) {
@@ -223,7 +230,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
     path.startsWith('/space/') ||
     path.startsWith('/oauth/') || path.startsWith('/.well-known/oauth-')
   ) {
-    return bound(env.IDENTITY, identity.fetch, env).fetch(req)
+    return bound(env.IDENTITY, identity, env).fetch(req)
   }
   // Money, before the connector: Stripe's webhook posts to `/stripe/webhook`
   // (beside sell.ts's `/stripe/connect`). `/api/*` at the apex is otherwise
@@ -248,7 +255,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // and a rate is the owner's own door, not a thing an agent may move.
   if (path == '/api/fee') return sell.fees(req, env)
   if (path == '/mcp' || path.startsWith('/api/')) {
-    return bound(env.MCP, mcp.fetch, env).fetch(req)
+    return bound(env.MCP, mcp, env).fetch(req)
   }
   // The one static token OpenAI's apps directory fetches to verify the domain.
   // Not identity.ts's — the oauth well-known is that door's metadata; this is a
@@ -555,9 +562,9 @@ let router = {
       // host-only session cookie rather than the app store answering a sign-in
       // path. It is a foreign host by construction — a space's `.yaks.app`
       // hostname already carries the platform cookie and never needs it.
-      if (foreign(host, env) && asked == identity.HANDOFF) {
+      if (foreign(host, env) && asked == HANDOFF) {
         return sealed(
-          await bound(env.IDENTITY, identity.fetch, env).fetch(req),
+          await bound(env.IDENTITY, identity, env).fetch(req),
           env,
         )
       }
@@ -637,6 +644,7 @@ let router = {
   // part, not the sender, never the body. A letter is somebody's, and the
   // question this line answers is only which of our names people write to.
   async email(message: Inbound, env: Env, _ctx?: Lent): Promise<void> {
+    let { arrived, Refused } = await import('./inbox.ts')
     try {
       await arrived(message, env)
     } catch (e) {

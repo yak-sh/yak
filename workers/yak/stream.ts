@@ -39,7 +39,9 @@
 // needs its own copy. A stream that names no session is a client that was
 // never told an id, and every one of those hears — they cannot be told apart,
 // and silence is the worse failure.
-import { rosterLine } from '@yaks/mcp'
+// The roster alone, not the package: its root carries the MCP SDK and zod,
+// which a Wire waking to pass a line along never runs (T-37977).
+import { rosterLine } from '@yaks/mcp/roster'
 import { VERSION } from '../../src/version.ts'
 import type { Env } from './env.ts'
 import { fetchOf, type Namespace } from './door.ts'
