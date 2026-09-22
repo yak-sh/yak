@@ -163,10 +163,12 @@ grouped approximately by function, **not** by dependency order.
   checkout consists of, the landed `commit` attached to the work it is about,
   the `file` a path in a repository is, and the `cites` edge that ties a
   document to a place in one — with `revision`, `symbol`, `lines` and `quote`
-  beside it, and staleness re-derived from Git. Its `land` tool operates on the
-  checkout at `ctx.cwd` (the CLI working directory), fast-forwarding its branch
-  into the base in the primary worktree. If the base moved, it rebases and
-  returns without landing; rerun tests and land again.
+  beside it, and staleness re-derived from Git. `cites check` reports the
+  citations that moved or were never checked, and `cites verify` records that
+  somebody looked. Its `land` tool operates on the checkout at `ctx.cwd` (the
+  CLI working directory), fast-forwarding its branch into the base in the
+  primary worktree. If the base moved, it rebases and returns without landing;
+  rerun tests and land again.
 - **[@yaks/effects](./effects)** — Run registered handlers after committed
   component changes or newly matching query patterns, isolating handler failures
   from the original transaction. An optional durable attempt log supports

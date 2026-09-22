@@ -291,6 +291,54 @@
       },
       "description": "what the citing side quoted, so a reader sees what it saw without opening the file"
     },
+    "cites_check": {
+      "tool": true,
+      "noun": "cites",
+      "verb": "check",
+      "title": "Check citations",
+      "description": "Report the citations that moved or were never checked. A citation is a link marked `cites`: one record refers to a place in another — a file in this checkout, named by a definition or a line range, or any other record. Whether it still holds is derived, never stored: for a file, which commits after its `revision.commit` touched that place; for a record, what changed about it after `verified.at`. One line per citation, with its state and what moved under it. A citation nobody has checked is reported as unverified, and one nothing could establish an answer for is reported as unknown rather than passing quietly. Scope it with `of` (only the citations one record makes) or `path` (only citations of one file). Reads the checkout this call runs in. Returns a report in content.body, with warning or failure findings when present; it writes nothing and enforces nothing.",
+      "input": {
+        "of": {
+          "type": "string",
+          "ref": "entity",
+          "description": "only the citations this record makes; pass its id or registered name"
+        },
+        "path": {
+          "type": "string",
+          "description": "only citations of this file path, as Git spells it"
+        }
+      },
+      "options": {
+        "positional": [
+          "of"
+        ]
+      },
+      "readOnly": true
+    },
+    "cites_verify": {
+      "tool": true,
+      "noun": "cites",
+      "verb": "verify",
+      "title": "Verify a citation",
+      "description": "Record that a citation was checked and holds: write the `verified` mark and move its `revision` to the commit this checkout is on, in one transaction, as the caller. Takes the citation link itself, or a record, meaning every citation that record makes. Nothing else writes the mark, so editing either end of a citation leaves it where it was and the citation goes on reading unverified until somebody looks. Returns the citations as written.",
+      "input": {
+        "cite": {
+          "type": "string",
+          "ref": "entity",
+          "description": "the citation to mark; pass its id"
+        },
+        "of": {
+          "type": "string",
+          "ref": "entity",
+          "description": "a record, meaning every citation it makes"
+        }
+      },
+      "options": {
+        "positional": [
+          "cite"
+        ]
+      }
+    },
     "land": {
       "tool": true,
       "title": "Land the current branch",

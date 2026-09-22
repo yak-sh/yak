@@ -103,6 +103,9 @@ let place = (cite: Bundle, path: string): string[] => {
 
 let short = (commit: string) => commit.slice(0, 8)
 
+let lines = (out: string) =>
+  out.split('\n').map((l) => l.trim()).filter(Boolean)
+
 // Git's complaint, first line only: `-L` naming a definition the file no
 // longer has says so in one line, and the rest is a usage note.
 let why = (err: string, fallback: string) =>
@@ -140,19 +143,31 @@ export let status = async (
       why: `commit ${short(commit)} is not in this checkout`,
     }
   }
+  // Two questions, coarse first: did anything touch the FILE, and only then
+  // did anything touch the place in it. The order is not an optimization —
+  // `git log -L` refuses an empty revision range ("No commit specified?"), and
+  // a citation verified at HEAD has exactly that range, so asking `-L` first
+  // would make every freshly verified citation read unknown.
+  let touched = await ask(
+    ['log', '--format=%h', `${commit}..HEAD`, '--', path],
+    ops.cwd,
+  )
+  if (!touched.ok) {
+    return { state: 'unknown', why: why(touched.err, 'git log failed') }
+  }
+  let commits = lines(touched.out)
+  if (!commits.length) return { state: 'current' }
   let narrow = place(cite, path)
-  // `-L` takes the path itself and refuses a pathspec beside it; without one
-  // the path is an ordinary pathspec after the range.
-  let log = await ask([
-    'log',
-    '-s',
-    '--format=%h',
-    ...narrow,
-    `${commit}..HEAD`,
-    ...narrow.length ? [] : ['--', path],
-  ], ops.cwd)
+  if (!narrow.length) return { state: 'moved', changes: commits }
+  // `-L` takes the path itself and refuses a pathspec beside it. A path that
+  // is gone at HEAD makes it fail, which is unknown rather than current: a
+  // deleted or renamed file is precisely what nobody can vouch for.
+  let log = await ask(
+    ['log', '-s', '--format=%h', ...narrow, `${commit}..HEAD`],
+    ops.cwd,
+  )
   if (!log.ok) return { state: 'unknown', why: why(log.err, 'git log failed') }
-  let changes = log.out.split('\n').map((l) => l.trim()).filter(Boolean)
+  let changes = lines(log.out)
   return changes.length ? { state: 'moved', changes } : { state: 'current' }
 }
 

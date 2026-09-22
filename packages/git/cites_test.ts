@@ -52,6 +52,17 @@ let file: Bundle = {
 let design: Bundle = { entity: { eid: 'design-1' }, doc: { title: 'D' } }
 
 let logArgs = (asked: string[][]) => asked.find((a) => a[0] == 'log') ?? []
+let placeArgs = (asked: string[][]) =>
+  asked.find((a) => a[0] == 'log' && a.includes('-L')) ?? []
+
+// A file one commit touched: the coarse question is answered yes, so the
+// narrowing question gets asked.
+let stirred = (narrowed = '') =>
+  fake((args) =>
+    args[0] != 'log' ? {} : args.includes('-L') ? { out: narrowed } : {
+      out: 'b8b0f89\n',
+    }
+  )
 
 Deno.test('a citation nobody has checked is unverified, and asks git nothing', async () => {
   let git = fake()
@@ -63,53 +74,74 @@ Deno.test('a citation nobody has checked is unverified, and asks git nothing', a
   assertEquals(git.asked, [])
 })
 
-Deno.test('a definition narrows the log to the commits that touched it', async () => {
+Deno.test('a file nothing touched is current, and the place is never asked about', async () => {
   let git = fake()
   let got = await status(cite({ symbol: { name: 'open' } }), file, {
     cwd: '.',
     run: git.run,
   })
   assertEquals(got, { state: 'current' })
-  assert(logArgs(git.asked).includes('-L'))
-  assert(logArgs(git.asked).includes(':open:src/db.ts'))
-})
-
-Deno.test('a line range narrows to those lines, and one line is a range of itself', async () => {
-  let git = fake()
-  await status(cite({ lines: { start: 3, end: 9 } }), file, {
-    cwd: '.',
-    run: git.run,
-  })
-  assert(logArgs(git.asked).includes('3,9:src/db.ts'))
-  let one = fake()
-  await status(cite({ lines: { start: 4 } }), file, {
-    cwd: '.',
-    run: one.run,
-  })
-  assert(logArgs(one.asked).includes('4,4:src/db.ts'))
-})
-
-Deno.test('a citation of a whole file passes the path as a pathspec', async () => {
-  let git = fake()
-  await status(cite(), file, { cwd: '.', run: git.run })
+  // The coarse question only, as a pathspec: `-L` refuses an empty range.
   assertEquals(logArgs(git.asked), [
     'log',
-    '-s',
     '--format=%h',
     `${COMMIT}..HEAD`,
     '--',
     'src/db.ts',
   ])
+  assertEquals(placeArgs(git.asked), [])
 })
 
-Deno.test('commits after the revision mean the citation moved, and name themselves', async () => {
-  let git = fake((args) =>
-    args[0] == 'log' ? { out: 'b8b0f89\n0c9c68a\n' } : {}
-  )
+Deno.test('a definition narrows a file that moved to the commits that touched it', async () => {
+  let git = stirred()
+  let got = await status(cite({ symbol: { name: 'open' } }), file, {
+    cwd: '.',
+    run: git.run,
+  })
+  assertEquals(got, { state: 'current' })
+  assertEquals(placeArgs(git.asked), [
+    'log',
+    '-s',
+    '--format=%h',
+    '-L',
+    ':open:src/db.ts',
+    `${COMMIT}..HEAD`,
+  ])
+})
+
+Deno.test('a line range narrows to those lines, and one line is a range of itself', async () => {
+  let git = stirred()
+  await status(cite({ lines: { start: 3, end: 9 } }), file, {
+    cwd: '.',
+    run: git.run,
+  })
+  assert(placeArgs(git.asked).includes('3,9:src/db.ts'))
+  let one = stirred()
+  await status(cite({ lines: { start: 4 } }), file, {
+    cwd: '.',
+    run: one.run,
+  })
+  assert(placeArgs(one.asked).includes('4,4:src/db.ts'))
+})
+
+Deno.test('a citation naming no place moves with the whole file', async () => {
+  let git = stirred()
   assertEquals(await status(cite(), file, { cwd: '.', run: git.run }), {
     state: 'moved',
-    changes: ['b8b0f89', '0c9c68a'],
+    changes: ['b8b0f89'],
   })
+  assertEquals(placeArgs(git.asked), [])
+})
+
+Deno.test('commits touching the place mean the citation moved, and name themselves', async () => {
+  let git = stirred('b8b0f89\n0c9c68a\n')
+  assertEquals(
+    await status(cite({ symbol: { name: 'open' } }), file, {
+      cwd: '.',
+      run: git.run,
+    }),
+    { state: 'moved', changes: ['b8b0f89', '0c9c68a'] },
+  )
 })
 
 Deno.test('a commit this checkout does not have reads unknown, never current', async () => {
@@ -134,9 +166,11 @@ Deno.test('a mark with no commit beside it reads unknown', async () => {
 
 Deno.test('git failing to answer reads unknown, in git own words', async () => {
   let git = fake((args) =>
-    args[0] == 'log'
+    args[0] != 'log'
+      ? {}
+      : args.includes('-L')
       ? { ok: false, err: "fatal: -L parameter 'gone': no match\nusage: …" }
-      : {}
+      : { out: 'b8b0f89\n' }
   )
   assertEquals(
     await status(cite({ symbol: { name: 'gone' } }), file, {

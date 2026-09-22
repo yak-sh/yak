@@ -26,7 +26,8 @@ Entry points:
 - `@yaks/git/land`: the filesystem-based branch landing operation.
 - `@yaks/git/cites`: how a citation stands against the code it names, derived
   from Git.
-- `@yaks/git/tools`: graph-tool implementations, currently `land`.
+- `@yaks/git/tools`: graph-tool implementations — `land`, `cites check` and
+  `cites verify`.
 - `@yaks/git/vocab`: vocabulary documents without runtime behavior.
 
 ## The idea
@@ -160,6 +161,31 @@ journal: what changed about that entity after `verified.at`. That is the
 `changed` seam in `Ops`, which a host fills from [@yaks/journal](../journal)'s
 `entries`; without one, a citation of an entity reads `unknown` rather than
 guessing.
+
+## Checking and verifying citations
+
+`@yaks/git/tools` puts the two verbs on the command line, reading the checkout
+the command runs in:
+
+```sh
+yak cites check                  # every citation that moved or was never checked
+yak cites check D-37775          # …only the ones that record makes
+yak cites check --path=src/db.ts # …only citations of one file
+yak cites verify <citation>      # checked and it holds: mark it, at this commit
+yak cites verify --of=D-37775    # …every citation that record makes
+```
+
+`check` is a health check — a tool whose verb is `check`
+([@yaks/tools](../tools/README.md#health-checks)) — so a citation that moved is
+a `fail` finding, one nobody has checked and one nothing could establish an
+answer for are `warn`, and a run with nothing to report still answers. It
+enforces nothing: a document whose code moved is work somebody has to do, not a
+transaction to reject.
+
+`verify` writes `verified{}` and `revision{commit}` for the commit the checkout
+is on, in one transaction, as the caller. The mark is written empty because
+`at`, `by` and `via` are the graph's to stamp — so a citation records who
+checked it and when, and nothing else writes that.
 
 Load the components beside the two packages whose mechanisms they use:
 
