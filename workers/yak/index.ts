@@ -75,7 +75,7 @@
 //                             that path: the space's apps own the first path
 //                             segment, the front page answers what is left
 //                             (T-33040)
-import { WorkerEntrypoint } from 'cloudflare:workers'
+import { waitUntil, WorkerEntrypoint } from 'cloudflare:workers'
 // @ts-types="./sentry.d.ts"
 import {
   instrumentDurableObjectWithSentry,
@@ -470,6 +470,10 @@ let unmounted = (req: Request) => {
 // the platform's own, and this is nobody's news but ours. Sentry hears it too,
 // tagged with the space and app the route named (unseen.ts `fault`).
 
+// The slice of a handler's context the letter door needs (see the default
+// export below).
+type Lent = { waitUntil: (work: Promise<unknown>) => void }
+
 let router = {
   async fetch(req: Request, env: Env): Promise<Response> {
     let host = hostOf(req)
@@ -575,7 +579,7 @@ let router = {
   // The log carries the recipient's domain and nothing else: not the local
   // part, not the sender, never the body. A letter is somebody's, and the
   // question this line answers is only which of our names people write to.
-  async email(message: Inbound, env: Env): Promise<void> {
+  async email(message: Inbound, env: Env, _ctx?: Lent): Promise<void> {
     try {
       await arrived(message, env)
     } catch (e) {
@@ -599,8 +603,21 @@ let router = {
 //
 // Wrapped for Sentry (sentry.ts), so an exception that escapes the router's
 // catch, or the letter door's, is a defect we hear about.
-export default withSentry(options, {
+let worker = withSentry(options, {
   ...router,
   fetch: async (req: Request, env: Env): Promise<Response> =>
     slid(req, env, await router.fetch(req, env)),
 })
+
+// A letter can arrive with no context: the runtime's own letter door (the one
+// `wrangler dev` and the probe post to) calls `email` over RPC, and an object
+// export called that way is handed the env alone. The platform's email event
+// carries one, so only that door lends the module's own `waitUntil`.
+// TODO(T-37921): @sentry/cloudflare's email wrapper reads `ctx.waitUntil`
+// unguarded (instrumentEmail.js `wrapEmailHandler`); drop the loan once it
+// tolerates an absent context.
+export default {
+  ...worker,
+  email: (message: Inbound, env: Env, ctx?: Lent) =>
+    worker.email(message, env, ctx ?? { waitUntil }),
+}
