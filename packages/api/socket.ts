@@ -9,7 +9,7 @@
 // runtime, and a subscription opened on that first tick would otherwise throw
 // while sending its own initial result.
 
-import { refusal } from './refuse.ts'
+import { fault, refusal } from './refuse.ts'
 import type { Frame, Sink, Subs } from './subs.ts'
 
 /** The part of a WebSocket this package uses: the standard `WebSocket`
@@ -87,6 +87,7 @@ export let receive = (subs: Subs, to: Sink, data: unknown): void => {
     }
     throw new SyntaxError('expected {subscribe}, {unsubscribe} or {relay}')
   } catch (err) {
+    fault(err, 'socket message')
     to({ id, refused: refusal(err) })
   }
 }

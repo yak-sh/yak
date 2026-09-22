@@ -14,6 +14,7 @@ import {
 import { idReport, parse } from './wrangler_app.ts'
 import { meta } from './meta.ts'
 import { refuse } from './tool.ts'
+import { caught } from './sentry.ts'
 
 type Read = (path: string) => Promise<Uint8Array<ArrayBuffer> | null>
 
@@ -82,6 +83,7 @@ export let deployWorker = async (
     bound = await provision(env, app, store, config)
   } catch (e) {
     if (!(await meta(env).query(`.eid=${app.eid}&.app!`)).length) throw e
+    caught(e, { request: 'deploy worker', app: app.slug })
     held = await bindings(env, app)
     let why = e instanceof Error ? e.message : String(e)
     return {

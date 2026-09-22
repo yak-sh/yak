@@ -24,7 +24,7 @@ import { vouched, type Who } from './session.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import { told } from './stream.ts'
 import { level, standing } from './meter.ts'
-import { defect } from './sentry.ts'
+import { caught, defect } from './sentry.ts'
 import { refuse } from './tool.ts'
 
 // A refusal is NOT a break (C-32652 item 3, T-32655; C-32869 item 5) — one
@@ -79,7 +79,8 @@ export let serving = async (env: Env, space: Space, app: App) => {
     let now = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
       .app(space, app.slug, true)
     return now?.version ?? app.version
-  } catch {
+  } catch (e) {
+    caught(e, { request: 'serving version', app: app.slug })
     return app.version
   }
 }
@@ -172,7 +173,7 @@ export let noted = async (breaks: Breaks, broke: {
       })
     }
   } catch (why) {
-    console.error('yak: could not push the break', why)
+    caught(why, { request: 'push a break' })
   }
 }
 
@@ -191,7 +192,7 @@ export let fault = async (
     request,
     message: e instanceof Error ? e.message : String(e),
     stack: e instanceof Error ? e.stack ?? '' : '',
-  }).catch((why) => console.error(`yak: could not file ${request}`, why))
+  }).catch((why) => caught(why, { request: `file ${request}` }))
 }
 
 type Broke = {

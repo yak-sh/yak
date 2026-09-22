@@ -34,6 +34,14 @@ export type Meta = {
 /** The platform writing about its own data: server-owned columns admitted. */
 export let KERNEL: Record<string, string> = { 'x-yak-kernel': '1' }
 
+// A door's no, carrying the status it was answered with: a 4xx is the
+// caller's (sentry.ts `refused`), anything else is the store falling over.
+export let answered = async (r: Response, said = '') =>
+  Object.assign(
+    new Error(`${said ? `${said}: ` : ''}${await r.text()}`),
+    { status: r.status },
+  )
+
 /**
  * The graph's own doors over a store: `POST /apply` takes the bundles as they
  * are and answers the batch as applied, `GET /query?q=` takes the whole filter
@@ -44,7 +52,7 @@ export let KERNEL: Record<string, string> = { 'x-yak-kernel': '1' }
 export let metaOf = (store: Door): Meta => ({
   query: async (line) => {
     let r = await store(`/query?q=${encodeURIComponent(line)}`)
-    if (!r.ok) throw new Error(`meta store: ${await r.text()}`)
+    if (!r.ok) throw await answered(r, 'meta store')
     return await r.json() as Bundle[]
   },
   apply: async (bundles, headers = {}) => {
@@ -59,7 +67,7 @@ export let metaOf = (store: Door): Meta => ({
       let s = await r.json() as Stale
       throw new Stale(s.eid, s.comp, s.column, s.current)
     }
-    if (!r.ok) throw new Error(`meta store refused: ${await r.text()}`)
+    if (!r.ok) throw await answered(r, 'meta store refused')
     return await r.json() as Bundle[]
   },
 })

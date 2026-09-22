@@ -46,6 +46,7 @@ import { meta } from './meta.ts'
 import { page, type Plugin } from './plugin.ts'
 import { titling, vouched, type Who } from './session.ts'
 import { inSpace, type Row, SPACE, str, text, worded } from './tool.ts'
+import { caught } from './sentry.ts'
 
 /** The Vectorize index, and the Workers AI model whose vectors it holds. */
 export let INDEX = 'yak-memories'
@@ -62,7 +63,8 @@ let vector = async (env: Env, text: string): Promise<number[] | null> => {
     }
     let one = said?.data?.[0]
     return Array.isArray(one) && one.length ? one : null
-  } catch {
+  } catch (e) {
+    caught(e, { request: 'memory embed' })
     return null
   }
 }
@@ -89,7 +91,7 @@ export let ranker = (env: Env): Ranker | undefined => {
       })
       return (found?.matches ?? []).map((m) => m.id)
     } catch (e) {
-      console.log(`memory: ${INDEX} did not answer — ${e}`)
+      caught(e, { request: 'memory recall', space: scope.space })
       return []
     }
   }
@@ -106,7 +108,7 @@ let filed = async (env: Env, eid: string, space: string, said: string) => {
     if (!values) return
     await index.upsert([{ id: eid, values, metadata: { space } }])
   } catch (e) {
-    console.log(`memory: ${eid} was not filed — ${e}`)
+    caught(e, { request: 'memory file', space })
   }
 }
 

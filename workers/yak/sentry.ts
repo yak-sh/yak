@@ -3,7 +3,10 @@
 // (index.ts), so an exception nothing caught arrives on its own; the seams
 // that catch a defect on purpose — the router's catch and the jobs
 // (unseen.ts `fault`), a Store's own (graph.ts `#broke`), a connector tool
-// (mcp.ts) — hand it to `defect` with who and where it happened as tags.
+// (mcp.ts) — hand it to `defect` with who and where it happened as tags. Every
+// other catch that answers a failure rather than throwing it — a fallback, a
+// sentence, an error response — hands it to `caught`, which keeps refusals
+// back.
 //
 // The DSN is the `SENTRY_DSN` secret, and without it the SDK sends nothing:
 // the tests and a local `wrangler dev` stay silent. The release is the
@@ -29,7 +32,9 @@ import {
   type ErrorEvent,
   withScope,
 } from '@sentry/core'
+import { status } from '@yaks/api'
 import type { Bundle, Comp } from '@yaks/graph'
+import { CallError } from '@yaks/tools'
 import { isTestAddress } from '../../src/bots.ts'
 import type { Ctx } from './tools.ts'
 
@@ -63,6 +68,26 @@ export let options = () => ({
   integrations: [captureConsoleIntegration({ levels: ['error'] })],
   beforeSend: scrub,
 })
+
+/** Whether a caught failure is the caller's own no rather than ours: a tool's
+ * refusal (`CallError`), an error @yaks/api answers below 500 (a refused or
+ * stale write, a denied one, a query naming what is not there), or a door
+ * that answered a 4xx and said so in its `status` (meta.ts). */
+export let refused = (e: unknown) => {
+  let said = (e as { status?: unknown } | null)?.status
+  return e instanceof CallError || status(e) < 500 ||
+    (typeof said == 'number' && said >= 400 && said < 500)
+}
+
+/** A failure a catch answers on purpose — a fallback, a sentence, an error
+ * response — sent to Sentry unless it was a refusal. What the caller is
+ * answered stays the catch's own business. */
+export let caught = (
+  e: unknown,
+  tags: Record<string, string | null | undefined>,
+) => {
+  if (!refused(e)) defect(e, tags)
+}
 
 /** One defect, with where it happened as tags and who hit it as the user. A
  * tag with no value is left off. */

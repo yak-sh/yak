@@ -53,6 +53,7 @@ import { pinsOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { vouched, type Who } from './session.ts'
 import { refuse } from './tool.ts'
+import { caught } from './sentry.ts'
 
 // A version's file set: the path the app serves it at, and the name of its
 // bytes.
@@ -349,10 +350,11 @@ let entries = (bytes: Uint8Array | null): Wrote[] => {
   try {
     let held = JSON.parse(new TextDecoder().decode(bytes))
     return Array.isArray(held) ? held as Wrote[] : []
-  } catch {
+  } catch (e) {
     // A log we cannot read is a log with nothing in it. The bytes it named are
     // still pinned; what is lost is the sentence about them, and losing that
-    // must never take a write down with it.
+    // must never take a write down with it — but it is ours, so Sentry hears.
+    caught(e, { request: 'version log' })
     return []
   }
 }

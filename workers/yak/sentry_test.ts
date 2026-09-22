@@ -7,7 +7,9 @@ import {
   ServerRuntimeClient,
   setCurrentClient,
 } from '@sentry/core'
-import { defect, reporter, scrub } from './sentry.ts'
+import { Refused, Stale } from '@yaks/graph'
+import { CallError } from '@yaks/tools'
+import { caught, defect, reporter, scrub } from './sentry.ts'
 import type { Ctx } from './tools.ts'
 
 // A client that keeps what it would have sent.
@@ -77,6 +79,27 @@ Deno.test('a connector tool names the tool, space, app, client and account', asy
     { tool: 'app_new', space: 'jeff', app: 'recipes', account: 'person' },
   ])
   assertEquals(seen[0].user, { id: 'p-1' })
+})
+
+Deno.test('a caught failure is sent, and a refusal is not', async () => {
+  let { seen, done } = sentry()
+  let status = (n: number) => Object.assign(new Error(`${n}`), { status: n })
+  for (
+    let e of [
+      new CallError('arguments', 'no'),
+      new Refused('no'),
+      new Stale('e', 'doc', 'title', null),
+      status(404),
+      status(503),
+      new TypeError('x is undefined'),
+    ]
+  ) caught(e, { request: 'GET /api/query', space: 'jeff' })
+  await done()
+  assertEquals(seen.map((e) => e.exception?.values?.[0].value), [
+    '503',
+    'x is undefined',
+  ])
+  assertEquals(seen[1].tags, { request: 'GET /api/query', space: 'jeff' })
 })
 
 Deno.test('what leaves carries no header, query, body or console argument', () => {

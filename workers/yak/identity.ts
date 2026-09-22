@@ -140,6 +140,7 @@ import { hostOf, MANAGE, OAUTH, onZone, RESERVED, says, SLUG } from './route.ts'
 import { canon, mint, nameOf, personOf, spend } from './signin.ts'
 import { RETRY, source, within } from './rate.ts'
 import { type Caller, minted } from './session.ts'
+import { caught } from './sentry.ts'
 
 // What a grant carries and a token gives back: the person, nothing else.
 // Membership is read from the directory at request time, never a claim.
@@ -412,6 +413,7 @@ let closing = async (
     // behind the soft error page: a domain Cloudflare would not give back is
     // the one failure here that costs money, and asking again finishes what
     // did not go (erase.ts holds the order that makes that safe).
+    caught(e, { request: 'POST /manage (delete)', space: slug })
     return askDelete({
       slug,
       lines,
@@ -1103,7 +1105,10 @@ let plain = async (req: Request, env: Env): Promise<Request> => {
   // Nothing to drop unless a secret was offered at all.
   if (!id || secret == null) return req
   let client = await getOAuthApi<Env>(opts(env), env).lookupClient(id)
-    .catch(() => null)
+    .catch((e) => {
+      caught(e, { request: 'POST /oauth/token' })
+      return null
+    })
   if (client?.tokenEndpointAuthMethod != 'none') return req
   form.delete('client_secret')
   form.set('client_id', id)

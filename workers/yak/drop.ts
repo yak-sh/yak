@@ -29,6 +29,7 @@ import { whoIs } from './session.ts'
 import { call, inApp, wrote } from './tools.ts'
 import { type Entry, MAX, unzip } from './unzip.ts'
 import { writes } from '@yaks/member'
+import { caught } from './sentry.ts'
 
 // A file's own name, with any folders a browser sent in front of it gone
 // (a directory drop names `pics/cat.png`) and nothing that could escape left.
@@ -148,6 +149,8 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   } catch (e) {
     // Everything below here answers a sentence: unzip.ts writes one per
     // refusal, and a tool's own no is already the words an agent would read.
+    // Anything else is ours, and Sentry hears it too.
+    caught(e, { request: 'POST /deploy', space: space.slug })
     return no(e instanceof Error ? e.message : String(e))
   }
 }

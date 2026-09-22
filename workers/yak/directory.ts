@@ -35,7 +35,8 @@ import {
   storeOf,
 } from './door.ts'
 import { ADMIN } from '../../src/bots.ts'
-import { KERNEL, type Meta, meta as metaStore } from './meta.ts'
+import { answered, KERNEL, type Meta, meta as metaStore } from './meta.ts'
+import { caught } from './sentry.ts'
 import { mailFrom } from './post.ts'
 import { RESERVED, SLUG } from './route.ts'
 import { firstOf } from './router.ts'
@@ -506,6 +507,7 @@ export let over = (store: Meta) => async (req: Request): Promise<Response> => {
       cache.clear()
       return Response.json({ ok: true, ...resulted(applied) })
     } catch (e) {
+      caught(e, { request: 'directory /apply' })
       return new Response(e instanceof Error ? e.message : String(e), {
         status: 400,
       })
@@ -521,6 +523,7 @@ export let over = (store: Meta) => async (req: Request): Promise<Response> => {
   try {
     rows = await store.query(line)
   } catch (e) {
+    caught(e, { request: 'directory /query' })
     return new Response(e instanceof Error ? e.message : String(e), {
       status: 400,
     })
@@ -859,7 +862,7 @@ export let directory = (via: Fetcher, now = false) => {
         fresh ? { headers: { [FRESH]: '1' } } : {},
       ),
     )
-    if (!r.ok) throw new Error(`directory: ${await r.text()}`)
+    if (!r.ok) throw await answered(r, 'directory')
     return r.json()
   }
   let one = async (q: string, fresh = now) => (await query(q, fresh))[0]
@@ -880,7 +883,7 @@ export let directory = (via: Fetcher, now = false) => {
           headers,
         }),
       )
-      if (!r.ok) throw new Error(await r.text())
+      if (!r.ok) throw await answered(r)
       return r.json()
     },
     space: async (slug: string) => {

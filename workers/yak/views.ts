@@ -41,6 +41,7 @@ import type { Env } from './env.ts'
 import { type Answer, page, type Plugin } from './plugin.ts'
 import { APP, inApp, type Row, SPACE as SPACE_ARG, worded } from './tool.ts'
 import { url as appUrl } from './directory.ts'
+import { caught } from './sentry.ts'
 
 /** How long Cloudflare keeps a data point. Said in one place. */
 export let KEPT_DAYS = 90
@@ -148,7 +149,7 @@ export let viewed = (
       status: res.status,
     }))
   } catch (e) {
-    console.log(`views: ${(e as Error).message}`)
+    caught(e, { request: 'views write', space: at.space, app: at.slug })
   }
 }
 
@@ -392,6 +393,7 @@ let stats: Answer = async (at) => {
   try {
     return Response.json({ on: true, ...await asked })
   } catch (e) {
+    caught(e, { request: 'views read' })
     return at.json(502, 'refused', e instanceof Error ? e.message : String(e))
   }
 }

@@ -102,7 +102,7 @@ import { type Entry, prompted, standing } from './standing.ts'
 import { type Ctx, inReach, VIEW_MIME } from './tools.ts'
 import { listen, rostered } from './stream.ts'
 import { type Clock, clock, timed } from './timing.ts'
-import { reporter } from './sentry.ts'
+import { caught, reporter } from './sentry.ts'
 import { isTestAddress } from '../../src/bots.ts'
 import { refuse } from './tool.ts'
 import { url as hostUrl } from './host.ts'
@@ -491,6 +491,7 @@ let stranger = async (
     try {
       reach = await opened(ctx, args)
     } catch (err) {
+      caught(err, { tool: name, request: 'POST /mcp (anonymous)' })
       return erred(rpc.id, err)
     }
   }

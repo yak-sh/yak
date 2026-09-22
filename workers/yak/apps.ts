@@ -86,6 +86,7 @@ import { edits, mode, reads, writes } from '@yaks/member'
 import { type Door, storeOf } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { fault, noted, refusal, serving } from './unseen.ts'
+import { caught } from './sentry.ts'
 import { full, fullFiles } from './usage.ts'
 import { refusedVisit } from './meter.ts'
 import { sha256 } from './versions.ts'
@@ -776,6 +777,7 @@ let took = async (
   try {
     await metaOf(store).apply(file.bundles, headers)
   } catch (e) {
+    caught(e, { request: 'POST /api/blob', space: space.slug, app: app.slug })
     return json(400, 'refused', e instanceof Error ? e.message : String(e))
   }
   return Response.json({
@@ -802,7 +804,8 @@ let gave = async (
   let bytes
   try {
     bytes = await r2Blobs(env.BLOBS).get(blobKey(space, app, sha))
-  } catch {
+  } catch (e) {
+    caught(e, { request: 'GET /api/blob', space: space.slug, app: app.slug })
     return json(404, 'no_such_file')
   }
   let rows = await metaOf((path, init, sent) =>
@@ -1086,6 +1089,7 @@ let api = async (
         Array.isArray(rows) ? listed(rows as Row[], asked) : rows,
       )
     } catch (e) {
+      caught(e, { request: 'GET /api/query', space: space.slug, app: app.slug })
       return json(400, 'refused', e instanceof Error ? e.message : String(e))
     }
   }
@@ -1141,6 +1145,11 @@ let api = async (
         ),
       )
     } catch (e) {
+      caught(e, {
+        request: 'POST /api/apply',
+        space: space.slug,
+        app: app.slug,
+      })
       return json(400, 'refused', e instanceof Error ? e.message : String(e))
     }
   }
@@ -1240,7 +1249,7 @@ let visits = async (env: Env, apps: App[]): Promise<Visits[] | null> => {
     let all = await Promise.all(asked as Promise<Stats>[])
     return apps.map((a, i) => ({ slug: a.slug, title: a.title, stats: all[i] }))
   } catch (e) {
-    console.log(`views: ${e instanceof Error ? e.message : String(e)}`)
+    caught(e, { request: 'views' })
     return null
   }
 }

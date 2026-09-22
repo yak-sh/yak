@@ -21,6 +21,7 @@
 // sets the header on every request that reaches the edge and a client cannot
 // choose it. A limiter that throws is not a refusal either: a broken counter
 // never locks a person out.
+import { caught } from './sentry.ts'
 
 // The binding's shape (@cloudflare/workers-types `RateLimit`), spelled here so
 // no Cloudflare type name leaks into env.ts.
@@ -36,7 +37,8 @@ export let within = async (lim: Limiter | undefined, key: string) => {
   if (!lim || !key) return true
   try {
     return (await lim.limit({ key })).success
-  } catch {
+  } catch (e) {
+    caught(e, { request: 'rate limit' })
     return true
   }
 }

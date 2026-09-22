@@ -85,7 +85,7 @@ import {
 } from '@sentry/cloudflare'
 import { Builder as Built } from './build.ts'
 import { Store as Stored } from './graph.ts'
-import { options } from './sentry.ts'
+import { caught, options } from './sentry.ts'
 import { Wire as Wired } from './stream.ts'
 import * as apps from './apps.ts'
 import { sealed } from './cache.ts'
@@ -169,7 +169,11 @@ export class Sandbox extends Workbench<Env> {
 // It is reached only through the `FILES` service binding (env.ts). The routes
 // in wrangler.toml name the default entrypoint, so nothing from the internet
 // arrives here.
-export class Files extends WorkerEntrypoint {
+//
+// Wrapped for Sentry like the objects above: it is its own invocation, so a
+// defect it reports itself (a cache purge that failed, cache.ts) has no client
+// to reach otherwise.
+class Filed extends WorkerEntrypoint {
   // The runtime sets this; `declare` names its type without emitting a field
   // that would shadow what the base class already put there. env.ts keeps the
   // Cloudflare types out of this Worker, so the base's own generic is not
@@ -180,6 +184,7 @@ export class Files extends WorkerEntrypoint {
     return filePart.fetch(req, this.env)
   }
 }
+export let Files = withSentry(options, Filed)
 
 let serve = async (req: Request, env: Env, r: Route) => {
   let asked = new URL(req.url).pathname
@@ -352,10 +357,11 @@ let settling = async (env: Env, host: string): Promise<Response | null> => {
     let custom = await customOf(env, host)
     how = custom ? steps(custom) : null
     if (how) stage = stageOf(how)
-  } catch {
+  } catch (e) {
     // No CF_ZONE/CF_HOSTNAMES_TOKEN, or Cloudflare itself unreachable: the
     // cached stage above (or `pending`, where there is none at all) still
     // says something true, just without the per-step detail.
+    caught(e, { request: 'domain settling' })
   }
   return stage == 'active' ? null : provisioning(
     host,

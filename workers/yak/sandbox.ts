@@ -56,6 +56,7 @@ import { retryOnce } from './door.ts'
 import { type Grant, type Kv, ledger, mint, tokenOf } from './grants.ts'
 import { type Host, url } from './host.ts'
 import { refuse } from './tool.ts'
+import { caught } from './sentry.ts'
 
 /** One sandbox, as this file asks for it — the four things the tools do,
  * plus the one knob the deploy has no way to set. */
@@ -364,7 +365,7 @@ let bared = async (env: Keys, space: Space) => {
     await book.drop(was.person, was.id)
     await book.bare(holder)
   } catch (e) {
-    console.error('yak: sandbox grant would not go', space.slug, e)
+    caught(e, { request: 'sandbox grant', space: space.slug })
   }
 }
 
@@ -396,7 +397,7 @@ export let boxOf = (
   // sleeps on the SDK's own default instead, which is longer, not forever.
   if (first) {
     Promise.resolve(box.setSleepAfter?.(SLEEP)).catch((e) =>
-      console.error('yak: sandbox would not take a sleep', space.slug, e)
+      caught(e, { request: 'sandbox sleep', space: space.slug })
     )
   }
   // Named rather than spread: the stub is a Durable Object proxy, and what a
@@ -439,7 +440,7 @@ export let destroyed = async (
   try {
     await stub(env.SANDBOX, space).destroy()
   } catch (e) {
-    console.error('yak: sandbox would not go', space.slug, e)
+    caught(e, { request: 'sandbox destroy', space: space.slug })
   }
   // And the grant it was wearing goes with it: a token that outlived its
   // container is a bearer nobody is holding. It is read off the ledger rather

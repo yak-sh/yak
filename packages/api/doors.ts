@@ -14,7 +14,7 @@ import { type Bundle, type Change, type Graph, Refused } from '@yaks/graph'
 import type { Actor, Row } from '@yaks/graph'
 import { parse, type Query } from '@yaks/query'
 import { signed } from './actor.ts'
-import { json, refusal } from './refuse.ts'
+import { fault, json, refusal } from './refuse.ts'
 
 /**
  * How many bundles go into one transaction when an import arrives one bundle
@@ -159,6 +159,7 @@ export let pour = (
       }
       if (held.length) await flush()
     } catch (err) {
+      fault(err, `${request.method} ${new URL(request.url).pathname}`)
       await say({ ...refusal(err), line: blame, committed })
     }
   }

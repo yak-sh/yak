@@ -49,6 +49,7 @@ import {
   type VocabDoc,
 } from '@yaks/vocab'
 import { refuse, rejected } from './tool.ts'
+import { caught } from './sentry.ts'
 
 // The words the PLATFORM says in every store — core, member, edge, the twelve
 // relations. A word outside this list was declared by an app, which is what
@@ -217,6 +218,8 @@ let asked = async (
       let out = await doorOf(env, r, said)(line)
       return { at: at(r), bundles: (Array.isArray(out) ? out : []) as Bundle[] }
     } catch (e) {
+      // A store left out of the merge is a quieter answer, never a silent one.
+      caught(e, { request: 'reach' })
       return { at: at(r), why: e }
     }
   }))

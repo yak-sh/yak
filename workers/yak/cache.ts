@@ -54,6 +54,7 @@ let SWR = 86400
 // sends this, and `Files` is reachable only through the service binding, so
 // nothing a person or an app can address ever wears it.
 import { type Host, url } from './host.ts'
+import { caught } from './sentry.ts'
 export let keepable = (tags: string[]) => ({
   'cache-control': `public, s-maxage=${YEAR}, stale-while-revalidate=${SWR}`,
   'cache-tag': tags.join(','),
@@ -154,8 +155,8 @@ export let sealed = (res: Response, env: Host = {}) => {
 // A purge never throws into the write that called it — failing `app_files`
 // because a cache was busy would be worse than the staleness. But a purge that
 // quietly fails is the "my edit did not appear" report this design exists to
-// prevent, so every way of failing says so on the log, the runtime simply not
-// having the API included. `s-maxage` is the backstop underneath.
+// prevent, so every way of failing is sent to Sentry (sentry.ts `caught`), the
+// runtime simply not having the API included. `s-maxage` is the backstop underneath.
 type Purger = {
   purge: (
     what: { tags?: string[]; pathPrefixes?: string[]; purgeEverything?: true },
@@ -167,24 +168,29 @@ export let purge = async (tags: string[]) => {
   try {
     mod = await import('cloudflare:workers') as { cache?: Purger }
   } catch (e) {
-    console.error('yak: no cloudflare:workers to purge with', tags, e)
+    caught(e, { request: 'cache purge' })
     return false
   }
   if (typeof mod.cache?.purge != 'function') {
     // `wrangler dev` and the workerd probes land here, where there is no cache
     // to empty and nothing is wrong. A deployed Worker landing here means every
     // write is silently stale, so it is worth the line either way.
-    console.error('yak: this runtime has no cache.purge', tags)
+    caught(new Error('this runtime has no cache.purge'), {
+      request: 'cache purge',
+    })
     return false
   }
   try {
     let out = await mod.cache.purge({ tags })
     if (!out.success) {
-      console.error('yak: cache purge refused', tags, out.errors)
+      caught(
+        new Error(`cache purge refused: ${JSON.stringify(out.errors ?? [])}`),
+        { request: 'cache purge' },
+      )
     }
     return out.success
   } catch (e) {
-    console.error('yak: cache purge threw', tags, e)
+    caught(e, { request: 'cache purge' })
     return false
   }
 }

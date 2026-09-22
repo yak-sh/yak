@@ -253,6 +253,7 @@ import {
 import { read } from '@yaks/yaml'
 import { toolsOf as pluginTools } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
+import { caught } from './sentry.ts'
 
 // What a tool IS, and the little kit for saying one, live in tool.ts — below
 // this module, so a plugin (plugin.ts) can say a row without importing the
@@ -626,12 +627,13 @@ let toGallery = async (ctx: Ctx, space: Space, app: App) => {
       yes: galleryDoor(await ticketFor(app, true, secret), ctx.env),
       no: galleryDoor(await ticketFor(app, false, secret), ctx.env),
     }, ctx.env))
-  } catch {
+  } catch (e) {
     throw new Error(
       `${space.slug}/${app.slug} is published, but the gallery could not be ` +
         'asked: the letter that carries the decision would not send. ' +
         'Nothing was changed — ask again, or leave it offered without being ' +
         'shown',
+      { cause: e },
     )
   }
   await askGallery(ctx.env, app)
@@ -1029,7 +1031,10 @@ let released = async (
       'healed',
       () => healed(ctx.env, space, app, who, version),
     )
-  } catch { /* the files are out; an open break is the softer wrong */ }
+  } catch (e) {
+    // The release is out; an open break is the softer wrong, and Sentry hears.
+    caught(e, { tool: 'app_deploy', space: space.slug, app: app.slug })
+  }
   // A published app's offer does not move with a deploy: publishing is the
   // owner's deliberate act and pins the version strangers install, so an
   // editor's deploy must not change what the whole platform gets. Silence
@@ -1393,7 +1398,10 @@ export let wrote = async (
   // open rather than failing a write that landed.
   try {
     await c.time('rewrote', () => rewrote(env, space, app, who, paths))
-  } catch { /* the files are out; an open break is the softer wrong */ }
+  } catch (e) {
+    // The files are out; an open break is the softer wrong, and Sentry hears.
+    caught(e, { tool: 'app_files', space: space.slug, app: app.slug })
+  }
   return paths
 }
 
@@ -1650,7 +1658,8 @@ let recently = async (ctx: Ctx) => {
     return (await meta(ctx.env).query(
       `.report!&.created.by=${ctx.person}&.report.at>=1-hour-ago`,
     )).length
-  } catch {
+  } catch (e) {
+    caught(e, { tool: 'feedback' })
     return 0
   }
 }
@@ -1977,13 +1986,14 @@ let OURS: Row[] = [
       // trash's words however this call was made.
       try {
         await mail(ctx.env)({ to, ...letter(d, link, forever, ctx.env) })
-      } catch {
+      } catch (e) {
         throw new Error(
           'the confirmation letter could not be sent. They can still put the ' +
             `space in the trash themselves, signed in, at ${
               door(space.slug, undefined, ctx.env)
             } — which asks them to type ${space.slug} back. That would stop:\n` +
             bullets(keeping(d, ctx.env)),
+          { cause: e },
         )
       }
       return {
@@ -3663,7 +3673,9 @@ let OURS: Row[] = [
       } catch (e) {
         await ctx.dir.apply({
           entities: [{ entity: { eid }, tombstone: {} }],
-        }, vouched(who)).catch(() => {})
+        }, vouched(who)).catch((why) =>
+          caught(why, { tool: 'domain_attach', space: space.slug })
+        )
         throw e
       }
       let how = steps(custom)
@@ -4357,7 +4369,10 @@ let OURS: Row[] = [
           'is nothing to install and no account to make first. Until you ' +
           'accept, nothing of theirs is shared with you, and if you did not ' +
           'expect this you can ignore it.',
-      }).then(() => true).catch(() => false)
+      }).then(() => true).catch((e) => {
+        caught(e, { tool: 'member_add', space: space.slug })
+        return false
+      })
       if (sent) await counted(ctx.env, space)
       return {
         text: `${email} is invited as ${an(want)} ${want} of ` +
@@ -4572,7 +4587,10 @@ let OURS: Row[] = [
       let space = args.space != null
         ? await ctx.dir.space(text(args.space, 'space'))
         : ctx.person
-        ? await ownSpace(ctx, args.app).catch(() => null)
+        ? await ownSpace(ctx, args.app).catch((e) => {
+          caught(e, { tool: 'feedback' })
+          return null
+        })
         // Signed out there is no space of theirs to work out, and asking the
         // directory whose it might be would be reading about somebody.
         : null
@@ -4649,7 +4667,10 @@ let OURS: Row[] = [
           (where ? `${where}\n` : '') +
           (app && space ? `${url(space, app, ctx.env)}\n` : '') +
           `yaks.app ${VERSION} · ${at}\n${eid}`,
-      }).then(() => true).catch(() => false)
+      }).then(() => true).catch((e) => {
+        caught(e, { tool: 'feedback', space: space?.slug, app: app?.slug })
+        return false
+      })
       // Never loud: a mail seam that refused loses the letter, never the
       // words. The row stands, and the answer says so, because an agent told
       // "that failed" says it again and the person says it twice.

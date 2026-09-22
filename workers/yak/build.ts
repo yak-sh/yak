@@ -72,6 +72,7 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { building } from './pages.ts'
 import type { Who } from './session.ts'
+import { caught } from './sentry.ts'
 
 /**
  * The slice of a `DurableObjectState` this object needs: its SQLite, and its
@@ -326,7 +327,7 @@ export class Builder {
     } catch (e) {
       // The loop answers its own refusals in sentences; anything that reaches
       // here is ours breaking, and the person is owed a sentence for that too.
-      console.error('builder: the loop threw', e)
+      caught(e, { request: 'build', space: held.space })
       return this.#say([{
         done: 'Something of ours broke. Nothing was built.',
       }])
@@ -419,7 +420,9 @@ export class Builder {
     // The build outlives this handler; the runtime keeps the object alive for
     // the promise, and every frame it casts goes to the sockets rather than
     // back through this return.
-    this.say(held, said).catch((e) => console.error('builder: say', e))
+    this.say(held, said).catch((e) =>
+      caught(e, { request: 'build', space: held.space })
+    )
   }
 }
 

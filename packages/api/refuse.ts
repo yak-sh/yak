@@ -70,6 +70,13 @@ export let refusal = (err: unknown): Refusal => {
 export let status = (err: unknown): number =>
   (err instanceof Error ? STATUS[err.name] : undefined) ?? 500
 
+/** A server failure, said on the console with where it happened, so a
+ * calling program's log watcher sees it; a refusal (below 500) is the
+ * caller's and says nothing. */
+export let fault = (err: unknown, where: string): void => {
+  if (status(err) >= 500) console.error(`${where} failed —`, err)
+}
+
 /** A JSON response. */
 export let json = (body: unknown, code = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -82,12 +89,6 @@ export let json = (body: unknown, code = 200): Response =>
  * never the query string, headers or body. Expected client refusals are not
  * logged at all. */
 export let refuse = (err: unknown, request?: Request): Response => {
-  let code = status(err)
-  if (request && code >= 500) {
-    console.error(
-      `${request.method} ${new URL(request.url).pathname} failed —`,
-      err,
-    )
-  }
-  return json(refusal(err), code)
+  if (request) fault(err, `${request.method} ${new URL(request.url).pathname}`)
+  return json(refusal(err), status(err))
 }

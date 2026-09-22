@@ -54,6 +54,7 @@ import type { Bindings } from './graph.ts'
 import type { Page } from './guide.ts'
 import type { Who } from './session.ts'
 import type { Tool } from './tool.ts'
+import { caught } from './sentry.ts'
 
 /**
  * An app's own door, as the request reaches a plugin: everything apps.ts had
@@ -316,7 +317,7 @@ export let watched = (plugins: Plugin[], v: Visit) => {
     try {
       p.watch?.(v)
     } catch (e) {
-      console.log(`plugin ${p.name}: ${(e as Error).message}`)
+      caught(e, { request: `plugin ${p.name}` })
     }
   }
 }

@@ -53,6 +53,7 @@ import { asleep, released, spending } from './sandbox.ts'
 import type { Who } from './session.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { standing } from './standing.ts'
+import { caught } from './sentry.ts'
 
 /** What one response cost, in the words both providers can be read into.
  * `neurons` is Workers AI's own billing unit and rides only where it is
@@ -248,6 +249,9 @@ let called = async (
     let said = await run(c.args.trim() ? JSON.parse(c.args) : {})
     return { text: words(said), ok: true }
   } catch (e) {
+    // The same line the connector draws (@yaks/tools `faulted`): a refusal
+    // is the model's to correct, anything else is ours.
+    caught(e, { tool: c.name, request: 'build' })
     return { text: e instanceof Error ? e.message : String(e), ok: false }
   }
 }
@@ -273,7 +277,8 @@ export let prompt = async (env: Env, ctx?: Ctx): Promise<string> => {
       return instructions(env) + after
     }
     return `${instructions(env)}\n\n---\n\n${await page.text()}${after}`
-  } catch {
+  } catch (e) {
+    caught(e, { request: 'build prompt' })
     return instructions(env) + after
   }
 }
@@ -538,7 +543,7 @@ export let build = async (
     try {
       opts.on?.(b)
     } catch (e) {
-      console.warn('builder: a listener threw', e)
+      caught(e, { request: 'build', space: space.slug })
     }
   }
   // The workbench this build may reach for (sandbox.ts, T-34264). It is minted
@@ -610,6 +615,7 @@ export let build = async (
     try {
       answer = await model.ask({ system, said: lines, fns, tokens })
     } catch (e) {
+      if (!busy(e)) caught(e, { request: 'build model', space: space.slug })
       return await end(
         busy(e) ? BUSY : e instanceof Error ? e.message : String(e),
       )

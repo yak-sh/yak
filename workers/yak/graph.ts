@@ -146,7 +146,7 @@ import type { Binding } from './post.ts'
 import { ledger } from './ledger.ts'
 import { doorOf, GIT_STORE, type Namespace, PLATFORM_STORE } from './door.ts'
 import { type Meta, metaOf } from './meta.ts'
-import { defect } from './sentry.ts'
+import { caught, defect } from './sentry.ts'
 import { apex, url } from './host.ts'
 import {
   addressed,
@@ -638,10 +638,20 @@ export class Store {
     // (T-34044). `#trust` is the same door `x-yak-kernel` writes through; the
     // graph it names is whichever one this object last built, which is the
     // only one that could be committing.
-    let fx = effects(vocab, { write: (b) => this.#trust(b, null) })
+    // A handler or hook that fails after its batch committed is sent to
+    // Sentry rather than to the console the packages default to. Not noted in
+    // this store as `#broke` does: the note is a write, and a hook that fails
+    // on every write would answer it with another break, forever.
+    let fx = effects(vocab, {
+      write: (b) => this.#trust(b, null),
+      report: (error, { handler }) =>
+        defect(error, { request: `effect ${handler}`, store: name }),
+    })
     let g = graph({
       storage: store,
       vocab,
+      report: (error, { phase, plugin }) =>
+        defect(error, { request: `${plugin} ${phase}`, store: name }),
       // The guard is added last and only when this object knows which app it
       // holds: @yaks/member refuses a write by an actor with no level, so a
       // store that cannot name its app has no access question to ask and the
@@ -1230,7 +1240,7 @@ export class Store {
         },
       }], null)
     } catch (why) {
-      console.error('store: could not note', request, why, 'after', error)
+      caught(why, { request: `note ${request}`, store: this.#get('name') })
     }
   }
 
@@ -1446,7 +1456,7 @@ export class Store {
         JSON.stringify(report, null, 2),
       )
     } catch (e) {
-      console.error('store: migration report', e)
+      caught(e, { request: 'migration report', store: report.store })
     }
   }
 
@@ -1471,7 +1481,7 @@ export class Store {
         await bucket.put(wrote, lines(dump))
         report.export = wrote
       } catch (e) {
-        console.error('store: migration export', e)
+        caught(e, { request: 'migration export', store: report.store })
       }
     }
     await this.#report(report)
@@ -1970,7 +1980,10 @@ export class Store {
     } catch (e) {
       // A runtime that offers none of this throws its own sentence, which is
       // handed on as a refusal rather than a 500: nothing broke, the back end
-      // simply cannot do it.
+      // simply cannot do it. Where it can, a throw is ours, and Sentry hears.
+      if (!(e instanceof Refused)) {
+        caught(e, { request: 'restore', store: this.#get('name') })
+      }
       return refuse(e instanceof Refused ? e : new Refused(String(e)))
     }
   }

@@ -38,7 +38,7 @@ import { comps } from '@yaks/graph'
 import { type Filter, filter } from '@yaks/match'
 import { bare, type Clause, parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import { type Refusal, refusal } from './refuse.ts'
+import { fault, type Refusal, refusal } from './refuse.ts'
 import { type Relay, relay as relaying, type Timer } from './relay.ts'
 
 /**
@@ -171,6 +171,7 @@ export let subscriptions = (graph: Graph, opts: {
   // the socket.
   let cut = (sub: Sub, err: unknown) => {
     held.get(sub.sink)?.delete(sub.id)
+    fault(err, 'subscription')
     sub.sink({ id: sub.id, refused: refusal(err) })
   }
 

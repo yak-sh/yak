@@ -53,6 +53,7 @@ import { managePath } from './route.ts'
 import { apex, type Host, url as hostUrl } from './host.ts'
 import { whoIs } from './session.ts'
 import { refuse } from './tool.ts'
+import { caught } from './sentry.ts'
 
 // ---- the fee ---------------------------------------------------------------
 
@@ -582,6 +583,7 @@ export let buying = async (
     success = backAt(at.root, asked.success)
     cancel = backAt(at.root, asked.cancel)
   } catch (e) {
+    caught(e, { request: 'POST /api/pay/checkout', app: at.app })
     return no(400, 'refused', e instanceof Error ? e.message : String(e))
   }
   let email = String((body as { email?: unknown })?.email ?? '').trim()
@@ -1078,7 +1080,10 @@ export let fetch = (req: Request, env: Env): Promise<Response> => hook(env, req)
  */
 export let priceAt = async (dir: Directory, file: Response) => {
   let html = await file.text()
-  let bps = await feeOf(dir).catch(() => 0)
+  let bps = await feeOf(dir).catch((e) => {
+    caught(e, { request: 'pricing fee' })
+    return 0
+  })
   let headers = new Headers(file.headers)
   // The two headers that describe the bytes: the body just changed length, and
   // it is no longer the file that etag names.

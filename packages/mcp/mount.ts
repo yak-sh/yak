@@ -123,7 +123,7 @@ export let mcp = (opts: MountOptions): Handler => {
       await opts.extend?.(built)
       return json(await ask(built, rpc.data, ms))
     } catch (err) {
-      return refuse(err)
+      return refuse(err, request)
     }
   }
 }

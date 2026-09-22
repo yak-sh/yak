@@ -21,6 +21,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
+import { status } from '@yaks/api'
 import {
   type Actor,
   type Bundle,
@@ -31,6 +32,7 @@ import {
 } from '@yaks/graph'
 import {
   answerOf,
+  CallError,
   faulted,
   type Opts as RunnerOpts,
   type Runner,
@@ -424,11 +426,8 @@ export let server = (opts: Options): McpServer => {
   // connector that will not write a row into somebody else's store just
   // because a question was asked). The tools still read and write `graph`.
   let calls = opts.calls ?? graph
-  let run = opts.runner ?? runner(calls, {
-    tools,
-    host: graph,
-    report: opts.report ?? logged,
-  })
+  let report = opts.report ?? logged
+  let run = opts.runner ?? runner(calls, { tools, host: graph, report })
   let names = tools.map((t) => t.name)
 
   for (let t of tools) {
@@ -442,15 +441,22 @@ export let server = (opts: Options): McpServer => {
     }
     let call = async (args: Record<string, unknown>) => {
       let out: CallToolResult
+      let asked: Bundle = {
+        entity: { eid: '$call' },
+        call: { to: toolEid(t.name), args: JSON.stringify(args ?? {}) },
+        ...(actor ? { $actor: { ...actor } } : {}),
+      }
       try {
         await run.ensure()
-        let landed = await run.call([{
-          entity: { eid: '$call' },
-          call: { to: toolEid(t.name), args: JSON.stringify(args ?? {}) },
-          ...(actor ? { $actor: { ...actor } } : {}),
-        }])
+        let landed = await run.call([asked])
         out = said(answerOf(landed), faulted(landed))
       } catch (err) {
+        // The runner answers a tool's own throw as a fault above; a throw that
+        // reaches here is the runner's (a call it could not record), reported
+        // the same way unless it was the caller's refusal.
+        if (!(err instanceof CallError) && status(err) >= 500) {
+          await report(err, asked, t.name)
+        }
         out = failed(err)
       }
       // A refusal carries the roster sentence too: an agent holding a stale

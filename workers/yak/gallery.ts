@@ -53,6 +53,7 @@ import { esc } from './pages.ts'
 import { GALLERY } from './seo.ts'
 import { foot, head, html, top } from './shell.ts'
 import { type Host, replyTo, url as siteUrl } from './host.ts'
+import { caught } from './sentry.ts'
 
 // Where the gallery lives, and where a letter's links land. What the page says
 // about itself — its title and its line — is seo.ts's, beside the same two
@@ -284,7 +285,10 @@ let shot = async (env: Env, a: Shown) => {
 export let pictures = async (env: Env, all: Shown[]) =>
   await Promise.all(all.map(async (a) => ({
     ...a,
-    shot: await shot(env, a).catch(() => ''),
+    shot: await shot(env, a).catch((e) => {
+      caught(e, { request: 'gallery picture' })
+      return ''
+    }),
   })))
 
 // ---- the page ----------------------------------------------------------
@@ -622,7 +626,10 @@ export let made = async (env: Env, dir: Directory, file: Response) => {
   let shown = await listed(dir, env).then((all) =>
     pictures(env, all.slice(0, 3))
   )
-    .catch(() => [] as Shown[])
+    .catch((e) => {
+      caught(e, { request: 'home showcase' })
+      return [] as Shown[]
+    })
   // The headers the assets door set, minus the two that describe the bytes:
   // the body just changed length, and it is no longer the file that etag names.
   let headers = new Headers(file.headers)
