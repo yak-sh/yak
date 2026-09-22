@@ -87,10 +87,13 @@ let door = (base) => async (path, init) => {
 // the documented call threw `Invalid base URL` (C-32800 item 6). It is
 // resolved against this origin, and a path that names the api directory
 // without saying so keeps its meaning: the doors are under it, so the base
-// ends in a slash or `query` would replace the last segment.
+// ends in a slash or `query` would replace the last segment. A sandboxed
+// app's page (installed.ts) has an opaque origin, which reads "null" and is no
+// base either, so its own address stands in: the hostname is the same.
 let based = (base) => {
   if (base instanceof URL) return base
-  let at = new URL(base, globalThis.location?.origin)
+  let here = globalThis.location
+  let at = new URL(base, here?.origin == 'null' ? here.href : here?.origin)
   if (!at.pathname.endsWith('/')) at.pathname += '/'
   return at
 }

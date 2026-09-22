@@ -59,6 +59,7 @@ export type Use =
   | 'erase' // a space's deletion ticket (erase.ts)
   | 'review' // a gallery review ticket (gallery.ts)
   | 'invite' // an invitation's accept link (workers/yak/invite.ts)
+  | 'page' // a sandboxed app's page speaking to its own API (installed.ts)
 
 let HMAC = { name: 'HMAC', hash: 'SHA-256' }
 

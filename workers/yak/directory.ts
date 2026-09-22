@@ -225,8 +225,10 @@ export type Offer = {
   about: string
 }
 // Where an installed app came from, and the version it took (T-32889). The
-// pin is what makes `app_update` a deliberate act.
-export type Pin = { of: string; version: number }
+// pin is what makes `app_update` a deliberate act. `of` is null once the app
+// it came from is gone, and the copy is still a copy: it stays sandboxed
+// (installed.ts) until `trusted` says when its space's owner let it out.
+export type Pin = { of: string | null; version: number; trusted: string | null }
 
 // Where a published app stands with the gallery (gallery.ts, T-34476): when
 // its owner asked to be shown on yaks.app, and when we said yes. Asked and not
@@ -278,7 +280,11 @@ type Row = {
     at?: string | null
     about?: string | null
   }
-  installed?: { of?: Id | null; version?: number | null }
+  installed?: {
+    of?: Id | null
+    version?: number | null
+    trusted?: string | null
+  }
   gallery?: { asked_at?: string | null; listed_at?: string | null }
   seeded?: { at?: string | null; version?: number | null }
   trashed?: { at?: string | null; by?: Id | null }
@@ -652,8 +658,12 @@ export let appOf = (r: Row): App => ({
       about: r.published.about ?? '',
     }
     : null,
-  installed: r.installed?.of
-    ? { of: idOf(r.installed.of), version: r.installed.version ?? 0 }
+  installed: r.installed
+    ? {
+      of: r.installed.of ? idOf(r.installed.of) : null,
+      version: r.installed.version ?? 0,
+      trusted: r.installed.trusted || null,
+    }
     : null,
   gallery: r.gallery
     ? {

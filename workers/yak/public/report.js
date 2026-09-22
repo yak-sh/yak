@@ -46,7 +46,12 @@ let send = (body) => {
   if (sent++ >= 20) return
   try {
     let blob = new Blob([JSON.stringify(body)], { type: 'application/json' })
-    if (!navigator.sendBeacon || !navigator.sendBeacon(door, blob)) {
+    // A beacon always sends credentials, and a sandboxed app's page — an
+    // opaque origin, `self.origin` "null" — reports to a door that answers
+    // any origin only because it takes none (installed.ts), so the browser
+    // refuses the beacon. A keepalive fetch sends none from there.
+    let beacon = self.origin != 'null' && navigator.sendBeacon
+    if (!beacon || !navigator.sendBeacon(door, blob)) {
       fetch(door, { method: 'POST', body: blob, keepalive: true })
     }
   } catch { /* a reporter that throws is worse than one that misses */ }

@@ -77,6 +77,7 @@ import {
   TITLE,
   url,
 } from './directory.ts'
+import { sandboxed } from './installed.ts'
 import {
   appsOf,
   listCommands,
@@ -664,12 +665,21 @@ let vocabs = async (ctx: Ctx, space: Space, app: App) => {
 // stays its own, because a store's vocabulary is additive forever. `said` is
 // every app's manifest beside it, since growing a home means writing the
 // home's whole manifest back.
+//
+// A sandboxed app (installed.ts, T-37926) is on neither side of that: it
+// borrows no word, so every word it declares is planted in its own store, and
+// it is no home, so the space's own apps never write their rows into a store
+// whose code is a stranger's. Trusting it lifts both, from its next release.
 let homesIn = async (ctx: Ctx, space: Space, app: App) => {
   let said = await vocabs(ctx, space, app)
   let ours = said.get(app.slug)?.$defs ?? {}
   let homes: Homes = {}
+  if (sandboxed(app)) return { said, homes }
+  let walled = new Set(
+    (await ctx.dir.apps(space)).filter(sandboxed).map((a) => a.slug),
+  )
   for (let [slug, doc] of said) {
-    if (slug == app.slug) continue
+    if (slug == app.slug || walled.has(slug)) continue
     for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
       if (name in homes || name in ours) continue
       homes[name] = { at: slug, props: schema.properties ?? {} }
@@ -2905,6 +2915,14 @@ let OURS: Row[] = [
           "the phone's splash-screen colour while the app opens, as CSS. " +
             "Unset, the platform's own colour is used",
         ),
+        trusted: {
+          type: 'boolean',
+          description: "for an app installed from someone else's release, " +
+            'which runs sandboxed in its own origin: true lets it run like ' +
+            "the space's own apps, where it can read and change everything " +
+            'in this space; false sandboxes it again. Only the space owner ' +
+            'can set it',
+        },
         forget: FORGET,
       },
       required: ['app'],
@@ -2926,16 +2944,31 @@ let OURS: Row[] = [
       let background = args.background_color == null
         ? null
         : color(args.background_color, 'background_color')
+      let trust = args.trusted == null ? null : flag(args.trusted, 'trusted')
       if (
         title == null && to == null && open == null && home == null &&
         first == null && show == null && drop == null &&
-        themeColor == null && background == null
+        themeColor == null && background == null && trust == null
       ) {
         throw refuse(
           'arguments',
           'nothing to change: pass title, slug, access, home, first, ' +
-            'gallery, theme_color, background_color, forget, or all',
+            'gallery, theme_color, background_color, trusted, forget, or all',
         )
+      }
+      // Letting a stranger's code out of its sandbox is the space owner's:
+      // what it costs is everything in the space (installed.ts).
+      if (trust != null) {
+        if (who.role != 'owner') {
+          throw refuse('access', `not the owner of ${space.slug}`)
+        }
+        if (!app.installed) {
+          throw refuse(
+            'conflict',
+            `${space.slug}/${app.slug} was not installed from anywhere — ` +
+              "the space's own apps are never sandboxed",
+          )
+        }
       }
       // Letting an address go is the space owner's, the way the front page is:
       // what it costs is every link anybody was ever given to it, and an
@@ -2977,10 +3010,13 @@ let OURS: Row[] = [
       let entities: EntityLiteral[] = []
       if (
         title != null || moving || open || had || themeColor != null ||
-        background != null
+        background != null || trust != null
       ) {
         entities.push({
           entity: { eid: app.eid },
+          ...(trust == null ? {} : {
+            installed: { trusted: trust ? new Date().toISOString() : null },
+          }),
           ...(title == null ? {} : { doc: { title } }),
           ...(moving || open
             ? {
@@ -3074,6 +3110,15 @@ let OURS: Row[] = [
             } before the apps that own them`
             : ' — it answers no path before the app that owns it'}${
           shown ? ` — ${saying(shown, ctx.env)}` : ''
+        }${
+          trust == null
+            ? ''
+            : trust
+            ? " — trusted: it runs like the space's own apps, and can read " +
+              'and change everything in this space; app_set(trusted: false) ' +
+              'sandboxes it again'
+            : ' — sandboxed: it runs in its own origin and reaches only its ' +
+              'own data'
         }${
           themeColor == null && background == null ? '' : ` — colours set: ${
             [
@@ -4072,7 +4117,9 @@ let OURS: Row[] = [
             wrote.length == 1 ? 'file' : 'files'
           }, its own ` +
           'store and its own data, pinned to that version (app_update moves ' +
-          'it)' + out.said,
+          'it). It runs sandboxed, in its own origin: it reaches its own ' +
+          "data and nothing else in the space; the space owner's " +
+          'app_set(trusted: true) lets it run like their own apps' + out.said,
         space,
       }
     },
@@ -4097,7 +4144,7 @@ let OURS: Row[] = [
             'their own app, and app_deploy releases what you write in it',
         )
       }
-      let from = await ctx.dir.appAt(app.installed.of)
+      let from = app.installed.of ? await ctx.dir.appAt(app.installed.of) : null
       if (!from?.app.published) {
         throw refuse(
           'missing',
@@ -4129,8 +4176,14 @@ let OURS: Row[] = [
       }
       let { wrote, gone } = await copied(ctx, from, { space, app })
       let out = await released(ctx, space, app, who, store)
+      // Trust was given to the code the owner saw. An update somebody else
+      // runs is new code, so it goes back into its sandbox (installed.ts).
+      let untrusts = !!app.installed.trusted && who.role != 'owner'
       await ctx.dir.apply({
-        entities: [{ entity: { eid: app.eid }, installed: { version: to } }],
+        entities: [{
+          entity: { eid: app.eid },
+          installed: { version: to, ...(untrusts ? { trusted: null } : {}) },
+        }],
       }, vouched(who))
       return {
         text:
@@ -4138,7 +4191,12 @@ let OURS: Row[] = [
             wrote.length == 1 ? 'file' : 'files'
           }${
             gone.length ? `, ${gone.length} removed` : ''
-          } — everything it had saved is still there` + out.said,
+          } — everything it had saved is still there${
+            untrusts
+              ? ' — it runs sandboxed again until the space owner trusts ' +
+                'this version (app_set trusted: true)'
+              : ''
+          }` + out.said,
         space,
       }
     },

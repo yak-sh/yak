@@ -444,3 +444,15 @@ export let sameOrigin = (host: string, origin: string | null) => {
 export let shared = (method: string, pathname: string) =>
   (method == 'GET' || method == 'HEAD') &&
   /^(?:\/[^/]+)?\/api\/query$/.test(pathname)
+
+// A sandboxed app's page asking its own doors (installed.ts, D-37901): the
+// path carries its page token as `/<app>/~<token>/…`, or `/~<token>/…` for a
+// front page or an app on its own domain. Such a page has an opaque origin,
+// so it sends `Origin: null`, which `sameOrigin` refuses — and it should,
+// everywhere a cookie could ride along. Here none may: the router takes the
+// cookie off before the request is served and marks the answer readable by
+// any origin (index.ts), because the credential is the token in the URL,
+// which no browser attaches on its own. What the token opens is the one app
+// it was sealed for; every other request on such a path is anonymous.
+export let paged = (pathname: string) =>
+  /^(?:\/[^/]+)?\/~[^/]+(?:\/|$)/.test(pathname)

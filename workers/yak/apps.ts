@@ -77,7 +77,7 @@ import {
   route,
 } from './route.ts'
 import { covers, PLATFORM_PATHS } from './router.ts'
-import { titling, vouched, type Who, whoIs } from './session.ts'
+import { nobody, titling, vouched, type Who, whoIs } from './session.ts'
 import { seedy } from './seed.ts'
 import { nameOf } from './signin.ts'
 import { type Reach, split, written } from './reach.ts'
@@ -98,6 +98,16 @@ import { answered, watched } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { refuse } from './tool.ts'
 import { source, tooMany, within } from './rate.ts'
+import {
+  bearerOf,
+  lasting,
+  paged,
+  paging,
+  sandboxed,
+  stored,
+  tokenOf,
+  walled,
+} from './installed.ts'
 
 // The runtime's streaming HTML rewriter, the slice this file asks for, so
 // `deno check` reads the Worker without @cloudflare/workers-types (env.ts).
@@ -468,9 +478,15 @@ let asset = async (
   path: string,
   // Where this app is mounted for the browser that asked, which is what its
   // pages resolve their relative URLs against: `/<app>/`, or `/` when it is
-  // the space's front page (T-33040).
+  // the space's front page (T-33040). A sandboxed app's carries its page
+  // token as its last segment (installed.ts), and `bare` is the same address
+  // without it — what a manifest names, since a home screen keeps it.
   at: string,
   c: Clock,
+  bare = at,
+  // A sandboxed app's page is woven these tags too: its storage (installed.ts
+  // `stored`), asked for only once the file turns out to be a page.
+  sandbox?: () => Promise<string>,
 ) => {
   let prefix = prefixOf(space, app)
   if (inside(keyed(prefix, path).slice(prefix.length))) return nothingHere(env)
@@ -484,9 +500,22 @@ let asset = async (
   )
   if (got.status != 200) {
     await got.body?.cancel()
-    return await unwritten(req, env, app, path, at) ?? nothingHere(env)
+    return await unwritten(req, env, app, path, bare) ?? nothingHere(env)
   }
   let type = got.headers.get('content-type') ?? 'application/octet-stream'
+  let html = type.startsWith('text/html')
+  // A sandboxed page is woven its person's saved keys (installed.ts
+  // `stored`), which the bytes' tag knows nothing of, and carries a token for
+  // them: it is sent whole every time, and no cache on the way may keep it.
+  if (sandbox && html) {
+    let own = pinned(at, await got.text(), app)
+    return reported(
+      at,
+      new Response(based(at, intoHead(own, await sandbox())), {
+        headers: { 'content-type': type, 'cache-control': 'private, no-store' },
+      }),
+    )
+  }
   let etag = await etagOf(got.headers.get(SHA) ?? '', at)
   let headers = { 'content-type': type, 'cache-control': keeping(app), etag }
   // The browser already has these bytes, so it is told so and sent none.
@@ -494,7 +523,7 @@ let asset = async (
     await got.body?.cancel()
     return new Response(null, { status: 304, headers })
   }
-  if (!type.startsWith('text/html')) return new Response(got.body, { headers })
+  if (!html) return new Response(got.body, { headers })
   // A page, so it gets the app's address before its own first relative URL,
   // and the reporter after it. The weaving is done here rather than behind the
   // cache because the same file is a different document at each mount, and one
@@ -801,8 +830,10 @@ type Wrote = { entities: string[]; aliases: Record<string, string> }
 
 // The words this app uses but does not home (T-32728), as its own store last
 // accepted them: the word, and the app in this space whose store holds its
-// rows.
+// rows. A sandboxed app borrows none (installed.ts, T-37926): its words stay
+// in its own store, whatever a release before it was walled off recorded.
 let usesOf = async (env: Env, space: Space, app: App) => {
+  if (sandboxed(app)) return {} as Record<string, string>
   let r = await storeOf(env.STORE, storeName(space, app))('/uses')
   if (!r.ok) {
     await r.body?.cancel()
@@ -811,10 +842,13 @@ let usesOf = async (env: Env, space: Space, app: App) => {
   return await r.json() as Record<string, string>
 }
 
+// The homes those words live in. A sandboxed app is never one (T-37926):
+// the space's own app would be writing its rows into a store whose code is a
+// stranger's.
 let appsAt = async (env: Env, space: Space, slugs: string[]) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   return (await Promise.all(slugs.map((s) => dir.app(space, s))))
-    .filter(Boolean) as App[]
+    .filter((a): a is App => !!a && !sandboxed(a))
 }
 
 // The other stores this app's acts reach: one per app it borrows a word from.
@@ -931,7 +965,7 @@ let api = async (
   // The store client an app's pages import (public/client.js), served beside
   // the doors it wraps so a page needs no address but its own. One file for
   // every app, so it comes from the platform's assets, not the app's blobs.
-  if (path == '/client.js' || path == '/report.js') {
+  if (path == '/client.js' || path == '/report.js' || path == '/storage.js') {
     return env.ASSETS.fetch(new Request(new URL(path, req.url)))
   }
   let store = appStore(env.STORE, space, app, env)
@@ -1110,6 +1144,22 @@ let api = async (
       return json(400, 'refused', e instanceof Error ? e.message : String(e))
     }
   }
+  // What a sandboxed page keeps in localStorage (installed.ts,
+  // public/storage.js): the person's own keys in this app's store, never
+  // graph rows, which the app's other readers could query. Anybody who may
+  // read the app keeps their own; a visitor who is not signed in keeps
+  // theirs in the page alone.
+  if (path == '/storage') {
+    if (!who.person) return refused('not_a_reader')
+    if (!mayRead) return refused('not_a_reader')
+    if (req.method != 'GET' && req.method != 'POST') {
+      return json(405, 'method_not_allowed')
+    }
+    return store('/storage', {
+      method: req.method,
+      body: req.method == 'POST' ? await req.text() : undefined,
+    }, headers)
+  }
   // The file door: bytes in, one content-addressed address out. Uploaded
   // bytes are app data, not the app's own files — a vote page's photo is the
   // visitor's, not the deploy's — so the app's `access` governs both halves:
@@ -1134,7 +1184,11 @@ let api = async (
     // The file door is never widened (public/docs/sharing.md): a guest of
     // this app writes its data and never its bytes, whatever level the grant
     // gave them. An app takes a guest's rows and never a guest's deploy.
-    if (!writes(who.role) || who.guest) return refused()
+    //
+    // Nor is a sandboxed app's (installed.ts): its API hears only its page
+    // token, and that token is the page's — writing the app's code stays a
+    // member's act through the tools, never something its own page does.
+    if (!writes(who.role) || who.guest || sandboxed(app)) return refused()
     let key = keyOf(space, app, path.slice('/files'.length))
     let bytes = new Uint8Array(await req.arrayBuffer())
     let stopped = await fullFiles(env, space, [{
@@ -1662,13 +1716,50 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // being a loop.
   // Where this app is mounted for the browser that asked: the prefix its
   // pages resolve relative URLs against, and where its reporter lives.
-  let at = mount ?? (front ? '/' : `/${app.slug}/`)
-  let itself = await granted(req, env.SESSION_SECRET, storeName(space, app))
+  let bare = mount ?? (front ? '/' : `/${app.slug}/`)
+  // A sandboxed app (installed.ts): its page's own requests arrive with its
+  // page token leading the path, `/<app>/~<token>/…`. The segment is taken
+  // off here, so everything below — the app's worker included — sees the
+  // clean address. A top-level navigation to one (a link the page followed,
+  // its own address copied) goes to the clean address instead, which loads
+  // the page afresh and never shows a token in the address bar. On an app
+  // that is not sandboxed the segment names nothing.
+  let walls = sandboxed(app)
+  let paper = tokenOf(path)
+  if (paper) {
+    let reads = req.method == 'GET' || req.method == 'HEAD'
+    if (reads && req.headers.get('sec-fetch-mode') == 'navigate') {
+      return redirect(`${bare}${paper.rest.slice(1)}${url.search}`)
+    }
+    if (!walls) return nothingHere(env)
+    let clean = new URL(url)
+    clean.pathname = url.pathname.slice(0, -path.length) + paper.rest
+    req = new Request(clean, req)
+    url = clean
+    path = paper.rest
+  }
+  let store = storeName(space, app)
+  let itself = await granted(req, env.SESSION_SECRET, store)
   let who = itself ??
     await c.time(
       'who',
-      () => whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p)),
+      () =>
+        walls
+          ? visiting(req, env, dir, space!, store, paper?.token, path)
+          : whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p)),
     )
+  // And the page's own address for its relative URLs: a sandboxed page's
+  // carries a token for whoever loaded it, dying with their cookie.
+  let at = paper
+    ? `${bare}~${paper.token}/`
+    : walls && !path.startsWith('/api/') && env.SESSION_SECRET
+    ? `${bare}~${await paging(
+      env.SESSION_SECRET,
+      store,
+      who.person,
+      lasting(who.until),
+    )}/`
+    : bare
   // Rung 1½: the home app's router, where it named this path. Ahead of the app
   // whose slug owns it — and ahead of that app's own access rule, since what
   // answers is the HOME app's page and not this one's. Not for the home app's
@@ -1676,7 +1767,10 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // never for a request an app's worker made: the router's own onward call
   // carries the grant it was handed, and without that guard it would arrive
   // back at the path it just intercepted (dispatch.ts `bearing`).
-  if (!front && !bearing(req)) {
+  //
+  // Nor for a sandboxed page's own request: its token is its app's alone,
+  // and the router would be acting as the person who holds it.
+  if (!front && !bearing(req) && !paper) {
     let early = await firstly(env, dir, space, req, who, c)
     // The answer is the home app's, so it reports as the home app — and is
     // counted as the home app's page view — at the bare hostname, which is
@@ -1688,7 +1782,8 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
         res: early.page,
         at: seen(space, early.app),
       })
-      return reporting(early.page, req, '/')
+      let res = reporting(early.page, req, '/')
+      return sandboxed(early.app) ? walled(res) : res
     }
   }
   // A guest of this one app (T-37615). The roster is read space-wide, so
@@ -1705,22 +1800,25 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   }
   // The `/api/` doors stay the kernel's, always, and keep their own refusals,
   // which speak.
+  //
+  // A sandboxed app's answers, every one, are walled (installed.ts).
+  let wall = (res: Response) => walls ? walled(res) : res
   if (path.startsWith('/api/')) {
     // A stranger's reads are held to a rate per source (rate.ts), here and
     // before the store, so a refused one is never a store request the space's
     // meter counts. Not the space's people, and not the app's own worker,
     // which is already somebody's request.
     if (!itself && !who.person && !await within(env.API_RATE, source(req))) {
-      return reporting(tooMany(), req, at)
+      return wall(reporting(tooMany(), req, at))
     }
-    return reporting(
+    return wall(reporting(
       await c.time(
         'api',
         () => api(req, env, space!, app!, path.slice(4), who),
       ),
       req,
       at,
-    )
+    ))
   }
   // A private app hides its page too, not only its data (C-32607 item 5):
   // `access: private` says only its members can see it, and its files are
@@ -1752,7 +1850,19 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // The wasted read is the rare case — an app whose worker answers — and it
   // is one small GET. The `catch` is there because a promise nobody awaits
   // must not surface as an unhandled rejection.
-  let file = mayRead ? asset(req, env, space, app, path, at, c) : null
+  let file = mayRead
+    ? asset(
+      req,
+      env,
+      space,
+      app,
+      path,
+      at,
+      c,
+      bare,
+      walls ? () => storing(env, space!, app!, who, at) : undefined,
+    )
+    : null
   file?.catch(() => {})
   let own = itself
     ? null
@@ -1779,7 +1889,58 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // HTML is not a page, and the platform's own pages — the space index, the
   // trash, a wrong address — never come back through here.
   watched(PLUGINS, { env, req, res: page, at: seen(space, app) })
-  return reporting(page, req, at)
+  return wall(reporting(page, req, at))
+}
+
+// Who a sandboxed app's request is (installed.ts). Its page token, from the
+// path or a bearer, names the person, and their role is read live — the token
+// carries none. Without one, the app's `/api/` hears nobody, whatever cookie
+// came: only its page load reads the cookie, and that is what mints the token.
+let visiting = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  space: Space,
+  store: string,
+  token: string | undefined,
+  path: string,
+): Promise<Who> => {
+  let sent = token ?? bearerOf(req)
+  if (!sent) {
+    return path.startsWith('/api/')
+      ? nobody
+      : whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+  }
+  let p = env.SESSION_SECRET
+    ? await paged(sent, env.SESSION_SECRET, store)
+    : null
+  if (!p?.person) return { ...nobody, ...(p ? { until: p.exp } : {}) }
+  return {
+    person: p.person,
+    role: await dir.role(space, p.person),
+    until: p.exp,
+  }
+}
+
+// What a sandboxed page is given to keep things in (installed.ts `stored`):
+// the person's saved keys, read from the app's own store, or none for a
+// visitor who is not signed in, whose storage lasts as long as the page.
+let storing = async (
+  env: Env,
+  space: Space,
+  app: App,
+  who: Who,
+  at: string,
+) => {
+  if (!who.person) return stored(at, {}, false)
+  let r = await appStore(env.STORE, space, app, env)(
+    '/storage',
+    {},
+    vouched(who),
+  )
+  let keys = r.ok ? await r.json() as Record<string, string> : {}
+  if (!r.ok) await r.body?.cancel()
+  return stored(at, keys, true)
 }
 
 // One page view's identity: which app it was a page of, and the address it was

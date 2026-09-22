@@ -112,6 +112,7 @@ import {
   guarded,
   hostOf,
   MOUNT,
+  paged,
   platform,
   type Route,
   route,
@@ -456,6 +457,29 @@ let cors = (res: Response) => {
   })
 }
 
+// A sandboxed page's own request (route.ts `paged`, installed.ts): the
+// cookie off, since the token in the path is the whole of what it may carry.
+let uncookied = (req: Request) => {
+  let headers = new Headers(req.headers)
+  headers.delete('cookie')
+  return new Request(req, { headers })
+}
+
+// And the question a browser asks before a sandboxed page's JSON write or
+// its upload: yes, from anywhere, with the headers it named. No credentials
+// are allowed and none are read, so there is nothing an origin could add.
+let preflight = (req: Request) =>
+  new Response(null, {
+    status: 204,
+    headers: {
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET, HEAD, POST, PUT, DELETE',
+      'access-control-allow-headers':
+        req.headers.get('access-control-request-headers') ?? '',
+      'access-control-max-age': '86400',
+    },
+  })
+
 // A header only the router writes: whatever a client sent under that name is
 // gone before anything reads it.
 let unmounted = (req: Request) => {
@@ -546,8 +570,16 @@ let router = {
       // One door is open to every page anyway, and this is where it opens:
       // the app's read door, asked with GET, served with the credentials
       // stripped off and marked readable by any origin (route.ts `shared`).
+      //
+      // And a sandboxed app's page, on the path that carries its token: its
+      // origin is opaque, so it is a stranger to every page, and its request
+      // is served with no cookie at all (route.ts `paged`).
       let anyone = false
-      if (
+      if (paged(asked)) {
+        if (req.method == 'OPTIONS') return sealed(preflight(req), env)
+        req = uncookied(req)
+        anyone = true
+      } else if (
         guarded(req.method, asked) &&
         !sameOrigin(host, req.headers.get('origin'))
       ) {

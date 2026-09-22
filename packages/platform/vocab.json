@@ -109,6 +109,11 @@
         },
         "version": {
           "type": "number"
+        },
+        "trusted": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when the space's owner let the copy run unsandboxed, like the space's own apps; empty while it runs sandboxed"
         }
       },
       "description": "a copy of somebody else’s app, at the version it was copied from"

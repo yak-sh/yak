@@ -34,6 +34,10 @@ export type Who = {
    * reaches nothing else in the space — its files included, since writing an
    * app's bytes stays a member's act (apps.ts, public/docs/sharing.md). */
   guest?: boolean
+  /** The unix second the credential this caller came in on dies at: the
+   * cookie's `exp`, or a page token's. A sandboxed app's page token is minted
+   * to die with it (installed.ts). */
+  until?: number
 }
 
 /**
@@ -68,7 +72,11 @@ export let whoIs = async (
   if (!token || !secret) return nobody
   let claims = await verify(token, secret)
   if (!claims) return nobody
-  return { person: claims.person, role: await roleOf(claims.person) }
+  return {
+    person: claims.person,
+    role: await roleOf(claims.person),
+    until: claims.exp,
+  }
 }
 
 // The headers an app is handed in the cookie's place.
