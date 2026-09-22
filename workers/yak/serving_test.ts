@@ -29,7 +29,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
-import { slow } from '../../src/testing.ts'
+import { slow, until } from '../../src/testing.ts'
 import { sign } from '../../src/token.ts'
 import * as apps from './apps.ts'
 import { directory, stamp, storeName } from './directory.ts'
@@ -39,7 +39,7 @@ import type { Env } from './env.ts'
 import { added, asked } from './examples/shop/cart.js'
 import { analytics, dataset, platform as inMemory } from './harness.ts'
 import { emptied, trash, trashSpace } from './erase.ts'
-import { signed, stripe } from './probe.ts'
+import { charged, delivered, merchant, signed, stripeKey } from './probe.ts'
 import * as sell from './sell.ts'
 import { call, type Ctx, wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
@@ -1391,346 +1391,342 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
     long.entity.eid,
   ])
   assertEquals(/price|amount|cent/.test(JSON.stringify(items)), false)
+})
 
-  // ---- and through the platform's own door, with Stripe stood in for -------
-  let fake = stripe(({ path, sent }) =>
-    path == '/v1/checkout/sessions'
-      ? {
-        id: 'cs_test_probe',
-        url: `https://checkout.stripe.com/c/pay/cs_test_probe#${
-          sent.get('line_items[0][price_data][unit_amount]')
-        }`,
-      }
-      // The charge a dispute is about, read back on the seller's account.
-      : path == '/v1/charges/ch_1'
-      ? {
-        id: 'ch_1',
-        payment_intent: 'pi_1',
-        metadata: { space: SPACE_EID.at, app: 'shop' },
-      }
-      : null
-  )
-  // The space's eid, filled in below once it is seeded — the fake answers
-  // before and after, so it reads the box rather than closing over a value.
-  let SPACE_EID: { at?: string } = {}
-  let cookie = await as(ADA)
-  try {
-    // A platform with no Stripe key of its own says so, in one sentence.
-    let off = await paying(k.env, { items })
-    assertEquals(off.status, 503)
-    assertEquals(off.body.error.code, 'no_selling')
-
-    k.env.STRIPE_KEY = 'sk_probe'
-    k.env.STRIPE_API = fake.url
-
-    let free = await paying(k.env, { items })
-    assertEquals(free.status, 403)
-    assertEquals(free.body.error.code, 'plus_required')
-    assertEquals(fake.calls.length, 0)
-    await stamp(k.env, {
-      entities: [{ entity: { eid: k.space.eid }, plan: { tier: 'plus' } }],
-    })
-
-    // The shop is deployed and the space has not connected Stripe. That is the
-    // refusal a page will actually meet — a seller deploys before they finish
-    // Stripe's form nearly every time — so it is refused by name, with the way
-    // out in the sentence.
-    let early = await paying(k.env, { items })
-    assertEquals(early.status, 409)
-    assertEquals(early.body.error.code, 'not_selling')
-    assertStringIncludes(early.body.error.message, 'has not connected')
-    assertEquals(fake.calls.length, 0, 'Stripe was never asked')
-
-    // Now the seller is ready.
-    await stamp(k.env, {
-      entities: [{
-        entity: { eid: k.space.eid },
-        stripe: {
-          account: 'acct_seller',
-          charges_enabled: true,
-          details_submitted: true,
-        },
-      }],
-    })
-    SPACE_EID.at = k.space.eid
-
-    let paid = await paying(k.env, {
-      items,
-      email: 'ana@example.com',
-      success: '?ordered={CHECKOUT_SESSION_ID}',
-    })
-    assertEquals(paid.status, 200, JSON.stringify(paid.body))
-    assertStringIncludes(paid.body.url, 'checkout.stripe.com')
-
-    // The one header that makes it the seller's charge and not ours.
-    let made = fake.at('/v1/checkout/sessions')!
-    assertEquals(made.on, 'acct_seller')
-    // The door priced it off the store, and carried the size into the name the
-    // buyer reads on Stripe's own page.
-    assertEquals(made.sent.get('mode'), 'payment')
-    assertEquals(
-      made.sent.get('line_items[0][price_data][product_data][name]'),
-      'Everyday Tee — Charcoal (M)',
-    )
-    assertEquals(
-      made.sent.get('line_items[0][price_data][unit_amount]'),
-      '2800',
-    )
-    assertEquals(made.sent.get('line_items[0][quantity]'), '2')
-    assertEquals(
-      made.sent.get('line_items[1][price_data][product_data][name]'),
-      'Long Sleeve — Moss',
-    )
-    assertEquals(
-      made.sent.get('line_items[1][price_data][unit_amount]'),
-      '3600',
-    )
-    assertEquals(made.sent.get('customer_email'), 'ana@example.com')
-    // Back inside the app, with Stripe's own literal intact.
-    assertEquals(
-      made.sent.get('success_url'),
-      'https://ada.yaks.app/shop/?ordered={CHECKOUT_SESSION_ID}',
-    )
-    assertEquals(made.sent.get('cancel_url'), 'https://ada.yaks.app/shop/')
-    // The two words the webhook routes by, on the session and on the intent —
-    // a refund arrives as a charge and knows nothing of the session.
-    assertEquals(made.sent.get('metadata[space]'), k.space.eid)
-    assertEquals(made.sent.get('metadata[app]'), 'shop')
-    assertEquals(
-      made.sent.get('payment_intent_data[metadata][items]'),
-      made.sent.get('metadata[items]'),
-    )
-    // The owner has set no rate, so no fee is sent at all: Stripe wants a
-    // positive application fee, and a fee of nothing is no fee.
-    assertEquals(
-      made.sent.get('payment_intent_data[application_fee_amount]'),
-      null,
-    )
-
-    // A product this store does not have is refused before Stripe is asked —
-    // an eid off another app, or one somebody made up.
-    let wrong = await paying(k.env, { items: [{ product: CAKE, qty: 1 }] })
-    assertEquals(wrong.status, 400)
-    assertStringIncludes(wrong.body.error.message, 'no product')
-    // And a buyer cannot name their own price: there is nowhere to put one.
-    let cheap = await paying(k.env, {
-      items: [{ product: tee.entity.eid, qty: 1, price_cents: 1 }],
-    })
-    assertEquals(cheap.status, 200)
-    assertEquals(
-      fake.at('/v1/checkout/sessions')!.sent.get(
-        'line_items[0][price_data][unit_amount]',
-      ),
-      '2800',
-    )
-    // Nor send the buyer anywhere but back into the app.
-    let away = await paying(k.env, { items, success: 'https://evil.example/' })
-    assertEquals(away.status, 400)
-    assertStringIncludes(away.body.error.message, 'stay inside this app')
-
-    // Downgrading blocks new checkouts, but the completed checkout below
-    // still files its order, receipt, refund and dispute.
-    await stamp(k.env, {
-      entities: [{ entity: { eid: k.space.eid }, plan: { tier: 'free' } }],
-    })
-    let before = fake.calls.length
-    let downgraded = await paying(k.env, { items })
-    assertEquals(downgraded.status, 403)
-    assertEquals(downgraded.body.error.code, 'plus_required')
-    assertEquals(fake.calls.length, before)
-
-    // ---- and the money moves (T-34526) ------------------------------------
-    //
-    // Stripe posts to the Connect door, and one row lands in the SHOP's own
-    // store — written by the platform, as the app, with a letter to the buyer
-    // beside it in the same batch.
-    k.env.STRIPE_CONNECT_WEBHOOK_SECRET = WHSEC
-    let session = made.sent
-    let bought = await connectHook(k.env, WHSEC, {
-      id: 'evt_paid',
-      type: 'checkout.session.completed',
-      account: 'acct_seller',
-      data: {
-        object: {
-          id: 'cs_test_1',
-          payment_intent: 'pi_1',
-          payment_status: 'paid',
-          amount_total: 2800 * 2 + 3600,
-          currency: 'usd',
-          customer_details: { email: 'ana@example.com' },
-          metadata: {
-            space: session.get('metadata[space]'),
-            app: 'shop',
-            items: session.get('metadata[items]'),
-          },
-        },
-      },
-    })
-    assertEquals(bought.status, 200)
-    assertEquals(bought.body.did, 'shop: paid 9200')
-
-    let orders = async () =>
-      await (await apps.fetch(
-        visit('/shop/api/query?.order!&.doc?', { headers: { cookie } }),
-        k.env,
-      )).json() as {
-        entity: { eid: string }
-        order: Record<string, string | number>
-        created?: { by?: { eid?: string } | string }
-      }[]
-    let [order] = await orders()
-    assertEquals(order.order.session, 'cs_test_1')
-    assertEquals(order.order.intent, 'pi_1')
-    assertEquals(order.order.account, 'acct_seller')
-    assertEquals(order.order.total_cents, 9200)
-    // No rate is set, so the platform took nothing.
-    assertEquals(order.order.fee_cents, 0)
-    assertEquals(order.order.email, 'ana@example.com')
-    assertEquals(order.order.status, 'paid')
-    // The cart came back whole, product eids and the size and all.
-    assertEquals(JSON.parse(String(order.order.items)).length, 2)
-
-    // The buyer's letter, in the same batch, aimed at the address they typed
-    // and carrying what they bought.
-    let post = await (await apps.fetch(
-      visit('/shop/api/query?.mail!&.doc?&.deliver?', {
-        headers: { cookie },
-      }),
-      k.env,
-    )).json() as { doc: { title: string; body: string } }[]
-    assertEquals(post.length, 1)
-    assertStringIncludes(post[0].doc.title, 'Your order from')
-    assertStringIncludes(post[0].doc.body, 'Everyday Tee — Charcoal (M) × 2')
-    assertStringIncludes(post[0].doc.body, '**Total $92.00**')
-
-    // ---- the same event again. At-least-once delivery is the normal case,
-    // and the order's eid is derived from the session — so this addresses the
-    // row already there, derives the same columns, and leaves one order.
-    await connectHook(k.env, WHSEC, {
-      id: 'evt_paid',
-      type: 'checkout.session.completed',
-      account: 'acct_seller',
-      data: {
-        object: {
-          id: 'cs_test_1',
-          payment_intent: 'pi_1',
-          payment_status: 'paid',
-          amount_total: 9200,
-          currency: 'usd',
-          customer_details: { email: 'ana@example.com' },
-          metadata: {
-            space: session.get('metadata[space]'),
-            app: 'shop',
-            items: session.get('metadata[items]'),
-          },
-        },
-      },
-    })
-    assertEquals((await orders()).length, 1, 'one sale, one order')
-
-    // ---- refunded. The charge inherits the PaymentIntent's metadata, which
-    // is why the door put it there: a refund knows nothing of a session. Part
-    // of the charge first, then the rest (T-37887).
-    let refund = (id: string, amount_refunded: number) =>
-      connectHook(k.env, WHSEC, {
-        id,
-        type: 'charge.refunded',
-        account: 'acct_seller',
+// ---- the same cart through the platform's door, and Stripe's sandbox -------
+//
+// The seller is a connected account in the sandbox that can take money
+// (probe.ts `merchant`), so every call the door makes on the seller's behalf
+// is made on that account and read back from it.
+slow('a cart is priced at Stripe, paid, refunded and disputed', async () => {
+  let key = stripeKey()
+  using k = await shopping()
+  await k.deploy()
+  let shirts = await k.shirts()
+  let tee = shirts.find((r) => r.doc.title.endsWith('Charcoal'))!
+  let long = shirts.find((r) => r.doc.title.startsWith('Long'))!
+  let items = asked(added(
+    added([], { product: tee.entity.eid, options: 'M', qty: 2 }),
+    { product: long.entity.eid },
+  ))
+  let seller = await merchant(key)
+  let on = (path: string, fields?: Record<string, unknown>) =>
+    charged(key, path, fields, seller)
+  // The session the door made, read back off Stripe with its line items.
+  let held = async (url: string) => {
+    let id = /cs_test_[A-Za-z0-9]+/.exec(url)?.[0]
+    assert(id, `no checkout session in ${url}`)
+    return await on(`/v1/checkout/sessions/${id}?expand[]=line_items`) as {
+      id: string
+      mode: string
+      amount_total: number
+      customer_email: string | null
+      success_url: string
+      cancel_url: string
+      metadata: Record<string, string>
+      line_items: {
         data: {
-          object: {
-            id: 'ch_1',
-            payment_intent: 'pi_1',
-            amount: 9200,
-            amount_refunded,
-            refunded: amount_refunded == 9200,
-            metadata: {
-              space: session.get('metadata[space]'),
-              app: 'shop',
-            },
-          },
-        },
-      })
-    assertEquals(
-      (await refund('evt_part', 4600)).body.did,
-      'shop: partially_refunded',
-    )
-    assertEquals((await orders())[0].order.status, 'partially_refunded')
-    let back = await refund('evt_refund', 9200)
-    assertEquals(back.body.did, 'shop: refunded')
-    assertEquals((await orders())[0].order.status, 'refunded')
-
-    // ---- disputed. A dispute carries no metadata at all, so its charge is
-    // read back from Stripe on the seller's own account and the metadata
-    // comes off that.
-    let charged = false
-    let dispute = await connectHook(k.env, WHSEC, {
-      id: 'evt_dispute',
-      type: 'charge.dispute.created',
-      account: 'acct_seller',
-      data: { object: { id: 'dp_1', charge: 'ch_1', amount: 9200 } },
-    })
-    charged = fake.calls.some((c) => c.path == '/v1/charges/ch_1')
-    assert(charged, 'the charge was read back to find whose sale it was')
-    assertEquals(
-      fake.at('/v1/charges/ch_1')!.on,
-      'acct_seller',
-      'and on the SELLER account, where the charge lives',
-    )
-    assertEquals(dispute.body.did, 'shop: disputed')
-    assertEquals((await orders())[0].order.status, 'disputed')
-
-    // ---- the dispute decided (T-37887): won puts the order back to paid,
-    // and lost says the buyer's bank took the money back.
-    let closed = (id: string, status: string) =>
-      connectHook(k.env, WHSEC, {
-        id,
-        type: 'charge.dispute.closed',
-        account: 'acct_seller',
-        data: { object: { id: 'dp_1', charge: 'ch_1', status } },
-      })
-    assertEquals((await closed('evt_won', 'won')).body.did, 'shop: paid')
-    assertEquals((await orders())[0].order.status, 'paid')
-    // A closed dispute on an order no longer disputed moves nothing.
-    assertEquals((await closed('evt_won_again', 'won')).body.did, 'unchanged')
-    await connectHook(k.env, WHSEC, {
-      id: 'evt_dispute_2',
-      type: 'charge.dispute.created',
-      account: 'acct_seller',
-      data: { object: { id: 'dp_2', charge: 'ch_1', amount: 9200 } },
-    })
-    assertEquals((await closed('evt_lost', 'lost')).body.did, 'shop: lost')
-    assertEquals((await orders())[0].order.status, 'lost')
-
-    // A charge the merchant made outside this platform, on the same account:
-    // not ours, and not a break.
-    assertEquals(
-      (await connectHook(k.env, WHSEC, {
-        id: 'evt_other',
-        type: 'charge.refunded',
-        account: 'acct_seller',
-        data: { object: { id: 'ch_2', payment_intent: 'pi_2' } },
-      })).body.did,
-      'not a sale of ours',
-    )
-  } finally {
-    await fake.stop()
+          description: string
+          quantity: number
+          price: { unit_amount: number }
+        }[]
+      }
+    }
   }
+  let cookie = await as(ADA)
+
+  // A platform with no Stripe key of its own says so, in one sentence.
+  let off = await paying(k.env, { items })
+  assertEquals(off.status, 503)
+  assertEquals(off.body.error.code, 'no_selling')
+
+  k.env.STRIPE_KEY = key
+
+  let free = await paying(k.env, { items })
+  assertEquals(free.status, 403)
+  assertEquals(free.body.error.code, 'plus_required')
+  await stamp(k.env, {
+    entities: [{ entity: { eid: k.space.eid }, plan: { tier: 'plus' } }],
+  })
+
+  // The shop is deployed and the space has not connected Stripe. That is the
+  // refusal a page will actually meet — a seller deploys before they finish
+  // Stripe's form nearly every time — so it is refused by name, with the way
+  // out in the sentence.
+  let early = await paying(k.env, { items })
+  assertEquals(early.status, 409)
+  assertEquals(early.body.error.code, 'not_selling')
+  assertStringIncludes(early.body.error.message, 'has not connected')
+
+  // Now the seller is ready.
+  await stamp(k.env, {
+    entities: [{
+      entity: { eid: k.space.eid },
+      stripe: {
+        account: seller,
+        charges_enabled: true,
+        details_submitted: true,
+      },
+    }],
+  })
+
+  let paid = await paying(k.env, {
+    items,
+    email: 'ana@example.com',
+    success: '?ordered={CHECKOUT_SESSION_ID}',
+  })
+  assertEquals(paid.status, 200, JSON.stringify(paid.body))
+  assertStringIncludes(paid.body.url, 'checkout.stripe.com')
+
+  // The door priced it off the store, and carried the size into the name the
+  // buyer reads on Stripe's own page.
+  let made = await held(paid.body.url)
+  assertEquals(made.mode, 'payment')
+  let [first, second] = made.line_items.data
+  assertEquals(first.description, 'Everyday Tee — Charcoal (M)')
+  assertEquals(first.price.unit_amount, 2800)
+  assertEquals(first.quantity, 2)
+  assertEquals(second.description, 'Long Sleeve — Moss')
+  assertEquals(second.price.unit_amount, 3600)
+  assertEquals(made.amount_total, 2800 * 2 + 3600)
+  assertEquals(made.customer_email, 'ana@example.com')
+  // Back inside the app, with Stripe's own literal intact.
+  assertEquals(
+    made.success_url,
+    'https://ada.yaks.app/shop/?ordered={CHECKOUT_SESSION_ID}',
+  )
+  assertEquals(made.cancel_url, 'https://ada.yaks.app/shop/')
+  // The two words the webhook routes by.
+  assertEquals(made.metadata.space, k.space.eid)
+  assertEquals(made.metadata.app, 'shop')
+
+  // A product this store does not have is refused before Stripe is asked —
+  // an eid off another app, or one somebody made up.
+  let wrong = await paying(k.env, { items: [{ product: CAKE, qty: 1 }] })
+  assertEquals(wrong.status, 400)
+  assertStringIncludes(wrong.body.error.message, 'no product')
+  // And a buyer cannot name their own price: there is nowhere to put one.
+  let cheap = await paying(k.env, {
+    items: [{ product: tee.entity.eid, qty: 1, price_cents: 1 }],
+  })
+  assertEquals(cheap.status, 200)
+  let other = await held(cheap.body.url)
+  assertEquals(other.line_items.data[0].price.unit_amount, 2800)
+  // A third sale, for the dispute the seller loses below.
+  let third = await held(
+    (await paying(k.env, { items: [{ product: long.entity.eid }] })).body.url,
+  )
+  // Nor send the buyer anywhere but back into the app.
+  let away = await paying(k.env, { items, success: 'https://evil.example/' })
+  assertEquals(away.status, 400)
+  assertStringIncludes(away.body.error.message, 'stay inside this app')
+
+  // Downgrading blocks new checkouts, but the completed checkouts below
+  // still file their orders, receipt, refund and dispute.
+  await stamp(k.env, {
+    entities: [{ entity: { eid: k.space.eid }, plan: { tier: 'free' } }],
+  })
+  let downgraded = await paying(k.env, { items })
+  assertEquals(downgraded.status, 403)
+  assertEquals(downgraded.body.error.code, 'plus_required')
+
+  // ---- and the money moves (T-34526) ------------------------------------
+  //
+  // Stripe's checkout page is not a thing a test can drive, so each session
+  // is paid the way the API pays: a PaymentIntent confirmed with one of
+  // Stripe's test cards, carrying the metadata the door put on the session's
+  // intent. What finishing the page adds to the session — paid, the intent,
+  // the buyer's address — is laid over the session Stripe holds.
+  let settle = async (
+    session: typeof made,
+    card: string,
+    email?: string,
+  ) => {
+    let intent = await on('/v1/payment_intents', {
+      amount: session.amount_total,
+      currency: 'usd',
+      payment_method: card,
+      payment_method_types: { 0: 'card' },
+      confirm: true,
+      metadata: session.metadata,
+    }) as { id: string; latest_charge: string; status: string }
+    assertEquals(intent.status, 'succeeded')
+    let did = await hook(k.env, 'checkout.session.completed', {
+      ...session,
+      status: 'complete',
+      payment_status: 'paid',
+      payment_intent: intent.id,
+      customer_details: email ? { email } : null,
+    }, seller)
+    return { intent, did }
+  }
+
+  // One row lands in the shop's own store — written by the platform, as the
+  // app, with a letter to the buyer beside it in the same batch.
+  k.env.STRIPE_CONNECT_WEBHOOK_SECRET = WHSEC
+  let sale = await settle(made, 'pm_card_visa', 'ana@example.com')
+  assertEquals(sale.did, 'shop: paid 9200')
+
+  let orders = async () =>
+    await (await apps.fetch(
+      visit('/shop/api/query?.order!&.doc?', { headers: { cookie } }),
+      k.env,
+    )).json() as {
+      entity: { eid: string }
+      order: Record<string, string | number>
+    }[]
+  let status = async (intent: string) =>
+    (await orders()).find((o) => o.order.intent == intent)?.order.status
+  let [order] = await orders()
+  assertEquals(order.order.session, made.id)
+  assertEquals(order.order.intent, sale.intent.id)
+  assertEquals(order.order.account, seller)
+  assertEquals(order.order.total_cents, 9200)
+  // No rate is set, so the platform took nothing.
+  assertEquals(order.order.fee_cents, 0)
+  assertEquals(order.order.email, 'ana@example.com')
+  assertEquals(order.order.status, 'paid')
+  // The cart came back whole, product eids and the size and all.
+  assertEquals(JSON.parse(String(order.order.items)).length, 2)
+
+  // The buyer's letter, in the same batch, aimed at the address they typed
+  // and carrying what they bought.
+  let post = await (await apps.fetch(
+    visit('/shop/api/query?.mail!&.doc?&.deliver?', {
+      headers: { cookie },
+    }),
+    k.env,
+  )).json() as { doc: { title: string; body: string } }[]
+  assertEquals(post.length, 1)
+  assertStringIncludes(post[0].doc.title, 'Your order from')
+  assertStringIncludes(post[0].doc.body, 'Everyday Tee — Charcoal (M) × 2')
+  assertStringIncludes(post[0].doc.body, '**Total $92.00**')
+
+  // ---- the same event again. At-least-once delivery is the normal case,
+  // and the order's eid is derived from the session — so this addresses the
+  // row already there, derives the same columns, and leaves one order.
+  await hook(k.env, 'checkout.session.completed', {
+    ...made,
+    status: 'complete',
+    payment_status: 'paid',
+    payment_intent: sale.intent.id,
+    customer_details: { email: 'ana@example.com' },
+  }, seller)
+  assertEquals((await orders()).length, 1, 'one sale, one order')
+
+  // ---- refunded, at Stripe. The charge inherits the PaymentIntent's
+  // metadata, which is why the door put it there: a refund knows nothing of a
+  // session. Part of the charge first, then the rest (T-37887).
+  let refund = async (amount?: number) => {
+    await on('/v1/refunds', { payment_intent: sale.intent.id, amount })
+    return await hook(
+      k.env,
+      'charge.refunded',
+      await on(`/v1/charges/${sale.intent.latest_charge}`),
+      seller,
+    )
+  }
+  assertEquals(await refund(4600), 'shop: partially_refunded')
+  assertEquals(await status(sale.intent.id), 'partially_refunded')
+  assertEquals(await refund(), 'shop: refunded')
+  assertEquals(await status(sale.intent.id), 'refunded')
+
+  // ---- disputed. Stripe's dispute card is charged and then disputed; a
+  // dispute carries no metadata at all, so its charge is read back from Stripe
+  // on the seller's account and the metadata comes off that.
+  type Dispute = { id: string; status: string }
+  let disputed = async (session: typeof made, total: number) => {
+    let fought = await settle(session, 'pm_card_createDispute')
+    assertEquals(fought.did, `shop: paid ${total}`)
+    let dispute = await until(
+      async () =>
+        ((await on(`/v1/disputes?payment_intent=${fought.intent.id}`)) as {
+          data: Dispute[]
+        }).data[0],
+      { timeout: 30_000, poll: 1000, label: 'the dispute' },
+    )
+    assertEquals(
+      await hook(k.env, 'charge.dispute.created', dispute, seller),
+      'shop: disputed',
+    )
+    assertEquals(await status(fought.intent.id), 'disputed')
+    return { intent: fought.intent.id, dispute }
+  }
+  // Stripe decides a dispute once it is answered, and settles it after a
+  // moment; the event is the dispute as it then stands.
+  let decided = async (dispute: Dispute, answer: Record<string, unknown>) => {
+    await on(`/v1/disputes/${dispute.id}`, answer)
+    let closed = await until(
+      async () => {
+        let now = await on(`/v1/disputes/${dispute.id}`) as Dispute
+        return /^(won|lost)$/.test(now.status) && now
+      },
+      { timeout: 60_000, poll: 1000, label: `${dispute.id} decided` },
+    )
+    return await hook(k.env, 'charge.dispute.closed', closed, seller)
+  }
+
+  // ---- the dispute decided (T-37887): won puts the order back to paid,
+  // with the evidence Stripe's sandbox decides for the seller on...
+  let won = await disputed(other, 2800)
+  let winning = {
+    evidence: { uncategorized_text: 'winning_evidence' },
+    submit: true,
+  }
+  assertEquals(await decided(won.dispute, winning), 'shop: paid')
+  assertEquals(await status(won.intent), 'paid')
+  // A closed dispute on an order no longer disputed moves nothing.
+  let again = await on(`/v1/disputes/${won.dispute.id}`)
+  assertEquals(
+    await hook(k.env, 'charge.dispute.closed', again, seller),
+    'unchanged',
+  )
+  // ...and lost, the seller conceding, says the buyer's bank took the money.
+  let lost = await disputed(third, 3600)
+  assertEquals(
+    await hook(
+      k.env,
+      'charge.dispute.closed',
+      await on(`/v1/disputes/${lost.dispute.id}/close`, {}),
+      seller,
+    ),
+    'shop: lost',
+  )
+  assertEquals(await status(lost.intent), 'lost')
+
+  // A charge the merchant made outside this platform, on the same account:
+  // not ours, and not a break.
+  let elsewhere = await on('/v1/payment_intents', {
+    amount: 500,
+    currency: 'usd',
+    payment_method: 'pm_card_visa',
+    payment_method_types: { 0: 'card' },
+    confirm: true,
+  }) as { id: string; latest_charge: string }
+  await on('/v1/refunds', { payment_intent: elsewhere.id })
+  assertEquals(
+    await hook(
+      k.env,
+      'charge.refunded',
+      await on(`/v1/charges/${elsewhere.latest_charge}`),
+      seller,
+    ),
+    'not a sale of ours',
+  )
 })
 
 // ---- selling (sell.ts, T-34524) --------------------------------------------
 //
 // The Connect webhook against a real directory: what an event from a seller's
 // account does to the space it belongs to. The account and the onboarding link
-// go out through a stand-in Stripe on a free port (probe.ts `stripe`, aimed at
-// with STRIPE_API), so what is asserted is the request that actually left
-// rather than a mock's word for it.
+// are made in Stripe's sandbox (probe.ts `stripeKey`), and read back from it.
 //
 // The space page's half of this — the three states an owner reads, and the
-// button that posts back — is in mcp_test.ts instead: drawing that page reaches
-// identity.ts for whether an assistant has ever connected, and the OAuth
-// provider it carries imports `cloudflare:` modules that only workerd can load.
-// So the page is driven where a runtime exists, and the door is driven here,
-// where it costs nothing.
+// button that posts back — is in mcp_load_test.ts instead: drawing that page
+// reaches identity.ts for whether an assistant has ever connected, and the
+// OAuth provider it carries imports `cloudflare:` modules that only workerd can
+// load. So the page is driven where a runtime exists, and the door is driven
+// here.
 
 // Where the space stands with selling, read back off the directory.
 let sold = async (env: Env) =>
@@ -1738,8 +1734,8 @@ let sold = async (env: Env) =>
     .space('ada'))?.stripe
 
 // The button on that page, as its form posts it. The page it is on is drawn in
-// mcp_test.ts; the POST is apps.ts `saved` and reaches nothing that needs a
-// runtime.
+// mcp_load_test.ts; the POST is apps.ts `saved` and reaches nothing that needs
+// a runtime.
 let pressed = async (env: Env, sell: string) =>
   await apps.fetch(
     new Request('https://ada.yaks.app/_yaks/selling', {
@@ -1754,170 +1750,124 @@ let pressed = async (env: Env, sell: string) =>
     env,
   )
 
-// One event at the Connect door, signed the way Stripe signs it.
-let connectHook = async (
-  env: Env,
-  secret: string,
-  event: Record<string, unknown>,
-) => {
-  let raw = JSON.stringify(event)
-  let at = Math.floor(Date.now() / 1000)
-  let res = await sell.fetch(
-    new Request('https://yaks.app/stripe/connect', {
-      method: 'POST',
-      body: raw,
-      headers: {
-        'content-type': 'application/json',
-        'stripe-signature': await signed(secret, raw, at),
-      },
-    }),
-    env,
-  )
-  return { status: res.status, body: await res.json() }
-}
-
 let WHSEC = 'whsec_a_connect_probe_secret'
 
-let updated = (id: string, over: Record<string, unknown>) => ({
-  id,
-  type: 'account.updated',
-  account: 'acct_probe',
-  data: { object: { id: 'acct_probe', ...over } },
-})
+// One event at the Connect door, signed with the secret the door was given —
+// the hop Stripe cannot make to a test (probe.ts `delivered`). It answers
+// what the door did.
+let hook = async (env: Env, type: string, object: unknown, account: string) =>
+  (JSON.parse(
+    await delivered(
+      {
+        at: (host: string, path: string, init?: RequestInit) =>
+          sell.fetch(new Request(`https://${host}${path}`, init), env),
+      },
+      '/stripe/connect',
+      WHSEC,
+      type,
+      object,
+      account,
+    ),
+  ) as { did: string }).did
 
-Deno.test('a space connects Stripe, and the webhook makes it ready', async () => {
-  let fake = stripe(({ path }) =>
-    path == '/v1/accounts'
-      ? { id: 'acct_probe', charges_enabled: false, details_submitted: false }
-      : path == '/v1/account_links'
-      ? { url: 'https://connect.stripe.com/setup/c/acct_probe/TOKEN' }
-      : null
-  )
+slow('a space connects Stripe, and the webhook makes it ready', async () => {
+  let key = stripeKey()
   using scenario = inMemory(SECRET, {
-    STRIPE_KEY: 'sk_probe',
-    STRIPE_API: fake.url,
+    STRIPE_KEY: key,
     STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC,
   })
   let { env } = scenario
+  let { dir, space } = await seeded(env)
+  let ctx = { env, dir, person: ADA } as unknown as Ctx
+  let denied = () => call(ctx, 'space_sell', { space: 'ada' })
+  await assertRejects(denied, Error, 'Plus')
+  await assertRejects(() => sell.connect(env, space, ''), Error, 'Plus')
+  await stamp(env, {
+    entities: [{ entity: { eid: space.eid }, plan: { tier: 'plus' } }],
+  })
+  // Nothing connected.
+  assertEquals(await sold(env), null)
+
+  // The button. It answers a redirect to Stripe's own hosted form — the one
+  // thing on that page that leaves the site.
+  let went = await pressed(env, 'start')
+  assertEquals(went.status, 303)
+  let link = went.headers.get('location') ?? ''
+  assertStringIncludes(link, 'https://connect.stripe.com/')
+
+  // The id is written the moment Stripe answers with it, before the link is
+  // asked for — so a person who wanders off mid-onboarding comes back to the
+  // account they started rather than a second one.
+  let account = (await sold(env))?.account ?? ''
+  assert(account.startsWith('acct_'), account)
   try {
-    let { dir, space } = await seeded(env)
-    let ctx = { env, dir, person: ADA } as unknown as Ctx
-    let denied = () => call(ctx, 'space_sell', { space: 'ada' })
-    await assertRejects(denied, Error, 'Plus')
-    await assertRejects(() => sell.connect(env, space, ''), Error, 'Plus')
-    assertEquals(fake.calls.length, 0)
-    await stamp(env, {
-      entities: [{ entity: { eid: space.eid }, plan: { tier: 'plus' } }],
-    })
-    // Nothing connected.
-    assertEquals(await sold(env), null)
-
-    // The button. It answers a redirect to Stripe's own hosted form — the one
-    // thing on that page that leaves the site.
-    let went = await pressed(env, 'start')
-    assertEquals(went.status, 303)
-    assertEquals(
-      went.headers.get('location'),
-      'https://connect.stripe.com/setup/c/acct_probe/TOKEN',
-    )
-
-    // What actually went to Stripe: the four controller properties that are
-    // the charge-merchants-directly model, and no `type` beside them.
-    let made = fake.at('/v1/accounts')!
-    assertEquals(made.sent.get('controller[fees][payer]'), 'account')
-    assertEquals(made.sent.get('controller[losses][payments]'), 'stripe')
-    assertEquals(made.sent.get('controller[stripe_dashboard][type]'), 'full')
-    assertEquals(made.sent.get('controller[requirement_collection]'), 'stripe')
-    assertEquals(made.sent.get('type'), null)
-    // And the link comes back to the page the button is on, both ways.
-    let asked = fake.at('/v1/account_links')!
-    assertEquals(asked.sent.get('account'), 'acct_probe')
-    assertEquals(asked.sent.get('type'), 'account_onboarding')
-    assertEquals(
-      asked.sent.get('return_url'),
-      'https://ada.yaks.app/_yaks/selling',
-    )
-    assertEquals(
-      asked.sent.get('refresh_url'),
-      'https://ada.yaks.app/_yaks/selling',
-    )
-
-    // The id is written the moment Stripe answers with it, before the link is
-    // asked for — so a person who wanders off mid-onboarding comes back to the
-    // account they started rather than a second one.
     assertEquals(await sold(env), {
-      account: 'acct_probe',
+      account,
       chargesEnabled: false,
       detailsSubmitted: false,
     })
 
+    // What Stripe holds: the four controller properties that are the
+    // charge-merchants-directly model.
+    let made = await charged(key, `/v1/accounts/${account}`) as {
+      controller: {
+        fees: { payer: string }
+        losses: { payments: string }
+        stripe_dashboard: { type: string }
+        requirement_collection: string
+      }
+    }
+    assertEquals(made.controller.fees.payer, 'account')
+    assertEquals(made.controller.losses.payments, 'stripe')
+    assertEquals(made.controller.stripe_dashboard.type, 'full')
+    assertEquals(made.controller.requirement_collection, 'stripe')
+
     // Pressing it again mints a new link on the same account — an account link
     // is single-use, and a second account would split one merchant's money
     // across books nobody can add up.
-    await pressed(env, 'start')
-    assertEquals(
-      fake.calls.filter((c) => c.path == '/v1/accounts').length,
-      1,
-      'one account, ever',
-    )
-    assertEquals(
-      fake.calls.filter((c) => c.path == '/v1/account_links').length,
-      2,
-    )
+    let again = await pressed(env, 'start')
+    assertEquals(again.status, 303)
+    assertStringIncludes(again.headers.get('location') ?? '', 'connect.stripe')
+    assertEquals((await sold(env))?.account, account, 'one account, ever')
 
-    // ---- account.updated, and they are ready ----
-    let ready = await connectHook(
-      env,
-      WHSEC,
-      updated('evt_1', { charges_enabled: true, details_submitted: true }),
-    )
-    assertEquals(ready.status, 200)
-    assertEquals(ready.body.did, 'ada can sell')
+    // ---- account.updated, as Stripe holds the account: nobody has been
+    // through the form, which the row already says, so nothing moves.
+    let updated = 'account.updated'
+    assertEquals(await hook(env, updated, made, account), 'unchanged')
+
+    // ---- and they are ready. Being ready is Stripe's verdict on a person's
+    // identity form, which no test can fill in, so the two flags that verdict
+    // sets are laid over the account Stripe holds.
+    let ready = { ...made, charges_enabled: true, details_submitted: true }
+    assertEquals(await hook(env, updated, ready, account), 'ada can sell')
     assertEquals(await sold(env), {
-      account: 'acct_probe',
+      account,
       chargesEnabled: true,
       detailsSubmitted: true,
     })
 
     // The same event again writes nothing at all: at-least-once delivery is
     // the normal case, and the row is derived rather than transitioned.
-    assertEquals(
-      (await connectHook(
-        env,
-        WHSEC,
-        updated('evt_1', { charges_enabled: true, details_submitted: true }),
-      )).body.did,
-      'unchanged',
-    )
+    assertEquals(await hook(env, updated, ready, account), 'unchanged')
 
-    // ---- Stripe changes its mind: a flag it does not send is false ----
-    assertEquals(
-      (await connectHook(
-        env,
-        WHSEC,
-        updated('evt_2', {
-          details_submitted: true,
-        }),
-      )).body.did,
-      'ada cannot sell',
-    )
+    // ---- Stripe changes its mind: the account as it holds it again.
+    assertEquals(await hook(env, updated, made, account), 'ada cannot sell')
     assertEquals((await sold(env))?.chargesEnabled, false)
 
     await stamp(env, {
       entities: [{ entity: { eid: space.eid }, plan: { tier: 'free' } }],
     })
-    let before = fake.calls.length
     await assertRejects(denied, Error, 'Plus')
-    assertEquals(fake.calls.length, before)
 
-    // ---- the seller revokes us from their own dashboard ----
+    // ---- the seller revokes us from their own dashboard. The event's object
+    // is the platform's application, which the door does not read.
     assertEquals(
-      (await connectHook(env, WHSEC, {
-        id: 'evt_3',
-        type: 'account.application.deauthorized',
-        account: 'acct_probe',
-        data: { object: { id: 'ca_platform' } },
-      })).body.did,
+      await hook(
+        env,
+        'account.application.deauthorized',
+        { object: 'application' },
+        account,
+      ),
       'ada disconnected',
     )
     // Forgotten here, and untouched at Stripe: the row is gone, the merchant
@@ -1926,18 +1876,22 @@ Deno.test('a space connects Stripe, and the webhook makes it ready', async () =>
 
     // An event for an account nobody here sells through is answered 200 and
     // nothing else: a second delivery would find the same nothing, and making
-    // Stripe repeat an unanswerable question for three days helps no one.
+    // Stripe repeat an unanswerable question for three days helps no one. The
+    // platform's own account is one such.
+    let platform = await charged(key, '/v1/account')
     assertEquals(
-      (await connectHook(env, WHSEC, {
-        id: 'evt_4',
-        type: 'account.updated',
-        account: 'acct_someone_else',
-        data: { object: { id: 'acct_someone_else', charges_enabled: true } },
-      })).body.did,
+      await hook(env, updated, platform, String(platform.id)),
       'no space sells through that account',
     )
   } finally {
-    await fake.stop()
+    // The sandbox keeps what a test made unless it is deleted.
+    await charged(
+      key,
+      `/v1/accounts/${account}`,
+      undefined,
+      undefined,
+      'DELETE',
+    )
   }
 })
 
@@ -2001,32 +1955,22 @@ Deno.test('with no connect secret the door says so, and nothing else breaks', as
 // The one button a space can press without a Stripe key set is Stop, and it
 // needs no Stripe call at all: forgetting an account is a write of ours.
 Deno.test('stopping selling forgets the account and calls nothing', async () => {
-  let fake = stripe(() => null)
-  using scenario = inMemory(SECRET, {
-    STRIPE_KEY: 'sk_probe',
-    STRIPE_API: fake.url,
-    STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC,
-  })
+  using scenario = inMemory(SECRET, { STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC })
   let { env } = scenario
-  try {
-    let { space } = await seeded(env)
-    await stamp(env, {
-      entities: [{
-        entity: { eid: space.eid },
-        stripe: {
-          account: 'acct_probe',
-          charges_enabled: true,
-          details_submitted: true,
-        },
-      }],
-    })
-    assertEquals((await sold(env))?.chargesEnabled, true)
-    assertEquals((await pressed(env, 'stop')).status, 303)
-    assertEquals(await sold(env), null)
-    assertEquals(fake.calls.length, 0, 'nothing was asked of Stripe')
-  } finally {
-    await fake.stop()
-  }
+  let { space } = await seeded(env)
+  await stamp(env, {
+    entities: [{
+      entity: { eid: space.eid },
+      stripe: {
+        account: 'acct_probe',
+        charges_enabled: true,
+        details_submitted: true,
+      },
+    }],
+  })
+  assertEquals((await sold(env))?.chargesEnabled, true)
+  assertEquals((await pressed(env, 'stop')).status, 303)
+  assertEquals(await sold(env), null)
 })
 
 // ---- the fee (T-34554) -----------------------------------------------------

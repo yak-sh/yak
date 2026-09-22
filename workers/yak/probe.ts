@@ -731,55 +731,6 @@ export let seed = async (
   return { ...them, eids }
 }
 
-// ---- Stripe, stood in for (billing.ts, sell.ts) ----------------------------
-//
-// Stripe's v1 API is form-encoded POSTs to one base URL, and `STRIPE_API`
-// aims that base anywhere — so a probe can be Stripe for the length of a test.
-// What it is for is the two things only a runtime can answer: that the fields
-// the code builds actually go out on the wire in the shape Stripe's docs spell,
-// and that the whole route — tool to door to Stripe and back into the graph —
-// joins up. The seams are pinned in sell_test.ts and billing_test.ts, where
-// they cost microseconds.
-
-export type Call = { path: string; on: string; sent: URLSearchParams }
-
-/**
- * A stand-in Stripe on a free port. `answer` is handed the path, the fields
- * as they arrived and the `Stripe-Account` header (empty on a platform call),
- * and returns the JSON object Stripe would — or null for "Stripe would refuse
- * that", which comes back in the error shape billing.ts `said` reads.
- *
- * Every call is recorded in `calls`, in order, because the assertion that
- * matters is usually what was sent: an `application_fee_amount` under the right
- * key, a `Stripe-Account` on the right request.
- */
-export let stripe = (
-  answer: (call: Call) => unknown,
-) => {
-  let calls: Call[] = []
-  let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
-    let call: Call = {
-      path: new URL(req.url).pathname,
-      on: req.headers.get('stripe-account') ?? '',
-      sent: new URLSearchParams(await req.text()),
-    }
-    calls.push(call)
-    let out = answer(call)
-    return out == null
-      ? Response.json({
-        error: { message: `nothing stands in for ${call.path}` },
-      }, { status: 400 })
-      : Response.json(out)
-  })
-  return {
-    url: `http://127.0.0.1:${(server.addr as Deno.NetAddr).port}`,
-    calls,
-    // The last call at a path, which is what an assertion nearly always wants.
-    at: (path: string) => calls.filter((c) => c.path == path).at(-1),
-    stop: () => server.shutdown(),
-  }
-}
-
 // ---- Cloudflare's custom hostnames, stood in for (domains.ts) -------------
 //
 // The three calls a domain makes — list by name, create, delete — over the
@@ -824,33 +775,26 @@ export let hostnames = () => {
 }
 
 /**
- * A space on Plus, the one way a space gets there: Stripe says its
- * subscription is active and the webhook moves the plan (billing.ts). `plan`
- * is stamped, so no door a test can reach writes it — the kernel is leased
- * with this `STRIPE_WEBHOOK_SECRET` and the event is signed with it.
+ * A space on Plus, the one way a space gets there: Stripe holds an active
+ * subscription for it and the webhook moves the plan (billing.ts). `plan` is
+ * stamped, so no door a test can reach writes it — the kernel is leased with
+ * this `STRIPE_WEBHOOK_SECRET` and the event is signed with it. The
+ * subscription comes back, for a test that goes on to cancel it.
  */
-export let plus = async (k: Kernel, secret: string, space: string) => {
-  let at = Math.floor(Date.now() / 1000)
-  let raw = JSON.stringify({
-    id: `evt_plus_${space}`,
-    type: 'customer.subscription.updated',
-    created: at,
-    data: {
-      object: {
-        id: `sub_plus_${space}`,
-        customer: `cus_plus_${space}`,
-        status: 'active',
-        metadata: { space },
-      },
-    },
-  })
-  let paid = await k.at('yaks.app', '/stripe/webhook', {
-    method: 'POST',
-    body: raw,
-    headers: { 'stripe-signature': await signed(secret, raw, at) },
-  })
-  let said = await paid.text()
-  if (!paid.ok) throw new Error(`plus: ${paid.status} ${said}`)
+export let plus = async (
+  k: Pick<Kernel, 'at'>,
+  secret: string,
+  space: string,
+) => {
+  let sub = await subscribed(stripeKey(), { space })
+  await delivered(
+    k,
+    '/stripe/webhook',
+    secret,
+    'customer.subscription.updated',
+    sub,
+  )
+  return sub
 }
 
 /**
@@ -1091,14 +1035,13 @@ export let bearerFor = async (
   return got.access_token
 }
 
-// ---- Stripe's own sandbox, not stood in for -------------------------------
+// ---- Stripe, in its sandbox (billing.ts, sell.ts) ------------------------
 //
-// `stripe` above is the stand-in every seam test uses. These are the other
-// thing: Stripe itself in test mode, which is what proves a purchase works
-// rather than proving the right fields were assembled. The key is the owner's
-// sandbox secret key, passed in the environment and never committed; a run
-// without one fails naming what to set rather than passing over the money
-// paths in silence.
+// Every test that reaches Stripe reaches Stripe itself, in test mode: what
+// proves a purchase works is Stripe taking it, not the right fields having been
+// assembled. The key is the owner's sandbox secret key, passed in the
+// environment and never committed; a run without one fails naming what to set
+// rather than passing over the money paths in silence.
 
 /** The sandbox secret key, or the sentence saying how to supply one. It must
  * be a test-mode key: a live key here would charge somebody. */
@@ -1191,6 +1134,97 @@ export let plusPrice = async (key: string, named = 'yaks.app probe Plus') => {
 }
 
 /**
+ * A connected account that can take money, found or made in the sandbox. The
+ * account `space_sell` makes waits on a person's identity form, which no test
+ * can fill in, so this one is onboarded by the platform with Stripe's test
+ * identity (`address_full_match`, `000000000`, `btok_us_verified`). Stripe
+ * takes about a minute to enable a new one, so it is kept and found again by
+ * name rather than made per run.
+ */
+export let merchant = async (
+  key: string,
+  named = 'yaks.app probe merchant',
+) => {
+  let found = ''
+  for (let after = ''; !found;) {
+    let page = await charged(
+      key,
+      `/v1/accounts?limit=100${after && `&starting_after=${after}`}`,
+    ) as unknown as {
+      data: { id: string; metadata?: Record<string, string> }[]
+      has_more: boolean
+    }
+    found = page.data.find((a) => a.metadata?.probe == named)?.id ?? ''
+    if (!page.has_more) break
+    after = page.data.at(-1)!.id
+  }
+  let id = found || String(
+    (await charged(key, '/v1/accounts', {
+      country: 'US',
+      business_type: 'individual',
+      controller: {
+        fees: { payer: 'application' },
+        losses: { payments: 'application' },
+        requirement_collection: 'application',
+        stripe_dashboard: { type: 'none' },
+      },
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+      },
+      business_profile: { mcc: '5734', url: 'https://yaks.app' },
+      individual: {
+        first_name: 'Probe',
+        last_name: 'Merchant',
+        email: 'merchant@example.com',
+        phone: '0000000000',
+        dob: { day: 1, month: 1, year: 1901 },
+        address: {
+          line1: 'address_full_match',
+          city: 'Brooklyn',
+          state: 'NY',
+          postal_code: '11201',
+          country: 'US',
+        },
+        id_number: '000000000',
+      },
+      external_account: 'btok_us_verified',
+      tos_acceptance: { date: Math.floor(Date.now() / 1000), ip: '127.0.0.1' },
+      metadata: { probe: named },
+    })).id,
+  )
+  await until(
+    async () => (await charged(key, `/v1/accounts/${id}`)).charges_enabled,
+    { timeout: 180_000, poll: 2000, label: `${id} to take charges` },
+  )
+  return id
+}
+
+/**
+ * A Plus subscription Stripe holds, carrying `metadata`, paid with
+ * `pm_card_visa` (Stripe's name for 4242 4242 4242 4242) on `customer`, or on a
+ * fresh customer when none is named. It is what a completed checkout leaves:
+ * Stripe's checkout page draws its card fields in cross-origin frames behind a
+ * captcha, which no test can drive, so the card goes in the way the API puts it.
+ */
+export let subscribed = async (
+  key: string,
+  metadata: Record<string, string>,
+  customer?: string,
+) => {
+  customer ??= String((await charged(key, '/v1/customers', { metadata })).id)
+  let card = await charged(key, '/v1/payment_methods/pm_card_visa/attach', {
+    customer,
+  })
+  return await charged(key, '/v1/subscriptions', {
+    customer,
+    items: { 0: { price: await plusPrice(key) } },
+    default_payment_method: String(card.id),
+    metadata,
+  })
+}
+
+/**
  * An event as Stripe would deliver it, carrying an object Stripe actually
  * holds. Stripe cannot reach a workerd bound to loopback, so the half of
  * delivery a probe supplies is the hop itself: the object is fetched from the
@@ -1207,8 +1241,10 @@ export let delivered = async (
   // rather than in the object, and it is what the Connect door attributes by,
   // so an event without one is not about a seller at all (sell.ts `apply`).
   on?: string,
+  // When Stripe made the event. A redelivery is the same event again, so a
+  // test that replays one passes the same moment twice.
+  at = Math.floor(Date.now() / 1000),
 ) => {
-  let at = Math.floor(Date.now() / 1000)
   let raw = JSON.stringify({
     id: `evt_${crypto.randomUUID()}`,
     type,

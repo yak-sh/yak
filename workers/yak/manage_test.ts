@@ -3,7 +3,16 @@
 // that keep another space's page from changing this account.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { client, connector, kernel, meta, signIn, stripe } from './probe.ts'
+import {
+  charged,
+  client,
+  connector,
+  kernel,
+  meta,
+  plusPrice,
+  signIn,
+  stripeKey,
+} from './probe.ts'
 import { MANAGE, managePath } from './route.ts'
 
 slow('account pages remain reachable behind a custom home app', async () => {
@@ -164,15 +173,10 @@ slow('account pages remain reachable behind a custom home app', async () => {
 slow(
   'Billing management opens checkout and the customer portal for this space',
   async () => {
-    let fake = stripe(({ path }) =>
-      path == '/v1/customers'
-        ? { id: 'cus_settings' }
-        : { url: 'https://checkout.stripe.com/settings-test' }
-    )
+    let key = stripeKey()
     let k = await kernel({
-      STRIPE_KEY: 'sk_test_probe',
-      STRIPE_PRICE: 'price_probe',
-      STRIPE_API: fake.url,
+      STRIPE_KEY: key,
+      STRIPE_PRICE: await plusPrice(key),
     })
     try {
       let them = await signIn(k)
@@ -182,6 +186,7 @@ slow(
       let page = await (await k.at(host, path, { headers })).text()
       assertStringIncludes(page, 'Billing')
       assertStringIncludes(page, 'data-door="checkout"')
+      let url: Record<string, string> = {}
       for (let door of ['checkout', 'portal']) {
         let response = await k.at(host, path, {
           method: 'POST',
@@ -189,23 +194,17 @@ slow(
           body: new URLSearchParams({ billing: door }),
         })
         assertEquals(response.status, 200)
-        assertEquals(
-          (await response.json()).url,
-          'https://checkout.stripe.com/settings-test',
-        )
+        url[door] = (await response.json()).url
       }
-      let checkout = fake.at('/v1/checkout/sessions')!
-      assertEquals(
-        checkout.sent.get('success_url'),
-        `https://${host}${path}?paid=1`,
-      )
-      assertEquals(
-        checkout.sent.get('cancel_url'),
-        `https://${host}${path}?paid=0`,
-      )
-      let portal = fake.at('/v1/billing_portal/sessions')!
-      assertEquals(portal.sent.get('customer'), 'cus_settings')
-      assertEquals(portal.sent.get('return_url'), `https://${host}${path}`)
+      // Where a purchase started from is where it comes back to, both ways,
+      // read back off the session Stripe holds.
+      let id = /cs_test_[A-Za-z0-9]+/.exec(url.checkout)?.[0]
+      assert(id, `no checkout session in ${url.checkout}`)
+      let made = await charged(key, `/v1/checkout/sessions/${id}`)
+      assertEquals(made.success_url, `https://${host}${path}?paid=1`)
+      assertEquals(made.cancel_url, `https://${host}${path}?paid=0`)
+      // The portal is Stripe's own page, for the customer checkout made.
+      assertStringIncludes(url.portal, 'https://billing.stripe.com/')
       page = await (await k.at(host, path, { headers })).text()
       assertStringIncludes(page, 'data-door="portal"')
       let denied = await k.at(host, path, {
@@ -216,7 +215,6 @@ slow(
       assertEquals(denied.status, 403)
     } finally {
       await k.stop()
-      await fake.stop()
     }
   },
 )

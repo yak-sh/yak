@@ -99,7 +99,7 @@ export let ask = async (
   let body = fields ? new URLSearchParams(form(fields)).toString() : undefined
   // `globalThis.fetch`, because this module exports a `fetch` of its own —
   // the part's handler (env.ts) — and the bare name is that one.
-  let r = await globalThis.fetch(`${env.STRIPE_API ?? API}${path}`, {
+  let r = await globalThis.fetch(`${API}${path}`, {
     method: body == null ? 'GET' : 'POST',
     headers: {
       authorization: `Bearer ${env.STRIPE_KEY}`,

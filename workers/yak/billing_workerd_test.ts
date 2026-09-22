@@ -5,43 +5,32 @@
 // Origin guard lets a server-to-server POST through, and that a duplicate and
 // an out-of-order delivery leave the graph exactly where it was.
 //
-// The two `customer.subscription.*` events carry the whole subscription, so
-// nothing here calls Stripe: the kernel boots with a webhook secret and no
-// STRIPE_KEY, which is also the shape a deploy has before the owner sets one.
+// The subscription in each event is one Stripe's sandbox holds (probe.ts
+// `subscribed`), so the test needs STRIPE_KEY set to a test-mode key. The
+// kernel itself boots with a webhook secret and no STRIPE_KEY — the events
+// carry the whole subscription and the door reads nothing back — which is also
+// the shape a deploy has before the owner sets one. Stripe cannot reach a
+// loopback workerd, so the test signs each delivery with that secret.
 import { assert, assertEquals } from '@std/assert'
 import { slow } from '../../src/testing.ts'
-import { connector, kernel, meta, seed, signed } from './probe.ts'
+import {
+  charged,
+  connector,
+  delivered,
+  kernel,
+  meta,
+  seed,
+  signed,
+  stripeKey,
+  subscribed,
+} from './probe.ts'
 
 let SECRET = 'whsec_a_probe_secret'
-
-let PERIOD = 1_900_000_000
-
-let event = (
-  type: string,
-  space: string,
-  over: Record<string, unknown> = {},
-  created = Math.floor(Date.now() / 1000),
-) =>
-  JSON.stringify({
-    id: `evt_${type}_${created}`,
-    type,
-    created,
-    data: {
-      object: {
-        id: 'sub_probe',
-        object: 'subscription',
-        customer: 'cus_probe',
-        status: 'active',
-        metadata: { space },
-        items: { data: [{ current_period_end: PERIOD }] },
-        ...over,
-      },
-    },
-  })
 
 slow(
   'the webhook flips a plan, once, whatever order it arrives in',
   async () => {
+    let key = stripeKey()
     let k = await kernel({ STRIPE_WEBHOOK_SECRET: SECRET })
     try {
       let { cookie, eids } = await seed(k, [{
@@ -56,72 +45,56 @@ slow(
         ((await graph.query(`id=${space}`))[0] as {
           plan?: Record<string, string>
         }).plan
-
-      let post = async (raw: string, at = Math.floor(Date.now() / 1000)) => {
-        let r = await k.at('yaks.app', '/stripe/webhook', {
-          method: 'POST',
-          body: raw,
-          headers: {
-            'content-type': 'application/json',
-            'stripe-signature': await signed(SECRET, raw, at),
-          },
-        })
-        return { status: r.status, body: await r.json() }
-      }
+      let post = async (type: string, sub: unknown, at: number) =>
+        (JSON.parse(
+          await delivered(k, '/stripe/webhook', SECRET, type, sub, '', at),
+        ) as { did: string }).did
 
       // Nothing paid for yet: the sweep has not run either, so there is no row.
       assertEquals(await plan(), undefined)
 
       // ---- the subscription starts ----
+      let sub = await subscribed(key, { space }) as {
+        id: string
+        customer: string
+        items: { data: { current_period_end: number }[] }
+      }
       let now = Math.floor(Date.now() / 1000)
-      let started = event('customer.subscription.updated', space, {}, now)
-      let first = await post(started, now)
-      assertEquals(first.status, 200)
-      assertEquals(first.body.did, 'jeff is plus')
+      let updated = 'customer.subscription.updated'
+      assertEquals(await post(updated, sub, now), 'jeff is plus')
       let paid = await plan()
       assertEquals(paid?.tier, 'plus')
-      assertEquals(paid?.customer, 'cus_probe')
-      assertEquals(paid?.subscription, 'sub_probe')
+      assertEquals(paid?.customer, sub.customer)
+      assertEquals(paid?.subscription, sub.id)
       assertEquals(paid?.status, 'active')
-      assertEquals(paid?.until, new Date(PERIOD * 1000).toISOString())
+      assertEquals(
+        paid?.until,
+        new Date(sub.items.data[0].current_period_end * 1000).toISOString(),
+      )
 
       // ---- the same event again. At-least-once delivery is the normal case,
       // and it must write nothing at all rather than write the same thing twice.
-      let again = await post(started, now)
-      assertEquals(again.status, 200)
-      assertEquals(again.body.did, 'unchanged')
+      assertEquals(await post(updated, sub, now), 'unchanged')
       assertEquals(await plan(), paid, 'the row did not move')
 
-      // ---- deleted, then an older updated. Stripe delivers out of order, and
+      // ---- deleted, then the older updated. Stripe delivers out of order, and
       // the second of these was written before the cancellation: a system that
       // applied events as transitions would put this space back on Plus.
-      let killed = now + 60
-      let gone = await post(
-        event(
-          'customer.subscription.deleted',
-          space,
-          { status: 'canceled', ended_at: killed },
-          killed,
-        ),
-        killed,
-      )
-      assertEquals(gone.body.did, 'jeff is free')
+      let ended = await charged(
+        key,
+        `/v1/subscriptions/${sub.id}`,
+        undefined,
+        undefined,
+        'DELETE',
+      ) as { ended_at: number }
+      let deleted = 'customer.subscription.deleted'
+      assertEquals(await post(deleted, ended, now + 60), 'jeff is free')
       let dead = await plan()
       assertEquals(dead?.tier, 'free')
       assertEquals(dead?.status, 'canceled')
-      assertEquals(dead?.ending, new Date(killed * 1000).toISOString())
+      assertEquals(dead?.ending, new Date(ended.ended_at * 1000).toISOString())
 
-      let late = await post(
-        event(
-          'customer.subscription.updated',
-          space,
-          { status: 'active' },
-          now,
-        ),
-        now,
-      )
-      assertEquals(late.status, 200)
-      assertEquals(late.body.did, 'stale')
+      assertEquals(await post(updated, sub, now), 'stale')
       assertEquals(await plan(), dead, 'a cancelled plan does not come back')
     } finally {
       await k.stop()
@@ -129,11 +102,14 @@ slow(
   },
 )
 
-slow('an unsigned webhook is refused, and no Origin is not', async () => {
+// Every one of these is refused before its object is read, so the object need
+// not be Stripe's: the refusals are the door's own. A delivery getting in with
+// no Origin is the test above.
+slow('an unsigned webhook is refused, and so is a foreign Origin', async () => {
   let k = await kernel({ STRIPE_WEBHOOK_SECRET: SECRET })
   try {
-    let { cookie, eids } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
-    let raw = event('customer.subscription.updated', eids['jeff'])
+    let { cookie } = await seed(k, [{ slug: 'jeff', apps: ['recipes'] }])
+    let raw = '{"type":"customer.subscription.updated"}'
     let at = Math.floor(Date.now() / 1000)
 
     let send = (headers: Record<string, string>) =>
@@ -163,19 +139,12 @@ slow('an unsigned webhook is refused, and no Origin is not', async () => {
     })
     assertEquals((await old.json()).error.message, 'the signature is too old')
 
-    // The one that matters. This door is behind the Origin guard that
-    // separates spaces (route.ts `sameOrigin`, `guarded`, T-33118),
-    // and Stripe posts server to server with no Origin at all. An absent
-    // Origin is allowed deliberately — a browser always sends one — and a
-    // webhook silently 403ing is a plan that never activates, which nobody
-    // would see until a customer complained. So: no Origin gets in...
-    let stripe = await send({
-      'stripe-signature': await signed(SECRET, raw, at),
-    })
-    assertEquals(stripe.status, 200, 'Stripe sends no Origin and must get in')
-    assertEquals((await stripe.json()).did, 'jeff is plus')
-
-    // ...and a page at somebody else's address still does not.
+    // This door is behind the Origin guard that separates spaces (route.ts
+    // `sameOrigin`, `guarded`, T-33118). Stripe posts server to server with no
+    // Origin at all, and an absent Origin is allowed deliberately — a browser
+    // always sends one, and a webhook silently 403ing is a plan that never
+    // activates. A page at somebody else's address, signature and all, still
+    // does not get in.
     let page = await send({
       'stripe-signature': await signed(SECRET, raw, at),
       origin: 'https://evil.example',

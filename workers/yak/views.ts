@@ -179,7 +179,7 @@ export let FRESH = 5 * 60_000
 
 /** Cloudflare's API, and the one endpoint on it that answers SQL. The account
  * is CF_ACCOUNT, which is not a secret; ANALYTICS_API is a probe's door to
- * somewhere other than Cloudflare, the way MAIL_API and STRIPE_API are. */
+ * somewhere other than Cloudflare, the way MAIL_API is. */
 export let API = 'https://api.cloudflare.com/client/v4'
 
 export let sqlAt = (env: Env) =>

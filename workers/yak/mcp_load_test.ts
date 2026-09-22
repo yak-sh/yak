@@ -8,13 +8,17 @@ import {
 import { parseHTML } from 'linkedom'
 import { slow } from '../../src/testing.ts'
 import {
+  charged,
   connector,
+  delivered,
   kernel,
+  meta,
   num,
+  plus,
+  plusPrice,
   seed,
-  signed,
   signIn,
-  stripe,
+  stripeKey,
   txt,
   vocabFile,
 } from './probe.ts'
@@ -501,24 +505,14 @@ slow('an app says what it holds, and keeps notes about itself', async () => {
 // is here rather than in serving_test.ts because drawing that page reaches
 // identity.ts for whether an assistant has ever connected, and the OAuth
 // provider it carries imports `cloudflare:` modules only workerd can load.
-// Stripe is a stand-in on a free port (probe.ts `stripe`), aimed at with
-// STRIPE_API the way the analytics probe above aims ANALYTICS_API.
+// Stripe is Stripe's own sandbox (probe.ts `stripeKey`): the checkout session,
+// the subscription and the connected account are all made there and read back.
 slow('space_sell connects an account and hands back one link', async () => {
-  let fake = stripe(({ path }) =>
-    path == '/v1/accounts'
-      ? { id: 'acct_probe', charges_enabled: false, details_submitted: false }
-      : path == '/v1/account_links'
-      ? { url: 'https://connect.stripe.com/setup/c/acct_probe/TOKEN' }
-      : path == '/v1/customers'
-      ? { id: 'cus_probe' }
-      : path == '/v1/checkout/sessions'
-      ? { id: 'cs_probe', url: 'https://checkout.stripe.com/c/pay/cs_probe' }
-      : null
-  )
+  let key = stripeKey()
+  let price = await plusPrice(key)
   let k = await kernel({
-    STRIPE_KEY: 'sk_probe',
-    STRIPE_PRICE: 'price_probe',
-    STRIPE_API: fake.url,
+    STRIPE_KEY: key,
+    STRIPE_PRICE: price,
     STRIPE_CONNECT_WEBHOOK_SECRET: 'whsec_a_connect_probe_secret',
     STRIPE_WEBHOOK_SECRET: 'whsec_plan_probe',
   })
@@ -569,7 +563,6 @@ slow('space_sell connects an account and hands back one link', async () => {
       body: new URLSearchParams({ sell: 'start' }),
     })
     assertEquals(denied.status, 400)
-    assertEquals(fake.calls.length, 0)
     assert(
       !parseHTML(await denied.text()).document.querySelector(
         '[name="sell"][value="start"]',
@@ -594,113 +587,84 @@ slow('space_sell connects an account and hands back one link', async () => {
       assertEquals(r.status, status)
       await r.body?.cancel()
     }
-    assertEquals(fake.calls.length, 0)
     let checkout = await subscribe()
     assertEquals(checkout.status, 200)
-    assertEquals(
-      (await checkout.json()).url,
-      'https://checkout.stripe.com/c/pay/cs_probe',
-    )
-    let purchase = fake.at('/v1/checkout/sessions')!
-    assertEquals(purchase.sent.get('metadata[space]'), eids.ada)
-    assertEquals(purchase.sent.get('line_items[0][price]'), 'price_probe')
-    assertEquals(purchase.sent.get('managed_payments[enabled]'), 'true')
-    assertEquals(purchase.sent.get('allow_promotion_codes'), 'true')
+    let url = (await checkout.json()).url as string
+    assertStringIncludes(url, 'https://checkout.stripe.com/')
+    let id = /cs_test_[A-Za-z0-9]+/.exec(url)?.[0]
+    assert(id, `no checkout session in ${url}`)
+    let purchase = await charged(
+      key,
+      `/v1/checkout/sessions/${id}?expand[]=line_items`,
+    ) as {
+      metadata: Record<string, string>
+      line_items: { data: { price: { id: string } }[] }
+      success_url: string
+      cancel_url: string
+    }
+    assertEquals(purchase.metadata.space, eids.ada)
+    assertEquals(purchase.line_items.data[0].price.id, price)
     // Checkout started from a space's own page hands the person back to that
     // space's plan settings, not to the apex connector (billing.ts `checkout`).
     assertEquals(
-      purchase.sent.get('success_url'),
+      purchase.success_url,
       `https://ada.yaks.app${managePath('billing')}?paid=1`,
     )
     assertEquals(
-      purchase.sent.get('cancel_url'),
+      purchase.cancel_url,
       `https://ada.yaks.app${managePath('billing')}?paid=0`,
     )
-    let plan = async (status: string) => {
-      let raw = JSON.stringify({
-        id: `evt_plan_${status}`,
-        type: 'customer.subscription.updated',
-        created: Math.floor(Date.now() / 1000),
-        data: {
-          object: {
-            id: 'sub_probe',
-            customer: 'cus_probe',
-            status,
-            metadata: { space: eids.ada },
-          },
-        },
-      })
-      let r = await k.at('yaks.app', '/stripe/webhook', {
-        method: 'POST',
-        body: raw,
-        headers: {
-          'stripe-signature': await signed(
-            'whsec_plan_probe',
-            raw,
-            Math.floor(Date.now() / 1000),
-          ),
-        },
-      })
-      assertEquals(r.status, 200)
-      await r.body?.cancel()
-    }
-    await plan('active')
+    let sub = await plus(k, 'whsec_plan_probe', eids.ada)
     await page('Connect Stripe')
     let paid = await subscribe()
     assertEquals(paid.status, 409)
     assertEquals((await paid.json()).error.code, 'already_plus')
-    assertEquals(
-      fake.calls.filter((c) => c.path == '/v1/checkout/sessions').length,
-      1,
-    )
 
     // The tool hands back one link and says to stop there — an assistant that
     // kept going would be an assistant clicking through somebody's identity
     // form.
     let said = await agent.tool('space_sell', { space: 'ada' })
-    assertStringIncludes(said, 'https://connect.stripe.com/setup/c/acct_probe/')
+    assertStringIncludes(said, 'https://connect.stripe.com/')
     assertStringIncludes(said, 'They are the merchant')
 
-    // What went out is the charge-merchants-directly model, and it named the
-    // space both ways so an account read back at Stripe says whose it is.
-    let made = fake.at('/v1/accounts')!
-    assertEquals(made.sent.get('controller[fees][payer]'), 'account')
-    assertEquals(made.sent.get('controller[losses][payments]'), 'stripe')
-    assertEquals(made.sent.get('controller[stripe_dashboard][type]'), 'full')
-    assertEquals(made.sent.get('controller[requirement_collection]'), 'stripe')
-    assertEquals(made.sent.get('metadata[slug]'), 'ada')
+    // The account Stripe now holds is the charge-merchants-directly model, and
+    // it names the space so an account read back at Stripe says whose it is.
+    let seller = async () =>
+      ((await meta(k, cookie).query(`id=${eids.ada}`))[0] as {
+        stripe?: { account: string }
+      }).stripe?.account
+    let acct = await seller()
+    assert(acct, 'the space holds the account Stripe made')
+    let made = await charged(key, `/v1/accounts/${acct}`) as {
+      controller: {
+        fees: { payer: string }
+        losses: { payments: string }
+        stripe_dashboard: { type: string }
+        requirement_collection: string
+      }
+      metadata: Record<string, string>
+    }
+    assertEquals(made.controller.fees.payer, 'account')
+    assertEquals(made.controller.losses.payments, 'stripe')
+    assertEquals(made.controller.stripe_dashboard.type, 'full')
+    assertEquals(made.controller.requirement_collection, 'stripe')
+    assertEquals(made.metadata.slug, 'ada')
 
     // The page now reads mid-setup, and does not offer the first step again.
     await page('Continue setup')
 
-    // Stripe says they are ready, at the Connect door.
-    let event = JSON.stringify({
-      id: 'evt_ready',
-      type: 'account.updated',
-      account: 'acct_probe',
-      data: {
-        object: {
-          id: 'acct_probe',
-          charges_enabled: true,
-          details_submitted: true,
-        },
-      },
-    })
-    let at = Math.floor(Date.now() / 1000)
-    let hook = await k.at('yaks.app', '/stripe/connect', {
-      method: 'POST',
-      body: event,
-      headers: {
-        'content-type': 'application/json',
-        'stripe-signature': await signed(
-          'whsec_a_connect_probe_secret',
-          event,
-          at,
-        ),
-      },
-    })
-    assertEquals(hook.status, 200)
-    assertEquals((await hook.json()).did, 'ada can sell')
+    // Stripe says they are ready, at the Connect door. Being ready is Stripe's
+    // verdict on a person's identity form, which no test can fill in, so the
+    // two flags that verdict sets are laid over the account Stripe holds.
+    let ready = await delivered(
+      k,
+      '/stripe/connect',
+      'whsec_a_connect_probe_secret',
+      'account.updated',
+      { ...made, charges_enabled: true, details_submitted: true },
+      acct,
+    )
+    assertEquals(JSON.parse(ready).did, 'ada can sell')
 
     // The page says so, and the tool stops offering a link nobody needs.
     await page('Disconnect Stripe', 'stop')
@@ -708,13 +672,22 @@ slow('space_sell connects an account and hands back one link', async () => {
       await agent.tool('space_sell', { space: 'ada' }),
       'already selling',
     )
-    assertEquals(
-      fake.calls.filter((c) => c.path == '/v1/accounts').length,
-      1,
-      'one account, ever',
-    )
+    assertEquals(await seller(), acct, 'one account, ever')
 
-    await plan('canceled')
+    let ended = await charged(
+      key,
+      `/v1/subscriptions/${sub.id}`,
+      undefined,
+      undefined,
+      'DELETE',
+    )
+    await delivered(
+      k,
+      '/stripe/webhook',
+      'whsec_plan_probe',
+      'customer.subscription.deleted',
+      ended,
+    )
     await freePage()
     await page('Disconnect Stripe', 'stop')
     await assertRejects(
@@ -738,9 +711,10 @@ slow('space_sell connects an account and hands back one link', async () => {
       Error,
       'ada',
     )
+    // The sandbox keeps what a test made unless it is deleted.
+    await charged(key, `/v1/accounts/${acct}`, undefined, undefined, 'DELETE')
   } finally {
     await k.stop()
-    await fake.stop()
   }
 })
 

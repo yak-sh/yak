@@ -59,6 +59,7 @@ import {
   plusPrice,
   signIn,
   stripeKey,
+  subscribed,
   txt,
   vocabFile,
 } from './probe.ts'
@@ -488,28 +489,17 @@ slow(
         let session = /cs_test_[A-Za-z0-9]+/.exec(url)?.[0] ?? ''
         assert(session, `no checkout session in ${url}`)
         assertStringIncludes(url, 'https://checkout.stripe.com/')
-        // Where a person types the card is Stripe's own page, and that page
-        // is not a thing a test can drive: under Managed Payments it draws
-        // the card fields in cross-origin frames behind a Link login and an
-        // invisible captcha. So the card goes in the way an API can put it —
-        // `pm_card_visa`, which is Stripe's name for 4242 4242 4242 4242 —
-        // on the very customer this session was opened for, and the
-        // subscription Stripe then holds is the one a completed checkout
-        // would have left.
+        // Where a person types the card is Stripe's own page, which no test
+        // can drive, so the card goes in the way the API puts it (probe.ts
+        // `subscribed`) on the very customer this session was opened for.
         let held = await charged(key, `/v1/checkout/sessions/${session}`)
         let customer = String(held.customer ?? '')
         assert(customer, 'the session names the customer it is for')
-        let card = await charged(
+        let sub = await subscribed(
           key,
-          '/v1/payment_methods/pm_card_visa/attach',
-          { customer },
-        )
-        let sub = await charged(key, '/v1/subscriptions', {
+          { space: eids[mine], slug: mine },
           customer,
-          items: { 0: { price } },
-          default_payment_method: String(card.id),
-          metadata: { space: eids[mine], slug: mine },
-        })
+        )
         assertEquals(sub.status, 'active', 'Stripe took the payment')
         // The hop Stripe cannot make to a loopback runtime.
         assertStringIncludes(

@@ -13,8 +13,8 @@ import {
   kernel,
   meta,
   num,
+  plus,
   seed,
-  signed,
   signIn,
   txt,
   vocabFile,
@@ -562,30 +562,7 @@ slow('the free tier: a warning once, then the refusals', async () => {
     await manage.body?.cancel()
     // MCP management still works, and raising the allowance reopens serving.
     assertStringIncludes(await agent.tool('app_list', { space: 'brim' }), 'one')
-    let created = Math.floor(Date.now() / 1000)
-    let raw = JSON.stringify({
-      id: 'evt_quota_upgrade',
-      type: 'customer.subscription.updated',
-      created,
-      data: {
-        object: {
-          id: 'sub_quota',
-          customer: 'cus_quota',
-          status: 'active',
-          metadata: { space: eids.brim },
-        },
-      },
-    })
-    let paid = await k.at('yaks.app', '/stripe/webhook', {
-      method: 'POST',
-      body: raw,
-      headers: {
-        'content-type': 'application/json',
-        'stripe-signature': await signed(secret, raw, created),
-      },
-    })
-    assertEquals(paid.status, 200)
-    assertEquals((await paid.json()).did, 'brim is plus')
+    await plus(k, secret, eids.brim)
     let reopened = await k.at('brim.yaks.app', '/one/api/graph')
     assertEquals(reopened.status, 200)
     await reopened.body?.cancel()
@@ -946,29 +923,7 @@ slow(
         app: 'original',
         name: 'limits-example',
       })
-      let at = Math.floor(Date.now() / 1000)
-      let raw = JSON.stringify({
-        id: 'evt_plus_limits',
-        type: 'customer.subscription.updated',
-        created: at,
-        data: {
-          object: {
-            id: 'sub_plus_limits',
-            customer: 'cus_plus_limits',
-            status: 'active',
-            metadata: { space: eids['plus-limits'] },
-          },
-        },
-      })
-      let paid = await k.at('yaks.app', '/stripe/webhook', {
-        method: 'POST',
-        body: raw,
-        headers: {
-          'stripe-signature': await signed('plus-limits-test', raw, at),
-        },
-      })
-      assertEquals(paid.status, 200)
-      await paid.body?.cancel()
+      await plus(k, 'plus-limits-test', eids['plus-limits'])
       const seeded = [
         ...['plus-limits', 'yourname'].flatMap((slug) =>
           Array.from({ length: 50 }, (_, i) => ({

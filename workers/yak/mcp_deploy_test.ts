@@ -342,7 +342,7 @@ slow(
 // producing it or the agent marks it fixed." So the deploy that carries the
 // Who visited (views.ts, T-34498). The SQL API is an HTTP call rather than a
 // binding, so the probe aims it at a server of this test's own (ANALYTICS_API,
-// the way MAIL_API and STRIPE_API are aimed) and answers each of the four
+// the way MAIL_API is aimed) and answers each of the four
 // queries fixed rows. What is being held here is the sentence the agent reads
 // and the structured half beside it — and that the numbers can be had at all
 // without the account.

@@ -153,9 +153,9 @@ export type Env = {
   CF_ZONE?: string
   CF_HOSTNAMES_TOKEN?: string
   // And the base URL those calls go to, which a probe aims somewhere other
-  // than Cloudflare — the same seam MAIL_API and STRIPE_API are, and for the
-  // same reason: attaching a domain is a conversation, and the test that holds
-  // it must be able to have it.
+  // than Cloudflare — the same seam MAIL_API is, and for the same reason:
+  // attaching a domain is a conversation, and the test that holds it must be
+  // able to have it.
   HOSTNAMES_API?: string
   // The paid tier (billing.ts, T-33125). STRIPE_KEY is the restricted API key
   // checkout, the portal and one subscription read speak to Stripe with;
@@ -163,12 +163,12 @@ export type Env = {
   // against. Both are secrets and both are the owner's to set (T-32760);
   // unset, the doors say the paid tier is not switched on here rather than
   // half-working. STRIPE_PRICE is the recurring price a subscription is for —
-  // not a secret, it rides wrangler.toml's `[vars]` beside the account tag —
-  // and STRIPE_API is the base URL a probe aims somewhere other than Stripe.
+  // not a secret, it rides wrangler.toml's `[vars]` beside the account tag.
+  // There is no base-URL seam beside them: under test Stripe is still Stripe,
+  // reached with a sandbox key (probe.ts `stripeKey`).
   STRIPE_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
   STRIPE_PRICE?: string
-  STRIPE_API?: string
   // Selling (sell.ts, T-34523): what the events from a seller's connected
   // account are verified against. A second secret, not the one above, because
   // Stripe delivers connected-account events to their own endpoint with their
