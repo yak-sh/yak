@@ -48,7 +48,7 @@ Deno.test('/docs draws the guide with a link to every page', async () => {
   // It wears the anchor the renderer names it by, like every heading here.
   assertStringIncludes(
     html,
-    '<h1 id="building-an-app-on-yaksapp">Building an app on yaks.app</h1>',
+    '<h1 id="building-a-yaks-app">Building a yaks app</h1>',
   )
   assertEquals((html.match(/<h1[\s>]/g) ?? []).length, 1)
   for (let p of CONTENTS) {

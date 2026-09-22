@@ -1,9 +1,9 @@
-# Building an app on yaks.app
+# Building a yaks app
 
-This platform is called yaks.app — lowercase, with the `.app`, written exactly
-the way its address is.
+The platform is yaks.app, written the way its address is: lowercase, with the
+`.app`. An app made here is a yaks app.
 
-An app is an `index.html` and whatever files sit beside it, served live at
+A yaks app is an `index.html` and whatever files sit beside it, served live at
 `<space>.yaks.app/<app>/`. There is no build step and no framework: what you
 write is what the browser gets. Every app comes with its own store — a graph of
 entities — and a small client for reading and writing it from the page.

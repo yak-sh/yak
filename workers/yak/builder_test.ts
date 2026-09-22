@@ -108,7 +108,7 @@ Deno.test('the fake model builds an app end to end, and it serves', async () => 
   // The system prompt is the connector's own instructions and the guide, so
   // the agent we run is taught what an agent somebody brings is taught.
   assertStringIncludes(model.asked[0].system, 'app_new — the app')
-  assertStringIncludes(model.asked[0].system, 'Building an app on yaks.app')
+  assertStringIncludes(model.asked[0].system, 'Building a yaks app')
   // And the tools it was offered are the platform's, with the table's own
   // schema — `app_files` takes a files list, said as JSON Schema.
   let files = model.asked[0].fns.find((f) => f.name == 'app_files')!

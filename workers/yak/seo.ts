@@ -48,7 +48,7 @@ let at = (path: string, env: Host = {}) => url(env, path)
 export let connector = (env: Host = {}) => ({
   name: PLATFORM,
   title: PLATFORM,
-  description: 'Build an app by asking Claude or ChatGPT.',
+  description: 'Build a yaks app by asking Claude or ChatGPT.',
   websiteUrl: url(env),
   icons: [
     {
@@ -91,7 +91,7 @@ export let SITE = [
 // other way round.
 export let GALLERY = {
   path: '/gallery',
-  title: 'The gallery — apps made with yaks.app',
+  title: 'The gallery — yaks apps people have made',
   description:
     'Explore apps made with yaks.app. Try one out or make it your own.',
 }
@@ -215,7 +215,7 @@ export let llms = (
   [
     '# yaks.app',
     '',
-    '> Build an app by asking Claude or ChatGPT. A recipe box, a sign-up sheet,',
+    '> Build a yaks app by asking Claude or ChatGPT. A recipe box, a sign-up sheet,',
     '> a trip planner — your assistant builds it, and yaks.app keeps it online.',
     `> Your app lives at ${
       spaceHost(env, 'yourname')

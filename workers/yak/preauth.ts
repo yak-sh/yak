@@ -81,12 +81,13 @@ export let NO_ARGS = { type: 'object' as const, properties: {} }
 // already read.
 export let about = (env: Host = {}): Says => ({
   name: 'about',
-  text: `yaks.app is a place to make small web apps by asking for one. An app
+  text:
+    `yaks.app is a place to make small web apps by asking for one. A yaks app
 is an index.html and whatever files sit beside it — no build step, no
 framework, no install — served live at its own address,
 ${
-    spaceHost(env, 'yourname')
-  }/<app>/. It opens on a phone, it keeps its data in a store
+      spaceHost(env, 'yourname')
+    }/<app>/. It opens on a phone, it keeps its data in a store
 of its own, and it is a link the person can send to somebody.
 
 What people make here is what they would otherwise keep in a note or a
@@ -96,8 +97,8 @@ or open for anyone to write to. It can carry tools of its own, which an agent
 calls the way it calls these, and code of its own that runs on the server.
 
 Every app also has an address of its own, <space>.<app>@${
-    apex(env)
-  } — letters to
+      apex(env)
+    } — letters to
 it land in the app's store, and the app writes from it. That is the app's
 mailbox and never a person's own; mail asked about with no app named is their
 mail account, which is somewhere else entirely.
@@ -161,7 +162,7 @@ export type Doc = {
 let guide = (env: Host = {}): Doc => ({
   uri: whole(env),
   name: 'building-an-app',
-  title: 'Building an app on yaks.app',
+  title: 'Building a yaks app',
   description:
     'The map: what an app is, how its pages read and write its store ' +
     'through ./api/client.js, and a passage on every feature there is. ' +

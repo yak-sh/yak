@@ -366,7 +366,7 @@ app_set:
     instead of the recipes app. Leave it alone unless the front page is
     meant to route the whole space; an empty list puts every path back
     where it was. gallery is whether a published app is submitted for
-    https://yaks.app/gallery, the public page of apps made here: true
+    https://yaks.app/gallery, the public page of yaks apps: true
     submits it, false withdraws it at once. Set it only when the person
     has said which they want. Pass forget with a slug this app has already
     left to drop it: it stops redirecting and another app can be created
@@ -471,7 +471,7 @@ app_list:
 commands:
   title: List app commands
   description: >-
-    The commands the apps here declare, with the arguments each one
+    The commands yaks apps declare, with the arguments each one
     accepts. An app's own commands (the ones its tools.json declares, and
     the two every component it holds gets, such as add_recipe and
     find_recipe) are listed here rather than in this tool list, which is

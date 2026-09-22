@@ -13,7 +13,7 @@ guide:
 
 # Mail: an app's own address
 
-Every app here has a mailbox. It can send a letter — an order confirmation, a
+Every yaks app has a mailbox. It can send a letter — an order confirmation, a
 weekly note to a list, a reply to somebody who wrote in — and letters written to
 its address land in its store as rows the page can draw.
 

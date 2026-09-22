@@ -3,7 +3,7 @@ prompt:
   name: make
   title: Make something new
   description: >-
-    Build what the person asks for as an app on yaks.app — its own address,
+    Build what the person asks for as a yaks app — its own address,
     its own store — and hand them the link.
   arguments:
     - name: what

@@ -55,7 +55,7 @@ query — so `find` with no arguments returns everything of that kind.
 **This is how an app is found again.** The person who asked for a recipe box in
 one conversation says "add this recipe" in the next one, to an agent that has
 never seen the app. `commands` is the one place every agent looks for what the
-apps here can do, so the app is listed there whether or not anybody wrote a
+yaks apps can do, so the app is listed there whether or not anybody wrote a
 `tools.json`.
 
 Three ways to change that:

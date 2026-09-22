@@ -766,7 +766,7 @@ slow('the apex answers the crawler and the model', async () => {
     for (let p of PAGES) assertStringIncludes(index, uriOf(p.slug))
 
     let whole = await (await k.at('yaks.app', '/llms-full.txt')).text()
-    assertStringIncludes(whole, '# Building an app on yaks.app')
+    assertStringIncludes(whole, '# Building a yaks app')
     // And it says the name outright, once, at the top (T-34302).
     assertStringIncludes(whole, 'This platform is called yaks.app')
     for (let p of PAGES) {
@@ -779,7 +779,7 @@ slow('the apex answers the crawler and the model', async () => {
     let map2 = await (await k.at('yaks.app', '/docs')).text()
     assertStringIncludes(
       map2,
-      '<h1 id="building-an-app-on-yaksapp">Building an app on yaks.app</h1>',
+      '<h1 id="building-a-yaks-app">Building a yaks app</h1>',
     )
     assertStringIncludes(map2, '<a href="/docs/querying">')
     let one = await (await k.at('yaks.app', '/docs/querying')).text()

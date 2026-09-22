@@ -1,9 +1,11 @@
 /// <reference lib="deno.ns" />
-// The product has ONE spelling: yaks.app — lowercase, with the .app. An agent
+// The platform has ONE spelling: yaks.app — lowercase, with the .app. An agent
 // that read the address a dozen times and the name not once invented "Yaks"
 // and told its person that was what the place is called (T-34302), so the
-// name is now said outright in the three things read first. This file is the
-// gate that keeps it said (T-34558).
+// name is now said outright in the three things read first, and this file is
+// the gate that keeps it said (T-34558). The thing made here is a yaks app,
+// and "Yaks apps" opening a sentence is that phrase, not the platform's name
+// (M-34600).
 //
 // The walks below are a DIRECTORY and a ROSTER, never a hand-kept list: a page
 // dropped into public/, a tool added to TOOLS, a letter written in a module
@@ -18,10 +20,11 @@ import { CONNECTOR } from './seo.ts'
 import { TOOLS } from './tools.ts'
 import { platformVocab } from './vocab.ts'
 
-// The name we never write. Two things wearing this shape are not it: an email
+// The name we never write. Three things with this shape are not it: an email
 // address, where case has never mattered and the guide says so
-// (`Ada.Cookbook@Yaks.App`), and the spelling itself.
-let bare = /(?<!@)\bYaks\b(?!\.[Aa]pp)/
+// (`Ada.Cookbook@Yaks.App`), the spelling itself, and "Yaks app" or "Yaks
+// apps", the thing a person builds.
+let bare = /(?<!@)\bYaks\b(?!\.[Aa]pp|\s+apps?\b)/
 
 let leak = (where: string, text: string) => {
   let hit = bare.exec(text)
@@ -107,4 +110,5 @@ Deno.test('nothing the connector says calls the place Yaks', () => {
 Deno.test('the instructions teach the spelling', () => {
   assertStringIncludes(INSTRUCTIONS, 'This is yaks.app')
   assertStringIncludes(INSTRUCTIONS, 'lowercase, with the .app')
+  assertStringIncludes(INSTRUCTIONS, 'An app made here is a yaks app')
 })
