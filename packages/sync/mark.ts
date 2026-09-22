@@ -15,7 +15,7 @@
 //           skips any bundle carrying it, which is how a client can apply what
 //           it just received without sending it straight back.
 
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Plugin } from '@yaks/graph'
 
 /** The mark on a bundle a caller sent, carrying the entity as it then stood. */
 export let SENT = '$sent'
@@ -38,6 +38,16 @@ export let asked = (b: Bundle): boolean => b[SENT] !== undefined
  * did not exist, `undefined` if this bundle is not a caller's. */
 export let before = (b: Bundle): Bundle | null | undefined =>
   (b[SENT] as { before: Bundle | null } | undefined)?.before
+
+/** The plugin a graph registers to accept these two marks when it carries no
+ * sync plugin of its own — a replica that only lands what a server sent
+ * (`land`, `snapshot`) and never posts anything back. `apply()` refuses a `$`
+ * key no plugin declared, and these are ours; it declares them and does nothing
+ * else. */
+export let marks: Plugin = {
+  name: '@yaks/sync/marks',
+  requests: [SENT, ECHO],
+}
 
 /** Mark bundles as the server's, so the outbound hook lets them pass. */
 export let echo = (bundles: Bundle[]): Bundle[] =>

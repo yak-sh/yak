@@ -1,4 +1,4 @@
-// Generating an eid, and the handle an entity gets before it has a number.
+// Generating an eid, and telling a generated one from a name somebody chose.
 //
 // Clients and servers both generate eids — a client assigns the id of the
 // entity it is creating, so a write takes one round trip and never waits for an
@@ -20,17 +20,8 @@ export let mint = (): string => {
   }-${h.slice(20)}`
 }
 
-/** The first 10 hex characters of an eid, dashes removed, after a `#` and an
- * optional prefix letter. */
-export let short = (eid: string, prefix = ''): string =>
-  `${prefix}#${eid.replaceAll('-', '').slice(0, 10).toLowerCase()}`
-
-/** A short handle as typed: 6–64 hex characters after the `#`. Hex with no `#`
- * is never read as an eid fragment. */
-export let SHORT: RegExp = /^(?:[a-z]+)?#[0-9a-f]{6,64}$/i
-
 // What a generated id looks like: a UUID, or the hex of a content address
-// (@yaks/graph's `derivedEid`, a key, a blob). A string of that shape is a
+// (./identity.ts `derivedEid`, a key, a blob). A string of that shape is a
 // generated id whatever the caller intended, so every lookup that means "an
 // eid, otherwise a name somebody chose" tells the two apart here rather than
 // each having its own copy of the test.

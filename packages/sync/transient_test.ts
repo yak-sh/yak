@@ -5,6 +5,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { subscriptions } from '@yaks/api'
 import { land } from './inbound.ts'
+import { marks } from './mark.ts'
 import type { Frame } from './socket.ts'
 const vocab = loadVocab([{
   $defs: {
@@ -16,7 +17,9 @@ const vocab = loadVocab([{
 }])
 Deno.test('subscriptions transfer ordered append frames and snapshot live values on resubscribe', async () => {
   const source = graph({ vocab, storage: ram(vocab) })
-  const target = graph({ vocab, storage: ram(vocab) })
+  // The target only lands what the source sent, so it declares the marks
+  // `land` puts on a batch and nothing else (mark.ts `marks`).
+  const target = graph({ vocab, storage: ram(vocab), plugins: [marks] })
   await source.apply([{ entity: { eid: 'd' }, doc: { body: '' } }])
   const subs = subscriptions(source)
   const frames: Frame[] = []
@@ -58,7 +61,9 @@ Deno.test('subscriptions transfer ordered append frames and snapshot live values
 
 Deno.test('resubscription clears a stale projection when finalization was missed', async () => {
   const source = graph({ vocab, storage: ram(vocab) })
-  const target = graph({ vocab, storage: ram(vocab) })
+  // The target only lands what the source sent, so it declares the marks
+  // `land` puts on a batch and nothing else (mark.ts `marks`).
+  const target = graph({ vocab, storage: ram(vocab), plugins: [marks] })
   await source.apply([{ entity: { eid: 'd' }, doc: { body: '' } }])
   const subs = subscriptions(source)
   let pending = Promise.resolve()

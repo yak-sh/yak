@@ -64,13 +64,24 @@ let words: Record<string, Keywords> = Object.fromEntries(
 let compsOf = (d: VocabDoc) =>
   Object.entries(d.$defs ?? {}).filter(([, s]) => s.component).map(([k]) => k)
 
+// The words a file DECLARES, and the ones it only adds columns to. An
+// extension has no home of its own: it loads beside the file that declares the
+// component (@yaks/id's `num` beside @yaks/kernel's `entity`).
+let declaresOf = (d: VocabDoc) =>
+  Object.entries(d.$defs ?? {}).filter(([, s]) => s.component && !s.extends)
+    .map(([k]) => k)
+
+let extendsOf = (d: VocabDoc) =>
+  Object.entries(d.$defs ?? {}).filter(([, s]) => s.component && s.extends)
+    .map(([k]) => k)
+
 let beforeOf = (d: VocabDoc) =>
   Object.values(d.$defs ?? {}).flatMap((s) => s.before ?? [])
 
 // Which file declares a given word — the whole set, so a companion is resolved
 // rather than named.
 let home = new Map<string, VocabDoc>()
-for (let [, d] of files) for (let n of compsOf(d)) home.set(n, d)
+for (let [, d] of files) for (let n of declaresOf(d)) home.set(n, d)
 
 Deno.test('packages: every vocab.json is plain JSON that loads', () => {
   assert(files.length >= 10, `only ${files.length} vocab.json files walked`)
@@ -85,11 +96,11 @@ Deno.test('packages: every vocab.json is plain JSON that loads', () => {
       Object.keys(doc.$defs ?? {}).length > 0,
       `${pkg}/vocab.json declares nothing`,
     )
-    let beside = [...new Set(beforeOf(doc))]
-      .filter((k) => !mine.has(k))
+    let beside = [...new Set([...beforeOf(doc), ...extendsOf(doc)])]
+      .filter((k) => !new Set(declaresOf(doc)).has(k))
       .map((k) => {
         let d = home.get(k)
-        assert(d, `${pkg}/vocab.json sorts before '${k}', which no package has`)
+        assert(d, `${pkg}/vocab.json names '${k}', which no package declares`)
         return d
       })
     // A `$vocabulary` URI is now spelled in the file rather than imported as a

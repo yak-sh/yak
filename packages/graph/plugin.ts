@@ -256,6 +256,11 @@ export type Plugin = {
   name: string
   /** the components this plugin contributes, as @yaks/vocab documents */
   vocab?: VocabDoc[]
+  /** the `$` keys on a bundle this plugin answers — `['$num']` for the
+   * allocator behind @yaks/id's numbers. A request no plugin declares is
+   * refused at admission (./request.ts), so asking a graph for something it
+   * cannot do is an error rather than silence. */
+  requests?: string[]
   /** the phases it hooks, at most one hook each */
   hooks?: Partial<Record<Phase, Hook>>
   /** the rules it registers in code: a query over one bundle in the change,

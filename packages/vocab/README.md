@@ -55,6 +55,7 @@ component table needs on top:
 | keyword     | on     | means                                                                   |
 | ----------- | ------ | ----------------------------------------------------------------------- |
 | `component` | entry  | `true` = this entry is a component. Required; there is no default       |
+| `extends`   | comp   | `true` = add these columns to a component another document declares     |
 | `rule`      | entry  | `true` = a declarative rule, read by `rulesIn`                          |
 | `tool`      | entry  | `true` = this entry is a tool declaration, not a table                  |
 | `noun`      | tool   | the resource word a CLI answers to (`session list`, `list session`)     |
@@ -173,6 +174,35 @@ scalar `json` with text affinity and accepts a string containing any valid JSON
 value. Objects and arrays are encoded in that string; a column never holds a
 nested object or array directly. A null clears the column, while the string
 `"null"` stores the JSON null value.
+
+## One word, one home — and one exception
+
+A component is declared once. Loading two documents that both declare `doc`
+throws: one name, one home, so a package's vocabulary composes with every
+other's.
+
+The exception is the spine. `entity` is the identity row every entity has, and
+more than one package keeps something in it — the archetype a component set adds
+up to, the number a human id is built from. A document adds a column to it by
+marking the entry `extends`:
+
+```json
+{
+  "$defs": {
+    "entity": {
+      "component": true,
+      "extends": true,
+      "properties": { "num": { "type": "number", "stamped": true } }
+    }
+  }
+}
+```
+
+An extension carries columns and nothing else — `kind`, `prefix`, `wire` and the
+indexes belong to the document that declares the component — and a column the
+base already has is refused rather than overridden. Extensions are applied after
+every document is read, so the load order decides nothing, and an extension of a
+component no document declares is an error.
 
 ## Extension keywords
 

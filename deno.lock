@@ -1919,7 +1919,8 @@
       },
       "packages/id": {
         "dependencies": [
-          "jsr:@std/assert@1"
+          "jsr:@std/assert@1",
+          "jsr:@yaks/vocab@0.1"
         ]
       },
       "packages/journal": {

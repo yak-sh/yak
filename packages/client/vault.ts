@@ -27,7 +27,7 @@
 import type { Bundle, Comp, Eid, Graph, Plugin } from '@yaks/graph'
 import { comps, dead, detached, then } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { echo, local } from '@yaks/sync'
+import { ECHO, echo, local } from '@yaks/sync'
 
 // The components this file is responsible for: the ones no server sends, and
 // which the vocabulary declares outlive the tab.
@@ -163,6 +163,9 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
 
   let plugin: Plugin = {
     name: '@yaks/client/vault',
+    // The two marks the load below puts on its bundles: this package's own, and
+    // @yaks/sync's echo, which this graph may carry no sync plugin to declare.
+    requests: [KEPT, ECHO],
     hooks: {
       effect: (bundles) => {
         if (!hydrated) {

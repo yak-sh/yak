@@ -152,6 +152,9 @@
         "component": {
           "const": true
         },
+        "extends": {
+          "const": true
+        },
         "type": {
           "const": "object"
         },

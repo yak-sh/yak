@@ -17,6 +17,7 @@ import {
   type Coverage,
   covers,
   delivered,
+  ECHO,
   echoed,
   land,
   outbound,
@@ -372,6 +373,9 @@ export let retention = (
   }
   graph.use({
     name: '@yaks/client/retention',
+    // What lands from the server arrives marked as an echo (@yaks/sync), and
+    // this cache is what lands it, whether or not a sync plugin is registered.
+    requests: [ECHO],
     hooks: {
       effect: (bundles) => {
         if (closed) return bundles

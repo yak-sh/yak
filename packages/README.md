@@ -53,9 +53,10 @@ grouped approximately by function, **not** by dependency order.
   (2020-12) plus a small custom keyword vocabulary, and interrogate it at
   runtime: column types, path routing, display ordering, instance checks.
 - **[@yaks/id](./id)** — entity ids: generate an eid, and turn the `prefix` a
-  component declares plus a number into a human-readable id (`B-7`) and back.
-  The first package split out of `@yaks/vocab`: the schema keywords live there,
-  the code that interprets them lives here.
+  component declares plus a number into a human-readable id (`B-7`) and back. It
+  also owns the number itself — the `num` column on the `entity` row, the
+  allocator behind `$num`, and the resolver from `B-7` to an eid — so a graph
+  that does not load this package has no numbers and no prefixes anywhere.
 - **[@yaks/names](./names)** — the other way to address an entity: the
   components a vocabulary marks `by_name`, the column each one stores its name
   in, and the lookup for a name somebody typed.
@@ -248,7 +249,7 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/kernel](./kernel)** — Shared identity, provenance and metadata
   schemas: `entity`, `created`, `updated`, `decided`, `quarantined`, `comment`,
   `image`, `favorite` and relationship tags. It also defines schema keywords
-  such as `governed`, `lazy` and `well`, and identity-related graph plugins.
+  such as `governed`, `lazy` and `well`. It ships no plugins.
 
 - **[@yaks/task](./task)** — Task records, plans and containment relationships.
   Status is computed from marks such as `completed` and `cancelled`, using rules
@@ -557,11 +558,14 @@ distinguish implemented behavior from remaining proposals.
   `Guard`, so it exports `./vocab` but no `./rules`. Plugin options can describe
   policy data, not executable guard functions. A config-expressible guard is a
   remaining design question, not an implemented authentication service.
-- **Number allocation and display prefixes are separate.** Storage numbering is
-  opt-in; the graph's `numbers(allocate)` plugin handles explicit `$num`
-  requests. A component's `prefix` controls human-readable formatting, not
-  allocation by itself. A proposal to allocate numbers automatically for
-  prefixed components remains unimplemented; do not rely on it.
+- **Numbers and prefixes are one package, and they are opt in.**
+  [@yaks/id](./id) declares the `num` column, ships `numbers(allocate)` for
+  explicit `$num` requests and `ids(vocab)` for resolving what a person typed;
+  storage numbering (`number: true`) is the other, plugin-free way to have them.
+  A component's `prefix` controls formatting, not allocation: a proposal to
+  allocate numbers automatically for prefixed components remains unimplemented,
+  so do not rely on it. A graph that loads none of this refuses `$num` rather
+  than ignoring it.
 - **`./tools` is a reserved subpath that one core package still uses for
   something else.** `@yaks/vocab/tools` is the tool mechanism — validating a
   declaration's input — rather than one plugin's implementations, and it

@@ -152,6 +152,9 @@ export type PropSchema = {
   component?: boolean
   tool?: boolean
   rule?: boolean
+  // true = this component entry adds columns to a component another document
+  // declares, rather than declaring one of its own (vocab.ts `extended`).
+  extends?: boolean
   // A rule declaration's own keywords: the query it matches, and the phase it
   // runs in (`rules` by default; `effect` is a rule a post-commit runner asks
   // for). `before` is shared with a kind's ordering and means the same thing —

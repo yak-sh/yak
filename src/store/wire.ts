@@ -23,6 +23,11 @@ let lifted = (c: Change): Bundle =>
       ...(c.was ? { $was: { [c.name]: c.was } } : {}),
     }
 
+// `$num` is @yaks/id's request rather than a core bundle key, so the core type
+// does not name it; this store asks for one on nearly every write, and reads it
+// back off a bundle here.
+let asked = (b: Bundle): boolean | undefined => b.$num as boolean | undefined
+
 export let asBundle = (c: Change): Bundle => ({
   ...lifted(c),
   ...(c.$num !== undefined ? { $num: c.$num } : {}),
@@ -68,7 +73,7 @@ export let inputChanges = (b: Bundle): Change[] => {
   if (!out.length) out.push({ eid: b.entity.eid, name: 'entity', comp: {} })
   return out.map((c) => ({
     ...c,
-    ...(b.$num !== undefined ? { $num: b.$num } : {}),
+    ...(asked(b) !== undefined ? { $num: asked(b) } : {}),
     ...(b.$was?.[c.name] ? { was: b.$was[c.name] } : {}),
   }))
 }

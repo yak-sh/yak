@@ -2,6 +2,7 @@
   "db": "../../../.yak/yak.db",
   "plugins": [
     "@yaks/kernel",
+    "@yaks/id",
     "@yaks/key",
     "@yaks/alias",
     "@yaks/edge",

@@ -10,6 +10,7 @@ import {
   loadVocab,
   metaSchema,
 } from './mod.ts'
+import type { PropSchema, VocabDoc } from './types.ts'
 import slice from './fleet/slice.schema.json' with { type: 'json' }
 
 let v = loadVocab(slice)
@@ -424,6 +425,58 @@ Deno.test('a word has one home across documents', () => {
       }]),
     Error,
     'declared twice',
+  )
+})
+
+// The spine's case: a plugin keeps a column beside every entity without
+// declaring a second `entity`.
+let spine: VocabDoc = {
+  $defs: {
+    entity: {
+      component: true,
+      type: 'object',
+      wire: false,
+      properties: { archetype: { type: 'string', stamped: true } },
+    },
+  },
+}
+let adds = (
+  properties: Record<string, PropSchema>,
+  more: PropSchema = {},
+): VocabDoc => ({
+  $defs: { entity: { component: true, extends: true, properties, ...more } },
+})
+
+Deno.test('an extension adds its columns to the component another document declares', () => {
+  let v = loadVocab([spine, adds({ num: { type: 'number', stamped: true } })])
+  assertEquals(v.columns('entity'), ['archetype', 'num'])
+  assertEquals(v.comp('entity')!.wire, false)
+  assertEquals(v.column('entity', 'num')!.stamped, true)
+  // And the order the documents arrive in decides nothing.
+  assertEquals(
+    loadVocab([adds({ num: { type: 'number' } }), spine]).columns('entity'),
+    ['archetype', 'num'],
+  )
+})
+
+Deno.test('an extension of a component nobody declares is refused', () => {
+  assertThrows(
+    () => loadVocab([adds({ num: { type: 'number' } })]),
+    Error,
+    'extends a component no document declares',
+  )
+})
+
+Deno.test('an extension may not redeclare a column or restate the component', () => {
+  assertThrows(
+    () => loadVocab([spine, adds({ archetype: { type: 'string' } })]),
+    Error,
+    "already declares a 'archetype' column",
+  )
+  assertThrows(
+    () => loadVocab([spine, adds({ num: { type: 'number' } }, { kind: true })]),
+    Error,
+    'may only add columns',
   )
 })
 

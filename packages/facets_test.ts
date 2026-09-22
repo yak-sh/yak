@@ -82,6 +82,10 @@ Deno.test("every package's words load beside every other package's", async () =>
   // imports, which is where a package can still fold another's words into its
   // own document and make the two uncomposable.
   let home = new Map<string, string>()
+  // An `extends: true` entry adds columns to somebody else's word rather than
+  // saying one: @yaks/id keeps the number on @yaks/kernel's `entity` row. It
+  // owns no word, so it is checked against the homes instead of taking one.
+  let added: [string, string][] = []
   let docs: VocabDoc[] = []
   let keywords: Keywords[] = []
   for (let p of packages) {
@@ -91,7 +95,11 @@ Deno.test("every package's words load beside every other package's", async () =>
       keywords?: Keywords[]
     }
     for (let doc of mod.docs ?? []) {
-      for (let word of Object.keys(doc.$defs ?? {})) {
+      for (let [word, said] of Object.entries(doc.$defs ?? {})) {
+        if (said?.extends === true) {
+          added.push([word, p.name])
+          continue
+        }
         let held = home.get(word)
         assert(!held, `'${word}' is ${held}'s word and ${p.name} says it too`)
         home.set(word, p.name)
@@ -99,6 +107,9 @@ Deno.test("every package's words load beside every other package's", async () =>
       docs.push(doc)
     }
     keywords.push(...(mod.keywords ?? []))
+  }
+  for (let [word, pkg] of added) {
+    assert(home.has(word), `${pkg} extends '${word}', which no package says`)
   }
   assert(home.size > 60, `only ${home.size} words walked`)
   // And they load as one vocabulary — the host's own keywords registered, since

@@ -1,0 +1,20 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true
+  },
+  "title": "id",
+  "$defs": {
+    "entity": {
+      "component": true,
+      "extends": true,
+      "type": "object",
+      "properties": {
+        "num": {
+          "type": "number",
+          "stamped": true,
+          "description": "the number this graph gave it, counting up — what a human id such as B-7 is built from"
+        }
+      }
+    }
+  }
+}

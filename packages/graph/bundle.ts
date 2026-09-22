@@ -11,10 +11,11 @@
 //
 // A few reserved keys are never stored as columns. `$delete` and the
 // `tombstone` component both mean "delete this entity"; `$was` carries a
-// per-column precondition; `$actor` names who is writing; `$num` asks the
-// numbers plugin for a human-facing number. They are components in every sense
-// that matters — data attached to an entity — they just exist only in transit
-// and inside `apply()` rather than in a table. And that is where they stop:
+// per-column precondition; `$actor` names who is writing. They are components
+// in every sense that matters — data attached to an entity — they just exist
+// only in transit and inside `apply()` rather than in a table. A plugin adds
+// requests of its own by declaring them (./request.ts), and a `$` key nothing
+// declared is refused. And that is where they stop:
 // what `apply()` returns is composed (./compose.ts) with every `$` key stripped
 // except `$alias`, which is how the graph tells the caller which id its
 // `$name` became.
@@ -25,11 +26,10 @@
 export type Eid = string
 
 /**
- * An entity's identity: an `eid` the client generated, and an optional
- * human-facing `num`. An explicit `null` reports an entity with no number;
- * absence makes no claim about numbering either way. `num` is optional —
- * storage assigns it, and an adapter with no use for a short human-facing
- * number never assigns one.
+ * An entity's identity: an `eid` the client generated, and whatever the store
+ * keeps beside it. `num` is a human-facing number, present only where the
+ * plugin that allocates one is registered (@yaks/id): an explicit `null`
+ * reports an entity with no number, and absence makes no claim either way.
  */
 export type Entity = {
   eid: Eid
@@ -63,9 +63,9 @@ export type Actor = { by?: Eid; via?: Eid }
 /**
  * A patch for one entity. Its identity is under the `entity` key; every other
  * key names a component and maps to its columns, or to `null` to remove that
- * component. The reserved keys `$delete`, `$was`, `$num` and `$actor` look
- * like components but `apply()` acts on them rather than writing them as
- * columns.
+ * component. The reserved keys `$delete`, `$was` and `$actor` look like
+ * components but `apply()` acts on them rather than writing them as columns,
+ * and a plugin may declare requests of its own.
  */
 export type Bundle =
   & {
@@ -75,9 +75,6 @@ export type Bundle =
     $delete?: boolean
     /** a per-column precondition that must still hold */
     $was?: Was
-    /** ask storage for a human-facing number, for a new entity or an existing
-     * one */
-    $num?: boolean
     /** who is writing this transaction */
     $actor?: Actor
     /** the `$name` alias this bundle was referred to by, when the graph picked

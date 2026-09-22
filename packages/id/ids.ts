@@ -1,6 +1,6 @@
 // The id a person types, resolved to the eid it names. `T-37580` is stored
 // nowhere: what is stored is the number beside the entity, and the letter is
-// derived from the components the entity has (@yaks/id). So resolving one is a
+// derived from the components the entity has (./id.ts). So resolving one is a
 // read — find the entity carrying that number, and check which letters it could
 // be printed with.
 //
@@ -11,11 +11,11 @@
 // disagrees with the entity's own is refused by being left out of the answer,
 // and the caller's string goes on to fail as the eid it is not.
 
-import type { Eid, Plugin } from '@yaks/graph'
-import { parse, prefixOf } from '@yaks/id'
+import type { Eid, Plugin } from './graph.ts'
+import { parse, prefixOf } from './id.ts'
 import type { Vocab } from '@yaks/vocab'
 
-/** Resolves human ids to eids, for a graph whose storage mints numbers. */
+/** Resolves human ids to eids, for a graph that numbers its entities. */
 export let ids = (vocab: Vocab): Plugin => {
   let letter = prefixOf(vocab)
   return {

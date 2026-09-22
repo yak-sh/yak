@@ -54,7 +54,7 @@ import { blobKeywords } from '@yaks/blob'
 import { docDoc } from '@yaks/doc'
 import { EDGE_URI, edgeDoc, edgeKeywords } from '@yaks/edge'
 import { gitDoc } from '@yaks/git'
-import { idKeywords } from '@yaks/id'
+import { idDoc, idKeywords } from '@yaks/id'
 import { keyDoc, keyKeywords } from '@yaks/key'
 import { mailDoc } from '@yaks/mail'
 import { memberDoc } from '@yaks/member'
@@ -96,7 +96,10 @@ let stampCols: Record<string, PropSchema> = {
 
 /** The components every app's store has that no package owns: the spine, the
  * writer, and the two server-owned stamps. `doc` is @yaks/doc's, `member`
- * @yaks/member's, and both are loaded beside this one (see {@link coreDocs}). */
+ * @yaks/member's, and both are loaded beside this one (see {@link coreDocs}).
+ * The `num` on the spine is @yaks/id's and arrives with its document: every
+ * store on this platform is numbered, because its tools answer in `T-`-style
+ * ids and its migrations read the number a row was given. */
 export let coreDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
   title: 'core',
@@ -105,7 +108,7 @@ export let coreDoc: VocabDoc = {
       component: true,
       type: 'object',
       wire: false,
-      properties: { num: { type: 'number', stamped: true } },
+      properties: {},
     },
     person: {
       component: true,
@@ -498,6 +501,7 @@ let invocationDoc: VocabDoc = {
 
 export let coreDocs: VocabDoc[] = [
   coreDoc,
+  idDoc,
   classificationDoc,
   docDoc,
   memberDoc,
@@ -932,6 +936,7 @@ export let platformDoc: VocabDoc = {
  * are its `doc.body`, which is why @yaks/doc is loaded above every plugin. */
 export let platformDocs: VocabDoc[] = [
   coreDoc,
+  idDoc,
   classificationDoc,
   docDoc,
   edgeDoc,
@@ -972,6 +977,7 @@ export let platformVocab = (): Vocab => loadVocab(platformDocs, appKeywords)
  * nothing. */
 export let gitDocs: VocabDoc[] = [
   coreDoc,
+  idDoc,
   classificationDoc,
   edgeDoc,
   keyDoc,

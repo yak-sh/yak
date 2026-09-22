@@ -1,11 +1,16 @@
 {
   "name": "@yaks/id",
   "version": "0.1.0",
-  "description": "Generates entity UUIDs, and formats and parses human-readable ids from vocabulary-declared prefixes and storage-assigned numbers.",
-  "exports": "./mod.ts",
+  "description": "Generates entity UUIDs, formats and parses human-readable ids from vocabulary-declared prefixes, and contributes the entity number those ids are built from.",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./rules": "./rules.ts"
+  },
   "license": "Apache-2.0",
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@yaks/vocab": "jsr:@yaks/vocab@^0.1.0"
   },
   "publish": {
     "exclude": [

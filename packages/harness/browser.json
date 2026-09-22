@@ -17,6 +17,7 @@
     "@yaks/doc/vocab": "../doc/vocab.ts",
     "@yaks/edge/vocab": "../edge/vocab.ts",
     "@yaks/git/vocab": "../git/vocab.ts",
+    "@yaks/id/vocab": "../id/vocab.ts",
     "@yaks/kernel/vocab": "../kernel/vocab.ts",
     "@yaks/mcp-client/vocab": "../mcp-client/vocab.ts",
     "@yaks/model/vocab": "../model/vocab.ts",

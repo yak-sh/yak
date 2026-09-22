@@ -1,23 +1,19 @@
 import { assertEquals } from '@std/assert'
 import type { Bundle, Tx } from '@yaks/graph'
-import { idKeywords } from '@yaks/id'
+import { idKeywords } from './keywords.ts'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { ids } from './ids.ts'
+import { idDoc } from './vocab.ts'
 
 let doc: VocabDoc = {
   $defs: {
-    entity: {
-      component: true,
-      type: 'object',
-      wire: false,
-      properties: { num: { type: 'number', stamped: true } },
-    },
+    entity: { component: true, type: 'object', wire: false },
     doc: { component: true, type: 'object', kind: true },
     task: { component: true, type: 'object', kind: true, prefix: 'T' },
     memory: { component: true, type: 'object', kind: true, prefix: 'M' },
   },
 }
-let vocab = loadVocab([doc], [idKeywords])
+let vocab = loadVocab([doc, idDoc], [idKeywords])
 
 // The store, as far as addressing is concerned: the entities numbered so far.
 let rows: Bundle[] = [

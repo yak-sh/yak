@@ -46,9 +46,6 @@
 // there.
 
 import { rulesIn, type Vocab } from '@yaks/vocab'
-// getRandomValues, never crypto.randomUUID: a page served over plain http
-// generates ids too, and randomUUID is unavailable there.
-import { mint as fresh } from '@yaks/id'
 import {
   type Actor,
   type Bundle,
@@ -61,7 +58,9 @@ import { detached, type Query, type ReadOpts } from './storage.ts'
 import type { Hook, Phase, Plugin, Tracker, WriteHook } from './plugin.ts'
 import { type Derive, resolve } from './alias.ts'
 import { identified, identities } from './identity.ts'
+import { mint as fresh } from './mint.ts'
 import { admit } from './admit.ts'
+import { requested } from './request.ts'
 import { composed } from './compose.ts'
 import { type Ask, complete, gather, holding, reached } from './gather.ts'
 import { guard } from './guard.ts'
@@ -568,7 +567,16 @@ export let graph = (opts: Options): Graph => {
     return each(
       [
         phase('normalize', outside),
-        phase('admit', outside, (b) => admit(b, vocab, o.trusted)),
+        phase(
+          'admit',
+          outside,
+          (b) =>
+            admit(
+              requested(b, plugins.flatMap((p) => p.requests ?? [])),
+              vocab,
+              o.trusted,
+            ),
+        ),
         // Derive the id, then check it still matches: an id derived from a
         // value is only meaningful while the two agree (identity.ts
         // `identified`).

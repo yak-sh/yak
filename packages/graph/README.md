@@ -35,16 +35,19 @@ component with `from` and `to` references and add further components describing
 the relationship. The core does not require an application-specific class
 hierarchy for entities.
 
-`entity.num`, when storage assigns one, is a short human-facing number, not an
-identity. Do not use it in place of an eid. An application can turn off
-automatic numbering in its storage adapter and register `numbers(allocate)`
-instead. Code that creates an entity asks for a number per entity, by writing
-`{ entity: { eid }, $num: true, book: {} }`; the same request later assigns a
-number to an entity that does not have one yet. The allocator runs inside the
-graph's write transaction and must return the existing number when asked again
-for the same entity. This plugin assigns numbers only in response to `$num`; the
-presence of a component or display prefix does not request one. `$num` is
-request-only metadata: it is never part of what `apply()` returns.
+`entity.num`, when a store keeps one, is a short human-facing number, not an
+identity. Do not use it in place of an eid. Numbering is [@yaks/id](../id)'s:
+that package declares the column and ships the allocator behind `$num: true`,
+and a graph that registers neither has no numbers at all.
+
+`mint()` generates an eid — a v4 UUID from `crypto.getRandomValues`, so a page
+served over plain HTTP generates ids too — and `minted(id)` says whether an id
+was generated rather than chosen by a person.
+
+A `$` key on a bundle is a request to the pipeline rather than a component.
+`$delete`, `$was` and `$actor` are the core's own; a plugin declares its own in
+`requests`, and a request no plugin answers is refused at admission rather than
+ignored, so asking a graph for something it cannot do is an error you can read.
 
 ## Install
 

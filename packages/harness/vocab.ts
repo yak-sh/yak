@@ -18,6 +18,7 @@ import { contextDoc } from '@yaks/context/vocab'
 import { docDoc } from '@yaks/doc/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { marksDoc, spineDoc } from '@yaks/kernel/vocab'
+import { idDoc, idKeywords } from '@yaks/id/vocab'
 import { edgeDoc, edgeKeywords } from '@yaks/edge/vocab'
 import { modelDoc } from '@yaks/model/vocab'
 import { openaiDoc } from '@yaks/openai/vocab'
@@ -47,6 +48,8 @@ export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
  * @yaks/kernel's `entity` table, which is where `entity` and the two stamps
  * live, and its marks, which is where `archived` lives: a harness archives a
  * session, it does not own the component for putting something away.
+ * @yaks/id's document is loaded beside it because a harness shows `S-12`: it
+ * adds the `num` column to that same `entity` row.
  *
  * This is a list, package by package, because that is the only way each
  * component has exactly one home: no document here redeclares another's
@@ -54,6 +57,7 @@ export let harnessDoc: VocabDoc = { title: doc.title, $defs: core }
  * (`packages/facets_test.ts`). */
 export let docs: VocabDoc[] = [
   spineDoc,
+  idDoc,
   marksDoc,
   harnessDoc,
   mcpDoc,
@@ -74,7 +78,7 @@ export let docs: VocabDoc[] = [
 ]
 
 /** The JSON Schema keywords those documents use. */
-export let keywords: Keywords[] = [edgeKeywords, blobKeywords]
+export let keywords: Keywords[] = [edgeKeywords, blobKeywords, idKeywords]
 
 /** Every one of those documents, loaded into one vocabulary. */
 export let vocab: Vocab = loadVocab(docs, keywords)

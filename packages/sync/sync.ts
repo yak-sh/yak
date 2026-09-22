@@ -23,7 +23,7 @@
 
 import type { Bundle, Eid, Graph, Plugin } from '@yaks/graph'
 import { dead, then } from '@yaks/graph'
-import { asking, clean, echoed } from './mark.ts'
+import { asking, clean, ECHO, echoed, SENT } from './mark.ts'
 import { type Fetch, post, type Report } from './outbound.ts'
 import { relayed } from './tier.ts'
 import { land } from './inbound.ts'
@@ -164,6 +164,9 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
 
   let plugin: Plugin = {
     name: '@yaks/sync',
+    // The two marks a batch carries through `apply()` (./mark.ts): what the
+    // caller sent, and what came back from the server.
+    requests: [SENT, ECHO],
     hooks: {
       // Inside the transaction, before the patches: the copy to put back.
       precondition: (bundles, tx) => {

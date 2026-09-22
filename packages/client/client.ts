@@ -167,7 +167,7 @@ let ordinary = (): Vault | null => globalThis.indexedDB ? idb() : null
  *
  * ```ts
  * import { client } from '@yaks/client'
- * import { mint } from '@yaks/id'
+ * import { mint } from '@yaks/graph'
  * import { loadVocab } from '@yaks/vocab'
  * import { signal } from '@preact/signals'
  *

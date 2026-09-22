@@ -5,10 +5,11 @@
  * an entity (`comment`, `image`, `favorite`), and the tags that give an edge
  * its meaning (`about`, `reads`, `references`, `supersedes`, …).
  *
- * It ships almost no code: a vocabulary document, the three keywords that
- * describe what the core meta-model does not (see {@link kernelKeywords}), and
- * the one thing the `entity` row implies — resolving the id a person types
- * (`T-37580`) to the entity carrying that number (see {@link ids}).
+ * It ships no code beyond a vocabulary document and the three keywords that
+ * describe what the core meta-model does not (see {@link kernelKeywords}). The
+ * `entity` row is the identity row every entity has; what is KEPT beside the
+ * eid is each plugin's own — the archetype is @yaks/archetype's word and the
+ * number a human id is built from is @yaks/id's.
  *
  * Who a write is signed as is not here, and it is not a name out of a config
  * file: a write that did not arrive through an authenticated HTTP or MCP
@@ -18,4 +19,3 @@
  */
 export { KERNEL_URI, kernelKeywords } from './keywords.ts'
 export { kernelDoc, marksDoc, spineDoc } from './vocab.ts'
-export { ids } from './ids.ts'

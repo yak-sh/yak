@@ -21,13 +21,13 @@
 
 import type { Bundle, Eid, Hook, Tx } from '@yaks/graph'
 import { comps, substitute, then } from '@yaks/graph'
-import { minted } from '@yaks/id'
+import { minted } from '@yaks/graph'
 import { ofOf } from '@yaks/key'
 import type { Vocab } from '@yaks/vocab'
 import { aliasEid } from './comp.ts'
 
 /** Whether an id is worth looking up as a name — a `$alias` and an id these
- * packages generate (@yaks/id `minted`: a UUID, a content hash) are not. */
+ * packages generate (@yaks/graph `minted`: a UUID, a content hash) are not. */
 export let wordish = (id: string): boolean =>
   !!id && !id.startsWith('$') && !minted(id)
 

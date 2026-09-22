@@ -21,7 +21,7 @@ let some = (title: string, names: string[]): VocabDoc =>
     ),
   }) as VocabDoc
 
-/** Just `entity{num, archetype}` and the two provenance marks every graph
+/** Just `entity{archetype}` and the two provenance marks every graph
  * wants, `created{at, by, via}` and `updated{at, by, via}` — for a program that
  * loads those without the rest of the kernel's components. */
 export let spineDoc: VocabDoc = some('spine', ['entity', 'created', 'updated'])

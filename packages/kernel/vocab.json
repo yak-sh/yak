@@ -1,7 +1,6 @@
 {
   "$vocabulary": {
     "https://yaks.sh/vocab/core": true,
-    "https://yaks.sh/vocab/id": true,
     "https://yaks.sh/vocab/edge": true
   },
   "title": "kernel",
@@ -119,11 +118,6 @@
       "type": "object",
       "wire": false,
       "properties": {
-        "num": {
-          "type": "number",
-          "stamped": true,
-          "description": "the number this graph minted for it, counting up"
-        },
         "archetype": {
           "type": "string",
           "ref": "archetype",
@@ -132,7 +126,7 @@
           "description": "the archetype entity describing this one's set of components, not a type name"
         }
       },
-      "description": "every entity has one: the number this graph minted for it, and the archetype its set of components adds up to"
+      "description": "every entity has one: the identity row, carrying the archetype its set of components adds up to and whatever else a plugin keeps beside every entity"
     },
     "favorite": {
       "component": true,
@@ -242,7 +236,6 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "prefix": "X",
       "properties": {
         "target": {
           "type": "string",

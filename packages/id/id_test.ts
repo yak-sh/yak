@@ -4,8 +4,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { extendMeta, loadVocab, type VocabDoc } from '@yaks/vocab'
 import { ID_URI, idKeywords } from './keywords.ts'
-import { format, idOf, parse, prefixes, prefixOf } from './id.ts'
-import { mint, SHORT, short } from './mint.ts'
+import { format, idOf, parse, prefixes, prefixOf, SHORT, short } from './id.ts'
 
 let catalog: VocabDoc = {
   $vocabulary: { 'https://yaks.sh/vocab/core': true, [ID_URI]: true },
@@ -67,16 +66,6 @@ Deno.test('what is not a human id says so', () => {
   for (let token of [eid, '9f1c8d2a', 'B-', '-7', 'B7', 'gatsby', '']) {
     assertEquals(parse(token), undefined, token)
   }
-})
-
-Deno.test('a minted eid is a v4 uuid, and each one is its own', () => {
-  let a = mint()
-  assert(
-    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-      .test(a),
-    a,
-  )
-  assert(a != mint())
 })
 
 Deno.test('the keyword is registered, so the loader carries it', () => {

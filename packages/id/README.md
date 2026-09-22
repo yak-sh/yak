@@ -1,9 +1,9 @@
 # @yaks/id
 
-UUID creation and human-readable entity ID formatting. Vocabulary prefixes
-control display; storage adapters or graph address plugins are responsible for
-resolving IDs to entities. This package stores nothing and does not assign
-database numbers.
+UUID creation, the entity number a human-readable ID is built from, and the
+formatting and resolution of IDs such as `B-7`. Numbers are opt in: a graph has
+them because it loaded this package's document and registered its plugins, and
+has none otherwise.
 
 ## Install
 
@@ -14,11 +14,12 @@ deno add jsr:@yaks/id
 
 ## Two ids, one entity
 
-An entity's durable identifier is its **eid**. `mint()` generates a UUID on the
-client, so creating an id does not require a database round trip. The graph can
-also accept other string ids; not every package uses UUIDs. A numbered entity
-has a **human id**, such as `B-7`, for easier reading and typing. Storage
-assigns the number; the vocabulary (the component schema) supplies the prefix.
+An entity's durable identifier is its **eid**. @yaks/graph's `mint()` generates
+a UUID on the client, so creating an id does not require a database round trip.
+The graph can also accept other string ids; not every package uses UUIDs. A
+numbered entity has a **human id**, such as `B-7`, for easier reading and
+typing. Storage assigns the number; the vocabulary (the component schema)
+supplies the prefix.
 
 ## The `prefix` keyword
 
@@ -47,8 +48,9 @@ Call the JSON document above `catalog`, then register the keyword vocabulary
 when loading it. This enables prefix formatting; it does not allocate numbers:
 
 ```ts
+import { mint } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
-import { idKeywords, idOf, mint, parse } from '@yaks/id'
+import { idKeywords, idOf, parse } from '@yaks/id'
 
 let v = loadVocab([catalog], [idKeywords])
 let id = idOf(v)
@@ -77,12 +79,55 @@ unquoted leading `#` starts a comment.
 A **bundle** is one entity's components as a JSON object, with its identifier
 under `entity.eid`. `human(v)` formats the ID from that object.
 
+## Numbers are opt in
+
+Most applications never show a number, so nothing here is on by default. There
+are three pieces, and a graph takes the ones it wants:
+
+```ts
+import { graph } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
+import { idDoc, idKeywords } from '@yaks/id/vocab'
+import { ids, numbers } from '@yaks/id/rules'
+
+let vocab = loadVocab([catalog, idDoc], [idKeywords])
+let g = graph({
+  storage,
+  vocab,
+  plugins: [numbers(allocate), ids(vocab)],
+})
+```
+
+- **`idDoc`** adds `num` to the `entity` row — the one column a number needs. It
+  is an `extends` document ([@yaks/vocab](../vocab)): the spine is declared
+  once, by whichever package declares it, and this adds a column to it rather
+  than declaring a second `entity`.
+- **`numbers(allocate)`** answers `$num: true` on a bundle. Code that creates an
+  entity asks for a number per entity, by writing
+  `{ entity: { eid }, $num: true, book: {} }`; the same request later numbers an
+  entity that has none yet. The allocator runs inside the graph's write
+  transaction and must return the existing number when asked again for the same
+  entity. Nothing else requests a number: neither a component nor a display
+  prefix does. A storage adapter can also number every entity as it is written
+  (@yaks/sqlite's `number: true`), which is the other way to have numbers and
+  needs no plugin.
+- **`ids(vocab)`** resolves the id a person typed (`B-7`, or a bare `7`) to the
+  eid it names, as a graph plugin's `address` — so the MCP server, the HTTP
+  `/query` endpoint and the command line all accept the ids people type. A
+  letter that disagrees with the entity's own is not resolved.
+
+A graph that registers none of this stores no number, displays none, and refuses
+`$num: true` as a request nothing answers — an error naming the request, rather
+than a write that silently returns no number.
+
+On a host assembled from a config file ([@yaks/cli](../cli)), naming `@yaks/id`
+among the plugins loads `idDoc` and installs `ids`.
+
 ## Exports
 
 | export                         | is                                                                 |
 | ------------------------------ | ------------------------------------------------------------------ |
 | `idKeywords`, `ID_URI`         | the `prefix` keyword vocabulary, ready to register                 |
-| `mint()`                       | a fresh eid (a v4 UUID)                                            |
 | `short(eid, prefix?)`, `SHORT` | the 10-hex `#` handle, and the pattern that matches one            |
 | `prefixes(v)`                  | every declared prefix: component name → letter                     |
 | `prefixOf(v)`                  | the letter a component's ids have (declared, or its initial)       |
@@ -90,18 +135,27 @@ under `entity.eid`. `human(v)` formats the ID from that object.
 | `parse(id)`                    | `'B-7'` → `{ prefix: 'B', num: 7 }`; `undefined` if it is no id    |
 | `idOf(v)`                      | an entity → its display ID                                         |
 | `human(v)`                     | a bundle (`{entity: {eid, num?}, ...components}`) → its display ID |
+| `idDoc`                        | `entity{num}`, the column a number is kept in                      |
+| `numbers(allocate)`            | the `$num` allocator, from `@yaks/id/rules`                        |
+| `ids(v)`                       | human id → eid, from `@yaks/id/rules`                              |
 
 ## Integration
 
 An extension of [@yaks/vocab](https://jsr.io/@yaks/vocab): the meta-model
 carries the `prefix` keyword without interpreting it, and this package supplies
-the interpretation. Resolving a typed id back to a stored entity belongs to the
-storage adapter — [@yaks/sqlite](https://jsr.io/@yaks/sqlite) and its siblings —
-which calls `parse` to read the number out of what a person typed.
+the interpretation. Reading a number out of a query also belongs to the storage
+adapter — [@yaks/sqlite](https://jsr.io/@yaks/sqlite) and its siblings — which
+calls `parse` on what a person typed.
 
 ## Compatibility
 
-Pure TypeScript. Its only dependency is
-[@yaks/vocab](https://jsr.io/@yaks/vocab) (types plus a loaded schema), and
-`mint()` needs `crypto.getRandomValues`, which every modern runtime has. Runs on
-**Deno**, **Node**, and in the **browser**.
+Pure TypeScript, and its only dependency is
+[@yaks/vocab](https://jsr.io/@yaks/vocab) — `@yaks/id/rules` included. The
+plugins there state the graph shapes they need structurally (`graph.ts`) rather
+than importing [@yaks/graph](https://jsr.io/@yaks/graph): the dependency between
+the two runs one direction, and this is the leaf end of it, because
+[@yaks/sql](https://jsr.io/@yaks/sql) reads a human id with `parse` and
+@yaks/graph is built over @yaks/sql. [@yaks/match](https://jsr.io/@yaks/match)
+states the same thing about a bundle for the same reason. What the factories
+return is a `Plugin` and passes wherever one is asked for. Runs on **Deno**,
+**Node**, and in the **browser**.

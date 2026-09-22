@@ -5,9 +5,8 @@
  *
  * ## The model
  * Everything is an entity, identified by an {@link Entity} — an `eid` the
- * client generates, plus the `num` storage assigns the first time the entity is
- * written. An entity has components: a named object of columns, one per
- * component. An entity has no type of its own; it is whatever components it
+ * client generates. An entity has components: a named object of columns, one
+ * per component. An entity has no type of its own; it is whatever components it
  * has. A book is a `doc` plus a `book`; a review is a `doc` plus a `review`.
  * Adding a component adds an aspect to the entity, not a subtype.
  *
@@ -30,11 +29,12 @@
  * `apply()` acts on them rather than storing them as columns: `$delete` (delete
  * the entity, which can also be written as a `tombstone` component), `$was` (a
  * per-column precondition — see {@link Was}), and `$actor` (who is writing —
- * see {@link Actor}). They belong to the write pipeline and stop there: what
+ * see {@link Actor}). A plugin declares requests of its own the same way it
+ * declares components, and a `$` key nothing declared is refused (see
+ * {@link requested}). They belong to the write pipeline and stop there: what
  * `apply()` returns is the transaction as applied, {@link composed} into one
- * bundle per entity, carrying the components, the columns the server set, the
- * assigned `num` and the `$alias` the caller referred to it by — and no other
- * `$` key.
+ * bundle per entity, carrying the components, the columns the server set and
+ * the `$alias` the caller referred to it by — and no other `$` key.
  *
  * ## Apply is pluggable, in fixed phases
  * A change runs through an ordered list of {@link Phase}s — normalize, admit,
@@ -67,6 +67,7 @@
  */
 
 export * from './bundle.ts'
+export * from './mint.ts'
 export * from './storage.ts'
 export * from './plugin.ts'
 export * from './pipe.ts'
@@ -75,6 +76,7 @@ export * from './state.ts'
 export * from './alias.ts'
 export * from './identity.ts'
 export * from './admit.ts'
+export * from './request.ts'
 export * from './gather.ts'
 export * from './guard.ts'
 export * from './mutate.ts'
@@ -89,8 +91,6 @@ export * from './meant.ts'
 export * from './edit.ts'
 
 export * from './preflight.ts'
-
-export { numbers } from './number.ts'
 
 export * from './transient.ts'
 

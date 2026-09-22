@@ -61,6 +61,46 @@ export class Ambiguous extends Error {
   }
 }
 
+// The keywords an extension entry may carry. Everything else about a component
+// — its kind, its prefix, its indexes, whether it reaches the wire — belongs to
+// the document that declares it, so an extension that states one of those is a
+// mistake rather than an override.
+let ADDABLE = ['component', 'extends', 'type', 'description', 'properties']
+
+// A component another document declares, with one plugin's columns added. The
+// spine is what this exists for: `entity` is declared once, and a plugin that
+// stores a value beside every entity (@yaks/id's number) adds its column
+// instead of declaring a second `entity`. A column the base already has is a
+// collision, not an override.
+let extended = (
+  name: string,
+  base: PropSchema | undefined,
+  more: PropSchema,
+): PropSchema => {
+  if (!base) {
+    throw new Error(`'${name}' extends a component no document declares`)
+  }
+  let stray = Object.keys(more).filter((k) =>
+    !ADDABLE.includes(k) && k != 'required'
+  )
+  if (stray.length) {
+    throw new Error(
+      `'${name}' extends a component and may only add columns — drop ${
+        stray.join(', ')
+      }`,
+    )
+  }
+  let properties = { ...base.properties }
+  for (let [prop, schema] of Object.entries(more.properties ?? {})) {
+    if (prop in properties) {
+      throw new Error(`'${name}' already declares a '${prop}' column`)
+    }
+    properties[prop] = schema
+  }
+  let need = [...base.required ?? [], ...more.required ?? []]
+  return { ...base, properties, ...need.length ? { required: need } : {} }
+}
+
 // The extension keywords a registration admits, copied off a schema verbatim.
 // A keyword the caller did not register is dropped: the loader carries what
 // somebody asked for and nothing else.
@@ -336,7 +376,13 @@ export let loadVocab = (
   // marker is the one case that throws rather than being skipped: it is a
   // component whose marker was forgotten, and creating no table for it would
   // silently lose the component.
+  //
+  // `extends: true` is the one entry that may name a component another document
+  // already declared: it adds columns to it (`extended`). Those are applied
+  // after every document is read, so the order the documents were loaded in
+  // decides nothing.
   let defs: Record<string, PropSchema> = {}
+  let adding: [string, PropSchema][] = []
   for (let doc of docs) {
     for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
       if (schema?.tool === true || schema?.rule === true) continue
@@ -349,9 +395,16 @@ export let loadVocab = (
         }
         continue
       }
+      if (schema.extends === true) {
+        adding.push([name, schema])
+        continue
+      }
       if (name in defs) throw new Error(`component '${name}' is declared twice`)
       defs[name] = schema
     }
+  }
+  for (let [name, schema] of adding) {
+    defs[name] = extended(name, defs[name], schema)
   }
 
   let props = (name: string): Record<string, PropSchema> =>

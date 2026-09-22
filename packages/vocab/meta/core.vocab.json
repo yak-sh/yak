@@ -9,6 +9,10 @@
       "description": "true = this $defs entry declares a component: an object schema whose properties are the component's columns. Required \u2014 an entry marked neither this nor `tool` is an ordinary reusable subschema, and the loader creates no table for it.",
       "const": true
     },
+    "extends": {
+      "description": "true = this component entry adds its columns to a component another document declares, instead of declaring one of its own. The spine is what it is for: `entity` is declared once, and a plugin that keeps a value beside every entity adds its column here. An extension carries columns and nothing else — kind, prefix, indexes and wire belong to the document that declares the component.",
+      "const": true
+    },
     "tool": {
       "description": "true = this $defs entry declares a tool: one named operation an agent can ask the graph to perform. The implementation is a function the module exports, looked up by the entry name (or noun_verb); the declaration is the part that is sent to clients.",
       "const": true

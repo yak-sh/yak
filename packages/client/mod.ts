@@ -15,7 +15,7 @@
  * ## One call
  * ```ts
  * import { client } from '@yaks/client'
- * import { mint } from '@yaks/id'
+ * import { mint } from '@yaks/graph'
  * import { loadVocab } from '@yaks/vocab'
  *
  * let vocab = loadVocab(recipeBox)

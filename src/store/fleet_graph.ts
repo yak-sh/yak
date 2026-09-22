@@ -12,11 +12,11 @@ import {
   type Entity,
   type Graph,
   graph,
-  numbers,
   pick,
   type Plugin,
   then,
 } from '@yaks/graph'
+import { numbers } from '@yaks/id/rules'
 import { blobRead, blobs, decode, encode } from '@yaks/blob'
 import { type Driver, storage } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'

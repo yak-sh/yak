@@ -136,6 +136,10 @@ Deno.test('external journal handlers write through apply; no implicit transactio
       failures.push(String(e))
     },
   })
+  // The graph has to know this consumer even where it dispatches from outside:
+  // an effect's own write carries the generation counter, and `apply()` refuses
+  // a `$` key no plugin declared.
+  g.use(fx)
   fx.created(
     'post',
     (_e, _tx, write) =>

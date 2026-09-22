@@ -3,9 +3,10 @@ import type { Bundle, Comp, Graph, ToolCtx } from '@yaks/graph'
 import { graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { loadVocab } from '@yaks/vocab'
-import { idKeywords } from '@yaks/id'
+import { idDoc, idKeywords } from '@yaks/id'
 import { nameKeywords } from '@yaks/names'
-import { ids, kernelKeywords, spineDoc } from '@yaks/kernel'
+import { kernelKeywords, spineDoc } from '@yaks/kernel'
+import { ids } from '@yaks/id/rules'
 import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
 import { docDoc } from '@yaks/doc'
@@ -29,6 +30,7 @@ let host = () => {
   let vocab = loadVocab(
     [
       spineDoc,
+      idDoc,
       sessionDoc,
       toolsDoc,
       modelDoc,

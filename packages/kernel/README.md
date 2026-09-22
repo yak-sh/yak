@@ -1,9 +1,9 @@
 # @yaks/kernel
 
-Shared identity and metadata components for a graph: entity numbers, creation
+Shared identity and metadata components for a graph: the entity row, creation
 and update provenance, decisions, comments, images, favorites and relationship
-types. They are exported as JSON Schema documents, with plugins for resolving
-human-readable IDs and a tool for creating comments.
+types. They are exported as JSON Schema documents, with a tool for creating
+comments.
 
 ## Terms this README uses
 
@@ -21,17 +21,16 @@ and rows internally. Three terms are used below:
 
 A **vocabulary** is the set of component declarations a graph was loaded with
 ([@yaks/vocab](../vocab)). Its `vocab.json` is one such declaration, readable as
-ordinary JSON. The package also implements human-id resolution and a
-comment-creation tool.
+ordinary JSON. The package also implements a comment-creation tool.
 
 ## What it declares
 
-- `entity{num, archetype}` — the row every entity has. `num` is the number this
-  graph minted for it, counting up, and `archetype` points at the entity
-  describing its particular set of components ([@yaks/archetype](../archetype)).
-  No client writes either one: `num` is minted by storage, `archetype` is
-  maintained by @yaks/archetype's plugin, and the component is declared
-  `wire: false` (excluded from the ordinary component input schema).
+- `entity{archetype}` — the row every entity has. `archetype` points at the
+  entity describing its particular set of components
+  ([@yaks/archetype](../archetype)), which maintains it; no client writes it,
+  and the component is declared `wire: false` (excluded from the ordinary
+  component input schema). A graph that wants human-readable ids adds
+  [@yaks/id](../id), whose document adds `num` to this same row.
 - the marks recording what happened to something and who did it — `created`,
   `updated`, `opened`, `archived`, `verified` — each with `at`, `by` and `via`
   columns that @yaks/graph stamps rather than a caller. `by` is the entity that
@@ -69,19 +68,12 @@ program that runs twice is two writers — two `yak` commands over one database
 file are two of them — so a name in config could not tell them apart, and a
 process entity can.
 
-## Human ids
+## Human ids are not here
 
-People type `T-37580`, and that string is stored nowhere. What is stored is the
-`entity.num` beside the entity; the letter is derived from the components the
-entity has ([@yaks/id](../id)). So turning one into an `eid` is a read, and
-`ids.ts` is the graph plugin that does it — it implements a plugin's `address`,
-which `graph.address()` calls before a caller's ids are used, so the MCP server,
-the HTTP `/query` endpoint and the command line all accept the ids people type.
-
-A bare number (`37580`) resolves too, because the number is the identity. A
-letter that disagrees with the entity's own is not resolved: the plugin leaves
-it out of its answer, and the caller's string goes on to fail as the eid it is
-not.
+People type `T-37580`, and nothing about that is this package's: the number, the
+letter, the allocator and the resolver are all [@yaks/id](../id)'s, and a graph
+that never loads it has no numbers to show. This package declares the row they
+are kept in and nothing more.
 
 ## The keywords
 
@@ -102,32 +94,30 @@ makes it one, and the core meta-model already has a keyword for that:
 
 ## Entry points
 
-`deno.json` names four, and a program imports only the ones it needs:
+`deno.json` names three, and a program imports only the ones it needs:
 
 - `@yaks/kernel` — `kernelDoc`, the `spineDoc` and `marksDoc` subsets,
-  `kernelKeywords`, `KERNEL_URI`, and the `ids(vocab)` plugin. It does not
-  re-export the tool factory.
+  `kernelKeywords` and `KERNEL_URI`. It does not re-export the tool factory.
 - `@yaks/kernel/vocab` — the vocabulary documents and keywords, and nothing
   else. It reaches no storage, no SQL and no runtime API, so a browser tab can
   load it on its own.
-- `@yaks/kernel/rules` — the graph plugins: here, just the human-id resolver.
 - `@yaks/kernel/tools` — the implementation of `comment_new`.
 
 ## Example
 
 ```ts
-import { ids, kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { loadVocab } from '@yaks/vocab'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 
 const vocab = loadVocab([kernelDoc], [kernelKeywords])
-const g = graph({ vocab, storage: ram(vocab), plugins: [ids(vocab)] })
+const g = graph({ vocab, storage: ram(vocab) })
 await g.apply([{ entity: { eid: 'example' }, favorite: {} }])
 console.log(await g.read('.favorite'))
 ```
 
-Use a numbered storage adapter when you need `ids` to resolve human ids. Load
+Add [@yaks/id](../id) when entities should have numbers and `B-7` ids. Load
 [@yaks/doc](../doc) and the `./tools` factory as well to use `comment_new`. This
 package does not provide persistence: the example stores records in RAM.
 

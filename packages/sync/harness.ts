@@ -13,6 +13,7 @@ import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { api, type Handler } from '@yaks/api'
+import { marks } from './mark.ts'
 import type { Connect, Socket } from './socket.ts'
 import { type Sync, sync } from './sync.ts'
 import type { Trouble } from './outbound.ts'
@@ -103,7 +104,13 @@ export let box: Vocab = loadVocab(doc)
 /** A graph over a fresh map. `adopt` is what a client store needs: the numbers
  * come from the server, not from this map. */
 export let boxGraph = (adopt = false): Graph =>
-  graph({ storage: ram(box, { adopt, number: true }), vocab: box })
+  graph({
+    storage: ram(box, { adopt, number: true }),
+    vocab: box,
+    // These tests drive `land` and `snapshot` at a graph with no sync plugin,
+    // which is exactly what `marks` is for.
+    plugins: [marks],
+  })
 
 /** A stand-in socket, driven by hand: it records what this side sent, and
  * `emit` fires the events a WebSocket would. It starts in the connecting
