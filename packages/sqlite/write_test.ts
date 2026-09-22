@@ -8,6 +8,8 @@ import type { Bundle, Comp } from './bundle.ts'
 import type { Driver } from './driver.ts'
 import { mem, shop, store } from './harness.ts'
 import { storage } from './mod.ts'
+import { graph } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
 
 let c = (b: Bundle, name: string): Comp => b[name] as Comp
 
@@ -257,4 +259,33 @@ Deno.test('partial updates and bare tags respect required columns and SQL defaul
   )
   assertEquals(get().doc, { title: 'changed', body: 'body' })
   assertEquals(s.tx((tx) => tx.get(['bad'])), [])
+})
+
+// A Durable Object's SQLite binds at most 100 parameters per statement, so a
+// write whose statements grow a parameter per entity fails at the 101st.
+Deno.test('a batch past 100 entities binds under the Durable Object limit', async () => {
+  let d = mem()
+  let capped: Driver = {
+    ...d,
+    query: (sql, params) => {
+      if (params.length > 100) throw new Error('too many SQL variables')
+      return d.query(sql, params)
+    },
+  }
+  // A declared rule over what the batch writes, so the batch is read as an
+  // overlay (overlay.ts) as well as written.
+  let ruled = loadVocab([...shop.docs, {
+    $defs: { priced: { rule: true, match: '.product.price>1' } },
+  }])
+  let s = storage(capped, ruled, { number: true })
+  s.install()
+  let g = graph({ storage: s, vocab: ruled })
+  let many = (price: number) =>
+    Array.from({ length: 150 }, (_, i) => ({
+      entity: { eid: `p${i}` },
+      product: { price },
+    }))
+  await g.apply(many(1))
+  await g.apply(many(2))
+  assertEquals((s.read('.price=2') as Bundle[]).length, 150)
 })

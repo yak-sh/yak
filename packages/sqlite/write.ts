@@ -74,8 +74,9 @@ let isRef = (v: Vocab, comp: string, prop: string): boolean =>
  * tombstoned. An eid with no entry has no entity yet. */
 export type Spine = { dead: boolean }
 
-/** What the store knows about these eids — one statement, whatever the batch's
- * size. An eid absent from the map has no entity; one present with `dead` is
+/** What the store knows about these eids — one statement and one bound
+ * parameter, whatever the batch's size (a Durable Object binds at most 100).
+ * An eid absent from the map has no entity; one present with `dead` is
  * tombstoned, and a deleted identity is still an identity: it resolves by eid
  * forever, it just takes no more writes. */
 export let spines = (
@@ -83,13 +84,12 @@ export let spines = (
   eids: string[],
 ): Map<string, Spine> => {
   if (!eids.length) return new Map()
-  let holes = eids.map(() => '?').join(', ')
   return new Map(
     driver.query(
       `select e.eid as eid, t.entity as dead from entity e
         left join tombstone t on t.entity = e.id
-        where e.eid in (${holes})`,
-      eids,
+        where e.eid in (select value from json_each(?))`,
+      [JSON.stringify(eids)],
     ).map((r) => [String(r.eid), { dead: r.dead != null }]),
   )
 }

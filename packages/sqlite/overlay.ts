@@ -82,6 +82,11 @@ export type Overlay = {
 
 let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
 
+// A list the batch supplies, as one bound JSON array rather than a parameter
+// per item: a Durable Object binds at most 100 per statement, and a batch is
+// as long as its writer made it. The batch's own rows ride the same way.
+let EACH = '(select value from json_each(?))'
+
 // A component's stored columns, in the order the table carries them.
 let stored = (v: Vocab, comp: string): string[] =>
   v.columns(comp).map((p) => v.column(comp, p)!).filter((c) => !c.computed)
@@ -176,17 +181,12 @@ export let overlay = (
   // ever is.
   let ids = new Map<Eid, number>()
   let eids = named(vocab, bundles)
-  for (let i = 0; i < eids.length; i += 500) {
-    let chunk = eids.slice(i, i + 500)
-    for (
-      let row of driver.query(
-        `select id, eid from entity where eid in (${
-          chunk.map(() => '?').join(', ')
-        })`,
-        chunk,
-      )
-    ) ids.set(String(row.eid), Number(row.id))
-  }
+  for (
+    let row of driver.query(
+      `select id, eid from entity where eid in ${EACH}`,
+      [JSON.stringify(eids)],
+    )
+  ) ids.set(String(row.eid), Number(row.id))
   let next = 0
   let fresh: Eid[] = []
   for (let eid of eids) {
@@ -210,16 +210,16 @@ export let overlay = (
     let list = [key, ...cols].map(q).join(', ')
     let sql = `select ${list} from ${from}`
     if (out.length) {
-      sql += ` where ${q(key)} not in (${out.map(() => '?').join(', ')})`
-      params.push(...out)
+      sql += ` where ${q(key)} not in ${EACH}`
+      params.push(JSON.stringify(out))
     }
     if (rows.length) {
-      sql += ` union all values ${
-        rows.map(() => `(${[key, ...cols].map(() => '?').join(', ')})`).join(
+      sql += ` union all select ${
+        [key, ...cols].map((_, i) => `json_extract(value, '$[${i}]')`).join(
           ', ',
         )
-      }`
-      for (let row of rows) params.push(...row)
+      } from json_each(?)`
+      params.push(JSON.stringify(rows))
     }
     parts.push(`${q(OVER + comp)} as (${sql})`)
     covers.push(comp)
@@ -234,8 +234,8 @@ export let overlay = (
       for (
         let row of driver.query(
           `select entity, ${cols.map(q).join(', ')} from ${q(comp)} ` +
-            `where entity in (${owners.map(() => '?').join(', ')})`,
-          owners,
+            `where entity in ${EACH}`,
+          [JSON.stringify(owners)],
         )
       ) held.set(Number(row.entity), row)
     }
@@ -284,12 +284,8 @@ export let overlay = (
   for (let [comp, eids] of dropped) {
     let rows = [...eids].map((e) => ids.get(e)!).filter((id) => id != null)
     if (!rows.length) continue
-    parts.push(
-      `${q(GONE + comp)}("entity") as (values ${
-        rows.map(() => '(?)').join(', ')
-      })`,
-    )
-    params.push(...rows)
+    parts.push(`${q(GONE + comp)}("entity") as ${EACH}`)
+    params.push(JSON.stringify(rows))
     took.add(comp)
   }
 

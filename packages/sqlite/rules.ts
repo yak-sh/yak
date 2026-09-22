@@ -261,12 +261,14 @@ export let statement = (
   // one of its patterns must bind an entity the batch wrote — the same thing
   // the hand-written effect rules have always required, expressed in SQL.
   if (touched) {
-    let ids = touched.map(() => '?').join(', ')
+    let ids = JSON.stringify(touched)
     conds.push(
       or(...anchors.map((own) =>
         raw({
-          sql: touched.length ? `${own} in (${ids})` : '0',
-          params: [...touched],
+          sql: touched.length
+            ? `${own} in (select value from json_each(?))`
+            : '0',
+          params: touched.length ? [ids] : [],
         })
       )),
     )
