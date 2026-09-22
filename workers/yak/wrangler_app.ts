@@ -32,7 +32,6 @@ export type Config = {
   r2_buckets?: Bucket[]
   durable_objects?: { bindings: { name: string; class_name: string }[] }
   migrations?: Record<string, unknown>[]
-  ai?: { binding: string }
   vectorize?: Index[]
 }
 export type Parsed = { config: Config; report: string[]; refused: string[] }
@@ -53,7 +52,6 @@ export let HONORED = [
   'r2_buckets',
   'durable_objects',
   'migrations',
-  'ai',
   'vectorize',
 ]
 
@@ -66,6 +64,12 @@ let REFUSED: Record<string, string> = {
     "KV has a 1000-namespace account cap and app sharing is undecided; use Durable Object storage or the app's store",
   queues:
     "queue provisioning is not available for apps; write what is owed into the app's store, with a wake{at} on it (https://yaks.app/docs/wakes.md)",
+  // Workers AI is billed to the platform's account per call, and nothing in an
+  // app's worker is counted against its space's plan, so a free app bound to
+  // it would spend our bill on every visit (T-37894). Refused rather than
+  // metered: the builder is the one thing here that runs a model, and it is.
+  ai:
+    "Workers AI is not available to apps: a model's cost is the platform's and is not metered per space; call a model's own API with a key you set with app_secret_set",
   crons:
     "user workers in a dispatch namespace receive no cron triggers; a wake{at, every} on a row in the app's store is the schedule, and a rule on `fired` is what it does (https://yaks.app/docs/wakes.md)",
 }
@@ -161,8 +165,8 @@ export let allowlist = (value: unknown): Parsed => {
       return []
     })
   }
-  keys(value, [...HONORED, 'kv_namespaces', 'queues', 'triggers'])
-  for (let key of ['kv_namespaces', 'queues']) {
+  keys(value, [...HONORED, 'kv_namespaces', 'queues', 'ai', 'triggers'])
+  for (let key of ['kv_namespaces', 'queues', 'ai']) {
     if (key in value) no(key, REFUSED[key])
   }
   if ('triggers' in value) {
@@ -305,15 +309,6 @@ export let allowlist = (value: unknown): Parsed => {
       }
     }
   }
-  if ('ai' in value) {
-    if (!object(value.ai)) no('ai', 'expected a binding object')
-    else {
-      keys(value.ai, ['binding'], 'ai.')
-      if (name(value.ai.binding, 'ai.binding')) {
-        config.ai = { binding: value.ai.binding }
-      }
-    }
-  }
   return { config, report, refused }
 }
 
@@ -389,7 +384,6 @@ export let metadata = (
   for (let binding of config.durable_objects?.bindings ?? []) {
     bindings.push({ type: 'durable_object_namespace', ...binding })
   }
-  if (config.ai) bindings.push({ type: 'ai', name: config.ai.binding })
   let migrations = migrationMetadata(config.migrations, tag)
   return {
     main_module: WRAPPER,
