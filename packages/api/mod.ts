@@ -56,7 +56,7 @@
 
 export { api, type Handler, type Options, type Route, routed } from './route.ts'
 export { type Authenticate, signed } from './actor.ts'
-export { ask, CHUNK, pour, write } from './doors.ts'
+export { ask, CHUNK, pour, poured, write } from './doors.ts'
 export {
   json,
   type Refusal,

@@ -205,8 +205,9 @@ export let BOUNDARIES = [MARK, HOMED, FORMER, SERVES, HANDLED, FILED, TOOLED]
 let SPINE = ['entity', 'tombstone']
 
 /** This object's own memory in the new store (graph.ts `KV`), which the pass
- * writes but never reads out of the old schema. */
-let KEEP = [...SPINE, 'yak_kv']
+ * writes but never reads out of the old schema, and its write log (writes.ts),
+ * which holds what was sent while the pass had yet to run. */
+let KEEP = [...SPINE, 'yak_kv', 'yak_writes']
 
 /** A table renamed aside for the length of the pass. */
 let ASIDE = 'yak_old_'

@@ -1221,7 +1221,8 @@ slow('a re-addressing that collides rolls the whole pass back', async () => {
     method: 'POST',
     body: JSON.stringify([{ entity: { eid: BEN }, person: {} }]),
   }, APP)
-  assertEquals(write.status, 503)
+  // A write is kept for the store to apply once it can (writes.ts).
+  assertEquals(write.status, 202)
 })
 
 slow('counts that do not reconcile refuse the pass', async () => {
@@ -1284,7 +1285,8 @@ slow('a body nothing holds refuses the pass', async () => {
     method: 'POST',
     body: JSON.stringify([{ entity: { eid: BEN }, person: {} }]),
   }, APP)
-  assertEquals(write.status, 503)
+  // A write is kept for the store to apply once it can (writes.ts).
+  assertEquals(write.status, 202)
   let said = await why(now, APP)
   assert(/address a body/.test(said), said)
   assertEquals(count(ctx, 'doc'), 3)

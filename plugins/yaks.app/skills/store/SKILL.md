@@ -58,6 +58,11 @@ to `./api/apply` as `{entities: [...]}`. It returns:
 one batch — every bundle in one `apply` call, applied in one transaction — so if
 any bundle is refused, nothing in that call is written.
 
+If the app's store cannot apply a write right now (yaks.app itself is failing,
+not your data), the write is kept and applied later, in the order it was sent.
+`apply` then returns `{ ok: true, pending: true, changes: [], aliases: {} }`.
+Don't send the write again.
+
 ### query(filter)
 
     let recipes = await query('.recipe!&.doc?')

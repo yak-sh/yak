@@ -74,6 +74,7 @@ import {
   type Authenticate,
   type Handler,
   json,
+  poured,
   refuse,
   signed,
   type Sink,
@@ -147,6 +148,23 @@ import { ledger } from './ledger.ts'
 import { doorOf, GIT_STORE, type Namespace, PLATFORM_STORE } from './door.ts'
 import { type Meta, metaOf } from './meta.ts'
 import { caught, defect } from './sentry.ts'
+import {
+  constrained,
+  dead,
+  done,
+  fits,
+  held,
+  keep,
+  type Kept,
+  logged,
+  oldest,
+  parked,
+  replayed,
+  said,
+  tried,
+  waiting,
+  WRITES,
+} from './writes.ts'
 import { apex, url } from './host.ts'
 import {
   addressed,
@@ -469,6 +487,15 @@ export class Store {
   // manifest they were built from. A deploy is the only thing that moves that
   // manifest, and a new one is a new runner.
   #runs: { said: string; run: Runner } | null = null
+  // The write log's replay (writes.ts). `#landing` is the kept write whose
+  // batch is being applied right now, which the `yak/writes` hook takes out
+  // of the log in that batch's own transaction; `#draining` is the replay in
+  // progress, one at a time; `#stuck` says the last one stopped on a failure,
+  // and only the alarm or the next incarnation tries it again.
+  #landing: number | null = null
+  #draining: Promise<void> | null = null
+  #callers = new Map<number, (answer: Response) => void>()
+  #stuck = false
 
   constructor(ctx: State, bind: Bindings = {}) {
     this.#ctx = ctx
@@ -490,6 +517,9 @@ export class Store {
   #start() {
     let ctx = this.#ctx
     ctx.storage.sql.exec(KV)
+    // The write log, before anything that can refuse the object: a store
+    // whose graph cannot boot still keeps what it is sent (writes.ts).
+    ctx.storage.sql.exec(WRITES)
     this.#documenting()
     this.#pending = !this.#get('migrated') && stale(ctx.storage)
     if (!this.#pending) this.#boot()
@@ -643,6 +673,7 @@ export class Store {
       // store that cannot name its app has no access question to ask and the
       // kernel's own gate in front of it is the whole rule.
       plugins: [
+        this.#logging,
         ...(vocab.comp('archetype') ? [archetypes()] : []),
         // First, before anything reads a word that is not there. The directory
         // is left out: its words are the platform's own, its callers are the
@@ -732,7 +763,14 @@ export class Store {
     this.#vocab = vocab
     this.#graph = g
     // One per incarnation, like the graph: directory.ts seeds once per Meta.
-    this.#meta = metaOf(doorOf((req) => this.fetch(req), PLATFORM_STORE))
+    // Its own writes are not writes reaching it, so they skip the log (and
+    // never wait on a replay they may be part of).
+    this.#meta = metaOf(
+      doorOf(
+        async (req) => await this.#ready(req) ?? this.#serve(req),
+        PLATFORM_STORE,
+      ),
+    )
     let subs = subscriptions(g)
     this.#live = sockets(this.#naming(subs), ctx)
     // The one `Authenticate` (T-33813). The app is read at request time — the
@@ -1176,7 +1214,20 @@ export class Store {
 
   /** The runtime's clock going off: whatever this object armed itself for. */
   async alarm(): Promise<void> {
-    if (this.#refused || this.#pending) return
+    // Writes the log still holds are replayed first, which is what makes the
+    // replay need nobody: the alarm set when one was kept wakes the object
+    // after a deploy too. The oldest one's own request names the object for
+    // a migration pass still ahead of it.
+    let kept = oldest(this.#ctx.storage.sql)
+    if (kept && this.#behind) await this.#pass(replayed(kept))
+    if (this.#refused || this.#pending) {
+      if (kept) await this.#retry()
+      return
+    }
+    if (kept) {
+      this.#stuck = false
+      await this.#drain()
+    }
     await this.tick()
   }
 
@@ -1433,6 +1484,18 @@ export class Store {
    * sockets it inherited.
    */
   async fetch(request: Request): Promise<Response> {
+    if (logged(request)) return this.#write(request)
+    let no = await this.#ready(request)
+    if (no) return no
+    // Writes the log kept while this object could not apply them go first:
+    // nothing is answered off rows they have yet to reach.
+    await this.#settle()
+    return this.#serve(request)
+  }
+
+  /** Everything before a door: the object brought up to date and told what
+   * it is. A refusal to start is the answer, when there is one. */
+  async #ready(request: Request): Promise<Response | null> {
     // The one pass, before this object answers anything (T-33809). It runs
     // inside the runtime's own gate, so every other request waits on it rather
     // than racing it, and it runs from a request rather than the constructor
@@ -1448,6 +1511,191 @@ export class Store {
     // schedules are planted and a lost alarm is set again. Once per
     // incarnation, and the stamp keeps it to one read after the first.
     await (this.#sowing ??= this.#sow())
+    return null
+  }
+
+  // ---- the write log (T-37968, writes.ts) ----------------------------------
+
+  /**
+   * A write, kept before anything else happens to it, then applied in its
+   * turn by the one replay that runs at a time, which answers its caller as
+   * the store always did. A write that finds the object refusing to start, or
+   * the replay stopped on an earlier write that failed, is answered 202 and
+   * waits in the log.
+   */
+  async #write(request: Request): Promise<Response> {
+    let body = await request.text()
+    let seq: number
+    let unkept = async () => {
+      let req = new Request(request, { body })
+      return await this.#ready(req) ?? this.#serve(req)
+    }
+    if (!fits(body)) return unkept()
+    try {
+      seq = keep(this.#ctx.storage.sql, request, body)
+    } catch (e) {
+      // Storage that will not take a row: applied as it came, and said.
+      defect(e, { request: 'write log', store: this.#name() })
+      return unkept()
+    }
+    if (await this.#ready(request)) {
+      return this.#park(seq, this.#refused ?? 'this app could not start')
+    }
+    if (this.#stuck) {
+      return this.#park(seq, 'earlier writes to this app are still waiting')
+    }
+    let answer = new Promise<Response>((r) => this.#callers.set(seq, r))
+    void this.#drain()
+    return answer
+  }
+
+  /** The log from its oldest waiting write, one at a time, until it is empty
+   * or a write fails for a reason that is not its own: that one and every
+   * write after it wait, in order, for the alarm or the next incarnation.
+   * Each write whose caller is still waiting (`#callers`) is answered as it
+   * lands; the ones left waiting are told they are kept. */
+  #drain(): Promise<void> {
+    if (this.#draining) return this.#draining
+    let sql = this.#ctx.storage.sql
+    let run = async () => {
+      // Yield once, so `#draining` is set before the loop can end and clear
+      // it: a write that arrives in between must find the loop running.
+      await null
+      try {
+        for (let k = oldest(sql); k; k = oldest(sql)) {
+          let caller = this.#callers.get(k.seq)
+          this.#callers.delete(k.seq)
+          let r = await this.#land(k, !!caller)
+          let failed = r.status >= 500 && held(sql, k.seq)
+          caller?.(failed ? this.#park(k.seq, await said(r)) : r)
+          if (failed) {
+            this.#stuck = true
+            break
+          }
+        }
+      } catch (e) {
+        this.#stuck = true
+        defect(e, { request: 'write replay', store: this.#name() })
+      }
+      // Synchronously after the last look at the log: nothing can be kept
+      // between that look and this line without finding the loop gone.
+      this.#draining = null
+      for (let [seq, caller] of this.#callers) {
+        caller(this.#park(seq, 'earlier writes to this app are still waiting'))
+      }
+      this.#callers.clear()
+    }
+    return this.#draining = run()
+  }
+
+  /** One kept write, applied: out of the log when it commits or is refused
+   * as asked, and waiting when it fails. `live` is a write whose caller is
+   * still here to be told its refusal; a replay's refusal has nobody to tell,
+   * so it stays in the log with its reason and is reported. */
+  async #land(k: Kept, live: boolean): Promise<Response> {
+    let sql = this.#ctx.storage.sql
+    try {
+      let r = await this.#commit(replayed(k), k.seq)
+      if (r.status < 300) done(sql, k.seq)
+      else if (r.status >= 500) tried(sql, k.seq)
+      else if (live) done(sql, k.seq)
+      else {
+        let why = await said(r.clone())
+        dead(sql, k.seq, why)
+        defect(new Error(`a kept write no longer applies: ${why}`), {
+          request: 'write replay',
+          store: this.#name(),
+        })
+      }
+      return r
+    } catch (e) {
+      defect(e, { request: 'write replay', store: this.#name() })
+      return refuse(e)
+    }
+  }
+
+  /** The log first, for a request that reads: unless a replay stopped on a
+   * failure, which the alarm owns, or one is already running. */
+  #settle(): Promise<unknown> | void {
+    if (this.#draining) return this.#draining
+    if (!this.#stuck && waiting(this.#ctx.storage.sql)) return this.#drain()
+  }
+
+  /** The caller's answer for a kept write, and the alarm that comes back for
+   * it. */
+  #park(seq: number, why: string): Response {
+    void this.#retry()
+    return parked(seq, why)
+  }
+
+  #retry = () => this.#arming(new Date(Date.now() + Store.RETRY).toISOString())
+
+  // The name, for a report from an object that may be too broken to say it.
+  #name(): string | null {
+    try {
+      return this.#get('name')
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * One batch in at `/apply`, the kernel's or a caller's. The graph's own
+   * `apply()` is called in one synchronous step after `#landing` names the
+   * kept write, so the `yak/writes` hook below takes exactly that write out
+   * of the log in the transaction that commits its batch: never one without
+   * the other, and so never applied twice.
+   *
+   * `x-yak-kernel` is the platform writing about its own data: the server-
+   * owned columns are admitted and @yaks/member's guard stands down
+   * (`#trust`). The flag is the kernel's by construction: a store is only
+   * ever reached through a request the Worker builds from scratch, and
+   * door.ts `storeOf` strips the whole vouch set from any request it is
+   * handed, so it can never arrive from outside. An NDJSON import is
+   * @yaks/api's `pour`, chunk by chunk.
+   */
+  async #commit(request: Request, seq: number | null = null) {
+    if (poured(request)) return await this.#route(request)
+    try {
+      let body = JSON.parse(await request.text())
+      if (!Array.isArray(body)) {
+        throw new Refused('/apply takes a JSON array of bundles')
+      }
+      let kernel = request.headers.get('x-yak-kernel') == '1'
+      let who = kernel ? null : await this.#auth(request)
+      let out
+      this.#landing = seq
+      try {
+        out = kernel
+          ? this.#trust(body as Bundle[], vouchOf(request).person)
+          : this.#graph.apply(signed(body as Bundle[], who))
+      } finally {
+        this.#landing = null
+      }
+      return json(await out)
+    } catch (e) {
+      return refuse(constrained(e), request)
+    }
+  }
+
+  // The hook that closes the loop: inside the transaction of the batch a kept
+  // write brought, that write leaves the log. Every other batch — an effect's,
+  // a tick's, one applied after an await — finds `#landing` empty.
+  #logging: Plugin = {
+    name: 'yak/writes',
+    hooks: {
+      commit: (bundles) => {
+        if (this.#landing != null) {
+          done(this.#ctx.storage.sql, this.#landing)
+          this.#landing = null
+        }
+        return bundles
+      },
+    },
+  }
+
+  /** Every door but the write log's, for an object that is ready. */
+  async #serve(request: Request): Promise<Response> {
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
     if (path == '/vocab') return this.#vocabDoor(request)
@@ -1507,8 +1755,12 @@ export class Store {
       }
       return this.#live.accept(request)
     }
-    if (path == '/apply' && request.method == 'POST' && kernel) {
-      return this.#kernel(request)
+    // A batch is applied here, whoever sent it; a dry run is @yaks/api's.
+    if (
+      path == '/apply' && request.method == 'POST' &&
+      (kernel || logged(request))
+    ) {
+      return this.#commit(request)
     }
     if (path == '/query') {
       let url = new URL(request.url)
@@ -1839,6 +2091,7 @@ export class Store {
     }
     await this.#ctx.storage.deleteAll()
     this.#ctx.storage.sql.exec(KV)
+    this.#ctx.storage.sql.exec(WRITES)
     if (name) this.#put('name', name)
     this.#boot()
     if (this.#refused) return this.#stalled(request)
@@ -1888,31 +2141,6 @@ export class Store {
         caught(e, { request: 'restore', store: this.#get('name') })
       }
       return refuse(e instanceof Refused ? e : new Refused(String(e)))
-    }
-  }
-
-  // The platform writing about its own data: a `plan` a person may not lift,
-  // the `meter` the hourly sweep read off Cloudflare, the `signin` no client
-  // may author, the `exception` we noted about ourselves. Those columns are
-  // `stamped` — readable, never wire-writable — so the ordinary door refuses
-  // them, and this one admits them by handing @yaks/graph `trusted`.
-  //
-  // The flag is the kernel's by construction: a store is only ever reached
-  // through a request the Worker builds from scratch, and door.ts `storeOf`
-  // strips the whole vouch set from any request it is handed, so
-  // `x-yak-kernel` can never arrive from outside.
-  async #kernel(request: Request): Promise<Response> {
-    try {
-      let body = await request.json()
-      if (!Array.isArray(body)) {
-        return json({
-          error: 'Refused',
-          message: '/apply takes a JSON array of bundles',
-        }, 400)
-      }
-      return json(await this.#trust(body as Bundle[], vouchOf(request).person))
-    } catch (e) {
-      return refuse(e, request)
     }
   }
 

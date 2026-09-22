@@ -36,6 +36,7 @@ import { status } from '@yaks/api'
 import type { Bundle, Comp } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
 import { isTestAddress } from '../../src/bots.ts'
+import { Pending } from './writes.ts'
 import type { Ctx } from './tools.ts'
 
 /** Who hit a defect: the person's eid, and whether that account is a person
@@ -72,10 +73,12 @@ export let options = () => ({
 /** Whether a caught failure is the caller's own no rather than ours: a tool's
  * refusal (`CallError`), an error @yaks/api answers below 500 (a refused or
  * stale write, a denied one, a query naming what is not there), or a door
- * that answered a 4xx and said so in its `status` (meta.ts). */
+ * that answered a 4xx and said so in its `status` (meta.ts). A write the
+ * store's log kept (writes.ts `Pending`) is neither: its failure was reported
+ * where it happened. */
 export let refused = (e: unknown) => {
   let said = (e as { status?: unknown } | null)?.status
-  return e instanceof CallError || status(e) < 500 ||
+  return e instanceof CallError || e instanceof Pending || status(e) < 500 ||
     (typeof said == 'number' && said >= 400 && said < 500)
 }
 

@@ -19,6 +19,7 @@
 // (directory.ts vouch), so it cannot arrive from outside.
 import { type Bundle, Stale } from '@yaks/graph'
 import { type Door, type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
+import { Pending, said } from './writes.ts'
 
 /** The meta store, in the graph's own wire. */
 export type Meta = {
@@ -67,6 +68,9 @@ export let metaOf = (store: Door): Meta => ({
       let s = await r.json() as Stale
       throw new Stale(s.eid, s.comp, s.column, s.current)
     }
+    // Kept by the store's write log and applied later (writes.ts): the
+    // batch as applied does not exist yet, so there is nothing to return.
+    if (r.status == 202) throw new Pending(await said(r))
     if (!r.ok) throw await answered(r, 'meta store refused')
     return await r.json() as Bundle[]
   },

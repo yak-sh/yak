@@ -509,8 +509,9 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
   assertEquals(
     tables,
     [
-      // the object's own memory, and @yaks/blob's store
+      // the object's own memory and its write log, and @yaks/blob's store
       'yak_kv',
+      'yak_writes',
       'blob_text',
       // the spine, and the store's own key/value beside it
       'entity',
@@ -654,7 +655,9 @@ Deno.test('a rule writing outside its *write set takes the batch with it', async
       entity: { eid: CAKE },
       recipe: { serves: 8 },
     }], owner)
-    assert(!no.ok)
+    // A rule that breaks is the platform's fault, not the caller's: the write
+    // is kept for code that works (writes.ts), and none of it lands now.
+    assertEquals(no.status, 202)
     assertStringIncludes((await no.json()).message, 'write set')
     // The refusal is a rollback: the batch it fired on is not in the store.
     let read = await (await get(store, '/query?q=.recipe!', owner)).json()

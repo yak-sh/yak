@@ -50,6 +50,7 @@ import {
 } from '@yaks/vocab'
 import { refuse, rejected } from './tool.ts'
 import { caught } from './sentry.ts'
+import { said } from './writes.ts'
 
 // The words the PLATFORM says in every store — core, member, edge, the twelve
 // relations. A word outside this list was declared by an app, which is what
@@ -744,6 +745,11 @@ let sent = async (
     method: 'POST',
     body: JSON.stringify(part.entities),
   }, { ...vouched(r.who), ...headers })
+  // A write the store's log kept (writes.ts) lands later, in order: the
+  // agent is told so rather than that it failed, so it does not send it twice.
+  if (res.status == 202) {
+    throw refuse('unavailable', `${at(r)}: ${await said(res)}`)
+  }
   let body = await res.text()
   if (!res.ok) throw rejected(res.status, `${at(r)}: ${body}`)
   return JSON.parse(body) as Bundle[]

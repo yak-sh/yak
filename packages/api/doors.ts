@@ -27,7 +27,8 @@ export let CHUNK = 50
 // Whether this request body is NDJSON. `application/x-ndjson` is the media
 // type the guide shows; `application/ndjson` is the same one without the
 // historical `x`, and both are used in practice.
-let poured = (request: Request): boolean =>
+/** Whether a request's body is NDJSON, the import {@link pour} answers. */
+export let poured = (request: Request): boolean =>
   (request.headers.get('content-type') ?? '').toLowerCase().includes('ndjson')
 
 // The body's lines as they arrive, each with the 1-based number it was on.

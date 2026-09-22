@@ -58,6 +58,7 @@ import {
 import { served as fenced, type Size, sizeOf } from '@yaks/blob'
 import { asking, listed, type Row } from './listing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
+import { Pending } from './writes.ts'
 import { batched, lined, lowered } from './wire.ts'
 import {
   binned,
@@ -1145,6 +1146,17 @@ let api = async (
         ),
       )
     } catch (e) {
+      // Kept by the store's write log (writes.ts): the page's edit is safe
+      // and lands when the app recovers, so it is not told it failed.
+      if (e instanceof Pending) {
+        return Response.json({
+          ok: true,
+          pending: true,
+          message: e.message,
+          changes: [],
+          aliases: {},
+        }, { status: 202 })
+      }
       caught(e, {
         request: 'POST /api/apply',
         space: space.slug,
