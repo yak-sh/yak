@@ -3,7 +3,7 @@
 // before merging. The browser program may use any declared web-platform lib,
 // but never gains Deno, Node or Workers globals from the root configuration.
 //
-// WHAT THE BROWSER PROGRAM CHECKS is a package's browser-facing EXPORTS, not
+// What the browser program checks is a package's browser-facing exports, not
 // its directory. `entries` in a browser.json names them (default: `.`), and a
 // package's `./vocab` and `./views` subpaths are always added when it has
 // them: the web door imports those two of every package, so "this package fits

@@ -107,7 +107,7 @@ let three = (m: string) => [
   { path: 'app.js', content: `console.log('${m}')` },
 ]
 
-// `hops` and `r2` are COUNTS and not milliseconds (workers/yak/timing.ts): the
+// `hops` and `r2` are counts and not milliseconds (workers/yak/timing.ts): the
 // round trips a call made to a store and to the bucket. They ride the same
 // `dur` field as every stage, so they are pulled out here and said as counts
 // beside the stage line rather than sorted in among the times — an N+1 shows

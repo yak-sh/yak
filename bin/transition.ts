@@ -1,10 +1,10 @@
 #!/usr/bin/env -S deno run -A
-// ONE-TIME USE. This file is deleted at cutover (T-37584) along with `src/`.
+// One-time use. This file is deleted at cutover (T-37584) along with `src/`.
 //
 // The fleet server is dismantled, not migrated (D-37573, C#9faadb22f2): its
-// database is exported ONCE into the package vocabulary and imported into a
+// database is exported once into the package vocabulary and imported into a
 // fresh db that `yak serve` opens with the plugins in `etc/yak.json`. Every
-// adapter the fleet's shape needs lives HERE and nowhere else — no package
+// adapter the fleet's shape needs lives here and nowhere else — no package
 // carries a column, a keyword or a branch for the fleet's sake.
 //
 // `docs/transition.md` is the spec: one row per fleet component, naming the
@@ -14,8 +14,8 @@
 //
 //   deno run -A bin/transition.ts --from ~/.tasks/snap.db --to ~/.yak/yak.db
 //
-// `--from` must be a COPY (`VACUUM INTO`), never the live file. `--to` is a
-// db that already holds a graph — the harness's, which IS the new db — and
+// `--from` must be a copy (`VACUUM INTO`), never the live file. `--to` is a
+// db that already holds a graph — the harness's, which is the new db — and
 // nothing in it is dropped: the fleet's rows land beside what is there, and
 // where a derived id already exists (a tool, an edge, a key) the fleet's row
 // merges onto that entity rather than minting a second one. `--limit N` caps
@@ -61,7 +61,7 @@ type Ctx = {
   provider: (name: string) => string | undefined
   /** the entity a repository at this path or url is */
   repository: (name: string) => string
-  /** the git ref a branch NAME is — @yaks/git's `worktree.branch` points at
+  /** the git ref a branch name is — @yaks/git's `worktree.branch` points at
    * the ref, it does not spell it */
   branch: (name: string) => string
   /** the tmux pane somebody watches a run in (@yaks/tmux) */
@@ -96,7 +96,7 @@ type Move = {
 }
 
 // The marks: at/by/via as the fleet stamped them, carried as trusted writes so
-// the new graph records WHEN a thing happened rather than when it was imported.
+// the new graph records when a thing happened rather than when it was imported.
 let mark = (row: Row, ctx: Ctx) => ({
   ...(row.at == null ? {} : { at: String(row.at) }),
   ...(row.by == null ? {} : { by: ctx.ref(row.by) }),
@@ -135,9 +135,9 @@ let refs = (says: string, ref: string[], plain: string[] = []): Move => ({
 // The typed facets the fleet grew per tool name, and the `tool_use` block
 // beside them: all of it is one `call{to, args}`. The tool is named by
 // `tool_use.name` where the transcript kept it and by the facet's own word
-// where it did not, and the facet's columns ARE the arguments.
+// where it did not, and the facet's columns are the arguments.
 //
-// AND EVERY IMPORTED CALL IS ALREADY CALLED: it was made, by a process on
+// And every imported call is already called: it was made, by a process on
 // another machine, years of transcript ago. `execution{by}` says whose it was
 // (@yaks/tools), so no runner here ever selects it — the boot redrive reads
 // past thirty thousand calls to tools this host has never had.
@@ -157,7 +157,7 @@ let asCall = (facet: string, ...cols: string[]): Move => ({
 })
 
 /**
- * THE TABLE, as code: one entry per fleet component, `null` where nothing
+ * The table, as code: one entry per fleet component, `null` where nothing
  * takes its rows. It is checked against `docs/transition.md` before anything
  * is written — a component the doc moves and this does not is a refusal, not a
  * silent loss.
@@ -167,8 +167,8 @@ let MOVES: Record<string, Move | null> = {
   about: tag('about'),
   alias: {
     says: 'alias',
-    // The name IS the row: @yaks/alias writes one through the `alias{name}`
-    // sugar on the named entity's own bundle, and every OTHER name the fleet
+    // The name is the row: @yaks/alias writes one through the `alias{name}`
+    // sugar on the named entity's own bundle, and every other name the fleet
     // listed beside it is another key on that same entity.
     make: (row, ctx) => {
       for (let extra of String(row.slugs ?? '').split(/\s+/).filter(Boolean)) {
@@ -184,7 +184,7 @@ let MOVES: Record<string, Move | null> = {
   anchor: same('anchor', 'paths', 'sha', 'symbol', 'hunk', 'start', 'end'),
   archetype: {
     says: 'archetype',
-    // A descriptor names the TABLES an entity wears, and the tables change
+    // A descriptor names the tables an entity wears, and the tables change
     // here — so it is re-derived by @yaks/archetype as each entity is written,
     // never copied from a reading of a schema that is being dismantled.
     elsewhere: 're-derived by @yaks/archetype as each entity lands',
@@ -194,7 +194,7 @@ let MOVES: Record<string, Move | null> = {
   artifact: {
     says: 'artifact',
     // The fleet kept its blob store on the spine, one entity per SHA. The
-    // package's store is off it — but the journal's rows point AT these
+    // package's store is off it — but the journal's rows point at these
     // entities, so the descriptors come across and the bytes land again
     // underneath through @yaks/blob when each body is written.
     make: (row, ctx) => ({ size: num(row.size), address: ctx.ref(row.entity) }),
@@ -204,7 +204,7 @@ let MOVES: Record<string, Move | null> = {
   comment: refs('comment', ['target']),
   commit: {
     says: 'commit',
-    // The sha IS the eid (see `reidentified`), so the column is gone, and
+    // The sha is the eid (see `reidentified`), so the column is gone, and
     // `repo` names a repository entity rather than spelling a path.
     make: (row, ctx) => ({
       ...(row.target == null ? {} : { target: ctx.ref(row.target) }),
@@ -297,7 +297,7 @@ let MOVES: Record<string, Move | null> = {
   supervises: tag('supervises'),
   updated: {
     says: 'updated',
-    // The graph OWNS this stamp: it writes `updated.at` on every patch to an
+    // The graph owns this stamp: it writes `updated.at` on every patch to an
     // entity that already existed, over whatever the caller said, because that
     // is what the word means. An archive's reading of when a thing last
     // changed therefore cannot come through the door — it is restored under
@@ -318,7 +318,7 @@ let MOVES: Record<string, Move | null> = {
   },
   board: {
     says: 'board',
-    // A board IS its query, so a saved query is a stored VALUE and a rename is
+    // A board is its query, so a saved query is a stored value and a rename is
     // a rename: `.status` meant a task's status when a task was the only thing
     // that had one, and now a session has one too, so the saved word is
     // rewritten rather than left to be refused at read time.
@@ -341,7 +341,7 @@ let MOVES: Record<string, Move | null> = {
   repo: {
     says: 'repo',
     // A project's landing policy, not a second git record: the path is a
-    // worktree OF the repository the url names.
+    // worktree of the repository the url names.
     make: (row, ctx) => {
       let repository = ctx.repository(String(row.url || row.path))
       if (row.path) {
@@ -362,7 +362,7 @@ let MOVES: Record<string, Move | null> = {
   task: tag('task'),
   venture: {
     says: 'venture',
-    // `paused` is a MARK beside the phase, so nothing has to be remembered
+    // `paused` is a mark beside the phase, so nothing has to be remembered
     // and put back; a cadence, a model and an operator are not free text on a
     // business, so each becomes the thing it names or is left behind.
     make: (row, ctx) => {
@@ -401,7 +401,7 @@ let MOVES: Record<string, Move | null> = {
     ['name', 'transport', 'credential', 'fallback', 'offered'],
   ),
 
-  // ── roles: what is left of a job is what a job IS ──
+  // ── roles: what is left of a job is what a job is ──
   bug: null,
   dream: refs('dream', ['scope'], ['floor']),
   finding: null,
@@ -631,7 +631,7 @@ let MOVES: Record<string, Move | null> = {
   fork: refs('fork', ['from']),
   generation: {
     says: 'ask',
-    // One ask, not a second row about it: what ANSWERED is the `using`
+    // One ask, not a second row about it: what answered is the `using`
     // stamped on the ask, so `serving_model` is `using.model` there.
     make: (row, ctx) => {
       let provider = row.provider && ctx.provider(String(row.provider))
@@ -669,7 +669,7 @@ let MOVES: Record<string, Move | null> = {
     // Prose says its own side: `content` alone is an input, `content` beside
     // `output{source}` is what a model said.
     make: (row, ctx) => {
-      // Wearing `output` at all is the side it is on; WHICH ask produced it is
+      // Wearing `output` at all is the side it is on; which ask produced it is
       // `output.source`, which the fleet's own `output` row says where it knew
       // one — so this writes the side and never guesses the source.
       if (row.role == 'agent') {
@@ -741,7 +741,7 @@ let MOVES: Record<string, Move | null> = {
   },
   session: {
     says: 'session',
-    // IDENTITY ONLY. Everything else is derived, is somebody else's word, or
+    // Identity only. Everything else is derived, is somebody else's word, or
     // rides on the first entry — see the `session` row of docs/transition.md.
     make: (row, ctx) => {
       let me = ctx.ref(row.entity)!
@@ -764,11 +764,11 @@ let MOVES: Record<string, Move | null> = {
           spawned: { parent: ctx.ref(row.parent) },
         })
       }
-      // What the session was asked to work on. It is the CLAIM only while the
+      // What the session was asked to work on. It is the claim only while the
       // session still holds one — the fleet's own `claim` rows say which, and
       // there are two of them. Five thousand finished sessions each writing a
       // lease would read as five thousand tasks in progress, which is not what
-      // an archive says: a finished session's request is what it WORKED on.
+      // an archive says: a finished session's request is what it worked on.
       let want = ctx.ref(row.requested_task)
       if (want) ctx.also(link(me, 'worked', want))
       for (let col of ['persona', 'role']) {
@@ -870,7 +870,7 @@ let MOVES: Record<string, Move | null> = {
     says: 'using',
     onto: (row, ctx) =>
       ctx.firstEntry(ctx.ref(row.entity)!) ?? ctx.ref(row.entity),
-    // What was ASKED for is the `using` on the first entry, the same word a
+    // What was asked for is the `using` on the first entry, the same word a
     // mid-transcript switch says; the persona it wears is an edge.
     make: (row, ctx) => {
       let me = ctx.ref(row.entity)!
@@ -902,7 +902,7 @@ let MOVES: Record<string, Move | null> = {
   },
   stop_request: {
     says: 'stop',
-    // A stop is an ENTRY, so the daemon reads it where it reads everything
+    // A stop is an entry, so the daemon reads it where it reads everything
     // else, and a fork from before it does not inherit it.
     onto: (row, ctx) => ctx.ref(row.entity),
     make: () => ({}),
@@ -975,7 +975,7 @@ let link = (from: Eid, relation: string, to: Eid): Bundle => ({
   [relation]: {},
 })
 
-// What has to be written before what. A component that VALIDATES a reference
+// What has to be written before what. A component that validates a reference
 // — an entry's session, a claim's session — cannot be written before the thing
 // it names exists, so those few go first; the rest are order-free, because a
 // reference mints the spine it points at.
@@ -986,7 +986,7 @@ let FIRST = ['model', 'provider', 'person', 'persona', 'project', 'session']
 // export is — so the fleet's own reading of when a thing last changed has to
 // land last, or half a million entities read as changed today.
 
-// The relation tags an edge entity wears. An edge is ONE sentence, so its two
+// The relation tags an edge entity wears. An edge is one sentence, so its two
 // ends and its tag are written in one bundle — said apart, the half with no
 // tag is not an edge yet and @yaks/edge refuses it.
 let NATURES = new Set([
@@ -1105,14 +1105,14 @@ let main = async () => {
       num: r.num == null ? null : Number(r.num),
     })
   }
-  // A commit's id IS its sha: a column restating it is a second copy that can
+  // A commit's id is its sha: a column restating it is a second copy that can
   // disagree. Every reference and every edge sentence follows the new name.
   let renamed = new Map<string, string>()
   for (let r of all('select entity, sha from "commit" where sha is not null')) {
     let s = spine.get(Number(r.entity))
     if (s) renamed.set(s.eid, String(r.sha))
   }
-  // A page's address IS the page: @yaks/page declares `web.url` an identity,
+  // A page's address is the page: @yaks/page declares `web.url` an identity,
   // so the id is derived from it and the fleet's minted one cannot stand. Two
   // rows witnessing one address become one entity, which is the point of
   // saying it that way.
@@ -1166,7 +1166,7 @@ let main = async () => {
   let cfg = read(config)
   say('read')
   console.log(`composing ${cfg.plugins?.length} plugins over ${to}`)
-  // The import writes the graph but NOT its log: the fleet's own three-table
+  // The import writes the graph but not its log: the fleet's own three-table
   // journal is the history, and it is copied across whole at the end.
   let load: Load = async (plugin, name) => {
     let mod = await facet(plugin, name)
@@ -1180,7 +1180,7 @@ let main = async () => {
       },
     }
   }
-  // The store ADOPTS what each bundle states its number to be — the fleet's
+  // The store adopts what each bundle states its number to be — the fleet's
   // own, or `null` for the entities this export creates, which wear none.
   let host = await compose({ ...cfg, db: to, port: 0, adopt: true }, load)
 
@@ -1201,7 +1201,7 @@ let main = async () => {
       written += sending.length
     } catch {
       // A batch is atomic, so one bundle the packages will not take would
-      // lose every other bundle beside it. An export finishes and SAYS what
+      // lose every other bundle beside it. An export finishes and says what
       // did not fit, so the refused one is found by sending them singly.
       for (let b of sending) {
         try {
@@ -1225,7 +1225,7 @@ let main = async () => {
       let held = minted.get(`tool|${name}`)
       if (held) return held
       // @yaks/tools' own derivation, so the `bash` the fleet called and the
-      // `bash` this store already has are ONE entity.
+      // `bash` this store already has are one entity.
       let eid = toolEid(name)
       minted.set(`tool|${name}`, eid)
       batch.push({ entity: { eid, num: null }, tool: { name } })
@@ -1398,7 +1398,7 @@ let main = async () => {
   }
   say('endings')
 
-  // ── pass 1c: an imported transcript is OVER ──
+  // ── pass 1c: an imported transcript is over ──
   // A harness boot wakes every session whose entries read as pending, running
   // or queued, and after the import 699 of them do — none of this box's to
   // continue. They are the fleet's, and they ended when its server stopped
@@ -1447,7 +1447,7 @@ let main = async () => {
   // Every patch above left an `updated` carrying the import's own clock, which
   // is true of the import and false of the graph. The fleet's own readings go
   // back under it: the stamp is the graph's to write, so nothing written
-  // THROUGH the graph could have said this. Only the entities this import
+  // through the graph could have said this. Only the entities this import
   // touched — what was already in this store was last changed when it says.
   sql.exec('create temp table imported_entity (id integer primary key)')
   sql.exec('begin')
@@ -1484,7 +1484,7 @@ let main = async () => {
 
   // ── pass 3: the graves ──
   // A tombstone is spine storage, not a component: nothing can be written
-  // THROUGH the graph that says "this eid died and was never anything".
+  // through the graph that says "this eid died and was never anything".
   let graves = all('select entity, deleted_at from tombstone')
   let bury = sql
   bury.exec('begin')

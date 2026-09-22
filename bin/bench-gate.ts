@@ -2,58 +2,58 @@
 // bench-gate — the performance ratchet. The app only ever gets faster.
 //
 // Runs the hot-path benches (deno bench --json) and gates each one — but on its
-// RATIO to a fixed reference bench, not its absolute time. On an improvement it
-// ratchets the stored ratio DOWN, so a faster number becomes the new floor no
+// ratio to a fixed reference bench, not its absolute time. On an improvement it
+// ratchets the stored ratio down, so a faster number becomes the new floor no
 // future change may cross. Wired into `deno task gate`; also standalone as
 // `deno task bench:gate`.
 //
-// Why RATIO, not absolute — this box is shared and virtualized, and under
-// concurrent load EVERY bench slows by a similar factor. (Measured: even
+// Why ratio, not absolute — this box is shared and virtualized, and under
+// concurrent load every bench slows by a similar factor. (Measured: even
 // process CPU-time inflates ~2x under load here, via vCPU frequency-scaling /
-// steal — so switching the clock does NOT help.) An absolute-min gate therefore
+// steal — so switching the clock does not help.) An absolute-min gate therefore
 // cries wolf whenever the box is busy — a different bench each run. The fix:
-// the control bench (src/control_bench.ts, a fixed op) is slowed by the SAME
+// the control bench (src/control_bench.ts, a fixed op) is slowed by the same
 // box conditions, so `bench.min / control.min` cancels them out. Empirically
 // this pulls contention inflation from ~2x down to within the tolerance band,
 // while a real code regression still raises a bench's ratio (the control is
 // unaffected by your diff).
 //
-// Why MIN, over RUNS runs — the fastest observed ratio is the code's intrinsic
-// speed; noise is one-directional (contention only ever ADDS time), and min
+// Why min, over RUNS runs — the fastest observed ratio is the code's intrinsic
+// speed; noise is one-directional (contention only ever adds time), and min
 // can't be lured low (nothing makes work take negative time), so it's a safe
-// ratchet floor. Taking the min ACROSS several suite runs also cancels the
+// ratchet floor. Taking the min across several suite runs also cancels the
 // shared control's own run-to-run jitter (~6% under ambient load).
 //
 // A regression must clear the relative band (BENCH_TOL, default 0.25) on the
 // ratio — the box's measurement noise floor is ~15-20%, so a tighter band false-
 // fails; the regressions this catches are multiples, far past 25%. A busy box is
 // detected (control far above its floor) and suppresses ratcheting, never the
-// regression check — with the control the slowest op, load only LOWERS ratios.
+// regression check — with the control the slowest op, load only lowers ratios.
 //
-// VERSIONING — the baseline stores a `version`. When it doesn't match VERSION
+// Versioning — the baseline stores a `version`. When it doesn't match VERSION
 // (a metric change, like this absolute->ratio switch, or a control-op change),
-// the stored numbers are incomparable, so the gate RE-BASELINES (writes the
+// the stored numbers are incomparable, so the gate re-baselines (writes the
 // current ratios, no comparison) instead of flagging every bench. Zero false
 // failures on a switchover; normal comparison resumes next run. A bench with no
 // stored ratio is likewise recorded, never failed.
 //
 // Override: BENCH_ACCEPT=1 (or `deno task bench:accept`) writes every current
-// ratio as the new baseline, regressions INCLUDED — the explicit, logged path
+// ratio as the new baseline, regressions included — the explicit, logged path
 // for a justified speed-for-correctness tradeoff. Loud on purpose.
 
 let VERSION = 4 // bump when the metric or the control op changes -> re-baseline
-//   v4: the control op grew 600k -> 8M LCG steps so it stays the SLOWEST op
+//   v4: the control op grew 600k -> 8M lcg steps so it stays the slowest op
 //   once the server query benches joined the suite (their floor is the ~89
 //   component-table sweep, milliseconds). Every stored ratio shifts by that
 //   factor, so v3's numbers are incomparable and the gate re-baselines.
 let CONTROL = 'control: fixed reference (LCG)' // src/control_bench.ts
 let TOL = +(Deno.env.get('BENCH_TOL') ?? '0.25') // the box's measurement noise floor
 //   is ~15-20% (shared, virtualized; sub-µs benches jitter hardest as ratios), so a
-//   tighter band false-fails. The regressions this gate exists for are MULTIPLES
+//   tighter band false-fails. The regressions this gate exists for are multiples
 //   (apply 5-13x, freshDb ~20x, contextDigest scans) — far past 25%. Sub-25%
 //   detection isn't achievable here without dedicated hardware; don't pretend it.
 let RUNS = +(Deno.env.get('BENCH_RUNS') ?? '3') // suite runs; per bench we take the
-//   MIN ratio across them, so ambient jitter in the shared control denominator
+//   Min ratio across them, so ambient jitter in the shared control denominator
 //   (measured ~6% run-to-run under background fleet load) can't false-regress.
 let LOAD_TOL = +(Deno.env.get('BENCH_LOAD_TOL') ?? '1.5') // control this-far over its
 //   idle floor => box is loaded => compare, but don't ratchet/bank (see below)
@@ -141,7 +141,7 @@ let measureOnce = async (): Promise<Record<string, number>> => {
   return mins
 }
 
-// Run the suite RUNS times; per bench take the MIN ratio-to-control across runs
+// Run the suite RUNS times; per bench take the min ratio-to-control across runs
 // (each run's ratio cancels that run's load; the min picks the cleanest sample
 // for both terms). Also return each bench's best absolute min (for display) and
 // the best control abs (the load sensor).
@@ -186,9 +186,9 @@ let bl = readBaseline()
 
 let newFloor = Math.min(bl.controlFloorNs ?? controlAbs, controlAbs)
 // The control is (by construction) the slowest op in the suite, so box load
-// inflates it at least as much as any bench — load only ever LOWERS ratios. A
+// inflates it at least as much as any bench — load only ever lowers ratios. A
 // control running well above its idle floor therefore means "box busy": we still
-// trust a regression (a ratio RISE can't come from load), but we must NOT bank
+// trust a regression (a ratio rise can't come from load), but we must not bank
 // improvements — a load-deflated ratio becoming the new floor would false-regress
 // the next quiet run. The floor self-calibrates: it ratchets down toward the true
 // idle time as quiet runs happen.
@@ -265,7 +265,7 @@ let removed = Object.keys(base).filter((k) => !(k in ratios))
 for (let k of removed) delete next[k]
 
 // A regression fails the gate outright — nothing is written, so improvements in
-// the same run are NOT banked (the tree must be fixed and re-run).
+// the same run are not banked (the tree must be fixed and re-run).
 if (regressions.length) {
   console.error(
     `\n─── PERFORMANCE REGRESSION — gate FAILED (ratio tol ${

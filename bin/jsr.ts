@@ -1,5 +1,5 @@
 #!/usr/bin/env -S deno run --allow-read --allow-net=api.jsr.io --allow-env=JSR_TOKEN
-// bin/jsr — the @yaks/* package PAGES on jsr.io, written from this repo.
+// bin/jsr — the @yaks/* package pages on jsr.io, written from this repo.
 //
 // `deno publish` uploads code; it never touches a package's page. JSR's config
 // reference (https://jsr.io/docs/package-configuration) has no `description`
@@ -16,7 +16,7 @@
 // Reading is anonymous. Writing needs a JSR personal access token in
 // JSR_TOKEN, minted at https://jsr.io/account/tokens.
 //
-// PATCH takes ONE field per request — the API's UpdatePackageRequest is a
+// PATCH takes one field per request — the API's UpdatePackageRequest is a
 // oneOf (https://api.jsr.io/.well-known/openapi) — so an edit here is a field
 // and a value, and a package with three stale fields is three requests.
 import { configs } from './release.ts'
@@ -72,14 +72,14 @@ export let split = (name: string) => {
 export let fits = (description: string) =>
   description.length <= DESC_MAX && !description.includes('\n')
 
-// What the repo PROVES about a runtime, never what it hopes. A `browser.json`
+// What the repo proves about a runtime, never what it hopes. A `browser.json`
 // or `workers.json` beside a package's deno.json is the platform program
 // bin/check-platform.ts typechecks in CI, so carrying one is a gate rather
 // than a claim, and every package is checked and tested under Deno. Node and
 // Bun stay absent on purpose: nothing here runs them, and JSR reads an absent
 // key as "unknown support", which is the true answer.
 //
-// Grepping sources for `Deno.` is deliberately NOT the probe. Five
+// Grepping sources for `Deno.` is deliberately not the probe. Five
 // browser-proven packages (blob, context, git, openai, session) mention it in
 // a file outside their published mod.ts graph, so the grep would call them
 // browser-hostile while CI compiles them for the browser every run.
@@ -126,7 +126,7 @@ export let mine = (page: Record<string, unknown>): Details => {
   }
 }
 
-// Every value compared here is a string, a null, or ONE flat object of scalars
+// Every value compared here is a string, a null, or one flat object of scalars
 // (a repo, a compat), so sorting the top-level entries is the whole of it.
 let canon = (value: unknown) =>
   value && typeof value == 'object'

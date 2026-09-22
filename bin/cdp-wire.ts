@@ -1,5 +1,5 @@
 // Payload-free CDP attribution: all inbound UTF-8 bytes, row identities only.
-// Subscriptions overlap, so per-sub ID counts are NOT additive. Exclusive IDs
+// Subscriptions overlap, so per-sub ID counts are not additive. Exclusive IDs
 // occur in just one sub; ids permits same-snapshot union/difference analysis.
 type Event = {
   method: string

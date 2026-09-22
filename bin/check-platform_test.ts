@@ -89,7 +89,7 @@ Deno.test('platform entrypoints cover every standalone config and the tail Worke
           expected.push(new URL('conform.ts', base).href)
           continue
         }
-        // The browser program checks a package's browser-facing EXPORTS: what
+        // The browser program checks a package's browser-facing exports: what
         // its browser.json names (default `.`), plus `./vocab` and `./views`
         // whenever the package exports them — the web door imports those two
         // of every package and must reach nothing server-side through either.

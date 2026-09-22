@@ -8,12 +8,12 @@
 //   2. does the connector door still list its one public tool
 //   3. does three minutes of live traffic carry a 5xx or an exception
 //
-// It is CREDENTIAL-FREE on purpose. Every door below is reachable by a
+// It is credential-free on purpose. Every door below is reachable by a
 // stranger, and a check that cannot sign in cannot mint a person, spend a
 // sign-in code, send a letter or open a Stripe session — the doors right next
 // to these that do exactly that (identity.ts POST /login, billing.ts
 // /api/billing/*). The one tool it calls is `about`, which reads nothing
-// (preauth.ts PUBLIC). Nothing here writes.
+// (preauth.ts public). Nothing here writes.
 //
 //   deno task verify:yak                         # doors, /mcp, 3 min of tail
 //   deno task verify:yak --staging               # yaks.fyi and yak-staging

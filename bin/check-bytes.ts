@@ -3,7 +3,7 @@
 //
 // A raw 0x00 in a .ts file is invisible in an editor and changes nothing at
 // runtime — `\x00` spells the same byte — but git sees it and calls the file
-// BINARY. A binary file has no diff and no three-way merge, so every branch
+// binary. A binary file has no diff and no three-way merge, so every branch
 // touching it has to be landed one at a time by hand (T-33946: graph.ts and
 // mcp.ts each carried two, from a template literal joining key parts with a
 // NUL). The same goes for a stray ESC, a BEL, or a lone \r: an escape is the

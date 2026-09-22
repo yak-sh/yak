@@ -9,7 +9,7 @@
 //   --profile  capture a CPU profile during the run and print the hottest self-time frames
 //   --json     emit only the timings object as JSON (for the gate)
 //
-// NEVER point --profile-driving runs at the live graph: it navigates and types.
+// Never point --profile-driving runs at the live graph: it navigates and types.
 // Give it a probe server URL.
 
 let base = Deno.args[0] ?? 'http://localhost:5199'
@@ -23,7 +23,7 @@ let log = (...a: unknown[]) => {
 // --- launch chrome ---------------------------------------------------------
 let port = 9200 + Math.floor(Date.now() % 700)
 // Chrome's singleton socket path lives under user-data-dir and must fit the
-// ~108-char unix socket limit — keep the dir short (a deep TMPDIR is a FATAL
+// ~108-char unix socket limit — keep the dir short (a deep TMPDIR is a fatal
 // "Socket path too long"). So a profile is the one scratch that may NOT
 // follow TMPDIR; src/probes.ts `throwaway()` only reaps one under `/tmp`.
 let dir = await Deno.makeTempDir({ dir: '/tmp', prefix: 'wp' })

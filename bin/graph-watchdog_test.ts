@@ -31,7 +31,7 @@ Deno.test('classify: one failed check is an unconfirmed blip, not down', () => {
 
 Deno.test('classify: pid churn plus failures is crashloop', () => {
   let h = [chk(true, 1), chk(false, 2), chk(true, 3)]
-  assertEquals(classify(h), 'crashloop') // 3 distinct pids AND a failed check
+  assertEquals(classify(h), 'crashloop') // 3 distinct pids and a failed check
 })
 
 Deno.test('classify: pid churn with all 200s is deploys, not crashloop', () => {
@@ -74,7 +74,7 @@ Deno.test('decideAlert: ongoing outage re-pages past the reminder window', () =>
 })
 
 Deno.test('decideAlert: down→crashloop is a fresh transition, pages now', () => {
-  // crashloop is "bad" and so was down, so it re-pages only past REMINDER —
+  // crashloop is "bad" and so was down, so it re-pages only past reminder —
   // deliberate: churn while already-alerted is not a new outage.
   assertEquals(decideAlert('down', 'crashloop', 0, 1000), null)
   assertEquals(

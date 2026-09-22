@@ -21,7 +21,7 @@ export type Row = {
 
 export let RECORD = new URL('../bench/app-deploys.jsonl', import.meta.url)
 
-// The three gated numbers, by name: what a person WAITS for.
+// The three gated numbers, by name: what a person waits for.
 export let GATED = {
   'files → live': (r: Row) => r.files3.live.median,
   'deploy': (r: Row) => r.deploy.call.median,

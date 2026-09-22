@@ -15,9 +15,9 @@ if (
 const listener = Deno.listen({ hostname: '127.0.0.1', port: 0 })
 const port = (listener.addr as Deno.NetAddr).port
 listener.close()
-// A Chrome profile is the one scratch that may NOT follow TMPDIR: the
+// A Chrome profile is the one scratch that may not follow TMPDIR: the
 // singleton socket under it must fit the ~108-char unix path limit (a deep
-// TMPDIR is a FATAL "Socket path too long"), and src/probes.ts `throwaway()`
+// TMPDIR is a fatal "Socket path too long"), and src/probes.ts `throwaway()`
 // only reaps a profile under `/tmp`. Short base, reaped either way.
 const dir = await Deno.makeTempDir({ dir: '/tmp', prefix: 'client-gate-' })
 const child = new Deno.Command('google-chrome', {

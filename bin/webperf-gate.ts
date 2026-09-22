@@ -1,22 +1,22 @@
 #!/usr/bin/env -S deno run -A --unstable-net --unstable-worker-options
 // webperf-gate — the CDP end-to-end tier of the performance ratchet, and the
-// deliberately SMALL slow exception to the sub-1ms bar. The bulk of perf
+// deliberately small slow exception to the sub-1ms bar. The bulk of perf
 // coverage is chrome-free and <1ms (bin/bench-gate.ts: db, read, render, and
 // pure-fn micro-benches); this tier keeps only what a browser uniquely reveals
 // — a real cold load through paint + network (load_to_interactive). It boots a
-// throwaway probe server on a COMPACT COPY of the live graph, drives it in
+// throwaway probe server on a compact copy of the live graph, drives it in
 // headless Chrome via bin/webperf.ts, and compares to bench/webperf.baseline
-// .json: a regression FAILS the gate, an improvement ratchets the baseline
-// DOWN. Wired into `deno task gate`; also `deno task bench:gate:web` standalone.
+// .json: a regression fails the gate, an improvement ratchets the baseline
+// down. Wired into `deno task gate`; also `deno task bench:gate:web` standalone.
 //
 // Why a probe copy, never the live graph: webperf navigates and dispatches
 // keys — a gesture-driving probe must never touch the owner's board (probe
-// hygiene). VACUUM INTO gives a CONSISTENT snapshot even while the server
+// hygiene). VACUUM into gives a consistent snapshot even while the server
 // writes, so the copy can't catch the live db mid-transaction.
 //
 // Tolerance is far looser than the sub-1ms micro-benches (baseline
 // .tolerance_pct, currently 150% / env WEBPERF_TOL), and that width is not
-// slack — it is the MACHINE. This number is wall-clock on a shared box whose
+// slack — it is the machine. This number is wall-clock on a shared box whose
 // load swings ~4x within an hour: measured 2026-09-05 on an unchanged tree, the
 // best-of-10 warm sample ranged 266ms to 573ms across consecutive runs. A band
 // narrower than that machine variance does not make the gate stricter, it makes
@@ -30,18 +30,18 @@
 //
 // The sampling also has to earn its verdict: a discarded warm-up run (the first
 // load against a freshly booted server pays that process's one-time costs,
-// which no human ever pays), then samples read twice — BEST to judge a
-// regression, FIRM (the second-smallest, i.e. a time hit twice) as the only
+// which no human ever pays), then samples read twice — best to judge a
+// regression, firm (the second-smallest, i.e. a time hit twice) as the only
 // value that may become a stored ceiling. See the RUNS note below for why:
 // ratcheting to a lucky single sample is how this baseline went 9310ms ->
 // 316ms and then stayed red on an unchanged tree.
 //
 // Override: BENCH_ACCEPT=1 (or `deno task bench:accept:web`) records the current
-// timings as the new ceiling, regressions INCLUDED — the same explicit, logged
+// timings as the new ceiling, regressions included — the same explicit, logged
 // path the API ratchet uses, and how this baseline is (re)bootstrapped after a
 // deliberate change or a material shift in graph scale.
 //
-// KNOWN LIMITATION (reported to the owner): load_to_interactive scales with the
+// Known limitation (reported to the owner): load_to_interactive scales with the
 // size of the probe graph, so as the live graph grows the baseline drifts and
 // should be re-accepted (BENCH_ACCEPT) when scale moves materially. The 15%
 // band absorbs ordinary growth; per-scale calibration would remove the drift
@@ -50,12 +50,12 @@ import { liveDb } from '../src/store/sqlite.ts'
 
 // Keys in the baseline file that are metadata, not ratcheted timings.
 let META = new Set(['_comment', 'tolerance_pct', '_tol'])
-// Timings webperf emits but that are NOT ratcheted here. The perf gate is
-// deliberately CHROME-MOSTLY-OUT: the bulk of render/logic coverage is the
+// Timings webperf emits but that are not ratcheted here. The perf gate is
+// deliberately Chrome-mostly-out: the bulk of render/logic coverage is the
 // chrome-free micro-benches in bin/bench-gate.ts (each <1ms), and this CDP tier
-// keeps only the ONE end-to-end a browser uniquely reveals — a real cold load
+// keeps only the one end-to-end a browser uniquely reveals — a real cold load
 // through paint + network (load_to_interactive). Excluded:
-//   open_board   — a WARM re-render; its cost is now covered chrome-free by the
+//   open_board   — a warm re-render; its cost is now covered chrome-free by the
 //                  component-render micro-benches (render_bench.ts), and as a
 //                  single CDP sample it jitters ±50%+. Dropped to keep this tier
 //                  small and non-flaky; re-add if a real board-paint end-to-end
@@ -97,7 +97,7 @@ let tolFor = (k: string): number => {
 }
 // The metrics under ratchet: the numeric, non-meta keys the baseline curates
 // (load_to_interactive, open_board, open_palette). webperf also emits
-// render_nodes (a COUNT, not a time) and _top_frame_hits — deliberately not in
+// render_nodes (a count, not a time) and _top_frame_hits — deliberately not in
 // the baseline, so never compared or ratcheted.
 let baseMetrics = (): Record<string, number> => {
   let m: Record<string, number> = {}
@@ -112,24 +112,24 @@ let base = baseMetrics()
 let ms = (n: number) => (n < 0 ? 'timeout' : `${n}ms`)
 let pct = (r: number) => `${r >= 0 ? '+' : ''}${(r * 100).toFixed(1)}%`
 
-// Each webperf run is a SINGLE cold page-load sample — a full navigation
+// Each webperf run is a single cold page-load sample — a full navigation
 // through chrome jitters ±30% (open_board especially). The API gate escapes
 // this because deno bench repeats internally and reports the min; the web gate
 // must do the repeating itself. So sample N times, then read the samples twice:
 //
-//   BEST (the min) is what a regression is judged against. Contention can only
-//   ADD time, so the fastest sample is the closest thing to intrinsic speed;
+//   Best (the min) is what a regression is judged against. Contention can only
+//   add time, so the fastest sample is the closest thing to intrinsic speed;
 //   judging on the min is what keeps a busy box from failing the gate.
-//   FIRM (the second-smallest) is what the ceiling may be ratcheted DOWN to. A
+//   Firm (the second-smallest) is what the ceiling may be ratcheted down to. A
 //   ceiling nobody can reach twice is not a ceiling: ratcheting to the best
 //   single sample lets one lucky quiet moment write a number the gate can never
 //   hit again, and every run after that is red. That is exactly how this
 //   baseline went 9310ms -> 316ms inside an unrelated commit (2780ff44) and
 //   stayed red on an unchanged tree.
 //
-// The box is SHARED and its load swings ~4x within an hour, so a fixed, small N
+// The box is shared and its load swings ~4x within an hour, so a fixed, small N
 // cannot decide anything: 2 contended samples are not evidence, and 2 samples
-// never gave FIRM a second value to agree with. So N is a FLOOR, not a count —
+// never gave firm a second value to agree with. So N is a floor, not a count —
 // after WEBPERF_RUNS samples the gate keeps sampling while any metric is still
 // out of band, up to WEBPERF_MAX. It spends time only when it is about to fail,
 // which is exactly when spending it is worth something, and a quiet box pays
@@ -142,7 +142,7 @@ let MAX = Math.max(RUNS, +(Deno.env.get('WEBPERF_MAX') ?? '10'))
 
 let writeBaseline = (metrics: Record<string, number>) => {
   // Preserve the meta (_comment, tolerance_pct); write metrics sorted so the
-  // file states what IS and diffs cleanly.
+  // file states what is and diffs cleanly.
   let out: Record<string, unknown> = {}
   if (typeof raw._comment == 'string') out._comment = raw._comment
   if (typeof raw.tolerance_pct == 'number') {
@@ -165,7 +165,7 @@ type Sampled = { best: Record<string, number>; firm: Record<string, number> }
 
 let measure = async (): Promise<Sampled> => {
   let tmp = await Deno.makeTempFile({ prefix: 'webperf-gate-', suffix: '.db' })
-  // VACUUM INTO overwrites — it refuses an existing file, so clear the stub.
+  // VACUUM into overwrites — it refuses an existing file, so clear the stub.
   await Deno.remove(tmp)
   let vac = await new Deno.Command('sqlite3', {
     args: [liveDb(), `VACUUM INTO '${tmp}'`],
@@ -255,7 +255,7 @@ let measure = async (): Promise<Sampled> => {
       return JSON.parse(line)
     }
 
-    // Warm-up, discarded: the FIRST page load against a freshly booted server
+    // Warm-up, discarded: the first page load against a freshly booted server
     // is 2-6x the rest, because it alone pays that process's one-time costs —
     // the per-socket worker's module compile, statement preparation, the first
     // snapshot build. No human ever pays that: nobody loads a server that has
@@ -263,8 +263,8 @@ let measure = async (): Promise<Sampled> => {
     // artifact of the probe harness rather than of the app.
     await one()
 
-    // Per-metric BEST (min) and FIRM (second-smallest). A -1 (timeout) is
-    // dropped as jitter UNLESS a metric times out in EVERY sample — then it's a
+    // Per-metric best (min) and firm (second-smallest). A -1 (timeout) is
+    // dropped as jitter unless a metric times out in every sample — then it's a
     // real, persistent timeout.
     let samples: Record<string, number[]> = {}
     let n = 0
@@ -279,12 +279,12 @@ let measure = async (): Promise<Sampled> => {
       for (let [k, vs] of Object.entries(samples)) {
         let ok = vs.filter((v) => v >= 0).sort((a, b) => a - b)
         best[k] = ok.length ? ok[0] : -1
-        // With one sample there is nothing to agree with it, so FIRM is it.
+        // With one sample there is nothing to agree with it, so firm is it.
         firm[k] = ok.length ? ok[1] ?? ok[0] : -1
       }
       return { best, firm }
     }
-    // In band = every ratcheted metric's BEST is at or under its ceiling. That
+    // In band = every ratcheted metric's best is at or under its ceiling. That
     // is the verdict the gate is about to give, so it is also the right thing
     // to stop sampling on.
     let inBand = () => {
@@ -364,7 +364,7 @@ for (let k of Object.keys(base)) {
     )
   } else if (firm[k] >= 0 && firm[k] < b) {
     // Ratchet the ceiling down — the app only gets faster — but only as far as
-    // FIRM, a time this run hit twice. The best single sample is a claim about
+    // firm, a time this run hit twice. The best single sample is a claim about
     // one quiet moment; the ceiling has to be a claim about the machine.
     next[k] = firm[k]
     improved.push(

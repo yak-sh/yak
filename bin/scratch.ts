@@ -1,5 +1,5 @@
 // One temp directory per run, owned by the runner. Deno.makeTempDir reads
-// TMPDIR, so pointing it at `<base>/tasks-run-<pid>` puts EVERY scratch dir a
+// TMPDIR, so pointing it at `<base>/tasks-run-<pid>` puts every scratch dir a
 // test mints inside one directory the run can remove — whether or not the test
 // that made it reached its own cleanup. Roughly two hundred test call sites
 // mint one; almost none remove it, and no amount of per-test `finally` survives
@@ -14,12 +14,12 @@
 //
 // Three doors close the directory: normal exit, an accepted signal, and the
 // next run's stale sweep (a SIGKILLed run cannot clean up after itself, so its
-// successor does it by pid). Afterwards the run reports any NEW `tasks-*`
+// successor does it by pid). Afterwards the run reports any new `tasks-*`
 // entry that appeared in the base directory: that is a spawn site writing to a
 // hard-coded `/tmp` instead of TMPDIR, and it is how /tmp filled to 0 bytes
 // free on this box three times (T-20558).
 //
-// That check reads the base directory, so a stray is only ATTRIBUTABLE while
+// That check reads the base directory, so a stray is only attributable while
 // the base is this run's to watch — and the caller already says which case it
 // is by naming TMPDIR or not. A named base (a scratchpad, a CI run) is nobody
 // else's, so a stray there is this run's leak and fails it. An unnamed one is

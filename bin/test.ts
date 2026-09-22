@@ -104,7 +104,7 @@ let common = [
   '-A',
   '--unstable-net',
   '--unstable-worker-options',
-  // No --fail-fast. A suite reports EVERY failure it has: stopping at the
+  // No --fail-fast. A suite reports every failure it has: stopping at the
   // first one turns a red run into a single symptom, and the shard that never
   // ran is indistinguishable from a green one. The slow tier hid 22 failures
   // behind an early shard for hundreds of commits that way.
@@ -368,7 +368,7 @@ function report(
 
 if (import.meta.main && Deno.args[0] === '--bulk') {
   // Deno --parallel shares a native SQLite allocator across its worker threads.
-  // Separate processes avoid its mutex contention. This coordinator and ALL
+  // Separate processes avoid its mutex contention. This coordinator and all
   // its children stay in the outer runner's process group: fail-fast or a
   // signal still settles the complete tree, not just a shard's leader.
   let jobs = Number(Deno.env.get('DENO_JOBS') ?? navigator.hardwareConcurrency)

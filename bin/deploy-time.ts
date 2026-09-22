@@ -89,7 +89,7 @@ export let built = (runs: { name: string }[]) =>
   runs.some((r) => r.name.startsWith('Workers Builds'))
 
 // Cloudflare silently ignores an override for a version outside the active
-// deployment. A 200 alone can therefore be the OLD code, even during rollout.
+// deployment. A 200 alone can therefore be the old code, even during rollout.
 export let probe = async (version: string, get = fetch) => {
   try {
     let res = await get('https://yaks.app/', {

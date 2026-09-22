@@ -91,8 +91,8 @@ slow(
   },
 )
 
-// The dump must carry an index's DEFINITION and no byte of the index itself.
-// Its shadow tables cannot be written as plain CREATE TABLEs — VACUUM emits
+// The dump must carry an index's definition and no byte of the index itself.
+// Its shadow tables cannot be written as plain create TABLEs — VACUUM emits
 // them ahead of the virtual table, so they win and the virtual table then
 // fails to create, which is what left every `insert into mail_fts` with no
 // such table from 2026-09-11. The script's own round-trip gate is the rest of

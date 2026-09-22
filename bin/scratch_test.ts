@@ -63,7 +63,7 @@ Deno.test('this very process is running; pid 0 names no process', () => {
 
 // The predicate above decides an exit code, and it was the exit code that
 // failed runs which had leaked nothing — so the wiring gets its own proof.
-// The run leaks by hand: a command that mkdirs a `tasks-*` entry in the BASE
+// The run leaks by hand: a command that mkdirs a `tasks-*` entry in the base
 // is exactly the spawn site writing past TMPDIR that the guard is for.
 let leaks = async (base: string, env: Record<string, string>) => {
   let stray = `${base}/tasks-e2e-${crypto.randomUUID().slice(0, 8)}`
@@ -86,7 +86,7 @@ let leaks = async (base: string, env: Record<string, string>) => {
 slow(
   'a stray fails a named base and only warns on the shared one',
   async () => {
-    // clearEnv is the only way to UNSET TMPDIR for a child, so the few names
+    // clearEnv is the only way to unset TMPDIR for a child, so the few names
     // the child still needs are carried across by hand — DENO_DIR among them,
     // or the run would build a second module cache under HOME.
     let home = Object.fromEntries(

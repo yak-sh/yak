@@ -5,8 +5,8 @@
 // spec for the one-time export/import (D-37573, C#9faadb22f2); this test is
 // what keeps it true while both halves still exist.
 //
-// It proves two things and nothing else: the packages COMPOSE (one vocabulary,
-// no word declared twice), and the table COVERS (every manifest component
+// It proves two things and nothing else: the packages compose (one vocabulary,
+// no word declared twice), and the table covers (every manifest component
 // accounted for, every package component it names real). It asserts no parity:
 // where the package's shape is better, the table's note says what changed.
 

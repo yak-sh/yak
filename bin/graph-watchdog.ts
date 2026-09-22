@@ -1,29 +1,29 @@
 #!/usr/bin/env -S deno run --allow-net --allow-read --allow-write --allow-env --allow-run=ss
-// A graph-INDEPENDENT health watchdog for the tasks server. Run by cron every
+// A graph-independent health watchdog for the tasks server. Run by cron every
 // ~2 min. Its whole reason to exist: TaskMaster and the owner must learn the
 // instant the graph server is down or crash-looping — and the graph server is
 // exactly what's down when that must happen, so an alert that rides the graph
 // (a knock, a `task mail`) is dead on arrival. holdco-deadman already pages on
-// silence, but IT pages via `task mail`, i.e. through the graph, so it cannot
+// silence, but it pages via `task mail`, i.e. through the graph, so it cannot
 // report the graph itself being down. This watchdog reaches the owner through
-// the Cloudflare Email Sending API DIRECTLY — the same door mail uses, inlined
+// the Cloudflare Email Sending API directly — the same door mail uses, inlined
 // here so this script imports nothing from src/ and shares no failure mode with
 // what it watches (the deadman's founding principle: a checker inside the thing
 // it checks dies with it).
 //
 // Detection: a real request to /providers (not just "is the port open"), plus
 // pid-churn flap detection — a crash-looping server answers intermittently and
-// its listening pid changes every few seconds. Churn ALONE is not trouble:
+// its listening pid changes every few seconds. Churn alone is not trouble:
 // since the bind-last reload (efd8236) a healthy deploy changes the pid while
-// every probe keeps answering 200, so `crashloop` requires churn AND at least
-// one failed check in the window. Alerts fire on state TRANSITION
+// every probe keeps answering 200, so `crashloop` requires churn and at least
+// one failed check in the window. Alerts fire on state transition
 // (healthy→trouble, →recovery) and then only every REMINDER ms while trouble
 // persists, so a long outage doesn't page every run. Exit 0 only when healthy,
 // so the run is itself deadman-stampable.
 //
 // Heartbeat / deadman: every run rewrites STATE and prints one line to stderr
 // (cron appends it to ~/.tasks/graph-watchdog.log). STATE's mtime older than
-// ~5 min therefore means the WATCHDOG itself stopped running — that mtime is
+// ~5 min therefore means the watchdog itself stopped running — that mtime is
 // the deadman check; there is deliberately no second watchdog watching this one.
 // Every page attempt is appended to SENDS with the Cloudflare message-id or
 // the error, so "did it page?" is answerable after the fact.
@@ -40,7 +40,7 @@ let SENDS = Deno.env.get('GRAPH_WATCHDOG_SENDS') ??
   `${Deno.env.get('HOME')}/.tasks/graph-watchdog-sends.log`
 let ENV_FILE = '/home/yaks/code/holdco/.env'
 let OWNER = 'jeff@yak.sh'
-// task@bot.yak.sh is the fleet's PROVEN sender (delivery receipts on record);
+// task@bot.yak.sh is the fleet's proven sender (delivery receipts on record);
 // graph-watchdog@bot.yak.sh was silently dropped — 19 pages accepted by the
 // API during the 2026-08-25 outages, none delivered. The name label keeps the
 // watchdog identifiable in the inbox; the address is the one that arrives.
@@ -65,12 +65,12 @@ export type State = {
   lastKind: string
 }
 
-// PURE. Classify recent checks. `crashloop` wins over `down`/`healthy` because
+// Pure. Classify recent checks. `crashloop` wins over `down`/`healthy` because
 // a flapping server produces a mix of successes, failures, and changing pids —
 // and that instability, not a clean silence, is the thing hardest to notice by
-// eye. But churn alone is a DEPLOY, not a crash: bind-last reloads change the
+// eye. But churn alone is a deploy, not a crash: bind-last reloads change the
 // pid while every probe stays 200, so crashloop requires a churn signal
-// (`flapped` intra-run, or FLAP_PIDS distinct pids cross-run) AND at least one
+// (`flapped` intra-run, or FLAP_PIDS distinct pids cross-run) and at least one
 // failed check in the same window.
 export let classify = (history: Check[]): Health => {
   let recent = history.slice(-WINDOW)
@@ -84,7 +84,7 @@ export let classify = (history: Check[]): Health => {
   return 'healthy' // a single failed check is an unconfirmed blip, not yet down
 }
 
-// PURE. Decide whether to page and with what kind, given the new health, the
+// Pure. Decide whether to page and with what kind, given the new health, the
 // prior health, and when we last paged. Trouble on a healthy→trouble edge
 // pages at once; a persistent outage re-pages only past REMINDER; recovery
 // pages once. Steady-healthy and steady-trouble-within-REMINDER stay silent.
@@ -103,7 +103,7 @@ export let decideAlert = (
   return null
 }
 
-// PURE. The two secrets, read out of an .env file's KEY=value lines (comments
+// Pure. The two secrets, read out of an .env file's key=value lines (comments
 // and blanks ignored); a real process env var wins when present. Parsing the
 // file directly — rather than sourcing it — keeps the watchdog self-sufficient
 // however cron invokes it.
@@ -212,7 +212,7 @@ let logSend = (kind: string, outcome: string) => {
   }
 }
 
-// Inlined Cloudflare Email Sending — deliberately NOT imported from src/mailer.ts
+// Inlined Cloudflare Email Sending — deliberately not imported from src/mailer.ts
 // so a broken src/ can't disarm the alarm. Text + a minimal html part, matching
 // the payload shape mailer.ts uses. Returns the message-id; logs every attempt.
 let page = async (
