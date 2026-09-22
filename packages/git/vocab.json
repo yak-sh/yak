@@ -115,7 +115,8 @@
       "properties": {
         "common": {
           "type": "string",
-          "description": "canonical absolute common Git directory"
+          "identity": true,
+          "description": "canonical absolute common Git directory; the entity id is derived from it"
         },
         "origin": {
           "type": "string",
@@ -219,6 +220,7 @@
       "component": true,
       "type": "object",
       "kind": true,
+      "identity": ["path", "repository"],
       "properties": {
         "path": {
           "type": "string",
@@ -231,7 +233,7 @@
           "description": "the repository entity the path is read in"
         }
       },
-      "description": "a file in a repository, as an entity, so anything in the graph can refer to one"
+      "description": "a file in a repository, as an entity, so anything in the graph can refer to one; its entity id is derived from the path and the repository"
     },
     "cites": {
       "component": true,
@@ -252,17 +254,6 @@
         }
       },
       "description": "the commit a citation was last checked against; the verify step moves it to the commit checked out then"
-    },
-    "symbol": {
-      "component": true,
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "the name of a function, type or other definition in the cited file"
-        }
-      },
-      "description": "the definition a citation names, which narrows staleness to the commits that changed that definition rather than the whole file"
     },
     "lines": {
       "component": true,

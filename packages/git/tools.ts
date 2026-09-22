@@ -88,10 +88,15 @@ let journal = (host: Seams): Changed | undefined => {
 
 // Where a citation points, in one phrase: the file and the place in it, or the
 // entity it names.
-let where = (cite: Bundle, to: Bundle, id: (b: Bundle) => string): string => {
-  let path = str(comp(to, FILE)?.path)
+let where = (
+  cite: Bundle,
+  to: Bundle,
+  file: Bundle,
+  id: (b: Bundle) => string,
+): string => {
+  let path = str(comp(file, FILE)?.path)
   if (!path) return id(to)
-  let name = str(comp(cite, SYMBOL)?.name)
+  let name = str(comp(to, SYMBOL)?.name)
   if (name) return `${path}:${name}`
   let start = count(comp(cite, LINES)?.start)
   if (start == null) return path
@@ -148,12 +153,17 @@ export let runs = (host: Seams = {}): Runs => ({
           .filter((e): e is string => !!e),
       ),
     ]
-    let at = new Map(
-      (await detached(ctx.graph.storage).get(ends)).map((b) => [
-        b.entity.eid,
-        b,
-      ]),
-    )
+    let get = async (eids: string[]) =>
+      (await detached(ctx.graph.storage).get(eids)).map((b) =>
+        [b.entity.eid, b] as const
+      )
+    let at = new Map(await get(ends))
+    // A cited definition is read in its module's file: fetch those too.
+    let modules = [...at.values()].map((b) => str(comp(b, SYMBOL)?.module))
+      .filter((e) => e && !at.has(e))
+    for (let [eid, b] of await get([...new Set(modules)])) at.set(eid, b)
+    let fileOf = (to: Bundle) =>
+      comp(to, SYMBOL) ? at.get(str(comp(to, SYMBOL)?.module)) ?? to : to
     let changed = journal(host)
     let found: Finding[] = []
     for (let cite of cites) {
@@ -162,13 +172,14 @@ export let runs = (host: Seams = {}): Runs => ({
       let to = at.get(str(edge?.to))
       if (!from || !to) continue
       if (scope && from.entity.eid != scope) continue
-      if (path && str(comp(to, FILE)?.path) != path) continue
-      let got = await status(cite, to, { cwd, changed })
+      let file = fileOf(to)
+      if (path && str(comp(file, FILE)?.path) != path) continue
+      let got = await status(cite, to, { cwd, changed }, file)
       if (got.state == 'current') continue
       let [level, why] = verdict(got)
       found.push({
         level,
-        text: `${id(from)} cites ${where(cite, to, id)} — ${why}`,
+        text: `${id(from)} cites ${where(cite, to, file, id)} — ${why}`,
       })
     }
     return checked(ctx.call, 'every citation still holds', found)

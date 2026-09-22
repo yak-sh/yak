@@ -171,6 +171,11 @@ grouped approximately by function, **not** by dependency order.
   primary worktree. If the base moved, it rebases and returns without landing;
   rerun tests and land again.
 
+- **[@yaks/code](./code)** — a codebase read into the graph: a `package` per
+  manifest, a `module` per file (wearing @yaks/git's `file`), a `symbol` per
+  export and an `imports` link per import, each with its doc comment in `doc`
+  for search. `code sync` reads only the files whose Git blob moved.
+
 - **[@yaks/mirror](./mirror)** — one sync between files and a graph: a binding
   names its files and carries a `read` (files → graph), a `values` (graph →
   files), or both. Each path remembers the Git blob and value hash it last

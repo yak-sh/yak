@@ -10,7 +10,6 @@
 //   file{path, repository}  a file in a repository, as an entity
 //   cites                   an @yaks/edge relation: a citation of a place
 //   revision{commit}        the commit a citation was last checked against
-//   symbol{name}            the definition a citation names
 //   lines{start, end}       the line range a citation names
 //   quote{text}             what the citing side quoted
 //
@@ -41,11 +40,11 @@
 //
 // A citation is an edge, and each fact about it is a component of its own on
 // that edge: `cites` says the link is a citation, `revision{commit}` says which
-// commit it was last checked against, `symbol{name}` or `lines{start, end}`
-// narrow it to one place in the cited file, and `quote{text}` keeps what was
-// quoted. They are separate because they are independent: a citation may name a
-// definition or a line range or neither, and the commit moves under all of
-// them. Whether a citation is still current is never stored — it is re-derived
+// commit it was last checked against, `lines{start, end}` narrows it to one
+// place in the cited file, and `quote{text}` keeps what was quoted. They are
+// separate because they are independent: a citation may name a line range or
+// not, and the commit moves under both. A definition is not a column here: it
+// is a @yaks/code `symbol` entity, and a citation of one points at it. Whether a citation is still current is never stored — it is re-derived
 // from Git, or from the journal for a citation of an entity (./cites.ts) — and
 // the one thing that is stored is the kernel's `verified{at, by, via}` mark,
 // written by the act of checking. The cited file is an entity of its own,

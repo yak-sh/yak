@@ -1867,6 +1867,11 @@
           "npm:fake-indexeddb@^6.2.2"
         ]
       },
+      "packages/code": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/d1": {
         "dependencies": [
           "jsr:@db/sqlite@0.13.0",

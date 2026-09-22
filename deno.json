@@ -199,6 +199,7 @@
     "./packages/doc",
     "./packages/key",
     "./packages/git",
+    "./packages/code",
     "./packages/mirror",
     "./packages/alias",
     "./packages/memory",

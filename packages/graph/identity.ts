@@ -104,7 +104,9 @@ let stating = (
 /**
  * A {@link Derive} for every component that declares an identity, read off a
  * loaded vocabulary — what the mint phase consults so a bundle written under a
- * `$alias` ends up on the entity its own values identify.
+ * `$alias` ends up on the entity its own values identify. It is what lets a
+ * seed be loaded idempotently without writing an eid: the same file loaded
+ * twice writes one entity.
  *
  * A component whose identity is only partly supplied derives nothing (it
  * returns `''`) and gets a generated id, which {@link identified} then refuses

@@ -7,15 +7,21 @@
 // are kept out of ./mod.ts, which type-checks with only the web platform in
 // scope.
 
-import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  derivedEid,
+  type Graph,
+  identityEid,
+} from '@yaks/graph'
 import { refEid } from './refs.ts'
 
 export { checkoutDoc } from './checkout_vocab.ts'
 
-/** The entity id of a repository, derived from its canonical common Git
- * directory. */
+/** The entity id of a repository: its declared identity, the canonical common
+ * Git directory. */
 export let repositoryEid = (common: string): string =>
-  derivedEid('repository|' + common)
+  identityEid('repository', [common])
 /** The entity id of a checkout, derived from its repository and its canonical
  * root path. */
 export let worktreeEid = (repository: string, path: string): string =>

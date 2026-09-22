@@ -51,6 +51,13 @@ let file: Bundle = {
 
 let design: Bundle = { entity: { eid: 'design-1' }, doc: { title: 'D' } }
 
+// A definition in that file, as @yaks/code reads one: a citation points at
+// it, and the file is passed beside it.
+let def = (name: string): Bundle => ({
+  entity: { eid: `sym-${name}` },
+  symbol: { module: 'file-1', name },
+})
+
 let logArgs = (asked: string[][]) => asked.find((a) => a[0] == 'log') ?? []
 let placeArgs = (asked: string[][]) =>
   asked.find((a) => a[0] == 'log' && a.includes('-L')) ?? []
@@ -76,10 +83,10 @@ Deno.test('a citation nobody has checked is unverified, and asks git nothing', a
 
 Deno.test('a file nothing touched is current, and the place is never asked about', async () => {
   let git = fake()
-  let got = await status(cite({ symbol: { name: 'open' } }), file, {
+  let got = await status(cite(), def('open'), {
     cwd: '.',
     run: git.run,
-  })
+  }, file)
   assertEquals(got, { state: 'current' })
   // The coarse question only, as a pathspec: `-L` refuses an empty range.
   assertEquals(logArgs(git.asked), [
@@ -94,10 +101,10 @@ Deno.test('a file nothing touched is current, and the place is never asked about
 
 Deno.test('a definition narrows a file that moved to the commits that touched it', async () => {
   let git = stirred()
-  let got = await status(cite({ symbol: { name: 'open' } }), file, {
+  let got = await status(cite(), def('open'), {
     cwd: '.',
     run: git.run,
-  })
+  }, file)
   assertEquals(got, { state: 'current' })
   assertEquals(placeArgs(git.asked), [
     'log',
@@ -136,10 +143,10 @@ Deno.test('a citation naming no place moves with the whole file', async () => {
 Deno.test('commits touching the place mean the citation moved, and name themselves', async () => {
   let git = stirred('b8b0f89\n0c9c68a\n')
   assertEquals(
-    await status(cite({ symbol: { name: 'open' } }), file, {
+    await status(cite(), def('open'), {
       cwd: '.',
       run: git.run,
-    }),
+    }, file),
     { state: 'moved', changes: ['b8b0f89', '0c9c68a'] },
   )
 })
@@ -173,10 +180,10 @@ Deno.test('git failing to answer reads unknown, in git own words', async () => {
       : { out: 'b8b0f89\n' }
   )
   assertEquals(
-    await status(cite({ symbol: { name: 'gone' } }), file, {
+    await status(cite(), def('gone'), {
       cwd: '.',
       run: git.run,
-    }),
+    }, file),
     { state: 'unknown', why: "fatal: -L parameter 'gone': no match" },
   )
 })
@@ -249,7 +256,12 @@ slow(
     let of = (extra: Partial<Bundle>) =>
       status(cite({ revision: { commit: at }, ...extra }), f, { cwd })
 
-    let moved = await of({ symbol: { name: 'greet' } })
+    let moved = await status(
+      cite({ revision: { commit: at } }),
+      { entity: { eid: 's' }, symbol: { module: 'file-1', name: 'greet' } },
+      { cwd },
+      f,
+    )
     assertEquals(moved.state, 'moved')
     assertEquals((moved as { changes: string[] }).changes.length, 1)
     // The line the second commit did not touch is still where it was said to be.

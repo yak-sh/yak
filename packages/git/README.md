@@ -104,7 +104,7 @@ Components for source code, as the rest of a graph refers to it:
 repository{common, origin}             a local object database, and its remote
 worktree{repository, path, branch,…}   a checkout: where it is, what it is on
 commit{target, repo, message}          a landed commit, attached to its work
-file{path, repository}                 a file in a repository, as an entity
+file{path, repository}                 a file in a repository, identified by both
 ```
 
 A `commit` stores the whole commit message, not just its first line, and its
@@ -115,22 +115,22 @@ entity, and it carries no `sha` column that could disagree with its own id.
 
 A document that quotes code goes out of date when the code moves, and nothing
 says so. A **citation** is that reference written down: an edge `A cites B`,
-where `B` is a `file` entity for a place in code and any entity at all
-otherwise.
+where `B` is a `file` entity for a place in code, a [@yaks/code](../code)
+`symbol` for a definition, and any entity at all otherwise.
 
 ```
 cites                      @yaks/edge relation: A refers to a place in B
 revision{commit}           the commit it was last checked against
-symbol{name}               the definition it names, when it names one
-lines{start, end}          the line range it names, when no definition fits
+lines{start, end}          the line range it names, when it names one
 quote{text}                what the citing side quoted
 verified{at, by, via}      @yaks/kernel's mark: somebody checked and it holds
 ```
 
 Each fact is a component of its own because each is independent: a citation may
-name a definition, a line range or neither, and the commit moves under all of
-them. Writing the same citation twice writes one entity, because an edge's id is
-derived from `from | cites | to` ([@yaks/edge](../edge)).
+name a line range or not, and the commit moves under all of them. A definition
+is cited by pointing at its `symbol` entity, which survives the file moving
+around it. Writing the same citation twice writes one entity, because an edge's
+id is derived from `from | cites | to` ([@yaks/edge](../edge)).
 
 Whether a citation is still current is never stored: it is derived from Git, by
 asking which commits after `revision.commit` touched the place the citation
@@ -151,10 +151,11 @@ await status(cite, file, { cwd: '/home/me/project' })
 ```
 
 The question put to Git is `git log <revision.commit>..HEAD`, narrowed to
-`-L :<symbol.name>:<path>` or `-L <lines.start>,<lines.end>:<path>` when the
-citation named a place, so a commit elsewhere in the same file is not reported.
-The commit is checked with `cat-file` first: one this checkout does not have —
-rebased away, or from another clone — reads `unknown`, never `current`.
+`-L :<symbol.name>:<path>` when it points at a definition (the path is its
+module's) or `-L <lines.start>,<lines.end>:<path>` when it names lines, so a
+commit elsewhere in the same file is not reported. The commit is checked with
+`cat-file` first: one this checkout does not have — rebased away, or from
+another clone — reads `unknown`, never `current`.
 
 A citation of an entity rather than a file asks the same question of the
 journal: what changed about that entity after `verified.at`. That is the

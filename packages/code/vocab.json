@@ -1,0 +1,103 @@
+{
+  "$vocabulary": {
+    "https://yaks.sh/vocab/core": true,
+    "https://yaks.sh/vocab/edge": true
+  },
+  "title": "code",
+  "$defs": {
+    "package": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": ["doc"],
+      "description": "a package, read from its manifest; its entity id is derived from its name, so every checkout of it is one entity",
+      "properties": {
+        "name": {
+          "type": "string",
+          "identity": true,
+          "description": "the name its manifest publishes it under"
+        },
+        "version": {
+          "type": "string",
+          "description": "the version its manifest says"
+        },
+        "manifest": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "the module the package was read from: its deno.json"
+        }
+      }
+    },
+    "module": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": ["doc", "file"],
+      "description": "one file of a codebase, read from the file itself; it wears the `file` it was read from, which identifies it, and its `doc` is its opening paragraph",
+      "properties": {
+        "blob": {
+          "type": "string",
+          "bare": false,
+          "description": "the Git blob id of the text it was read from; a sync reads the file again only when this moved"
+        },
+        "package": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "the package the file belongs to: the nearest manifest above it"
+        }
+      }
+    },
+    "symbol": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": ["doc"],
+      "identity": ["module", "name"],
+      "description": "a definition a module exports; identified by the module and its name, so a citation of it survives the file moving around it. Its `doc` is its doc comment",
+      "properties": {
+        "module": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "description": "the module that exports it"
+        },
+        "name": {
+          "type": "string",
+          "description": "the name it is exported under"
+        },
+        "kind": {
+          "type": "string",
+          "bare": false,
+          "description": "what it is, as `deno doc` says: function, variable, class, interface, typeAlias, enum or namespace"
+        },
+        "line": {
+          "type": "number",
+          "bare": false,
+          "description": "the line it is declared on, counting from 1"
+        }
+      }
+    },
+    "imports": {
+      "component": true,
+      "type": "object",
+      "relation": true,
+      "description": "edge tag: this module imports or re-exports that one",
+      "properties": {}
+    },
+    "code_sync": {
+      "tool": true,
+      "noun": "code",
+      "verb": "sync",
+      "title": "Sync the codebase",
+      "description": "Read the codebase of the checkout this call runs in into the graph: a package per manifest, a module per TypeScript, JavaScript or Markdown file Git tracks, a symbol per export, and an `imports` link per import. Only files whose Git blob moved since the last sync are read again; a file that is gone has its module and symbols cleared, never deleted, so a path or name that comes back is the same entity. Returns a one-paragraph report of what it read, cleared and how long it took.",
+      "input": {
+        "full": {
+          "type": "boolean",
+          "description": "read every file, not only the ones that moved"
+        }
+      }
+    }
+  }
+}

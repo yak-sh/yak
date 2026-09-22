@@ -1,9 +1,10 @@
 // How a citation stands right now, derived and never stored.
 //
 // A citation is an edge — `A cites B` — carrying the commit it was last
-// checked against (`revision{commit}`), the place in B it names (`symbol` or
-// `lines`, or the whole file when neither), and the `verified` mark somebody
-// wrote when they checked it. Whether it is still true is not a column: it is
+// checked against (`revision{commit}`), the place in B it names (`lines`, or
+// the whole file), and the `verified` mark somebody wrote when they checked
+// it. A definition is cited by pointing at it: B is then a @yaks/code
+// `symbol` entity, and the file is its module's. Whether it is still true is not a column: it is
 // re-derived here, so a document can never claim a freshness the repository
 // contradicts.
 //
@@ -41,7 +42,8 @@ export let FILE = 'file'
 /** The component naming the commit a citation was last checked against. */
 export let REVISION = 'revision'
 
-/** The component naming the definition a citation points at. */
+/** @yaks/code's component for an exported definition, named here because a
+ * citation may point at one. */
 export let SYMBOL = 'symbol'
 
 /** The component naming the line range a citation points at. */
@@ -92,8 +94,8 @@ let count = (v: unknown): number | undefined =>
 // definition by name, else the line range, else nothing and the whole file is
 // the place. A symbol is preferred over a range because it survives the file
 // moving around it, which is the whole reason Git has the form.
-let place = (cite: Bundle, path: string): string[] => {
-  let name = text(comp(cite, SYMBOL)?.name)
+let place = (cite: Bundle, to: Bundle, path: string): string[] => {
+  let name = text(comp(to, SYMBOL)?.name)
   if (name) return ['-L', `:${name}:${path}`]
   let lines = comp(cite, LINES)
   let start = count(lines?.start)
@@ -113,8 +115,8 @@ let why = (err: string, fallback: string) =>
 
 /**
  * Derive how one citation stands. `cite` is the edge bundle and `to` the
- * bundle it points at — a `file` entity for a place in code, any entity
- * otherwise.
+ * bundle it points at — a `file` entity for a place in code, a `symbol` for a
+ * definition (with `file`, its module, beside it), any entity otherwise.
  *
  * ```ts
  * await status(cite, file, { cwd: '/home/me/project' })
@@ -125,10 +127,11 @@ export let status = async (
   cite: Bundle,
   to: Bundle,
   ops: Ops,
+  file: Bundle = to,
 ): Promise<Status> => {
   let mark = comp(cite, VERIFIED)
   if (!mark) return { state: 'unverified' }
-  let path = text(comp(to, FILE)?.path)
+  let path = text(comp(file, FILE)?.path)
   if (!path) return await moved(to, text(mark.at), ops)
 
   let commit = text(comp(cite, REVISION)?.commit)
@@ -157,7 +160,7 @@ export let status = async (
   }
   let commits = lines(touched.out)
   if (!commits.length) return { state: 'current' }
-  let narrow = place(cite, path)
+  let narrow = place(cite, to, path)
   if (!narrow.length) return { state: 'moved', changes: commits }
   // `-L` takes the path itself and refuses a pathspec beside it. A path that
   // is gone at HEAD makes it fail, which is unknown rather than current: a

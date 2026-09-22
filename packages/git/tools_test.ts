@@ -76,7 +76,8 @@ Deno.test('a citation nobody has checked is a warning naming the place it points
   let bundles = [
     doc('doc-1', 1),
     fileAt('file-1', 'src/db.ts'),
-    cite('doc-1', 'file-1', { symbol: { name: 'open' } }),
+    { entity: { eid: 'sym-1' }, symbol: { module: 'file-1', name: 'open' } },
+    cite('doc-1', 'sym-1'),
   ]
   let answer = await tools.cites_check!([], ctx({}, bundles))
   let said = body(answer)
