@@ -198,6 +198,15 @@ export let codeIn = (rows: Row[], address: string, since: number) => {
   return seen[0]?.code ?? null
 }
 
+// The letters for one address since the ask. The graph holds thousands of
+// letters, so the filter names the recipient and the window: an unfiltered
+// window of the newest few reads other mail and misses this one. A window
+// keeps the newest matches.
+let lettersFor = (address: string, since: number) => [
+  `.mail.to_addr=${address}`,
+  `.mail.received_at>=${new Date(since).toISOString()}`,
+]
+
 // The fleet sweep files inbound mail every ten seconds (doing.ts), so a code
 // takes a few of them to arrive. Polls the graph rather than any mail API:
 // the graph is where the letter ends up and the only place this box can read
@@ -210,7 +219,7 @@ export let codeFor = async (
   let ask = opts.query ?? graphQuery
   let deadline = Date.now() + (opts.wait ?? 90_000)
   for (;;) {
-    let rows = await ask(['.kind=mail'], { limit: 40 })
+    let rows = await ask(lettersFor(address, since), { limit: 10 })
     let code = codeIn(rows, address, since)
     if (code) return code
     if (Date.now() > deadline) {

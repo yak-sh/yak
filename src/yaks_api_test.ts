@@ -2,12 +2,14 @@
 // session says about itself, which letter carries the code, and how a tool's
 // reply reads once the envelope is off.
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
-import type { Row } from './client.ts'
+import type { Querier, Row } from './client.ts'
+import { matchQuery, parseQuery } from './query.ts'
 import {
   addressIn,
   argOf,
   argsOf,
   claimsOf,
+  codeFor,
   codeIn,
   cookieOf,
   feeNow,
@@ -84,6 +86,39 @@ Deno.test('the code is the newest letter to THIS address since the ask', () => {
   )
   assertEquals(codeIn(rows, 'nobody@bot.yak.sh', since), null)
   assertEquals(codeIn([], 'probe@bot.yak.sh', since), null)
+})
+
+// A graph that answers as the server does: the filters select, and a window
+// keeps the newest matches.
+let graph = (rows: Row[]): Querier => (filters, opts) => {
+  let preds = parseQuery(filters.join('&'))
+  let hits = rows.filter((r) => matchQuery(r.comps, preds))
+  return Promise.resolve(opts?.limit ? hits.slice(-opts.limit) : hits)
+}
+
+Deno.test('the code is found by its address among many newer letters', async () => {
+  let since = Date.parse('2026-09-04T12:00:00Z')
+  let ours = row(
+    '444444 is your yaks.app code',
+    'probe@bot.yak.sh',
+    '2026-09-04T12:00:05Z',
+  )
+  let others = Array.from({ length: 50 }, (_, i) =>
+    row(
+      `${100000 + i} is your yaks.app code`,
+      `other${i}@bot.yak.sh`,
+      '2026-09-04T12:00:09Z',
+    ))
+  let old = row(
+    '555555 is your yaks.app code',
+    'probe@bot.yak.sh',
+    '2026-09-04T11:00:00Z',
+  )
+  let query = graph([old, ours, ...others])
+  assertEquals(
+    await codeFor('probe@bot.yak.sh', since, { query, wait: 0 }),
+    '444444',
+  )
 })
 
 Deno.test('a tool answers its words, and an erring one throws them', () => {
