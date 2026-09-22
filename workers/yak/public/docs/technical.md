@@ -147,29 +147,38 @@ CNAME flattening for this case.
 
 ## Limits
 
-The free plan allows five apps, 1 GB of app data, and 100 emails a month. Plus
-allows unlimited apps, 10 GB of app data, 50 GB of photos and files, and 2,500
-emails a month. Visits are reported against 50,000 a month on Free and 1,000,000
-on Plus, but are not refused. Operations that exceed a limit are refused, but
-existing apps and data are not deleted. Your assistant receives a notice when
-usage reaches 80% of a limit.
+The free plan allows five apps, 1 GB of app data, and 100 emails a month. A
+person owns up to five free spaces, and their emails, builds, builder tokens and
+sandbox time are shared by all of them; a space somebody invited you into, or
+one on the Plus plan, does not count toward yours. Plus allows unlimited apps,
+10 GB of app data, 50 GB of photos and files, and 2,500 emails a month. Visits
+are reported against 50,000 a month on Free and 1,000,000 on Plus, but are not
+refused. Operations that exceed a limit are refused, but existing apps and data
+are not deleted. Your assistant receives a notice when usage reaches 80% of a
+limit.
 
 The email limit counts incoming and outgoing messages, and only sending stops
 when the limit is reached. Incoming messages are still delivered. The count
 resets on the first day of each month.
 
 The optional built-in builder includes five builds a month on Free and 100 on
-Plus. A build counts when it deploys an app, not per message. Apps built or
-changed through your connected agent do not use this allowance.
+Plus. A build counts when it deploys an app, not per message. Its model reads
+and writes up to 1,000,000 tokens a month on Free and 10,000,000 on the Plus
+plan, counted whether or not a conversation deploys. Apps built or changed
+through your connected agent do not use this allowance.
 
 When something must be compiled — Rust to WebAssembly, say — the builder can run
 it in a Linux container and copy the result into your app. The container comes
 with Rust 1.98.1 (and wasm-bindgen 0.2.128, wasm-opt 132), Python 3.13.15 with
 pip, Go 1.27.1, Zig 0.16.0 — which is also its C and C++ compiler — and Deno
 2.9.1 alongside Node and Bun. Anything else the builder installs for that
-session with `apt` or a download. One build gets **10 minutes** of container
-time; past that the build says so and keeps whatever it has already shipped. The
-container is destroyed when the build ends, and everything in it with it.
+session with `apt` or a package manager; the container's network reaches the
+package registries and nothing else. One build gets **10 minutes** of container
+time; past that the build says so and keeps whatever it has already shipped. A
+month holds **1 hour** of container time on Free and **10 hours** on the Plus
+plan, and one person has one container awake at a time on Free, two on the Plus
+plan. The container is destroyed when the build ends, and everything in it with
+it.
 
 Visits are counted but not refused. Apps remain available after the plan's
 monthly visit amount is exceeded. [The pricing page](/pricing) has both plans in

@@ -210,8 +210,9 @@ An app may carry wrangler.jsonc or wrangler.json beside worker.js. Its supported
 keys are main (the app-relative server source path, worker.js by default;
 directories such as dist/server.js are allowed; the upload wrapper is internal),
 compatibility_date, compatibility_flags, vars, d1_databases,
-r2_buckets, durable_objects.bindings with local class_name, migrations, ai, and
-vectorize. D1 databases, R2 buckets and Vectorize indexes belong to that app and
+r2_buckets, durable_objects.bindings with local class_name, migrations, and
+vectorize; Workers AI (ai) is refused, since a model's cost is not metered
+per space. D1 databases, R2 buckets and Vectorize indexes belong to that app and
 are created at deploy; a new Vectorize index names dimensions and metric, or a
 preset. app_deploy reports unsupported settings and app_list names the
 bindings. Removing a binding keeps its resource and data until the app is
@@ -225,7 +226,7 @@ to WebAssembly for a chess engine, an image codec, a solver — there is a
 sandbox: sandbox_write the sources, sandbox_exec the build (a Linux container
 with pinned Rust, Python, Go and Zig toolchains — zig cc is its C and C++
 compiler — plus wasm-bindgen and wasm-opt; sandbox_exec names the versions,
-and anything else installs for the session with apt or a download), then
+and anything else installs for the session with apt or a package manager), then
 sandbox_ship the artifact — pkg/*.wasm, pkg/*.js — into the app, where it is
 served beside index.html and the page imports it. Its files are gone when the
 build ends; only what you ship survives. Every second

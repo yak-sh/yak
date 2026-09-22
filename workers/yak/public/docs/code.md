@@ -323,7 +323,8 @@ supported keys are `main` (the app-relative server source path, `worker.js` by
 default; directories such as `dist/server.js` are allowed, and the upload
 wrapper is internal), `compatibility_date`, `compatibility_flags`, `vars`,
 `d1_databases`, `r2_buckets`, `durable_objects.bindings` with local
-`class_name`, `migrations`, `ai`, and `vectorize`. D1 databases, R2 buckets and
+`class_name`, `migrations`, and `vectorize`. `ai` is refused: Workers AI is
+billed to the platform and not metered per space. D1 databases, R2 buckets and
 Vectorize indexes belong to that app; yaks.app creates them at deploy and reuses
 them. A new Vectorize index also names its `dimensions` and `metric`, or a
 `preset`. `app_deploy` reports unsupported settings and `app_list` names the
@@ -570,10 +571,22 @@ target gives you one that a WASI shim runs. C++ takes the same flags, with
 `-fno-exceptions`.
 
 **Anything else installs for the session.** Commands run as root, so
-`apt-get install -y <package>` or a plain download both work, and neither costs
-the next build anything: **the container is destroyed when the build ends**, and
-everything you put in it goes with it. Only what `sandbox_ship` copied into the
-app survives.
+`apt-get install -y <package>`, `cargo`, `pip`, `npm` and `go get` all work, and
+none of it costs the next build anything.
+
+**The container is destroyed when the build ends**, and everything you put in it
+goes with it. Only what `sandbox_ship` copied into the app survives.
+
+**Its network reaches the package registries and nothing else**: crates.io,
+PyPI, npm, the Go module proxy, Ubuntu's archive, and yaks.app itself. Any other
+address is refused, so a build fetches what it needs from a registry, not from a
+URL.
+
+**One sandbox at a time.** Each space has its own, and one person holds one
+awake at a time on the free plan, two on the Plus plan. A sandbox sleeps five
+minutes after its last command, and the next space's wakes then. The month's
+sandbox time is 1 hour on the free plan, shared by the free spaces you own, and
+10 hours for each space on the Plus plan.
 
 That container is **signed in as you**. Two variables are set in every command's
 environment, and the `yak` CLI is installed:

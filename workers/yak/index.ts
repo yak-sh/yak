@@ -76,6 +76,7 @@
 //                             segment, the front page answers what is left
 //                             (T-33040)
 import { waitUntil, WorkerEntrypoint } from 'cloudflare:workers'
+import { Sandbox as Workbench } from '@cloudflare/sandbox'
 // @ts-types="./sentry.d.ts"
 import {
   instrumentDurableObjectWithSentry,
@@ -119,6 +120,7 @@ import {
 import * as sell from './sell.ts'
 import { slid } from './session.ts'
 import { fault, refusal } from './unseen.ts'
+import { egress } from './sandbox.ts'
 
 // The Store, at every address the binding names — the directory at
 // `yak/platform` and every app's own beside it (T-33815). It carries the DO's
@@ -137,7 +139,23 @@ export let Builder = instrumentDurableObjectWithSentry(options, Built)
 // as a value — it imports `cloudflare:workers`, which only the runtime can
 // load, and sandbox.ts types the binding instead so every test can reach the
 // tools that use it.
-export { Sandbox } from '@cloudflare/sandbox'
+//
+// Its network is closed but for the registries a build installs from
+// (sandbox.ts `egress`, T-37883): the container starts with no internet, and
+// every HTTP and HTTPS request it makes is handed to `ContainerProxy`, which
+// lets an allowed host through and answers 520 to the rest. The SDK puts the
+// interception's certificate authority in the container's trust store itself.
+// The class keeps the SDK's name, since the Durable Object binding and its
+// migration are keyed by it.
+export { ContainerProxy } from '@cloudflare/sandbox'
+export class Sandbox extends Workbench<Env> {
+  override enableInternet = false
+  override interceptHttps = true
+  constructor(...made: ConstructorParameters<typeof Workbench<Env>>) {
+    super(...made)
+    this.allowedHosts = egress(made[1])
+  }
+}
 
 // The kernel's second entrypoint, and the only one with a cache in front of it
 // (cache.ts, wrangler.toml `[exports.Files]`). The default entrypoint below is

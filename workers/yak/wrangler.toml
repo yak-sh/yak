@@ -14,7 +14,15 @@ compatibility_date = "2025-05-08"
 # OAuth provider requires it before it will fetch a Client ID Metadata
 # Document (identity.ts), because a client_id is a URL a stranger chose and
 # same-zone routing would make that URL an SSRF into our own origin.
-compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+#
+# enable_ctx_exports is what the sandbox's egress rule rides (index.ts
+# `Sandbox`): the container's outbound traffic is handed to `ContainerProxy`
+# through `ctx.exports`, which this compatibility date predates.
+compatibility_flags = [
+  "nodejs_compat",
+  "global_fetch_strictly_public",
+  "enable_ctx_exports",
+]
 
 # The apex and every first-level space hostname, both on the yaks.app zone;
 # the zone's Universal certificate covers the wildcard. `*/*` is the third
@@ -176,8 +184,10 @@ new_sqlite_classes = ["Sandbox"]
 # its whole budget costs about two cents.
 #
 # `max_instances` bounds what can be running at once — one sandbox per space,
-# so five spaces building simultaneously. Nothing here is a fleet yet; raising
-# it is one number.
+# so five spaces building simultaneously, and one person holds at most one of
+# them on the free tier and two on the Plus plan (sandbox.ts `AWAKE`). Nothing
+# here is a fleet yet; raising it is one number. Outbound network is denied
+# but for the package registries (sandbox.ts `REGISTRIES`, index.ts).
 #
 # `image_build_context` is packages/cli rather than the Dockerfile's own
 # directory, which is what a build context defaults to: the image installs the

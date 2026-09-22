@@ -143,12 +143,14 @@ import { GRAPH, mail } from './mail.ts'
 import { PAGES, uriOf, whole } from './guide.ts'
 import { asset, EITHER, NO_ARGS, PUBLIC, publics } from './preauth.ts'
 import {
+  awake,
   type Box,
   boxOf,
   BUDGET,
   CAP,
   CWD,
   paid,
+  seconds,
   spending,
   TIMEOUT,
 } from './sandbox.ts'
@@ -189,10 +191,14 @@ import { archive, healed, line, openIn, rewrote, serve } from './unseen.ts'
 import {
   atCeiling,
   ceilings,
-  countedSandbox,
+  countedSpend,
+  free,
   monthOf,
+  refusedSpend,
   size,
+  SPACES,
   standing,
+  tooManySpaces,
 } from './meter.ts'
 import {
   held,
@@ -1467,6 +1473,11 @@ export let call = (ctx: Ctx, name: string, args: Args): Promise<Out> => {
  * with none, mints one, and pays for its own seconds here — leaving the
  * container to sleep on its own (sandbox.ts `SLEEP`), because the person may
  * well call again in a moment and a fresh container is a fresh `cargo build`.
+ *
+ * Two things are asked before the container is reached (T-37882, T-37883):
+ * the month's sandbox seconds, the account's on a free space, with what this
+ * build has held so far; and whether the caller already holds as many
+ * sandboxes awake in other spaces as the plan allows.
  */
 let bench = async <T>(
   ctx: Ctx,
@@ -1474,12 +1485,21 @@ let bench = async <T>(
   body: (box: Box) => Promise<T>,
 ): Promise<T> => {
   let spend = ctx.spend ?? spending()
+  let no = await refusedSpend(
+    ctx.dir,
+    space,
+    'seconds',
+    ctx.env,
+    seconds(spend),
+  )
+  if (no) throw refuse('limit', no)
+  await awake(ctx.env, space, ctx.person)
   let box = boxOf(ctx.env, space, ctx.person, spend)
   try {
     return await body(box)
   } finally {
     if (!ctx.spend) {
-      await paid(spend, (s) => countedSandbox(ctx.env, space, s))
+      await paid(spend, (s) => countedSpend(ctx.env, space, 0, s))
     }
   }
 }
@@ -1643,6 +1663,18 @@ let argsOf = (input: unknown) => {
     .join(', ')
 }
 
+/** Refused where the caller already owns as many free spaces as one person
+ * gets (meter.ts `SPACES`, T-37882). A space in the trash is on its way out,
+ * so it does not count; one somebody else made and invited them into is not
+ * theirs, and one on the Plus plan is paid for on its own. */
+let roomFor = async (ctx: Ctx) => {
+  let held = (await ctx.dir.spaces(ctx.person, 'owner'))
+    .filter((s) => free(s) && !s.trashed)
+  if (held.length >= SPACES) {
+    throw refuse('limit', tooManySpaces(held, ctx.env))
+  }
+}
+
 let SLUGS = PAGES.map((p) => p.slug).join(', ')
 let COVERING = PAGES.map((p) => `${p.slug} (${p.brief})`).join(', ')
 
@@ -1700,6 +1732,7 @@ let OURS: Row[] = [
             'pick another slug',
         )
       }
+      await roomFor(ctx)
       // The space, its owner, and the owner's person row in one batch. The
       // person is keyed by the caller's sign-in, and a bundle mints at an eid
       // its author chose (T-32455), so the whole batch is bundles. Once
@@ -1941,6 +1974,7 @@ let OURS: Row[] = [
             `https://${spaceHost(ctx.env, space.slug)}/`,
         )
       }
+      if (free(space)) await roomFor(ctx)
       await untrashSpace(ctx.env, ctx.dir, space, who)
       return {
         text:
@@ -4277,7 +4311,7 @@ let OURS: Row[] = [
       if (!had) {
         throw refuse('missing', `${email} is not a member of ${space.slug}`)
       }
-      if (had.role == 'owner' && (await ctx.dir.owners(space)) < 2) {
+      if (had.role == 'owner' && (await ctx.dir.owners(space)).length < 2) {
         throw refuse('conflict', `${email} is the only owner of ${space.slug}`)
       }
       await ctx.dir.apply({

@@ -33,10 +33,12 @@
 // the page that will draw this (T-34240) draws lines.
 //
 // A build is an `app_deploy` the builder performed, not a message: the loop
-// asks the meter before it spends anything (`refusedBuild`) and counts one
+// asks the meter before it spends anything (`over`) and counts one
 // afterwards where a deploy went through (`countedBuild`), so a long
 // conversation that ships one app costs one build and one that ships nothing
-// costs none. What the meter is holding is meter.ts's (T-34241); the page is
+// costs none. Its tokens are counted either way (`countedSpend`), and the
+// month's tokens are asked before every round, since a conversation that
+// never deploys spends them all the same. What the meter is holding is meter.ts's (T-34241); the page is
 // somebody else's (T-34242).
 import { worded } from '@yaks/tools'
 import { running } from './agent.ts'
@@ -45,9 +47,9 @@ import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { instructions, whole } from './guide.ts'
 import { type Host, hosted, url } from './host.ts'
-import { countedBuild, countedSandbox, refusedBuild } from './meter.ts'
+import { atCeiling, countedBuild, countedSpend, over, pooled } from './meter.ts'
 import { asset } from './preauth.ts'
-import { released, spending } from './sandbox.ts'
+import { asleep, released, spending } from './sandbox.ts'
 import type { Who } from './session.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { standing } from './standing.ts'
@@ -546,17 +548,21 @@ export let build = async (
   let spend = spending()
   // Every way out of the loop, including the refusals: a build that happened
   // is counted whichever end the conversation came to, and a conversation
-  // that deployed nothing is counted nowhere (meter.ts `countedBuild`). The
-  // container goes on every one of those ends too — a refusal is not a reason
-  // to leave one running.
+  // that deployed nothing is counted as the tokens and seconds it spent and
+  // no build (meter.ts `countedSpend`). The container goes on every one of
+  // those ends too — a refusal is not a reason to leave one running.
   let end = async (refused?: string): Promise<Built> => {
     if (refused) lines.push({ said: 'builder', text: refused })
     let seconds = await released(env, space, spend)
-    // One write, from one reading of the space: the build and the seconds it
-    // compiled for go together, and a conversation that compiled something
-    // and shipped nothing pays for the container alone (meter.ts).
+    // The container went with the build, so the person's place goes too
+    // (sandbox.ts `awake`), rather than when its nap would have ended.
+    if (seconds && who.person) await asleep(env, space, who.person)
+    // One write, from one reading of the space: the build, its tokens and
+    // the seconds it compiled for go together.
     if (built) await countedBuild(env, space, usage, seconds)
-    else if (seconds) await countedSandbox(env, space, seconds)
+    else {
+      await countedSpend(env, space, usage.input + usage.output, seconds)
+    }
     let last = [...lines].reverse().find((l) => l.said == 'builder')
     let text = last?.said == 'builder' ? last.text : ''
     on({ beat: 'done', text, ...(refused ? { refused } : {}) })
@@ -569,21 +575,20 @@ export let build = async (
     }
   }
   if (!who.person) return await end(anonymous(env))
-  // The month's builds (meter.ts, T-34241). It is asked before anything is
-  // spent, and what comes back is a sentence the builder says rather than a
-  // door slammed mid-conversation — so a refused build costs the person
-  // nothing, not a build and not the tokens of the refusal.
-  let full = refusedBuild(space, new Date(), env)
-  if (full) return await end(full)
+  // Fresh, every read: a tool answers about what a tool just wrote
+  // (directory.ts, mcp.ts).
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  // The month's builds and tokens, the account's on a free space (meter.ts,
+  // T-34241, T-37882). They are asked before anything is spent, and what
+  // comes back is a sentence the builder says rather than a door slammed
+  // mid-conversation — so a refused build costs the person nothing, not a
+  // build and not the tokens of the refusal. The reading is taken once; the
+  // tokens this conversation spends are added to it round by round.
+  let month = await pooled(dir, space)
+  let full = (['builds', 'tokens'] as const).find((w) => over(space, month, w))
+  if (full) return await end(atCeiling(space, full, env))
 
-  let ctx: Ctx = {
-    env,
-    // Fresh, every read: a tool answers about what a tool just wrote
-    // (directory.ts, mcp.ts).
-    dir: directory(bound(env.DIRECTORY, dirPart.fetch, env), true),
-    person: who.person,
-    spend,
-  }
+  let ctx: Ctx = { env, dir, person: who.person, spend }
   let model = opts.model ?? modelOf(env, opts.id ?? idOf(env, space))
   let tools = roster(ctx)
   let by = new Map(tools.map((t) => [t.fn.name, t.run]))
@@ -597,6 +602,9 @@ export let build = async (
 
   while (true) {
     if (rounds >= max) return await end(tooMany(max))
+    if (over(space, month, 'tokens', usage.input + usage.output)) {
+      return await end(atCeiling(space, 'tokens', env))
+    }
     if (now() - started > ms) return await end(tooLong(ms))
     let answer: Answer
     try {

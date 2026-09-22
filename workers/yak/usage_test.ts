@@ -17,16 +17,20 @@ import {
   BUILDS,
   ceilings,
   countedBuild,
+  countedSpend,
   FILES,
   FREE,
   LETTERS,
   level,
   PLUS,
-  refusedBuild,
+  pooled,
+  refusedSpend,
   refusedVisit,
+  SECONDS,
   size,
   spent,
   standing,
+  TOKENS,
   usedBuilds,
 } from './meter.ts'
 
@@ -355,6 +359,15 @@ Deno.test('a refusal names the ceiling and where the plans are written', () => {
   )
 })
 
+// A space nobody else's spending is pooled with: its own reading is the
+// account's (meter.ts `pooled`).
+let alone = {
+  owners: () => Promise.resolve([]),
+  spaces: () => Promise.resolve([]),
+}
+let refusedBuild = (s: Space, now: Date) =>
+  refusedSpend(alone, s, 'builds', {}, 0, now)
+
 // The builder's ceiling (T-34241). A build is one app shipped, so the count is
 // written once by the loop that finished one (`countedBuild`) and read before
 // it starts (`refusedBuild`).
@@ -378,7 +391,7 @@ let writes = () => {
 
 Deno.test('a free space gets five builds each month regardless of lifetime use', async () => {
   for (let builds of [0, 1, 4]) {
-    assertEquals(refusedBuild(space({ builds, built: 40 }), NOW), null)
+    assertEquals(await refusedBuild(space({ builds, built: 40 }), NOW), null)
   }
   let { sent, env } = writes()
   await countedBuild(env, space(), { input: 900, output: 100 }, 0, NOW)
@@ -391,11 +404,11 @@ Deno.test('a free space gets five builds each month regardless of lifetime use',
   })
 
   let after = space({ builds: 5, tokens: 1_000, built: 45 })
-  let no = refusedBuild(after, NOW)!
+  let no = (await refusedBuild(after, NOW))!
   assert(no)
   assertStringIncludes(no, 'https://jeff.yaks.app/_yaks/billing')
   assert(!/checkout|subscribe/i.test(no), no)
-  assert(refusedBuild(space({ builds: 6 }), NOW))
+  assert(await refusedBuild(space({ builds: 6 }), NOW))
 
   // A refusal costs them nothing — not the build, and not the sentence: the
   // count is written by the loop that finished one, and this one never ran.
@@ -406,19 +419,19 @@ Deno.test('a free space gets five builds each month regardless of lifetime use',
   let october = new Date('2026-10-02T00:00:00Z')
   assertEquals(spent(after, october).built, 45)
   assertEquals(usedBuilds(after, october), 0)
-  assertEquals(refusedBuild(after, october), null)
+  assertEquals(await refusedBuild(after, october), null)
 })
 
 Deno.test('a paid space counts its builds down, and the month gives them back', async () => {
   let plus = (builds: number, month = '2026-09') =>
     space({ month, builds, built: 40 }, 'plus')
-  assertEquals(refusedBuild(plus(BUILDS.plus - 1), NOW), null)
-  let no = refusedBuild(plus(BUILDS.plus), NOW)!
-  assertStringIncludes(no, `${BUILDS.plus} built-in builds this month`)
+  assertEquals(await refusedBuild(plus(BUILDS.plus - 1), NOW), null)
+  let no = (await refusedBuild(plus(BUILDS.plus), NOW))!
+  assertStringIncludes(no, `${BUILDS.plus} built-in builds a month`)
   assertStringIncludes(no, 'build again on the 1st')
   assertStringIncludes(no, 'https://jeff.yaks.app/_yaks/billing')
   // Last month's builds are not this month's.
-  assertEquals(refusedBuild(plus(BUILDS.plus, '2026-08'), NOW), null)
+  assertEquals(await refusedBuild(plus(BUILDS.plus, '2026-08'), NOW), null)
 
   // The tokens are the month's, summed both ways, because what they cost is
   // one number or it is a number nobody can add up.
@@ -460,11 +473,14 @@ Deno.test('the build line warns at 80%, and the line says both numbers', () => {
 
   // Both the build allowance and token usage are monthly on either plan.
   let said = standing(space({ builds: 1, tokens: 4_210, built: 1 }), 2, NOW)
-  assertStringIncludes(said, '1 of 5 builds a month (4,210 tokens this month)')
+  assertStringIncludes(
+    said,
+    '1 of 5 builds a month (4,210 of 1,000,000 tokens and 0 of 3,600 sandbox seconds this month)',
+  )
   assertStringIncludes(said, 'a build past 5')
   assertStringIncludes(
     standing(space({ builds: 4, tokens: 900, built: 44 }, 'plus'), 9, NOW),
-    `4 of ${BUILDS.plus} builds a month (900 tokens this month)`,
+    `4 of ${BUILDS.plus} builds a month (900 of 10,000,000 tokens`,
   )
 })
 
@@ -635,4 +651,47 @@ Deno.test('all quota guidance uses space plan settings without promising a Plus 
     NOW,
   )!
   assertEquals(response.status, 429)
+})
+
+// The account (T-37882): a free allowance is the owner's, summed over the free
+// spaces they own, and a Plus space answers to its own alone.
+Deno.test('a free space answers to the free spaces its owner owns, summed', async () => {
+  let as = (eid: string, meter: Partial<Meter>, tier: Tier | null = null) => ({
+    ...space(meter, tier),
+    eid,
+    slug: eid,
+  })
+  let a = as('a', { emails: 60, tokens: 600_000 })
+  let b = as('b', { emails: 40, seconds: 3_000 })
+  let paid = as('paid', { emails: 900 }, 'plus')
+  let lastMonth = as('old', { month: '2026-08', emails: 99 })
+  let dir = {
+    owners: () => Promise.resolve(['ada']),
+    spaces: () => Promise.resolve([a, b, paid, lastMonth]),
+  }
+  let m = await pooled(dir, a, NOW)
+  assertEquals([m.emails, m.tokens, m.seconds], [100, 600_000, 3_000])
+  // Not a space's own: b has sent 40 of its 100, and the account has sent
+  // all of them.
+  let no = (await refusedSpend(dir, b, 'emails', {}, 0, NOW))!
+  assertStringIncludes(no, 'shared by the free spaces its owner has')
+  assertStringIncludes(no, 'The Plus plan allows more')
+  // What a build holds uncounted is added to the reading.
+  assertEquals(await refusedSpend(dir, b, 'seconds', {}, 599, NOW), null)
+  assert(await refusedSpend(dir, b, 'seconds', {}, 600, NOW))
+  assertEquals(await refusedSpend(dir, a, 'tokens', {}, 399_999, NOW), null)
+  assert(await refusedSpend(dir, a, 'tokens', {}, 400_000, NOW))
+  // The Plus plan space is paid for on its own.
+  assertEquals((await pooled(dir, paid, NOW)).emails, 900)
+  assertEquals(await refusedSpend(dir, paid, 'emails', {}, 0, NOW), null)
+  assertEquals([TOKENS.free, SECONDS.free], [1_000_000, 3_600])
+})
+
+Deno.test('a conversation that shipped nothing pays for its tokens and seconds', async () => {
+  let { sent, env } = writes()
+  let held = space({ tokens: 10, seconds: 2, built: 3 })
+  await countedSpend(env, held, 90, 5, NOW)
+  assertEquals(sent[0].meter, { month: '2026-09', tokens: 100, seconds: 7 })
+  await countedSpend(env, space(), 0, 0, NOW)
+  assertEquals(sent.length, 1)
 })

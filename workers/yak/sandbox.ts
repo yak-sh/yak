@@ -15,7 +15,7 @@
 // wasm — and `wasm-bindgen` and `wasm-opt` beside them. Nothing rarer than
 // those, because an image is disk, disk is money, and every megabyte of it is
 // pulled before the first command runs; a build that wants something else
-// installs it for the session with apt or a download, and the container it
+// installs it for the session with apt or a registry, and the container it
 // installed into is destroyed at the end of that build (T-34516).
 //
 // The binding is typed, never imported, the way every other binding in this
@@ -51,9 +51,9 @@
 // one per command ({@link signed}), and it dies with the container
 // ({@link destroyed}). It rides the SDK's per-invocation env and is never
 // exported into a shell, so nothing puts it in the builder's transcript.
-import type { Space } from './directory.ts'
+import type { Space, Tier } from './directory.ts'
 import { retryOnce } from './door.ts'
-import { type Grant, ledger, mint, tokenOf } from './grants.ts'
+import { type Grant, type Kv, ledger, mint, tokenOf } from './grants.ts'
 import { type Host, url } from './host.ts'
 import { refuse } from './tool.ts'
 
@@ -136,6 +136,35 @@ export let CAP = 8_000
 export let sandboxHost = (env: Host = {}) => url(env)
 export let HOST = sandboxHost()
 
+/** Where a sandbox may reach (T-37883): the package registries its
+ * toolchains install from, Ubuntu's archive for apt, and this platform, which
+ * the `yaks` CLI inside it talks to. Everything else is refused at the
+ * container's edge (index.ts `Sandbox`), so a command cannot mail what it
+ * reads to somebody else's server, or be anybody's crawler. */
+export let REGISTRIES = [
+  // Rust: the crates index and downloads, and rustup's targets.
+  'crates.io',
+  'index.crates.io',
+  'static.crates.io',
+  'static.rust-lang.org',
+  // Python.
+  'pypi.org',
+  'files.pythonhosted.org',
+  // JavaScript.
+  'registry.npmjs.org',
+  // Go's module proxy and checksum database.
+  'proxy.golang.org',
+  'sum.golang.org',
+  // apt, on the image's Ubuntu.
+  'archive.ubuntu.com',
+  'security.ubuntu.com',
+]
+
+export let egress = (env: Host = {}) => [
+  ...REGISTRIES,
+  new URL(sandboxHost(env)).hostname,
+]
+
 /** How long the grant in the container's environment lives, in hours: the
  * whole build budget plus the nap that outlasts it, so the token is alive for
  * as long as anything in the container could still be running and dead soon
@@ -148,6 +177,91 @@ export let NO_BOX =
   'No sandbox is running here: the workbench is a Cloudflare Container and ' +
   'this runtime has none. Write the app in files a browser runs — html, css ' +
   'and js — and nothing needs compiling.'
+
+/** How many sandboxes one person may hold awake at once, by the plan of the
+ * space they are working in (T-37883). A sandbox is keyed per space, so
+ * without this a person owning five spaces holds five containers, which is
+ * every one the deploy runs (wrangler.toml `max_instances`). */
+export let AWAKE: Record<Tier, number> = { free: 1, plus: 2 }
+
+/** How long one call keeps a sandbox awake, in seconds: the longest command,
+ * then the nap before it sleeps on its own. */
+export let HELD = TIMEOUT / 1000 + NAP
+
+// The sandboxes a person holds, in the KV the grants live in: one row per
+// person, space eid → the unix second it is asleep by. One row rather than a
+// row per sandbox because a count is one read of it, where a KV listing is
+// neither consistent nor cheap. Nothing sweeps it: a sandbox past its second
+// has slept, and the row dies a minute after the last of them.
+let hold = (person: string) => `awake:${person}`
+
+let held = async (kv: Kv, person: string, now: number) =>
+  Object.fromEntries(
+    Object.entries(
+      JSON.parse(await kv.get(hold(person)) ?? '{}') as Record<string, number>,
+    ).filter(([, until]) => until > now),
+  )
+
+/** Past the per-person limit. Said as the way out: finish, or wait. */
+export let tooAwake = (awake: number, tier: Tier | null) =>
+  `you already have ${awake} sandbox${
+    awake == 1 ? '' : 'es'
+  } awake in another space, and the ${
+    tier == 'plus' ? 'Plus plan' : 'free tier'
+  } allows ${AWAKE[tier ?? 'free']} at a time — finish there, or wait: a ` +
+  `sandbox sleeps ${NAP / 60} minutes after its last command`
+
+/**
+ * This person's sandbox in this space, counted awake — refused where they
+ * already hold as many elsewhere as the plan allows. No KV or no container
+ * bound (a probe, a test) holds nothing.
+ *
+ * The row is written only when this space's second is half spent: KV takes
+ * one write a second per key, and a build calls the tools faster than that.
+ */
+export let awake = async (
+  env: { SANDBOX?: Sandboxes; OAUTH_KV?: unknown },
+  space: Space,
+  person: string,
+  now = Date.now(),
+) => {
+  let kv = env.OAUTH_KV as Kv | undefined
+  if (!env.SANDBOX || !kv?.get) return
+  let t = Math.floor(now / 1000)
+  let rows = await held(kv, person, t)
+  let others = Object.keys(rows).filter((eid) => eid != space.eid).length
+  if (others >= AWAKE[space.tier ?? 'free']) {
+    throw refuse('limit', tooAwake(others, space.tier))
+  }
+  if ((rows[space.eid] ?? 0) - t > HELD / 2) return
+  await kv.put(
+    hold(person),
+    JSON.stringify({ ...rows, [space.eid]: t + HELD }),
+    {
+      expirationTtl: HELD + 60,
+    },
+  )
+}
+
+/** This person's sandbox in this space, asleep: a build that destroyed its
+ * container gives the place back at once rather than when the nap would. */
+export let asleep = async (
+  env: { OAUTH_KV?: unknown },
+  space: Space,
+  person: string,
+  now = Date.now(),
+) => {
+  let kv = env.OAUTH_KV as Kv | undefined
+  if (!kv?.get) return
+  let rows = await held(kv, person, Math.floor(now / 1000))
+  if (!(space.eid in rows)) return
+  delete rows[space.eid]
+  if (Object.keys(rows).length) {
+    await kv.put(hold(person), JSON.stringify(rows), {
+      expirationTtl: HELD + 60,
+    })
+  } else await kv.delete(hold(person))
+}
 
 /** Past the budget. It says what is already built is built, the way every
  * other end of a build says it (builder.ts). */

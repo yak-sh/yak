@@ -113,7 +113,7 @@ Deno.test('a space and an app are seeded, minted, and read back', async () => {
   // The roster reads back with the platform's own three seats.
   assertEquals(await dir.role(s, ada), 'owner')
   assertEquals(await dir.members(s), [ada])
-  assertEquals(await dir.owners(s), 1)
+  assertEquals((await dir.owners(s)).length, 1)
 })
 
 Deno.test('the slug a space is taken by is taken once', async () => {

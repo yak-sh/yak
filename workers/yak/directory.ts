@@ -1047,10 +1047,13 @@ export let directory = (via: Fetcher, now = false) => {
       (await query(`.member.space=${space.eid}`))
         .map((r) => r.member && idOf(r.member.person))
         .filter((p): p is string => !!p),
-    // How many owners a space has, so removing a member can refuse to leave
-    // it with none.
-    owners: async (space: Space) =>
-      (await query(`.member.space=${space.eid}&.member.role=owner`)).length,
+    // Who owns a space, by person eid: so removing a member can refuse to
+    // leave it with none, and so a free space's spending is read against its
+    // owners' allowance (meter.ts `pooled`).
+    owners: async (space: Space): Promise<string[]> =>
+      (await query(`.member.space=${space.eid}&.member.role=owner`))
+        .map((r) => r.member && idOf(r.member.person))
+        .filter((p): p is string => !!p),
     // Who is at an address, if the platform has met them. signin.ts's
     // `personOf` asks this same question and mints when the answer is
     // nobody, which is how an invited person's later sign-in finds the row

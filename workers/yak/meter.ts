@@ -131,6 +131,18 @@ export let BUILDS: Record<Tier, number> = { free: 5, plus: 100 }
 
 export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
 
+// What the builder's model may read and write in a month, input and output
+// summed as `meter.tokens` is. A build is up to a dozen rounds over a prompt
+// of several thousand tokens, so the free five builds fit in a million with
+// room for the conversations that ship nothing; the Plus plan's hundred builds
+// are held to ten million, which on Workers AI is a few dollars of the nine.
+export let TOKENS: Record<Tier, number> = { free: 1_000_000, plus: 10_000_000 }
+
+// Seconds of sandbox container a month (sandbox.ts). An hour free is six
+// builds' whole budget (sandbox.ts `BUDGET`); ten hours on the Plus plan is
+// about $1.30 of standard-2 time at Cloudflare's rates (wrangler.toml).
+export let SECONDS: Record<Tier, number> = { free: 3_600, plus: 36_000 }
+
 // What a tier costs a month, in whole dollars (D-32751). The number is
 // tax-inclusive: $9 is what a customer pays anywhere, so this is the whole
 // price rather than a subtotal something is added to. Stripe holds the same
@@ -143,6 +155,88 @@ export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
 export let PRICE: Record<Tier, number> = { free: 0, plus: 9 }
 
 export let CURRENCY = 'USD'
+
+// ---- the account (T-37882) --------------------------------------------------
+//
+// Jeff, 2026-09-22 (C-37911): "oh yes, those should be per-account. and maybe
+// limit to 5 (same as apps) on free account. i want to prompt folks to
+// upgrade, but also the reason for more spaces is to *share*, so that should
+// be encouraged! and yeah, limit anything currently uncapped"
+//
+// So a free allowance is a person's, not a space's. A person owns at most
+// {@link SPACES} free spaces, and the spaces somebody else made and invited
+// them into are not theirs to count. What they spend is counted where it
+// always was, on each space's meter, and the account's month is those meters
+// summed over the free spaces they own ({@link pooled}) rather than a second
+// counter beside them: one place a letter is written down, and a space that
+// moves to the Plus plan takes its reading with it. A Plus space answers to
+// its own allowance alone, since it is paid for on its own.
+
+/** The free spaces one person may own. */
+export let SPACES = 5
+
+/** The monthly allowances a spend is refused at, before it is spent. */
+export type Spend = 'emails' | 'builds' | 'tokens' | 'seconds'
+
+let ALLOWANCE: Record<Spend, Record<Tier, number>> = {
+  emails: LETTERS,
+  builds: BUILDS,
+  tokens: TOKENS,
+  seconds: SECONDS,
+}
+let SPENDS = Object.keys(ALLOWANCE) as Spend[]
+
+export let allowance = (what: Spend, tier: Tier | null) =>
+  ALLOWANCE[what][tier ?? 'free']
+
+/** A space its owners' free allowance covers: not on the Plus plan, and not
+ * comped (directory.ts `tierOf` reads a comp as the Plus plan). */
+export let free = (space: Space) => space.tier != 'plus'
+
+/** The directory, as far as the account reads it. */
+export type Owned = Pick<Directory, 'owners' | 'spaces'>
+
+/**
+ * What a space answers to this month: its own reading on the Plus plan, and
+ * on the free tier each figure summed over the free spaces of whichever owner
+ * of it has spent the most. A space almost always has one owner; one with
+ * several stops when any of them is out, since each of them is paying for it
+ * out of their own allowance.
+ */
+export let pooled = async (
+  dir: Owned,
+  space: Space,
+  now = new Date(),
+): Promise<Meter> => {
+  let most = { ...spent(space, now) }
+  if (!free(space)) return most
+  for (let person of await dir.owners(space)) {
+    let theirs = (await dir.spaces(person, 'owner')).filter(free)
+    for (let what of SPENDS) {
+      let sum = theirs.reduce((n, s) => n + spent(s, now)[what], 0)
+      most[what] = Math.max(most[what], sum)
+    }
+  }
+  return most
+}
+
+/** Whether a reading is at an allowance; `more` is what the caller holds
+ * that is not counted yet — the tokens and seconds of a build still going. */
+export let over = (space: Space, m: Meter, what: Spend, more = 0) =>
+  m[what] + more >= allowance(what, space.tier)
+
+/** What stops this spend here, or null to go ahead. */
+export let refusedSpend = async (
+  dir: Owned,
+  space: Space,
+  what: Spend,
+  env: Host = {},
+  more = 0,
+  now = new Date(),
+) =>
+  over(space, await pooled(dir, space, now), what, more)
+    ? atCeiling(space, what, env)
+    : null
 
 // What one build's model calls cost, as the builder's loop reports them
 // (T-34239 `build()` returns it). Input and output are summed into
@@ -216,8 +310,9 @@ export let fullness = (space: Space, apps: number, now = new Date()) => {
   let m = spent(space, now)
   let both = {
     files: (m.files ?? 0) / FILES[space.tier ?? 'free'],
-    emails: m.emails / letters(space.tier),
-    builds: usedBuilds(space, now) / builds(space.tier),
+    ...Object.fromEntries(
+      SPENDS.map((what) => [what, m[what] / allowance(what, space.tier)]),
+    ),
   }
   return free
     ? {
@@ -264,9 +359,13 @@ export let standing = (
   let made = `${count(usedBuilds(space, now))} of ${
     count(builds(space.tier))
   } builds a month`
-  // The tokens those builds spent: the one place a person sees what a build
-  // costs us, and the month's, whatever span the builds are counted over.
-  let cost = `${count(m.tokens)} tokens this month`
+  // The tokens and the sandbox time the builder spent: the one place a person
+  // sees what a build costs us, each against its own monthly allowance.
+  let cost = `${count(m.tokens)} of ${
+    count(allowance('tokens', space.tier))
+  } tokens and ${count(m.seconds)} of ${
+    count(allowance('seconds', space.tier))
+  } sandbox seconds this month`
   let files = `${size(m.files ?? 0)} of ${
     size(FILES[space.tier ?? 'free'])
   } photos and files (hourly reading)`
@@ -314,11 +413,14 @@ export let standing = (
 // signed-in web page's door (billing.ts).
 export let atCeiling = (
   space: Space,
-  what: 'apps' | 'bytes' | 'files' | 'emails' | 'builds',
+  what: 'apps' | 'bytes' | 'files' | Spend,
   env: Host = {},
 ) => {
   let free = ceilings(space.tier, space.slug)!
   let tier = space.tier ?? 'free'
+  // A free allowance is the account's ({@link pooled}), so it is said as the
+  // owner's: the space in hand may have spent none of it.
+  let shared = tier == 'free' ? ', shared by the free spaces its owner has' : ''
   // Comped spaces can hit the letter/build allowances, not app/data ceilings.
   let said = {
     apps: () =>
@@ -338,24 +440,45 @@ export let atCeiling = (
     emails: () =>
       `${space.slug} is on the ${tier} tier, which is ${
         count(letters(space.tier))
-      } emails a month, and this month's are sent — it can send again on the ` +
-      `1st, and letters written to it still arrive`,
+      } emails a month${shared}, and this month's are sent — it can send ` +
+      `again on the 1st, and letters written to it still arrive`,
     // The builder's refusal, which it says in the chat rather than bouncing
     // (T-34242 renders it): a person asked for an app in words, and a person
     // asked in words is owed an answer in words. What it leaves them is the
     // app they already have and the tools to change it themselves.
     builds: () =>
-      `${space.slug} has used its ${
+      `${space.slug} is on the ${tier} tier, which is ${
         count(builds(space.tier))
-      } built-in builds this month — it can build again on the 1st, ` +
-      `or keep building with a connected agent`,
+      } built-in builds a month${shared}, and this month's are used — it ` +
+      `can build again on the 1st, or keep building with a connected agent`,
+    tokens: () =>
+      `${space.slug} is on the ${tier} tier, which is ${
+        count(allowance('tokens', space.tier))
+      } builder tokens a month${shared}, and this month's are spent — the ` +
+      `builder answers again on the 1st, or keep building with a connected ` +
+      `agent`,
+    seconds: () =>
+      `${space.slug} is on the ${tier} tier, which is ${
+        count(allowance('seconds', space.tier))
+      } seconds of sandbox time a month${shared}, and this month's are ` +
+      `spent — the sandbox wakes again on the 1st, and an app of html, css ` +
+      `and js needs none`,
   }[what]()
   return `${said}. ${
     tier == 'plus'
       ? `Manage usage and plan settings`
-      : `Compare paid plans in settings`
+      : `The Plus plan allows more. Compare paid plans in settings`
   }: ${planSettings(space.slug, env)}`
 }
+
+/** The refusal at {@link SPACES}: the free spaces a person owns, and what
+ * frees one. Sharing is never what stops them, so it says so. */
+export let tooManySpaces = (held: Space[], env: Host = {}) =>
+  `you own ${held.length} free spaces, which is what one person gets for ` +
+  `nothing — delete one (space_delete) to make another. A space on the Plus ` +
+  `plan does not count toward them, and neither does a space somebody else ` +
+  `invited you into. The Plus plan allows more. Compare paid plans in ` +
+  `settings: ${planSettings(held[0].slug, env)}`
 
 // ---- the letters (T-33688) --------------------------------------------------
 //
@@ -398,12 +521,6 @@ export let counted = async (
 // The refusal is a sentence the builder says, not a bounce: the person is
 // talking to it, and a door slamming mid-conversation is not an answer. The
 // builder asks before it starts and repeats what comes back.
-
-/** What stops the builder here, or null to go ahead. */
-export let refusedBuild = (space: Space, now = new Date(), env: Host = {}) =>
-  usedBuilds(space, now) >= builds(space.tier)
-    ? atCeiling(space, 'builds', env)
-    : null
 
 /**
  * One completed build and what it cost: the month's builds, tokens and
@@ -455,36 +572,40 @@ export let countedBuild = async (
 // from the first sandbox call in a build to the moment the build lets the
 // container go (sandbox.ts `Spend`), rounded up.
 //
-// There is no ceiling on the plan here, only the per-build budget the tools
-// refuse at (sandbox.ts `BUDGET`), because the builds ceiling already bounds
-// how many builds a plan gets and a build cannot spend more than its budget.
-// What `meter.seconds` is for is the bill: the one place a month of container
-// time is written down.
+// Two ceilings hold it: the per-build budget the tools refuse at (sandbox.ts
+// `BUDGET`), and the month's {@link SECONDS}, which is what bounds the lone
+// calls that belong to no build (tools.ts `bench` asks before each).
 
 /**
- * The container seconds spent, on the space's month, on their own.
+ * The tokens and container seconds spent, on the space's month, with no build
+ * beside them.
  *
- * The door for the seconds that ride beside no build: a conversation that
- * compiled something and shipped nothing (builder.ts `end`), and a lone
- * sandbox tool call somebody's own agent made over the connector (tools.ts
- * `bench`). Where a build is being counted the seconds go with it
+ * The door for a conversation that shipped nothing (builder.ts `end`) — its
+ * model calls cost the same whether or not they ended in a deploy — and for a
+ * lone sandbox tool call somebody's own agent made over the connector
+ * (tools.ts `bench`). Where a build is being counted both go with it
  * ({@link countedBuild}), so that one reading of the space makes one write.
  */
-export let countedSandbox = async (
+export let countedSpend = async (
   env: { STORE: Namespace },
   space: Space,
+  tokens: number,
   seconds: number,
   now = new Date(),
 ) => {
-  if (seconds <= 0) return
+  if (tokens <= 0 && seconds <= 0) return
   let month = monthOf(now)
   let held = thisMonth(space.meter, month)
   await stamp(env, {
     entities: [{
       entity: { eid: space.eid },
       meter: held
-        ? { month, seconds: held.seconds + seconds }
-        : { ...empty(month, space.meter?.built ?? 0), seconds },
+        ? {
+          month,
+          tokens: held.tokens + tokens,
+          seconds: held.seconds + seconds,
+        }
+        : { ...empty(month, space.meter?.built ?? 0), tokens, seconds },
     }],
   })
 }
@@ -532,11 +653,11 @@ export let metering = (
     let ns = bind.STORE
     let box = ns ? mailedTo(from() ?? '', bind) : null
     if (!ns || !box) return await sender.send(m)
-    let space = await reaching(ns).space(box.space)
+    let dir = reaching(ns)
+    let space = await dir.space(box.space)
     if (!space) return await sender.send(m)
-    if (spent(space).emails >= letters(space.tier)) {
-      throw refuse('limit', atCeiling(space, 'emails', bind))
-    }
+    let no = await refusedSpend(dir, space, 'emails', bind)
+    if (no) throw refuse('limit', no)
     let receipt = await sender.send(m)
     await counted({ STORE: ns }, space)
     return receipt

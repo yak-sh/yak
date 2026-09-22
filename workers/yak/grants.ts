@@ -50,7 +50,7 @@ export type Grant = {
 
 // The KV as this file asks for it — the same shape handoff.ts's ledger takes,
 // so no Cloudflare type name enters the kernel (env.ts OAUTH_KV is `unknown`).
-type Kv = {
+export type Kv = {
   get(k: string): Promise<string | null>
   put(k: string, v: string, o?: { expirationTtl?: number }): Promise<void>
   delete(k: string): Promise<void>

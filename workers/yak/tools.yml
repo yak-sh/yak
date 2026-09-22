@@ -143,8 +143,10 @@ sandbox_exec:
     -target wasm32-wasi one that a WebAssembly System Interface (WASI)
     compatibility layer runs); Deno 2.9.1, and the Node and Bun the base
     image ships. Anything else can be installed for the duration of the
-    build: the command runs as root, so `apt-get install -y <pkg>` or a
-    download works, and it costs the next build nothing. sandbox_write
+    build: the command runs as root, so `apt-get install -y <pkg>`, cargo,
+    pip, npm and go get work, and it costs the next build nothing. Its
+    network reaches the package registries and this platform and nothing
+    else. sandbox_write
     writes source into it, and sandbox_ship copies a built artifact into the
     app. An app needs none of this unless something must be compiled: html,
     css and js run as they are. The sandbox is signed in as the person:
@@ -153,11 +155,13 @@ sandbox_exec:
     token is short-lived and revoked when the platform destroys the
     container. Sandbox use is metered in seconds charged to the space, with
     a {{budget}}-second budget per managed build (or per standalone tool
-    call). The container is destroyed when the build ends; separate MCP
+    call) and a monthly allowance shared by the free spaces its owner has.
+    One person has one sandbox awake at a time on the free tier, two on the
+    Plus plan. The container is destroyed when the build ends; separate MCP
     calls reuse it until it sleeps after five idle minutes. Its files are
     temporary. Returns the exit code, stdout and stderr, each output stream
-    truncated after 8,000 characters. A command can call APIs and change
-    apps, so its external effects are not undone by discarding the
+    truncated after 8,000 characters. A command can call these tools and
+    change apps, so its external effects are not undone by discarding the
     container. Documentation: https://yaks.app/docs/code.
 sandbox_write:
   title: Write a build file

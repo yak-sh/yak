@@ -30,19 +30,25 @@ import * as apps from './apps.ts'
 import { platform, type Ran, sandboxes } from './harness.ts'
 import { GRANT, held, ledger } from './grants.ts'
 import {
+  asleep,
+  awake,
   boxOf,
   BUDGET,
   destroyed,
+  egress,
+  HELD,
   HOST,
   LIFE,
   named,
   NO_BOX,
+  REGISTRIES,
   released,
   seconds,
   spending,
 } from './sandbox.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import type { Who } from './session.ts'
+import { SECONDS } from './meter.ts'
 
 let SECRET = 'a probe secret'
 // A wasm module's first eight bytes, as escapes — the point of the ship path
@@ -576,4 +582,58 @@ Deno.test('a lone connector call pays for itself and leaves the container', asyn
   // container is still there for the next call.
   assert(((await dirOf(env).space('ada'))!.meter?.seconds ?? 0) >= 1)
   assertEquals([...box.alive], [`build-${space.eid}`])
+})
+
+// T-37883: one person holds one sandbox at a time on the free tier. A space
+// of hers is a sandbox of its own, so without this her five spaces were
+// every container the deploy runs.
+Deno.test('one person holds one sandbox awake on the free tier', async () => {
+  let { env, ctx, box } = await bench()
+  await tool('space_new').run(ctx, { slug: 'ada2', title: 'Two' })
+  let other = (await dirOf(env).space('ada2'))!
+  let lone: Ctx = { env, dir: dirOf(env), person: ADA }
+  await tool('sandbox_exec').run(lone, { space: 'ada', cmd: 'ls' })
+  let no = await assertRejects(
+    () => tool('sandbox_exec').run(lone, { space: 'ada2', cmd: 'ls' }),
+    Error,
+    'allows 1 at a time',
+  )
+  assertEquals((no as { code?: string }).code, 'limit')
+  assertEquals(box.ran, ['ls'])
+  // On the Plus plan, two; and once her first has slept, the second wakes.
+  let now = Date.now()
+  await awake(env, { ...other, tier: 'plus' }, ADA, now)
+  let space = (await dirOf(env).space('ada'))!
+  await asleep(env, space, ADA, now)
+  await awake(env, other, ADA, now)
+  await assertRejects(() => awake(env, space, ADA, now), Error, 'free tier')
+  await awake(env, space, ADA, now + (HELD + 1) * 1000)
+})
+
+Deno.test("the month of sandbox time is the account's, and it refuses", async () => {
+  let { env, space, ctx } = await bench()
+  await dirPart.stamp(env, {
+    entities: [{
+      entity: { eid: space.eid },
+      meter: {
+        month: new Date().toISOString().slice(0, 7),
+        seconds: SECONDS.free,
+      },
+    }],
+  })
+  await assertRejects(
+    () => tool('sandbox_exec').run({ ...ctx, spend: undefined }, { cmd: 'ls' }),
+    Error,
+    'seconds of sandbox time a month',
+  )
+})
+
+Deno.test('a sandbox reaches the registries and this platform, and nothing else', () => {
+  let hosts = egress({ APEX: 'yaks.fyi' })
+  for (let host of ['static.crates.io', 'pypi.org', 'registry.npmjs.org']) {
+    assert(hosts.includes(host), host)
+  }
+  assert(hosts.includes('yaks.fyi'))
+  assert(hosts.every((h) => !h.includes('*')), 'no wildcard reaches further')
+  assertEquals(REGISTRIES.includes('github.com'), false)
 })
