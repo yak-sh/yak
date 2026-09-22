@@ -56,7 +56,7 @@ export let metaOf = (store: Door): Meta => ({
     // back as the graph's own `Stale`, so a caller that wrote on `$was` can
     // tell "read again" from a failure.
     if (r.status == 409) {
-      let s = await r.json()
+      let s = await r.json() as Stale
       throw new Stale(s.eid, s.comp, s.column, s.current)
     }
     if (!r.ok) throw new Error(`meta store refused: ${await r.text()}`)
