@@ -206,6 +206,9 @@ import {
   whatChanged,
   when,
 } from './versions.ts'
+// The pass that moves a short type map to the document it means, over the
+// bytes an app deployed (`declaring`).
+import { documented } from './migrate.ts'
 // The one ceiling on bytes going into an app's store, wherever they arrive
 // from: an upload, a drop, or `app_files` fetch.
 import { MAX } from './apps.ts'
@@ -756,10 +759,9 @@ let released = async (
   // refuses fails the release: the words and the tables must agree, and a
   // half-planted vocabulary is what `unknown component` is made of.
   let blobs = r2Blobs(ctx.env.BLOBS)
-  let key = await spelled(blobs, space, app, 'vocab')
-  // The file the app declares its words in, for every sentence below that
-  // tells somebody to go and edit it.
-  let vocabFile = key?.split('/').pop() ?? 'vocab.json'
+  // The file the app declares its words in — and its name, for every sentence
+  // below that tells somebody to go and edit it.
+  let { file: vocabFile, source } = await declaring(blobs, space, app)
   let planted: string[] = []
   let dropped: string[] = []
   // What this manifest moved, which naming the components does not say: a
@@ -773,8 +775,7 @@ let released = async (
   // what the tools below are generated from.
   let manifest: VocabDoc = {}
   let vocabTook = c.since()
-  if (key) {
-    let source = new TextDecoder().decode(await blobs.get(key))
+  if (source != null) {
     // The manifest as one document (vocab.ts `appDoc`, @yaks/yaml — the file
     // may be .json or .yml): a column's keywords ride all the way to the store
     // that plants it.
@@ -1206,6 +1207,49 @@ let spelled = async (
     if (await blobs.has(key)) return key
   }
   return null
+}
+
+/**
+ * The manifest an app declares, as the bytes it is stored in — and the file
+ * left in the one shape a manifest is written in.
+ *
+ * `vocab.json` could once be a short type map, `{"recipe": {"serves":
+ * "number"}}`. T-37546 made a manifest a JSON Schema document and only that,
+ * and moved every store's remembered vocabulary over (migrate.ts
+ * `documented`), but not the files apps had deployed — so a release published
+ * before that change still held the old spelling, and `app_install` refused
+ * every one of them on it (T-37809). The same pass runs here, over the bytes,
+ * the first time anything reads them; after that read the file says what it
+ * always meant and `appDoc` has one input.
+ *
+ * An install reads the source app's file through this door, so the app being
+ * copied from is migrated too. Rewriting somebody else's file is the point: it
+ * is the platform moving its own spelling, the way a store's slot moves when
+ * the store wakes, and the document says exactly what the short map said.
+ *
+ * Only a file that parses as JSON is rewritten. A short map written as YAML
+ * would have to be rewritten in another language to migrate it, which is the
+ * author's file and not the platform's to restyle; the door refuses that one
+ * with the sentence that teaches (vocab.ts `appDoc`).
+ *
+ * `file` is what a refusal calls it, since the app may have written either
+ * spelling (`spelled`), and `source` is null where the app declares no words.
+ */
+let declaring = async (
+  blobs: Blobs,
+  space: Space,
+  app: App,
+): Promise<{ file: string; source: string | null }> => {
+  let key = await spelled(blobs, space, app, 'vocab')
+  let file = key?.split('/').pop() ?? 'vocab.json'
+  if (!key) return { file, source: null }
+  let source = new TextDecoder().decode(await blobs.get(key))
+  let doc = documented(source)
+  if (doc) {
+    await blobs.put(key, new TextEncoder().encode(doc))
+    source = doc
+  }
+  return { file, source }
 }
 
 /**
@@ -3822,6 +3866,18 @@ let OURS: Row[] = [
         )
       }
       let version = offer.app.published.version
+      // The words the copy will declare, read off the app it is copied from,
+      // before anything is written. A release refuses a manifest it cannot
+      // read (vocab.ts `appDoc`) — and that refusal used to arrive after the
+      // app row was minted and its files copied, leaving a v0 app nobody asked
+      // for in the space, counted against its ceiling (T-37809). Nothing has
+      // happened yet here, so a refusal costs the installer nothing.
+      let said = await declaring(
+        r2Blobs(ctx.env.BLOBS),
+        offer.space,
+        offer.app,
+      )
+      if (said.source != null) appDoc(said.source, said.file)
       // The app row, born the way app_new writes one — its own eid, so its own
       // handle and its own store — plus the pin that says where the code came
       // from and which version it took. Its access is the published app's: an
@@ -3901,17 +3957,13 @@ let OURS: Row[] = [
       // moves: a vocabulary that only grew lands through the store's own
       // additive graft, and one that conflicts is refused here with the
       // sentence a deploy gives (T-32728), leaving the copy as it was.
-      let blobs = r2Blobs(ctx.env.BLOBS)
-      let key = await spelled(blobs, from.space, from.app, 'vocab')
-      if (key) {
-        await fits(
-          ctx,
-          space,
-          app,
-          store,
-          new TextDecoder().decode(await blobs.get(key)),
-          key.split('/').pop() ?? 'vocab.json',
-        )
+      let said = await declaring(
+        r2Blobs(ctx.env.BLOBS),
+        from.space,
+        from.app,
+      )
+      if (said.source != null) {
+        await fits(ctx, space, app, store, said.source, said.file)
       }
       let { wrote, gone } = await copied(ctx, from, { space, app })
       let out = await released(ctx, space, app, who, store)

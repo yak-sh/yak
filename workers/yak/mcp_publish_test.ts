@@ -603,3 +603,94 @@ slow('an installed app is the installer own copy, data and all', async () => {
     await k.stop()
   }
 })
+
+// A manifest became a JSON Schema document and only that (T-37546), and the
+// releases people had already published kept the old short type map in their
+// files — so every install of one refused on it, and refused only after the
+// copy had been minted and its code written, leaving an app nobody asked for
+// in the installer's space and counted against its ceiling (T-37809). Both
+// halves are here: a stored file in the old spelling is migrated the first
+// time anything reads it, and a manifest that is refused for real is refused
+// before a byte is written.
+slow(
+  'an install migrates an old manifest, and a refused one leaves nothing',
+  async () => {
+    let k = await kernel()
+    try {
+      let jeff = await signIn(k)
+      let his = connector(k, jeff.cookie)
+      let mine = jeff.email.split('@')[0]
+      let write = (path: string, content: string) =>
+        his.tool('app_files', {
+          space: mine,
+          app: 'recipes',
+          op: 'write',
+          path,
+          content,
+        })
+      await his.tool('app_new', {
+        space: mine,
+        slug: 'recipes',
+        title: 'Recipes',
+      })
+      await write('index.html', '<h1>Recipes</h1>')
+      await his.tool('app_deploy', { space: mine, app: 'recipes' })
+      await his.tool('app_publish', {
+        space: mine,
+        app: 'recipes',
+        about: 'A recipe box',
+      })
+      // What a release published before the shape changed left in the bucket:
+      // the short type map, sitting there unread since the deploy wrote it.
+      await write('vocab.json', '{"recipe": {"serves": "number"}}')
+
+      let kitchen = `kitchen-${crypto.randomUUID().slice(0, 8)}`
+      await his.tool('space_new', { slug: kitchen, title: 'Kitchen' })
+      assertStringIncludes(
+        await his.tool('app_install', { space: kitchen, name: 'recipes' }),
+        'installed recipes v1',
+      )
+      // The install read the publisher's file, so the publisher's file now says
+      // what it always meant — and the copy declares the word.
+      assertStringIncludes(
+        await his.tool('app_files', {
+          space: mine,
+          app: 'recipes',
+          op: 'read',
+          path: 'vocab.json',
+        }),
+        '"$defs"',
+      )
+      await his.tool('graph_apply', {
+        space: kitchen,
+        app: 'recipes',
+        entities: [{
+          entity: { eid: crypto.randomUUID() },
+          recipe: { serves: 4 },
+        }],
+      })
+
+      // And a manifest nothing can accept — a word the platform already says.
+      // The refusal lands before the app row, so the space is as it was.
+      await write(
+        'vocab.json',
+        JSON.stringify({ $defs: { doc: { properties: { serves: num } } } }),
+      )
+      let pantry = `pantry-${crypto.randomUUID().slice(0, 8)}`
+      await his.tool('space_new', { slug: pantry, title: 'Pantry' })
+      assertStringIncludes(
+        (await assertRejects(
+          () => his.tool('app_install', { space: pantry, name: 'recipes' }),
+          Error,
+        )).message,
+        'the platform already says',
+      )
+      assertEquals(
+        (await his.tool('app_list', { space: pantry })).includes('recipes'),
+        false,
+      )
+    } finally {
+      await k.stop()
+    }
+  },
+)

@@ -111,16 +111,21 @@ let WAS: Record<string, Record<string, unknown>> = {
 }
 
 /**
- * The vocabulary slot a store kept before T-37546, as the document it means.
- * An app's `vocab.json` could be written as a short type map —
- * `{"recipe": {"serves": "number"}}` — and a store that last accepted one
- * remembers it that way. That spelling is gone: a manifest is a JSON Schema
- * document and nothing converts one at the door any more, so a store still
- * holding a short map is rewritten at its next open (graph.ts `#documenting`)
- * and never reads one again.
+ * A short type map, as the document it means. An app's `vocab.json` could be
+ * written as one — `{"recipe": {"serves": "number"}}` — and that spelling is
+ * gone: a manifest is a JSON Schema document and nothing converts one at the
+ * door any more (vocab.ts `appDoc`).
  *
- * `null` where there is nothing to do — an empty slot, a slot that is already a
- * document, or one no reader could parse — which is every store after one wake.
+ * Two places kept the old spelling and both are rewritten by this pass. A
+ * store that last accepted one remembers it in its vocabulary slot, and is
+ * rewritten at its next open (graph.ts `#documenting`). The file the app
+ * deployed keeps it too — which T-37546 left behind, so every release
+ * published before it refused to install (T-37809) — and is rewritten the
+ * next time anything reads it (tools.ts `declaring`).
+ *
+ * `null` where there is nothing to do — nothing held, something that is
+ * already a document, or something no reader could parse — which is every
+ * store after one wake and every file after one read.
  *
  * `"tools": false` is the manifest's one word about itself, so it rides across
  * as the document's own; every other key is a component.
