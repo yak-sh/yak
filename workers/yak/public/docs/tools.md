@@ -30,6 +30,13 @@ arguments, and a template you wrote once so nobody has to remember that a run is
 `jog{who, miles}` on a fresh entity. It is listed for everyone else in the space
 too, so an app for four people is a command four people can use.
 
+A new capability is a new component, not a new command. `graph_apply` already
+writes anything the vocabulary declares, so something an app needs to keep, a
+`rating`, a `loan`, a `shift`, is a line in its `vocab.json`, discoverable by
+everyone through `graph_schema` the moment it deploys. Reach for a command only
+when the app needs a verb that someone else's agent can call. Every command is
+one more name anyone reading `commands` has to choose between.
+
 ## Every kind you declare is two commands already
 
 You get the first two for nothing. Every component an app's `vocab.json`

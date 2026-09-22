@@ -35,7 +35,7 @@ sync, nothing to keep in step.
     graph_apply { app: 'lending', entities: [
       { entity: { eid: piranesi }, loan: { to: 'Maya' } } ] }
 
-`num` is the other half of an address and is NOT shared: it is one store's own
+`num` is the other half of an address and is _not_ shared: it is one store's own
 counter, so the same entity is `#3` in one app and `#17` in another. Address
 things by eid across apps, and by num only inside one.
 
@@ -103,7 +103,7 @@ writable from either app:
 **From an agent's tools and from an app's own commands, a borrowed component
 just works**: `graph_apply { app: 'lending', entities: [{ book: … }] }` lands in
 the reading list's store, and a `tools.json` entry of the lending app may name
-`book` in its `apply` or its `query`. **From a PAGE it does not**: `./api/apply`
+`book` in its `apply` or its `query`. **From a page it does not**: `./api/apply`
 and `./api/query` are this app's own HTTP endpoints onto its own store, so a
 page that writes a borrowed component gets `unknown component: book`. Reach the
 home app by its address instead — `store('/reading-list/api/')`, below.
@@ -159,7 +159,7 @@ address you name:
     let lending = store('/lending/api/')
     let loans = await lending.query('.loan!&.doc?')
 
-Every app in a space shares one hostname, so the address is a PATH, not a URL —
+Every app in a space shares one hostname, so the address is a path, not a URL —
 `/lending/api/`. It resolves against the page's own origin, and the trailing
 slash is optional (the endpoints are under it either way). Your own app is a
 path like any other, so `store('/reading/api/')` is the same store as the bare
@@ -181,10 +181,10 @@ every space they belong to — and answered as one bundle per entity.
           book: { pages: 245 }, loan: { to: 'Maya' },
           _stores: { book: 'yourname/reading-list', loan: 'yourname/lending' } } ]
 
-- `!` names which entities the answer is ABOUT; `?` asks for a component beside
-  them without filtering on it. So `.book!&.loan?` is every book, with its loan
-  where it has one, and `.book!&.loan!` is only the books that are out — `&` is
-  an intersection across apps exactly as within one.
+- `!` names which entities the answer is _about_; `?` asks for a component
+  beside them without filtering on it. So `.book!&.loan?` is every book, with
+  its loan where it has one, and `.book!&.loan!` is only the books that are out
+  — `&` is an intersection across apps exactly as within one.
 - `_stores` names which app holds which component. It appears only on a bundle
   that actually spans two apps, which is where you need it: to write one
   component back, you need to know whose it is.

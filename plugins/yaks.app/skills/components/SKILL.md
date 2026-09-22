@@ -13,7 +13,7 @@ your own and text in `doc.body`.
 
 ## What a component is
 
-A component is one named set of fields describing ONE aspect of an entity. An
+A component is one named set of fields describing _one_ aspect of an entity. An
 entity is nothing but the components it has: there is no `kind` column, no table
 of types, no class to pick at creation. A row with `doc` has words a person
 reads; give the same row `task` as well and it has a state; give it `recipe` too
@@ -29,7 +29,7 @@ being anything else.
 That is one entity, two components, one call. `kind` on the row you read back is
 derived from the components it has — your own component wins, being the most
 specific thing on the row — and nothing in the store branches on it. Every
-component is a PATCH: send the columns you are changing and the rest are left
+component is a _patch_: send the columns you are changing and the rest are left
 alone; `column: null` clears one; `comp: null` takes the whole component off;
 `{entity: {eid}, tombstone: {}}` kills the entity.
 
@@ -63,26 +63,27 @@ needs no filing; add it when work belongs on a project board.
 suggestion waiting on someone. Reach for it rather than inventing a `status`
 column of your own, and the platform's own status grammar works on your rows.
 
-`status` is READ, never written — `open`, `wip`, `done` or `cancelled`, derived
-from the components the entity has: `cancelled` if it has `cancelled`, else
-`done` if it has `completed`, else `wip` if it has a live `claim`, else `open`.
+`status` is _read_, never written — `open`, `wip`, `done` or `cancelled`,
+derived from the components the entity has: `cancelled` if it has `cancelled`,
+else `done` if it has `completed`, else `wip` if it has a live `claim`, else
+`open`.
 
     await apply({ entity: { eid: '$t' },
       doc: { title: 'Water the plants' }, task: {}, filed: { priority: 1 } })
 
     let todo = await query('.task.status=open&.doc?')
 
-**`completed`** — `at` (time), `by` (eid). The mark that makes a task `done`.
-The store fills both — the clock from the write, the writer from whoever is
-asking — so `completed: {}` is the whole write, and taking it off again is
-`completed: null`. It also carries a server-set `via`.
+**`completed`** — no writable columns; the store sets `at` (time), `by` (eid)
+and `via` (eid). The mark that makes a task `done`. The store fills all three —
+the clock from the write, the writer from whoever is asking — so `completed: {}`
+is the whole write, and taking it off again is `completed: null`.
 
     await apply({ entity: { eid }, completed: {} })      // done
     await apply({ entity: { eid }, completed: null })    // open again
 
-**`cancelled`** — `at` (time), `by` (eid), `reason` (text). Called off rather
-than finished, and the one of the two that has somewhere to put why. Also
-carries a server-set `via`.
+**`cancelled`** — `reason` (text); the store sets `at` (time), `by` (eid) and
+`via` (eid). Called off rather than finished, and the one of the two that has
+somewhere to put why.
 
     await apply({ entity: { eid }, cancelled: { reason: 'moved house' } })
 
@@ -97,20 +98,20 @@ tasks live on with a null `project`.
     })
     await apply({ entity: { eid }, task: {}, filed: { project: aliases.$p } })
 
-**`comment`** — `target` (eid). A note aimed at ANY entity — a recipe, a photo,
-another comment. The note's own words go in its `doc`. The comment dies with its
-target, so a deleted recipe takes its thread with it.
+**`comment`** — `target` (eid). A note aimed at _any_ entity — a recipe, a
+photo, another comment. The note's own words go in its `doc`. The comment dies
+with its target, so a deleted recipe takes its thread with it.
 
     await apply({ entity: { eid: '$n' },
       doc: { body: 'Halve the sugar.' }, comment: { target: recipe } })
 
     let thread = await query(`.comment.target=${recipe}&.doc?`)
 
-**`alias`** — `name` (text). A name of your own for an entity, worth as much as
-its eid. Write it beside a `$` eid and the write becomes idempotent: the same
-name written again patches the entity that already holds it, so a seed, an
-import, or a page that saves itself every time it opens writes one row rather
-than a pile.
+**`alias`** — no columns of its own; `alias: { name }` is the shorthand. A name
+of your own for an entity, worth as much as its eid. Write it beside a `$` eid
+and the write becomes idempotent: the same name written again patches the entity
+that already holds it, so a seed, an import, or a page that saves itself every
+time it opens writes one row rather than a pile.
 
     await apply({ entity: { eid: '$r' },
       alias: { name: 'recipe:lemon-cakes' },
@@ -151,23 +152,22 @@ page a recipe was copied from. Also carries a server-set `frozen_at`.
     await apply({ entity: { eid: '$b' }, doc: { title: 'The recipe' },
       web: { url: 'https://example.com/chana' } })
 
-**`artifact`** — `size` (number). A byte count, not the bytes. It sits on the
+**`blob`** — `bytes` (number). A byte count, not the bytes. It sits on the
 content-addressed entity the bytes live at, so it is how big a file is.
 
-**`attachment`** — `artifact` (eid), `media_type` (text), `name` (text). One
-file, as `upload` writes it. `attachment.artifact` is where the bytes are, which
-is what `./api/blob/<eid>` is built from; deleting the bytes takes the row with
-them.
+**`attachment`** — `blob` (eid), `mime` (text), `name` (text). One file, as
+`upload` writes it. `attachment.blob` is where the bytes are, which is what
+`./api/blob/<sha>` is built from; deleting the bytes takes the row with them.
 
-**`image`** — `w` (number), `h` (number). What a picture measures, on the
-artifact itself, not on the row that points at it. `upload` reads it off the
-file's own header (png, jpeg, gif, webp), so a wall can hold a photo's space
-open before its bytes arrive.
+**`image`** — `w` (number), `h` (number). What a picture measures, on the blob
+itself, not on the row that points at it. `upload` reads it off the file's own
+header (png, jpeg, gif, webp), so a wall can hold a photo's space open before
+its bytes arrive.
 
-**`created`** — `by` (eid); the store sets `at` (time) and `via` (eid).
-**`updated`** — the same three. The byline and the clock. You rarely write
-either: the store stamps the writer and the moment on its own, and a listing
-leaves them out unless the filter asks for them.
+**`created`** — no writable columns; the store sets `at` (time), `by` (eid) and
+`via` (eid). **`updated`** — the same three. The byline and the clock. You
+rarely write either: the store stamps the writer and the moment on its own, and
+a listing leaves them out unless the filter asks for them.
 
     for (let e of await query('.doc!&.created!')) draw(e, e.created.by?.name)
 
@@ -220,7 +220,7 @@ shown beside it:
 - a closed set of values — the platform's alone; a refusal lists the set,
   `open|wip|done|cancelled`.
 
-**Noon for a date.** When a `time` column really holds a DAY — the plants went
+**Noon for a date.** When a `time` column really holds a _day_ — the plants went
 in, the meeting is on the 4th — write noon UTC, `2026-04-11T12:00:00Z`. Midnight
 is the day before for everyone west of Greenwich, so a diary written at
 `T00:00:00Z` renders a day early in California, and the page has to correct for
@@ -239,6 +239,12 @@ until it can be declared, hang the ticks off `comment.target` or make each tick
 its own entity carrying the parent's eid in `comment.target`.
 
 ## What a refusal tells you
+
+`graph_schema` reports the vocabulary: every component, its columns and their
+types, for the app or the space you name. `graph_apply`'s input schema is that
+vocabulary too, and it is deliberately open: a column your cached copy of the
+schema has never heard of still reaches the store, and a column nobody declared
+is refused there. The schema describes; the server decides.
 
 Name a column that is not there and the refusal lists the whole component — from
 a page's `./api/` endpoints and from an agent's tools alike — so one look ends
@@ -275,8 +281,8 @@ true either way and is the wrong test; the value is the right one.
     if ('mood' in row.jotting) …     // always true
 
 That holds for the platform's own columns too, `doc.title` included: a doc
-nobody titled reads back as null, not `''`. `doc.body` is kept as a
-content-addressed artifact and reads back as null when there is none.
+nobody titled reads back as null, not `''`. `doc.body` is kept content-addressed
+and reads back as null when there is none.
 
 ## Components of your own
 
@@ -460,7 +466,7 @@ These are the names, all of them:
     supervises task task_context timeout tool tool_use updated usage venture
     verifier wake wants web worked worktree yield
 
-When your first choice is taken, ask what the component is FOR and name that:
+When your first choice is taken, ask what the component is _for_ and name that:
 the taken name is the general one, yours is the specific one. Not `card` but
 `flashcard`, not `entry` but `weigh_in`, not `plan` but `menu`, not `board` but
 `standings`. A prefix works too — `book_note` — but a name of its own reads

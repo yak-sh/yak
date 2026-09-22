@@ -34,7 +34,7 @@ address (inside `<head>` if there is one, else after the doctype; a page with a
 
 `store(base)` is the same six functions at an address you name. Every app in a
 space shares one hostname, so a sibling app is a path — with or without its
-trailing slash, and answering by its OWN `access`, whoever is asking:
+trailing slash, and answering by its own `access`, whoever is asking:
 
     import { store } from './api/client.js'
 
@@ -238,7 +238,7 @@ beside the components, and refuses with the same message.
 
 `entity` and `kind` name the row. Everything else is exactly the components the
 filter named — by presence (`.recipe!`), by request (`.doc?`), or by a predicate
-of its own (`.recipe.minutes<=30`). A component asserted ABSENT (`.archived=`)
+of its own (`.recipe.minutes<=30`). A component asserted _absent_ (`.archived=`)
 filters without asking for anything back. `*` asks for every component, which is
 what you want when you are looking rather than drawing.
 
@@ -252,8 +252,8 @@ Three things a listing leaves out unless you name them: the platform's stamps
 (`created`, `updated`, `notified`, `opened`, `quarantined` — `.created!` asks
 for them back); the platform's own rows about the app (`exception` and `error`,
 what the platform recorded when something broke — `.exception!` asks for those,
-and asking for the stamps is NOT asking for these); and `person` rows, which the
-store mints for whoever writes to it and `query('.person!&.doc?')` lists by
+and asking for the stamps is _not_ asking for these); and `person` rows, which
+the store mints for whoever writes to it and `query('.person!&.doc?')` lists by
 name.
 
 ## subscribe in practice
@@ -304,7 +304,7 @@ An app's `access` is one of three settings, given by `app_new` and `app_set`:
 
 - `public` — the default. Anyone with the link reads. Only a member (owner or
   editor) writes.
-- `open` — anyone with the link reads AND writes. The vote page, the shared
+- `open` — anyone with the link reads _and_ writes. The vote page, the shared
   list, the party wall.
 - `private` — members only, both halves. The pages are hidden too, not just the
   data: a stranger asking for `/diary/` is sent to sign in, and someone signed
@@ -346,7 +346,7 @@ any other: it comes back when the filter names it.
     for (let e of await query('.doc!&.created!')) draw(e, e.created.by?.name)
 
 `created.at` is when. `created.by` is who — and where this store knows the
-person, it returns `{eid, name}` rather than a bare eid, so ONE query draws a
+person, it returns `{eid, name}` rather than a bare eid, so _one_ query draws a
 list with its writers instead of painting "someone" and asking again.
 
 This is a rule about references, not about that one stamp: any column that
@@ -388,8 +388,8 @@ A `seed.yml` is the same list written as YAML, and is read the same way:
 
 When there is a lot of it, write a `seed/` folder of `*.json` (or `*.yml`) files
 instead — `seed/01-places.json`, `seed/02-menu.json` — and upload them a call at
-a time. All of them are ONE batch, read in filename order, so an alias minted in
-one file resolves in the next and the pieces can point at each other. Either
+a time. All of them are _one_ batch, read in filename order, so an alias minted
+in one file resolves in the next and the pieces can point at each other. Either
 layout works, and a `seed.json` with a `seed/` folder beside it is still that
 one batch, the file first.
 
@@ -566,7 +566,7 @@ Catch what you want to show.
 filter named. `query('.recipe!')` returns recipes with no titles, and a page
 drawing `row.doc.title` prints `undefined` for every one of them. Ask for the
 title beside it: `query('.recipe!&.doc?')`. `&.doc?` is the way to ask for a
-SECOND component — `.recipe.doc` addresses a COLUMN of `recipe`, a different
+_second_ component — `.recipe.doc` addresses a _column_ of `recipe`, a different
 question and one `recipe` has no answer to. `subscribe` returns the same
 components a query does, so it is the same mistake there.
 
@@ -582,8 +582,8 @@ moment somebody installs a copy at another address. Write `./api/client.js` and
 store you meant to read: `store('/lending/api/')`.
 
 **Saving the same thing twice.** Content addressing makes the same bytes one
-blob and one `attachment` row — but a row of your OWN pointing at them is still
-a second row, and the wall shows the photo twice. Look first:
+blob and one `attachment` row — but a row of your _own_ pointing at them is
+still a second row, and the wall shows the photo twice. Look first:
 
     let [seen] = await query(`.photo.blob=${file.eid}`)
     if (!seen) await apply({ photo: { caption, blob: file.eid } })

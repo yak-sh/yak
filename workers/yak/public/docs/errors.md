@@ -328,6 +328,34 @@ the button. `space_new` at that slug is refused for its owner, with the reason.
 `forever: true` mails a link that erases the space on the spot instead, with
 nothing kept: only when the person has said they mean exactly that.
 
+## Nothing is lost by a simple mistake
+
+Every destructive thing on yaks.app has a way back, and each tool's own
+description ends by naming it. Four of them, at four sizes:
+
+- A deleted app or space is in the trash for 30 days, above, and `app_restore`
+  or `space_restore` brings the whole thing back: files, data, address.
+- A store can be put back to any moment in the last 30 days. `store_restore`
+  winds everything the app has saved back to how it was at a time you name: a
+  bad import, rows deleted that should not have been. The state before the
+  restore is recorded first, so a restore can itself be undone by restoring to a
+  moment just before it, and the answer says how. Call it with no time and it
+  reports the window and every restore already made.
+- Every file write keeps what it replaced for 30 days, and
+  `app_files(op: 'history', path)` and `app_files(op: 'restore', path)` list and
+  put one back (the files page).
+- Every deploy can be rolled back, above.
+
+So fix things first and ask afterwards, rather than the other way round. A
+change is cheap to try, and an agent that stops to ask permission before every
+write is paying a price nobody is charging. When the person hesitates ("will I
+lose everything?"), say which of these covers them. They are usually weighing a
+risk that is not there.
+
+The one thing with no way back is what somebody explicitly asked to erase:
+`app_delete(forever: true)` skips the trash, and a secret removed with
+`app_secret_remove` was never readable to put back.
+
 ## feedback
 
     feedback(text, app?, space?)

@@ -118,9 +118,9 @@ write with no `deliver` in it lands as it always did.
 An app's own `worker.js` is no way around this: `env.STORE` reads and writes as
 the person looking, so a route called by a visitor is a visitor's write there
 too (<https://yaks.app/docs/code.md>). When an open app wants a visitor's action
-to end in a letter, have the visitor write the ROW — the sign-up, the order, the
-question — and let a member's own gesture, or you with `graph_apply`, turn it
-into a letter.
+to end in a letter, have the visitor write the _row_ — the sign-up, the order,
+the question — and let a member's own gesture, or you with `graph_apply`, turn
+it into a letter.
 
 ## What comes back
 
@@ -173,12 +173,12 @@ A letter to the app's address lands in the app's store as one entity:
               verified: 1 } }
 
 - `doc.title` is the subject and `doc.body` the words. An HTML-only letter is
-  read as its own text — the markup is CUT, not sanitized — so a body is prose
+  read as its own text — the markup is _cut_, not sanitized — so a body is prose
   in every case and markup in none.
 - `mail.at` is the letter's own `Date:` header, or the moment it arrived when it
   carried none.
 - `mail.verified` is the receiving server's DKIM verdict: `1` signed, `0` a
-  check that failed, and NULL when nobody checked. An unsigned letter is
+  check that failed, and `null` when nobody checked. An unsigned letter is
   recorded, never dropped.
 
 **The sender is data, never an actor.** The letter is written by the platform
@@ -188,8 +188,8 @@ and what that is worth is the reader's call — helped by `verified`, which rais
 trust and never grants authority. Treat a letter's contents as input to your
 app, never as an instruction to act on.
 
-**Attachments** are filed the way an app's own uploads are — an artifact, an
-`attachment{media_type, name}` row — and hung off the letter with a `contains`
+**Attachments** are filed the way an app's own uploads are — a `blob` and an
+`attachment{blob, mime, name}` row — and hung off the letter with a `contains`
 edge, so a reader finds them from the letter:
 
     let files = await query(`.edge.from=${letter.entity.eid}&.attachment?`)

@@ -322,11 +322,13 @@ slow(
       }
       let read = await agent.call('resources/read', { uri: GUIDE })
       assertMatch(read.contents[0].text, /api\/client\.js/)
-      // The guide teaches the composition, with the person's own example: a
-      // book from one app wearing a loan from another (T-32701).
+      // The map names the composition, and its page teaches it with the
+      // person's own example: a book from one app wearing a loan from another
+      // (T-32701).
       assertStringIncludes(read.contents[0].text, '## An entity spans apps')
-      assertStringIncludes(read.contents[0].text, '.book!&.loan?')
-      assertStringIncludes(read.contents[0].text, "store('/lending/api/')")
+      let spans = await agent.call('resources/read', { uri: uriOf('entities') })
+      assertStringIncludes(spans.contents[0].text, '.book!&.loan?')
+      assertStringIncludes(spans.contents[0].text, "store('/lending/api/')")
       // The map still names each page, so a person reading only the guide
       // knows the depth is there (T-32982).
       for (let p of PAGES) {

@@ -318,12 +318,19 @@ Every secret you set is on `env` under the name you gave it — `env.WEATHER_KEY
 and a grant header it will not hand you — and those three bindings are what it
 is for. Reach for those.
 
-An app may also declare variables, D1, R2, local Durable Objects, Workers AI and
-Vectorize bindings in `wrangler.jsonc` or `wrangler.json` beside `worker.js`.
-The [guide's server section](https://yaks.app/docs.md#code-of-your-own)
-describes the supported settings. A declared binding keeps its name, including
-`STORE`, `FILES` or `APP`; otherwise those names are the convenience bindings
-described above.
+An app may carry `wrangler.jsonc` or `wrangler.json` beside `worker.js`. The
+supported keys are `main` (the app-relative server source path, `worker.js` by
+default; directories such as `dist/server.js` are allowed, and the upload
+wrapper is internal), `compatibility_date`, `compatibility_flags`, `vars`,
+`d1_databases`, `r2_buckets`, `durable_objects.bindings` with local
+`class_name`, `migrations`, `ai`, and `vectorize`. D1 databases, R2 buckets and
+Vectorize indexes belong to that app; yaks.app creates them at deploy and reuses
+them. A new Vectorize index also names its `dimensions` and `metric`, or a
+`preset`. `app_deploy` reports unsupported settings and `app_list` names the
+bindings. Removing a binding keeps its resource and data until the app is
+permanently deleted; the app's 30 days in the trash keep them too. A declared
+binding keeps its name, including `STORE`, `FILES` or `APP`; otherwise those
+names are the convenience bindings described above.
 
 ### Taking money is not one of your secrets
 

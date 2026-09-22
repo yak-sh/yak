@@ -73,7 +73,7 @@ Four ways to name a component rather than one of its columns:
     .recipe?      asks for the recipe without filtering on it
     *             every component this store holds (the debugging form)
 
-`!` and `=` SELECT. `?` selects nothing and screens nothing — it only asks for
+`!` and `=` _select_. `?` selects nothing and screens nothing — it only asks for
 the component to come back with whatever the rest of the filter selected:
 
     await query('.chore!&.completed=&.doc?')   // chores not yet done
@@ -120,11 +120,11 @@ and this is the right one:
 
 Anything a predicate mentions counts as naming it, whichever operator it uses:
 `.doc.title~=cake` carries the doc, `.task.status=open` carries the task,
-`.created.at=today` carries the stamp. Three things do NOT name one: an absence
-(`.archived=` asks for rows without one — there is nothing to carry), the `*`
-form, which asks for all of them, and a bare word, which searches the docs
-without naming anything to leave out — so a filter that is only words returns
-whole entities, like `id=`.
+`.created.at=today` carries the stamp. Three things do _not_ name one: an
+absence (`.archived=` asks for rows without one — there is nothing to carry),
+the `*` form, which asks for all of them, and a bare word, which searches the
+docs without naming anything to leave out — so a filter that is only words
+returns whole entities, like `id=`.
 
 A column of yours that nothing has written is on the row with the value `null`,
 not missing from it, so test the value and not `in`. The platform's own columns
@@ -198,7 +198,7 @@ loudly rather than quietly matching nothing:
 - **eid** — a reference to another entity, by its eid: `.comment.target=940d…`,
   `.filed.assignee=dc5e…`, `.created.by=<who.person>`.
 
-Your OWN columns work differently: they are stored as given and compared as
+Your _own_ columns work differently: they are stored as given and compared as
 text, with no parsing on either side. Two consequences worth knowing before you
 design a component:
 

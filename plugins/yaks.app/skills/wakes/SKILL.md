@@ -136,7 +136,7 @@ command and its arguments; a `wake` on that same row records when:
       wake: { at: '2026-09-21T09:00:00Z', every: '@weekly' },
     })
 
-`call.to` is a command's own ROW. A deploy plants one per declared command,
+`call.to` is a command's own _row_. A deploy plants one per declared command,
 carrying `tool { name, description }`, so the name is what you look it up by —
 and a `to` naming no command this store knows is left where it is rather than
 refused, since another runner may own it. A mistyped name is a call that never
@@ -180,7 +180,7 @@ Every five minutes the store wakes itself, writes the call for that instant and
 runs it — with nothing open and nothing connected.
 
 **A stretch nobody was there for is one firing, not one per minute.** Half an
-hour when nothing was awake to notice leaves ONE `advance`, and the cadence
+hour when nothing was awake to notice leaves _one_ `advance`, and the cadence
 carries on from where the catch-up left it: 09:05, then 09:40, then 09:45. That
 is the whole of catching up, and it is why a five-minute world costs the same
 whether it was watched all day or not at all.

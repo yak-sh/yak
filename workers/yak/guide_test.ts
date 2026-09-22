@@ -1,7 +1,7 @@
 // The guide is the map an agent building an app reads (mcp.ts serves it as a
-// resource, with a page per subject beside it), so a list printed there has to
-// be true.
-// What can rot is anything the guide prints that the code also decides: the
+// resource, with a page per subject beside it), so a list printed on the map
+// or on the page it points to has to be true.
+// What can rot is anything the pages print that the code also decides: the
 // reserved words a manifest is refused against (the code's list, never the
 // page's — C-32624 item 1), the components an app has, whose columns and
 // types are what a refusal now spells and what the seventh user test had to
@@ -9,8 +9,7 @@
 // app's own worker.js runs under (T-32780).
 import { assert, assertEquals } from '@std/assert'
 import { front } from '@yaks/yaml'
-import { RESERVED } from './vocab.ts'
-import { comps, typeName } from '../../src/types.ts'
+import { coreDocs, RESERVED, wordOf } from './vocab.ts'
 import { SHIM, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { INSTRUCTIONS, PAGES, uriOf } from './guide.ts'
@@ -96,15 +95,19 @@ Deno.test('no worker route on a page is under /api/', () => {
   }
 })
 
-// A page may print the reserved words too — it is the page an app's author
-// meets them on. Wherever it does, it is the code's list, the same rule the
-// map is held to (C-32624 item 1).
-Deno.test('a page printing the reserved words prints the code list', () => {
+// The reserved words are printed on the page an app's author meets them on,
+// as one indented block of bare words, and wherever a page prints them it is
+// the code's list (C-32624 item 1).
+Deno.test('the pages print every word vocab.json may not use', () => {
+  let printed = 0
   for (let p of PAGES) {
     let block = pageText(p.slug).split('\n\n')
       .find((b) => b.startsWith('    ') && b.includes('stop_request'))
-    if (block) assertEquals(block.trim().split(/\s+/), RESERVED, p.slug)
+    if (!block) continue
+    printed++
+    assertEquals(block.trim().split(/\s+/), RESERVED, p.slug)
   }
+  assert(printed, 'no page prints the reserved words')
 })
 
 // A link from one page to another has to name a page there is.
@@ -141,28 +144,40 @@ Deno.test('the guide imports the client relatively, every time it shows one', ()
   )
 })
 
-Deno.test('the guide prints every word vocab.json may not use', () => {
-  // The indented block after the sentence that introduces it — the guide's
-  // one code block of bare words.
-  let block = guide.split(/taken:\n\n/)[1]?.split('\n\n')[0] ?? ''
-  assertEquals(block.trim().split(/\s+/), RESERVED)
-})
-
-// One bullet of the component list: the names it heads with, and the
-// `col` (type) pairs it prints before the sentence explaining them.
-let bullets = () => {
-  let section = guide.split('## The components an app has today')[1]
+// One entry of the components page's vocabulary: the name it heads with, the
+// `col` (type) pairs it prints before the first sentence ends, and the ones it
+// says the store sets.
+let pairs = (s: string) =>
+  [...s.matchAll(/`(\w+)` \(([^)]+)\)/g)].map((m) => [m[1], m[2]])
+let entries = () => {
+  let section = pageText('components').split("## The platform's vocabulary")[1]
     ?.split('\n## ')[0] ?? ''
-  return section.split('\n- ').slice(1).map((bullet) => {
-    let [head, ...said] = bullet.replace(/\s+/g, ' ').split(' — ')
+  return section.split('\n**`').slice(1).map((entry) => {
+    let [head, ...said] = entry.replace(/\s+/g, ' ').split(' — ')
+    let rest = said.join(' — ')
     return {
-      names: [...head.matchAll(/`(\w+)`/g)].map((m) => m[1]),
-      cols: [
-        ...said.join(' — ').split('. ')[0]
-          .matchAll(/`(\w+)` \(([^)]+)\)/g),
-      ].map((m) => [m[1], m[2]]),
+      name: head.match(/^(\w+)/)![1],
+      cols: pairs(rest.split(/[.;] /)[0]),
+      set: pairs(rest.split('the store sets ')[1]?.split('. ')[0] ?? ''),
     }
   })
+}
+
+// What an app's store loads (vocab.ts `appVocab`): every column of every core
+// component, spelled the way the page spells it, and whether the store owns it.
+let stored = () => {
+  let all: Record<string, [string, string, boolean][]> = {}
+  for (let doc of coreDocs) {
+    for (let [name, s] of Object.entries(doc.$defs ?? {})) {
+      if (!s.component) continue
+      let cols = all[name] ??= []
+      for (let [col, p] of Object.entries(s.properties ?? {})) {
+        if (p.computed === true || cols.some(([c]) => c == col)) continue
+        cols.push([col, p.ref ? 'eid' : wordOf(p), !!p.stamped])
+      }
+    }
+  }
+  return all
 }
 
 // The third list that can rot, and the one an app's code is written against:
@@ -170,16 +185,15 @@ let bullets = () => {
 // the platform's own — the shim decides the first, the upload's metadata the
 // second — and a guide that names a door the shim does not hand over teaches
 // an app to break at the first request (T-32780).
-Deno.test('the guide names the doors a worker is actually given', () => {
-  let section = guide.split('## Code of your own')[1]?.split('\n## ')[0] ?? ''
-  assert(section, 'the guide no longer teaches worker.js')
+Deno.test('the code page names the doors a worker is actually given', () => {
+  let section = pageText('code')
   // Every `env.NAME` the section spells, minus the secrets, which are the
   // app's own names and not the platform's.
   let named = new Set(
     [...section.matchAll(/env\.([A-Z_]+)/g)].map((m) => m[1]),
   )
   for (let door of ['STORE', 'FILES']) {
-    assert(named.has(door), `the guide never shows env.${door}`)
+    assert(named.has(door), `the code page never shows env.${door}`)
     assert(SHIM.includes(`${door}: door(`), `the shim hands over no ${door}`)
   }
   for (let door of named) {
@@ -187,13 +201,13 @@ Deno.test('the guide names the doors a worker is actually given', () => {
     // Anything else must read as a secret the person set, not a door.
     assert(
       /app_secret_set|WEATHER_KEY/.test(section),
-      `the guide shows env.${door} and never says where it came from`,
+      `the code page shows env.${door} and never says where it came from`,
     )
   }
 })
 
-Deno.test('the app guide names its bindings and when their data is deleted', () => {
-  for (let text of [guide, INSTRUCTIONS]) {
+Deno.test('the code page names its bindings and when their data is deleted', () => {
+  for (let text of [pageText('code'), INSTRUCTIONS]) {
     let paragraph = (text.split('\n\n').find((p) =>
       p.startsWith('An app may carry') && p.includes('wrangler.jsonc')
     ) ?? '').replace(/\s+/g, ' ')
@@ -228,16 +242,15 @@ Deno.test('the app guide names its bindings and when their data is deleted', () 
 // reached at. `/api/…` is the kernel's, always, so an example opening with
 // `endsWith('/api/mine')` is a route that can never run — which is what the
 // ninth user test copied and got the api door's own 404 for (C-32869 item 2).
-Deno.test("no route in the guide's worker example is under /api/", () => {
-  let section = guide.split('## Code of your own')[1]?.split('\n## ')[0] ?? ''
-  let routes = [...section.matchAll(/pathname[^\n]*?'(\/[^']*)'/g)]
+Deno.test("no route in the code page's worker examples is under /api/", () => {
+  let routes = [...pageText('code').matchAll(/pathname[^\n]*?'(\/[^']*)'/g)]
     .map((m) => m[1])
   assert(routes.length, 'the example names no routes at all')
   assertEquals(routes.filter((r) => r.split('/').includes('api')), [])
 })
 
-Deno.test('the guide prints the limits an app is really held to', async () => {
-  let section = guide.split('## Code of your own')[1]?.split('\n## ')[0] ?? ''
+Deno.test('the code page prints the limits an app is held to', async () => {
+  let section = pageText('code')
   let meta: { limits: { cpu_ms: number; subrequests: number } } = {
     limits: {
       cpu_ms: 0,
@@ -257,47 +270,53 @@ Deno.test('the guide prints the limits an app is really held to', async () => {
   }
   assert(
     section.includes(`${meta.limits.cpu_ms}ms of CPU`),
-    `the guide does not say ${meta.limits.cpu_ms}ms of CPU`,
+    `the code page does not say ${meta.limits.cpu_ms}ms of CPU`,
   )
   assert(
     section.includes(`${meta.limits.subrequests} subrequests`),
-    `the guide does not say ${meta.limits.subrequests} subrequests`,
+    `the code page does not say ${meta.limits.subrequests} subrequests`,
   )
 })
 
 // The fifth list that can rot, and the one a person's data rides on: what
-// sharing an app costs them. An app is a plugin (T-32890), so the guide has to
+// sharing an app costs them. An app is a plugin (T-32890), so the page has to
 // name every tool that makes one — a missing verb is a door nobody finds — and
 // say the two things that are not obvious from the names: an installed copy
 // shares nothing but the code, and it is pinned until someone moves it.
-Deno.test('the guide teaches every tool that shares an app', () => {
-  let section = guide.split('## Sharing an app')[1]?.split('\n## ')[0] ?? ''
-  assert(section, 'the guide never teaches publishing')
+Deno.test('the sharing page teaches every tool that shares an app', () => {
+  let section = pageText('sharing')
   for (
     let tool of TOOLS.map((t) => t.name).filter((n) =>
       /^app_(publish|unpublish|published|install|update)$/.test(n)
     )
   ) {
-    assert(section.includes(tool), `the guide never names ${tool}`)
+    assert(section.includes(tool), `the sharing page never names ${tool}`)
   }
   assert(
-    /nothing but the code/.test(section),
-    'the guide never says what an installed app shares',
+    /the code, and nothing else|nothing but the code/.test(section),
+    'the sharing page never says what an installed app shares',
   )
-  assert(/PINNED|pinned/.test(section), 'the guide never says what pinning is')
+  assert(/pinned/.test(section), 'the sharing page never says what pinning is')
 })
 
-Deno.test('the guide prints every column of every component it lists', () => {
-  let listed = bullets()
-  let named = listed.flatMap((b) => b.names)
+Deno.test('the components page prints every column of every component it lists', () => {
+  let listed = entries()
+  let named = listed.map((e) => e.name)
   // A parse that found nothing would pass every assertion below.
-  assert(named.includes('doc') && named.includes('artifact'), named.join(' '))
-  for (let { names, cols } of listed) {
-    for (let name of names) {
-      assert(comps[name], `the guide lists ${name}, which is no component`)
+  assert(named.includes('doc') && named.includes('attachment'), named.join(' '))
+  let all = stored()
+  for (let { name, cols, set } of listed) {
+    let has = all[name]
+    assert(has, `the page lists ${name}, which is no component of a store`)
+    assertEquals(
+      cols,
+      has.filter(([, , own]) => !own).map(([c, w]) => [c, w]),
+      name,
+    )
+    if (set.length) {
       assertEquals(
-        cols,
-        Object.entries(comps[name]).map(([col, t]) => [col, typeName(t)]),
+        set,
+        has.filter(([, , own]) => own).map(([c, w]) => [c, w]),
         name,
       )
     }
@@ -314,12 +333,11 @@ Deno.test('the guide and its page point a domain where the code does', () => {
   let section = guide.split('## A custom domain')[1]
     ?.split('\n## ')[0] ?? ''
   assert(section, 'the guide never teaches a custom domain')
+  let page = pageText('domains')
   for (let tool of TOOLS.map((t) => t.name).filter((n) => /^domain_/.test(n))) {
-    assert(section.includes(tool), `the guide never names ${tool}`)
+    assert(page.includes(tool), `the domains page never names ${tool}`)
   }
-  for (
-    let [where, text] of [['guide', section], ['page', pageText('domains')]]
-  ) {
+  for (let [where, text] of [['guide', section], ['page', page]]) {
     assert(text.includes(ORIGIN), `the ${where} never says ${ORIGIN}`)
     assertEquals(
       [...text.matchAll(/\borigin[a-z0-9.-]*\.yaks\.app/g)].map((m) => m[0])
@@ -427,8 +445,8 @@ Deno.test("the clipping page's own reader handles a schema.org page", () => {
   assertEquals(h.src(['https://x.test/a.png']), 'https://x.test/a.png')
 })
 
-Deno.test('the guide describes main as server source, not the upload wrapper', () => {
-  for (let text of [guide, INSTRUCTIONS, pageText('code')]) {
+Deno.test('the code page describes main as server source, not the upload wrapper', () => {
+  for (let text of [INSTRUCTIONS, pageText('code')]) {
     let plain = text.replaceAll('`', '').replace(/\s+/g, ' ')
     assert(plain.includes('server source path'))
     assert(plain.includes('worker.js'))
