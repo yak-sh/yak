@@ -1745,7 +1745,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       'who',
       () =>
         walls
-          ? visiting(req, env, dir, space!, store, paper?.token, path)
+          ? presented(req, env, dir, space!, store, paper?.token, path)
           : whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p)),
     )
   // And the page's own address for its relative URLs: a sandboxed page's
@@ -1896,7 +1896,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
 // path or a bearer, names the person, and their role is read live — the token
 // carries none. Without one, the app's `/api/` hears nobody, whatever cookie
 // came: only its page load reads the cookie, and that is what mints the token.
-let visiting = async (
+let presented = async (
   req: Request,
   env: Env,
   dir: ReturnType<typeof directory>,
