@@ -3,6 +3,7 @@
 // here is the plugin a config would name.
 
 import { assert, assertEquals } from '@std/assert'
+import type { Handler } from '@yaks/api'
 import { compose, type Served } from '@yaks/cli/host'
 import type { Bundle, Comp } from '@yaks/graph'
 import { detached } from '@yaks/graph'
@@ -15,7 +16,7 @@ import { pageEid } from './url.ts'
 let host = async (): Promise<Served> =>
   await compose({
     db: ':memory:',
-    plugins: ['@yaks/doc', '@yaks/blob', '@yaks/page'],
+    plugins: ['@yaks/doc', '@yaks/blob', '@yaks/page', '@yaks/api'],
     numbers: false,
   })
 
@@ -25,8 +26,15 @@ let comp = (b: Bundle | undefined, name: string) =>
 let read = async (h: Served, eid: string) =>
   (await detached(h.storage).get([eid]))[0]
 
+// The door this package's routes hang on: every config here names @yaks/api,
+// so a host without a handler would be this file's own bug.
+let door = (h: Served): Handler => {
+  if (!h.handler) throw new Error('this host composed no handler')
+  return h.handler
+}
+
 let witness = (h: Served, body: unknown) =>
-  h.handler(
+  door(h)(
     new Request('http://h/page', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -90,7 +98,7 @@ Deno.test('GET /page/<eid> answers the frozen document, fenced and dated', async
   try {
     await witness(h, { url: 'https://example.com/w', html: TAB })
     let eid = pageEid('https://example.com/w')
-    let got = await h.handler(new Request(`http://h/page/${eid}`))
+    let got = await door(h)(new Request(`http://h/page/${eid}`))
     assertEquals(got.status, 200)
     let html = await got.text()
     // the invariant: these bytes reach nothing
@@ -110,11 +118,11 @@ Deno.test('GET /page/<eid> answers the frozen document, fenced and dated', async
     )
     // an id that never named a page is a miss, not a lookup
     assertEquals(
-      (await h.handler(new Request('http://h/page/../etc'))).status,
+      (await door(h)(new Request('http://h/page/../etc'))).status,
       404,
     )
     assertEquals(
-      (await h.handler(
+      (await door(h)(
         new Request(`http://h/page/${pageEid('https://a.com/')}`),
       ))
         .status,

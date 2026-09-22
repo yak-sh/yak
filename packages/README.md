@@ -316,13 +316,16 @@ grouped approximately by function, **not** by dependency order.
   handler over a graph, serving `/apply`, `/query` and the `/ws` WebSocket
   endpoint. It authenticates the writer, and a subscription is a saved query
   whose results are pushed again whenever a committed transaction changes them.
-  It also declares the `serve` tool, which binds a port and answers with the
-  handler its host assembled, so `yak serve` is a plugin's verb rather than a
-  command of the CLI.
+  It is also the plugin that makes a host answer HTTP at all: its `./routes`
+  builds that host's one handler out of every listed plugin's routes, and its
+  `serve` tool binds a port and answers with it — so `yak serve` is a plugin's
+  verb rather than a command of the CLI, and a config that does not list this
+  package has neither.
 - **[@yaks/mcp](./mcp)** — the same graph exposed to an agent: an MCP server of
   five generic tools that accept and return bundles, served either as a portable
   `fetch` handler or over stdio, with each tool's output schema generated from
-  the vocabulary.
+  the vocabulary. Its `./routes` is that handler at `/mcp`, one route on
+  whatever is serving the host's routes.
 - **[@yaks/mcp-client](./mcp-client)** — the client side of MCP: a remote MCP
   server's tools reached over Streamable HTTP and presented as the same `Tool`
   definitions a graph hands to its own model, with credentials resolved by the
@@ -399,7 +402,7 @@ exports it needs, one per kind of contribution, and loads only the ones it runs
 | `./rules`   | `rules: (host, options) => Plugin[]`, `extend?` (@yaks/sql)                     | anything            |
 | `./tools`   | `runs: (host, options) => Runs` — the code behind its `tool: true` declarations | ajv, SQL, anything  |
 | `./effects` | `effects: (host, options) => Watch[]`                                           | anything            |
-| `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`                           | anything            |
+| `./routes`  | `routes: (host, options) => Route[]`, `authenticate?`, `handler?`               | anything            |
 | `./service` | `service: (host, options, signal) => void \| Promise<void>`                     | anything            |
 | `./views`   | `views` — `@yaks/render` renderers                                              | nothing server-side |
 | `.`         | the library API and types; runtime requirements vary by package                 |                     |
@@ -550,6 +553,12 @@ distinguish implemented behavior from remaining proposals.
   and a value written as `{"env": "NAME"}` is read from the environment when the
   config is loaded — so a config can name a secret without containing one. See
   [@yaks/cli](./cli/README.md#what-a-config-passes-to-one-plugin).
+- **`handler` is what hosts the routes.** It is exported from `./routes` by at
+  most one plugin in a program — @yaks/api — and is handed the host once
+  `host.routes` holds every listed plugin's routes. What it returns is the one
+  handler that host answers with. A program whose config lists no such plugin
+  has no handler and never calls the other plugins' `routes` factories: a route
+  with nothing listening is a facet the host ignores.
 - **`authenticate` is access policy, not a route.** It is exported from
   `./routes` because the HTTP server is where authentication happens, but it is
   not an HTTP path, and at most one plugin in a program may define it.

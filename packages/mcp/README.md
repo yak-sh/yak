@@ -75,6 +75,20 @@ Deno.serve((request) =>
 )
 ```
 
+## The plugin: `/mcp` as a route
+
+`@yaks/mcp/routes` is the same handler as one `Route` at `/mcp`, so a host
+composed from a config gets it by listing this package
+([@yaks/cli](../cli/README.md)). Whatever serves that host's routes serves this
+one — [@yaks/api](../api/README.md) does — and a config listing neither runs the
+same tools in its own process with nothing listening.
+
+The generic tier is restated for this transport (`core: true`), which is what
+gives `graph_apply` the bundle schema the host's own vocabulary describes. The
+host's copies of that tier (@yaks/graph `tier`, the form a command line reads)
+are dropped from the list the route is handed, so each generic tool is listed
+once.
+
 ## Storage
 
 This package does not create its own database. `tools/call` uses the

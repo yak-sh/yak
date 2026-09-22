@@ -5,9 +5,9 @@
 //
 // The port is bound here rather than through the `serve` tool, because this is
 // `compose` being tested and not that tool: what the tool adds — binding a
-// port with the handler assembled here and recording the call for as long as
-// it listens — is @yaks/api's own test. What this asserts of it is that a
-// config naming that package gets the verb.
+// port with the handler the config's own plugins built and recording the call
+// for as long as it listens — is @yaks/api's own test. What this asserts of it
+// is that a config naming that package gets the verb, and a handler at all.
 
 import { assert, assertEquals } from '@std/assert'
 import { compose, read } from './host.ts'
@@ -32,12 +32,14 @@ slow(
       `${dir}/yak.json`,
       JSON.stringify({
         db: 'graph.db',
-        plugins: ['@yaks/api', '@yaks/harness'],
+        plugins: ['@yaks/api', '@yaks/mcp', '@yaks/harness'],
         numbers: false,
         port,
       }),
     )
     let host = await compose(read(`${dir}/yak.json`))
+    // The config named the package that hosts routes, so there is one.
+    assert(host.handler, 'a config naming @yaks/api composed no handler')
     let server = Deno.serve({ port }, host.handler)
     let at = `http://localhost:${port}`
     try {

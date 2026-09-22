@@ -2,7 +2,7 @@
 // The `serve` tool, over a host written here: no database, no plugins, just
 // the four things it reads off the host it was composed into.
 
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, ToolCtx } from '@yaks/graph'
 import type { Runner } from '@yaks/tools'
 import { PORT, runs, type Serving } from './tools.ts'
@@ -68,6 +68,20 @@ Deno.test('serve answers with the host handler until the host stops', async () =
   let body = (answer.content as { body: string }).body
   assert(body.includes('http://'), body)
   assert(body.includes(String(port)), body)
+})
+
+Deno.test('a host that composed no handler has nothing to serve', async () => {
+  // Which is what a config leaving this package out gets: the routes facets
+  // are never asked for, and nothing binds a port to refuse every request.
+  let { host } = fake(PORT)
+  await assertRejects(
+    () =>
+      runs({ ...host, handler: undefined }).serve([], ctx()) as Promise<
+        Bundle[]
+      >,
+    Error,
+    'compose @yaks/api',
+  )
 })
 
 Deno.test('the call names the port, over the one the config named', async () => {

@@ -22,11 +22,17 @@
  * and the work it keeps doing while the host is up (`/service`). This file
  * calls those six subpaths a plugin's {@link FACETS}. A subpath a package does
  * not export is skipped; a subpath that exists and fails to import is an
- * error, never a skip. Over the plugins it opens one SQLite file and mounts
- * {@link https://jsr.io/@yaks/api | @yaks/api} at `/apply`, `/query` and
- * `/ws`, and {@link https://jsr.io/@yaks/mcp | @yaks/mcp} at `/mcp`. There is
- * no other wiring: a running server is a config file, a list of packages, and
+ * error, never a skip. Over the plugins it opens one SQLite file, and nothing
+ * else is wired in: a running server is a config file, a list of packages, and
  * whichever of their tools somebody called.
+ *
+ * Nothing here serves HTTP. A config that wants a listener names
+ * {@link https://jsr.io/@yaks/api | @yaks/api}, the plugin that turns the
+ * routes into {@link Host.handler} and brings the `serve` verb, and one that
+ * wants an agent's door names {@link https://jsr.io/@yaks/mcp | @yaks/mcp},
+ * whose `/mcp` is a route like any other. A config that names neither gets a
+ * host that opens the graph and runs tools, and the `/routes` facets of the
+ * plugins it did name are never asked for.
  *
  * ```ts
  * import { compose } from '@yaks/cli/host'
@@ -53,12 +59,11 @@ import {
   graph,
   isPromise,
   type NamedTool,
-  namedTool,
   type Plugin,
   then,
 } from '@yaks/graph'
 import { type Runner, runner, toolsDoc } from '@yaks/tools'
-import { loadTools, type Runs } from '@yaks/graph/tools'
+import { loadTools, type Runs, type Search, tier } from '@yaks/graph/tools'
 import {
   type Keywords,
   loadVocab,
@@ -71,14 +76,11 @@ import { ended, PROCESS, selfEid, started } from '@yaks/process'
 import type { Derived, Extension } from '@yaks/sql'
 import { type Driver, migrations, storage, type Store } from '@yaks/sqlite'
 import { Database, driver } from '@yaks/sqlite/db'
-import {
-  api,
-  type Authenticate,
-  type Handler,
-  type Route,
-  routed,
-} from '@yaks/api'
-import { core, mcp, type Search } from '@yaks/mcp'
+// Types only. A route and a request handler are @yaks/api's words, and a host
+// names the shape of what it passes through without importing a line of HTTP:
+// the package that answers requests is a plugin a config lists, never a
+// dependency of this one.
+import type { Authenticate, Handler, Route } from '@yaks/api'
 import { adopt, fields as searched, find, search } from '@yaks/fts'
 import {
   EFFECT,
@@ -120,12 +122,23 @@ export type Host = {
   storage: Store
   sql: Driver
   graph: Graph
-  /** every HTTP endpoint and route of this host as one request handler:
-   * `/apply`, `/query` and `/ws` from @yaks/api, `/mcp` from @yaks/mcp, and
-   * the plugins' own routes in front of them. Assembled here because the
-   * plugins are; whether any process listens with it is the `serve` tool's
-   * business (@yaks/api). */
-  handler: Handler
+  /** every route of this host as one request handler — built by the listed
+   * plugin that hosts routes ({@link RoutesFacet.handler}, @yaks/api), and
+   * absent where the config named no such plugin. Whether any process listens
+   * with it is the `serve` tool's business (@yaks/api). */
+  handler?: Handler
+  /** every HTTP route the listed plugins contributed, in the order the config
+   * names them. Gathered only where a plugin hosts them: nothing here answers
+   * a request, so a host with no such plugin never asks. */
+  routes: Route[]
+  /** every tool declared across the plugins, joined to the code behind it,
+   * with this graph's own generic tier (@yaks/graph `tier`) first. One list: a
+   * command line runs it, and a transport that lists tools lists it. */
+  tools: NamedTool[]
+  /** ranked text search over this graph, where its vocabulary marks a column
+   * `search: true` and @yaks/fts indexed it — what the tier's `search` tool
+   * answers with, and what a transport restating the tier asks for. */
+  search?: Search
   /** the one tool runner over this graph: what writes a `call` row, runs the
    * function and writes the result back, for a command line and an HTTP
    * request alike. */
@@ -217,17 +230,24 @@ export type EffectsFacet = {
   effects?: (host: Host, options: Options) => Watch[]
 }
 
-/** `<plugin>/routes` — the HTTP routes it adds beside @yaks/api's own, and,
- * for at most one plugin per host, who is calling.
+/** `<plugin>/routes` — the HTTP a plugin adds, who is calling, and, for the
+ * one plugin that hosts them, what answers a request at all.
  *
  * `authenticate` is a factory like every other plugin export, because naming a
  * caller is a read: @yaks/session resolves a request to the session it claims
  * to speak for, which it can only do through the host's own graph. It is
  * handed the host with nothing open on it yet — keep the reference, do not
- * call it. */
+ * call it.
+ *
+ * `handler` is the other way round: at most one plugin per host exports it, it
+ * is called last, with the graph open and `host.routes` holding every listed
+ * plugin's routes, and what it returns is {@link Host.handler}. @yaks/api is
+ * that plugin, so a config naming it serves HTTP and a config leaving it out
+ * has a host that answers no request and never asks the others for routes. */
 export type RoutesFacet = {
   routes?: (host: Host, options: Options) => Route[]
   authenticate?: (host: Host, options: Options) => Authenticate
+  handler?: (host: Host, options: Options) => Handler
 }
 
 /** The name of the one background job this host owns rather than any plugin:
@@ -312,8 +332,6 @@ export let facet: Load = async (plugin, name) => {
 /** An assembled host: everything a plugin factory was given, plus what only
  * the caller of {@link compose} needs. */
 export type Served = Host & {
-  /** every tool declared and implemented across the plugins */
-  tools: NamedTool[]
   /** the post-commit effect registry the plugins registered on */
   fx: Effects
   /** close the graph: every lease this process holds released and its `exit`
@@ -505,8 +523,13 @@ export let compose = async (
     // reached through the host by the facets that need them: `@yaks/api`'s
     // `serve` is a tool, so it is asked for at a moment when the handler it
     // listens with does not exist yet, and reads it off the host when the call
-    // arrives.
+    // arrives. The routes and the tools are the same story one step earlier —
+    // a plugin that hosts routes, or mounts one, reads both off the host while
+    // it is being assembled.
     let answering: Handler | undefined
+    let paths: Route[] = []
+    let made: NamedTool[] | undefined
+    let ranked: Search | undefined
     let calls: Runner | undefined
     let jobs: ((signal?: AbortSignal) => Promise<void>) | undefined
     let stopping = new AbortController()
@@ -533,9 +556,18 @@ export let compose = async (
         if (!g) throw new Error('the graph is not open yet')
         return g
       },
-      get handler(): Handler {
-        if (!answering) throw new Error('the request handler is not built yet')
+      get handler(): Handler | undefined {
         return answering
+      },
+      get routes(): Route[] {
+        return paths
+      },
+      get tools(): NamedTool[] {
+        if (!made) throw new Error('the tools are not built yet')
+        return made
+      },
+      get search(): Search | undefined {
+        return ranked
       },
       get runner(): Runner {
         if (!calls) throw new Error('the tool runner is not built yet')
@@ -605,7 +637,7 @@ export let compose = async (
     if (text.length) adopt(sql, text, derived)
     // Ranked results, for whoever asks for them. Which rows match is already
     // answered by the extension above; this is the order they come back in.
-    let ranked: Search | undefined = text.length
+    ranked = text.length
       ? async (words, opts) => {
         let hits = find(sql, text, words, { limit: opts?.limit })
         let found = await detached(host.storage).get(hits.map((h) => h.entity))
@@ -613,13 +645,14 @@ export let compose = async (
         return hits.map((h) => at.get(h.entity)).filter((b) => !!b)
       }
       : undefined
-    // The generic tools belong to this graph, not to the HTTP layer.
-    // `graph_apply` over this graph is one tool whether a person typed it or
-    // an agent requested it, so it is assembled here beside the plugins' own
-    // (@yaks/mcp `core`) and `/mcp` is told not to add a second copy. That is
-    // what lets a command line run every tool the MCP server lists.
-    let tools = [
-      ...core({ vocab, search: ranked }).map(namedTool),
+    // The generic tools belong to this graph, not to any transport: they are
+    // declared in @yaks/graph's own vocabulary and implemented there, and a
+    // host has a graph whether or not anything is listening. So the tier is
+    // assembled here beside the plugins' own, in the form the vocabulary
+    // declares, and a transport that needs them in its own form restates them
+    // (@yaks/mcp `core`).
+    let tools = made = [
+      ...tier({ search: ranked }),
       ...loadTools(
         docs,
         Object.assign(
@@ -655,22 +688,19 @@ export let compose = async (
     for (let rule of run.rules) {
       fx.on(rule.plan, (e) => run.run(e.entity.eid), { doc: rule.rule.name })
     }
-    let routes = served.flatMap(([r, o]) => r.routes?.(host, o) ?? [])
-    let door = api({ graph: g, authenticate: host.who })
-    let agents = mcp({
-      graph: g,
-      authenticate: host.who,
-      tools,
-      core: false,
-      name: config.name ?? 'yak',
-    })
-    answering = (request) => {
-      let path = new URL(request.url).pathname
-      if (path == '/mcp') return agents(request)
-      let route = routes.find((r) => routed(r, request.method, path))
-      // A request no plugin route claimed goes to @yaks/api, which answers
-      // `/apply`, `/query` and `/ws` and returns an error for anything else.
-      return route ? route.handle(request) : door(request)
+    // Which listed plugin hosts the routes — turns them into the one handler
+    // this host answers with (@yaks/api). Two would be two answers to one
+    // request, which is not an answer. None means nothing here serves HTTP, so
+    // the other plugins are never asked for routes: a facet whose whole
+    // purpose is a listener that does not exist is a facet this host ignores.
+    let hosts = served.filter(([r]) => r.handler)
+    if (hosts.length > 1) {
+      throw new Error(`${hosts.length} plugins host routes — a host has one`)
+    }
+    let [mod, options] = hosts[0] ?? []
+    if (mod?.handler) {
+      paths = served.flatMap(([r, o]) => r.routes?.(host, o) ?? [])
+      answering = mod.handler(host, options ?? {})
     }
     // The background jobs: work that is nobody's request and everybody's to
     // do, each leased under the name of the package that owns it. The SWEEP is
@@ -740,7 +770,6 @@ export let compose = async (
     return {
       ...host,
       graph: g,
-      tools,
       fx,
       // The last transaction, then the file: every lease this process holds
       // released, and its ending stamped. One transaction, because they are

@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "exports": {
     ".": "./mod.ts",
-    "./stdio": "./stdio.ts"
+    "./stdio": "./stdio.ts",
+    "./routes": "./routes.ts"
   },
   "license": "Apache-2.0",
   "description": "Exposes a graph through generic MCP tools for writes, queries, entity inspection, schema inspection, and optional search.",

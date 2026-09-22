@@ -255,3 +255,11 @@ export let tier = (seams: Seams = {}): NamedTool[] => {
     .filter((decl) => !!doing[decl.name!])
     .map((decl) => ({ ...decl, name: decl.name!, run: doing[decl.name!] }))
 }
+
+/** Every name the generic tier declares, whether or not a given graph lists
+ * all of them. A transport that restates the tier in the form it accepts
+ * (@yaks/mcp `core`) drops these from the tool list its host handed it, so
+ * each of them is listed once rather than twice under one name. */
+export let generic: string[] = toolsSaid(graphDoc).map((decl) =>
+  decl.name ?? toolName(decl)
+)

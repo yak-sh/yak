@@ -1,4 +1,5 @@
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
+import type { Handler } from '@yaks/api'
 import { type Bundle, type Comp, detached } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
@@ -10,6 +11,7 @@ import { effectDoc } from '@yaks/effects'
 import { runs as effectRuns } from '@yaks/effects/tools'
 import {
   compose,
+  facet,
   FACETS,
   type Facets,
   given,
@@ -118,11 +120,27 @@ let shop: Plugged = {
 }
 
 // Every facet of every plugin, by name. A facet nobody wrote is `null` — the
-// answer the default loader gives for a subpath a package does not export.
+// answer the default loader gives for a subpath a package does not export. A
+// package named by its own specifier is loaded off disk instead, so a test
+// composes @yaks/api beside the plugins written here and gets the doors,
+// the handler and the `serve` verb a config would.
 let only =
   (mods: Record<string, Plugged>) =>
-  <F extends keyof Facets>(spec: string, facet: F): Promise<Facets[F] | null> =>
-    Promise.resolve((mods[spec]?.[facet] ?? null) as Facets[F] | null)
+  <F extends keyof Facets>(spec: string, name: F): Promise<Facets[F] | null> =>
+    spec.startsWith('@yaks/')
+      ? facet(spec, name)
+      : Promise.resolve((mods[spec]?.[name] ?? null) as Facets[F] | null)
+
+// The two packages a host lists when it wants HTTP: one hosts the routes, the
+// other is a route on it.
+let HTTP = ['@yaks/api', '@yaks/mcp']
+
+// What a host that listed them answers with. A test asking for a handler has
+// composed @yaks/api, so an absent one is that test's own bug.
+let serving = (host: { handler?: Handler }): Handler => {
+  if (!host.handler) throw new Error('this host composed no handler')
+  return host.handler
+}
 
 let write = (path: string, body: unknown) =>
   Deno.writeTextFileSync(path, JSON.stringify(body))
@@ -179,14 +197,13 @@ Deno.test('a host without a database refuses rather than guessing one', async ()
 
 Deno.test('compose takes each facet from its own subpath, and mounts the doors', async () => {
   let host = await compose(
-    { db: ':memory:', plugins: ['shop'] },
+    { db: ':memory:', plugins: ['shop', ...HTTP] },
     only({ shop }),
   )
   try {
     assertEquals(host.vocab.comp('book')?.name, 'book')
     // The generic tier is this graph's own, ahead of the plugins': one list,
-    // which the command line runs and `/mcp` lists (`core: false` there, so
-    // the tier is not added a second time).
+    // which the command line runs and `/mcp` restates for itself.
     assertEquals(host.tools.map((t) => t.name), [
       'graph_apply',
       'graph_query',
@@ -197,9 +214,11 @@ Deno.test('compose takes each facet from its own subpath, and mounts the doors',
       'search',
       'book_list',
       'book_add',
+      // And the verb the package in the config brought with it.
+      'serve',
     ])
 
-    let applied = await host.handler(
+    let applied = await serving(host)(
       new Request('http://h/apply', {
         method: 'POST',
         body: JSON.stringify([{
@@ -213,13 +232,13 @@ Deno.test('compose takes each facet from its own subpath, and mounts the doors',
     // whatever the client said about itself.
     assertEquals((await applied.json())[0].created.by, me)
 
-    let found = await host.handler(new Request('http://h/query?q=.book'))
+    let found = await serving(host)(new Request('http://h/query?q=.book'))
     assertEquals((await found.json())[0].book.title, 'Spring')
 
-    let mine = await host.handler(new Request('http://h/shop/anything'))
+    let mine = await serving(host)(new Request('http://h/shop/anything'))
     assertEquals(await mine.text(), '/shop/anything')
 
-    let missing = await host.handler(new Request('http://h/nowhere'))
+    let missing = await serving(host)(new Request('http://h/nowhere'))
     assertEquals(missing.status, 404)
   } finally {
     host.close()
@@ -278,12 +297,12 @@ Deno.test('a host that names itself writes as itself, and a plugin may say who e
     },
   }
   let host = await compose(
-    { db: ':memory:', plugins: ['shop', 'told'] },
+    { db: ':memory:', plugins: ['shop', 'told', ...HTTP] },
     only({ shop, told }),
   )
   try {
     let wrote = async (headers: Record<string, string> = {}) => {
-      let said = await host.handler(
+      let said = await serving(host)(
         new Request('http://h/apply', {
           method: 'POST',
           headers,
@@ -356,6 +375,52 @@ Deno.test('two plugins may not both say who is calling', async () => {
       ),
     Error,
     'a door has one',
+  )
+})
+
+// T-37821, Jeff's words: "compose should be the other way around: if a plugin
+// lists routes but @yaks/api is not included, then those facets are ignored."
+Deno.test('a host with nobody to host routes has no handler, and never asks for them', async () => {
+  let asked = 0
+  let counted: Plugged = {
+    ...shop,
+    routes: {
+      routes: () => {
+        asked++
+        return [{
+          method: 'GET',
+          path: '/shop/*',
+          handle: () => new Response(''),
+        }]
+      },
+    },
+  }
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'] },
+    only({ shop: counted }),
+  )
+  try {
+    assertEquals(host.handler, undefined)
+    assertEquals(host.routes, [])
+    assertEquals(asked, 0, 'a route was built for a listener nobody composed')
+    // And the verb that binds a port is not a tool of a host that cannot
+    // answer a request: it comes with the package that can.
+    assert(!host.tools.some((t) => t.name == 'serve'), 'serve with no server')
+  } finally {
+    host.close()
+  }
+})
+
+Deno.test('two plugins may not both host the routes', async () => {
+  let hosts: Plugged = { routes: { handler: () => () => new Response('one') } }
+  await assertRejects(
+    () =>
+      compose(
+        { db: ':memory:', plugins: ['a', 'b'] },
+        only({ a: hosts, b: { routes: { ...hosts.routes } } }),
+      ),
+    Error,
+    'a host has one',
   )
 })
 
@@ -456,13 +521,13 @@ Deno.test('a start-up pass is an effect on this process being born', async () =>
 
 Deno.test('the door calls the tool, and the call is the transcript', async () => {
   let host = await compose(
-    { db: ':memory:', plugins: ['shop'] },
+    { db: ':memory:', plugins: ['shop', ...HTTP] },
     only({ shop }),
   )
   try {
     // What `yak book add --title Spring` is once it reaches the server: one
     // POST to /mcp, which is the only way a line runs a tool here.
-    let said = await host.handler(
+    let said = await serving(host)(
       new Request('http://h/mcp', {
         method: 'POST',
         headers: {
@@ -500,7 +565,7 @@ Deno.test('the door calls the tool, and the call is the transcript', async () =>
 
 Deno.test('a call written through the door is run by the effect', async () => {
   let host = await compose(
-    { db: ':memory:', plugins: ['shop'] },
+    { db: ':memory:', plugins: ['shop', ...HTTP] },
     only({ shop }),
   )
   try {
@@ -508,7 +573,7 @@ Deno.test('a call written through the door is run by the effect', async () => {
     // Nobody is waiting on this one: it is a write like any other, through
     // the door a client uses. The rules are registered as effects, so the
     // call is run because it matched, not because somebody awaited it.
-    let wrote = await host.handler(
+    let wrote = await serving(host)(
       new Request('http://h/apply', {
         method: 'POST',
         body: JSON.stringify([{
@@ -538,7 +603,11 @@ Deno.test('a plugin named with options gets them, beside the host', async () => 
   let host = await compose(
     {
       db: ':memory:',
-      plugins: [{ use: 'shop', with: { open: 'tuesdays' } }, 'quiet'],
+      plugins: [
+        { use: 'shop', with: { open: 'tuesdays' } },
+        'quiet',
+        ...HTTP,
+      ],
     },
     only({
       shop: {
@@ -568,7 +637,7 @@ Deno.test('a plugin named with options gets them, beside the host', async () => 
   )
   try {
     assertEquals(said, [{}, { open: 'tuesdays' }])
-    let res = await host.handler(new Request('http://x/open'))
+    let res = await serving(host)(new Request('http://x/open'))
     assertEquals(await res.text(), 'tuesdays')
   } finally {
     host.close()
@@ -757,7 +826,7 @@ Deno.test('a signal that has already aborted is one pass and out', async () => {
 
 Deno.test('a duty that throws is reported, and the host still serves', async () => {
   let host = await compose(
-    { db: ':memory:', plugins: ['shop', 'broken'] },
+    { db: ':memory:', plugins: ['shop', 'broken', ...HTTP] },
     only({
       shop,
       broken: {
@@ -772,7 +841,7 @@ Deno.test('a duty that throws is reported, and the host still serves', async () 
   try {
     await host.duties(AbortSignal.abort())
     assertEquals(
-      await (await host.handler(new Request('http://x/shop/a'))).text(),
+      await (await serving(host)(new Request('http://x/shop/a'))).text(),
       '/shop/a',
     )
   } finally {
@@ -782,7 +851,7 @@ Deno.test('a duty that throws is reported, and the host still serves', async () 
 
 Deno.test('a column that declares its words searched is indexed, and ranked', async () => {
   let host = await compose(
-    { db: ':memory:', plugins: ['shop'] },
+    { db: ':memory:', plugins: ['shop', ...HTTP] },
     only({ shop }),
   )
   try {
@@ -798,7 +867,7 @@ Deno.test('a column that declares its words searched is indexed, and ranked', as
     )
     // And the door lists the ranked tool, which the generic tier only has
     // when the host composed one.
-    let said = await host.handler(
+    let said = await serving(host)(
       new Request('http://h/mcp', {
         method: 'POST',
         headers: {
@@ -907,7 +976,7 @@ Deno.test('a body kept in the store is still found by its own words', async () =
     },
   }
   let host = await compose(
-    { db: ':memory:', plugins: ['blog'] },
+    { db: ':memory:', plugins: ['blog', ...HTTP] },
     only({
       blog: {
         vocab: { docs: [post], keywords: [blobKeywords], derived: blobRead },
@@ -920,7 +989,7 @@ Deno.test('a body kept in the store is still found by its own words', async () =
       entity: { eid: 'p1' },
       post: { title: 'On lemons', body: 'three lemons and a drizzle of syrup' },
     }])
-    let found = await host.handler(new Request('http://h/query?q=drizzle'))
+    let found = await serving(host)(new Request('http://h/query?q=drizzle'))
     let rows = await found.json()
     assertEquals(rows.length, 1)
     assertEquals(rows[0].post.title, 'On lemons')

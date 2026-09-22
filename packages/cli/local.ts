@@ -19,7 +19,6 @@
 // importing it opens a database and pulls in every plugin the config names — a
 // cost `yak login` on a machine with no graph should not pay.
 
-import { inputSchemaOf } from '@yaks/mcp'
 import { answerOf, faulted, toolEid, worded } from '@yaks/tools'
 import { read } from './config.ts'
 import type { Command, Ctx } from './run.ts'
@@ -67,15 +66,11 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
   let host = await opened(c.config!)
   return host.tools.map((declared) => ({
     ...declared,
-    // The command line is parsed from the tool's own arguments as JSON Schema
-    // — the same document `tools/list` sends — so a command typed against a
-    // local graph and the same command typed against an MCP server are written
-    // identically, even for a tool that declared its arguments in Zod
-    // (@yaks/mcp `inputSchemaOf`). The Zod copy is dropped: a tool declares
-    // its arguments once, and the runner still validates the call against the
-    // tool's own declaration (@yaks/tools `checked`).
-    input: undefined,
-    inputSchema: inputSchemaOf(declared),
+    // A tool arrives declaring its arguments as JSON Schema — the same
+    // document `tools/list` sends — so a command typed against a local graph
+    // and the same command typed against an MCP server are written
+    // identically. Nothing is converted here: a transport that wants them in
+    // another form restates them on its own side (@yaks/mcp `core`).
     run: async (args: Record<string, unknown>): Promise<number> => {
       // Write the `tool` rows a call's `to` points at first: a call naming an
       // entity nothing created would be a dangling reference. Done once per

@@ -31,8 +31,8 @@ it, so a config listing that package is a config whose graph can be served.
 The package has two main responsibilities:
 
 - [`host.ts`](./host.ts) imports configured plugin modules, opens storage, and
-  assembles the graph, including the request handler its `serve` tool listens
-  with.
+  assembles the graph. It serves no HTTP of its own: the request handler is
+  built by the listed plugin that hosts routes, which is @yaks/api.
 - [`platform.ts`](./platform.ts) lists and calls tools on a remote MCP server.
   [`local.ts`](./local.ts) exposes the same command interface for a graph opened
   by the current process.
@@ -152,15 +152,15 @@ six.
 }
 ```
 
-| Subpath     | Expected exports                                                              |
-| ----------- | ----------------------------------------------------------------------------- |
-| `./vocab`   | `docs?`, `keywords?`, and `derived?` declarations                             |
-| `./rules`   | `rules?: (host, options) => Plugin[]` and query `extend?` functions           |
-| `./tools`   | `runs?: (host, options) => Runs`, keyed by declared tool name                 |
-| `./effects` | `effects?: (host, options) => Watch[]` for post-commit work                   |
-| `./routes`  | `routes?: (host, options) => Route[]` and at most one `authenticate?` factory |
-| `./service` | `service?: (host, options, signal)` for leased background work                |
-| `.`         | Public types and library functions; not loaded by `compose`                   |
+| Subpath     | Expected exports                                                                              |
+| ----------- | --------------------------------------------------------------------------------------------- |
+| `./vocab`   | `docs?`, `keywords?`, and `derived?` declarations                                             |
+| `./rules`   | `rules?: (host, options) => Plugin[]` and query `extend?` functions                           |
+| `./tools`   | `runs?: (host, options) => Runs`, keyed by declared tool name                                 |
+| `./effects` | `effects?: (host, options) => Watch[]` for post-commit work                                   |
+| `./routes`  | `routes?: (host, options) => Route[]`, and at most one each of `authenticate?` and `handler?` |
+| `./service` | `service?: (host, options, signal)` for leased background work                                |
+| `.`         | Public types and library functions; not loaded by `compose`                                   |
 
 The web UI separately imports `./vocab` and `./views`. Those modules must work
 in a browser and must not import SQL, storage drivers, or server-only APIs.
@@ -202,8 +202,17 @@ Factories can retain `host.storage`, `host.graph`, `host.handler`,
 initialization. In particular, `rules.extend` runs before the store exists. A
 route is an `@yaks/api` `Route` with `method`, `path`, and a
 `(Request) => Response` handler. Paths are exact unless they end in `*`; `*`
-also matches any method. Unmatched requests fall through to the standard
-`/apply`, `/query`, and `/ws` API.
+also matches any method.
+
+A host answers requests only where a listed plugin exports `handler` from
+`./routes`. @yaks/api is that plugin: it is handed the host once `host.routes`
+holds every listed plugin's routes, and returns them in front of `/apply`,
+`/query` and `/ws`, which answer whatever no route claimed. A config that does
+not list it composes a host with no `handler`, no `serve` tool, and no call to
+any plugin's `routes` factory — the routes are ignored rather than built for a
+listener that does not exist. `/mcp` is the same arrangement one level down:
+@yaks/mcp contributes it as a route, so a config that wants an agent's door
+lists that package too.
 
 Routes that write should use `host.who(request)` and `signed` from `@yaks/api`
 to attribute their changes. At most one plugin may export `authenticate`.
@@ -239,14 +248,15 @@ opening the same graph from performing the same startup work.
 4. Builds the graph from plugin rules and the post-commit effect registry.
 5. Registers plugin effects and joins tool declarations to their `runs`
    implementations. A declared tool without an implementation is an error.
-6. Creates the standard API, MCP endpoint, and plugin routes as one handler.
+6. Asks the plugin that hosts routes, if the config listed one, for the one
+   handler this host answers with.
 7. Creates the current process entity after registrations are ready.
 
-It returns a `Served` object: the `Host` fields — which include `handler`,
-`runner`, and `duties` — plus `tools`, `fx`, and `close`. Nothing here binds a
-port. The `serve` tool does that, reading the handler off the host it was
-composed into, reconciling interrupted calls, and taking over the background
-jobs for as long as it listens.
+It returns a `Served` object: the `Host` fields — which include `tools`,
+`routes`, `handler`, `runner`, and `duties` — plus `fx` and `close`. Nothing
+here binds a port. The `serve` tool does that, reading the handler off the host
+it was composed into, reconciling interrupted calls, and taking over the
+background jobs for as long as it listens.
 
 ## Background jobs: the work nobody is asking for
 

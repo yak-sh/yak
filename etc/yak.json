@@ -18,6 +18,7 @@
     "@yaks/session",
     "@yaks/tools",
     "@yaks/api",
+    "@yaks/mcp",
     "@yaks/model",
     "@yaks/openai",
     "@yaks/process",

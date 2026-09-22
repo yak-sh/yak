@@ -4,7 +4,15 @@
 // nothing up here; the test does, because what it is checking is the wiring.
 
 import { assert, assertEquals } from '@std/assert'
+import type { Handler } from '@yaks/api'
 import { compose } from '@yaks/cli/host'
+
+// The door these tests ask: @yaks/api is in every config here, so a host
+// without a handler would be this file's own bug.
+let door = (host: { handler?: Handler }): Handler => {
+  if (!host.handler) throw new Error('this host composed no handler')
+  return host.handler
+}
 
 // Three documents: two about the same thing in different words, one about
 // something else. The offline embedder sees vocabulary overlap and no meaning,
@@ -39,6 +47,7 @@ let host = () =>
     numbers: false,
     plugins: [
       '@yaks/doc',
+      '@yaks/api',
       {
         use: '@yaks/embedding',
         with: {
@@ -62,7 +71,7 @@ Deno.test('a config composes the vectors, and asking the door ranks by them', as
     assertEquals(vectors(), 3, 'the sweep the write woke')
 
     let ask = async (q: string) => {
-      let res = await yak.handler(
+      let res = await door(yak)(
         new Request(`http://host/query?q=${encodeURIComponent(q)}`),
       )
       return { status: res.status, said: await res.json() }
@@ -93,6 +102,7 @@ Deno.test('a config with no key composes, and nothing about the boot is differen
     numbers: false,
     plugins: [
       '@yaks/doc',
+      '@yaks/api',
       {
         use: '@yaks/embedding',
         with: {
@@ -110,7 +120,7 @@ Deno.test('a config with no key composes, and nothing about the boot is differen
   })
   try {
     await yak.graph.apply(shelf)
-    let res = await yak.handler(
+    let res = await door(yak)(
       new Request(
         `http://host/query?q=${encodeURIComponent('.near=d1&.order=similar')}`,
       ),

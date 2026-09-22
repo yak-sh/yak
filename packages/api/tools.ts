@@ -12,8 +12,8 @@
 // It acts on the machine rather than on the graph — it binds a port there —
 // the way `land` acts on a checkout, so it belongs to the process that opened
 // the graph in the first place. What it listens with is already assembled:
-// `host.handler` is /apply, /query, /ws, /mcp and the plugins' own routes as
-// one function, built by whoever composed the host.
+// `host.handler` is this package's own doors with the listed plugins' routes
+// in front of them, built by ./routes.ts when the host was composed.
 //
 // A call that does not return. The runner writes the call row and claims it
 // `running` before the tool starts, and writes the result and `done` when it
@@ -43,7 +43,10 @@ export let PORT = 8787
  * that said where to listen. */
 export type Serving = {
   config: { db?: string; port?: number; hostname?: string }
-  handler: Handler
+  /** what this host answers with. Optional because a host has one only where
+   * a plugin built one, and ./routes.ts is that plugin — so a `Serving` put
+   * together by hand may carry none. */
+  handler?: Handler
   runner: Runner
   duties: (signal?: AbortSignal) => Promise<void>
   stopping: AbortSignal
@@ -54,6 +57,11 @@ let seconds = (ms: number): string => `${Math.round(ms / 1000)}s`
 /** The implementation of the tool ./vocab.json declares. */
 export let runs = (host: Serving): Runs => ({
   serve: async (_bundles, ctx: ToolCtx): Promise<Bundle[]> => {
+    let handler = host.handler
+    // A host that composed this package has a handler; one that does not has
+    // nothing to listen with, and binding a port to refuse every request is
+    // not a server.
+    if (!handler) throw new Error('serve has no handler — compose @yaks/api')
     let port = Number(ctx.args.port ?? host.config.port ?? PORT)
     let hostname = ctx.args.hostname ?? host.config.hostname
     // What a crash left claimed and unanswered, finished before this process
@@ -79,7 +87,7 @@ export let runs = (host: Serving): Runs => ({
         // result is a long way off.
         console.error(`serve — ${at} · ${host.config.db ?? 'no db'}`)
       },
-    }, host.handler)
+    }, handler)
     // A host closing while this is up stops the server too, so a program that
     // shuts its graph down does not leave a port bound over a closed database.
     // It is the unusual way round: a program closes its graph after the call

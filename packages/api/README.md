@@ -228,18 +228,28 @@ HTTP errors use these statuses. Subscription errors are socket messages, and
 streaming import errors use the final NDJSON line described above. `STATUS` is
 an exported error-name mapping.
 
-## The `serve` tool
+## The plugin: the handler, and the `serve` tool
 
-This package is also a plugin. [`vocab.json`](./vocab.json) declares one tool,
-`serve`, and [`tools.ts`](./tools.ts) implements it: it binds a TCP port and
-answers with the request handler the host that loaded it assembled — `/apply`,
-`/query`, `/ws`, `/mcp`, and every route the other plugins added. A config that
-lists `@yaks/api` among its plugins is a config whose graph can be served, and
-`yak serve` is that tool being called like any other
-([@yaks/cli](../cli/README.md)).
+This package is also the plugin that makes a host answer HTTP at all.
+[`routes.ts`](./routes.ts) exports `handler`, which the host calls once its
+graph is open and `host.routes` holds every listed plugin's routes: what comes
+back is those routes in front of `/apply`, `/query` and `/ws`, and it becomes
+`host.handler`. A config that does not list this package composes a host with no
+handler, and the routes the other plugins would have added are never asked for
+([@yaks/cli](../cli/README.md)). `/mcp` is one of those routes, contributed by
+[@yaks/mcp](../mcp/README.md) when a config lists that package too.
+
+[`vocab.json`](./vocab.json) declares one tool, `serve`, and
+[`tools.ts`](./tools.ts) implements it: it binds a TCP port and answers with
+that handler. So a config listing `@yaks/api` is a config whose graph can be
+served, and `yak serve` is that tool being called like any other.
 
 ```json
-{ "db": "graph.db", "plugins": ["@yaks/api", "@yaks/task"], "port": 8787 }
+{
+  "db": "graph.db",
+  "plugins": ["@yaks/api", "@yaks/mcp", "@yaks/task"],
+  "port": 8787
+}
 ```
 
 ```sh
