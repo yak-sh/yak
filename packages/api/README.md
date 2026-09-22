@@ -1,29 +1,16 @@
 # @yaks/api
 
-HTTP and WebSocket access to a [@yaks/graph](../graph/README.md) graph. Use it
-to serve an existing graph as a fetch-style request handler: a `Request` goes
-in, a `Response` comes out. Your application supplies authentication, storage,
-and the server runtime. Everything here is standard `Request`, `Response` and
-`WebSocket`, apart from the WebSocket upgrade, which differs per runtime and is
-passed in.
+HTTP and WebSocket access to a [@yaks/graph](../graph/README.md) graph. `api()`
+returns a fetch-style handler: a `Request` goes in and a `Response` comes out.
+Your application supplies the graph, authentication policy, and server runtime.
 
-Three endpoints:
+A **bundle** is one entity's components as a JSON object, with its identity in
+`entity.eid`. A **batch** is a list of changes applied in one transaction. The
+JSON `/apply` endpoint accepts a batch of bundles; queries return bundles.
 
-- **`POST /apply`** — the request body is a JSON array of bundles, applied in
-  one transaction; the response body is that array as applied, one bundle per
-  entity (@yaks/graph `composed`). Add `?check=1` to run every phase and then
-  roll the transaction back, so nothing is written and no effect observes it,
-  while a refusal is still a refusal. A check reserves nothing and gives you no
-  transaction across several graphs: a write sent afterwards can still fail.
-- **`GET /query?q=…`** (or `POST /query`) — a query string in, the bundles it
-  selects out. A query that REDUCES the selection instead of naming its members
-  returns a value: `.count!` returns `{"count":n}`, `.distinct=col` returns
-  `{"distinct":[…]}`, `.tally=col` returns `{"tally":{…}}`.
-- **`/ws`** — subscriptions: a saved query whose result is pushed again whenever
-  a committed transaction changes it.
-
-`/apply` also accepts an import too large to parse or commit in one go — see
-[Importing one bundle per line](#importing-one-bundle-per-line).
+This package creates no database or component tables. Persistent data belongs to
+the graph's storage adapter. Subscription membership and peer values are kept in
+memory by the handler's subscription registry.
 
 ## Install
 
@@ -34,52 +21,85 @@ deno add jsr:@yaks/api
 
 ## Use
 
+Given an application module that exports an initialized graph and an
+`Authenticate` callback:
+
 ```ts
 import { api } from '@yaks/api'
+import { authenticate, graph } from './shop.ts'
 
 let handler = api({ graph, authenticate })
-
-Deno.serve(handler) // …or pass it to any fetch-style server
+Deno.serve({ port: 8000 }, handler)
 ```
 
-The examples below use a bookshop: books with a price and a status, reviews
-about them, and members who buy them.
+Keep the handler for subsequent requests so its subscription registry is reused.
+The following requests assume the graph's vocabulary declares `doc.title`,
+`book.price`, and `book.status`:
 
 ```sh
-curl -X POST localhost:8000/apply -d '[
-  { "entity": { "eid": "b1" },
-    "doc":  { "title": "The Left Hand of Spring" },
-    "book": { "price": 12, "status": "shelved" } }
-]'
+curl http://localhost:8000/apply \
+  -H 'content-type: application/json' \
+  -d '[{"entity":{"eid":"b1"},"doc":{"title":"Dune"},"book":{"price":12,"status":"shelved"}}]'
 
-curl 'localhost:8000/query?q=.status=shelved%26.price<20'
+curl -G http://localhost:8000/query \
+  --data-urlencode 'q=.status=shelved&.price<20'
 ```
 
-A **bundle** is one entity, whole: its identity under `entity`, and each of its
-components under that component's name. `/apply` accepts a JSON array of them (a
-`Change`) and responds with the array `apply()` returned — one bundle per
-entity: the patches as they were written, plus everything the graph added on its
-own, such as the `num` it minted, the `created` stamp it wrote, and a tombstone
-for any entity a cascading delete took with it.
+| Endpoint         | Request                    | Response                                             |
+| ---------------- | -------------------------- | ---------------------------------------------------- |
+| `POST /apply`    | JSON array of changes      | Applied changes, combined into one bundle per entity |
+| `GET /query?q=…` | URL-encoded query          | Selected bundles, or an aggregate value              |
+| `POST /query`    | JSON string or `{"q":"…"}` | Same as GET                                          |
+| `/ws`            | WebSocket upgrade          | Subscription messages                                |
+
+The `/apply` result contains patches and graph-generated changes, including
+assigned entity numbers, timestamps, and cascading deletions where the graph is
+configured to produce them. It is not a read of every component on each entity.
+Add `?check=1` to validate and roll back the transaction before commit; effects
+do not run. This reserves nothing, and a later write can still fail. It does not
+provide a transaction across multiple graphs.
+
+Queries use [@yaks/query](../query/README.md). Aggregate queries return values
+instead of bundles: `.count!` returns `{"count":n}`, `.distinct=col` returns
+`{"distinct":[…]}`, and `.tally=col` returns `{"tally":{…}}`. The storage
+adapter must support the requested query.
+
+## Exports
+
+All exports are available from `@yaks/api`:
+
+| Exports                                                                    | Purpose                                                                               |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `api`, `Options`, `Handler`                                                | Build and type the request handler                                                    |
+| `Route`, `routed`                                                          | Describe and match application routes by method and exact path or trailing `*` prefix |
+| `Authenticate`, `signed`                                                   | Identify a caller and replace client-supplied write attribution                       |
+| `ask`, `write`, `pour`, `CHUNK`                                            | Query, JSON write, and streaming import handlers; import chunk size                   |
+| `subscriptions`, `Subs`, `Ask`, `Frame`, `Sink`                            | Manage subscriptions and their messages                                               |
+| `attach`, `receive`, `sink`, `Socket`, `Upgrade`, `denoUpgrade`            | Connect the subscription protocol to sockets                                          |
+| `json`, `refusal`, `refuse`, `status`, `STATUS`, `Refusal`, `Unauthorized` | Construct JSON responses and translate errors                                         |
+
+`Route` and `routed` help an application compose additional routes; `api()`
+itself only serves the three paths above.
 
 ## Importing one bundle per line
 
-A 10 MB import uses the same endpoint with a different content type. Send
-`application/x-ndjson` and the body is read as a stream, one bundle per line
-(blank lines skipped), applied **50 at a time** through the same `apply()`, so
-neither the request body nor the response body is ever whole in memory:
+Send `application/x-ndjson` to import a stream of bundles. Blank lines are
+skipped; each group of 50 bundles is applied in its own transaction. The
+implementation also accepts content types containing `ndjson`.
 
 ```sh
-curl -X POST localhost:8000/apply \
+curl http://localhost:8000/apply \
   -H 'content-type: application/x-ndjson' \
   --data-binary @rows.ndjson
 ```
 
-The response is NDJSON too: the composed bundles, one JSON object per line,
-written as each chunk commits rather than all at the end. The status is 200
-whatever happens — the first bundles have already been sent long before a later
-line can be refused — so a refusal is instead the **last line of the body**, and
-it is what `apply()` threw plus two numbers:
+The response is NDJSON, emitted as each group completes. It includes applied
+bundles corresponding to input entities; additional entities produced by plugins
+or cascading deletes are omitted. Request and response bodies are streamed
+rather than accumulated in full.
+
+Once streaming starts, the HTTP status is 200, including when a later line
+fails. An error is the last response line:
 
 ```json
 {
@@ -90,117 +110,97 @@ it is what `apply()` threw plus two numbers:
 }
 ```
 
-`line` is the 1-based line the offending bundle was on, and `committed` how many
-bundles were written before it; nothing after that line is read. A chunk is one
-transaction, so the error the graph throws names the chunk rather than a line —
-the line is found by re-applying the refused chunk with one bundle left out at a
-time (with `check`, so each attempt rolls back), which costs nothing until
-something has already gone wrong.
+`line` is a 1-based input line number. `committed` counts input bundles in
+successful earlier groups. The failed group is rolled back, but earlier groups
+remain committed. For an apply error, the handler tests the failed group with
+one bundle omitted at a time, using rollback-only checks. If no single omission
+makes the group succeed, it reports the group's first line. Therefore the
+reported line is not always the only offending line, and the group may already
+have been read past it. Processing stops after the error.
 
-**An alias resolves within its own chunk and nowhere else.** A bundle naming
-`$x` and the bundle that mints it have to fall in the same run of 50 lines,
-because that run is the whole array the graph is ever shown. Order the file so
-each entity is minted beside the ones that refer to it, or send the references
-as a second import once the eids are known.
+With `?check=1`, every group is rolled back and `committed` counts bundles that
+passed the check, not stored bundles. Later groups cannot depend on entities
+that earlier check-only groups would have created.
+
+A `$name` alias resolves only within its group of 50 bundles. Keep an entity and
+its alias references in the same group, or use known entity IDs for references
+across groups.
 
 ## Authentication and write attribution
 
-A client can put anything in the JSON it posts, including whose name is on it.
-So the handler discards the `$actor` the client sent and replaces it with the
-actor your `authenticate` returns for that request — `by` the identity it acts
-for, and `via` whatever it came through, where you know one:
+`authenticate(request)` runs on every request, including reads and WebSocket
+upgrades. It returns an actor such as `{ by: memberId, via: sessionId }`, or
+`null`. The API replaces each submitted `$actor` with that result before
+applying changes. `by` identifies the entity responsible for the write; optional
+`via` records the entity through which it was made.
 
-```ts
-let authenticate = (request: Request) => {
-  let token = request.headers.get('authorization')
-  return token ? { by: memberFor(token) } : null
-}
-```
-
-It runs on **every** request — a read, a write and a WebSocket upgrade alike —
-so an `authenticate` written for reads applies here as well. Return `null` and
-the write is stored unattributed; throw `Unauthorized` and the request is
-answered with a 401.
-
-Nothing else about a request is trusted either: which columns a caller may
-write, whether a precondition still holds, and what a delete takes with it are
-all [@yaks/graph](https://jsr.io/@yaks/graph)'s to decide, not this package's.
+Omitting authentication or returning `null` permits unattributed requests. Throw
+`Unauthorized` to return HTTP 401. Authentication alone does not define which
+entities or columns a caller may access; the application and graph plugins
+supply the relevant authorization policy. The graph validates changes and
+preconditions.
 
 ## Subscriptions
 
-A subscription is a **saved query**. You open one over the WebSocket, the server
-responds with the set the query selects right now, and from then on pushes what
-changed — including what LEFT the set, which no client can work out for itself,
-because it never sees the entity that stopped matching.
+A query subscription first receives its current result, then updates after graph
+commits. Open a socket to `/ws` and send:
 
 ```ts
 socket.send(
   JSON.stringify({ subscribe: '.status=shelved&.price<20', id: 'cheap' }),
 )
-
-// ← { id: 'cheap', bundles: [ { entity: { eid: 'b1', num: 3 }, doc: {…}, book: {…} } ] }
-// …someone marks b1 sold:
-// ← { id: 'cheap', bundles: [], gone: ['b1'] }
+// Initial response: { id: 'cheap', bundles: [...], transientReset: [...] }
+// If b1 stops matching: { id: 'cheap', bundles: [], gone: ['b1'] }
 ```
-
-The protocol is these messages:
 
 ```text
-→ { subscribe: "<query>" | true, id: "<id>" }   open one (true = every commit)
-→ { unsubscribe: "<id>" }                       close one
-→ { relay: Bundle[] }                           forward peer values (below)
-← { id, bundles: Bundle[], gone?: Eid[] }       the set, then every change to it
-← { id, relay: Bundle[] }                       peer values from another client
-← { id, refused: { error, message, … } }        that subscription was refused
+→ { subscribe: "<query>" | true, id: "<id>" }
+→ { unsubscribe: "<id>" }
+→ { relay: Bundle[] }
+← { id, bundles: Bundle[], gone?: Eid[] }
+← { id, relay: Bundle[] }
+← { id, transient: TransientFrame[] }
+← { id, refused: { error, message, … } }
 ```
 
-`bundles` are whole entities that are now in the set; `gone` names the ones that
-left it, whether they were deleted or merely stopped matching. `subscribe: true`
-asks for the raw feed instead: every committed transaction, exactly as `/apply`
-returned it, with no membership set of its own.
+Query updates contain current bundles for matching entities and `gone` IDs for
+entities that were deleted or stopped matching. A refreshed query can return its
+whole current set. `subscribe: true` selects the committed-change feed, with no
+initial snapshot: each message contains the combined transaction changes, like
+the JSON `/apply` result.
 
-**No durable write crosses the socket.** Changes are applied with `POST /apply`,
-and the socket is how everyone — including the writer — learns about them. The
-one exception is a `relay` message, which carries components the vocabulary
-marks `sync: peers` — a cursor, a caret, a presence dot. Those are forwarded to
-the other subscribers watching the same entities and are never stored: the
-connection that sent one is what holds it, which is why it cannot go through
-`/apply`, a separate request with no connection to name. A value clears when its
-writer clears it, when that connection closes, or when the duration the
-vocabulary gave it (`durable: "5s"`) runs out.
+Initial query messages also contain `transientReset` IDs and may include
+`transient` snapshots or existing peer values. `transient` messages carry
+nonpersistent property updates from the graph; their frame type is defined by
+[@yaks/graph](../graph/README.md).
 
-Subscriptions are re-evaluated on the graph's own `effect` phase, so a write the
-application makes directly against the graph reaches subscribers just like one
-that arrived over HTTP. Each commit reads the changed entities once, then tests
-them one of two ways:
+Durable writes use HTTP `/apply`. Socket `relay` messages carry components
+marked `sync: peers`, such as cursor position or typing status. They are
+validated and forwarded to other subscribers watching those entities without
+entering storage. Raw subscribers receive all relays. Values clear when their
+writer clears them, its connection closes, or the vocabulary's duration, such as
+`durable: "5s"`, expires; a clear is sent as a component set to `null`.
 
-- **incrementally**, when the query asks only about each entity itself —
-  [@yaks/match](https://jsr.io/@yaks/match)'s `filter` re-tests the changed
-  bundles, and the query is never run again however large its set is;
-- **by running the query again**, when the query hops through a reference,
-  orders, or limits with `.limit`. Those results are properties of the whole
-  set: adding a cheaper book can push another out of `.price<20&.limit=1`
-  without changing it. Those subscriptions run the query again and send the
-  difference.
-
-Which mode a subscription uses is decided once, when it opens.
+The registry observes the graph's `effect` phase, including writes made directly
+by the application. For queries that can be tested one entity at a time,
+[@yaks/match](../match/README.md) rechecks changed entities. Queries involving
+references, ordering, limits, or other unsupported incremental conditions run
+again. The strategy is selected when the subscription opens.
 
 ### Queries that depend on entities outside their result
 
-Some query results depend on entities that are not in the result set. A
-session's computed status, for example, can depend on its transcript entries.
-Pass `subscriptions(graph, { invalidate(query, applied) })`: when the callback
-returns true, that subscription runs its query again and its full current set is
-sent, along with the eids that left. The callback is an explicit dependency
-policy, not automatic dependency analysis — use it narrowly, or unrelated
-commits will send full sets.
+For dependencies the query itself does not express, create a registry with
+`subscriptions(graph, { invalidate })` and pass it as `api({ graph, subs })`.
+`invalidate(query, applied)` returning `true` causes that subscription to read
+and send its full current result and IDs that left. This is an
+application-supplied dependency rule; it does not discover dependencies
+automatically.
 
 ## Refusals
 
-Every endpoint answers a thrown error with the same body: the error's own name,
-its message, and whatever fields it carried. A precondition that lost a race
-still names the column and what the graph holds now, so a client can merge onto
-that instead of guessing.
+Errors contain the thrown error's name as `error`, its `message`, and additional
+fields other than its stack. For example, a failed `$was` precondition reports
+the column and its current value:
 
 ```json
 {
@@ -213,68 +213,43 @@ that instead of guessing.
 }
 ```
 
-| status | when                                                          |
-| ------ | ------------------------------------------------------------- |
-| 400    | `Refused` (a column the vocabulary does not define), bad JSON |
-| 400    | `Unsupported` (a query this graph cannot compile)             |
-| 401    | `Unauthorized` — thrown by your `authenticate`                |
-| 404    | no route                                                      |
-| 405    | the wrong HTTP method, or `/ws` without an upgrade            |
-| 409    | `Stale` — a `$was` precondition no longer holds               |
-| 500    | anything unlisted: a bug in the server, not in the request    |
+| Status | Cause                                                              |
+| ------ | ------------------------------------------------------------------ |
+| 400    | `Refused`, `Unsupported`, `SyntaxError`, `Unknown`, or `Ambiguous` |
+| 401    | `Unauthorized`                                                     |
+| 403    | `Denied`                                                           |
+| 404    | `NotFound` or an unknown route                                     |
+| 405    | Wrong HTTP method or `/ws` without an upgrade header               |
+| 409    | `Stale`                                                            |
+| 500    | An error name not in `STATUS`                                      |
 
-The table is `STATUS`, keyed by the error's `name`, so an error from your own
-plugin joins it by setting its `name`.
+HTTP errors use these statuses. Subscription errors are socket messages, and
+streaming import errors use the final NDJSON line described above. `STATUS` is
+an exported error-name mapping.
 
 ## Serving it
 
-Everything here is standard `Request`, `Response` and `WebSocket` — except the
-WebSocket upgrade, which no web standard covers. That one step is passed in.
-
-**Deno** — the default, nothing to pass:
-
-```ts
-Deno.serve(api({ graph, authenticate }))
-```
-
-**Cloudflare Workers** — a `WebSocketPair`
-([@yaks/workerd](https://jsr.io/@yaks/workerd) wraps this for you):
-
-```ts
-let upgrade = (request: Request) => {
-  let [client, server] = Object.values(new WebSocketPair())
-  server.accept()
-  return {
-    socket: server,
-    response: new Response(null, { status: 101, webSocket: client }),
-  }
-}
-
-export default { fetch: api({ graph, authenticate, upgrade }) }
-```
-
-**Node** — serve the handler through any fetch-style adapter, and pass an
-`upgrade` built on your WebSocket library. The handler itself is unchanged.
+Deno's WebSocket upgrade is the default. In Cloudflare Workers, pass
+`workerUpgrade` from [@yaks/workerd](../workerd/README.md), or use that
+package's `worker()` entrypoint. For Node or Bun, use a fetch-style server
+adapter and an `upgrade` callback implemented with the runtime's WebSocket
+library. An upgrade returns `{ socket, response }`.
 
 ## Compatibility
 
-**Deno, Node, Bun, and Cloudflare Workers.** The package imports no
-runtime-specific API: it type-checks under `lib: ["dom", "esnext"]` with no
-`Deno` types in the compile at all, and the one file that knows a runtime
-(`deno.ts`) looks the global up instead of importing it, so it loads anywhere
-and throws only if you call it off Deno. Its dependencies are the sibling
-packages: `@yaks/graph`, `@yaks/match`, `@yaks/query` and `@yaks/vocab`.
+The handler uses standard `Request`, `Response`, and socket interfaces and is
+intended for Deno, Node, Bun, and Cloudflare Workers. The package type-checks
+with `dom` and `esnext` libraries. `denoUpgrade` looks up Deno at call time and
+throws outside Deno; other runtimes must provide their own upgrade callback.
 
 ## The related packages
 
-A query string is parsed by [@yaks/query](https://jsr.io/@yaks/query); a
-vocabulary is described with [@yaks/vocab](https://jsr.io/@yaks/vocab);
-[@yaks/graph](https://jsr.io/@yaks/graph) defines the bundle format and
-`apply()`; [@yaks/sqlite](https://jsr.io/@yaks/sqlite) (or `@yaks/d1`, or
-`@yaks/durable-object`) stores the rows; and
-[@yaks/match](https://jsr.io/@yaks/match) evaluates the same query grammar
-against bundles in memory, which is what makes a subscription cheap. This
-package is the HTTP and WebSocket interface to all of it.
+[@yaks/graph](../graph/README.md) defines entities, changes, and write
+processing; [@yaks/vocab](../vocab/README.md) defines component schemas;
+[@yaks/query](../query/README.md) defines query syntax; and
+[@yaks/match](../match/README.md) evaluates queries in memory. Storage adapters
+such as [@yaks/sqlite](../sqlite/README.md), [@yaks/d1](../d1/README.md), and
+[@yaks/durable-object](../durable-object/README.md) persist the data.
 
 ## License
 

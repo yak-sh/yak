@@ -1,11 +1,12 @@
 # @yaks/task
 
-To-do items for a [@yaks/graph](https://jsr.io/@yaks/graph): the `task`
-component, the `completed` and `cancelled` marks, a status computed from those
-marks rather than stored, counts over `requires` and `contains` links, and three
-tools. A task entity can carry other components as well — document text, an
-estimate, whatever the application declares. Where a task is filed (its project,
-priority, domain and assignee) belongs to [@yaks/project](../project).
+Task components and operations for [@yaks/graph](../graph). The package defines
+open, completed and cancelled tasks, records completion attribution, counts
+unfinished dependencies, and supplies create, list and update tools.
+
+A task is an entity with a `task` component. It can also carry a title from
+[@yaks/doc](../doc), filing information from [@yaks/project](../project), or
+components your application defines.
 
 ## Install
 
@@ -14,194 +15,183 @@ deno add jsr:@yaks/task
 # or: npx jsr add @yaks/task
 ```
 
+The examples also use `@yaks/graph`, `@yaks/vocab`, `@yaks/ram`, `@yaks/doc` and
+`@yaks/edge`.
+
 ## What it is
 
-Say a team keeps a list of what it has to do. Four questions come up, and this
-package is the four answers.
+The package declares these stored components:
 
-**What is on the list?** An entity with a `task{}` component is a to-do item.
-`task` is one component among the entity's others, not a record type of its own:
-the same entity also carries your `doc`, your `estimate`, anything else it is.
-Adding `task` to something makes it something to do without making it stop being
-what it was. [@yaks/project](../project)'s optional
-`filed{project, priority, domain, assignee}` places it in a portfolio; a
-microtask needs only `doc` and `task`, with nothing filed.
+| Component                        | Meaning                                                                      |
+| -------------------------------- | ---------------------------------------------------------------------------- |
+| `task{}`                         | Identifies an entity as a task.                                              |
+| `completed{at, by, via}`         | Records when the task finished, who finished it and the source of the write. |
+| `cancelled{at, by, via, reason}` | Records cancellation and an optional reason.                                 |
+| `blocked{on, since}`             | Describes an external obstacle; `since` is declared server-owned.            |
+| `accept{body}`                   | Describes the conditions for completion.                                     |
+| `requires{}`, `contains{}`       | Relation components on an `edge{from, to}` entity.                           |
 
-**Where does it stand?** No column holds the answer. A task with a `completed`
-component is done, one with `cancelled` is cancelled, and one with neither is
-open. `status` is computed from those components, so finishing something records
-_when_ and _by whom_, and reopening it means removing a component rather than
-guessing what the status used to be.
+`task.status` is computed from component presence; it is never stored. The first
+matching entry in `MARKS` wins: `cancelled` means `cancelled`, otherwise
+`completed` means `done`, otherwise a task is `open`. An entity without `task`
+has no task status. If both completion and cancellation are present,
+cancellation takes precedence.
 
-**How do you look at the list?** [@yaks/project](../project)'s `board{query}` is
-a saved filter over the portfolio. Membership is never stored — no row anywhere
-records that a task is on a board — so a board is always current, and a task
-that starts matching the query is on it. The empty query selects nothing, on
-purpose.
+This package does not open or own storage. The graph's storage adapter keeps
+these components, using memory, SQLite or another supported backend. References
+from completion and cancellation records remain as history when the referenced
+entity is deleted. `accept.body` is declared for blob storage; composing
+[@yaks/blob](../blob) supplies that behavior.
 
-**What is it waiting for?** `requires` and `contains` relate one task to another
-through [@yaks/edge](https://jsr.io/@yaks/edge), and `blocked{on}` records that
-something outside the graph is in the way.
+Project, priority, domain and assignee are columns on `filed`, which belongs to
+[@yaks/project](../project). That package also owns `board{query}`, a saved
+query whose results determine board membership. Neither filing nor a board is
+required to create a task.
 
 ## Use
+
+A **bundle** is one entity's components as a JSON object. A **batch** is a list
+of changes applied in one transaction. This complete example creates two tasks
+and their dependency in an in-memory graph:
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
 import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
-import { projectDoc, projects } from '@yaks/project'
-import { taskDoc, tasks } from '@yaks/task'
+import { openDeps, statusOf, taskDoc, tasks } from '@yaks/task'
 
-let vocab = loadVocab([edgeDoc, taskDoc, projectDoc, mine], [edgeKeywords])
-let g = graph({
-  storage,
-  vocab,
-  plugins: [edges(vocab), tasks(), projects(vocab)],
-})
+let vocab = loadVocab([docDoc, edgeDoc, taskDoc], [edgeKeywords])
+let storage = ram(vocab)
+let g = graph({ storage, vocab, plugins: [edges(vocab), tasks()] })
 
-g.apply([
-  {
-    entity: { eid: 't1' },
-    doc: { title: 'Buy the cake' },
-    task: {},
-    filed: { priority: 1 },
-  },
-  {
-    entity: { eid: 't2' },
-    doc: { title: 'Book the room' },
-    task: {},
-    filed: { priority: 0 },
-  },
+await g.apply([
+  { entity: { eid: 't1' }, task: {}, doc: { title: 'Buy the cake' } },
+  { entity: { eid: 't2' }, task: {}, doc: { title: 'Book the room' } },
   link('t1', 'requires', 't2'),
-  {
-    entity: { eid: 'b1' },
-    doc: { title: 'Up next' },
-    board: { query: '.status=open&.order=priority' },
-  },
 ])
+console.log(await openDeps(storage, 't1')) // 1
+
+await g.apply([{ entity: { eid: 't2' }, completed: {} }])
+let [room] = await g.read('.completed')
+console.log(statusOf(room)) // done
+console.log(await openDeps(storage, 't1')) // 0
+
+await g.apply([{ entity: { eid: 't2' }, completed: null }]) // reopen
 ```
 
-Finish a task by writing the mark, not by setting a status. The mark is written
-with no columns: `completed.at`, `.by` and `.via` are server-owned, filled in by
-@yaks/graph from the clock of the `apply()` call and the `$actor` that call
-carries (stamp.ts); values a client sends for those columns are dropped before
-the write.
+Write `completed: {}` to finish a task. The graph fills the server-owned `at`,
+`by` and `via` fields from its clock and the batch's `$actor`; an anonymous
+write has no actor identity to record. Client-supplied values for those fields
+are dropped. Trusted server writes may supply them. The `tasks()` plugin
+preserves the original completion author when an existing completion is edited.
+To attribute a new completion, supply an authenticated actor:
 
 ```ts
-g.apply([{ entity: { eid: 't2' }, completed: {}, $actor: { by: dana } }])
+await g.apply([{
+  entity: { eid: 't2' },
+  completed: {},
+  $actor: { by: 'dana' },
+}])
 ```
+
+Code accepting remote requests must authenticate that identity and replace any
+actor supplied by the client.
 
 ## A plan is one list of bundles
 
-Work of three steps or more is a tree — the outcome, what it needs, what it
-contains — and there is no tool for building one. A tree is a list of bundles:
-the tasks, each under a `$alias` id, and the links that connect them, applied in
-one transaction. An edge entity's id is derived from its two ends and the
-relation ([@yaks/edge](https://jsr.io/@yaks/edge)), so the ends may be entities
-the same transaction is creating. That is why each link is written under an
-alias of its own rather than through `link()`: `link()` computes the id from the
-ids you hand it, and `$goal` is not an id yet.
+Create related tasks together by putting their bundles and edge bundles in one
+batch. An id beginning with `$` is a temporary alias resolved during `apply()`.
+Give each new edge an alias too: the edge plugin derives its final id after
+resolving its endpoints. Use `link()` only when the endpoint ids are already
+known, because it computes the edge id immediately.
+
+Using `g` from the preceding example:
 
 ```ts
 let plan = [
+  { entity: { eid: '$goal' }, task: {}, doc: { title: 'Organize the event' } },
+  { entity: { eid: '$step' }, task: {}, doc: { title: 'Choose the date' } },
   {
-    entity: { eid: '$goal' },
-    task: {},
-    doc: { title: 'The outcome' },
-    filed: { project: 'p19' },
-  },
-  {
-    entity: { eid: '$link~goal' },
-    edge: { from: 'p19', to: '$goal' },
-    contains: {},
-  },
-  {
-    entity: { eid: '$gate' },
-    task: {},
-    doc: { title: 'First' },
-    filed: { project: 'p19' },
-  },
-  {
-    entity: { eid: '$link~gate' },
-    edge: { from: '$goal', to: '$gate' },
+    entity: { eid: '$dependency' },
+    edge: { from: '$goal', to: '$step' },
     requires: {},
   },
 ]
 
-g.apply(plan, { check: true }) // what WOULD be written, and none of it kept
-g.apply(plan) // the whole tree, or none of it
+let preview = await g.apply(plan, { check: true })
+let written = await g.apply(plan)
 ```
 
-A dry run executes every phase — admission, the preconditions, the rules — and
-then rolls the transaction back. What comes back is the list of bundles as it
-would have been written, with every alias resolved to the id it would have been
-given and every link under its derived id, while nothing is stored, no journal
-row is kept and no effect runs. A refusal is still a refusal, which is the whole
-reason to ask. The same rehearsal over HTTP is `POST /apply?check=1`
-([@yaks/api](https://jsr.io/@yaks/api)); from the command line it is
-`yak apply --dry-run`.
+A dry run returns the proposed changes with resolved ids, then rolls back the
+transaction. It runs admission, preconditions and rules, but keeps no entity or
+journal writes and runs no post-commit effects. Invalid changes still fail. Ids
+generated during a preview are not reserved for a later write. The HTTP form is
+`POST /apply?check=1`; the CLI form is `yak apply --dry-run`.
 
 ## The status rule is written once
 
-`task.status` is declared `computed: true` — no column holds it. Its value is
-the first mark the task has, and that one ordered list is what all three readers
-are built from:
+The same ordered list of marks supplies three ways to read status:
 
 ```ts
 import { compute, derived, statusOf } from '@yaks/task'
 
-statusOf(bundle) // for an entity already in hand
-derived() // the same rule as SQL, for @yaks/sql's `derived` hook
-compute() // the same rule per bundle, for @yaks/match
+statusOf({ entity: { eid: 't1' }, task: {} }) // open
+derived() // SQL expressions for @yaks/sql's derived option
+compute() // per-bundle readers for @yaks/match's computed option
 ```
 
-Because it is one list, a saved filter selects the same tasks in a database and
-in a page — which is the property that makes a board portable at all.
+Configure the evaluator used by your storage when filtering on `.task.status`.
+Calling `tasks()` alone does not register these readers. For example, filter
+already-loaded bundles with `@yaks/match`:
 
-Add a rung and every reader learns it at once. A graph that leases its tasks
-reads a held lease as `wip`:
+```ts
+import { matcher } from '@yaks/match'
+
+let open = matcher('.task.status=open', vocab, { computed: compute() })
+console.log(open(await g.read('.task')))
+```
+
+Applications can extend the ordered list. A `claim` component can indicate work
+in progress without counting as completion:
 
 ```ts
 import { MARKS } from '@yaks/task'
 
 let marks = [...MARKS, { status: 'wip', comp: 'claim', settled: false }]
-// derived(marks), compute(marks), statusOf(b, marks), projects(vocab, marks)
+// Pass marks to statusOf(), derived(), compute(), openDeps() and done().
 ```
 
-`settled: false` is what records that a lease means somebody is _on_ it, not
-that they finished it — so it still counts as work left.
-[@yaks/session](../session) does exactly this: it owns the `claim` component, so
-its `@yaks/session/vocab` module restates `task.status` with the lease in the
-ladder, and a server that loads it after this package gets the wider reading.
+For dependency helpers, pass `{ marks }` as their third argument. Declare the
+additional component and status values in the vocabulary too.
+[@yaks/session](../session) provides the `claim` component and an extended SQL
+status definition through `@yaks/session/vocab`; plugin assembly loads that
+definition after `@yaks/task/vocab`.
 
 ## Blocked is not a status
 
-There is no `blocked` status, and that is a decision rather than an omission. A
-blocked task is still open work: rolling it into the status would hide it from
-every query for open work exactly when somebody needs to see it.
+`blocked{on}` describes an external obstacle independently of status. Adding it
+to an open task leaves the task open. `gated(bundle)` tests for the component's
+presence.
 
-So the two questions stay apart, and they read differently:
+`openDeps(storage, eid, options?)` follows outgoing `requires` and `contains`
+links and counts distinct direct endpoints that are unfinished. Cancelled and
+completed tasks both count as settled. Missing endpoints and entities without
+`task` remain counted. It does not recursively inspect descendants.
 
-```ts
-import { done, gated, openDeps } from '@yaks/task'
-
-gated(bundle) // something OUTSIDE the graph is in the way — an alarm
-openDeps(storage, 't1') // how many children are unfinished — a count
-done(storage, 't1') // settled itself AND no unfinished children
-```
-
-`openDeps` follows `requires` and `contains` and counts what has not settled. A
-task with three unfinished children is a task in progress, not a task in
-trouble: it renders as "3 left", and zero renders as nothing at all. A child
-that is not a task cannot settle, so it stays counted. `done` accepts the same
-optional `marks` and `relations` as `openDeps`; both return a value for
-synchronous storage and a promise for asynchronous storage. They look at direct
-children, not at a recursive closure.
+`done(storage, eid, options?)` returns true only when the entity is a settled
+task and has no unfinished direct dependencies. Both helpers accept
+`{ marks, relations }` to override the status definitions or relation names.
+They return values with synchronous storage and promises with asynchronous
+storage. A UI can display the dependency count as "3 left" and omit zero; this
+package does not render it.
 
 ## The three tools
 
-`@yaks/task/tools` exports `runs`, the implementations behind the three
-declarations marked `tool: true` in `vocab.json`:
+`@yaks/task/tools` exports `runs()`, which supplies implementations for the
+three tool declarations in `taskDoc`. A server that loads these tools exposes
+them through CLI or MCP:
 
 ```sh
 yak task new 'Buy the cake' --project P-19 --priority 1
@@ -209,59 +199,55 @@ yak task list '.filed.project=P-19&.priority<3'
 yak task update T-42 done
 ```
 
-Over MCP the same three are named `task_new`, `task_list` and `task_update`.
-Each one returns bundles and lets the tool runner commit them. `task_update`
-writes a status as the marks that mean it: `done` adds `completed` and removes
-`cancelled`, `cancelled` does the reverse, and `open` removes both.
+| MCP name      | Behavior                                                            |
+| ------------- | ------------------------------------------------------------------- |
+| `task_new`    | Returns a new task, its supplied title/body, and any filing fields. |
+| `task_list`   | Reads matching task bundles; it does not write them.                |
+| `task_update` | Returns patches for supplied status, text and filing fields.        |
 
-`task_list` always puts `.task` in the query and joins whatever the caller
-passed onto it with `&`; a caller who passes nothing gets `.task.status=open`.
-That default names `.task.status` rather than `.status` because a graph that
-also keeps transcripts has a `session.status`, and a bare `.status` would be
-ambiguous there.
+The tool runner commits results from the write tools. `done` adds `completed`
+and removes `cancelled`; `cancelled` does the reverse; `open` removes both.
+Omitted arguments leave existing values unchanged.
 
-These tools write components other packages own — `doc{title, body}` and
-`filed{…}` — which is deliberate. A tool returns bundles, and a bundle is plain
-data, so naming a neighbour's component costs no import; a server that composes
-neither package simply has those columns dropped when the write is admitted.
+`task_list` always includes `.task`, combines it with the caller's query using
+`&`, and defaults to `.task.status=open`. The qualified status name avoids
+ambiguity with components such as `session.status`. Its storage must support
+that computed status, as described above.
 
-There is no `task show`, no `task search` and no `task tree` here. Showing an
-entity whole is `graph_show` and ranked text search is `search`, both in
-@yaks/mcp's generic tier, over any vocabulary at all; a second name for either
-would be two implementations of one thing. A plan is the same story: it is a
-list of bundles applied in one transaction, and `graph_apply` with `check`
-rehearses it before it is written.
+The tools can write `doc` and `filed` without importing their packages because
+bundles are plain data. Load `@yaks/doc` and `@yaks/project` to retain those
+components: graph admission drops undeclared components. An unknown column on a
+declared component is refused instead.
+
+Showing a complete entity uses the generic `graph_show` tool. Ranked search uses
+`search` when the server supplies a search implementation. Applying a plan uses
+`graph_apply`, whose `check` option previews it. This package supplies no
+separate show, search or tree tool.
 
 ## The board guard
 
-It lives in [@yaks/project](../project), beside the `board` it guards. A board
-whose query would quietly match nothing is refused when it is written, because
-an empty board looks exactly like a board whose filter is right and whose answer
-happens to be nothing. That package registers a `precondition` hook that catches
-both ways a query can be wrong:
-
-- **Routing** — `.staus=open` names no column.
-- **Members** — `.status=complete` names no status.
-
-The refusal happens inside the transaction, so nothing in that `apply()` call is
-written. Writing `task.status` needs no refusal: @yaks/graph's `admit` phase
-drops a computed column before the hook ever sees it.
+[@yaks/project](../project) validates saved board queries in a `precondition`
+hook. It rejects unknown columns such as `.staus=open` and unsupported status
+values such as `.status=complete`. A refusal rolls back the whole batch. Writing
+`task.status` itself does not set status: graph admission drops computed columns
+before that hook runs.
 
 ## Integration
 
-One of the domain plugins over [@yaks/graph](https://jsr.io/@yaks/graph),
-alongside [@yaks/member](https://jsr.io/@yaks/member) and others. It composes
-with [@yaks/edge](https://jsr.io/@yaks/edge) for the two relations,
-[@yaks/sql](https://jsr.io/@yaks/sql) for the derived status in a database, and
-[@yaks/match](https://jsr.io/@yaks/match) for the same status in memory.
+Use [@yaks/edge](../edge) for dependency relations, [@yaks/project](../project)
+for filing and boards, and [@yaks/sql](../sql) or [@yaks/match](../match) for
+status filtering. The task package supplies no database, transport or UI.
 
 ## Compatibility
 
-Runs on Deno, Node, browsers and Cloudflare Workers — it imports no platform
-API.
+Pure TypeScript with no platform API imports. It can run on Deno, Node, browsers
+and Cloudflare Workers with suitable storage and package resolution.
 
 ## Interface
 
-`taskDoc`, `tasks`, `MARKS`, `Mark`, `Status`, `OPEN`, `statuses`, `declared`,
-`settled`, `statusOf`, `compute`, `derived`, `gated`, `openDeps`, `done`, and
-the component-name constants.
+| Import path        | Exports                                                                                                                                                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/task`       | `taskDoc`, `tasks`, `MARKS`, `OPEN`, `statuses`, `declared`, `settled`, `statusOf`, `compute`, `derived`, `gated`, `openDeps`, `done`; types `Mark`, `Status`, `Compute`, `DepOpts`; constants `TASK`, `COMPLETED`, `CANCELLED`, `BLOCKED`, `REQUIRES`, `CONTAINS`. |
+| `@yaks/task/vocab` | `taskDoc`, `docs`, and the default SQL `derived()` definitions.                                                                                                                                                                                                     |
+| `@yaks/task/rules` | `rules()`, returning the task graph plugin in an array.                                                                                                                                                                                                             |
+| `@yaks/task/tools` | `runs()`, status patches in `marked`, and the query-building helper `listing()`.                                                                                                                                                                                    |

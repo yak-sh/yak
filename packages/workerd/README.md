@@ -2,11 +2,14 @@
 
 Cloudflare Workers integration for [@yaks/api](../api/README.md). It provides a
 Worker fetch entrypoint, WebSocket upgrades through `WebSocketPair`, request
-authentication helpers, and forwarding to Durable Objects. Applications provide
-the graph, storage, and authorization policy.
+authentication helpers, and request forwarding to Durable Objects. Applications
+provide the graph, storage adapter, and authorization policy.
 
-For bundle structure, write phases, and adapter responsibilities, see the
-[graph architecture](../graph/ARCHITECTURE.md).
+This package creates no database, component tables, or persistent records.
+`worker()` caches API handlers in memory; each graph's storage adapter
+determines where its data is kept. For example, [@yaks/d1](../d1/README.md) uses
+D1 and [@yaks/durable-object](../durable-object/README.md) uses a Durable
+Object's SQLite storage.
 
 ## Install
 
@@ -15,34 +18,52 @@ deno add jsr:@yaks/workerd
 # or: npx jsr add @yaks/workerd
 ```
 
+## Exports
+
+All exports are available from `@yaks/workerd`:
+
+| Exports                                         | Purpose                                                     |
+| ----------------------------------------------- | ----------------------------------------------------------- |
+| `worker`, `Options`, `Worker`, `Env`, `Context` | Build and type a Worker fetch entrypoint                    |
+| `door`, `Door`                                  | Build an authentication callback from a credential verifier |
+| `cookies`, `bearer`                             | Read cookies or a bearer token from a request               |
+| `workerUpgrade`, `Accepting`                    | Accept a Workers WebSocket and return the upgrade response  |
+| `forward`, `Namespace`, `Stub`                  | Forward a request to a named Durable Object                 |
+
 ## Worker entrypoint
 
-The examples are a bookshop: books with a price and a status, reviews about
-them, members who buy them.
+This example assumes `shop.ts` initializes a graph from the Worker's bindings
+and verifies a token, returning an actor or `null`:
 
 ```ts
 import { door, worker } from '@yaks/workerd'
-import { shopGraph } from './shop.ts' // your graph, over your storage
+import { memberFor, shopGraph } from './shop.ts'
+
+type Env = { SHOP: unknown; SHOP_SECRET: string }
 
 export default worker({
-  api: (env: { SHOP_SECRET: string }) => ({
-    graph: shopGraph(env),
+  api: async (env: Env) => ({
+    graph: await shopGraph(env.SHOP),
     authenticate: door({
       cookie: 'shop_session',
       verify: (token) => memberFor(token, env.SHOP_SECRET),
+      required: true,
     }),
   }),
 })
 ```
 
-That serves `POST /apply`, `GET|POST /query` and `/ws` — the routes and the
-errors are [@yaks/api](https://jsr.io/@yaks/api)'s, unchanged.
+This serves `POST /apply`, `GET|POST /query`, and `/ws` with the behavior and
+errors described by [@yaks/api](../api/README.md). The `api` callback accepts
+bindings and may return its options synchronously or asynchronously.
 
-`api` is called with the Worker's bindings and its result is cached for the life
-of the isolate, not rebuilt per request: building the api twice would create a
-second subscription registry, and the sockets already open would be listening to
-a registry nothing writes through. Give it a graph and, if you want writes
-attributed, an authentication callback.
+The handler is cached by the identity of the `env` object. Concurrent requests
+using that object share initialization and the same subscription registry. A
+different bindings object gets a different handler. Failed initialization is not
+retained, so later requests can retry. This cache is local to a Worker isolate;
+it does not coordinate subscriptions between isolates.
+
+For a D1-backed application, the binding configuration might be:
 
 ```toml
 # wrangler.toml
@@ -53,40 +74,48 @@ compatibility_date = "2025-05-08"
 [[d1_databases]]
 binding = "SHOP"
 database_name = "shop"
-database_id = "…"
+database_id = "replace-with-your-database-id"
 ```
+
+`shopGraph` is application code that opens the corresponding storage adapter;
+`worker()` does not open D1 or install a schema. Supply `SHOP_SECRET` through
+your Worker's secret configuration.
 
 ## Request authentication
 
-`door` reads the credential a request carries — the named cookie first, then an
-`authorization: Bearer …` header — and passes it to your `verify` function,
-which is the only part that knows what a token means:
+`door()` reads a configured cookie, or a bearer token when that cookie is
+absent, and passes the credential and request to `verify`:
 
 ```ts
 let authenticate = door({
   cookie: 'shop_session',
-  verify: async (token) => {
-    let person = await verifyJwt(token, env.SHOP_SECRET)
-    return person ? { by: person } : null
+  verify: async (token, request) => {
+    let member = await verifyToken(token, request)
+    return member ? { by: member } : null
   },
-  required: true, // a request with no identity gets a 401
+  required: true,
 })
 ```
 
-Without `required`, a request carrying no credential can still read and write —
-its changes are simply stored with no actor recorded on them. With it, a request
-with no verified identity is rejected before the graph sees it. The
-authentication callback runs on **every** request, reads and socket upgrades
-included, and the identity it returns is the actor recorded on the write:
-whatever `$actor` a client sent is discarded.
+`verifyToken` above is application code returning a member entity ID or `null`.
+`verify` must return an actor such as `{ by: memberId, via: sessionId }`, or
+`null`. The bearer token is not retried if a present cookie is empty or fails
+verification. Omit `cookie` to read only the bearer token. Bearer scheme
+matching is case-insensitive; cookie values are percent-decoded where possible.
 
-`cookies(request)` and `bearer(request)` are exported on their own, for an
-authentication callback that wants to decide differently.
+With `required: true`, missing or rejected credentials result in HTTP 401.
+Without it, requests with no verified actor are allowed and writes are
+unattributed. `@yaks/api` invokes the callback for reads, writes, and socket
+upgrades and replaces client-supplied `$actor` values with the verified actor.
+The application and graph plugins still need to enforce authorization.
+
+Use the separate `cookies(request)` and `bearer(request)` helpers to implement a
+different credential-selection policy.
 
 ## WebSocket upgrades
 
-`worker()` wires `workerUpgrade` for you. Reach for it directly when you are
-building the api yourself — inside a Durable Object, say:
+`worker()` supplies `workerUpgrade` unless the API options include another
+`upgrade`. When building a handler directly, pass it explicitly:
 
 ```ts
 import { api } from '@yaks/api'
@@ -95,17 +124,14 @@ import { workerUpgrade } from '@yaks/workerd'
 let handler = api({ graph, authenticate, upgrade: workerUpgrade })
 ```
 
-It creates a `WebSocketPair`, accepts the half the server keeps, and answers 101
-with the half the client gets. Outside the Workers runtime it throws, saying so.
+It creates a `WebSocketPair`, accepts the server half, and returns
+`{ socket, response }`, with HTTP 101 and the client half on the response. It
+throws if the runtime does not provide `WebSocketPair`.
 
 ## When the graph lives in a Durable Object
 
-A Durable Object is one graph's home: single-threaded, strongly consistent, with
-its own SQLite and its own open sockets
-([@yaks/durable-object](https://jsr.io/@yaks/durable-object) is the storage
-adapter for it). The Worker in front of it is then a router rather than a server
-— work out **which** graph the request is for, and forward the request without
-reading it:
+A Durable Object can keep a graph's SQLite storage and subscriptions in one
+instance. The outer Worker selects an object and forwards the request:
 
 ```ts
 import { forward, type Namespace } from '@yaks/workerd'
@@ -113,16 +139,20 @@ import { forward, type Namespace } from '@yaks/workerd'
 type Env = { SHOPS: Namespace }
 
 export default {
-  fetch: (request: Request, env: Env) =>
-    // one graph per subdomain: ada.shop.example → the object named `ada`
-    forward(env.SHOPS, new URL(request.url).hostname.split('.')[0], request),
+  fetch: (request: Request, env: Env) => {
+    let shop = new URL(request.url).hostname.split('.')[0]
+    return forward(env.SHOPS, shop, request)
+  },
 }
 ```
 
-The object at the other end runs `api()` over its own storage — it is the
-server; this Worker only routes to it. Because the request is forwarded whole,
-its method, path, body and `upgrade` header arrive intact, and the socket the
-object answers with belongs to the client.
+`forward(namespace, name, request)` calls `idFromName(name)`, gets the object's
+stub, and passes the original request to `stub.fetch()`. It does not read the
+body, change the path, or remove the upgrade header. The object implements its
+own fetch handler, typically `api()` with `workerUpgrade` over its graph.
+
+The application must implement and export the Durable Object class. A binding
+for an application class named `Shop` might be:
 
 ```toml
 # wrangler.toml
@@ -139,31 +169,26 @@ tag = "v1"
 new_sqlite_classes = ["Shop"]
 ```
 
-The name you forward by is the graph's identity, and the same name always
-reaches the same object. Derive it from something the request cannot lie about —
-a subdomain, a path segment you validate, a customer id you looked up — never
-from a header a client sets.
+The same name selects the same object within the namespace. Validate the
+selected name and authorize the caller's access to that graph. A subdomain, path
+segment, or client header identifies a destination; it does not prove access
+rights.
 
 ## Compatibility
 
-**Cloudflare Workers.** The package imports no Cloudflare package: every runtime
-type it needs is written structurally — the slice of it this code uses — and
-`WebSocketPair` is looked up on the global object rather than declared, so the
-source type-checks and loads anywhere and throws only where a Worker's API is
-missing. `conform.ts` holds those hand-written shapes against
-`@cloudflare/workers-types` in a separate type-check, so they cannot drift from
-the runtime they describe.
-
-Its dependencies are the sibling packages: `@yaks/api` and `@yaks/graph`.
+The WebSocket integration requires Cloudflare Workers APIs. Other interfaces are
+structurally typed, so importing the package does not require a Cloudflare
+global or package import. `conform.ts` checks those interfaces against
+`@cloudflare/workers-types`. Runtime dependencies are `@yaks/api` and
+`@yaks/graph`.
 
 ## Related packages
 
-[@yaks/api](https://jsr.io/@yaks/api) owns the routes, the errors and the
-subscription model; [@yaks/graph](https://jsr.io/@yaks/graph) owns the JSON
-bundle format and `apply()`; the bytes belong to a storage adapter —
-[@yaks/durable-object](https://jsr.io/@yaks/durable-object) inside a Durable
-Object, `@yaks/d1` over D1, [@yaks/ram](https://jsr.io/@yaks/ram) in memory.
-This package is only the integration between them and Cloudflare.
+[@yaks/api](../api/README.md) defines routes, errors, and subscriptions;
+[@yaks/graph](../graph/README.md) defines entities and write processing. Storage
+adapters include [@yaks/durable-object](../durable-object/README.md),
+[@yaks/d1](../d1/README.md), and [@yaks/ram](../ram/README.md). See the
+[graph architecture](../graph/ARCHITECTURE.md) for adapter responsibilities.
 
 ## License
 

@@ -1,15 +1,59 @@
 # @yaks/render
 
-A renderer registry shared by every rendering backend: `@yaks/preact` in a
-browser, `@yaks/text` for Markdown and plain text, `@yaks/tui` in a terminal.
-Each portable renderer receives `(bundle, h, ctx)` and returns whatever the `h`
-it is given builds. This package imports no backend and performs no action of
-its own.
+Select renderers and actions for a **bundle**: one entity's components as a JSON
+object. A registry associates view names with queries and renderer functions.
+For example, a `Tile` view can use a different renderer for a document and a
+task.
+
+This package handles selection and editing rules. A rendering backend supplies
+`h(tag, props, ...children)`, the function that builds its output nodes.
+[@yaks/preact](../preact/README.md) produces Preact nodes, and `@yaks/text`
+produces Markdown or plain text. The registry and its caches live in memory;
+this package opens no graph or database, stores no entities, and applies no
+changes.
+
+## Exports
+
+All exports come from `@yaks/render`:
+
+| Export                  | Purpose                                               |
+| ----------------------- | ----------------------------------------------------- |
+| `define`, `extend`      | Create a registry and prepend renderer registrations. |
+| `resolve`, `applicable` | Select a renderer or list matching view names.        |
+| `actions`               | List actions offered for a bundle.                    |
+| `edit`                  | Create a validated, single-column editing action.     |
+| `editors`, `properties` | Create portable `Edit` and `Props` renderers.         |
+
+The module also exports the contracts `Registration`, `Renderer`, `Registry`,
+`Selection`, `Options`, `H`, `Child`, `Context`, `RenderContext`, `Action`,
+`Contributor`, `Patch`, `EditOptions`, and `ArchetypeLookup`, and re-exports the
+`Bundle` and `Query` types.
+
+## Use
+
+This example builds a renderer registry and renders a document as Markdown:
 
 ```ts
-import { define, resolve } from '@yaks/render'
+import { define } from '@yaks/render'
 import { parse } from '@yaks/query'
+import { loadVocab } from '@yaks/vocab'
+import { render } from '@yaks/text'
 
+let vocab = loadVocab({
+  $defs: {
+    doc: {
+      component: true,
+      type: 'object',
+      properties: { title: { type: 'string' } },
+    },
+    task: {
+      component: true,
+      type: 'object',
+      properties: { done: { type: 'boolean' } },
+    },
+  },
+})
+let bundle = { entity: { eid: 'example' }, doc: { title: 'A document' } }
 let registry = define([
   {
     view: 'Tile',
@@ -22,100 +66,143 @@ let registry = define([
     render: (b, h) => h('strong', null, (b.doc as { title: string }).title),
   },
 ])
-let renderer = resolve(registry, bundle, 'Board.List.Tile', vocab)
-let node = renderer?.render(bundle, h, {})
+console.log(render(registry, bundle, 'Board.List.Tile', vocab)) // ## A document
 ```
 
-At each view name, the matching query with the most top-level clauses wins; ties
-preserve registration order. `true` scores 0.5, below every query match. The
-walk tries `Board.List.Tile`, `List.Tile`, then `Tile`. A missing view falls to
-a matching `JSON` registration, or returns `undefined`. An unnamed request
-considers `options.views`, or every registered view when omitted.
+A portable `Renderer` receives `(bundle, h, ctx)` and returns the node built by
+`h`. `ctx` contains values supplied by the caller, such as the column being
+edited. A backend may supply `ctx.render(view, context?)` for nested views,
+using the same registry and bundle and merging the child context over the parent
+context.
 
-`Registration` is what selection needs, `{view, match}`. A registry preserves
-any further fields on a renderer, and their types, including native `Render`
-components and file metadata. `@yaks/preact` mounts native components; the
-portable `Renderer` remains the default for text and the other backends.
+## Renderer selection
 
-`extend(registry, renderers)` prepends an overlay to that registry; an overlay
-wins equal scores while a more specific base renderer still wins. Other
-registries remain independent. `applicable(registry, bundle, vocab, ctx?)`
-returns matching exact view names in `options.views` order, or registration
-order when views are omitted. It does not use the JSON fallback to invent tabs
-for unmatched names.
+`resolve(registry, bundle, view, vocab, ctx?)` returns the selected registration
+or `undefined`. It does not invoke the renderer.
 
-A caller can supply `define(renderers, {archetypes: eid => tables})`, where
-`tables` is an immutable array of physical table names from `@yaks/archetype`.
-Presence-only queries then match `bundle.entity.archetype` without reading
-component bodies, with one cached answer per query, vocabulary and table set.
-Scores, view traversal and overlays are unchanged. Value predicates and column
-controls still use the ordinary matcher; absent or unknown descriptor ids also
-fall back to it. A caller must load the descriptors before rendering projected
-bundles, and keep its descriptor subscription open so that newly created sets
-arrive.
+For `Board.List.Tile`, selection tries `Board.List.Tile`, `List.Tile`, then
+`Tile`. At the first view name with a match, the query with the most top-level
+clauses wins; ties preserve registration order. A `match: true` registration
+scores 0.5, below every query match, including an empty query. If no view
+matches, selection tries a matching `JSON` registration. When `view` is omitted,
+selection considers the names in `options.views`, or all registered names if
+that option is omitted.
 
-Actions are contributed through `define`:
+`Registration` requires only `{ view, match }`. The registry preserves
+additional fields and their types, including backend-specific `Render`
+components and file metadata. `@yaks/preact` can mount native Preact components;
+portable renderers use the `render` function shown above.
+
+`extend(registry, renderers)` prepends registrations to that registry. These
+registrations win equal scores; a more specific existing registration still
+wins. Other registries are unaffected.
+
+`applicable(registry, bundle, vocab, ctx?)` lists matching exact view names in
+`options.views` order, or registration order when `views` is omitted. It neither
+tries shorter names nor adds names through the `JSON` fallback.
+
+### Matching component presence
+
+`define(renderers, { archetypes: eid => tables })` accepts a lookup of immutable
+physical table-name arrays from [@yaks/archetype](../archetype/README.md). For
+queries that test only component presence, selection can use
+`bundle.entity.archetype` to look up those tables instead of reading component
+values. Results are cached per query, vocabulary, and table array. This supports
+bundles whose component values were omitted from a query result.
+
+Value predicates and column selection still use the ordinary matcher. Missing or
+unknown descriptor ids also fall back to it. Applications using this lookup must
+load the descriptors before rendering such bundles and keep their subscription
+open to receive new table sets. Scoring and view selection do not change.
+
+## Actions
+
+Static actions are registered by component name. Continuing the example:
 
 ```ts
-define(renderers, {
+import { actions } from '@yaks/render'
+
+let actionable = define(registry.renderers, {
   vocab,
   actions: { doc: [{ name: 'clear', run: () => ({ doc: { title: null } }) }] },
 })
+let offered = actions(actionable, bundle)
+let patch = offered[0].run(bundle) // { doc: { title: null } }
 ```
 
-Call `actions(registry, bundle)` to get their union in component registration
-order. Optional `when: parse('.task')` conditions filter the offerings.
-Duplicate names remain separate contributions. `run(bundle, input?)` returns a
-component patch; the caller decides whether and how to apply it. The vocabulary
-may instead be passed as the third argument to `actions`.
+`actions(registry, bundle, vocab?)` collects actions for components present on
+the bundle, in component registration order. Optional `when: parse('.task')`
+conditions filter the result. Duplicate names remain separate contributions.
+Conditions require a vocabulary, passed to `define` or directly to `actions`.
+Listing actions never calls their `run` functions. A default `Action` returns a
+component patch from `run(bundle, input?)`; the caller decides how to apply it.
 
-Dynamic actions use an ordered array of `{match: Query | true, acts(source)}`
-contributors in `options.actions`. Every matching contributor runs when actions
-are requested; each returns its current offerings, including optional `when`
-queries. Action callbacks are never invoked while listing. For an application
-with its own action and entity shapes, use
+For dynamic actions, pass an ordered array of
+`{ match: Query | true,
+acts(source) }` contributors as `options.actions`. Each
+matching contributor's `acts` function runs when actions are listed and returns
+the currently available actions, including any `when` conditions.
+
+Applications with other action or entity types can use
 `define<MyRenderer, MyAction, MyEntity>(renderers, options)` and
-`actions(registry, bundle, vocab, entity)`. Queries read the matchable bundle;
-factories receive the original typed entity. Without a separate source,
-factories receive the bundle. `Registry` defaults to portable `Renderer`,
-`Action` and `Bundle` for existing callers.
+`actions(registry, bundle, vocab, entity)`. Queries read the bundle;
+contributors receive the separately supplied entity. Without a separate entity,
+contributors receive the bundle. `Registry` defaults to `Renderer`, `Action`,
+and `Bundle`.
 
-Editors are ordinary renderers. Register the built-in family beside your entity
-views and add `Props` to lay out every declared column of a component:
+## Editors
+
+Editors use the same registry as entity views. `editors(vocab, options?)`
+returns seven `Edit` registrations: text (`string`, `url`, `query`), number
+(`number`, `priority`), enum, entity reference (`ref`), timestamp (`time`),
+boolean, and JSON. `properties(vocab)` returns a `Props` renderer that lays out
+all declared columns of one component.
+
+The text backend renders editors read-only. Continuing the example:
 
 ```ts
-import { define, editors, properties } from '@yaks/render'
-import { render } from '@yaks/preact'
+import { editors, properties } from '@yaks/render'
 
-let registry = define([...editors(vocab), properties(vocab)])
-let node = render(registry, bundle, 'Props', vocab, {
-  comp: 'doc',
-  onPatch: (patch, bundle) => store.patch(bundle.entity.eid, patch),
-  onError: (error) => showError(error),
-})
-// One column: render(registry, bundle, 'Edit', vocab, {comp: 'doc', col: 'title', onPatch})
+let editable = define([...editors(vocab), properties(vocab)])
+console.log(render(editable, bundle, 'Props', vocab, { comp: 'doc' }))
 ```
 
-`editors(vocab, options?)` returns seven registrations: text (`string`, `url`,
-`query`), number (`number`, `priority`), enum, entity reference (`ref`),
-timestamp (`time`), boolean and JSON. Enum options come from
-`vocab.column().values`. JSON is declared `{type: 'string', format: 'json'}` and
-stored as JSON text. References accept entity ids; applications can overlay a
-picker with a more specific `.column.type=ref, .column.ref=project` query.
+For interactive controls, call `@yaks/preact`'s `render` with an `onPatch`
+callback that applies the returned patch, and optionally `onError` to display
+validation failures:
 
-Controls carry an `Action` as their `onChange` property. `@yaks/preact` turns
-that data into a change handler, calls `run(bundle, input)` and passes the patch
-to `onPatch`. Validation failures reach `onError` and the control's native
-validation feedback. The package itself never applies a patch. Native controls
-can call the same `edit()` action while retaining their own gestures and paint.
+```ts
+import { render as renderPreact } from '@yaks/preact'
 
-`Props` takes `{comp}` and uses the backend's nested render callback to select
-each column's `Edit` in the same registry, including overlays. Its definition
-list includes absent values and read-only columns. `@yaks/text` renders both
-views read-only in Markdown or plain text; values such as false and zero remain
-visible, and unset values show `—`. `readOnly: true` also works on Preact.
+let node = renderPreact(editable, bundle, 'Edit', vocab, {
+  comp: 'doc',
+  col: 'title',
+  onPatch: (patch, entity) => console.log(entity.entity.eid, patch),
+  onError: (error) => console.error(error),
+})
+```
 
-When both `comp` and `col` are supplied, selection reads a schema projection:
+This example logs edits; an application replaces `onPatch` with its write
+operation. Controls carry an `Action` in their `onChange` property. The Preact
+backend converts it to an event handler, calls `run(bundle, input)`, and sends
+the patch to `onPatch`. Validation failures reach `onError` and the control's
+native validation feedback. Native controls may also call `edit()` directly.
+
+Enum choices come from `vocab.column(comp, col).values`. References accept
+entity ids; applications can register a more specific query such as
+`.column.type=ref, .column.ref=project` to select their own picker. JSON columns
+are declared `{ type: 'string', format: 'json' }` and contain JSON text.
+
+`Props` requires `{ comp }` and a backend that supplies nested rendering. It
+selects each column's `Edit` through the same registry, including added
+registrations. It includes absent and read-only columns. Read-only output shows
+false and zero, and uses `—` for unset values. The text backend always requests
+read-only output; callers can also pass `readOnly: true` to the Preact backend.
+
+### Column selection
+
+When both `comp` and `col` are supplied, selection matches the column
+declaration as a temporary bundle:
 
 ```ts
 {
@@ -124,39 +211,36 @@ When both `comp` and `col` are supplied, selection reads a schema projection:
 }
 ```
 
-Its queryable fields are `comp`, `col`, `type`, `ref` under `column`. `type` is
-`string`, `number`, `boolean`, `ref`, `enum`, `time`, `url`, `query` or
-`priority` or `json`, according to the declaration. This selects the declared
-type even when the entity's value is absent. Render still receives the original
-bundle. An unknown column address or a `col` without `comp` throws. A `comp`
-alone supplies component context to an entity view. Entity queries and column
-queries describe different subjects; use appropriate views for each. An editor
-can close over `vocab.column(comp, col)` for enum choices or other schema
-details. No second registry is needed.
+The queryable fields are `column.comp`, `column.col`, `column.type`, and
+`column.ref`. The declared type is `string`, `number`, `boolean`, `ref`, `enum`,
+`time`, `url`, `query`, `priority`, or `json`. Selection therefore works even if
+the entity has no value for that column. Rendering still receives the original
+bundle. An unknown column or `col` without `comp` throws. A `comp` alone
+supplies context without changing entity selection. Use separate view names for
+entity queries and column queries. Editors can read further schema details
+through `vocab.column(comp, col)`.
 
-`edit(vocab, {comp, col}, options?)` creates an action whose
-`run(bundle, input)` parses a value and returns only `{[comp]: {[col]: value}}`.
-It never writes. Text remains text; numbers and booleans become typed values,
-enum aliases resolve to declared members, and timestamps require an explicit
-timezone. JSON columns hold validated JSON text. Null clears a column. Computed
-columns, stamped columns, and columns the vocabulary does not mark `wire: true`
-refuse edits.
+### Parsing edits
 
-An application's `options.parse(input, column, bundle)` supplies its value
-language; vocabulary checks still run afterward.
-`options.validate(value, column, bundle)` may throw to refuse a value before the
-action returns a patch. Creating or listing an action invokes neither hook. A
-backend may supply `ctx.render(view, context?)` to compose nested views through
-the same registry and bundle, merging the child context over the parent.
+`edit(vocab, { comp, col }, options?)` creates an action whose
+`run(bundle, input)` parses and validates a value, then returns only
+`{ [comp]: { [col]: value } }`. Text stays text, numbers and booleans become
+typed values, enum aliases resolve to declared members, and timestamps require
+an explicit timezone. JSON columns contain validated JSON text. Null clears a
+column. Computed or stamped columns, and columns of components without
+`wire: true`, reject edits.
+
+`options.parse(input, column, bundle)` can replace the default input parser;
+vocabulary validation still runs afterward.
+`options.validate(value, column, bundle)` may throw to reject a parsed value.
+Creating or listing an action calls neither hook and writes no data.
 
 ## Compatibility
 
-Deno, Node, browsers and workers. Depends on `@yaks/query`, `@yaks/match` and
-`@yaks/vocab`; it needs no DOM, no runtime globals, no database and no
-framework.
+Deno, Node, browsers, and workers. Depends on `@yaks/query`, `@yaks/match`, and
+`@yaks/vocab`; it needs no DOM, database, or UI framework.
 
 ## Verification
 
-`deno test --doc packages/render/mod.ts` runs the recording-hyperscript example;
-`deno test packages/render/` covers matching, view resolution, column types and
-action union.
+From the repository root, `deno test packages/render/` covers matching, view
+selection, actions, column types, parsing, and editors.

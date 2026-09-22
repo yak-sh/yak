@@ -1,9 +1,11 @@
 # @yaks/member
 
-Access control for a [@yaks/graph](../graph). Three components record who
-belongs to a space and what each person may do, and two checks enforce them —
-one inside `apply()` for writes, one the HTTP layer calls before it answers a
-read.
+Access control for [@yaks/graph](../graph). The package stores space
+memberships, permission grants and access modes as graph components. It checks
+writes inside `apply()` and provides a read check for an HTTP handler or other
+caller to run before returning data.
+
+It does not authenticate callers, open storage or automatically protect reads.
 
 ## Install
 
@@ -12,216 +14,218 @@ deno add jsr:@yaks/member
 # or: npx jsr add @yaks/member
 ```
 
+The complete example below also uses `@yaks/graph`, `@yaks/vocab`, `@yaks/ram`
+and `@yaks/doc`.
+
 ## Terms
 
-A **principal** is the entity doing something: a person, or — for a share link —
-the grant itself. An **app** is any entity that access is decided about; this
-package never declares what an app is, only who may reach one. A **space** is
-the entity a roster belongs to, and whose owners own the apps in it. Both are
-plain entities in your own vocabulary.
+A **principal** is the entity making a request: usually a person, or a grant
+entity representing a share link. An **app** is the entity whose access rules
+apply to the graph. A **space** groups memberships; its owners receive owner
+permission when a policy or guard is configured with that space's id.
 
-The examples use a book club: a `space` named `club`, a reading `list` and a
-`notes` page as its two apps, and four people. It is the same fixture the tests
-use (`harness.ts`).
+The application supplies app, space and principal entity ids. This package does
+not declare their components or infer an app's space from its contents.
 
 ## The three components
 
-**`member{space, person, role}`** — one row per person per space, the roster:
+These components are stored by the graph's storage adapter, alongside the
+application's other data:
 
-```
-{ entity: { eid: 'seat1' }, member: { space: club, person: dana, role: 'owner' } }
-```
+| Component                           | Purpose                                                                                                                                                         |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `member{space, person, role}`       | Associates a person with a space. `role` defaults to `member`; `owner` supplies owner permission to policies configured for that space.                         |
+| `grant{app, person, token, access}` | Gives a principal permission on an app. `access` defaults to `viewer`, with `editor` and `owner` also supported. A share link uses `token` instead of `person`. |
+| `access{mode}`                      | Sets an app's access mode. Missing or unset mode defaults to `public`.                                                                                          |
 
-`role` is `owner` or `member`. An `owner` runs the space — billing, removals —
-and holds `owner` permission on every app in it. A `member` belongs to the space
-and holds nothing beyond what a grant gives them.
+Memberships and grants are separate entities. The `access` component is stored
+on the app entity. References from `member` and `grant` use `death: cascade`, so
+deleting a referenced person, space or app removes the dependent entities. Use
+qualified query names such as `.grant.person=dana` and `.grant.access=editor`
+for columns whose short names are disabled.
 
-**`grant{app, person, access}`** — one principal's permission on one app:
+The modes determine access:
 
-```
-{ entity: { eid: 'g1' }, grant: { app: list, person: raj, access: 'editor' } }
-```
-
-`access` is `owner` (shares and deletes it), `editor` (writes it) or `viewer`
-(reads it).
-
-**`access{mode}`** — what the app allows everyone who has no grant on it:
-
-```
-{ entity: { eid: list }, access: { mode: 'public' } }
-```
-
-- `public` — anyone with the link reads it; only the granted write it. An app
-  with no `access` component is `public`.
-- `open` — anyone with the link reads **and writes** it, signed in or not.
-- `private` — only principals holding a permission see it at all.
+| Mode      | Read                                  | Write ordinary data                             |
+| --------- | ------------------------------------- | ----------------------------------------------- |
+| `public`  | Anyone                                | Owner or editor                                 |
+| `open`    | Anyone                                | Anyone, including anonymous callers and viewers |
+| `private` | Any principal with a permission level | Owner or editor                                 |
 
 ## Membership is not permission
 
-Being on the roster grants nothing by itself. A member with no grant reaches an
-app exactly as far as a stranger with the link does. That is what makes a roster
-safe to be generous with, and it is why removing someone is one row: delete the
-membership and every permission implied by it goes too.
+An ordinary membership supplies no permission. A grant can authorize a person
+who has no membership at all. Removing a membership removes any owner permission
+derived from that membership, but **does not revoke explicit grants**. Remove
+the grants separately when revoking those permissions.
 
-Permission is resolved in this order:
+Permission resolution checks these cases in order:
 
-| principal                     | level it holds                     |
-| ----------------------------- | ---------------------------------- |
-| nobody (an anonymous request) | none; the app's mode decides       |
-| the space's **owner**         | `owner`, on every app in the space |
-| a principal a **grant** names | the grant's `access`               |
-| a member with **no grant**    | none; the app's mode decides       |
+1. An anonymous principal has no permission level.
+2. If the principal entity itself carries a grant for this app, use that grant's
+   access level. This supports share links.
+3. If the principal is an owner in the configured space, use `owner`.
+4. Otherwise, use the first matching grant naming that person and app, or no
+   level if none exists.
 
-The first and last rows land in the same place, which is the point. The space
-owner's `owner` level is never stored per app — storing it would be a row to
-forget to write.
+Space-owner permission is computed from membership, without storing a grant for
+every app. Omitting `space` from the policy or guard disables this source of
+permission. The package does not combine multiple grants by taking their highest
+level; avoid conflicting duplicate grants for a person and app.
 
 ## The two checks
 
-```
-read    the mode is not `private`, OR the principal holds any level
-write   the mode is `open`,        OR the principal holds owner or editor
-```
+`reads(mode, level)` allows reads when the mode is not `private` or the
+principal has any level. `edits(mode, level)` allows writes when the mode is
+`open` or the level is `owner` or `editor`.
 
-A `viewer` never writes, under any mode. Both are pure functions in `words.ts`
-(`reads(mode, level)` and `edits(mode, level)`), taking a mode and a level and
-nothing else, so the check inside `apply()` and the check at the HTTP layer
-cannot drift apart. A service that already knows both — one that authenticated
-the caller at its edge and keeps modes in a directory — calls them directly,
-with no storage involved.
+These exported functions require no storage. A viewer can write an `open` app;
+on `public` and `private` apps a viewer can only read. `writes(level)` checks
+the level alone and returns true for `owner` and `editor`.
 
 ## Where each check runs
 
-A **write** is refused inside `apply()`. `members()` registers a `precondition`
-hook, which runs inside the transaction before any row has moved, so the check
-reads the transaction's own view and a refused list of changes rolls back whole:
+This complete example uses in-memory storage, creates an initial owner, then
+installs the write guard:
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
 import { graph } from '@yaks/graph'
-import { memberDoc, members } from '@yaks/member'
+import { ram } from '@yaks/ram'
+import { docDoc } from '@yaks/doc'
+import { memberDoc, members, policy } from '@yaks/member'
 
-let vocab = loadVocab([memberDoc, club])
-let g = graph({
-  storage,
-  vocab,
-  plugins: [members({ app: list, space: club })],
-})
+let vocab = loadVocab([memberDoc, docDoc])
+let storage = ram(vocab)
+let g = graph({ storage, vocab })
 
-g.apply([{
-  entity: { eid: 'p1' },
-  pick: { title: 'Piranesi' },
-  $actor: { by: mo },
+await g.apply([
+  { entity: { eid: 'club' }, doc: { title: 'Book club' } },
+  { entity: { eid: 'dana' }, doc: { title: 'Dana' } },
+  {
+    entity: { eid: 'notes' },
+    doc: { title: 'Club notes' },
+    access: { mode: 'private' },
+  },
+  {
+    entity: { eid: 'membership' },
+    member: { space: 'club', person: 'dana', role: 'owner' },
+  },
+])
+g.use(members({ app: 'notes', space: 'club' }))
+
+await g.apply([{
+  entity: { eid: 'notes' },
+  doc: { body: 'Next meeting: Thursday' },
+  $actor: { by: 'dana' },
 }])
-// throws Denied: mo may not write list — editor is the least that may
+
+let may = policy(storage, { space: 'club' })
+console.log(await may.canRead('dana', 'notes')) // true
+console.log(await may.canRead(null, 'notes')) // false
 ```
 
-The principal is whatever `$actor` the changes carry. An HTTP layer replaces
-that field with the identity it authenticated before calling `apply()` — see
-[@yaks/api](https://jsr.io/@yaks/api)'s `signed`. Changes with no `$actor` act
-as nobody: allowed on an `open` app, refused everywhere else, which is what an
-anonymous visitor should get.
+A **bundle** is one entity's components as a JSON object. A **batch** is a list
+of changes applied in one transaction. The guard selects the first nonempty
+`$actor.by` in the batch as its principal, and uses the configured app's access
+rules for the entire batch. It is not a per-entity filter for a graph containing
+several independently protected apps.
 
-A **read** never reaches `apply()`, so the HTTP layer checks first:
+`members()` registers a `precondition` hook. It reads permissions inside the
+transaction before applying changes; throwing `Denied` rolls back that
+transaction. Changes without an actor are anonymous, so ordinary writes are
+allowed only when the app is `open`.
 
-```ts
-import { policy } from '@yaks/member'
+The code receiving a request must authenticate the caller and replace any
+client-supplied actor before applying changes. [@yaks/api](../api) uses
+`signed()` for that replacement. This package trusts the actor it receives.
 
-let may = policy(storage, { space: club })
-may.canRead(dana, notes) // true — she owns the club
-may.canRead(kim, notes) // false — private, and she holds nothing
-```
-
-Over a synchronous storage — a Map, an embedded database — every one of these
-returns a value rather than a promise.
+Reads do not pass through `apply()`. Call `policy(storage, { space }).canRead`
+before returning results. `policy()` also exposes `modeOf`, `levelOf` and
+`canWrite`. These methods return values for synchronous storage and promises for
+asynchronous storage; `await` works with either.
 
 ## Only an owner edits the access rows
 
-The `member`, `grant` and `access` components are governed: a transaction that
-touches any of them is refused unless the principal holds `owner` on the app. An
-editor writes the app's data and does not hand out permissions. That matters
-most on an `open` app, where the first check admits everybody: without this
-rule, a visitor invited to sign the guest book could rewrite the roster and lock
-the owner out.
+Changes that write or remove `member`, `grant` or `access` components require
+owner permission on the configured app. An editor can change ordinary data but
+cannot write these access-control components. This additional check also runs
+for an `open` app.
 
-Which leaves the bootstrap. A graph with the guard installed and an empty roster
-admits nobody, because there is no owner yet to write the row that makes one. So
-write the first owner before installing the guard:
-
-```ts
-let g = graph({ storage, vocab })
-g.apply([{
-  entity: { eid: 'seat1' },
-  member: { space: club, person: dana, role: 'owner' },
-}])
-g.use(members({ app: list, space: club }))
-```
-
-From there the roster maintains itself: an owner adds the next one.
+Create the first owner membership before installing `members()`, as in the
+example. With the guard installed, writing the first owner membership requires
+an owner that does not yet exist. Thereafter an authorized owner can maintain
+memberships and grants through the guarded graph.
 
 ## Share links
 
-A grant may name a `token` instead of a person:
+A grant can identify a link token instead of a person:
 
-```
-{ entity: { eid: 'share' }, grant: { app: notes, token: 'x7v2…', access: 'viewer' } }
+```json
+{
+  "entity": { "eid": "share" },
+  "grant": { "app": "notes", "token": "a-secret-token", "access": "viewer" }
+}
 ```
 
-Whoever opens that link acts **as** the grant: the HTTP layer signs their
-changes with the grant's own entity id, and everything above works unchanged,
-because permission resolution checks the principal's own `grant` component
-before it looks for grants about the principal. No account, no roster row, one
-revocable row, scoped to one app.
+The authentication layer validates the token and identifies the caller as
+`share`, the grant entity's id. Permission lookup then reads that entity's own
+grant. Deleting the grant revokes its permission. Its permission applies only to
+the named app; that app's mode still applies, including unrestricted ordinary
+writes when the mode is `open`.
+
+This package does not generate tokens, validate incoming tokens, or implement an
+HTTP route for opening a link.
 
 ## Invitations belong to another package
 
-Adding someone to a roster usually means sending them a message. That is a
-`created('member')` handler on [@yaks/effects](https://jsr.io/@yaks/effects) —
-it runs after the commit, so the row exists before the message goes out, and it
-is isolated, so a mail server that is down does not refuse the write:
+[@yaks/mail](../mail) supplies invitation handling through
+[@yaks/effects](../effects). A `created('member')` handler runs after commit, so
+a delivery failure does not roll back the membership write. For an application
+with an effects registry named `fx` and its own `invite` function:
 
 ```ts
-fx.created('member', (e, tx) => invite(e.comp?.person, e.comp?.space))
+fx.created('member', (event) => invite(event.comp?.person, event.comp?.space))
 ```
 
-This package ships no such handler. `@yaks/mail` provides one.
+This package registers no invitation handler.
 
 ## Exports
 
-| export                                     | what it is                                        |
-| ------------------------------------------ | ------------------------------------------------- |
-| `memberDoc`                                | the three components, to load beside your own     |
-| `MEMBER`, `GRANT`, `ACCESS`                | their component names; `GOVERNED` is the three    |
-| `Role`, `Level`, `Mode`                    | the value types, and `ROLES`/`LEVELS`/`MODES`     |
-| `role`, `level`, `mode`                    | read a stored value, falling back to its default  |
-| `writes(level)`                            | may a principal holding this level write?         |
-| `members(guard)`                           | the @yaks/graph plugin — components and hook      |
-| `guarding(guard)`, `actorOf`, `governs`    | the hook, and the two facts it reads              |
-| `policy(storage, where)`                   | `modeOf`, `levelOf`, `canRead`, `canWrite`        |
-| `modeOn`, `levelOn`, `readsOn`, `writesOn` | the same checks, against a transaction            |
-| `Denied`                                   | the refusal: who, which app, which level would do |
+| Import path          | Exports                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| `@yaks/member`       | Component definitions, access helpers, policy, write guard, plugin and error listed below. |
+| `@yaks/member/vocab` | `memberDoc` and `docs`, the array of vocabulary documents.                                 |
+
+The main export includes:
+
+| Exports                                                   | Purpose                                                                        |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `memberDoc`                                               | Vocabulary document containing the three components.                           |
+| `MEMBER`, `GRANT`, `ACCESS`, `GOVERNED`                   | Component names and the list requiring owner permission.                       |
+| `Role`, `Level`, `Mode`; `ROLES`, `LEVELS`, `MODES`       | Value types and their supported values.                                        |
+| `role`, `level`, `mode`                                   | Read a value with its default: member, viewer or public.                       |
+| `reads`, `edits`, `writes`                                | Pure permission checks.                                                        |
+| `members(guard)`                                          | Graph plugin with the vocabulary, permission-read requirements and write hook. |
+| `guarding(guard)`, `wanting(guard)`, `actorOf`, `governs` | Write hook and supporting helpers.                                             |
+| `policy(storage, where)`                                  | Read and write checks bound to storage.                                        |
+| `modeOn`, `levelOn`, `readsOn`, `writesOn`                | Checks using an existing graph transaction.                                    |
+| `Guard`, `Viewer`, `Where`, `Policy`                      | Configuration and policy types.                                                |
+| `Denied`                                                  | Error with `actor`, `app`, `need` and `act` fields.                            |
 
 ## What is deliberately not here
 
-**Authentication.** Establishing who someone _is_ belongs to the HTTP layer;
-this package decides what an established identity may do.
-
-**Per-grant filters.** A grant good for only part of an app's data is not a
-level, and one level per app is what fits in a person's head.
-
-**A fourth level.** Three levels mirror what the platform this was drawn from
-already distinguishes. Adding one is a design decision, not a default.
+Authentication belongs to the caller. Permissions apply to an app as a whole;
+this package supplies no per-grant query filters. It supports exactly the
+`viewer`, `editor` and `owner` levels.
 
 ## Integration
 
-This is an ordinary [@yaks/graph](https://jsr.io/@yaks/graph) plugin, the same
-shape an application's own plugin has — like
-[@yaks/edge](https://jsr.io/@yaks/edge) it contributes components and a hook and
-nothing privileged. A `Denied` reaches a client through
-[@yaks/api](https://jsr.io/@yaks/api)'s error response, which answers it with a
-403.
+`members()` is a graph plugin. It uses the same storage and hook interfaces as
+application plugins. [@yaks/api](../api) maps `Denied` errors to HTTP 403; a
+caller can choose its own response policy.
 
 ## Compatibility
 
-Pure TypeScript with no platform API: reads go through @yaks/graph's `Storage`
-interface. Runs on **Deno**, **Node**, and in the **browser**.
+Pure TypeScript with no platform API imports. It runs on Deno, Node, browsers
+and Cloudflare Workers with suitable storage and package resolution.

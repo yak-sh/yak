@@ -1,12 +1,15 @@
 # @yaks/client
 
-A client-side graph: in-memory storage, reactive queries, optional
-synchronization with a server, and persistence in the browser. `client()`
-assembles the graph, RAM, match and sync packages into one object, which an
-application uses to write bundles and watch query results.
+Create an in-memory graph with reactive queries, an optional server connection,
+and optional IndexedDB persistence. Applications write and read **bundles**: one
+entity's components as a JSON object. `client()` combines `@yaks/graph`,
+`@yaks/ram`, `@yaks/match`, and `@yaks/sync`, and provides the storage and watch
+lifecycle around them.
 
-For bundle structure, write phases, and what a storage adapter is responsible
-for, see the [graph architecture](../graph/ARCHITECTURE.md).
+The graph holds entity data in RAM. Separate persistence interfaces store
+browser-owned components and cached server data. See the
+[graph architecture](../graph/ARCHITECTURE.md) for bundle structure and how
+changes pass through the graph.
 
 ## Install
 
@@ -15,353 +18,390 @@ deno add jsr:@yaks/client
 # or: npx jsr add @yaks/client
 ```
 
+## Exports
+
+All exports come from `@yaks/client`:
+
+| Export                           | Purpose                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `client`                         | Assemble the graph, storage, watches, and optional synchronization.       |
+| `watches`                        | Add reactive queries to an existing graph.                                |
+| `idb`, `stash`                   | IndexedDB and in-memory implementations of `Vault` for local components.  |
+| `keep`, `localComps`             | Connect a `Vault` to a graph, or select the components it stores.         |
+| `wireIdb`, `wireStash`           | IndexedDB and in-memory implementations of `WireVault` for server data.   |
+| `retention`                      | Add cache retention to an existing graph, RAM store, and watch registry.  |
+| `RETENTION_ROWS`, `ANSWER_BYTES` | Default cache budgets: 20,000 rows and 1,000,000 bytes of query metadata. |
+
+The module also exports `Client`, `ClientOpts`, `ClientWatchOpts`, `Watch`,
+`Watches`, `WatchOpts`, `WatchesOpts`, `Hold`, `Make`, `Vault`, `Saved`, `Kept`,
+`IdbOpts`, `Retained`, `WireVault`, and `SavedAnswer` types.
+
 ## Use
 
-The examples are a shared recipe box: recipes with a course and a serving count,
-notes about them, cooks who wrote them, and a draft of what this cook is typing.
+This local-only example defines two components, creates a recipe, and watches
+matching entities. A **batch** is a list of changes applied in one transaction;
+the array passed to `mutate` is one batch.
 
 ```ts
 import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
 
-let recipeBox = {
+let vocab = loadVocab({
   $defs: {
-    doc: { type: 'object', properties: { title: { type: 'string' } } },
+    doc: {
+      component: true,
+      type: 'object',
+      properties: { title: { type: 'string' } },
+    },
     recipe: {
+      component: true,
       type: 'object',
       properties: { serves: { type: 'number' }, course: { type: 'string' } },
     },
   },
-}
-let vocab = loadVocab(recipeBox)
-let box = client(vocab, [], { url: 'https://recipes.example' })
-
-box.mutate([{
-  entity: { eid: crypto.randomUUID() },
+})
+let box = client(vocab, [], { vault: false })
+let eid = crypto.randomUUID()
+await box.mutate([{
+  entity: { eid },
   doc: { title: 'Dal' },
   recipe: { serves: 4, course: 'dinner' },
 }])
+let dinners = box.watch('.course=dinner')
+console.log(dinners.value.length) // 1
+console.log(box.ent(eid)?.doc) // { title: 'Dal' }
+dinners.close()
+box.close()
 ```
 
-`client(vocab, plugins, opts)` takes a vocabulary, your plugins, and options. It
-returns the graph, the synchronization client, the watches, and these four
-shorthands:
+`client(vocab, plugins?, opts?)` returns these application methods:
+
+| Method or property    | Behavior                                                              |
+| --------------------- | --------------------------------------------------------------------- |
+| `watch(query, opts?)` | Return a live query result.                                           |
+| `read(query, opts?)`  | Read matching bundles synchronously from RAM.                         |
+| `ent(eid)`            | Read one cached entity, or `undefined` when it is absent from memory. |
+| `mutate(change)`      | Call the graph's `apply()`; returns bundles or a promise of bundles.  |
+| `ready`               | Wait for local persistence and any configured epoch restore.          |
+| `setEpoch(epoch)`     | Validate the server cache epoch and refresh remote subscriptions.     |
+| `close()`             | Close all watches, the connection, and cache activity.                |
+
+The returned `graph`, `store`, `watches`, `cache`, and optional `wire`
+connection remain available. A deleted entity read by `ent()` carries a
+`tombstone` component; an entity absent from this client's cache is not evidence
+of deletion.
+
+To connect to a server implementing `@yaks/sync`, supply its base `url` and use
+the same vocabulary on both ends:
 
 ```ts
-box.watch('.course=dinner') // a live result (below)
-box.read('.course=dinner') // the result now, synchronously
-box.ent('r1') // one entity, whole, by id
-box.mutate([...]) // apply changes locally, then POST them
+let remote = client(vocab, [], { url: 'https://recipes.example' })
 ```
 
-Everything it built stays reachable — `box.graph` is an ordinary graph, with
-`apply()`, `read()` and `use()` on it. This package adds no layer over them.
+Server-synchronized edits normally apply locally before `POST /apply` completes.
+Deletions wait for the server because graph deletion is permanent. Server
+refusals can revert optimistic edits and are reported through `opts.report`.
+Components declared `sync: none` stay local; `sync: peers` components are
+relayed through the WebSocket. See [@yaks/sync](https://jsr.io/@yaks/sync) for
+transport and failure behavior.
 
-## A query is a value
+## Reactive queries
+
+A watch exposes `value` (the current bundle array), `ready`,
+`subscribe(listener)`, and `close()`:
 
 ```ts
-let dinners = box.watch('.course=dinner&.serves>4')
-
-dinners.value // → the bundles, now (possibly from the cache)
-dinners.ready // → the current subscription has answered
-let stop = dinners.subscribe((bundles) => paint(bundles)) // → the next ones
-stop() // stop this listener only
-dinners.close() // close this handle; the last handle stops the shared watch
+let dinners = remote.watch('.course=dinner&.serves>4')
+console.log(dinners.value, dinners.ready)
+let stop = dinners.subscribe((bundles) => console.log(bundles))
+stop() // Remove this listener.
+dinners.close() // Release this watch handle.
 ```
 
-A watch re-evaluates on the graph's own `effect` phase, so it sees every
-committed transaction — the ones this page wrote and the ones the server pushed.
-How it re-evaluates depends on the query:
-
-- A query that asks only about each entity itself (`.course=dinner&.serves>4`)
-  is tested one bundle at a time by [@yaks/match](https://jsr.io/@yaks/match)'s
-  `filter`, against the entities the transaction changed. Nothing else is read,
-  however many entities the page holds. The result keeps **first-match order**,
-  with a new match appended at the end.
-- A query whose result is a property of the whole set — it follows a reference,
-  orders, limits or counts — is **run again** and compared. `.order=title`
-  therefore both defines the order and puts the watch in this mode.
-
-Listeners are called when the result or the readiness changes. An unrelated
-write does not call them.
+Subscriptions report later result or readiness changes; read `value` for the
+initial result. Local evaluation runs after committed graph changes, including
+server updates. Queries about one entity's own values test only changed
+entities. These results keep their initial order and append new matches. Queries
+that follow references, order, limit, or aggregate run again against the store.
+State an order explicitly, for example `.order=title`, when order matters.
+Unrelated writes do not notify listeners.
 
 ### With a server
 
-When the client has a `url`, opening a watch also opens the **server's**
-subscription for that query. Identical query text with identical effective
-options (`now`, `remote`, `evaluate`) shares one local evaluation and one server
-subscription. Each call returns an independent handle: closing one removes only
-its listeners; the last close drops the shared subscription. `client.close()`
-closes every handle. The query text is never normalized. Pass
-`{ remote: false }` for a watch over data that is already local.
+A watch opens a server subscription when the client has a URL, unless
+`{ remote: false }` is passed. Identical query text and effective `now`,
+`remote`, and `evaluate` options share local evaluation and the remote
+subscription. Text is not normalized. Each caller gets an independent handle;
+the last handle to close releases the shared subscription. `client.close()`
+closes all handles.
 
-`watch.ready` is false until the server's first result has been applied, even
-when cached rows are already on screen. An empty result makes it true as well.
-It returns to false on a disconnect or a refused subscription, and becomes true
-again once the reconnect has been answered. `subscribe` is called on readiness
-changes even when `value` has not changed. A local-only watch becomes ready
-after its first read; that is separate from `client.ready`, which is the promise
-for loading this browser's own stored components. Await that promise before
-opening a local watch that has to include restored drafts.
+For remote watches, `ready` remains false until the first server result has been
+applied, even when cached rows are visible. An empty result also makes it true.
+Disconnects and refusals make it false; a successful result after reconnecting
+makes it true again. Readiness changes notify listeners even if `value` stays
+the same.
+
+A local watch becomes ready after its initial graph read. This differs from
+`client.ready`, which waits for stored local components and any restore started
+by `opts.epoch`. Await `client.ready` before opening a local watch that must
+include restored drafts.
 
 ### With signals
 
-`watch()` depends on no framework: `value` plus `subscribe` is the whole of it.
-Pass `client` a signal factory and both `value` and `ready` become signal reads
-instead, which is all a signals-based renderer needs to track them. Nothing is
-imported — the factory is yours:
+Pass a signal factory to make `value` and `ready` reactive reads. For example,
+with `@preact/signals`:
 
-```tsx
+```ts
 import { signal } from '@preact/signals'
 
-let box = client(vocab, [], { url, signal })
-let dinners = box.watch('.course=dinner')
-
-// Inside a component: reading `.value` subscribes the component to it.
-let Dinners = () => <ul>{dinners.value.map((b) => <Recipe bundle={b} />)}</ul>
+let reactive = client(vocab, [], { signal })
+let dinners = reactive.watch('.course=dinner')
 ```
+
+A Preact component that reads `dinners.value` or `dinners.ready` then subscribes
+to that signal. The application closes the watch when it is no longer needed. No
+rendering framework is imported by this package.
 
 ### With React
 
-`subscribe` and `value` are exactly `useSyncExternalStore`'s two halves:
+For a watch whose lifetime is managed by the application, React's
+`useSyncExternalStore` can subscribe to it:
 
 ```tsx
-let useWatch = (query: string) => {
-  let watch = useMemo(() => box.watch(query), [query])
-  useEffect(() => () => watch.close(), [watch])
-  return useSyncExternalStore(watch.subscribe, () => watch.value)
+import { useSyncExternalStore } from 'react'
+import type { Watch } from '@yaks/client'
+
+function Count({ watch }: { watch: Watch }) {
+  let bundles = useSyncExternalStore(watch.subscribe, () => watch.value)
+  let ready = useSyncExternalStore(watch.subscribe, () => watch.ready)
+  return <span>{ready ? bundles.length : 'Loading…'}</span>
 }
 ```
 
-The snapshot is a new array only when the result changed, so React re-renders
-when the result changes and not otherwise. To track loading separately, use
-`useSyncExternalStore(watch.subscribe, () => watch.ready)` as well.
+The snapshot array stays stable between result updates. Keep the watch stable
+across component renders and close it when its owner disposes it.
 
-## Two keywords, one apply()
+## Component storage
 
-A client holds state the server owns, state this browser owns, and state that
-disappears with the tab. Which is which is declared by the component itself, in
-[@yaks/vocab](https://jsr.io/@yaks/vocab)'s `sync` and `durable` keywords:
+A component's `sync` and `durable` vocabulary keywords determine its storage:
+
+| Declaration                                         | Storage and synchronization                                    |
+| --------------------------------------------------- | -------------------------------------------------------------- |
+| `sync: server` (default)                            | Sent to the server; eligible for the local server-data cache.  |
+| `sync: none`, `durable: forever` (default lifetime) | Persisted through the local `Vault`; never sent.               |
+| `sync: none`, another lifetime                      | Held in memory, without local persistence.                     |
+| `sync: peers`                                       | Relayed over the WebSocket; requires a non-permanent lifetime. |
+
+For example, add this component to the vocabulary to persist a local draft:
 
 ```json
 {
   "$defs": {
     "draft": {
+      "component": true,
       "type": "object",
       "sync": "none",
+      "durable": "forever",
       "properties": { "text": { "type": "string" } }
     }
   }
 }
 ```
 
-- **`sync: server`** (the default) belongs to the server. @yaks/sync POSTs it
-  and applies what comes back.
-- **`sync: none` with `durable: forever`** belongs to this browser. It is
-  written through to IndexedDB after each commit and loaded back at start-up — a
-  draft survives a reload, and it is never sent to the server.
-- **`sync: none` otherwise** disappears with the tab: held in the graph, written
-  down nowhere.
-
-All three go through the same `apply()`. What this browser stored is back in the
-graph by the time `ready` resolves:
-
-```ts
-let box = client(vocab, [], { url })
-await box.ready
-box.ent('r1') // the draft is here again
-```
-
-What is written through is the entity's whole set of browser-owned components,
-read back from the store after the commit — so a patch merges the way every
-other patch does, a component that was removed is removed from IndexedDB too,
-and a deleted entity is dropped from it.
+All components use the same graph write API. After a commit, the local `Vault`
+stores the entity's complete set of persistent local components, read from the
+graph. Patches therefore preserve other fields, removed components disappear
+from persistence, and deleted entities are dropped. Loading stored data does not
+overwrite edits or deletions made while loading was in progress.
 
 ### Where it is stored
 
-`idb()` is the default in a browser: one database, one object store keyed by
-eid. Give each application its own database name, and pass an IndexedDB when the
-global one is not the one you want:
+In environments with IndexedDB, `idb()` is the default local `Vault`. Its
+configuration accepts `name`, `store`, and an `indexedDB` implementation. The
+default database is `yaks`, with an object store named `local`, keyed by entity
+id. Use an application-specific name:
 
 ```ts
-import { client, idb } from '@yaks/client'
+import { idb } from '@yaks/client'
 
-let box = client(vocab, [], { url, vault: idb({ name: 'recipes' }) })
+let persistent = client(vocab, [], { vault: idb({ name: 'recipes-local' }) })
+await persistent.ready
 ```
 
-`vault: false` stores nothing. `stash()` is a vault in memory — what a test
-uses, and what a page can fall back to when the browser refuses storage. An
-application with its own storage implements the four functions of `Vault`
-(`load`, `save`, `drop`, `clear`) and passes that.
-
-A vault is deliberately **not** a `Storage`: a Storage evaluates queries, and
-queries here are already evaluated against the map @yaks/ram holds. What was
-missing is durability, so the interface is the four things durability needs. It
-lives here until a second implementation makes a package of its own worth
-publishing.
+`vault: false` disables local persistence. `stash()` provides the same interface
+in memory for tests or an application-selected fallback; it does not survive a
+process restart. Custom `Vault` implementations provide `load`, `save`, `drop`,
+and `clear`. The vault only persists records; queries run against the RAM store.
 
 ## Options
 
-| option              | default                        | what it is                             |
-| ------------------- | ------------------------------ | -------------------------------------- |
-| `url`               | none — a local-only graph      | the server's base URL                  |
-| `fetch` / `connect` | the globals                    | how @yaks/sync POSTs and opens sockets |
-| `timer`             | `setTimeout`                   | how a reconnect is scheduled           |
-| `headers`           | none                           | headers added to every `POST /apply`   |
-| `wait` / `most`     | 250 / 30_000                   | the reconnect backoff, in ms           |
-| `report`            | a console warning              | where a refusal or failure is reported |
-| `vault`             | `idb()` where a browser has it | where this browser's state is stored   |
-| `signal`            | a plain object                 | the factory each `value` is held in    |
-| `mint`              | `crypto.randomUUID()`          | how an eid is made for an alias        |
+| Option                 | Default                    | Purpose                                                                                  |
+| ---------------------- | -------------------------- | ---------------------------------------------------------------------------------------- |
+| `url`                  | none                       | Server base URL; omitted for a local-only graph.                                         |
+| `fetch`, `connect`     | global fetch and WebSocket | HTTP requests and socket creation.                                                       |
+| `timer`                | `setTimeout`               | Reconnect and deferred cache-write scheduling.                                           |
+| `headers`              | none                       | Headers added to `POST /apply`.                                                          |
+| `wait`, `most`         | 250, 30,000 ms             | Initial and maximum reconnect delay.                                                     |
+| `report`               | console warning            | Receive synchronization and server-cache failures.                                       |
+| `vault`                | `idb()` when available     | Persistence for local components, or `false`.                                            |
+| `wireVault`            | `wireIdb()` when available | Persistence for server data, or `false`.                                                 |
+| `epoch`                | none                       | Validated server epoch for restoring server data.                                        |
+| `retention`            | 20,000                     | Maximum inactive server rows retained.                                                   |
+| `answerBytes`          | 1,000,000                  | Encoded byte budget for retained server query metadata.                                  |
+| `retainUnownedColumns` | false                      | Keep previously read fields for display after their subscription ends.                   |
+| `signal`               | plain object               | Factory for watch `value` and `ready` containers.                                        |
+| `mint`                 | random UUID                | Id generator for entities created through aliases.                                       |
+| `provenance`           | graph default              | Policy for `created` and `updated` attribution; return `null` to leave it to the server. |
 
 ## Compatibility
 
-**Browser, Deno, Node, Bun, and Cloudflare Workers.** The package imports no
-runtime-specific API: `fetch`, `WebSocket` and `indexedDB` are all read from
-options (the globals are only the default), and it type-checks under
-`lib: ["dom", "esnext"]` with no `Deno` types in the compile at all. A runtime
-with no IndexedDB simply stores nothing unless it is passed a vault. Its
-dependencies are the sibling packages listed below.
+Browser, Deno, Node, Bun, and Cloudflare Workers. The package uses standard web
+APIs and type-checks with `lib: ["dom", "esnext"]` without Deno types. Fetch,
+socket creation, timers, and persistence can be supplied by the caller.
+Environments without IndexedDB have no persistence unless given a vault.
 
-Outside a browser, what this package is for is the assembly and the watches: a
-worker, a test, or a CLI holding a working set gets the same live queries.
+## Server cache and restoration
 
-## The working set, and restoring the server's rows
+By default, the client retains up to 20,000 server rows that no open
+subscription covers. `retention: 0` keeps none of those inactive rows. Open
+subscriptions and unacknowledged local writes protect their rows from eviction
+and do not count against this limit. Local-only graphs do not evict the sole
+copy of locally written data.
 
-By default the client keeps **20,000 rows that no open subscription covers**
-(`retention: n` changes the limit; `0` keeps none of them). A local-only graph
-never evicts the only copy of data written locally. The members of an open
-subscription, and rows with a local write the server has not acknowledged, do
-not count against that limit and are never evicted to meet it. Identical watches
-still share one subscription; different subscriptions can hold the same row. One
-query reporting an entity as `gone` removes it from that query's result without
-taking the row away from another subscription that holds it.
+`ent()` and `read()` mark returned rows as recently used. Storage enumeration
+and watch refreshes do not. The least recently read inactive rows are evicted
+first, without changing query order. Eviction removes server data from RAM and
+notifies watches. It sends no deletion, creates no tombstone, triggers no
+cascade, and preserves local drafts and identity reservations. The row limit
+does not bound active rows, pending writes, local components, or identity
+reservations.
 
-`ent()` and `read()` mark the rows they touch as recently used. Enumerating
-storage and refreshing a watch do not, and marking a row never changes a query's
-order or first-match order. Reopening a query claims its cached rows before the
-first frame arrives. Cached values can be rendered, but `ready` stays false. The
-server's first frame reconciles whatever is missing, including rows that were
-retained for a different query. A frame carrying a whole query result replaces
-fields absent from it; a raw feed stays a patch. Neither path overwrites a
-browser-owned or in-memory component. A subscription result cannot overwrite a
-local write the server has not acknowledged; the response to the POST reconciles
-it. A transport failure with an unknown outcome keeps the row pinned: it is
-**not** an acknowledgement. A durable outbox and a retry policy belong to the
-application.
+Subscriptions can share rows and cover different columns. A query reporting an
+entity as `gone` removes its own membership without removing another
+subscription's data. Query snapshots replace fields within their declared
+coverage; raw change feeds apply patches. Other subscriptions' covered fields,
+local components, and unacknowledged writes are preserved. A transport failure
+with an unknown outcome keeps pending writes protected; it is not an
+acknowledgement. Durable queuing and retry policy remain application concerns.
 
-Eviction is not deletion: it writes no tombstone, cascades to nothing, POSTs
-nothing, and erases no drafts. RAM removes the server-synchronized data and
-notifies the watches. The compact eid and entity-number reservations survive
-eviction, so restoring an eid does not create a new entity; deletions stay
-permanent. The limit bounds only those uncovered rows: not rows a subscription
-covers, not rows with a pending write, not browser-owned or in-memory data, and
-not those identity reservations. Because eviction is a cache operation and not a
-committed transaction, an application maintaining its own derived indexes must
-use `cache.onRows` (below) rather than treating an eviction as a user deletion.
+### Restoring server data
 
-The server's rows are stored separately from the browser's own `Vault`:
+Server persistence is separate from the local component vault:
 
 ```ts
-import { client, idb, wireIdb } from '@yaks/client'
+import { wireIdb } from '@yaks/client'
 
-let box = client(vocab, [], {
-  url,
+let cached = client(vocab, [], {
+  url: 'https://recipes.example',
   vault: idb({ name: 'recipes-local' }),
-  wireVault: wireIdb({ name: 'recipes-wire' }),
+  wireVault: wireIdb({ name: 'recipes-server' }),
   retention: 20_000,
 })
-await box.setEpoch(authoritativeBootEpoch)
+// After obtaining the server's current epoch, call cached.setEpoch(epoch).
 ```
 
-An epoch you have already validated can instead be passed as `opts.epoch`; then
-`client.ready` waits for both the browser's own state and the server's rows to
-be restored. Without a validated epoch there are **no disk reads or writes at
-all** for the server's rows. Never pass an epoch read back from disk as proof of
-the server's current epoch. `setEpoch()` also asks the open subscriptions for
-fresh results and marks them not ready. Negotiating the epoch, and any boot
-messages specific to your application, are the application's job.
+An **epoch** is the server-supplied identifier for the dataset version whose
+cached state remains valid. Pass a validated epoch as `opts.epoch`, or call
+`await cached.setEpoch(epoch)` after obtaining it. The latter also refreshes
+open subscriptions and makes them not ready. Epoch negotiation belongs to the
+application; a value read from disk alone does not validate the current server
+state. Until an epoch is supplied, server persistence performs no reads or
+writes. With `opts.epoch`, `client.ready` waits for that restore too.
 
-`wireIdb()` defaults to a **separate** `yaks-wire` database; `idb()` defaults to
-`yaks`. Use distinct names. `wireVault: false` turns off disk storage for the
-server's rows without turning it off for this browser's drafts. `wireStash()` is
-the in-memory implementation of the same three-function `WireVault` interface. A
-mismatched epoch atomically clears the server's rows and nothing else. Saves and
-deletes check the epoch inside their own transaction, so a tab still on the
-previous epoch cannot bring its rows back. On disk, the newest rows written are
-kept up to the limit, including rows a subscription covers; in memory, rows are
-evicted least-recently-read first. Reads walk bounded index cursors, and data
-left over from an earlier, larger budget is deleted by key rather than read in
-with `getAll()`.
+`wireIdb()` defaults to the separate `yaks-wire` database. Its name must differ
+from the local vault's database. `wireVault: false` disables server persistence
+without disabling drafts. `wireStash()` is its in-memory equivalent. Custom
+`WireVault` implementations provide `load`, `save`, and `drop`, with optional
+`loadAnswers` and `saveAnswers` for query metadata.
 
-What is restored from disk is there so the page has something to show, not proof
-that anything is current. Rows already in memory, and writes made while the
-database was opening, win over it; any answer that arrived over the socket in
-the meantime — even an empty one — cancels a restore that finishes late. A newer
-epoch, or closing the client, cancels an older restore. Loading the browser's
-own vault likewise cannot overwrite an edit made while it was loading.
-`await box.cache.idle()` waits for the queued disk writes, and
-`box.cache.size()` reports how many uncovered rows are held in memory.
+An epoch mismatch clears persisted server rows and query metadata atomically.
+Saves and drops check the epoch in their transaction, preventing a late write
+from a tab on an older epoch. Disk storage keeps the newest written rows up to
+the row limit, including rows covered by subscriptions. IndexedDB restoration
+uses bounded index cursors and removes excess old records by key.
 
-The Tasks frontend adapter, protocol and epoch negotiation, a durable outbox and
-refusal ledger, closer query parity and the scratch-probe CDP comparisons are a
-later phase of the integration; this package does not yet replace `src/live.ts`.
+Restored rows can be displayed while subscriptions are not ready. Rows already
+in memory and edits made while loading take precedence. Any intervening server
+result, including an empty result, cancels a late restore. A newer epoch or
+closing the client also cancels an older restore.
+
+`await cached.cache.idle()` waits for queued server-persistence writes.
+`cached.cache.size()` counts inactive rows in memory, and
+`cached.cache.answerBytes()` reports retained query metadata size.
 
 ### Letting the server decide membership
 
-A partial cache cannot prove what a server query selects. RAM's text matcher is
-not SQLite FTS, and a reference the query follows, a column it orders by, or a
-semantic vector may never have been sent to the browser at all. So a watch can
-opt out of parsing, evaluating or pre-filling the query locally:
+A partial client cache cannot always evaluate a query correctly: referenced
+entities, sort fields, or semantic vectors may be missing, and the RAM text
+matcher differs from SQLite FTS. Use server evaluation for these queries:
 
 ```ts
-let hits = box.watch('café', { evaluate: 'server' })
+let hits = cached.watch('café', { evaluate: 'server' })
 ```
 
-The query text is opaque on this path. The server has to validate it and send
-ordinary bundle frames, or a refusal. Membership and order come only from those
-frames: a frame carrying the whole result replaces both, while a frame carrying
-only changes updates the members already held without re-sorting them — so a
-change in ranking has to be sent as a whole result. A local edit to an entity
-already in the result updates it immediately but cannot change membership, and
-an unrelated local write cannot insert itself into a ranked server result.
-Entity data still lives only in memory, and another subscription reporting an
-entity as `gone` cannot remove a row this one holds. `ready`, sharing by
-reference count, independent closing, and the behaviour on reconnect and refusal
-are the same as for any other remote watch. The evaluation mode is part of the
-key watches are shared under. Server evaluation requires a remote watch:
-`remote: false`, or a client with no URL, is refused rather than quietly
-reinterpreted.
+The query text is not parsed or evaluated locally. The server validates it and
+sends results or a refusal. Result membership and order come from server frames.
+A full replacement establishes both; later changes update members without
+re-sorting existing entries. A ranking change therefore requires a replacement
+result. Local edits update existing members immediately but cannot add unrelated
+entities to a server-ranked result.
 
-This is **not yet a full rich-query protocol**. `Watch.value` is still bundles,
-not a map of aggregates or a semantic score. Which columns a subscription
-covers, peer coverage, `tally` and window metadata, and persisting the
-membership of an ordered query all need the adapter work described in
-[the Tasks migration audit](../../docs/CLIENT_MIGRATION.md). In particular, a
-server-evaluated watch starts empty when it is newly opened, even when retained
-or restored rows exist: a standing watch keeps its last result while
-disconnected (`ready=false`), but closing and reopening one does not guess a
-result from the rows it still has. Do not read this mode as a claim that
-reopening before the first frame is at parity.
+Server evaluation requires a remote watch: it rejects `remote: false` and
+clients without a URL. Sharing, independent handle cleanup, readiness,
+reconnects, and refusals work as for other remote watches.
 
-`box.cache.onRows(eids => ...)` is called when entity data changed, including
-eviction from memory, an epoch mismatch, and a restore from disk. Read each
-current row with `box.ent(eid)` to update indexes your application derives; a
-missing row means not loaded, not deleted. The callback runs synchronously after
-the change, returns a function that unsubscribes it, and is cleared when the
-client closes. It is where an application observes these changes, not a second
-place to cache them, and it must not write to the graph. Code using @yaks/sync
-directly can turn off local ownership pre-filling with
-`wire.subscribe(query, id, { prime: false })`; ordinary subscriptions keep it.
+The client retains ordered membership and column coverage for server-evaluated
+queries under the exact watch key. A reopened watch can restore these results
+from memory or, under the same validated epoch, from its `WireVault`. It uses
+only retained rows and fields; it never infers matches from unrelated cached
+entities. `ready` stays false until the server answers. Without retained query
+metadata, a newly opened server-evaluated watch starts empty. A disconnected
+standing watch keeps its last value.
+
+Query metadata has a separate `answerBytes` budget, including query text, ids,
+and coverage. Older entries are discarded when needed. A result larger than the
+whole budget is not retained; its active watch is not truncated.
+
+### Column coverage and cache notifications
+
+`cache.loaded(eid, component, property?)` reports whether an open subscription
+covers that field. A false result means the client has no coverage for it, not
+that it was deleted. A covered field may be absent because the server confirmed
+its absence. Additional referenced entities supplied with a result remain
+available through `ent()` without becoming query members.
+
+`retainUnownedColumns: true` keeps previously read fields available for display
+after their covering subscription ends, within the row budget. They are not
+reported as loaded. A new covering result, deletion, or epoch change still
+reconciles them. Restored coverage is restricted to fields present in memory.
+`Watch.value` remains a bundle array; it does not expose aggregate or window
+metadata. Application integration is described in the
+[Tasks migration audit](../../docs/CLIENT_MIGRATION.md).
+
+`cache.onRows(eids => ...)` observes entity changes, including commits,
+eviction, epoch changes, and disk restoration. Read the current row with
+`ent(eid)` to update application indexes. A missing row is not proof of
+deletion. The callback runs synchronously, must not write to the graph, and
+returns an unsubscribe function; closing the client clears callbacks. Observe
+eviction through this API because it is a cache change, not a graph transaction.
+
+For applications using `@yaks/sync` directly,
+`wire.subscribe(query, id, { prime: false })` disables locally evaluated initial
+membership. Ordinary subscriptions keep that behavior enabled.
 
 ## Related packages
 
-[@yaks/graph](https://jsr.io/@yaks/graph) defines the bundles and `apply()`;
-[@yaks/ram](https://jsr.io/@yaks/ram) is the map this keeps them in;
-[@yaks/match](https://jsr.io/@yaks/match) tests a bundle against a query;
-[@yaks/query](https://jsr.io/@yaks/query) is the query grammar both sides use;
-[@yaks/sync](https://jsr.io/@yaks/sync) is the HTTP and WebSocket connection to
-the server, and defines the `sync` keyword that decides what goes over it.
+- [@yaks/graph](../graph/README.md): bundles, transactions, and plugins.
+- [@yaks/ram](../ram/README.md): in-memory entity storage and queries.
+- [@yaks/match](https://jsr.io/@yaks/match): per-bundle query matching.
+- [@yaks/query](../query/README.md): query syntax.
+- [@yaks/sync](https://jsr.io/@yaks/sync): HTTP and WebSocket synchronization.
+
+## Verification
+
+From the repository root, `deno test packages/client/` checks local and remote
+watches, persistence, cache limits, query coverage, and restoration with both
+in-memory and simulated IndexedDB storage.
 
 ## License
 

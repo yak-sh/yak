@@ -1,10 +1,22 @@
 # @yaks/page
 
-Records a web page as it was seen, and keeps a copy of it.
+Store web page URLs and archived HTML in a [@yaks/graph](../graph/README.md), so
+recorded sources can still be read after the original page changes or
+disappears. Use it to save HTML captured in a browser or to archive URLs with an
+external command.
 
-`web{url, frozen_at, bytes}` — the address that was read, when a copy of the
-document was taken, and where that copy is stored. A citation keeps its meaning
-after the page changes or disappears.
+The graph's storage adapter stores the `web` component:
+
+| Column      | Meaning                                                               |
+| ----------- | --------------------------------------------------------------------- |
+| `url`       | Canonical page URL, used to derive the entity id.                     |
+| `frozen_at` | When the archive was stored; absent until a capture is saved.         |
+| `bytes`     | SHA-256 key for the HTML in an [@yaks/blob](../blob/README.md) store. |
+
+`frozen_at` and `bytes` are server-owned columns. Ordinary client writes cannot
+set them. Page titles and prose use the separate `doc` component from
+[@yaks/doc](../doc/README.md). This package stores the latest archive reference
+on each page entity; it does not maintain a list of snapshots.
 
 ## Install
 
@@ -13,10 +25,39 @@ deno add jsr:@yaks/page
 # or: npx jsr add @yaks/page
 ```
 
+## Use
+
+For a graph that records URLs without fetching them:
+
+```ts
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { docDoc, docs } from '@yaks/doc'
+import { pageDoc, pageEid, pages } from '@yaks/page'
+
+let vocab = loadVocab([docDoc, pageDoc])
+let g = graph({ storage: ram(vocab), vocab, plugins: [docs(), pages()] })
+let url = 'https://example.com/article'
+
+await g.apply([{
+  entity: { eid: pageEid(url) },
+  web: { url },
+  doc: { title: 'An article' },
+}])
+console.log(await g.read('.web'))
+```
+
+Each object passed to `apply()` is a **bundle**: one entity's components as a
+JSON object. A **batch** is a list of changes applied in one transaction. The
+example uses memory storage; replace it with a persistent graph storage adapter
+to keep records across restarts.
+
 ## The address is the identity
 
-`web.url` is declared `identity`, so a page's entity id is **derived** from its
-canonical address:
+`web.url` is declared `identity`, so the graph can derive a page's entity id
+from its canonical URL when creating it under an alias. `pageEid()` computes
+that same id directly:
 
 ```ts
 import { canon, pageEid } from '@yaks/page'
@@ -25,58 +66,87 @@ canon('HTTPS://Example.com/a/?utm_source=n#top') // 'https://example.com/a'
 pageEid('https://example.com/a/') == pageEid('https://example.com/a') // true
 ```
 
-Recording the same page twice writes one row **by construction** — no lookup to
-race, no uniqueness index to remember, and a client holding a URL can compute
-its entity id without asking anybody. `canon()` is the only place an address is
-rewritten, and the plugin calls it in @yaks/graph's `normalize` phase, the
-earliest one, so the id is always minted from the canonical form no matter which
-code path wrote the row.
+`pages()` normalizes URLs before the graph assigns ids. Use an alias or
+`pageEid(url)` when creating a page so repeated records of the same URL update
+one entity. Normalization removes fragments, credentials, recognized tracking
+parameters, and trailing slashes from non-root paths. Other query parameters
+retain their order. These are this package's identity rules; URLs that differ
+only in these ways are treated as one page.
 
-What carries no identity is dropped: a fragment names a spot inside a page,
-campaign parameters name the trip rather than the destination, credentials are
-never part of a page's name, and a trailing slash is a server's habit. Query
-parameters are kept, in the order they arrived. Anything that is not an http(s)
-URL is returned exactly as it came.
+All inputs are trimmed. Invalid and non-HTTP(S) URLs are otherwise left alone by
+`canon()`. Automatic fetching and `POST /page` accept only HTTP(S) addresses.
 
-## A frozen page renders from its own bytes
+## HTML processing
 
-`scrub()` removes every external reference **at freeze time**: scripts and every
-other document a page can embed, `link` tags that are not `data:`, meta refresh,
-inline event handlers, every URL-bearing attribute pointing outside these bytes,
-and `url()` in CSS. That is the mechanism. The Content-Security-Policy header
-sent when the archive is served is defence in depth and nothing more — an
-archive that is mailed, copied, or opened from a file has no header in front of
-it.
+Before saving HTML, `scrub()` parses it with `linkedom` and removes scripts,
+`base`, embedded documents (`iframe`, `frame`, `embed`, `object`), meta refresh,
+and inline event handlers. It removes `link` elements unless their `href` starts
+with `data:`. It also removes external values from the URL attributes listed in
+[scrub.ts](./scrub.ts), including `src`, `href`, `srcset`, and form actions;
+`data:`, fragment, and `about:` values are retained.
 
-It parses the document rather than running regular expressions over it: where an
-attribute's value begins and ends is decided by the HTML parser, not by us.
+CSS `url()` references are emptied except for embedded `data:` values. This is a
+specific set of HTML and CSS transformations, not a complete CSS sanitizer: for
+example, quoted CSS `@import` rules are not removed. Served archives also
+receive a restrictive Content-Security-Policy from `@yaks/blob`; that header is
+not present when someone opens a copied HTML file directly.
+
+`froze(page, html, { blobs, now? })` scrubs and stores the HTML, then returns
+the changes to apply with `{ trusted: true }`. It derives the blob key from the
+stored HTML's SHA-256, so identical stored documents use the same key. It adds
+the HTML title only if the page has no `doc` component.
 
 ## Two ways the bytes arrive
 
-A browser extension or tab posts its own document to `POST /page`. It has three
-things no server has: the address somebody is standing at, the document as it
-looks after login and after scripts ran (refetch a paywalled page and you
-archive the paywall), and the moment. Any other page is fetched afterwards by
-the archiver named in the config, in an effect handler that runs after the
-commit — so a capture that takes thirty seconds is not a request anybody is
-holding open, and a site that is down cannot cause the write to fail.
+With the route module loaded, a browser or extension can post the document it
+already has, including content available only after login or script execution:
 
-Both end up the same way: scrubbed, stored under its own SHA-256 in the server's
-[@yaks/blob](../blob) store, and stamped onto the page entity. `frozen_at` and
-`bytes` are server-owned columns, so no client can claim an archive that does
-not exist.
+```sh
+curl -X POST http://localhost:8000/page \
+  -H 'content-type: application/json' -d '{
+  "url": "https://example.com/article",
+  "title": "An article",
+  "html": "<html><head><title>An article</title></head><body>Saved text</body></html>"
+}'
+```
+
+`url` is required. `title` and `html` are optional. The response is the JSON
+array returned by `graph.apply()`. HTML is scrubbed and stored before its hash
+and a server timestamp are written to the entity. The request cannot set the
+capture timestamp. A supplied title takes precedence over the HTML title when
+the page has no `doc` component; an existing document is preserved.
+
+For URL-only records, the optional `created('web')` effect calls the configured
+archiver after the transaction commits. It skips entities that already have
+`web.bytes` and non-HTTP(S) URLs. A failed capture is reported by the effects
+registry without rolling back the URL record. The effect is awaited, so a slow
+capture can delay the caller even though the transaction has already committed.
+
+Both paths use the same HTML processing and blob storage. No archiver is
+configured by default, so URL-only records remain unarchived until an
+application supplies HTML or arranges a capture.
 
 ## What each entry point exports
 
-Throughout, "the server" means whichever process opened the graph and loaded
-this package.
+The root import `@yaks/page` provides `pageDoc`, `WEB`, `pages()`, `canon()`,
+`pageEid()`, `fetchable()`, `scrub()`, `froze()`, `freezing()`, `archiver()`,
+and `blobsOf()`, plus the types `Scrubbed`, `Archive`, `Keep`, `Capture`,
+`Options`, and `Run`.
 
-| subpath     | what it exports                                                 |
-| ----------- | --------------------------------------------------------------- |
-| `./vocab`   | the `web` component definition                                  |
-| `./rules`   | the plugin: the component, plus canonicalization at `normalize` |
-| `./effects` | a `created(web)` handler that archives a page given its address |
-| `./routes`  | two HTTP endpoints: `POST /page` and `GET /page/<eid>`          |
+A **host** is the process that opened the graph, represented here by an object
+containing the services a function uses. `effects()` and `blobsOf()` need a
+SQLite `sql` driver; `routes()` also needs `graph` and `storage`.
+
+The server loader uses these separate sub-module exports:
+
+| Import               | Exports                                                                                 |
+| -------------------- | --------------------------------------------------------------------------------------- |
+| `@yaks/page/vocab`   | `pageDoc` and `docs`, the `web` vocabulary document and its one-item array.             |
+| `@yaks/page/rules`   | `rules()`, returning the graph plugin and its normalization hook.                       |
+| `@yaks/page/effects` | `effects(host, options)`, returning an archive handler when configured; also `Options`. |
+| `@yaks/page/routes`  | `routes(host, options)`, `PREFIX`, and `Filing` for `POST /page` and `GET /page/<eid>`. |
+
+A plugin entry in a `yak serve` configuration can be:
 
 ```json
 {
@@ -91,35 +161,38 @@ this package.
 }
 ```
 
-`archive` names the external command that turns a live URL into one
-self-contained document. `{url}` in an argument is replaced with the address,
-and where no argument mentions it the address is appended. The document is read
-from the command's **stdout**, so there is no temporary file to name or clean
-up. Name no archiver and nothing is fetched — which is what a graph fed only by
-a browser extension wants.
+`archive.run` names the command and arguments. Each `{url}` in an argument is
+replaced with the URL; if no argument contains it, the URL is appended. The
+command must write HTML to stdout. Nonzero exit status, empty output, or timeout
+fails the capture. The default timeout is 60,000 milliseconds. Install the
+command separately; this package does not include it.
 
-`bytes` is a directory the frozen documents are written to. Leave it out and
-they go in the blob table the server already has: not a second store to
-configure, back up and serve, and `GET /blob/<sha>` serves them like anything
-else. A frozen page inlines every asset and is often megabytes, which is the
-reason to name a directory instead.
+`bytes` selects a directory for archived HTML. Omit it to use the host's SQLite
+blob table, which `blobsOf()` creates if needed. A directory can keep large HTML
+documents outside the graph database. `GET /page/<eid>` reads from the
+configured store in either case. A separately configured `GET /blob/<sha>` route
+can serve the same bytes only if it uses the same store.
 
-`GET /page/<eid>` returns the archived document itself, with @yaks/blob's
-restrictive headers (a sandbox CSP with no scripts, plus `nosniff`), its media
-type, and the two headers that let a reader date a snapshot without querying the
-graph: `Memento-Datetime` is the moment these bytes were what the page said, and
-the `rel="original"` link is the address they were read from (RFC 7089).
+`GET /page/<eid>` returns HTML with a sandbox Content-Security-Policy that
+blocks scripts, `X-Content-Type-Options: nosniff`, and `Cache-Control: no-cache`
+because a later capture can replace the page's archive reference. It adds
+`Memento-Datetime` from `frozen_at` and `Link: <url>; rel="original"` from
+`url`, using the archive metadata headers defined by RFC 7089. Missing pages,
+missing archives, and invalid entity ids return 404.
 
 ## What this package does not own
 
-The title and prose are `doc{title, body}` ([@yaks/doc](../doc)), loaded beside
-this package rather than redefined in it — a vocabulary refuses a component
-declared twice. The bytes belong to [@yaks/blob](../blob). A record of source
-code rather than of a web page — paths plus a git sha — is the `anchor`
-component, which [@yaks/git](../git) owns.
+Load [@yaks/doc](../doc/README.md) alongside this package for
+`doc{title, body}`; it is not redeclared here. [@yaks/blob](../blob/README.md)
+supplies byte storage. Source-code references with paths and a Git commit id use
+`anchor` from [@yaks/git](../git/README.md).
 
 ## Compatibility
 
-`./vocab` is a JSON document with no runtime calls and loads anywhere. The rest
-needs a filesystem and the ability to start a process: the archiver is an
-external command, and `./routes` reads and writes the server's blob store.
+`@yaks/page/vocab` exports a vocabulary document and has no runtime calls. The
+configured archiver uses `Deno.Command`; the configured stores use SQLite or the
+filesystem. The root import includes these server helpers and is not covered by
+the package's browser type check, which checks only `./vocab`. URL
+normalization, HTML processing, and capture composition do not themselves start
+processes; `freezing()` accepts an application-supplied `Archive` function and
+blob store.
