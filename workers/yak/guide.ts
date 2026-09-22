@@ -337,18 +337,18 @@ you tried, once, and it reaches the people who run yaks.app by mail.`
 export let INSTRUCTIONS = instructions()
 
 /**
- * The way back out of a delete in this store, appended to `graph_apply`'s
+ * How a delete in this store is undone, appended to `graph_apply`'s
  * description (@yaks/mcp `CoreOpts.undo`, T-34509).
  *
  * The shared graph tools in @yaks/mcp cannot know it — a graph is a graph —
  * and it is exactly what an agent wants to know at the moment it is deciding
- * whether to dare, which is the moment it is reading that tool's description
- * and not this guide.
+ * whether to risk a delete, which is the moment it is reading that tool's
+ * description and not this guide.
  */
 export let UNDO =
-  'Nothing deleted here is lost by a simple mistake. The way back: ' +
+  'Nothing deleted here is lost by a simple mistake. To undo: ' +
   'store_restore puts everything this store holds back to any moment in the ' +
-  'last 30 days, and called with no time it says the window and every ' +
+  'last 30 days, and called with no time it reports the window and every ' +
   'restore already made.'
 
 export let whole = (env: Host = {}) => url(env, '/guide.md')

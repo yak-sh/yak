@@ -286,7 +286,7 @@ let whoami = async (ctx: Ctx) => {
 }
 
 let HOSTNAME = str(
-  'the domain, whole and as it will be typed into a browser — ' +
+  'the full domain, as it will be typed into a browser: ' +
     'herbusiness.com, or www.herbusiness.com. No scheme and no path',
 )
 
@@ -310,11 +310,11 @@ let ACCESS = {
   type: 'string',
   enum: [...appAccess],
   description:
-    "who may read and write the app's data: public (the default) — anyone " +
+    "who may read and write the app's data: public (the default), anyone " +
     'with the link reads it, the person and whoever they invite write it; ' +
-    'open — anyone with the link writes too, which is what a vote page, a ' +
-    'shared list or a signup sheet needs; private — nobody but the person ' +
-    'and whoever they invite, either way',
+    'open, anyone with the link writes too, which is what a vote page, a ' +
+    'shared list or a signup sheet needs; private, nobody but the person ' +
+    'and whoever they invite may read or write',
 }
 
 let ROLES: Role[] = ['owner', 'editor', 'viewer']
@@ -1117,9 +1117,9 @@ let laid = async (blobs: Blobs, from: string, onto: string) => {
 // two tools that would drift.
 
 let FORGET = str(
-  'an address this has LEFT, to stop it redirecting and let it be taken ' +
-    'again — never the address it is at now. Only when the person has said ' +
-    'they are done with it',
+  'an address this has already moved away from, to stop it redirecting ' +
+    'and let it be taken again; never the current address. Only when the ' +
+    'person has said they are done with it',
 )
 
 /** Whether an address is one this row has actually left. A refusal rather than
@@ -1757,7 +1757,7 @@ let OURS: Row[] = [
         forever: {
           type: 'boolean',
           description:
-            'true to mail a link that erases the space on the spot instead ' +
+            'true to email a link that erases the space at once instead ' +
             'of trashing it: its apps, everything they saved, their files ' +
             'and its address, all gone, with no restore. Only when the ' +
             'person has said they mean exactly that',
@@ -1877,8 +1877,8 @@ let OURS: Row[] = [
           type: 'boolean',
           description:
             'true to stop selling through this space: the Stripe account is ' +
-            'left alone and untouched, and no app here can charge on it any ' +
-            'more. Connecting again is one call',
+            'left untouched, and no app here can charge on it any more. ' +
+            'Connecting again is one call',
         },
       },
     },
@@ -2016,13 +2016,13 @@ let OURS: Row[] = [
           type: 'string',
           enum: [...OPS],
           description:
-            'what to do; leave it out when passing files, which is a write',
+            'the operation; leave it out when passing files, which is a write',
         },
         path: str('the file path, e.g. index.html'),
         content: str('the file text, for write'),
         base64: str(
-          'the file BYTES, base64, instead of content — for a file that is ' +
-            'not text, such as the .wasm a worker.js imports',
+          'the file bytes, base64-encoded, instead of content: for a file ' +
+            'that is not text, such as the .wasm a worker.js imports',
         ),
         find: str(
           'for patch: the exact text to replace, which must appear exactly ' +
@@ -2033,16 +2033,17 @@ let OURS: Row[] = [
             'text',
         ),
         url: str(
-          'for fetch: the https address whose body is written to path — a ' +
-            'library vendored into the app rather than transcribed',
+          'for fetch: the https URL whose response body is written to ' +
+            'path, which vendors a library into the app without transcribing ' +
+            'it',
         ),
         sha: str(
-          'for restore: the sha256 of the version to put back, off op ' +
-            'history. Left out with at, the newest is put back',
+          'for restore: the sha256 of the version to put back, from op ' +
+            'history. With both sha and at left out, the newest is put back',
         ),
         at: str(
-          'for restore: put the file back to what it was at this moment — ' +
-            '2026-09-06T14:20:00Z',
+          'for restore: put the file back to what it was at this moment, ' +
+            'e.g. 2026-09-06T14:20:00Z',
         ),
         files: {
           type: 'array',
@@ -2056,7 +2057,7 @@ let OURS: Row[] = [
             required: ['path'],
           },
           description: 'several files to write at once, instead of ' +
-            'path and content — the whole app in one call',
+            'path and content: the whole app in one call',
         },
       },
       required: ['app'],
@@ -2279,10 +2280,10 @@ let OURS: Row[] = [
       properties: {
         space: SPACE,
         cmd: str('the command, run in a shell, e.g. cargo build --release'),
-        cwd: str(`where to run it (default ${CWD})`),
+        cwd: str(`the directory to run it in (default ${CWD})`),
         timeout: {
           type: 'number',
-          description: `seconds to allow it (default and most, ${
+          description: `seconds to allow it (default and maximum, ${
             TIMEOUT / 1000
           })`,
         },
@@ -2367,7 +2368,8 @@ let OURS: Row[] = [
         paths: {
           type: 'array',
           items: str('a path or glob in the sandbox, e.g. pkg/*.wasm'),
-          description: 'the files to copy in; a glob may name several',
+          description: 'the files to copy into the app; a glob may name ' +
+            'several',
         },
       },
       required: ['app', 'paths'],
@@ -2451,19 +2453,19 @@ let OURS: Row[] = [
         space: SPACE,
         app: APP,
         path: str(
-          'the file to load — data/cities.json, data/cities.csv — or a ' +
+          'the file to load (data/cities.json, data/cities.csv) or a ' +
             'folder, which loads every *.json and *.csv under it',
         ),
         as: str(
-          'for a CSV: the component one row becomes — "city", or a platform ' +
-            'word like "task". Its columns are the headers',
+          'for a CSV: the component one row becomes, "city", or a platform ' +
+            'component such as "task". Its columns are the headers',
         ),
         map: {
           type: 'object',
           additionalProperties: { type: 'string' },
           description:
             'headers that do not match a column, renamed: {"Serves how ' +
-            'many": "serves"}. A header that matches needs no entry',
+            'many": "serves"}. A header that already matches needs no entry',
         },
       },
       required: ['app', 'path'],
@@ -2562,8 +2564,8 @@ let OURS: Row[] = [
         version: {
           type: 'number',
           description:
-            'the version to go back to, off app_versions; left out, the one ' +
-            'before the live one',
+            'the version to go back to, from app_versions; left out, the ' +
+            'one before the live one',
         },
       },
       required: ['app'],
@@ -2624,9 +2626,9 @@ let OURS: Row[] = [
         space: SPACE,
         app: APP,
         at: str(
-          'the moment to put the store back to, within the last 30 days — ' +
-            '2026-09-06T14:20:00Z. Left out, this answers the window and the ' +
-            'restores already made instead of restoring anything',
+          'the moment to put the store back to, within the last 30 days, ' +
+            'e.g. 2026-09-06T14:20:00Z. Left out, this reports the window ' +
+            'and the restores already made instead of restoring anything',
         ),
       },
       required: ['app'],
@@ -2689,8 +2691,8 @@ let OURS: Row[] = [
         home: {
           type: 'boolean',
           description:
-            'true to make this app what <space>.yaks.app/ opens — it is ' +
-            'served AT that address, and its own /<app>/ forwards there; ' +
+            'true to make this app what <space>.yaks.app/ opens: it is ' +
+            'served at that address, and its own /<app>/ redirects there; ' +
             'false to leave the space with no front page, where that ' +
             'address lists the apps a visitor may open',
         },
@@ -2698,27 +2700,28 @@ let OURS: Row[] = [
           type: 'array',
           items: { type: 'string' },
           description:
-            'the path globs the front page answers before the apps that own ' +
+            'the path globs the front page handles before the apps that own ' +
             'them, e.g. ["/recipes/*", "/*/print"]; [] to route nothing ' +
             'first. Only the front page routes, so pass home: true with it ' +
-            'unless this app is already one. The platform keeps /login, ' +
-            "/connect, /mcp and every app's /api/ door, so a glob naming one " +
-            'is refused',
+            'unless this app is already the front page. The platform ' +
+            "reserves /login, /connect, /mcp and every app's /api/ " +
+            'endpoints, so a glob naming one is refused',
         },
         gallery: {
           type: 'boolean',
-          description: 'true to put this published app forward for ' +
-            'https://yaks.app/gallery — it appears there once yaks.app ' +
-            'agrees; false to take it off, or withdraw the ask, at once',
+          description: 'true to submit this published app for ' +
+            'https://yaks.app/gallery; it appears there once yaks.app ' +
+            'approves it. false to remove it, or withdraw the submission, ' +
+            'at once',
         },
         theme_color: str(
-          "the browser/status-bar chrome colour around the app's installed " +
-            'window, as CSS — a hex triple like #4c773e is safest. Unset, ' +
-            "the app wears the platform's own",
+          "the browser or status-bar colour around the app's installed " +
+            'window, as CSS; a hex colour like #4c773e is safest. Unset, ' +
+            "the platform's own colour is used",
         ),
         background_color: str(
           "the phone's splash-screen colour while the app opens, as CSS. " +
-            "Unset, the app wears the platform's own",
+            "Unset, the platform's own colour is used",
         ),
         forget: FORGET,
       },
@@ -2910,7 +2913,7 @@ let OURS: Row[] = [
         space: SPACE,
         app: APP,
         name: str('the name the worker reads it as, e.g. WEATHER_KEY'),
-        value: str('the secret itself — it is never answered back'),
+        value: str('the secret itself; it is never returned by any tool'),
       },
       required: ['app', 'name', 'value'],
     },
@@ -2982,7 +2985,7 @@ let OURS: Row[] = [
         forever: {
           type: 'boolean',
           description:
-            'true to erase it now instead of trashing it: its files, ' +
+            'true to erase the app now instead of trashing it: its files, ' +
             'everything it saved and its address, all gone, with no restore. ' +
             'Only when the person has said they mean exactly that',
         },
@@ -3080,18 +3083,18 @@ let OURS: Row[] = [
           type: 'array',
           items: { type: 'string' },
           description:
-            'ids of breaks that are fixed — each is archived and stops ' +
-            'being listed. An id off a line here, or an eid.',
+            'ids of errors that are fixed; each is archived and stops ' +
+            'being listed. An id from a line of this listing, or an eid.',
         },
         seen: {
           type: 'array',
           items: { type: 'string' },
           description:
-            'breaks you are done with, whether or not you fixed them — the ' +
-            'same archiving `fixed` does, said without listing ids. `all`, ' +
-            '`v3` for everything up to and including that deploy, or a day ' +
-            '(2026-08-14) or an instant for everything at or before it. Ids ' +
-            'work here too, so one call can mix them.',
+            'errors you are done with, whether or not you fixed them: the ' +
+            'same archiving `fixed` does, without listing ids. `all`, ' +
+            '`v3` for everything up to and including that deploy, or a date ' +
+            '(2026-08-14) or a timestamp for everything at or before it. ' +
+            'Ids work here too, so one call can mix them.',
         },
       },
       required: ['app'],
@@ -3251,8 +3254,9 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         app: str(
-          'one app to ask about — its slug, or <space>/<app> where two ' +
-            'spaces spell one. Leave it out for every app they can reach',
+          'one app to ask about: its slug, or <space>/<app> when two of ' +
+            'their spaces have an app with that slug. Leave it out for ' +
+            'every app they can reach',
         ),
       },
     },
@@ -3306,18 +3310,18 @@ let OURS: Row[] = [
     input: {
       type: 'object',
       properties: {
-        name: str('the command, as commands lists it — add_recipe'),
+        name: str('the command name, as commands lists it, e.g. add_recipe'),
         app: str(
-          'the app whose command it is — its slug, or <space>/<app> where ' +
-            'two spaces spell one. Leave it out where only one app has it',
+          'the app whose command it is: its slug, or <space>/<app> when ' +
+            'two of their spaces have an app with that slug. Leave it out ' +
+            'when only one app has the command',
         ),
         // Open on purpose: the arguments are the app's own, and a schema that
         // spelled them would be this tool's shape moving every time somebody
         // deployed — which is the thing a snapshotted tool list cannot have.
         args: {
           type: 'object',
-          description:
-            "the command's own arguments, as commands says it takes them",
+          description: "the command's own arguments, as commands lists them",
           additionalProperties: true,
         },
       },
@@ -3576,18 +3580,19 @@ let OURS: Row[] = [
         space: SPACE,
         app: APP,
         name: str(
-          'the name others install it by, across the whole platform — the ' +
-            "app's own slug the first time, and after that whatever it is " +
-            'already offered as, unless you say otherwise',
+          'the name others install it by, unique across the whole ' +
+            "platform: the app's own slug the first time, and after that " +
+            'the name it is already published under, unless you pass ' +
+            'another',
         ),
-        about: str('one line saying what it is, for someone browsing'),
+        about: str('one line saying what the app is, for someone browsing'),
         gallery: {
           type: 'boolean',
           description:
-            'true to put it forward for https://yaks.app/gallery, the ' +
-            'public page of apps made here. Only when the person has said ' +
-            'they want it shown. It goes on the page once yaks.app agrees; ' +
-            'app_set(app, gallery: false) takes it back at any time',
+            'true to submit it for https://yaks.app/gallery, the public ' +
+            'page of apps made here. Only when the person has said they ' +
+            'want it shown. It appears there once yaks.app approves it; ' +
+            'app_set(app, gallery: false) withdraws it at any time',
         },
       },
       required: ['app'],
@@ -3713,8 +3718,8 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         words: str(
-          'search the offers — a word or two of what it should be about. ' +
-            'Leave it out for all of them',
+          'words to search the published apps by, matched against name, ' +
+            'title and description. Leave it out to list all of them',
         ),
       },
     },
@@ -3753,8 +3758,8 @@ let OURS: Row[] = [
         space: SPACE,
         name: str('the published name, from app_published'),
         as: str(
-          "the address to put it at in their space — the app's own slug, " +
-            'the one app_published prints, unless you say otherwise',
+          "the slug to install it at in their space; the app's own slug, " +
+            'the one app_published prints, unless you pass another',
         ),
       },
       required: ['name'],
@@ -3925,18 +3930,20 @@ let OURS: Row[] = [
         space: SPACE,
         email: str('their email address'),
         app: str(
-          'the app they are being invited to, and the ONLY one they get: ' +
-            'they hold this app and nothing else in the space. Leave it out ' +
-            'to seat them on the space, which reaches every app in it',
+          'the app they are being invited to, and the only one they get: ' +
+            'they have access to this app and nothing else in the space. ' +
+            'Leave it out to add them to the space, which reaches every app ' +
+            'in it',
         ),
         name: str(
-          'what to call them — the name their apps show beside what they ' +
-            'write. Leave it out and the first sign-in asks them',
+          'what to call them: the name their apps show beside what they ' +
+            'write. Leave it out and they are asked at their first sign-in',
         ),
         note: str(
-          "the person's own message to them, carried at the top of the " +
-            'letter as written and quoted as theirs — a line or two, not a ' +
-            'newsletter. Leave it out and the letter is the invitation alone',
+          "the person's own message to them, placed at the top of the " +
+            'invitation email as written and quoted as theirs; a line or ' +
+            'two, not a newsletter. Leave it out and the email is the ' +
+            'invitation alone',
         ),
         role: {
           type: 'string',
@@ -4078,8 +4085,8 @@ let OURS: Row[] = [
         space: SPACE,
         email: str('their email address'),
         app: str(
-          'the app they were a guest of — takes that one app back and leaves ' +
-            'the rest. Leave it out to take a seat on the space back',
+          'the app they were invited to: removes them from that one app ' +
+            'and leaves the rest. Leave it out to remove them from the space',
         ),
       },
       required: ['email'],
@@ -4144,16 +4151,16 @@ let OURS: Row[] = [
       properties: {
         hours: {
           type: 'number',
-          description: `how long it lasts, in hours — ${DEFAULT} by ` +
+          description: `how long it lasts, in hours: ${DEFAULT} by ` +
             `default, ${HOURS} at most`,
         },
         space: str(
-          'narrow it to this one space: a grant naming one reaches that ' +
+          'limit it to this one space: a token naming one reaches that ' +
             "space's apps and nothing else of the person's",
         ),
         revoke: str(
-          'take a grant back instead of minting one: its id, or the front of ' +
-            'one. Nothing else here is read when this is given',
+          'revoke a token instead of creating one: its id, or a prefix of ' +
+            'one. Every other argument is ignored when this is given',
         ),
       },
     },
@@ -4222,8 +4229,8 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         text: str(
-          'the feedback itself — what is wrong, clumsy, missing, wished for ' +
-            'or good: the words the person used, and what you tried',
+          'the feedback itself: what is wrong, clumsy, missing, wished for ' +
+            'or good, in the words the person used, and what you tried',
         ),
         app: str(
           'the app they were looking at when it came up, if there was one',
@@ -4350,15 +4357,15 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         page: str(
-          `the page to read — one of ${SLUGS}. Leave it out for the map, ` +
-            'which is what to read first',
+          `the page to read, one of ${SLUGS}. Leave it out for the ` +
+            'overview, which is what to read first',
         ),
       },
     },
     output: {
       type: 'object',
       properties: {
-        page: str('the page answered — a slug, or `guide` for the map'),
+        page: str('the page returned: a slug, or `guide` for the overview'),
         markdown: str('the page itself'),
       },
       required: ['page', 'markdown'],
@@ -4429,12 +4436,12 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         words: str(
-          'what to look for, in the words the person used — matched against ' +
+          'what to look for, in the words the person used; matched against ' +
             "each listing's name and the line its maker wrote about it",
         ),
         limit: {
           type: 'number',
-          description: 'how many at most (10 by default, 25 at the top)',
+          description: 'how many results at most (10 by default, 25 maximum)',
         },
       },
     },

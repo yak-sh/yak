@@ -34,12 +34,12 @@ import { type Ctx, inApp } from './tools.ts'
  * decides which mailbox somebody meant.
  */
 export let scope = (env: Host = {}) =>
-  'These are the letters an app received at its yaks.app address ' +
+  'These are the emails an app received at its yaks.app address ' +
   `(<space>.<app>@${
     apex(env)
-  }); not a person's own mailbox — mail asked about ` +
-  'with no app named is their own mail account, which whatever mail tool ' +
-  'they have connected answers.'
+  }), not a person's own mailbox: a question about mail ` +
+  'with no app named is about their own mail account, which whatever mail ' +
+  'tool they have connected answers.'
 
 export let SCOPE = scope()
 
@@ -80,10 +80,10 @@ let newest = (a: Bundle, b: Bundle) =>
   (b.entity?.num ?? 0) - (a.entity?.num ?? 0)
 
 let address = (env: Host) =>
-  `the app slug — its mailbox is <space>.<app>@${apex(env)}`
+  `the app slug; its email address is <space>.<app>@${apex(env)}`
 
 let SPACE = "the space the app is in; leave it out and the person's own is " +
-  'used, as everywhere else'
+  'used, as with every other tool'
 
 // The recipient an address already names in this app, if any. A letter is
 // addressed to an ENTITY here, so writing a second row for a person the app
@@ -105,13 +105,13 @@ let known = async (
 let listing = (ctx: Ctx): Tool => ({
   name: 'mail_list',
   readOnly: true,
-  title: "An app's letters",
+  title: "List an app's email",
   description:
-    `Every letter an app received at its own address, and every one it sent ` +
-    `from it, newest first, as whole bundles carrying what became of each — ` +
+    `Every email an app received at its own address, and every one it sent ` +
+    `from it, newest first, as whole bundles, each carrying its outcome: ` +
     `delivered{at, via} or bounced{at, reason}. ${
       scope(ctx.env)
-    } direction takes one ` +
+    } direction selects one ` +
     `side: received, sent, or all (the default).`,
   input: {
     app: z.string().describe(address(ctx.env)),
@@ -138,34 +138,33 @@ let listing = (ctx: Ctx): Tool => ({
 
 let sending = (ctx: Ctx): Tool => ({
   name: 'mail_send',
-  title: "Send from an app's address",
-  // A letter to a stranger's inbox: it leaves the platform, and no second
+  title: "Send email from an app's address",
+  // An email to a stranger's inbox: it leaves the platform, and no second
   // call takes it back.
   destructive: true,
   openWorld: true,
   description:
-    `Send one letter from an app's own address to one recipient — an email ` +
-    `address, or the eid of an entity in the app already wearing ` +
-    `email{address}, which is what later letters to the same person hang ` +
-    `off. It writes the recipient where the app has not got them yet, then ` +
-    `the letter beside them, and answers the letter as applied; whether it ` +
-    `left lands on that same entity a moment later as delivered or bounced, ` +
-    `so read it back with mail_list. The body is markdown. ${
-      scope(ctx.env)
-    } Asking ` +
-    `to send takes a member who may write, even in an app anyone can write ` +
-    `to. The way back: none — a letter that has left cannot be recalled, ` +
-    `which makes this one of the very few things here a mistake is final in. ` +
-    `Read it back to the person before you send it.`,
+    `Send one email from an app's own address to one recipient: an email ` +
+    `address, or the eid of an entity in the app that already carries ` +
+    `email{address}, which is the entity later emails to the same person ` +
+    `are attached to. It creates the recipient entity if the app does not ` +
+    `have one yet, then the email entity beside it, and returns the email as ` +
+    `written; whether it was delivered is recorded on the email entity a ` +
+    `moment later as delivered or bounced, so read it back with mail_list. ` +
+    `The body is markdown. ${scope(ctx.env)} Sending ` +
+    `requires a member who may write, even in an app anyone can write to. ` +
+    `Cannot be undone: an email that has been sent cannot be recalled, ` +
+    `which makes this one of the very few things here where a mistake is ` +
+    `final. Read it back to the person before you send it.`,
   input: {
     app: z.string().describe(address(ctx.env)),
     space: z.string().optional().describe(SPACE),
     to: z.string().describe(
       'the recipient: an email address, or the eid of an entity in the app ' +
-        'that wears email{address}',
+        'that carries email{address}',
     ),
     title: z.string().describe('the subject line'),
-    body: z.string().describe('the words, as markdown'),
+    body: z.string().describe('the body, as markdown'),
   },
   run: async (_, c) => {
     let args = c.args

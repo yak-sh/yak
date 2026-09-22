@@ -149,7 +149,7 @@ slow(
       // both directories check them mechanically. hints_test.ts pins which
       // tool is which; here is the proof they survive the wire — the audit
       // found `about` reaching a client as a bare name and nothing else.
-      // And every destructive one arrives having said its way back (T-34509).
+      // And every destructive one arrives saying how it is undone (T-34509).
       // hints_test.ts pins the words; what is proved here is that they reach a
       // client — including graph_apply's, which the generic package cannot
       // know and this door supplies (@yaks/mcp `CoreOpts.undo`).
@@ -159,8 +159,8 @@ slow(
         if (!hints?.destructiveHint) continue
         assertStringIncludes(
           t.description ?? '',
-          'way back',
-          `${t.name} reached the client naming no way back`,
+          'undo',
+          `${t.name} reached the client without saying how it is undone`,
         )
       }
       assertStringIncludes(
@@ -259,7 +259,7 @@ slow(
           'app_publish',
           'app_install',
           'nothing shared but',
-          'pinned to the version it took',
+          'pinned to the version it was installed at',
           // A row carries the components its filter names (T-32699), which is
           // what a page draws from — the one thing that silently emptied a
           // working page's titles (T-32953).
@@ -270,9 +270,9 @@ slow(
         tools.find((t: { name: string }) => t.name == name).description
       assertStringIncludes(says('app_files'), './api/client.js')
       assertStringIncludes(says('app_files'), 'never localStorage')
-      // The generic tier says its own grammar (@yaks/mcp): a query LINE in,
-      // whole bundles out, and a batch of bundles to write.
-      assertStringIncludes(says('graph_query'), 'query LINE')
+      // The generic tier states its own grammar (@yaks/mcp): a query string
+      // in, whole bundles out, and a batch of bundles to write.
+      assertStringIncludes(says('graph_query'), 'query STRING')
       assertStringIncludes(says('graph_apply'), 'BUNDLES')
       // Both mail tools say WHICH mailbox they are, because the tool list is
       // where a model with a mail connector beside this one decides what
