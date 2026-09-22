@@ -244,7 +244,7 @@ touches only that row:
         }
         let sent = await req.json()
         let code = String(sent.code ?? '')
-        // THE CHECK COMES FIRST. Nothing below it may run without it.
+        // The check comes first. Nothing below it may run without it.
         if (!code) return new Response('no code', { status: 403 })
         let r = await env.APP.fetch(
           '/query?.household.code=' + await hashed(code) + '&.doc?&limit=1',

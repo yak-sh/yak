@@ -30,7 +30,7 @@ A space can have both at once, and an app of it can still have a domain of its
 own — at that domain the app is the root, at the space's domain it is a
 directory.
 
-A domain is aimed at the space or the app ITSELF, never at the `.yaks.app`
+A domain is aimed at the space or the app itself, never at the `.yaks.app`
 address it happens to have. So `space_set(slug)` or `app_set(app, slug)` moves
 the `.yaks.app` address and the domain keeps serving exactly what it served
 before, with nothing to re-attach and no DNS to change

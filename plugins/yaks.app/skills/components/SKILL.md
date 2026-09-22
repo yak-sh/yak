@@ -40,7 +40,7 @@ alone; `column: null` clears one; `comp: null` takes the whole component off;
 ## The platform's vocabulary
 
 These components mean the same thing in every store on the platform. Each
-heading gives the columns you may WRITE; a few carry server-set columns you can
+heading gives the columns you may write; a few carry server-set columns you can
 read but never write, and those are named beneath.
 
 **`doc`** — `title` (text), `body` (text). The words a person reads, and what
@@ -107,7 +107,7 @@ target, so a deleted recipe takes its thread with it.
     let thread = await query(`.comment.target=${recipe}&.doc?`)
 
 **`alias`** — `name` (text). A name of your own for an entity, worth as much as
-its eid. Write it beside a `$` eid and the write becomes IDEMPOTENT: the same
+its eid. Write it beside a `$` eid and the write becomes idempotent: the same
 name written again patches the entity that already holds it, so a seed, an
 import, or a page that saves itself every time it opens writes one row rather
 than a pile.
@@ -142,7 +142,7 @@ and `.archived=` is "everything not archived".
     let open = await query('.recipe!&.archived=')
 
 **`favorite`** — no writable columns; the store sets `at` (time). A plain star,
-one stamp per ENTITY rather than one per person: it means "this app has starred
+one stamp per entity rather than one per person: it means "this app has starred
 this", not "you have".
 
 **`web`** — `url` (url). An address out on the web: a bookmark, a source, the
@@ -151,7 +151,7 @@ page a recipe was copied from. Also carries a server-set `frozen_at`.
     await apply({ entity: { eid: '$b' }, doc: { title: 'The recipe' },
       web: { url: 'https://example.com/chana' } })
 
-**`artifact`** — `size` (number). A byte COUNT, not the bytes. It sits on the
+**`artifact`** — `size` (number). A byte count, not the bytes. It sits on the
 content-addressed entity the bytes live at, so it is how big a file is.
 
 **`attachment`** — `artifact` (eid), `media_type` (text), `name` (text). One
@@ -160,7 +160,7 @@ is what `./api/blob/<eid>` is built from; deleting the bytes takes the row with
 them.
 
 **`image`** — `w` (number), `h` (number). What a picture measures, on the
-ARTIFACT itself, not on the row that points at it. `upload` reads it off the
+artifact itself, not on the row that points at it. `upload` reads it off the
 file's own header (png, jpeg, gif, webp), so a wall can hold a photo's space
 open before its bytes arrive.
 
@@ -231,7 +231,7 @@ and content-addressed bodies each need machinery a store cannot plant from a
 name alone — a foreign key, a set to enforce, a hash.
 
 **No eid column of your own**, then: a component of yours cannot point at
-another entity by declaring one. Where a row of yours needs to be ABOUT another
+another entity by declaring one. Where a row of yours needs to be about another
 row, the platform already has a component for it — `comment.target` is an eid
 aimed at any entity, and an edge is the other way to record it. A history
 component (a chore's ticks, a diary's plantings) is the case that wants this;
@@ -318,7 +318,7 @@ the `.yml`:
           again: { type: boolean }
 
 A component name is `a-z`, then `a-z0-9_`, up to 40 characters, and may not be
-one of the platform's own component names. A COLUMN name follows the same rules
+one of the platform's own component names. A column name follows the same rules
 and is checked against nothing else — only `entity` and `eid` are refused, since
 those name the row itself. So `recipe.doc` is a legal column; it just reads like
 a component, and `.recipe.doc` addresses it rather than the doc beside it.
@@ -413,7 +413,7 @@ The rule is short: **columns only ever arrive.**
       yourself, a row at a time with graph_query then graph_apply. Nothing is
       migrated behind you.
 
-  That line is what makes a RENAME visible. Change `minutes` to `mins` and you
+  That line is what makes a rename visible. Change `minutes` to `mins` and you
   have two columns: the new one arrives empty, the old one keeps every row
   already written, and rows read back as `"minutes": 46, "mins": null` until you
   move them yourself.
@@ -472,7 +472,7 @@ better in a filter, and the filter is where you meet it most.
 person reads and search should find.** A recipe's method, a note's prose, a
 book's blurb.
 
-Reach for a COLUMN when the value is one the app will filter, sort, count or
+Reach for a column when the value is one the app will filter, sort, count or
 draw as a field — `serves`, `minutes`, `rating`, `started`. Those are the things
 `.recipe.minutes<=30` can ask about; the same number written into `body` is
 invisible to every query.
@@ -487,7 +487,7 @@ Do not put in a column what the graph already holds. Who wrote it is
 `archived`; what it belongs to is `filed.project` or a `contains` edge. A second
 copy in a column of your own only drifts.
 
-The exception is a DATE the row itself has. `created.at` is when the store saw
+The exception is a date the row itself has. `created.at` is when the store saw
 the row, which is the right answer for a page someone is typing into and the
 wrong one for anything imported or seeded, where it reads today for something
 that happened in April. When the date is part of what the row IS, it is a `time`
@@ -510,7 +510,7 @@ the columns are born together and die together — `image` is `w` and `h`.
 
 ## Edges are relations, not columns
 
-A relation between two entities is not a column on either. It is an EDGE — a
+A relation between two entities is not a column on either. It is an edge — a
 record of its own, naming the relation and the entity at the far end:
 
     await apply({ entity: { eid: menu },

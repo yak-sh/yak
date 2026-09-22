@@ -13,7 +13,7 @@ several stores.
 
 ## The eid is the thing
 
-An eid is a uuid the CLIENT mints, and it means the same entity in every store
+An eid is a uuid the client mints, and it means the same entity in every store
 on the platform. Nothing registers it, nothing hands it out, nothing has to
 agree. A reading list saves the book; a lending app, on the same eid, saves who
 has it. They are one entity with two components, one per store — no copy, no
@@ -34,7 +34,7 @@ things by eid across apps, and by num only inside one.
 
 ## Which app a component lives in
 
-A component lives with the app that DECLARES it, so nothing has to be
+A component lives with the app that declares it, so nothing has to be
 negotiated. `book` is the reading list's component wherever it is written;
 `loan` is the lending app's. A write is split up by component and each part is
 sent to the app that owns that component.
@@ -47,14 +47,14 @@ The platform's shared components — `doc`, `comment`, `task`, `image`, `archive
 3. the app whose own component is in the same bundle — a title beside a recipe
    is the recipe's title, which is what makes writing a new entity one call.
 
-`$app` is set on the BUNDLE rather than on the call, because the bundles in one
+`$app` is set on the bundle rather than on the call, because the bundles in one
 write may land in several apps at once — it is the bundle that goes to one app,
 not the whole write. When none of the three decides it, the write is refused
 rather than guessed:
 
     which app should doc go in? say $app on the bundle — reading-list, lending
 
-Every part is checked in its own store BEFORE any of them commits, so a refusal
+Every part is checked in its own store before any of them commits, so a refusal
 in one leaves the others unwritten. A `$alias` is minted once, when the write
 arrives, so a bundle landing in two stores lands under one eid.
 
@@ -66,8 +66,8 @@ arrives, so a bundle landing in two stores lands under one eid.
 ## One component, one home
 
 Declare `book` in a second app of the same space and nothing is planted twice.
-The first app in the space to declare a component is its HOME; a later manifest
-naming it is a use, not a second declaration. The deploy reports that:
+The first app in the space to declare a component is its _home_; a later
+manifest naming it is a use, not a second declaration. The deploy reports that:
 
     book lives in reading-list; this app reads and writes it there
     components: loan
@@ -82,7 +82,7 @@ refusal, and the rows are all in one place:
     graph_query { app: 'reading-list', filter: '.book!' }
     → both books, however they were written
 
-A column the borrower adds grows the HOME's table, additively, and is then
+A column the borrower adds grows the home's table, additively, and is then
 writable from either app:
 
     lending/vocab.json: { "$defs": {
@@ -166,7 +166,7 @@ neighbour grants anything.
 ## `graph_query` with no app named
 
 Name an app and you get that app's own answer, untouched. Leave `app` out and
-the question is asked of EVERY app in reach — every app the person may read, in
+the question is asked of every app in reach — every app the person may read, in
 every space they belong to — and answered as one bundle per entity.
 
     graph_query { filter: '.book!&.loan?' }
@@ -182,11 +182,11 @@ every space they belong to — and answered as one bundle per entity.
   that actually spans two apps, which is where you need it: to write one
   component back, you need to know whose it is.
 - `kind` is one of the app's own components, never a platform one — and when a
-  row carries components from two apps, the one the filter REQUIRED wins, so
+  row carries components from two apps, the one the filter required wins, so
   `.book!&.loan?` and `.loan?&.book!` both return books.
-- `.count!` counts ENTITIES, not rows: summing each store's own count would
+- `.count!` counts _entities_, not rows: summing each store's own count would
   count a spanning entity twice.
-- `limit=` bounds each PART before the parts are combined, so a mixed filter's
+- `limit=` bounds each part before the parts are combined, so a mixed filter's
   window is the newest of each side, then the newest of what they had in common.
 - `.distinct` and `.tally` read one app at a time, and refuse when no app is
   named: name one with `app`, or ask for the rows and reduce them yourself.

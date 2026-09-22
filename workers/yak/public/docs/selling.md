@@ -57,7 +57,7 @@ Plus is required for setup and new checkout sessions. After a downgrade,
 existing orders, refunds and disputes still update, and the Stripe account stays
 connected. See <https://yaks.app/pricing> for plans.
 
-Once per SPACE, not per app: `space_sell`, or the button on the space's own
+Once per space, not per app: `space_sell`, or the button on the space's own
 page. It opens Stripe's own onboarding — their business details, their bank
 account — and hands them back when it is done. Stripe decides when they are
 ready, and the space knows it as `stripe.charges_enabled`.
@@ -114,7 +114,7 @@ The page draws them out of the store like anything else:
 
 Same origin, under the app's own `/api/`, so a page reaches it with an ordinary
 `fetch` and an app's `worker.js` reaches it through `env.STORE`. It is callable
-by a GUEST — the person buying has no yaks.app account and never will — which is
+by a guest — the person buying has no yaks.app account and never will — which is
 the whole point of it being the platform's endpoint and not something an app has
 to be trusted with.
 

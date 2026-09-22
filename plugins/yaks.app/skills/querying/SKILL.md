@@ -54,13 +54,13 @@ you so:
     → presence filters end at !: .recipe! — join filters with &:
       .recipe!&.doc!
 
-Your own components must be written QUALIFIED — `.recipe.serves`, never
+Your own components must be written _qualified_ — `.recipe.serves`, never
 `.serves` — so a component you invent can never change what `.title` means in
 somebody else's store. The platform's columns do work bare (`.title~=lemon` is
 `.doc.title~=lemon`), but write the component anyway: it reads better, and it
 never becomes ambiguous.
 
-An EMPTY filter selects nothing. There is no "everything" — `query('')` and a
+An empty filter selects nothing. There is no "everything" — `query('')` and a
 bare `query('limit=50')` both return `[]`. To list what you saved, name a
 component those rows have: `.doc!`, `.recipe!`.
 
@@ -95,7 +95,7 @@ rows.
 
 ## What an answer carries
 
-**A row carries only the components its filter NAMED.** This is the one rule to
+**A row carries only the components its filter named.** This is the one rule to
 hold on to, because the mistake it prevents is a page that draws `undefined`.
 
 A row is `{kind, entity: {eid, num}, ...those components}`. So this is the wrong
@@ -175,7 +175,7 @@ across a word boundary. Bare words do that (below).
 
 ## Values, by type
 
-The platform's own columns are TYPED, and a value that cannot be one is refused
+The platform's own columns are typed, and a value that cannot be one is refused
 loudly rather than quietly matching nothing:
 
     .task.status=finished
@@ -207,7 +207,7 @@ design a component:
 - A `time` of yours is kept verbatim and compared as text, so write ISO stamps
   (`new Date().toISOString()`) and compare with ISO:
   `.reading.started>=2026-01-01` works, while `.reading.started=today` matches
-  only a row whose value is the literal text `today`. Time PHRASES are for the
+  only a row whose value is the literal text `today`. Time phrases are for the
   platform's stamps.
 
 Numbers of yours still compare as numbers — `.recipe.serves>=4` — because both
@@ -215,7 +215,7 @@ sides read as numbers.
 
 ## Time phrases
 
-A time phrase is a RANGE, and the operator picks which edge of it you mean:
+A time phrase is a range, and the operator picks which edge of it you mean:
 
     =   within it            .created.at=today
     >=  from its start       .created.at>=2026-01-01
@@ -304,13 +304,13 @@ Only the platform's columns can be references — a `vocab.json` column is `text
 stamp. Point at another entity from your own component by keeping its eid in a
 `text` column; it holds the address, but a path will not walk it.
 
-The PLURAL form walks the other way — the entities pointing back at this one:
+The plural form walks the other way — the entities pointing back at this one:
 
     .comments!                    has at least one comment
     .comments=                    has none
     .comments>=2                  has two or more (any comparison works)
-    .comments.doc.body~=butter    has SOME comment mentioning butter
-    .comments!.doc.body~=butter   has NONE mentioning butter
+    .comments.doc.body~=butter    has some comment mentioning butter
+    .comments!.doc.body~=butter   has none mentioning butter
     .comments!.doc.body!=butter   every comment mentions it (De Morgan)
 
 The name is the component's plural — `.comments` are the entities whose
@@ -333,7 +333,7 @@ whichever column:
 
 ## Counting and tallying
 
-Three directives return a VALUE instead of rows. They sit beside the filters
+Three directives return a value instead of rows. They sit beside the filters
 that select what they reduce, and they read from the index — a page that wants a
 number asks for the number, never for the rows to count.
 
@@ -360,12 +360,12 @@ used.
 
 ## Windows and paging
 
-A window bounds the ANSWER without changing what matches.
+A window bounds the answer without changing what matches.
 
     limit=20            the newest 20 matches
     after=<num>         continue below a spine num you already have
 
-A plain listing is oldest first, by the number the store minted. A WINDOWED
+A plain listing is oldest first, by the number the store minted. A windowed
 listing is the newest that many — still in that same oldest-first order among
 themselves. So `limit` is the front page of a feed, and paging walks backwards:
 
@@ -373,7 +373,7 @@ themselves. So `limit` is the front page of a feed, and paging walks backwards:
     let oldest = page[0].entity.num
     let older = await query(`.doc!&limit=20&after=${oldest}`)
 
-`after` means "older than this num", so the cursor is the SMALLEST num you hold,
+`after` means "older than this num", so the cursor is the smallest num you hold,
 not the largest. Both forms work — `limit=20` and `.limit=20` are the same
 window — and a bad bound is refused rather than dropped:
 
@@ -413,7 +413,7 @@ comes back ranked, best first:
                 score: 2.0000017} }]
 
 A word names no component to leave out, so — like `id=` above — a filter that is
-only words returns the WHOLE entity, the app's own components included. That is
+only words returns the whole entity, the app's own components included. That is
 what lets a page draw cards straight from a search. Name a component beside the
 word and you are back to the ordinary rule: `lemon&.recipe!` returns recipes
 with no titles, `lemon&.recipe!&.doc?` returns both.

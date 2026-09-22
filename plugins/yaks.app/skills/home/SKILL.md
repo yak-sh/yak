@@ -6,7 +6,7 @@ description: "The front page, and routing the space (yaks.app). The app served a
 # The front page, and routing the space
 
 A space has one address of its own — `<space>.yaks.app/` — and one app can
-answer there. That app is the space's FRONT PAGE: it is served at that address
+answer there. That app is the space's _front page_: it is served at that address
 rather than redirected to, and it also answers every path in the space that no
 other app claims.
 
@@ -90,7 +90,7 @@ with `first`.
 
 ## Answering first
 
-`first` is the opt-in: the paths the front page's worker sees BEFORE the app
+`first` is the opt-in: the paths the front page's worker sees before the app
 whose name owns them, written as globs.
 
     app_set(app: 'home', first: ['/recipes/*', '/*/print'])
@@ -112,7 +112,7 @@ a single value:
     { "entity": { "eid": "<the app>" },
       "home": { "first": "[\"/recipes/*\", \"/*/print\"]" } }
 
-One component, one place: an app is the front page BECAUSE it has `home`, and
+One component, one place: an app is the front page _because_ it has `home`, and
 what it routes first is written in the same row. So only a front page can carry
 globs at all — `app_set(app, first: [...])` on an app that is not one is
 refused, and passing `home: true` with it makes the app the front page and sets
@@ -139,7 +139,7 @@ them — one set of endpoints, two ways to write the address.
 
 The refusal names the glob and the path it collided with, so `/*` is refused for
 covering `/login` rather than for being broad. `/recipes/*` is fine even though
-a request under it could have gone somewhere else: a glob that merely CONTAINS a
+a request under it could have gone somewhere else: a glob that merely contains a
 platform path still loses to that path when the request arrives.
 
 ## Two rules
@@ -173,7 +173,7 @@ address — files, data and all — and each keeps the path it had, so
 **The address it leaves keeps working.** It redirects to the new one with the
 path and the query kept, permanently, so a link somebody was given a year ago
 still opens the page it always did. Letters to `<old>.<app>@yaks.app` still
-arrive. And it stays RESERVED: nobody else can take it, and neither can the
+arrive. And it stays reserved: nobody else can take it, and neither can the
 person who left it, until they say to forget it.
 
     space_set(forget: 'ada')         the old address stops redirecting, and is free
@@ -193,7 +193,7 @@ of its apps, who is a member, what is published, or what the stats have counted.
 
 `<space>@yaks.app` is the front page's mailbox — the same address every app has,
 with the app part left off (`<space>.<app>@yaks.app` is any other one). A letter
-written there lands in the FRONT PAGE's store, as the entity every arrival lands
+written there lands in the front page's store, as the entity every arrival lands
 as: `doc` for the subject and the words, `mail` for the envelope, attachments
 filed as blobs and linked to it. <https://yaks.app/docs/mail.md> describes the
 whole shape.

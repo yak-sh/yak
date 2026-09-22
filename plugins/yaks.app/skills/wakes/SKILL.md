@@ -1,6 +1,6 @@
 ---
 name: wakes
-description: "Coming back later (yaks.app). Schedules as data: a `wake` on any entity records when to return to it, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares decides what the firing MEANS. Recurrence in durations, cron lines and zones; pausing and resuming; a command asked for later; an idle world advancing offline on a five-minute cadence and catching a missed stretch up in one firing; where a firing runs and what it may spend; why there is no cron trigger, no `scheduled()` and no queue to ask for."
+description: "Coming back later (yaks.app). Schedules as data: a `wake` on any entity records when to return to it, the app's own store wakes itself at that moment and stamps `fired`, and a rule the app declares decides what the firing means. Recurrence in durations, cron lines and zones; pausing and resuming; a command asked for later; an idle world advancing offline on a five-minute cadence and catching a missed stretch up in one firing; where a firing runs and what it may spend; why there is no cron trigger, no `scheduled()` and no queue to ask for."
 ---
 
 # Coming back later
@@ -28,7 +28,7 @@ except the moment:
   spent one-shot, or a schedule someone paused.
 - **`every`** — how it repeats, when it does. See below.
 - **`note`** — a line for whoever is woken: why you asked to be.
-- **`target`** — another entity this wake is ABOUT, when it is not about the one
+- **`target`** — another entity this wake is about, when it is not about the one
   carrying it.
 
 Any entity may carry one. A plant, a lease, an invoice, a draft nobody has sent
@@ -54,7 +54,7 @@ not a timer somebody has to have been holding. Occurrences missed while nothing
 was running collapse into one firing, which then moves past now — a daily sweep
 that was owed four times is swept once, not four times in a row.
 
-## What the firing MEANS is a rule
+## What a firing means is a rule
 
 A wake carries no action. What happens when it goes off is whatever your app's
 rules say about `fired`, and a rule is a `vocab.json` entry like a component —
@@ -73,7 +73,7 @@ The `match` is a filter with two extra marks:
 
 - **`+comp`** writes that component (`+watered.by=wake` writes
   `watered { by: "wake" }`).
-- **`+!comp`** is a GATE: the rule only fires while that component is absent,
+- **`+!comp`** is a gate: the rule only fires while that component is absent,
   and after it writes, it is not. That is how a rule fires once per thing rather
   than on every later write to the row.
 
@@ -148,7 +148,7 @@ pointing back at the call, an `execution` recording `done` or `failed`, and
 whatever the command itself wrote. Nothing is lost if the app was quiet: the
 call is a row, and so is the moment it is owed.
 
-A call with `every` is a STANDING request and is never run itself. Each firing
+A call with `every` is a standing request and is never run itself. Each firing
 writes its own call — `call { to, args, source }`, the `source` naming the
 schedule — so a weekly digest is fifty-two calls and fifty-two answers, never
 one result re-run. The same instant twice is the same call, so a re-delivered
@@ -188,7 +188,7 @@ whether it was watched all day or not at all.
 How long it has been is on the rows. The schedule row carries `fired { at }` —
 the instant it last went off — and each firing's own call is stamped with when
 it was written, so the stretch that just passed is the gap between the last two.
-What the world EARNED over that stretch is the span times whatever a minute is
+What the world earned over that stretch is the span times whatever a minute is
 worth, and that arithmetic is not the tick's: a rule and a command both write
 rows, and neither multiplies. Fold the span where code runs — the page as it
 draws, or the app's own `worker.js`. Which is the other reason the catch-up is
@@ -196,8 +196,8 @@ cheap: one firing, one span, one fold, instead of a thousand replayed minutes.
 
 The repeating request is the `call`, not a rule. A declared rule that writes
 onto the row it matched has to gate itself (`+!comp` above), and a gate is what
-makes a rule fire ONCE per thing — so "every five minutes" belongs to the
-schedule, and a rule is for what one firing MEANS about that row.
+makes a rule fire once per thing — so "every five minutes" belongs to the
+schedule, and a rule is for what one firing means about that row.
 
 ## Where a firing runs
 
@@ -213,7 +213,7 @@ schedule, and a rule is for what one firing MEANS about that row.
   minutes, and the object 30 seconds of active CPU per invocation, raisable to
   five minutes (300,000 ms) on the Workers Paid plan
   (<https://developers.cloudflare.com/workers/platform/limits/>, read
-  2026-09-19). The 50 ms an app's own worker gets per REQUEST (see
+  2026-09-19). The 50 ms an app's own worker gets per request (see
   <https://yaks.app/docs/code.md>) is a different budget, and not the one a
   firing spends.
 - **At least once.** An alarm can be delivered twice; the firing is guarded on

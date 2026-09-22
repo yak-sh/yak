@@ -4,7 +4,7 @@
   limitations, etc etc."
 
   The rule this page is written under: every number and every capability on this page
-  is READ OFF THE CODE, never invented, and the pointer is named in a comment
+  is read off the code, never invented, and the pointer is named in a comment
   beside anything a reader might want to check. If the code stops being true,
   this page is wrong and somebody has to fix it — so it says as little as it
   can get away with, and points at the guide for the rest (M-14370).
@@ -154,7 +154,7 @@ on Plus, but are not refused. Operations that exceed a limit are refused, but
 existing apps and data are not deleted. Your assistant receives a notice when
 usage reaches 80% of a limit.
 
-The email limit counts incoming and outgoing messages, and only SENDING stops
+The email limit counts incoming and outgoing messages, and only sending stops
 when the limit is reached. Incoming messages are still delivered. The count
 resets on the first day of each month.
 

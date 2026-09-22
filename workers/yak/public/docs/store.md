@@ -31,8 +31,8 @@ The platform serves one client beside every app, at `./api/client.js`:
     </script>
 
 Write that import as a relative path, and never write the app's own name into
-any of the app's files. The code is COPIED when somebody installs your app, so a
-page carrying `/chores/api/client.js` is a 404 the moment the copy lands at
+any of the app's files. The code is _copied_ when somebody installs your app, so
+a page carrying `/chores/api/client.js` is a 404 the moment the copy lands at
 `/chore-chart/` — and it renders as bare HTML with nothing to explain why. The
 platform gives every HTML page it serves a `<base href>` at the app's own
 address (inside `<head>` if there is one, else after the doctype; a page with a
@@ -74,7 +74,7 @@ any bundle is refused, nothing in that call is written.
 A GET of `./api/query?<filter>`, returning an array of rows — oldest first, by
 the number the store minted. An aggregate filter returns an object instead
 (`query('.doc!&.count!')` → `{count: 12}`). The filter goes into the URL as you
-wrote it, so a VALUE carrying `&` or `#` needs `encodeURIComponent` around it;
+wrote it, so a value carrying `&` or `#` needs `encodeURIComponent` around it;
 `#` would otherwise start a fragment and take the rest of the filter with it.
 
 ### search(text, filter?)
@@ -88,7 +88,7 @@ you and sent as a quoted phrase, so punctuation is safe to pass straight
 through; a trailing `*` prefix-matches the last word (`search('lem*')`).
 
 **What a hit carries.** A search term names no component, the way `id=` does
-not, so a search with no filter returns the WHOLE entity — every component the
+not, so a search with no filter returns the whole entity — every component the
 row has. That is what lets a page draw cards from a search: the recipe's
 `minutes` and `serves` are there, and a comment on a recipe can be told apart
 from the recipe by the components it has.
@@ -106,7 +106,7 @@ same way.
 
 ### subscribe(filter, cb)
 
-`query` that keeps returning. It hands back the stop function SYNCHRONOUSLY —
+`query` that keeps returning. It hands back the stop function synchronously —
 not a promise, so there is nothing to await. Its own section below.
 
 ### upload(file, {name}?)
@@ -123,7 +123,7 @@ file twice is one upload and one row. 20 MB is the ceiling.
 
 ### me()
 
-`{person, name, role, reads, writes, signIn}`, returned to ANYONE — a signed-out
+`{person, name, role, reads, writes, signIn}`, returned to anyone — a signed-out
 visitor at a `private` app included, which is the point. Below.
 
 ## The bundle you save
@@ -137,14 +137,14 @@ set of columns; the entity is whatever its components make it.
       recipe: { serves: 8, minutes: 55 },
     })
 
-- `entity.eid` naming an existing entity PATCHES it.
+- `entity.eid` naming an existing entity _patches_ it.
 - A `$`-prefixed eid is an alias local to this batch: it mints an entity, and
   `saved.aliases.$cake` reports which one. The name is yours — `$cake`, `$1`,
   `$row-7`.
 - No `entity` key at all mints one too, silently, and nothing in `aliases`
   points at it. Use an alias whenever you need the eid afterwards.
 - An eid you minted yourself — a `crypto.randomUUID()`, or a sha256 hex string —
-  that names nothing yet and carries components DEFINES that entity.
+  that names nothing yet and carries components _defines_ that entity.
 - A new entity needs at least one component, and one bundle per entity per
   batch: the same eid twice is refused, so merge them into one bundle.
 
@@ -180,13 +180,13 @@ Four different things, four different ways to write them:
     // delete the entity
     await apply({ entity: { eid: cake }, tombstone: {} })
 
-A tombstone stands ALONE: it names an existing entity by eid and carries no
+A tombstone stands alone: it names an existing entity by eid and carries no
 components and no edges (`a dead entity takes no patch` if it does), and it
 needs an eid that already exists — there is nothing to delete behind a `$alias`.
 Deleting is permanent, and it cascades to entities that exist only about the
 deleted one.
 
-A row you READ can be handed straight back as a patch: the fields a read adds —
+A row you read can be handed straight back as a patch: the fields a read adds —
 `kind`, `rank`, the stamps — are dropped on the way in, and a reference that
 came back as `{eid, name}` writes as the eid it named.
 
@@ -199,7 +199,7 @@ That is the duplicate reward, and it is a read-modify-write with nothing holding
 the read.
 
 So state what you based the write on. `$was` names, per component and per
-column, the SHA-256 of the value you READ, and the store refuses the WHOLE batch
+column, the SHA-256 of the value you read, and the store refuses the whole batch
 if that column has moved since. `was()` computes that hash, and is exported
 beside `apply`:
 
@@ -229,7 +229,7 @@ clobbering a writer it never saw:
     }
 
 Three things worth knowing. `null` is a guard too — "I read no value" — and it
-is how a column that must still be EMPTY is guarded, which is the shape of "mint
+is how a column that must still be empty is guarded, which is the shape of "mint
 this once". Every column you name must be one the vocabulary declares, because a
 guard on a column that does not exist would compare absent to absent and protect
 nothing. And the whole batch is refused, never the part that moved: a title from
@@ -246,7 +246,7 @@ beside the components, and refuses with the same message.
       recipe: { serves: 8, minutes: 45 } }
 
 `entity` and `kind` name the row. Everything else is exactly the components the
-filter NAMED — by presence (`.recipe!`), by request (`.doc?`), or by a predicate
+filter named — by presence (`.recipe!`), by request (`.doc?`), or by a predicate
 of its own (`.recipe.minutes<=30`). A component asserted ABSENT (`.archived=`)
 filters without asking for anything back. `*` asks for every component, which is
 what you want when you are looking rather than drawing.
@@ -257,7 +257,7 @@ written", never `'mood' in row.entry`. The platform's own columns are no
 exception: `doc.title` comes back null too, and `doc.body` — a content-addressed
 blob — comes back null when there is none.
 
-Three things a listing leaves out unless you name them: the platform's STAMPS
+Three things a listing leaves out unless you name them: the platform's stamps
 (`created`, `updated`, `notified`, `opened`, `quarantined` — `.created!` asks
 for them back); the platform's own rows about the app (`exception` and `error`,
 what the platform recorded when something broke — `.exception!` asks for those,
@@ -271,7 +271,7 @@ name.
     // …later
     stop()
 
-What arrives is the WHOLE ROW SET, not a delta: on the first call, and again
+What arrives is the _whole_ row set, not a delta: on the first call, and again
 after every committed write that touches the filter's answer, the callback is
 handed the current rows sorted oldest first — the same shape and the same
 components `query()` returns for that same filter. So redraw the list from what
@@ -288,7 +288,7 @@ arrives; never append to what you drew last time.
   set the callback gets. Nothing else changes.
 - `stop()` removes that one subscription; the last one to leave closes the
   socket. Call it on `beforeunload`, or when the view it feeds is torn down.
-- Subscribe to ROWS. An aggregate filter like `.count!` has no rows to hand
+- Subscribe to rows. An aggregate filter like `.count!` has no rows to hand
   back, so the callback keeps being handed an empty array. Poll it with `query`
   instead.
 - Keep the count small. A socket carries its declarations in about 2 KB of state
@@ -301,7 +301,7 @@ arrives; never append to what you drew last time.
   throw and has no promise to reject, so a page that only subscribes shows an
   empty screen for as long as the socket is down — no error, no callback. It
   retries on its own, backing off to every 15 seconds, and the first frame that
-  arrives fills the page. So `query` FIRST for what you can draw now, then
+  arrives fills the page. So `query` first for what you can draw now, then
   `subscribe` to keep it true; the first callback replaces the rows you drew.
 
       draw(await query('.task.status=open&.doc?'))
@@ -311,7 +311,7 @@ arrives; never append to what you drew last time.
 
 An app's `access` is one of three settings, given by `app_new` and `app_set`:
 
-- `public` — the default. Anyone with the link READS. Only a member (owner or
+- `public` — the default. Anyone with the link reads. Only a member (owner or
   editor) writes.
 - `open` — anyone with the link reads AND writes. The vote page, the shared
   list, the party wall.
@@ -358,7 +358,7 @@ any other: it comes back when the filter names it.
 person, it returns `{eid, name}` rather than a bare eid, so ONE query draws a
 list with its writers instead of painting "someone" and asking again.
 
-This is a rule about REFERENCES, not about that one stamp: any column that
+This is a rule about references, not about that one stamp: any column that
 points at an entity comes back with the name when the store knows that entity as
 a person, a column of your own included.
 
@@ -404,7 +404,7 @@ one batch, the file first.
 
 Four things to know:
 
-- It runs ONCE per store, after the app's own `vocab.json` is installed — so a
+- It runs once per store, after the app's own `vocab.json` is installed — so a
   seed may write components of your own — and it is marked as done. Deploy again
   and nothing is seeded: what the person has changed since is theirs.
 - `app_install` gives the copy its own store, so the seed runs again there. That
@@ -431,7 +431,7 @@ For data the person is meant to edit, that is all there is to it. For a table of
 constants your page reads — an emoji list, a lookup — a plain `.js` file beside
 the page is simpler, and it is not data anyone can change.
 
-Data that arrives LATER is `store_load`, which reads the same kind of file on
+Data that arrives later is `store_load`, which reads the same kind of file on
 purpose: `store_load(app, path)` writes one JSON file already in the app —
 `data/cities.json` — or every `*.json` and `*.csv` under a folder you name, into
 the store now, as you. It is one batch, in filename order, aliases resolving
@@ -446,7 +446,7 @@ may. That makes an import two calls and nothing transcribed:
 `store_load` puts them in the store, reporting the files it read and how many
 entities it wrote.
 
-Most data a person already has is a SPREADSHEET, and a `.csv` is the same call
+Most data a person already has is a spreadsheet, and a `.csv` is the same call
 with one more argument: a spreadsheet does not state what a row is, so `as`
 does. Each row becomes one entity with that component, and the header row names
 its columns.
@@ -460,7 +460,7 @@ its columns.
 the column — `serves` is a number, a `bool` accepts true/yes/1 either way round,
 and an empty cell is left unwritten rather than written null. A `title` or
 `body` header lands in the row's `doc`; an `id` (or `alias`) column is the row's
-NAME — `alias{name}`, which lands on the entity already holding it, so loading
+name — `alias{name}`, which lands on the entity already holding it, so loading
 the file again patches the same rows instead of minting a second set of them,
 and the name works wherever an eid does. Leave it out and every load mints new
 rows. A header the component has no column for is refused by name: rename it
@@ -523,7 +523,7 @@ file:
 
 The answer is NDJSON too — one saved row per line, as each fifty commit — and it
 is a 200 whatever happens, because the first rows are sent long before a later
-line can be refused. So a refusal is the LAST line instead:
+line can be refused. So a refusal is the last line instead:
 `{"error": "Refused", "message": "unknown column: recipe.serving", "line": 137,
 "committed": 100}`
 — the line the bad bundle was on, and how many landed before it. Nothing after
@@ -554,7 +554,7 @@ this page as its return address. The codes from these endpoints: `not_a_reader`,
 `not_a_writer` (401 to a stranger, 403 to a member who may not), `too_large`,
 `no_bytes`, `space_full`, `no_such_file`, `method_not_allowed`, `not_found`.
 
-A refusal from the STORE — an unknown component, a column that does not exist, a
+A refusal from the store — an unknown component, a column that does not exist, a
 bundle that does not parse — is plain text with a 400, so the message the client
 throws is prefixed with the status and cut to 120 characters:
 
@@ -564,10 +564,10 @@ throws is prefixed with the status and cut to 120 characters:
 Both messages are written to be read: a bad column names the columns that do
 exist, and an undeclared component explains where one of your own comes from.
 
-You need not wire any of this up to be TOLD about it. The platform puts an error
+You need not wire any of this up to be told about it. The platform puts an error
 reporter in every page it serves, so a throw, an unhandled rejection, or a
 failed request is already on its way to the app's store and the person's agent.
-Catch what you want to SHOW.
+Catch what you want to show.
 
 ## The mistakes
 

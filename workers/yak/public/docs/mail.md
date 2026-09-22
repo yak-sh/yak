@@ -103,7 +103,7 @@ was told, and when" a query afterwards.
 
 ## Who may send
 
-Writing a letter is an ordinary write. ASKING for it to go — the `deliver`
+Writing a letter is an ordinary write. _asking_ for it to go — the `deliver`
 component — is held to a member who may write: an owner or an editor.
 
 That is deliberately stricter than the app's own access. An `open` app accepts
@@ -231,7 +231,7 @@ The numbers are in the plan table at <https://yaks.app/pricing>. Read them
 there, not from a page that copies them, this one included; `app_list` prints
 where a space stands against what it is allowed.
 
-Only the SEND stops there. A letter written to the app lands however many the
+Only the send stops there. A letter written to the app lands however many the
 space has spent — and is counted like any other — because refusing one on
 arrival loses the sender's words rather than limiting the app's. So an inbox
 keeps filling past the ceiling; it is only sending that waits for the 1st.
@@ -246,7 +246,7 @@ slow down rather than guessing at a number.
 
 ## What is not supported
 
-- **Mail at the person's own domain.** A domain they own can SERVE the app
+- **Mail at the person's own domain.** A domain they own can serve the app
   (<https://yaks.app/docs/domains.md>), but mail to and from it is not something
   this platform does; the app's address stays `<space>.<app>@yaks.app` whatever
   hostname the pages answer at.
