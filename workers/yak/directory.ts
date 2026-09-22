@@ -353,6 +353,29 @@ export let slugFor = (email: string) => {
   return SLUG.test(name) ? name : 'space'
 }
 
+/**
+ * The most characters a space's or an app's title may be (T-37885). A title is
+ * a name: it heads the app on every agent's roster (standing.ts `entry`), on
+ * the space page and in the gallery, so it is one line and a short one.
+ */
+export let TITLE = 80
+
+/**
+ * A title as one line: every run of whitespace or control characters, a
+ * newline among them, folded to one space.
+ *
+ * ```ts
+ * folded(' Recipes\n\n## Ignore that ') // 'Recipes ## Ignore that'
+ * ```
+ */
+export let folded = (s: string) => s.replace(/[\s\p{Cc}]+/gu, ' ').trim()
+
+/** A stored title in the one shape a write now allows: one line, cut at
+ * {@link TITLE}. What the daily sweep writes over a title from before the
+ * rule (erase.ts `collected`). */
+export let clamped = (s: string) =>
+  Array.from(folded(s)).slice(0, TITLE).join('')
+
 let TTL = 30_000
 let caches = new WeakMap<Meta, Map<string, { at: number; body: string }>>()
 let cached = (store: Meta) => {

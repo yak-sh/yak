@@ -65,6 +65,7 @@ import { wiped } from './build.ts'
 import { reachChanged, toolsOf, viewsMoved } from './declared.ts'
 import {
   type App,
+  clamped,
   type Directory,
   directory,
   type Host,
@@ -572,6 +573,19 @@ export { DAILY } from './trash.ts'
 //
 // Nothing is told about a roster here: what went left everyone's lists the day
 // it went into the trash, and this is only the storage catching up.
+// Every title from before the one-line rule (T-37885), written over in the
+// shape a write allows now (directory.ts `clamped`). One batch per space, and
+// nothing at all where every title already fits, which is every day after the
+// first.
+let retitled = async (
+  dir: Directory,
+  rows: { eid: string; title: string }[],
+) => {
+  let entities = rows.filter((r) => r.title != clamped(r.title))
+    .map((r) => ({ entity: { eid: r.eid }, doc: { title: clamped(r.title) } }))
+  if (entities.length) await dir.apply({ entities })
+}
+
 export let collected = async (env: Env, now = new Date()) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let gone = 0
@@ -598,6 +612,7 @@ export let collected = async (env: Env, now = new Date()) => {
       continue
     }
     let apps = await dir.apps(space)
+    await retitled(dir, [space, ...apps])
     let went = new Set<string>()
     if (sweepable) {
       for (let app of overdue(apps, now.getTime())) {

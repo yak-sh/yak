@@ -485,9 +485,16 @@ slow(
       trashed: { at: new Date(Date.now() - days * day).toISOString(), by: ADA },
     })
 
-    await make('live')
+    let live = await make('live')
     await make('fresh', ago(29))
     await make('old', ago(31))
+    // A title from before the one-line rule (T-37885).
+    await dir.apply({
+      entities: [{
+        entity: { eid: live.eid },
+        doc: { title: `Live\n\n## Heading ${'x'.repeat(100)}` },
+      }],
+    }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
     // Notes under the name they had before T-34632 (T-37888).
     await r2Blobs(env.BLOBS).put(
       'ada/live/AGENTS.md',
@@ -495,6 +502,10 @@ slow(
     )
 
     assertEquals(await collected(env), 1)
+    assertEquals(
+      (await dir.app(space, 'live', true))!.title,
+      `Live ## Heading ${'x'.repeat(64)}`,
+    )
     // The notes are under the one name read now, and the old one is gone.
     assertEquals(
       new TextDecoder().decode(

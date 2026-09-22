@@ -174,6 +174,9 @@ not have read themselves. Routing is not a way around another app's `access`.
     space_set(slug: 'ada-cooks')     the space is now ada-cooks.yaks.app
     space_set(title: 'Ada cooks')    just the name it is called
 
+A title, the space's or an app's, is its name: one line, up to 80 characters. A
+newline in one is folded to a space, and a longer one is refused with the count.
+
 Only the space's owner may move it. Every app in the space moves with the
 address — files, data and all — and each keeps the path it had, so
 `ada.yaks.app/cookbook/` becomes `ada-cooks.yaks.app/cookbook/`.

@@ -64,6 +64,8 @@ import {
   type Access,
   addresses,
   type App,
+  clamped,
+  folded,
   handle,
   homing,
   mailbox,
@@ -72,6 +74,7 @@ import {
   type Space,
   stamp,
   storeName,
+  TITLE,
   url,
 } from './directory.ts'
 import {
@@ -516,6 +519,22 @@ let unreserved = (s: string, what: string) => {
 }
 
 let fresh = (v: unknown, what: string) => unreserved(slug(v, what), what)
+
+// A space's or an app's title: folded to one line, and refused over the cap
+// with the number rather than cut, so the person's name is never half kept
+// (directory.ts `folded`, T-37885).
+let titled = (v: unknown) => {
+  let s = folded(text(v, 'title'))
+  let n = Array.from(s).length
+  if (n > TITLE) {
+    throw refuse(
+      'arguments',
+      `title: ${n} characters — ${TITLE} at most. A title is the app's or ` +
+        "the space's name; what it is for belongs in its files.",
+    )
+  }
+  return s
+}
 
 // A secret's name is a binding, which the app's own code spells as
 // `env.NAME` — so it must be a JavaScript name (dispatch.ts).
@@ -1758,7 +1777,7 @@ let OURS: Row[] = [
           { entity: { eid: ctx.person }, person: {} },
           {
             entity: { eid: '$space' },
-            doc: { title: text(args.title, 'title') },
+            doc: { title: titled(args.title) },
             space: { slug: s },
           },
           {
@@ -1790,7 +1809,7 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let { space, who } = await owns(ctx, args)
       let to = args.slug == null ? null : fresh(args.slug, 'slug')
-      let title = args.title == null ? null : text(args.title, 'title')
+      let title = args.title == null ? null : titled(args.title)
       let drop = args.forget == null ? null : slug(args.forget, 'forget')
       if (to == null && title == null && drop == null) {
         throw refuse(
@@ -2126,7 +2145,7 @@ let OURS: Row[] = [
         )
       }
       let entities: EntityLiteral[] = [born(space, s, {
-        title: text(args.title, 'title'),
+        title: titled(args.title),
         access: args.access == null ? 'public' : access(args.access),
       })]
       // Being first claims nothing (T-33040). Until somebody says which app
@@ -2891,7 +2910,7 @@ let OURS: Row[] = [
     },
     run: async (ctx, args) => {
       let { space, app, who } = await inApp(ctx, args, true)
-      let title = args.title == null ? null : text(args.title, 'title')
+      let title = args.title == null ? null : titled(args.title)
       let to = args.slug == null ? null : fresh(args.slug, 'slug')
       let open = args.access == null ? null : access(args.access)
       let home = args.home == null ? null : flag(args.home, 'home')
@@ -4025,7 +4044,7 @@ let OURS: Row[] = [
       // app_set it after.
       let entities: EntityLiteral[] = [{
         ...born(space, s, {
-          title: offer.app.title,
+          title: clamped(offer.app.title),
           access: offer.app.access ?? 'public',
         }),
         installed: { of: offer.app.eid, version },
