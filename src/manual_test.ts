@@ -72,7 +72,6 @@ Deno.test('every verb usage is rendered from its declaration', () => {
       graph_query: 'graph_query [filters…] [--limit=N] [--json]',
       decided: 'decided [filters…] [--all] [--json]',
       docs: 'docs [filters…] [--json]',
-      stale: 'stale [filters…] [--all] [--json]',
       new: 'new [title…]',
       tree: 'tree <text…> [--dry-run]',
       set: 'set <id> [--body=BODY] [--comment=TEXT]',
