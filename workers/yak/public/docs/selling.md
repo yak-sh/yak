@@ -166,10 +166,13 @@ store:
 `order` is one of the platform's own components, so every app already has it and
 no `vocab.json` declares it. Its columns are the platform's alone: no page,
 member or visitor writes one, and the owner may delete an order row. `status` is
-`paid`, and becomes `refunded` or `disputed` if it ever does. The buyer gets a
-confirmation from the app's own address, `<space>.<app>@yaks.app`, with the
-items and the total on it (<https://yaks.app/docs/mail.md>), and a reply to it
-lands back in the app's store as mail the seller can read.
+`paid`, and follows the charge after that: `partially_refunded` or `refunded`
+when the seller gives money back, `disputed` while a buyer's dispute is open,
+then `paid` again if the seller wins it or `lost` if the buyer's bank takes the
+money back. The buyer gets a confirmation from the app's own address,
+`<space>.<app>@yaks.app`, with the items and the total on it
+(<https://yaks.app/docs/mail.md>), and a reply to it lands back in the app's
+store as mail the seller can read.
 
 It is a row, so the seller's own view is a query:
 

@@ -1597,23 +1597,33 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
     assertEquals((await orders()).length, 1, 'one sale, one order')
 
     // ---- refunded. The charge inherits the PaymentIntent's metadata, which
-    // is why the door put it there: a refund knows nothing of a session.
-    let back = await connectHook(k.env, WHSEC, {
-      id: 'evt_refund',
-      type: 'charge.refunded',
-      account: 'acct_seller',
-      data: {
-        object: {
-          id: 'ch_1',
-          payment_intent: 'pi_1',
-          amount_refunded: 9200,
-          metadata: {
-            space: session.get('metadata[space]'),
-            app: 'shop',
+    // is why the door put it there: a refund knows nothing of a session. Part
+    // of the charge first, then the rest (T-37887).
+    let refund = (id: string, amount_refunded: number) =>
+      connectHook(k.env, WHSEC, {
+        id,
+        type: 'charge.refunded',
+        account: 'acct_seller',
+        data: {
+          object: {
+            id: 'ch_1',
+            payment_intent: 'pi_1',
+            amount: 9200,
+            amount_refunded,
+            refunded: amount_refunded == 9200,
+            metadata: {
+              space: session.get('metadata[space]'),
+              app: 'shop',
+            },
           },
         },
-      },
-    })
+      })
+    assertEquals(
+      (await refund('evt_part', 4600)).body.did,
+      'shop: partially_refunded',
+    )
+    assertEquals((await orders())[0].order.status, 'partially_refunded')
+    let back = await refund('evt_refund', 9200)
     assertEquals(back.body.did, 'shop: refunded')
     assertEquals((await orders())[0].order.status, 'refunded')
 
@@ -1636,6 +1646,28 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
     )
     assertEquals(dispute.body.did, 'shop: disputed')
     assertEquals((await orders())[0].order.status, 'disputed')
+
+    // ---- the dispute decided (T-37887): won puts the order back to paid,
+    // and lost says the buyer's bank took the money back.
+    let closed = (id: string, status: string) =>
+      connectHook(k.env, WHSEC, {
+        id,
+        type: 'charge.dispute.closed',
+        account: 'acct_seller',
+        data: { object: { id: 'dp_1', charge: 'ch_1', status } },
+      })
+    assertEquals((await closed('evt_won', 'won')).body.did, 'shop: paid')
+    assertEquals((await orders())[0].order.status, 'paid')
+    // A closed dispute on an order no longer disputed moves nothing.
+    assertEquals((await closed('evt_won_again', 'won')).body.did, 'unchanged')
+    await connectHook(k.env, WHSEC, {
+      id: 'evt_dispute_2',
+      type: 'charge.dispute.created',
+      account: 'acct_seller',
+      data: { object: { id: 'dp_2', charge: 'ch_1', amount: 9200 } },
+    })
+    assertEquals((await closed('evt_lost', 'lost')).body.did, 'shop: lost')
+    assertEquals((await orders())[0].order.status, 'lost')
 
     // A charge the merchant made outside this platform, on the same account:
     // not ours, and not a break.

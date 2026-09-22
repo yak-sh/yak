@@ -42,8 +42,9 @@ rather than a second listing:
 
 `order` is the platform's own word, written by the platform's Connect webhook:
 the Stripe session, the items, the total, the fee, the buyer's address and a
-`status` of `paid`, `refunded` or `disputed`. Read them with `.order!&.doc?`.
-Refunds are made in the seller's own Stripe dashboard; the status follows.
+`status` of `paid`, `partially_refunded`, `refunded`, `disputed` or `lost`. Read
+them with `.order!&.doc?`. Refunds are made in the seller's own Stripe
+dashboard; the status follows.
 
 ## Voice
 

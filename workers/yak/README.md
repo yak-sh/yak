@@ -163,13 +163,13 @@ already hold them (staging: the `[env.staging]` copies, `yak-*-staging` names).
 
 **Stripe dashboard**, sandbox first, then live:
 
-| step                            | where                                                                                     | without it                                                     |
-| ------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Managed Payments                | Stripe is the merchant of record for the paid tier (billing.ts); enable it on the account | tax and invoicing fall to us                                   |
-| Product + recurring price       | Product catalog; the price id is `STRIPE_PRICE`                                           | checkout has nothing to sell                                   |
-| Customer portal configuration   | Settings → Billing → Customer portal, save a configuration once                           | the portal door is refused by Stripe, and the refusal is filed |
-| Billing webhook, five events    | the billing section below                                                                 | plan changes never land                                        |
-| Connect webhook, five v1 events | the Connect section below                                                                 | seller account changes, refunds and disputes go unseen         |
+| step                           | where                                                                                     | without it                                                     |
+| ------------------------------ | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Managed Payments               | Stripe is the merchant of record for the paid tier (billing.ts); enable it on the account | tax and invoicing fall to us                                   |
+| Product + recurring price      | Product catalog; the price id is `STRIPE_PRICE`                                           | checkout has nothing to sell                                   |
+| Customer portal configuration  | Settings → Billing → Customer portal, save a configuration once                           | the portal door is refused by Stripe, and the refusal is filed |
+| Billing webhook, five events   | the billing section below                                                                 | plan changes never land                                        |
+| Connect webhook, six v1 events | the Connect section below                                                                 | seller account changes, refunds and disputes go unseen         |
 
 ## Staging (yaks.fyi)
 
@@ -191,10 +191,10 @@ secrets can stay unset. Credentials stay on the box.
 Create these Stripe sandbox event destinations, each with its own signing
 secret:
 
-| events from                                   | destination                       | secret                          |
-| --------------------------------------------- | --------------------------------- | ------------------------------- |
-| Your account (the five billing events below)  | `https://yaks.fyi/stripe/webhook` | `STRIPE_WEBHOOK_SECRET`         |
-| Connected accounts (the five v1 events below) | `https://yaks.fyi/stripe/connect` | `STRIPE_CONNECT_WEBHOOK_SECRET` |
+| events from                                  | destination                       | secret                          |
+| -------------------------------------------- | --------------------------------- | ------------------------------- |
+| Your account (the five billing events below) | `https://yaks.fyi/stripe/webhook` | `STRIPE_WEBHOOK_SECRET`         |
+| Connected accounts (the six v1 events below) | `https://yaks.fyi/stripe/connect` | `STRIPE_CONNECT_WEBHOOK_SECRET` |
 
 The zone needs proxied `AAAA @ → 100::` and `AAAA * → 100::` records. Onboard
 `yaks.fyi` for Email Sending and Email Routing with Cloudflare’s issued mail DNS
@@ -308,15 +308,15 @@ buyer pays. What is missing is only what the events would have told us.
 
 The dashboard steps, in full. In the **sandbox** first, then again in live:
 
-| step | where                                                                                                                                                                         |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | dashboard.stripe.com → check the account switcher is on the sandbox → **Workbench** → **Webhooks**                                                                            |
-| 2    | **Create an event destination**                                                                                                                                               |
-| 3    | **Events from**: **Connected accounts** — not "Your account". This is the whole point of the second endpoint                                                                  |
-| 4    | Select these five v1 events, and only these: `account.updated`, `account.application.deauthorized`, `checkout.session.completed`, `charge.refunded`, `charge.dispute.created` |
-| 5    | **Continue** → destination type **Webhook endpoint** → **Continue**                                                                                                           |
-| 6    | Endpoint URL: `https://yaks.app/stripe/connect`                                                                                                                               |
-| 7    | On the settings page, **Reveal secret** and copy the `whsec_…` value                                                                                                          |
+| step | where                                                                                                                                                                                                 |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | dashboard.stripe.com → check the account switcher is on the sandbox → **Workbench** → **Webhooks**                                                                                                    |
+| 2    | **Create an event destination**                                                                                                                                                                       |
+| 3    | **Events from**: **Connected accounts** — not "Your account". This is the whole point of the second endpoint                                                                                          |
+| 4    | Select these six v1 events, and only these: `account.updated`, `account.application.deauthorized`, `checkout.session.completed`, `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed` |
+| 5    | **Continue** → destination type **Webhook endpoint** → **Continue**                                                                                                                                   |
+| 6    | Endpoint URL: `https://yaks.app/stripe/connect`                                                                                                                                                       |
+| 7    | On the settings page, **Reveal secret** and copy the `whsec_…` value                                                                                                                                  |
 
 Then, from `workers/yak`:
 

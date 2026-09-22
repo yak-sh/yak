@@ -764,7 +764,7 @@ export let receipt = (
  * One verified event, applied. Answers what it did, which is what the door says
  * back — Stripe ignores the body, and a person reading the logs does not.
  *
- * The five v1 events this platform listens for, and why each:
+ * The six v1 events this platform listens for, and why each:
  *   `account.updated`                   Stripe changed its mind about a seller
  *   `account.application.deauthorized`  a seller disconnected US, from their
  *                                       own dashboard — the one direction we
@@ -772,6 +772,7 @@ export let receipt = (
  *   `checkout.session.completed`        somebody bought something (T-34526)
  *   `charge.refunded`                   the seller refunded it (T-34526)
  *   `charge.dispute.created`            the buyer disputed it (T-34526)
+ *   `charge.dispute.closed`             the dispute was decided (T-37887)
  */
 export let apply = async (env: Env, event: Event): Promise<string> => {
   let type = event.type ?? ''
@@ -805,7 +806,7 @@ export let apply = async (env: Env, event: Event): Promise<string> => {
     return `${space.slug} disconnected`
   }
   if (type == 'checkout.session.completed') return await sold(env, space, event)
-  if (type == 'charge.refunded' || type == 'charge.dispute.created') {
+  if (type == 'charge.refunded' || type.startsWith('charge.dispute.')) {
     return await settled(env, space, event)
   }
   return 'nothing to do'
@@ -924,14 +925,37 @@ let sold = async (env: Env, space: Space, event: Event) => {
  * there is no fee to give back today, and the first sale with a rate on it is
  * what should drive the shape.
  */
+type Charge = {
+  id?: string
+  charge?: string
+  payment_intent?: string | { id?: string }
+  metadata?: Record<string, string>
+  refunded?: boolean
+  status?: string
+}
+
+// Where an event moves an order, or '' where it moves nothing. A refund is
+// `refunded` only once the whole charge is (Stripe's `refunded`), and
+// `partially_refunded` before that. A dispute is `disputed` until it closes:
+// `lost` means the buyer's bank took the money back, and `won` or an inquiry
+// closed without one (`warning_closed`) puts the order back to `paid`.
+let statusOf = (type: string, o: Charge) =>
+  type == 'charge.refunded'
+    ? o.refunded ? 'refunded' : 'partially_refunded'
+    : type == 'charge.dispute.created'
+    ? 'disputed'
+    : type == 'charge.dispute.closed'
+    ? o.status == 'lost' ? 'lost' : 'paid'
+    : ''
+
 let settled = async (env: Env, space: Space, event: Event) => {
-  let o = (event.data?.object ?? {}) as {
-    id?: string
-    charge?: string
-    payment_intent?: string | { id?: string }
-    metadata?: Record<string, string>
-  }
-  let dispute = event.type == 'charge.dispute.created'
+  let o = (event.data?.object ?? {}) as Charge
+  let type = event.type ?? ''
+  let status = statusOf(type, o)
+  // The dispute's other events (updated, funds withdrawn or reinstated) say
+  // nothing the order records.
+  if (!status) return 'nothing to do'
+  let dispute = type.startsWith('charge.dispute.')
   let about = o
   if (dispute) {
     let charge = idOf(o.charge)
@@ -941,7 +965,7 @@ let settled = async (env: Env, space: Space, event: Event) => {
       `/v1/charges/${charge}`,
       undefined,
       event.account,
-    ) as typeof o
+    ) as Charge
   }
   let intent = idOf(about.payment_intent)
   let app = await inApp(env, space, String(about.metadata?.app ?? ''))
@@ -952,10 +976,13 @@ let settled = async (env: Env, space: Space, event: Event) => {
     order?: { status?: string }
   }[]
   if (!row) return 'no order for that payment'
-  let status = dispute ? 'disputed' : 'refunded'
-  // A dispute on an order already disputed, or a second `charge.refunded` for a
-  // partial refund that grew: the column is already where it is going, so
-  // nothing is written.
+  // A dispute settled in the seller's favour undoes the dispute and nothing
+  // else: an order refunded meanwhile stays refunded.
+  if (type == 'charge.dispute.closed' && row.order?.status != 'disputed') {
+    return 'unchanged'
+  }
+  // A dispute on an order already disputed, or a redelivery: the column is
+  // already where it is going, so nothing is written.
   if (row.order?.status == status) return 'unchanged'
   await store.apply([{ entity: { eid: row.entity.eid }, order: { status } }])
   return `${app.slug}: ${status}`

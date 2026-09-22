@@ -418,7 +418,9 @@ export let appsDoc: VocabDoc = {
         total_cents: owned(num),
         fee_cents: owned(num),
         email: owned(text),
-        status: owned({ enum: ['paid', 'refunded', 'disputed'] }),
+        status: owned({
+          enum: ['paid', 'partially_refunded', 'refunded', 'disputed', 'lost'],
+        }),
       },
     },
     favorite: {
