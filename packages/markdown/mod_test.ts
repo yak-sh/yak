@@ -1,7 +1,7 @@
 import { h } from 'preact'
 import { mount } from '../preact/harness.ts'
 import { assert, assertEquals } from '@std/assert'
-import { Markdown, parse, render, safeHref } from './mod.ts'
+import { headings, Markdown, parse, render, safeHref } from './mod.ts'
 import type { H } from '@yaks/render'
 
 type Tree = {
@@ -92,6 +92,30 @@ Deno.test('Markdown mounts as safe semantic browser DOM', () => {
   } finally {
     ui.free()
   }
+})
+
+// A heading is a place in a document, so it carries the name that place is
+// linked by. `headings` reads the same names out without drawing anything,
+// which is what a contents list is built from.
+Deno.test('headings carry anchor ids a contents list can link', () => {
+  let source = '# The `store`\n\n## Saving "a" <thing>\n\n## Queries\n' +
+    '\n### Queries\n\n## Queries\n\n## !!!\n'
+  let tokens = parse(source, { breaks: false })
+  assertEquals(headings(tokens), [
+    { depth: 1, text: 'The store', id: 'the-store' },
+    { depth: 2, text: 'Saving "a" <thing>', id: 'saving-a-thing' },
+    { depth: 2, text: 'Queries', id: 'queries' },
+    { depth: 3, text: 'Queries', id: 'queries-2' },
+    { depth: 2, text: 'Queries', id: 'queries-3' },
+    { depth: 2, text: '!!!', id: 'section' },
+  ])
+  // The renderer gives the headings those very ids, in that order.
+  let json = JSON.stringify(render(tokens, tree))
+  for (let h of headings(tokens)) {
+    assert(json.includes(`"id":"${h.id}"`), h.id)
+  }
+  // Nothing an attribute could be broken open with survives the name.
+  assert(!/"id":"[^"]*[<>&'`]/.test(json), json)
 })
 
 Deno.test('explicit source newlines become structural breaks before terminal rendering', () => {

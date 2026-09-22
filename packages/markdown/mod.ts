@@ -15,6 +15,50 @@ export let parse = (
   { breaks = true }: { breaks?: boolean } = {},
 ): Token[] => Lexer.lex(source, { gfm: true, breaks })
 
+/** The words a heading is made of, with the markup dropped: a reader sees
+ * these words, so the anchor is named after them. */
+let words = (tokens: Token[]): string =>
+  tokens.map((t) => {
+    let inner = (t as { tokens?: Token[] }).tokens
+    return inner ? words(inner) : (t as { text?: string }).text ?? ''
+  }).join('')
+
+/** A document's anchor names, handed out in reading order: lowercase words
+ * joined by hyphens, everything that is not a letter or a number dropped — so
+ * a name can never carry a quote or an angle bracket into an attribute — and
+ * a number on any name the document says twice. */
+export let slugs = (): (text: string) => string => {
+  let seen = new Map<string, number>()
+  return (text) => {
+    let base = text.toLowerCase().replace(/[^\p{L}\p{N} -]/gu, '').trim()
+      .replace(/\s+/g, '-') || 'section'
+    let n = (seen.get(base) ?? 0) + 1
+    seen.set(base, n)
+    return n > 1 ? `${base}-${n}` : base
+  }
+}
+
+/** Every heading of a document in reading order, each under the id `render`
+ * gives it — which is how a contents list links what is on the page without
+ * drawing the page a second time. */
+export let headings = (
+  tokens: Token[],
+): { depth: number; text: string; id: string }[] => {
+  let name = slugs()
+  let found = (
+    items: Token[],
+  ): { depth: number; text: string; id: string }[] =>
+    items.flatMap((t) => {
+      if (t.type == 'heading') {
+        let text = words((t as Tokens.Heading).tokens)
+        return [{ depth: (t as Tokens.Heading).depth, text, id: name(text) }]
+      }
+      let inner = (t as { tokens?: Token[] }).tokens
+      return inner ? found(inner) : []
+    })
+  return found(tokens)
+}
+
 /** Only navigable links: no scripting, data, or control-byte URL schemes. */
 export let safeHref = (href: string): string | undefined => {
   if ([...href].some((c) => c.charCodeAt(0) <= 32 || c.charCodeAt(0) == 127)) {
@@ -56,6 +100,7 @@ export let Link = (
  * HTML tokens remain text. Images are descriptive links, never remote fetches.
  */
 export let render = <Node>(tokens: Token[], host: H<Node>): Node => {
+  let name = slugs()
   let children = (items: Token[]): Child<Node>[] => items.flatMap(token)
   let token = (t: Token): Child<Node>[] => {
     switch (t.type) {
@@ -65,7 +110,11 @@ export let render = <Node>(tokens: Token[], host: H<Node>): Node => {
         return [host('p', null, ...children((t as Tokens.Paragraph).tokens))]
       case 'heading': {
         let v = t as Tokens.Heading
-        return [host('h' + v.depth, null, ...children(v.tokens))]
+        // The id is the anchor a contents list points at (`headings` hands
+        // out the same names in the same order), so every consumer of a
+        // document gets headings it can link to.
+        let at = { id: name(words(v.tokens)) }
+        return [host('h' + v.depth, at, ...children(v.tokens))]
       }
       case 'strong':
         return [host('strong', null, ...children((t as Tokens.Strong).tokens))]
