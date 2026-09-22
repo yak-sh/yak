@@ -17,7 +17,7 @@
 // `signin`, an `exception` — whose columns are server-owned and refused at the
 // ordinary door. It is never forwarded from anywhere a client can reach
 // (directory.ts vouch), so it cannot arrive from outside.
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, Stale } from '@yaks/graph'
 import { type Door, type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
 
 /** The meta store, in the graph's own wire. */
@@ -52,6 +52,13 @@ export let metaOf = (store: Door): Meta => ({
       method: 'POST',
       body: JSON.stringify(bundles),
     }, headers)
+    // A precondition that no longer holds (409, @yaks/api refuse.ts) comes
+    // back as the graph's own `Stale`, so a caller that wrote on `$was` can
+    // tell "read again" from a failure.
+    if (r.status == 409) {
+      let s = await r.json()
+      throw new Stale(s.eid, s.comp, s.column, s.current)
+    }
     if (!r.ok) throw new Error(`meta store refused: ${await r.text()}`)
     return await r.json() as Bundle[]
   },

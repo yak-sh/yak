@@ -14,11 +14,12 @@ import {
   nameOf,
   personOf,
   SENDS,
+  type Signin,
   spend,
   TRIES,
   WINDOW,
 } from './signin.ts'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, Stale, token } from '@yaks/graph'
 import type { Meta } from './meta.ts'
 
 let n = 0
@@ -156,7 +157,43 @@ Deno.test('signing in clears the count', async () => {
   ]
   let d = door(full)
   assert(await spend(d.at, SECRET, ME, '123456'))
-  assertEquals(d.wrote.length, full.length)
+  assertEquals(d.wrote.filter((b) => b.tombstone).length, full.length)
+})
+
+// A store that holds its rows and keeps `$was` the way the graph does
+// (@yaks/graph guard.ts): a count written on a read that has since moved is
+// refused, and nothing in its batch lands.
+let guarded = (rows: Signin[]) => {
+  let at: Meta = {
+    query: () => Promise.resolve(structuredClone(rows) as unknown as Bundle[]),
+    apply: (bundles) => {
+      let row = (eid: string) => rows.find((r) => r.entity.eid == eid)
+      for (let b of bundles) {
+        let r = row(b.entity.eid)
+        let was = (b.$was as { signin?: { tries?: string | null } })?.signin
+        if (was && token(r?.signin.tries) != was.tries) {
+          return Promise.reject(new Stale(b.entity.eid, 'signin', 'tries', 0))
+        }
+      }
+      for (let b of bundles) {
+        let r = row(b.entity.eid)
+        if (b.tombstone) rows.splice(rows.indexOf(r!), 1)
+        else if (r) Object.assign(r.signin, b.signin)
+      }
+      return Promise.resolve(bundles)
+    },
+  }
+  return at
+}
+
+Deno.test('forty guesses at once still get five, and the code dies', async () => {
+  let rows = [row(ME, await mac(ME, '123456', SECRET), soon()) as Signin]
+  let store = guarded(rows)
+  let wrong = Array.from({ length: 40 }, (_, i) => String(i).padStart(6, '9'))
+  let opened = await Promise.all(wrong.map((c) => spend(store, SECRET, ME, c)))
+  assertEquals(opened.filter(Boolean), [])
+  assertEquals(rows[0].signin.tries, TRIES)
+  assertFalse(await spend(store, SECRET, ME, '123456'))
 })
 
 Deno.test('a code belongs to its address', async () => {

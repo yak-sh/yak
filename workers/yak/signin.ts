@@ -20,7 +20,7 @@
 // door does with a refusal is the door's: it answers exactly what an accepted
 // ask answers and mails nothing, because a visible refusal would say whether
 // an address had been asked for.
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, Stale, token } from '@yaks/graph'
 import { KERNEL, type Meta, minted } from './meta.ts'
 
 // Ten minutes, five guesses: long enough to switch to the mail app, short
@@ -128,32 +128,46 @@ export let mint = async (store: Meta, secret: string, email: string) => {
 // the records that counted them go together, so a person who gets in starts
 // over with a full three.
 //
-// A wrong guess costs a try on every open code, so five guesses is five
-// however many letters are in the inbox. A row out of tries opens nothing and
-// stays only as the record; burning one is what an attacker would do to buy
+// A guess costs a try on every open code, so five guesses is five however
+// many letters are in the inbox. A row out of tries opens nothing and stays
+// only as the record; burning one is what an attacker would do to buy
 // another letter, and it buys nothing.
+//
+// The try is taken before the guess is compared, and taken in the store's own
+// transaction: each count is written on the precondition that it is still the
+// count this guess read (`$was`, @yaks/graph guard.ts). Read, compare, then
+// write was two steps, so forty guesses sent at once all read the same count,
+// all ran, and the right code still opened (T-37875). Now concurrent guesses
+// queue on the count: a guess whose read went stale reads again, and the
+// sixth finds nothing open.
 export let spend = async (
   store: Meta,
   secret: string,
   email: string,
   code: string,
 ) => {
-  let rows = await sent(store, email)
-  let live = rows.filter(open)
-  if (!live.length) return false
   let want = await mac(email, code, secret)
-  if (live.some((r) => r.signin.code == want)) {
+  for (;;) {
+    let rows = await sent(store, email)
+    let live = rows.filter(open)
+    if (!live.length) return false
+    try {
+      await apply(
+        store,
+        live.map((r) => ({
+          entity: { eid: r.entity.eid },
+          signin: { tries: (r.signin.tries ?? 0) + 1 },
+          $was: { signin: { tries: token(r.signin.tries) } },
+        })),
+      )
+    } catch (e) {
+      if (e instanceof Stale) continue
+      throw e
+    }
+    if (!live.some((r) => r.signin.code == want)) return false
     await forget(store, rows.map((r) => r.entity.eid))
     return true
   }
-  await apply(
-    store,
-    live.map((r) => ({
-      entity: { eid: r.entity.eid },
-      signin: { tries: (r.signin.tries ?? 0) + 1 },
-    })),
-  )
-  return false
 }
 
 type Person = { entity: { eid: string }; doc?: { title?: string } }

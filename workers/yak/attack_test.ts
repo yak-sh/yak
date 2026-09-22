@@ -7,7 +7,7 @@
 import { assertEquals } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { COOKIE } from '../../src/token.ts'
-import { allowed, type Kernel, kernel, signIn } from './probe.ts'
+import { allowed, type Kernel, kernel, mailed, signIn } from './probe.ts'
 import { granting } from './dispatch.ts'
 import { b64u } from './mcp-probe.ts'
 
@@ -88,6 +88,38 @@ slow(
       let own = await mintLink(me.cookie)
       assertEquals(own.status, 200)
       await own.body?.cancel()
+    } finally {
+      await k.stop()
+    }
+  },
+)
+
+slow(
+  'forty guesses at a sign-in code at once still get five (T-37875)',
+  async () => {
+    let k = await kernel()
+    try {
+      let email = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`
+      let asked = await posted(k, '/login', { email }, '')
+      assertEquals(asked.status, 200)
+      await asked.body?.cancel()
+      let code = await mailed(k, email)
+      let wrong = Array.from(
+        { length: 40 },
+        (_, i) => String((Number(code) + 1 + i) % 1_000_000).padStart(6, '0'),
+      )
+      let guessed = await Promise.all(
+        wrong.map((c) => posted(k, '/login/code', { email, code: c }, '')),
+      )
+      for (let r of guessed) {
+        assertEquals(r.status, 400)
+        await r.body?.cancel()
+      }
+      // Five of those were all the code had, so the right digits open nothing.
+      let right = await posted(k, '/login/code', { email, code }, '')
+      assertEquals(right.status, 400)
+      assertEquals(right.headers.get('set-cookie'), null)
+      await right.body?.cancel()
     } finally {
       await k.stop()
     }
