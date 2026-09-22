@@ -76,7 +76,7 @@ Deno.test('a letter’s link carries the code, and what it was finishing', async
   let pass = await passOf(t, SECRET)
   assertEquals(pass?.once?.email, ME)
   assertEquals(pass?.once?.code, '123456')
-  // The authorize request in flight rides in the SEAL, so a leaked link cannot
+  // The authorize request in flight rides in the seal, so a leaked link cannot
   // be re-aimed at a stranger's page.
   assertEquals(pass?.once?.q, 'a=b')
   assertEquals(pass?.once?.back, 'https://jeff.yaks.app/_yaks/billing')

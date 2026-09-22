@@ -3,7 +3,7 @@
 // before it does anything — which space, which app, and is this caller allowed
 // there.
 //
-// It is here rather than in tools.ts because tools.ts is the ROSTER, and a
+// It is here rather than in tools.ts because tools.ts is the roster, and a
 // plugin (plugin.ts) contributes rows to it. A domain module that said its
 // rows by importing the roster would be a cycle, and a cycle whose first
 // symptom is a row half-built at module load. So the contract sits below both:
@@ -34,15 +34,15 @@ export type Ctx = {
   // runs these tools for a person it already knows (builder.ts).
   who?: Caller
   // The tool list this door is serving and the version naming it (mcp.ts,
-  // T-34277). Set after the tools are assembled, since it is made OF them, so
-  // only a tool RUNNING sees it — which `about` is.
+  // T-34277). Set after the tools are assembled, since it is made of them, so
+  // only a tool running sees it — which `about` is.
   roster?: { version: string; names: string[] }
   // What the apps in reach say about themselves (standing.ts), assembled once
   // per request by the door that also puts it in `initialize.instructions`
   // (mcp.ts). `about` says it again, because a client that cached the
   // instructions at connect has no other way to read them fresh.
   standing?: string
-  // The container time this BUILD has spent (sandbox.ts `Spend`), where a
+  // The container time this build has spent (sandbox.ts `Spend`), where a
   // build is what is running: builder.ts mints one per loop and pays for it
   // at the end. A connector call arrives without one and gets a fresh one, so
   // a single tool call is its own budget — which is as much as one call could
@@ -54,7 +54,7 @@ export type Ctx = {
   clock?: Clock
   // Reads made once per request (`once` below): the door asks for the reach,
   // each app's declared tools and each store's vocabulary from several places
-  // while it assembles itself, and a call is answered about ONE moment, so the
+  // while it assembles itself, and a call is answered about one moment, so the
   // second ask is the first one's promise. Nothing here outlives the request:
   // freshness across calls is the directory's promise (mcp.ts), not this map's.
   once?: Map<string, Promise<unknown>>
@@ -92,7 +92,7 @@ export type Tool = {
   // permission prompt reads it instead of the snake_case name.
   title: string
   description: string
-  // What this one DOES, as the four MCP hints (@yaks/graph `Tool`, emitted by
+  // What this one does, as the four MCP hints (@yaks/graph `Tool`, emitted by
   // @yaks/mcp `annotated`). A host reads them to decide what it may call
   // without asking, so they say what the tool does and not what would be
   // convenient: readOnly for a pure look-up, destructive for what deletes or
@@ -109,13 +109,13 @@ export type Tool = {
   output?: Shape
   // What it declares about signing in (`_meta.securitySchemes`), where that is
   // not what the door declares for everything it lists: a tool anybody may
-  // call says `noauth` (preauth.ts NOAUTH, mcp.ts SIGNIN).
+  // call says `noauth` (preauth.ts NOAUTH, mcp.ts signin).
   security?: Security[]
   input: Shape
   run: (ctx: Ctx, args: Args) => Promise<Out>
 }
 
-/** What a tool SAYS about itself: one entry of tools.yml, under the tool's own
+/** What a tool says about itself: one entry of tools.yml, under the tool's own
  * name. The words are the file's; everything else about a row is code's. */
 export type Words = { title: string; description: string }
 
@@ -132,7 +132,7 @@ export type Row = Omit<Tool, 'title' | 'description'> & {
 
 /**
  * A row wearing its words. A name tools.yml says nothing about throws at
- * MODULE LOAD, which is the test run, the bundle and the boot — so a row added
+ * module load, which is the test run, the bundle and the boot — so a row added
  * without its words is a build that fails and never a tool that lists blank.
  */
 export let worded = (row: Row): Tool => {
@@ -165,12 +165,12 @@ export let text = (v: unknown, what: string) => {
   return v
 }
 
-// The space the caller means when they name none: the one that is THEIRS.
+// The space the caller means when they name none: the one that is theirs.
 // Signing in mints it, so this is one lookup and never a question; a person
 // who signed in before that existed, or who was invited into somebody else's
 // space before they ever had one, gets theirs on this very call (T-32482,
 // T-33142). Belonging to a space is not having one — defaulting to a space
-// the caller is only a member of aimed app_install at the INVITER's space.
+// the caller is only a member of aimed app_install at the inviter's space.
 //
 // Naming the APP is naming the space — the one they can reach that holds
 // that slug. An app's own tool (declared.ts) knows its store and asks
@@ -225,7 +225,7 @@ export let inSpace = async (ctx: Ctx, args: Args, write = false) => {
   return { space, who }
 }
 
-// One named space as a SEAT — the shape `directory.seats` answers in, so a
+// One named space as a seat — the shape `directory.seats` answers in, so a
 // listing over one space and a listing over all of them read the same
 // (tools.ts `app_list`).
 export let seatIn = async (ctx: Ctx, slug: string) => {

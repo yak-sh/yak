@@ -18,13 +18,13 @@ import { archetypes } from '@yaks/archetype'
 // in and bundles out: no fleet schema is planted, there is no `snapshot()`,
 // and no SQL is written here.
 //
-// It serves TWO roles, told apart by the name the kernel gives the object. An
-// app's store wakes with the core plus its own `vocab.json`; the DIRECTORY —
+// It serves two roles, told apart by the name the kernel gives the object. An
+// app's store wakes with the core plus its own `vocab.json`; the directory —
 // the one object named `yak/platform` — wakes with the platform's own
 // vocabulary, uniques and all (vocab.ts `platformDoc`, T-33814). One class,
 // one composition, two vocabularies.
 //
-// This class carries the DO's own NAME, `Store`, so wrangler's migration list
+// This class carries the DO's own name, `Store`, so wrangler's migration list
 // never moves: it took the name from the fleet-shaped object it replaced, which
 // is gone (T-33807), and migrate.ts carries that object's rows across on the
 // first request that reaches one (T-33809).
@@ -40,14 +40,14 @@ import { archetypes } from '@yaks/archetype'
 // request may reach a fresh incarnation.
 //
 // ## Who is asking (T-33813)
-// ONE seam, and it is @yaks/api's `Authenticate` — the same value @yaks/mcp's
+// one seam, and it is @yaks/api's `Authenticate` — the same value @yaks/mcp's
 // mount takes, so the agent door and the page door cannot disagree about who
 // is writing. {@link authenticating} is it: the vouch in, the `$actor` entity
 // out, and a refusal for a caller this app's mode does not admit. Nothing else
 // in this object reads a credential, and no bundle's own `$actor` survives
 // (@yaks/api `signed`).
 //
-// THE CREDENTIAL IS VERIFIED ONCE, AT THE EDGE. A session cookie, an OAuth
+// The credential is verified once, at the edge. A session cookie, an OAuth
 // bearer and a sealed grant are three things to check and one answer — a
 // person and the level they hold — so the kernel checks them where they
 // arrive (identity.ts `withAuth`, dispatch.ts `granted`) and says the answer
@@ -55,10 +55,10 @@ import { archetypes } from '@yaks/archetype'
 // this store holds (`x-yak-app`) and what the directory says its access mode
 // is (`x-yak-access`).
 //
-// WHY THE VOUCH IS BELIEVED. Not because it is signed — it is not — but
+// Why the vouch is believed. Not because it is signed — it is not — but
 // because nothing else can say it. A Durable Object is reachable only through
 // its binding, from this Worker, and the one door onto a store (door.ts
-// `storeOf`) STRIPS the whole vouch set from any request it is handed before
+// `storeOf`) strips the whole vouch set from any request it is handed before
 // it stamps its own. So the set is the kernel's by construction, in one place
 // that can be read, rather than by every caller remembering not to forward a
 // visitor's headers. A shared secret would put a signature on a hop that has
@@ -198,8 +198,8 @@ import {
 } from './vocab.ts'
 
 /**
- * Which words an object wakes with, from the one thing that decides it: WHICH
- * OBJECT IT IS. Two names on this platform are not apps — the directory
+ * Which words an object wakes with, from the one thing that decides it: which
+ * object it is. Two names on this platform are not apps — the directory
  * (`yak/platform`) and the git object graph (`yak/git`, D-34943) — and each
  * speaks its own vocabulary instead of an app's `vocab.json`. Every other name
  * is an app.
@@ -220,7 +220,7 @@ export let vocabOfStore = (name: string, declared: unknown = {}): Vocab =>
  * The slice of a `DurableObjectState` this object needs: its storage, and its
  * hibernatable sockets. A Worker's own `DurableObjectState` satisfies it.
  *
- * Two things beyond @yaks/durable-object's own slice, because the PLATFORM asks
+ * Two things beyond @yaks/durable-object's own slice, because the platform asks
  * this object for them and no app ever does. `databaseSize` is how many bytes
  * it holds — the only per-app storage figure that exists, since Cloudflare's
  * storage dataset has no per-object dimension (usage.ts reads it through
@@ -239,13 +239,13 @@ export type State = Hibernation & {
     // Cloudflare's point-in-time recovery, which is a whole store's way back
     // (recover.ts, T-34507): where this object's SQLite stands now, the
     // bookmark for a moment in the last thirty days, and the one to restore to
-    // when it next starts. OPTIONAL because a back-end may not offer them —
+    // when it next starts. Optional because a back-end may not offer them —
     // local workerd answers the first and refuses the other two — and the door
     // says so rather than pretending.
     getCurrentBookmark?(): Promise<string>
     getBookmarkForTime?(at: number | Date): Promise<string>
     onNextSessionRestoreBookmark?(bookmark: string): Promise<string>
-    // The object's ONE alarm, which is this store's whole clock (D-37562):
+    // The object's one alarm, which is this store's whole clock (D-37562):
     // every wake row it holds is owed at an instant, and the earliest of them
     // is what the runtime is asked to come back for. Optional like the
     // bookmarks — a stand-in that schedules nothing need not offer them, and a
@@ -304,7 +304,7 @@ export type Vouch = {
 }
 
 /**
- * The vouch off a request. `x-via` names an INSTRUMENT that named itself —
+ * The vouch off a request. `x-via` names an instrument that named itself —
  * attribution, never a level, and never a person's name — while
  * `x-yak-person` is the kernel's own word about a caller it verified.
  */
@@ -319,15 +319,15 @@ export let vouchOf = (req: Request): Vouch => {
 }
 
 /**
- * THE seam: the vouch as @yaks/api's `Authenticate`, which @yaks/mcp's mount
+ * The seam: the vouch as @yaks/api's `Authenticate`, which @yaks/mcp's mount
  * takes too. Nobody at all is `null` — an anonymous visitor, which an `open`
  * or `public` app admits and a `private` one refuses.
  *
- * A READ never reaches `apply()`, so it is refused here, in @yaks/member's own
+ * A read never reaches `apply()`, so it is refused here, in @yaks/member's own
  * words: the app's mode against the level this caller holds. The level is the
  * kernel's when it vouched one — the platform's roster lives in the directory,
  * not in an app's store — and this store's own grants otherwise, which is what
- * a share link and an app's own `grant` rows are. A WRITE passes here and is
+ * a share link and an app's own `grant` rows are. A write passes here and is
  * refused again inside the transaction by @yaks/member's precondition guard,
  * which is the only check that can read the batch.
  */
@@ -355,13 +355,13 @@ async (req) => {
 // The spine's own name.
 let SPINE = 'entity'
 
-// The two pieces of the wider platform grammar an app's store refuses BY NAME
+// The two pieces of the wider platform grammar an app's store refuses by name
 // rather than answering some other way (public/docs/querying.md, where both
 // are written down as this store's own limits). A work lane is the fleet's
 // board, which nothing here has; semantic ranking needs a vector index, which
 // nothing here has either — and an empty answer to a question about neither
 // would read as "no rows" rather than "not that question".
-// The three directives that reshape an answer into ONE value rather than a set
+// The three directives that reshape an answer into one value rather than a set
 // of rows. A line naming one is not a listing at all.
 type Agg = 'count' | 'distinct' | 'tally'
 let AGGS: Agg[] = ['count', 'distinct', 'tally']
@@ -384,7 +384,7 @@ let unserved = (line: string): string | null => {
 // A hibernatable socket the runtime will also close for us.
 type Closable = Wire & { close?(code: number, reason: string): void }
 
-// The VIEWS a tools manifest names (see the `/tools` door). It reads the JSON
+// The views a tools manifest names (see the `/tools` door). It reads the JSON
 // as written and says nothing about whether it is a manifest at all: what is
 // in the slot is whatever the kernel put there.
 let entries = (manifest: string): [string, Record<string, unknown>][] => {
@@ -426,14 +426,14 @@ export class Store {
   #auth!: Authenticate
   #meta!: Meta
   #bind: Bindings
-  // An object still holding the FLEET-shaped store this class replaces
+  // An object still holding the fleet-shaped store this class replaces
   // (T-33809). Nothing above the storage is built while this is true — planting
   // the new schema over the old tables is exactly what must not happen — so the
   // first request runs the pass and everything is raised after it.
   #pending = false
-  // Whether this object is behind the LATEST migration (migrate.ts `MARKS`):
+  // Whether this object is behind the latest migration (migrate.ts `MARKS`):
   // one that never carried, or one that carried before a later pass existed.
-  // Decided ONCE, here, rather than read off the storage on every request.
+  // Decided once, here, rather than read off the storage on every request.
   #behind = false
   #passing: Promise<void> | null = null
   // Why the pass refused, when it did. The rows are the old ones, untouched.
@@ -476,9 +476,9 @@ export class Store {
     this.#pending = !this.#get('migrated') && stale(ctx.storage)
     if (!this.#pending) this.#boot()
     if (this.#refused) return
-    // The passes after the first read and write the NEW schema, so they are
+    // The passes after the first read and write the new schema, so they are
     // asked after the boot — and only of an object that is not already at the
-    // LAST marker (migrate.ts `MARKS`), with one question per pass: an object
+    // last marker (migrate.ts `MARKS`), with one question per pass: an object
     // that stopped at an older marker because it had nothing to move for it
     // still has to be asked about the ones added since.
     this.#behind = this.#pending ||
@@ -488,7 +488,7 @@ export class Store {
           unfiled(ctx.storage)))
   }
 
-  // The vocabulary an object KEEPS is the document (T-37546). A store that
+  // The vocabulary an object keeps is the document (T-37546). A store that
   // last accepted the short type map an app's vocab.json could be written as
   // remembers it that way, and nothing converts one at the door any more — so
   // it is rewritten here, once, before anything above the storage reads it
@@ -504,7 +504,7 @@ export class Store {
   // and a reboot rather than a migration: the schema is additive — a table the
   // store has never seen is created, a column a word grew is added — and what
   // changed is which words the graph admits. Nothing is ever dropped or
-  // retyped; T-33809 owns moving rows that a changed COLUMN would need.
+  // retyped; T-33809 owns moving rows that a changed column would need.
   #boot(prepare = () => {}) {
     try {
       this.#ctx.storage.transactionSync(() => {
@@ -518,14 +518,14 @@ export class Store {
 
   #build() {
     let ctx = this.#ctx
-    // Which words this object speaks is a question of WHICH OBJECT it is
+    // Which words this object speaks is a question of which object it is
     // (`vocabOfStore`). One store on the platform is the directory (the meta
     // space, T-33814); one is the git object graph (D-34943); every other
     // object is an app, and wakes with the core plus whatever its `vocab.json`
     // declared.
     let name = this.#get('name') ?? ''
     let meta = name == PLATFORM_STORE
-    // Neither of the two is an APP, which is what the app-shaped extras below
+    // Neither of the two is an app, which is what the app-shaped extras below
     // are for: `task.status` is an expression over words a git object graph
     // does not have, and `vocab.json` is not a sentence to say to a caller of
     // either one.
@@ -551,7 +551,7 @@ export class Store {
     })
     // Every index the vocabulary declares is already in `store.ddl()` — the
     // directory's uniques included, since they are words of `platformDoc`.
-    // The blob table FIRST: the `doc_value` view and the search triggers read
+    // The blob table first: the `doc_value` view and the search triggers read
     // a body's text out of it, so it has to be standing before they are.
     let ddl = [
       ...blobSchema(),
@@ -562,7 +562,7 @@ export class Store {
     // vocabulary runs no DDL at all, and a deploy that added a component
     // raises its table on the next request.
     //
-    // A BRAND-NEW object raises nothing yet: it does not know which store it
+    // A brand-new object raises nothing yet: it does not know which store it
     // is until its first request says so, and planting an app's core into what
     // turns out to be the directory would leave tables no word of its
     // vocabulary names. `#learn` reboots the moment the name arrives, and every
@@ -571,11 +571,11 @@ export class Store {
     let stamp = sha256(ddl.join('\n'))
     let held = this.#get('schema')
     if (named && held != stamp) {
-      // A DEFINITION cannot be altered by replaying it. `create ... if not
+      // A definition cannot be altered by replaying it. `create ... if not
       // exists` says nothing about a trigger or a full-text index that is
       // already standing, so one raised under an older schema keeps its old
       // shape while the tables under it move — which is how a search index came
-      // to hold blob ADDRESSES after the triggers learned to resolve them
+      // to hold blob addresses after the triggers learned to resolve them
       // (T-33978). A definition holds no rows of its own, so it is dropped and
       // raised again at the current shape whenever the stamp moves, and the
       // index is then rebuilt off the content it mirrors. Nothing to do the
@@ -595,10 +595,10 @@ export class Store {
     }
     let app = this.#get('app')
     // The registry an app's own effects register on (T-33816), and the one
-    // every plugin of this Worker registers on below. It is FRESH on every
+    // every plugin of this Worker registers on below. It is fresh on every
     // boot, so those registrations happen once per incarnation however often
     // a store is rebuilt.
-    // An effect writes back through the KERNEL's own door — a new batch
+    // An effect writes back through the kernel's own door — a new batch
     // through this graph's `apply()`, trusted and unsigned — so what a letter
     // came to is journaled, cast to every open socket, and seen by whatever
     // else is watching, instead of a row a page finds on its next query
@@ -609,21 +609,21 @@ export class Store {
     let g = graph({
       storage: store,
       vocab,
-      // The guard is added LAST and only when this object knows which app it
+      // The guard is added last and only when this object knows which app it
       // holds: @yaks/member refuses a write by an actor with no level, so a
       // store that cannot name its app has no access question to ask and the
       // kernel's own gate in front of it is the whole rule.
       plugins: [
         ...(vocab.comp('archetype') ? [archetypes()] : []),
-        // First, before anything reads a word that is not there. The DIRECTORY
+        // First, before anything reads a word that is not there. The directory
         // is left out: its words are the platform's own, its callers are the
         // kernel's own, and `vocab.json` is not a sentence to say to any of
         // them.
         ...(own ? [] : [this.#teaching]),
-        // Before every check, because it is about the SHAPE a value arrived in.
+        // Before every check, because it is about the shape a value arrived in.
         this.#lowering,
         edges(vocab),
-        // The carrier and the one kind of it every store speaks: a NAME, which
+        // The carrier and the one kind of it every store speaks: a name, which
         // is how anything addresses a row it wrote last week without having
         // kept the eid. The carrier goes first — the name rides it (T-34390).
         keys(vocab),
@@ -643,14 +643,14 @@ export class Store {
         ...(!meta && app
           ? [this.#posting(app), mailbox({ domain: apex(this.#bind) })]
           : []),
-        // What every domain of this Worker declares about a WRITE, as data
+        // What every domain of this Worker declares about a write, as data
         // (plugin.ts `rules`, plugins.ts): a query over one bundle in the batch
         // plus what comes out, run by the phase it names. Every store gets
         // every rule — one about a component this store does not speak is inert
         // (@yaks/graph rules.ts) — and a phase runs its rules before its hooks
         // wherever the list sits, so the place decides nothing but the order
         // two rules on one phase fire in.
-        // The directory's jobs read and write the directory — which is THIS
+        // The directory's jobs read and write the directory — which is this
         // object. They get it as a method call (`META`), never as a fetch to
         // this object's own stub: a Durable Object shares one I/O context
         // across every request in flight on it, so each self-request deepens
@@ -665,7 +665,7 @@ export class Store {
         },
       ],
     })
-    // What every domain of this Worker does about data this store COMMITTED
+    // What every domain of this Worker does about data this store committed
     // (plugin.ts `effects`, plugins.ts): a letter that asks to go is the one
     // there is today (outbox.ts). The store hands over what only it knows —
     // its bindings, whether it is the platform's own, the app it holds and the
@@ -682,7 +682,7 @@ export class Store {
       created: (e) => this.#arming(e.comp?.at as string),
       changed: { at: (e) => this.#arming(e.comp?.at as string) },
     })
-    // The app's own commands, run HERE (T-37605, D-37562). @yaks/tools says
+    // The app's own commands, run here (T-37605, D-37562). @yaks/tools says
     // which calls still want running as two rules — one for a call nobody
     // scheduled, one for a call whose wake has fired — and a host registers
     // each as an effect. That is the whole of the scheduled case: a page
@@ -706,7 +706,7 @@ export class Store {
     this.#meta = metaOf(doorOf((req) => this.fetch(req), PLATFORM_STORE))
     let subs = subscriptions(g)
     this.#live = sockets(this.#naming(subs), ctx)
-    // The one `Authenticate` (T-33813). The app is read at REQUEST time — the
+    // The one `Authenticate` (T-33813). The app is read at request time — the
     // object may learn which app it holds from the request being answered —
     // and the mode with it, so a store told its access changed follows the
     // new word without a reboot.
@@ -716,7 +716,7 @@ export class Store {
       (v) => void (v.person && this.#vouched.set(v.person, v)),
     )
     this.#route = api({ graph: g, subs, authenticate: this.#auth })
-    // The registry is FRESH, and the sockets are not: they belong to the
+    // The registry is fresh, and the sockets are not: they belong to the
     // runtime and outlive every incarnation of this object, so whatever they
     // are watching is re-opened against the new one. Without this a deploy
     // would leave every open page subscribed to a registry nothing commits to.
@@ -727,7 +727,7 @@ export class Store {
    * values @yaks/mcp's mount is built out of, so the agent door is the same
    * graph under the same `Authenticate` as the page door (T-33812).
    *
-   * The third is where a CALL is RECORDED (ledger.ts). @yaks/tools writes one
+   * The third is where a call is recorded (ledger.ts). @yaks/tools writes one
    * as the transcript of having asked, and an app's store speaks its own app's
    * words — not `call`, `result` or `tool` — so the record lives in a graph of
    * its own for the life of this door rather than as three tables in
@@ -776,11 +776,11 @@ export class Store {
       this.#put('name', name)
       this.#build()
     }
-    // Which app this object holds is an APP's question. The directory is not
+    // Which app this object holds is an app's question. The directory is not
     // one — it speaks the platform's vocabulary, which has no `grant` and no
     // `access`, and the kernel decides who may read and write it before the
     // request arrives (vocab.ts, `platformDoc`). A caller that names an app on
-    // its way to the directory is naming an app whose ROW lives here, not the
+    // its way to the directory is naming an app whose row lives here, not the
     // object it is talking to, so the word is ignored rather than believed:
     // believing it installs @yaks/member's guard on a store with no seats and
     // writes a grant into a table that does not exist.
@@ -805,7 +805,7 @@ export class Store {
   }
 
   // The app's access mode, in this store's own rows — what @yaks/member reads
-  // to answer "and everyone else?". It is written STRAIGHT THROUGH storage,
+  // to answer "and everyone else?". It is written straight through storage,
   // not through apply(): the platform's word about who may write is not an
   // application write and does not pass the application's guard, which would
   // refuse it (only an owner may write an `access`).
@@ -815,7 +815,7 @@ export class Store {
     this.#patch([{ entity: { eid: app }, access: { mode: m } }])
   }
 
-  // What the kernel has vouched about somebody, this incarnation, kept BY
+  // What the kernel has vouched about somebody, this incarnation, kept by
   // person: two requests can be in flight at once, and a `Vouch` held in one
   // field would be whichever of them spoke last. `#told` is what has already
   // been written down for them, so a session's second write costs no rows.
@@ -827,7 +827,7 @@ export class Store {
    * entity of its own (so a byline resolves to somebody), the name to call
    * them by, and the level the platform says they hold on this app.
    *
-   * It is a WRITE-PATH plugin rather than a door's own step, because there is
+   * It is a write-path plugin rather than a door's own step, because there is
    * more than one door — @yaks/api's `/apply`, @yaks/mcp's tools, whatever
    * mounts next — and the guard that reads these rows would otherwise hold
    * for one of them and not the others. `precondition` is where it belongs:
@@ -835,17 +835,17 @@ export class Store {
    * platform's word is a row by the time the rule asks for one, and a refused
    * batch rolls the row back with everything else it wrote.
    *
-   * A READ writes nothing at all: an app learns who its members are when one
+   * A read writes nothing at all: an app learns who its members are when one
    * of them writes to it, not when one of them looks at it.
    */
   /**
    * A word nobody declared, refused at the write door instead of dropped.
    *
-   * @yaks/graph drops an unknown COMPONENT on purpose — forward compatibility,
+   * @yaks/graph drops an unknown component on purpose — forward compatibility,
    * so a newer client's batch still lands (admit.ts). This platform has the
    * opposite problem: an app's own words are its `vocab.json`, and a `recipe`
    * silently dropped is a page that saved nothing and said it saved. So the
-   * store that HOLDS the vocabulary says where a word comes from, in the same
+   * store that holds the vocabulary says where a word comes from, in the same
    * sentence the read door says it in (`#taught`).
    */
   #teaching: Plugin = {
@@ -867,7 +867,7 @@ export class Store {
   }
 
   /**
-   * A row read back, handed straight back. A reference READS as `{eid, name}`
+   * A row read back, handed straight back. A reference reads as `{eid, name}`
    * (`#speak`) because outputs speak human, and the shape a door hands out must
    * be a shape it takes: a page that read a byline and writes it into a column
    * of its own is doing the ordinary thing, and refusing it would make every
@@ -921,7 +921,7 @@ export class Store {
         let said = `${app ?? ''} ${v.level ?? ''} ${v.title ?? ''}`
         if (this.#told.get(who) == said) return bundles
         this.#told.set(who, said)
-        // The APP writing as itself (dispatch.ts `owning`, `env.APP`) is the
+        // The app writing as itself (dispatch.ts `owning`, `env.APP`) is the
         // one actor that is not a person: it is already a row here, carrying
         // this store's `access`, and calling it a person would put the app in
         // its own `.person!` listing. Its grant is still written — that is
@@ -957,19 +957,19 @@ export class Store {
   /**
    * An app's letters: the address they leave from, and who may ask for one.
    *
-   * THE `from` IS THE PLATFORM'S WORD, stamped over whatever the batch said.
+   * The `from` is the platform's word, stamped over whatever the batch said.
    * The address is a claim about who wrote — a letter from
    * `ada.cookbook@yaks.app` is DKIM-signed by us and read by the world as
    * ours — and a column a client may write is a column a client may forge. A
-   * letter the KERNEL writes is left alone: that is an ARRIVAL (T-33687),
+   * letter the kernel writes is left alone: that is an arrival (T-33687),
    * whose `from` is the sender's own, out on the web.
    *
-   * WHO MAY SEND is the roster, not the app's mode. @yaks/member's rule is
-   * about the APP, and an `open` app admits an anonymous visitor's write on
+   * Who may send is the roster, not the app's mode. @yaks/member's rule is
+   * about the app, and an `open` app admits an anonymous visitor's write on
    * purpose — that is what open means. But a letter does not stay in the app:
    * it leaves under the platform's name, so an open app with no rule here is
    * an open relay, and the first spam run would take the zone's reputation
-   * with it. So the ASK to send — the `deliver` component — is held to a level
+   * with it. So the ask to send — the `deliver` component — is held to a level
    * that writes: a member or an editor, and never nobody at all. Writing the
    * letter is not held to anything; a draft is ordinary data.
    */
@@ -1003,19 +1003,19 @@ export class Store {
     }
   }
 
-  // Whether the batch running RIGHT NOW came in at the kernel's door. A Durable
+  // Whether the batch running right now came in at the kernel's door. A Durable
   // Object is single-threaded and its storage is synchronous, so `#trust()`
   // below runs `apply()` from the line that sets this to the line that clears
   // it without ever yielding: no other batch can be between the two. And the
   // failure it could have is the safe one — a flag cleared too early leaves the
-  // guard ON, which refuses a write rather than admitting one.
+  // guard on, which refuses a write rather than admitting one.
   #kernelling = false
 
   /**
    * @yaks/member's guard, with the one writer it is not about taken out.
    *
-   * The guard asks whether the ACTOR may write this app. The platform is not an
-   * actor — it writes ABOUT the app rather than in it: the break it noted
+   * The guard asks whether the actor may write this app. The platform is not an
+   * actor — it writes about the app rather than in it: the break it noted
    * (unseen.ts `noted`), the mark on a line it served. That door is
    * {@link Store.fetch}'s `x-yak-kernel` branch, which no client can reach
    * (door.ts `storeOf` strips the whole vouch set), and a batch through it
@@ -1045,7 +1045,7 @@ export class Store {
   }
 
   // The same door, keeping whatever signature the batch already carries: what
-  // the RUNNER writes through (`#runner`). A call reached this store by the
+  // the runner writes through (`#runner`). A call reached this store by the
   // ordinary door and @yaks/member's guard has already had its say about who
   // wrote it; the claim and the result beside it are the server's own
   // bookkeeping, and a tool's answer is the caller's own write, already signed
@@ -1094,7 +1094,7 @@ export class Store {
   }
 
   // The `tool` rows a call names, written when the manifest they come from
-  // moves. A call points AT a tool entity, so that row has to be standing
+  // moves. A call points at a tool entity, so that row has to be standing
   // before anybody can write one — and a deploy is the moment to stand it up.
   #planting = async (): Promise<void> => {
     let said = this.#get('tools') ?? '{}'
@@ -1106,13 +1106,13 @@ export class Store {
   // ---- the clock (D-37562) -------------------------------------------------
   //
   // Every store keeps its own schedules and its own alarm. There is no
-  // heartbeat over the platform: a Cron Trigger could only reach ONE object,
+  // heartbeat over the platform: a Cron Trigger could only reach one object,
   // which made every app's schedules the directory's business and woke the
   // directory twelve times an hour to find nothing owed. A wake row is owed at
   // an instant, the runtime can be asked to come back at an instant, and that
   // is the whole mechanism.
 
-  // How long a REFUSED occurrence waits. A refusal leaves its wake due — a
+  // How long a refused occurrence waits. A refusal leaves its wake due — a
   // precondition moved, a rule said no — and nothing else will touch that row,
   // so the object comes back for it rather than dropping it. A minute is the
   // same floor @yaks/wake's Deno loop caps its sleep at.
@@ -1144,7 +1144,7 @@ export class Store {
    * and the alarm is set a minute out so nothing is silently dropped.
    */
   async tick(now = Date.now()): Promise<Ticked> {
-    // The firing is the SERVER's write, not a person's: a wake is the object's
+    // The firing is the server's write, not a person's: a wake is the object's
     // own business, and @yaks/member's guard asks which person may write an
     // app's data. So it goes through the same door the kernel writes through,
     // carrying the tick's instant, which is the `#Now` its rules read.
@@ -1184,7 +1184,7 @@ export class Store {
       // The app's own commands, standing: the `tool` rows a call names, and
       // one pass over the calls nobody is waiting on — one another process
       // wrote, one a crash left claimed, one whose wake fired while this
-      // object was away. Only a store that HAS commands asks.
+      // object was away. Only a store that has commands asks.
       if ((this.#get('tools') ?? '{}') != '{}') {
         await this.#planting()
         await reconcile(this.#runner())
@@ -1264,15 +1264,15 @@ export class Store {
   }
 
   /**
-   * ONE pass after the first, whichever it is (migrate.ts `MARKS`): the rows it
+   * One pass after the first, whichever it is (migrate.ts `MARKS`): the rows it
    * is about reach R2 before one moves, the move is one transaction, the report
    * is written beside them, and the marker is written only when it reconciles.
    * An object with nothing to move writes the marker and nothing else, so it is
    * never asked again — which is every app store for every one of these.
    *
    * The three differ in four words each, so they are four arguments and not
-   * three copies of this: what the object still HOLDS, the rows to READ OUT,
-   * the MOVE, and the marker it earns.
+   * three copies of this: what the object still holds, the rows to read out,
+   * the move, and the marker it earns.
    */
   async #after(
     request: Request,
@@ -1345,7 +1345,7 @@ export class Store {
       let held = w == 'name' ? name : slots?.get(w)
       if (held != null && String(held)) this.#put(w, String(held))
     }
-    // The vocabulary those slots carry is the OLD object's, which may be the
+    // The vocabulary those slots carry is the old object's, which may be the
     // short type map (migrate.ts `documented`): the carry raises the new schema
     // out of it, so it is the document before anything reads it.
     this.#documenting()
@@ -1444,7 +1444,7 @@ export class Store {
   }
 
   /**
-   * The object after a refusal. The rows are the OLD ones, exactly as they were
+   * The object after a refusal. The rows are the old ones, exactly as they were
    * — the pass ran in one transaction and it unwound — and this object cannot
    * read them: they are in the fleet's shape, and everything above the storage
    * here is raised from a vocabulary that has no tables for it. So it says so,
@@ -1476,7 +1476,7 @@ export class Store {
   }
 
   /**
-   * The object's door. What the kernel says about this object is read FIRST —
+   * The object's door. What the kernel says about this object is read first —
    * it may rebuild everything above the storage — and `wake()` comes next, so
    * a batch applied by the request that woke this object still reaches the
    * sockets it inherited.
@@ -1484,7 +1484,7 @@ export class Store {
   async fetch(request: Request): Promise<Response> {
     // The one pass, before this object answers anything (T-33809). It runs
     // inside the runtime's own gate, so every other request waits on it rather
-    // than racing it, and it runs from a REQUEST rather than the constructor
+    // than racing it, and it runs from a request rather than the constructor
     // because the kernel's vouch is what names this object and the app it holds.
     if (this.#behind) await this.#pass(request)
     if (this.#refused) return this.#stalled(request)
@@ -1493,14 +1493,14 @@ export class Store {
     this.#live.wake()
     // The clock, started. A wake row is owed at an instant and the runtime's
     // alarm is how this object comes back for it — but an object that has
-    // never been asked anything is not running, so a REQUEST is the moment its
+    // never been asked anything is not running, so a request is the moment its
     // schedules are planted and a lost alarm is set again. Once per
     // incarnation, and the stamp keeps it to one read after the first.
     await (this.#sowing ??= this.#sow())
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
     if (path == '/vocab') return this.#vocabDoor(request)
-    // The three slots beside the vocabulary: the words this app USES but does
+    // The three slots beside the vocabulary: the words this app uses but does
     // not home (T-32728), the tools it declares (T-32685), and what the object
     // weighs. None is graph data — a declaration holds no rows and a byte count
     // is not one — so each is a word in this object's own memory, and the
@@ -1511,12 +1511,12 @@ export class Store {
       let answer = await this.#slot(request, 'tools')
       if (!answer.ok || request.method != 'POST') return answer
       let now = this.#get('tools') ?? '{}'
-      // The VIEWS this manifest names, compared: the set of pages its
+      // The views this manifest names, compared: the set of pages its
       // commands draw their answers in, which is what `resources/list` is made
       // of, and the kernel tells everyone who can reach the app when it moved
       // (declared.ts `viewsMoved`). The commands themselves move no list —
       // they are not tools, and the tool roster is fixed (T-34541).
-      // The rows those commands are CALLED at (`#planting`): a deploy is what
+      // The rows those commands are called at (`#planting`): a deploy is what
       // moves the manifest, so a deploy is what stands them up.
       if (now != was) await this.#planting()
       let said = await answer.json() as Record<string, unknown>
@@ -1543,7 +1543,7 @@ export class Store {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       return this.#recovery(request)
     }
-    // The socket is a READ that stays open, and it is the one door @yaks/api
+    // The socket is a read that stays open, and it is the one door @yaks/api
     // does not answer here — hibernation is the runtime's, so `sockets` takes
     // it — which would leave it the one door with no policy on it. So it asks
     // the same seam, by hand, at the handshake.
@@ -1563,7 +1563,7 @@ export class Store {
       let line = url.searchParams.get('q') ?? ''
       let no = unserved(line)
       if (no) return refuse(new Refused(no))
-      // An AGGREGATE is not a listing — `.count!` answers one number — and
+      // An aggregate is not a listing — `.count!` answers one number — and
       // @yaks/api's read door answers bundles, which is the wrong half of the
       // compiled statement. So it is answered here, off the raw rows, in the
       // shape every door on this platform says it in.
@@ -1581,7 +1581,7 @@ export class Store {
     return await this.#route(request)
   }
 
-  // The word a row is NAMED by. `kind` is not a column and no client can derive
+  // The word a row is named by. `kind` is not a column and no client can derive
   // it: it is the most specific component this vocabulary says the entity wears
   // (@yaks/vocab `kindOf`), and only a store holding the vocabulary can say
   // which that is. Every caller above reads it — the composing read calls a row
@@ -1592,15 +1592,15 @@ export class Store {
     ...row,
   })
 
-  // Outputs speak HUMAN (db.ts `human()`): a column that references a person
+  // Outputs speak human (db.ts `human()`): a column that references a person
   // answers `{eid, name}` when this store knows who that is, and the bare eid
-  // when it does not. A view gets ONE query, and a byline it would need a second
+  // when it does not. A view gets one query, and a byline it would need a second
   // question for is no byline — the inline leaderboard drew "someone" on every
   // row while `created.by` was a uuid (C-32730 item 5). Writes are unmoved: the
   // value is the eid, and a read shape handed back is lowered to it.
   //
   // Which columns reference is the vocabulary's word (`refCols`), and who among
-  // them is a PERSON is this store's own rows — the writer it minted when they
+  // them is a person is this store's own rows — the writer it minted when they
   // first wrote here, wearing what the kernel said to call them.
   #speak = (rows: Bundle[]): Bundle[] | Promise<Bundle[]> => {
     let refs = new Set(this.#vocab.refCols().map(([c, p]) => `${c}.${p}`))
@@ -1625,17 +1625,17 @@ export class Store {
     })
   }
 
-  // What a listing CARRIES, beside what it selects (Jeff, 2026-09-03): "we
+  // What a listing carries, beside what it selects (Jeff, 2026-09-03): "we
   // should query for the exact components we want: `.book!&.recipe?` = must be
   // book, recipe is optional but requested. asking for all comps is i imagine
   // most useful for debugging". So an answer carries the components the filter
-  // NAMES — by presence (`.book!`), by request (`.loan?`), or by a predicate of
+  // names — by presence (`.book!`), by request (`.loan?`), or by a predicate of
   // its own — and nothing else. A filter that names none (an `id=` fetch, a
   // bare search term) left nothing out and answers the whole bundle, which is
   // also the only useful answer to someone who does not yet know what they
   // found; `*` is the debugging form that asks for everything by name.
   //
-  // A component asserted ABSENT (`.archived=`) names no component the answer
+  // A component asserted absent (`.archived=`) names no component the answer
   // could carry, which is also what keeps the door's own platform screens
   // (listing.ts `asking`) from reading as requests.
   #wanted(line: string): Set<string> | null {
@@ -1660,7 +1660,7 @@ export class Store {
     return want.size ? want : null
   }
 
-  // The rows, cut to what was asked for. The spine and the `kind` NAME a row,
+  // The rows, cut to what was asked for. The spine and the `kind` name a row,
   // and a text query's `rank` is the answer's own word about it, so those three
   // ride whatever the filter said.
   #only = (rows: Bundle[], want: Set<string> | null): Bundle[] =>
@@ -1674,7 +1674,7 @@ export class Store {
 
   // The read door's half of `#teaching`: `unknown prop: .recipe` is true and
   // useless on its own, so the store that holds the vocabulary adds where a
-  // word of your own comes from. The DIRECTORY says nothing of the kind — its
+  // word of your own comes from. The directory says nothing of the kind — its
   // callers are the kernel's own.
   async #taught(answer: Response): Promise<Response> {
     if (answer.ok || this.#get('name') == PLATFORM_STORE) return answer
@@ -1701,7 +1701,7 @@ export class Store {
     )
   }
 
-  // A text term RANKS as well as filters: a search answers closest first, and
+  // A text term ranks as well as filters: a search answers closest first, and
   // each row says how close (public/client.js `search`, and reach.ts reads the
   // same word to merge two apps' hits into one order). @yaks/sql compiles a
   // bare word as a predicate and stops there, so the ranking is read off the
@@ -1709,7 +1709,7 @@ export class Store {
   // filter already chose. `rank` is the answer's own word about a row, never a
   // component: nothing stores it and no vocabulary declares it.
   //
-  // bm25 counts DOWN — a closer match is a smaller number, and they are
+  // bm25 counts down — a closer match is a smaller number, and they are
   // negative — so what a page reads is its negation, where bigger is better.
   #ranked(rows: Bundle[], line: string): Bundle[] {
     let text = parse(line).clauses
@@ -1750,7 +1750,7 @@ export class Store {
   // The same word on a subscription's frames, because a subscription is that
   // query still answering: a page that swaps `query()` for `subscribe()` must
   // get the same rows (public/client.js). The sink a socket hands in is wrapped
-  // ONCE per sink, since `close` and `drop` find a subscription by the sink it
+  // once per sink, since `close` and `drop` find a subscription by the sink it
   // was opened with.
   #naming(subs: Subs): Subs {
     let wrapped = new Map<Sink, Sink>()
@@ -1778,7 +1778,7 @@ export class Store {
       open: (sink, id, query) => {
         let mine = wants.get(sink) ?? new Map()
         wants.set(sink, mine)
-        // `true` is a subscription to EVERYTHING, which names no component and
+        // `true` is a subscription to everything, which names no component and
         // so cuts nothing.
         mine.set(String(id), query === true ? null : this.#wanted(query))
         return subs.open(by(sink), id, query)
@@ -1801,7 +1801,7 @@ export class Store {
   }
 
   // One of the object's own memory slots as a door: a GET reads back what it
-  // last accepted, a POST replaces it whole. The body is stored as WRITTEN —
+  // last accepted, a POST replaces it whole. The body is stored as written —
   // whoever posts it is the one that can check it against the app's words
   // (tools.ts `released`), and a slot that parsed its own content would be a
   // second vocabulary in the object.
@@ -1862,14 +1862,14 @@ export class Store {
    * point-in-time recovery, T-34507).
    *
    * A GET reads bookmarks and changes nothing: `from` is where the object
-   * stands right now — which is the way BACK from any restore, and therefore
+   * stands right now — which is the way back from any restore, and therefore
    * the thing the caller writes down before asking for one — and `to`, when a
    * moment was named, is the bookmark for that moment.
    *
-   * A POST restores. The restart is a HURRY and not the mechanism:
+   * A POST restores. The restart is a hurry and not the mechanism:
    * `onNextSessionRestoreBookmark` is written down by the runtime, so the
    * recovery happens whenever this object next starts even if the abort never
-   * lands. Which is why the answer goes out FIRST — `abort` fails every
+   * lands. Which is why the answer goes out first — `abort` fails every
    * in-flight request, including the one asking for this — and the restart
    * rides a turn of the loop behind it.
    */
@@ -1931,13 +1931,13 @@ export class Store {
   // as it was. The kernel is the only caller; a client never spells a store's
   // path.
   //
-  // The answer is what this app now says and what MOVED, which naming the
+  // The answer is what this app now says and what moved, which naming the
   // components does not tell whoever deployed it (C-32652 item 4): a renamed
-  // column arrives BESIDE the old one, and `added` is how they see that. Nothing
+  // column arrives beside the old one, and `added` is how they see that. Nothing
   // ever leaves — the DDL is additive and a column's rows are already written —
   // so `dropped` is empty and stays that way.
   //
-  // What is written, kept and answered is one thing: the DOCUMENT (T-37546).
+  // What is written, kept and answered is one thing: the document (T-37546).
   // A manifest is a JSON Schema document and nothing else — a keyword is the
   // column's (`search`, `stamped`, a reference's `death`), and a manifest
   // flattened to bare type words dropped every one of them before any store
@@ -1972,8 +1972,8 @@ export class Store {
         if (this.#refused) return this.#stalled(request)
         return Response.json({
           ok: true,
-          // The app's OWN words, not the whole vocabulary it speaks: a store's
-          // `/vocab` is what it HOMES, which is how a deploy across a space
+          // The app's own words, not the whole vocabulary it speaks: a store's
+          // `/vocab` is what it homes, which is how a deploy across a space
           // knows whose a component is (reach.ts, T-32700).
           comps: Object.keys(doc.$defs ?? {}),
           dropped,
@@ -2006,7 +2006,7 @@ export class Store {
   /** A frame from a client: a subscription opened or closed. */
   webSocketMessage(ws: Wire, data: string | ArrayBuffer): void {
     // A hibernated socket outlives a deploy, so one opened against the store
-    // this class replaces can wake THIS object — before its first request, and
+    // this class replaces can wake this object — before its first request, and
     // therefore before anything above the storage exists. There is nothing to
     // serve it: hang up, and the page opens a socket onto whatever answers next.
     if (this.#unbuilt) return void this.#hangUp(ws)

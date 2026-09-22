@@ -5,7 +5,7 @@
 // is current before wrangler reads it.
 //
 // Why the install has to happen first: wrangler bundles with esbuild, which
-// resolves `zod` and the MCP SDK as FILES under this directory's
+// resolves `zod` and the MCP SDK as files under this directory's
 // `node_modules` (wrangler.toml `[alias]`). node_modules is gitignored, so a
 // fresh worktree has none and every wrangler command dies unresolved at
 // mcp.ts's `import { z } from 'zod'` (T-34159). npm is the only thing that
@@ -14,7 +14,7 @@
 
 // The pin. `--yes` so a cold npx cache installs it instead of asking.
 //
-// It has a FLOOR, not just a version: `send_email` is Email Sending's binding
+// It has a floor, not just a version: `send_email` is Email Sending's binding
 // now, whose `send()` takes `{from, to, subject, text, html}` and answers
 // `{messageId}` (post.ts), and miniflare only grew that shape late — 4.42.2's
 // stand-in knew the old Email Routing binding alone and bounced every letter
@@ -59,7 +59,7 @@ export let stale = (root = dir) =>
 
 /**
  * `npm ci` when it is needed, at most one at a time, and never twice at once:
- * `npm ci` EMPTIES node_modules before it fills it, and the slow tier boots
+ * `npm ci` empties node_modules before it fills it, and the slow tier boots
  * several kernels in parallel (bin/test.ts), so a second install would delete
  * the tree the first is bundling from. mkdir is the atomic create POSIX gives
  * us — whoever makes the directory installs, everyone else waits for the

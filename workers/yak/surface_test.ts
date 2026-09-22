@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-// What a HOST reads before a person has used this connector once, and the one
+// What a host reads before a person has used this connector once, and the one
 // thing it must not read there (T-34632).
 //
 // ChatGPT runs a classifier over an MCP server's tool titles, descriptions and
@@ -11,7 +11,7 @@
 // handling, including rules for AGENTS.md and app content."
 //
 // It was right about the shape and wrong about the intent, and the shape is
-// the part we own. A description here DESCRIBES: what the tool does, what it
+// the part we own. A description here describes: what the tool does, what it
 // takes, what comes back. It does not tell the model how to treat what it
 // reads, and it does not carry somebody else's words — an app's own notes and
 // a person's own memories are handed over by `about` and by the prompt of the
@@ -33,7 +33,7 @@ import type { Entry } from './standing.ts'
 import type { App, Space } from './directory.ts'
 
 // The shapes a classifier reads as an instruction about content. Small on
-// purpose: an imperative about the CALL ("pass the files in one call", "leave
+// purpose: an imperative about the call ("pass the files in one call", "leave
 // the space out") is a description of the tool doing its job, and a list that
 // caught those would be a list nobody could keep.
 let SHAPES: [string, RegExp][] = [
@@ -73,7 +73,7 @@ Deno.test('nothing a host reads prescribes how to handle content', () => {
   plain('preauth DOCS', JSON.stringify(DOCS))
   plain('preauth PUBLIC', JSON.stringify(PUBLIC))
   plain('PROMPTS', JSON.stringify(PROMPTS))
-  // The generic tier as it is ASSEMBLED: the package writes some of these
+  // The generic tier as it is assembled: the package writes some of these
   // descriptions out of pieces, and the pieces are not what a host reads.
   let generic = core({ vocab: platformVocab(), undo: UNDO })
   assert(
@@ -84,7 +84,7 @@ Deno.test('nothing a host reads prescribes how to handle content', () => {
   for (let t of [...TOOLS, ...generic]) {
     plain(`tool ${t.name}`, JSON.stringify(t))
   }
-  // The ANONYMOUS door is this same list: `barred` (anon.ts) replaces a
+  // The anonymous door is this same list: `barred` (anon.ts) replaces a
   // tool's `run` and its security schemes and touches no word of it, so the
   // walk above is both doors.
 })
@@ -140,7 +140,7 @@ Deno.test('what an app wrote stays off the surface a host reads', () => {
   plain('roster', roster)
   assert(roster.includes('## kitchen/recipes'), roster)
   assert(roster.includes(HAS_NOTES), roster)
-  // The listing of the prompt, likewise — its TEXT is the file, which is
+  // The listing of the prompt, likewise — its text is the file, which is
   // fetched by name and is the answer to somebody asking for it.
   for (let p of prompted([one], [])) {
     plain(`prompt ${p.name}`, JSON.stringify({ ...p, text: '' }))

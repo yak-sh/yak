@@ -98,7 +98,7 @@ slow('a word two spaces spell differently stays two words', async () => {
   }
 })
 
-// An app is a plugin (D-32318 §Nouns, T-32888): a deployed app is OFFERED to
+// An app is a plugin (D-32318 §Nouns, T-32888): a deployed app is offered to
 // every other space under a platform-wide name, that name is one app's — a
 // second claim on it is refused in a sentence — and withdrawing the offer
 // leaves the app, and everyone who took it, exactly as they were.
@@ -144,7 +144,7 @@ slow('an app is published by name, and the name is one app', async () => {
     assertStringIncludes(listed, '- recipes v1')
     assertStringIncludes(listed, 'Somewhere to keep recipes')
 
-    // A SECOND space claiming the same name is refused, named with the app
+    // A second space claiming the same name is refused, named with the app
     // that has it — and its own slug is free, so it offers under another.
     await agent.tool('space_new', { slug: 'kitchen', title: 'kitchen' })
     await made('kitchen', 'recipes')
@@ -163,7 +163,7 @@ slow('an app is published by name, and the name is one app', async () => {
     })
     assertEquals((await agent.tool('app_published')).split('\n').length, 2)
 
-    // A deploy does NOT move the offer: publishing is the owner's act and
+    // A deploy does not move the offer: publishing is the owner's act and
     // pins what strangers install. Silence about that is what left the
     // guestbook offering v1 while v2 served (T-33146), so the deploy that
     // leaves the offer trailing says so at the door.
@@ -194,7 +194,7 @@ slow('an app is published by name, and the name is one app', async () => {
     assertStringIncludes(again, 'Somewhere to keep recipes')
     assertEquals(again.split('\n').length, 2)
 
-    // A name is claimed ONCE (T-32908, C-32905 item 4). The kitchen app is
+    // A name is claimed once (T-32908, C-32905 item 4). The kitchen app is
     // offered as `recipe-box`, which is not its slug: republishing it with no
     // name keeps that name and says so. Before this it silently renamed the
     // offer to the app's slug, and everyone told to install `recipe-box`
@@ -325,7 +325,7 @@ slow('an app reaches the gallery only when yaks.app says yes', async () => {
       .map((m) => m[1])
     assert(yes && no, 'the letter carries two links')
 
-    // The GET only ever DRAWS: a mail client that fetches every link in a
+    // The GET only ever draws: a mail client that fetches every link in a
     // letter must not be able to list an app by doing its job.
     let drawn = await k.at('yaks.app', yes)
     assertEquals(drawn.status, 200)
@@ -373,7 +373,7 @@ slow('an app reaches the gallery only when yaks.app says yes', async () => {
     }).then((r) => r.text())
     assertStringIncludes(space, 'in the gallery')
 
-    // The trash writes NOTHING: the listing simply stops being drawn, and a
+    // The trash writes nothing: the listing simply stops being drawn, and a
     // restore gives it back with nobody asked twice.
     await agent.tool('app_delete', { space: mine, app: 'recipes' })
     assert(
@@ -386,7 +386,7 @@ slow('an app reaches the gallery only when yaks.app says yes', async () => {
       'Recipe box',
     )
 
-    // Withdrawing is the other direction, and it CLEARS the word: the app is
+    // Withdrawing is the other direction, and it clears the word: the app is
     // off the page, and putting it back asks yaks.app once more.
     assertStringIncludes(
       await agent.tool('app_unpublish', { space: mine, app: 'recipes' }),
@@ -448,7 +448,7 @@ slow('an app reaches the gallery only when yaks.app says yes', async () => {
   }
 })
 
-// The whole of T-32889: an installed app is an ORDINARY app in the
+// The whole of T-32889: an installed app is an ordinary app in the
 // installer's space — its own store, its own address, its own data from the
 // first byte — pinned to the version it took, so the publisher's next version
 // arrives only when the installer asks for it. An update keeps their data: a
@@ -481,7 +481,7 @@ slow('an installed app is the installer own copy, data and all', async () => {
       })
     await cast(his, 'jeff')
 
-    // A SECOND person, in their own space, takes it.
+    // A second person, in their own space, takes it.
     let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
     let hers = connector(k, ann.cookie)
     let space = ann.email.split('@')[0]
@@ -503,7 +503,7 @@ slow('an installed app is the installer own copy, data and all', async () => {
       }),
       '<h1>Tally v1</h1>',
     )
-    // And it serves at HER address, out of her own app.
+    // And it serves at her address, out of her own app.
     let page = await k.at(`${space}.yaks.app`, '/tally/')
     assertEquals(page.status, 200)
     assertStringIncludes(await page.text(), '<h1>Tally v1</h1>')
@@ -513,7 +513,7 @@ slow('an installed app is the installer own copy, data and all', async () => {
     assertEquals(await votes(his)(), ['jeff'])
     assertEquals(await votes(hers)(), ['ann'])
 
-    // A SECOND version, published. Nothing of hers moves until she asks.
+    // A second version, published. Nothing of hers moves until she asks.
     await mine('index.html', '<h1>Tally v2</h1>')
     await mine(
       'vocab.json',
@@ -544,7 +544,7 @@ slow('an installed app is the installer own copy, data and all', async () => {
       }),
       '<h1>Tally v2</h1>',
     )
-    // The grown column is writable in HER store, on the row she already had.
+    // The grown column is writable in her store, on the row she already had.
     await hers.tool('graph_apply', {
       app: 'tally',
       entities: [{
@@ -559,7 +559,7 @@ slow('an installed app is the installer own copy, data and all', async () => {
       'is already at v2',
     )
 
-    // A CONFLICT: her copy declared a column of its own, and the publisher's
+    // A conflict: her copy declared a column of its own, and the publisher's
     // next version spells the same one differently. The update is refused
     // with the deploy's own sentence, and not a byte of her app moves.
     await write(hers, 'tally')(

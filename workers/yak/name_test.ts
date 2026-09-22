@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-// The platform has ONE spelling: yaks.app — lowercase, with the .app. An agent
+// The platform has one spelling: yaks.app — lowercase, with the .app. An agent
 // that read the address a dozen times and the name not once invented "Yaks"
 // and told its person that was what the place is called (T-34302), so the
 // name is now said outright in the three things read first, and this file is
@@ -7,7 +7,7 @@
 // and "Yaks apps" opening a sentence is that phrase, not the platform's name
 // (M-34600).
 //
-// The walks below are a DIRECTORY and a ROSTER, never a hand-kept list: a page
+// The walks below are a directory and a roster, never a hand-kept list: a page
 // dropped into public/, a tool added to TOOLS, a letter written in a module
 // that does not exist yet — each is covered the day it lands, and a leak fails
 // here instead of reaching somebody's screen.
@@ -92,7 +92,7 @@ Deno.test('nothing the connector says calls the place Yaks', () => {
   leak('preauth DOCS', JSON.stringify(DOCS))
   leak('preauth PUBLIC', JSON.stringify(PUBLIC))
   leak('PROMPTS', JSON.stringify(PROMPTS))
-  // The generic tier as it is ASSEMBLED — the package writes some of these
+  // The generic tier as it is assembled — the package writes some of these
   // descriptions out of pieces, and the pieces are not what a host reads.
   let generic = core({ vocab: platformVocab(), undo: UNDO })
   assert(

@@ -5,12 +5,12 @@
 // meter, the serving door.
 //
 // What is proved here is the whole path a compile takes: the four tools run
-// as the person, a `.wasm` survives the trip into the app as BYTES, the
+// as the person, a `.wasm` survives the trip into the app as bytes, the
 // seconds land on the meter, the budget refuses in a sentence, and a runtime
 // with no container bound says so rather than half-running.
 //
 // The container itself is not proved here and cannot be: both `wrangler dev`
-// and `wrangler deploy --dry-run` BUILD the image, which needs a container
+// and `wrangler deploy --dry-run` build the image, which needs a container
 // engine, and a box may have the Docker CLI and no daemon —
 // `--containers-rollout=none` is what gets a dry run past it. So the last test
 // here reads the deploy's own config instead (see the gate note in
@@ -95,7 +95,7 @@ let tool = (name: string) => {
 let at = (name: string) =>
   Deno.readTextFile(new URL(`./${name}`, import.meta.url))
 
-// Every `ARG <NAME>_VERSION=` the image pins, as NAME → version. This is the
+// Every `ARG <NAME>_VERSION=` the image pins, as name → version. This is the
 // one list; the tool description and the two pages that quote it are checked
 // against it rather than against each other.
 let VERSIONS = /^ARG (\w+)_VERSION=(\S+)$/gm
@@ -152,7 +152,7 @@ Deno.test('the four tools write, run, read and ship', async () => {
   assertStringIncludes(shipped.text, 'chess.js, chess_bg.wasm')
 
   // And the app serves them — the .wasm as application/wasm, whole (files.ts
-  // MIME), which is what makes the ship path a BYTES path.
+  // MIME), which is what makes the ship path a bytes path.
   let js = await apps.fetch(
     new Request('https://ada.yaks.app/chess/chess.js'),
     env,
@@ -439,7 +439,7 @@ Deno.test('the workbench is offered to the builder, and says what it is for', ()
 // The deploy's own half, which no test on this box can run: `wrangler deploy`
 // builds the container image and needs an engine to do it, and this machine
 // has the Docker CLI and no daemon. A dry-run here gets as far as bundling the
-// Worker and then refuses at the CLI — so what is held instead is the CONFIG,
+// Worker and then refuses at the CLI — so what is held instead is the config,
 // and above all the one thing that rots silently: the image tag and the SDK
 // version are two halves of one release, and the SDK warns at startup rather
 // than failing when they disagree.
@@ -485,7 +485,7 @@ Deno.test('the deploy names the container, and the image is the SDK version', as
 
   // The CLI in the image (T-34387). It is installed from the repo copy until
   // @yaks/cli is on JSR, which is why the build context is that package and
-  // not this directory — the two have to agree or the COPY finds nothing.
+  // not this directory — the two have to agree or the copy finds nothing.
   assertEquals(box.image_build_context, '../../packages/cli')
   assertStringIncludes(file, 'COPY . /opt/yaks/cli')
   assertStringIncludes(file, 'deno install -gf')

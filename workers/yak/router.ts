@@ -1,5 +1,5 @@
-// The home app as the space's ROUTER (D-34197): which paths its worker sees
-// FIRST, before the app whose slug owns them. `home{first}` is a column of the
+// The home app as the space's router (D-34197): which paths its worker sees
+// first, before the app whose slug owns them. `home{first}` is a column of the
 // word that says which app is home at all (vocab.ts) — a list of path globs,
 // the way Workers static assets' `run_worker_first` takes globs — and this file
 // is the whole rule that column is written and read by: what a glob may say,
@@ -47,11 +47,11 @@ export let PLATFORM_PATHS = [
   `${MANAGE}/*`,
 ]
 
-// A glob's WITNESS: the pattern with its wildcards filled by a character no
+// A glob's witness: the pattern with its wildcards filled by a character no
 // path may hold, so only another wildcard can match it. Two globs overlap when
 // either answers the other's witness — which catches both directions with one
 // matcher, `/*` naming `/login` and `/*/api/query` naming the store doors
-// alike, and leaves `/recipes/*` alone, since a glob that merely CONTAINS a
+// alike, and leaves `/recipes/*` alone, since a glob that merely contains a
 // platform path still loses to it at the door.
 let MARK = '\u0000'
 let overlaps = (a: string, b: string) =>

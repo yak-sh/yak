@@ -1,5 +1,5 @@
 // The app vocabulary, held to two things: every example the guide teaches
-// loads, and what a load implies is ONE app's tables — not the fleet's 83
+// loads, and what a load implies is one app's tables — not the fleet's 83
 // (V-33553).
 import {
   assert,
@@ -102,7 +102,7 @@ Deno.test('every example vocab.json in the repo loads', () => {
   }
 })
 
-// A component an app declares is a KIND sorting before `doc` without saying
+// A component an app declares is a kind sorting before `doc` without saying
 // so: its own word is the most specific thing said about a row, and that is
 // what earns it its two tools (kinds.ts).
 Deno.test("an app's own word is a kind before doc", () => {
@@ -124,7 +124,7 @@ Deno.test("an app's own word is a kind before doc", () => {
   )
 })
 
-// There is ONE spelling. A manifest of bare component names is not a shorter
+// There is one spelling. A manifest of bare component names is not a shorter
 // way to say a document — it is refused, in the shape that works.
 Deno.test('a manifest that is not a document is refused', () => {
   let why = assertThrows(
@@ -141,7 +141,7 @@ Deno.test('a manifest that is not a document is refused', () => {
 })
 
 // YAML is the warm path, and a vocab.json keeps working because YAML reads it
-// (@yaks/yaml, M-34605). The two spellings of the FILE are the same manifest;
+// (@yaks/yaml, M-34605). The two spellings of the file are the same manifest;
 // which one an app wrote is what a refusal has to name.
 Deno.test('a manifest may be written as YAML', () => {
   let yml = appDoc(
@@ -188,7 +188,7 @@ let tablesOf = (sql: string[]) =>
     [...s.matchAll(/create table if not exists "?(\w+)"?/g)].map((m) => m[1])
   ).sort()
 
-// What the load IMPLIES: one app's schema. The fleet's store plants 83 tables
+// What the load implies: one app's schema. The fleet's store plants 83 tables
 // into every customer's Durable Object today; this is the whole of what a
 // store needs instead.
 Deno.test('the loaded vocabulary implies core + member + edge + the app', () => {
@@ -220,7 +220,7 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       // kind of it every store speaks: a name (@yaks/alias)
       'key',
       'alias',
-      // what the PLATFORM says in every app's store: the breaks it noted, the
+      // what the platform says in every app's store: the breaks it noted, the
       // marks a served or fixed item wears, and the two rows an upload makes
       'exception',
       'error',
@@ -276,7 +276,7 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
 })
 
 Deno.test('the directory and an app spell one word apart: member.role', () => {
-  // The platform's roster IS its access ladder, read space-wide (apps.ts
+  // The platform's roster is its access ladder, read space-wide (apps.ts
   // `reads`/`edits`, tools.ts `inSpace`); @yaks/member keeps belonging apart
   // from access, which it spells as a grant or the app's mode. So the two
   // stores mean two things by one column, and the MCP door types it nowhere
@@ -312,7 +312,7 @@ Deno.test('the platform declares the uniques its races are decided by', () => {
   }
   // An app's own store declares none of them — they are the directory's words.
   assert(!schema(appVocab()).some((s) => s.includes('unique index')))
-  // And an ADDRESS is no longer one of them (T-34657): `former` is history, so
+  // And an address is no longer one of them (T-34657): `former` is history, so
   // two apps may hold one address a year apart. Which app answers at an address
   // now is the tools' word, not an index's.
   assert(!sql.some((s) => s.includes('on "former"')))
@@ -325,11 +325,11 @@ Deno.test('none of the fleet vocabulary comes with it', () => {
   let mine = new Set(tablesOf(schema(appVocab())))
   assert(fleet.length > 50, `the fleet plants ${fleet.length} tables`)
   // Fewer than the fleet's, by a wide margin, and the margin is the point:
-  // every word here is one an app can USE. The last eight are the schedule
+  // every word here is one an app can use. The last eight are the schedule
   // and the invocation (D-37562, T-37605) — asking for something, and asking
   // for it later.
   assert(mine.size < 65, `an app plants ${mine.size}`)
-  // The words an app SHARES with the fleet are the ones the guide gives it to
+  // The words an app shares with the fleet are the ones the guide gives it to
   // reach for — `task` and its marks among them. What must not come with it is
   // the fleet's own working life: its sessions, its canvas, its memories.
   for (
@@ -370,7 +370,7 @@ Deno.test('a searched column of an app reaches the index fields', () => {
 
 // One word, one home (T-32728): the second app in a space to name a word does
 // not plant it again — it uses it where it lives, and a column it brings grows
-// the home's table. What travels is the column's SCHEMA, so the keywords a
+// the home's table. What travels is the column's schema, so the keywords a
 // borrowed column declares reach the store that plants it (T-37546).
 Deno.test('a word the space already has is a use, not a home', () => {
   let shelf = appDoc(says({ book: { title: txt, pages: num } }))
@@ -436,7 +436,7 @@ Deno.test('a searched column that holds no prose is refused', () => {
   )
 })
 
-// What a store KEEPS is the document (graph.ts `#vocabDoor`), and what it
+// What a store keeps is the document (graph.ts `#vocabDoor`), and what it
 // answers is that document, keywords and all.
 Deno.test('a store answers the document it means', () => {
   assertEquals(
@@ -458,7 +458,7 @@ Deno.test('a store answers the document it means', () => {
   assertEquals(meant(says({ doc: { headline: txt } })), {})
 })
 
-// An app's manifest never says `component: true`: its $defs entries ARE its
+// An app's manifest never says `component: true`: its $defs entries are its
 // components, that is the whole of what the file is for, and @yaks/vocab's
 // marker (T-37551) is put on here. So a store that accepted a manifest before
 // the marker existed reads back as the same words it accepted.

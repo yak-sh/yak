@@ -16,7 +16,7 @@
 // Two datasets, because one does not carry both numbers:
 // `durableObjectsInvocationsAdaptiveGroups` has `sum.requests`,
 // `durableObjectsPeriodicGroups` has `sum.rowsRead`/`sum.rowsWritten`, and
-// both carry `dimensions.objectId`. Stored bytes are NOT from analytics:
+// both carry `dimensions.objectId`. Stored bytes are not from analytics:
 // `durableObjectsStorageGroups` is account-wide, with no per-object dimension,
 // so an app's size is what its own store reports (graph.ts `/graph`).
 // The datasets are documented at
@@ -27,7 +27,7 @@
 // Without CF_ANALYTICS_TOKEN only R2 storage is measured; analytics readings
 // remain untouched until that binding is configured.
 //
-// What a space is ALLOWED — the ceilings, the letters, the line the agent
+// What a space is allowed — the ceilings, the letters, the line the agent
 // reads and the sentence a door says no with — is meter.ts, which this half
 // reads and the Store object reads too.
 import type { Bundle } from '@yaks/graph'
@@ -99,7 +99,7 @@ type Answer = {
 }
 
 // The answer as rows, by object id. A group with no id has nobody to charge;
-// an id outside this deployment is never matched by its STORE binding.
+// an id outside this deployment is never matched by its store binding.
 export let read = (answer: Answer) => {
   let said = answer.errors?.length
     ? answer.errors.map((e) => e.message).join('; ')
@@ -229,7 +229,7 @@ export let sweep = async (env: Env, now = new Date()) => {
     // A space that has just crossed a line — or fallen back under one — has
     // something new to hear, so the mark that it was told goes (unseen.ts
     // `ceiling` writes it back). A level that has not moved keeps its mark,
-    // which is what makes the line ride ONE reply.
+    // which is what makes the line ride one reply.
     let moved = level({ ...space, meter }, apps.length, now) !=
       level(space, apps.length, now)
     entities.push({
@@ -253,7 +253,7 @@ export let metered = async (env: Env, now = new Date()) => {
 }
 
 // The byte ceiling, at the two doors that add data (apps.ts): the space's
-// last reading, with THIS app's share swapped for what its store weighs now
+// last reading, with this app's share swapped for what its store weighs now
 // and the bytes on their way in added. The live read only happens near the
 // ceiling — under it an hour-old figure is close enough, and asking would
 // double the Durable Object requests we are metering in the first place.

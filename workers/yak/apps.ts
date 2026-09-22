@@ -9,7 +9,7 @@
 // write side, what a deploy is until app_deploy (T-32329) exists, and
 // `/api/blob` is the door for a page's own bytes — a photo a visitor picks —
 // content-addressed into the same bucket and named by a row in the app's
-// store (T-32677). An app's OWN Worker answers before the files do, where it
+// store (T-32677). An app's own Worker answers before the files do, where it
 // deployed one (dispatch.ts `ran`, T-32778): the same `vouched` headers, a
 // 404 from it falling back to the files, and `/api/` never its. It answers
 // ahead of the `private` gate as well (T-34303) — an app with a worker is one
@@ -23,7 +23,7 @@
 // deprecations and network errors, and both land on `POST /api/report`, which
 // writes the same `exception` entity a route that threw does. Rate-limited
 // per app: a page in a loop is a bug to see once, not a write flood. What the
-// door refused ON PURPOSE never becomes one (unseen.ts `refusal`): a
+// door refused on purpose never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
 import { apex, type Host } from './host.ts'
 import { r2Blobs } from '../../src/blobs_r2.ts'
@@ -92,7 +92,7 @@ import { refusedVisit } from './meter.ts'
 import { sha256 } from './versions.ts'
 // The space index's own visitor block reads views.ts directly (`visits`
 // below): drawing a page out of another module's data is not a slot, it is one
-// module using another. What DOES arrive through the host is the `/stats` door
+// module using another. What does arrive through the host is the `/stats` door
 // and the count of a page served — `answered` and `watched`, both over PLUGINS.
 import { DAYS, NOT_ON, type Stats, statsOf } from './views.ts'
 import { answered, watched } from './plugin.ts'
@@ -119,8 +119,8 @@ declare let HTMLRewriter: { new (): Rewriter }
 let keyOf = (space: Space, app: App, path: string) =>
   keyed(prefixOf(space, app), path)
 
-// A refusal is READ — by the page that catches it, and by the person's agent
-// after that — so it answers a SENTENCE beside its code (C-32574 item 2, where
+// A refusal is read — by the page that catches it, and by the person's agent
+// after that — so it answers a sentence beside its code (C-32574 item 2, where
 // a club member's vote showed them `{"error":{"code":"not_a_writer"}}`). The
 // code is the machine's half and never moves; the message is what someone is
 // told. When signing in is the way through it also answers `signIn`, the
@@ -136,12 +136,12 @@ let SAYS: Record<string, string> = {
   no_bytes: 'an upload needs a body: post the file itself',
   too_large: 'that file is too big to send — try a smaller one',
   no_such_file: 'no file at that address in this app',
-  // What the STORE said no to — an unknown component, a `$was` that moved, a
+  // What the store said no to — an unknown component, a `$was` that moved, a
   // dead entity. Its own sentence rides in `message`; this is the fallback.
   refused: 'the app store would not take that',
 }
 
-// The same refusals to someone who IS signed in: signing in is no longer the
+// The same refusals to someone who is signed in: signing in is no longer the
 // way through, so the sentence says whose it is to grant.
 let MEMBER: Record<string, string> = {
   not_a_writer: 'you can read this app but not change it — its owner can ' +
@@ -189,7 +189,7 @@ let moved = (req: Request, to: string) =>
 // at the end of a document with neither. Streaming — the bytes are never
 // held — and once, whichever came first.
 //
-// Its src is the app's address AS SERVED (`at`), because report.js reads the
+// Its src is the app's address as served (`at`), because report.js reads the
 // door out of its own src: at the app's prefix normally, at the root for a
 // front page or a custom domain, where the prefix is an address the browser
 // asking cannot reach (T-33040).
@@ -220,7 +220,7 @@ let intoHead = (page: string, tag: string) => {
   return doctype ? page.replace(doctype[0], `${doctype[0]}${tag}`) : tag + page
 }
 
-// An app's own files must not name the app. The code is COPIED under
+// An app's own files must not name the app. The code is copied under
 // whatever address the installer took it at (`app_install`), so a page
 // written with `/chores/api/client.js` in it is a 404 the moment the copy
 // lands at `/chore-chart/` — which is how a shared app rendered as bare HTML,
@@ -239,7 +239,7 @@ export let based = (href: string, page: string) =>
     ? page
     : intoHead(page, `<base href="${href}">`)
 
-// Whether the page already names a tag — one TOKEN of the attribute that
+// Whether the page already names a tag — one token of the attribute that
 // says what it IS, so `rel="shortcut icon"` and `rel="apple-touch-icon-
 // precomposed"` both count as the author having answered, and a `<meta
 // name="theme-color">` is asked the same way a `<link rel="manifest">` is:
@@ -259,10 +259,10 @@ let declares = (page: string, tag: string, attr: string, value: string) =>
 export let PLATFORM_THEME = '#4c773e'
 export let PLATFORM_BACKGROUND = '#fdf7ee'
 
-// The colour THIS app's chrome paints with: its own, if its owner set one
+// The colour this app's chrome paints with: its own, if its owner set one
 // (`app_set(theme_color: …)`), else the platform's. A stored colour is woven
 // straight into a `<meta content>` attribute and the manifest JSON below, so it
-// must be safe HERE, not only where app_set wrote it — the generic graph_apply
+// must be safe here, not only where app_set wrote it — the generic graph_apply
 // tier can set the `theme` component past that validator. The charset (the twin
 // of tools.ts `CSS_COLOR`, kept in step) admits hex, rgb()/hsl() and named
 // colours but no quote, angle bracket or backslash, so a value that fails it is
@@ -279,7 +279,7 @@ let backgroundColorOf = (app: App) =>
 // (T-34493, T-33055). iOS takes its icon from `<link rel="apple-touch-icon">`
 // and nowhere else — Apple's *Configuring Web Applications*: a page names
 // its icon there, 180×180 for current displays, `sizes` only when it offers
-// several, and the smallest icon LARGER than the device wants is the one
+// several, and the smallest icon larger than the device wants is the one
 // scaled, so one square file serves every device. Every other platform reads
 // the manifest's `icons` instead, at the address the manifest link names.
 // `apple-mobile-web-app-capable` is what makes iOS open the page as a window
@@ -290,7 +290,7 @@ let backgroundColorOf = (app: App) =>
 // owner, 2026-09-06: "the app's PWAs aren't getting icons (i tested iOS),
 // even when the site itself has an image icon."
 //
-// So a page is given every tag it did NOT write, at the app's own root: the
+// So a page is given every tag it did not write, at the app's own root: the
 // icon, the manifest (`manifest.webmanifest`, generated below), the chrome
 // colour, and the two Apple words. Each is decided on its own — a page naming
 // one gets the other four still — and what the page declares is never
@@ -324,7 +324,7 @@ export let pinned = (at: string, page: string, app: App) => {
 // What an app's manifest says when the app wrote none: its name, its own root
 // as the scope a standalone window stays inside, the icon at the two sizes an
 // installer looks for, and the two colours — the app's own, or the platform's
-// (`themeColorOf`/`backgroundColorOf` above). The SAME icon file at both
+// (`themeColorOf`/`backgroundColorOf` above). The same icon file at both
 // sizes — one square png is all the platform asks an agent for, and resizing
 // it at the edge would be a second set of bytes to serve and cache for an
 // installer that scales anyway.
@@ -343,29 +343,29 @@ export let manifesting = (app: App, at: string) => ({
   })),
 })
 
-// The files that ARE the app's platform manifest rather than its page: the
+// The files that are the app's platform manifest rather than its page: the
 // server code the dispatch namespace runs (dispatch.ts), the two declarations
 // a deploy reads, the data it seeds the store with (tools.ts, seed.ts), and
 // the notes its person left beside it under either name (standing.ts).
-// Those are the app's INSIDE — the platform reads them out of the blob store,
+// Those are the app's inside — the platform reads them out of the blob store,
 // and a member reads them back through `app_files` — so the door that serves
 // the app's pages does not serve them to the web. Before this, `GET
 // /weather/worker.js` answered the whole server source to anyone with the link
 // (C-32869 item 3).
 //
-// The test is on the decoded KEY, not the path, because `/%77orker.js` names
+// The test is on the decoded key, not the path, because `/%77orker.js` names
 // the same file.
 let MANIFEST = new Set([
   '/worker.js',
   '/wrangler.jsonc',
   '/wrangler.json',
   // Either spelling of a declaration (tools.ts `spelled`, M-34605): a `.yml`
-  // is the app's INSIDE exactly as much as the `.json` is.
+  // is the app's inside exactly as much as the `.json` is.
   '/vocab.json',
   '/vocab.yml',
   '/tools.json',
   '/tools.yml',
-  // Both spellings of the notes file (standing.ts NAMES). Written out rather
+  // Both spellings of the notes file (standing.ts names). Written out rather
   // than imported: standing.ts reaches this module through declared.ts, and a
   // set built at module top time cannot wait on a cycle.
   '/NOTES.md',
@@ -374,7 +374,7 @@ let MANIFEST = new Set([
 
 let inside = (path: string) => MANIFEST.has(path) || seedy(path.slice(1))
 
-// What the browser may keep, and for how long. An app's files are LIVE — a
+// What the browser may keep, and for how long. An app's files are live — a
 // written file serves the moment app_files puts it, with no deploy in
 // between — so nothing here may be held past a revalidation: `no-cache` is
 // "ask every time", not "do not store", and with an ETag beside it that ask
@@ -383,7 +383,7 @@ let inside = (path: string) => MANIFEST.has(path) || seedy(path.slice(1))
 // person reading them, which is the whole of the rule: a private app's bytes
 // belong to its members and to no proxy.
 //
-// The validator is the CONTENT, not the app's version: app_files writes
+// The validator is the content, not the app's version: app_files writes
 // bytes without bumping `app.version` (tools.ts), so a version is no promise
 // about what the bytes are (T-33176).
 let keeping = (app: App) =>
@@ -420,7 +420,7 @@ let bytes = (env: Env, app: App, prefix: string, path: string) =>
 
 // The two addresses the kernel answers for an app that wrote neither file
 // (T-34493), so the links `pinned` wove in are never dead. Both are the
-// FALLBACK and nothing more: an app with its own `icon.png` or its own
+// fallback and nothing more: an app with its own `icon.png` or its own
 // `manifest.webmanifest` is served that, because this is only reached where
 // the bucket had nothing.
 //
@@ -492,7 +492,7 @@ let asset = async (
   }
   if (!type.startsWith('text/html')) return new Response(got.body, { headers })
   // A page, so it gets the app's address before its own first relative URL,
-  // and the reporter after it. The weaving is done HERE rather than behind the
+  // and the reporter after it. The weaving is done here rather than behind the
   // cache because the same file is a different document at each mount, and one
   // cached copy of the bytes serving every mount beats one copy per mount.
   let page = based(at, pinned(at, await got.text(), app))
@@ -500,7 +500,7 @@ let asset = async (
 }
 
 // Where the browser sends what it notices on its own: the app's own report
-// door, named as an endpoint group, with NEL asking for the failures that
+// door, named as an endpoint group, with nel asking for the failures that
 // never reached us at all.
 let reporting = (res: Response, req: Request, at: string) => {
   // A socket is not a page: the 101 carries the runtime's own `webSocket`,
@@ -607,7 +607,7 @@ let broken = (body: string) => {
 export let MAX = 20 * 1024 * 1024
 
 // The bytes' own name (versions.ts `sha256`, the content address a version's
-// manifest is made of) is the object's key AND the entity's eid here, so the
+// manifest is made of) is the object's key and the entity's eid here, so the
 // same photo sent twice is one object and one row.
 //
 // The app's one use of those bytes, addressed off them: derived, so an upload
@@ -645,15 +645,15 @@ let nameSent = (req: Request) => {
  * write half of an upload, without a request anywhere in it, because bytes
  * arrive by other doors too (inbox.ts: a letter's attachments).
  *
- * The object lands in the bucket FIRST and the rows are only returned, because
+ * The object lands in the bucket first and the rows are only returned, because
  * a row pointing at nothing is the failure a reader sees, while bytes nobody
  * has named yet are invisible until the next arrival of the same file names
  * them. The caller applies the bundles, as whoever it decided is writing.
  *
- * Two rows, the way the fleet shapes a file (src/blob.ts): the CONTENT,
+ * Two rows, the way the fleet shapes a file (src/blob.ts): the content,
  * addressed by its sha and carrying what is true of the bytes — how many they
  * are, and what they measure (@yaks/blob `sizeOf`, off the file's own header) —
- * and the USE of it, carrying what it is called and what it is. They stay
+ * and the use of it, carrying what it is called and what it is. They stay
  * apart because they are two things, and because a component may not point at
  * its own entity. The use is addressed off the content, so the same bytes sent
  * twice are one attachment renamed rather than a second row saying the same
@@ -761,7 +761,7 @@ let gave = async (
 
 // What to call this person, for the store to write beside their rows: the
 // write door's half of the vouch (session.ts `titling`), over this door's own
-// directory. An app writing as ITSELF (dispatch.ts `owning`, `env.APP`) is not
+// directory. An app writing as itself (dispatch.ts `owning`, `env.APP`) is not
 // a person, so the directory is not asked to name one — the store knows the
 // app it holds and writes no person row for it (graph.ts `#vouching`).
 let named = (env: Env, who: Who, app?: App) =>
@@ -774,7 +774,7 @@ let named = (env: Env, who: Who, app?: App) =>
 // shape for both paths, so a caller never has to know which one ran.
 type Wrote = { entities: string[]; aliases: Record<string, string> }
 
-// The words this app USES but does not home (T-32728), as its own store last
+// The words this app uses but does not home (T-32728), as its own store last
 // accepted them: the word, and the app in this space whose store holds its
 // rows.
 let usesOf = async (env: Env, space: Space, app: App) => {
@@ -806,7 +806,7 @@ let borrowed = async (
 }
 
 // Where a filter line's words live, when every word it names is one this app
-// borrows from a SINGLE other app. Anything else is this app's own store: a
+// borrows from a single other app. Anything else is this app's own store: a
 // line spanning two stores is a composition, which the agent door's federated
 // read owns and a template's one line does not.
 let homeOf = async (
@@ -844,7 +844,7 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
       if (!edits(mode(app.access), who.role)) no('not_a_writer')
       let mine = { space, app, who }
       let homes = await borrowed(env, space, app, who)
-      // A word this app USES lives in another app's store (T-32728), so a
+      // A word this app uses lives in another app's store (T-32728), so a
       // bundle naming one is split the way the agent door splits it: the
       // borrowed word to its home, everything else here. One logical batch —
       // every part is admitted before any of them commits.
@@ -891,7 +891,7 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
 // The graph API, and the file door beside it. Who may do what to the store is
 // the app's own `access` (T-32504): `public` reads to anyone and writes to a
 // member, `open` writes to anyone with the link, `private` neither without a
-// role — 401 to nobody, 403 to a member who may not. The FILE door is not
+// role — 401 to nobody, 403 to a member who may not. The file door is not
 // part of that bargain: writing an app's bytes is always a member's, whatever
 // the app lets its visitors save. Every internal request is built here, so the
 // store sees the vouched headers and never the cookie.
@@ -942,7 +942,7 @@ let api = async (
     )
   let mayRead = reads(mode(app.access), who.role)
   let mayPost = edits(mode(app.access), who.role)
-  // Who is looking, BEFORE the first write (T-32679). A page could only learn
+  // Who is looking, before the first write (T-32679). A page could only learn
   // this from a refusal, which is too late twice over: on an `open` app a
   // signed-out write has no `created.by`, so the page must ask a guest their
   // name and nothing said so; on a `public` one the sign-in bounce arrives
@@ -965,7 +965,7 @@ let api = async (
         : signInAt(req.headers.get('referer') || req.url, env),
     })
   }
-  // What a PLUGIN answers at this app's address (plugin.ts `answers`,
+  // What a plugin answers at this app's address (plugin.ts `answers`,
   // T-34601) — the visitor counts (views.ts) is the one there is today. Here,
   // among the doors that are the app's own rather than its store's, and after
   // `/me`, so a plugin cannot take a path the kernel already answers. It is
@@ -982,7 +982,7 @@ let api = async (
     json,
   })
   if (mine) return mine
-  // Taking money (sell.ts, T-34525). A READ door as far as this app is
+  // Taking money (sell.ts, T-34525). A read door as far as this app is
   // concerned — it reads the products the cart names and writes nothing — so it
   // asks `mayRead` and not `mayPost`: a public shop sells to a stranger, which
   // is what a shop is, and a private one sells to its members. The price comes
@@ -1021,7 +1021,7 @@ let api = async (
         store(at, init, { ...headers, ...sent })
       ).query(asked)
       // The same rule the person's agent reads a listing by (listing.ts): one
-      // filter line, one answer, whichever door asked it. An AGGREGATE is not
+      // filter line, one answer, whichever door asked it. An aggregate is not
       // a listing — `.count!` answers one number — so it passes through whole.
       return Response.json(
         Array.isArray(rows) ? listed(rows as Row[], asked) : rows,
@@ -1034,7 +1034,7 @@ let api = async (
   // another device arrives here without asking. The upgrade goes to the object
   // itself — the socket is the store's, and the kernel is out of the way once
   // it is open — so the whole question is decided here, at the handshake, and
-  // it is a READ: no write crosses this seam (@yaks/api), a batch goes through
+  // it is a read: no write crosses this seam (@yaks/api), a batch goes through
   // `/apply` like any other, and whoever may read may listen.
   if (path == '/ws') {
     if (req.headers.get('upgrade') != 'websocket') {
@@ -1052,7 +1052,7 @@ let api = async (
     // the way it shows every other.
     let stopped = await full(env, space, app, body.length)
     if (stopped) return json(413, 'space_full', stopped)
-    // A BULK load says so in its content-type: one bundle per line, applied in
+    // A bulk load says so in its content-type: one bundle per line, applied in
     // chunks of 50 and answered a line at a time (@yaks/api `pour`). It is
     // handed to the store as it came and its answer handed back the same way —
     // the page's envelope is a shape for one batch, and this is a file. So this
@@ -1081,7 +1081,7 @@ let api = async (
     }
   }
   // The file door: bytes in, one content-addressed address out. Uploaded
-  // bytes are app DATA, not the app's own files — a vote page's photo is the
+  // bytes are app data, not the app's own files — a vote page's photo is the
   // visitor's, not the deploy's — so the app's `access` governs both halves:
   // its write rule the upload, its read rule the download.
   if (path == '/blob') {
@@ -1135,11 +1135,11 @@ let kernels = (space: Space, app: string | null) =>
 let identity = () => import('./identity.ts')
 
 // The space's own address, listed: every app this person may open, and how
-// many they may not. What a stranger must never learn is the NAME of a
+// many they may not. What a stranger must never learn is the name of a
 // private app, so the filter is per app and it is `reads` — the same question
 // the file door asks before it serves a page (T-33040).
 //
-// For its OWNER this is also where a fresh sign-in lands (T-34233), so it
+// For its owner this is also where a fresh sign-in lands (T-34233), so it
 // carries the two things the sign-in card stopped asking — what to call them
 // and where their apps live — and the connect instructions, open until an
 // agent has ever been let in as them (T-34236).
@@ -1202,8 +1202,8 @@ let index = async (
     space: space.slug,
     title: space.title,
     view,
-    // What the pill says about the gallery (gallery.ts, T-34476). LISTED is
-    // said to anybody — it is a public page — and WAITING only to the owner,
+    // What the pill says about the gallery (gallery.ts, T-34476). Listed is
+    // said to anybody — it is a public page — and waiting only to the owner,
     // who is the one it is news for.
     apps: mine.map((a) => ({
       eid: a.eid,
@@ -1240,7 +1240,7 @@ let index = async (
     fee: rate(await feeOf(dir)),
     name: owner ? await dir.nameAt(owner) ?? '' : '',
     connections: owner ? await (await identity()).connections(env, owner) : [],
-    // Something IS built here while an app sits in the trash: its store is
+    // Something is built here while an app sits in the trash: its store is
     // named for this address and its files live under it, so the address
     // stays put until the trash is empty (T-32576).
     fixed: !!here.length,
@@ -1250,10 +1250,10 @@ let index = async (
   }, env)
 }
 
-// A SPACE in the trash, at any of its addresses (erase.ts, T-34431). Nothing
+// A space in the trash, at any of its addresses (erase.ts, T-34431). Nothing
 // under it serves — not an app, not a file, not a store door — so this stands
 // ahead of every rung of `served` below, and what it answers is what a wrong
-// address answers. Its OWNER is the exception: they are told where their
+// address answers. Its owner is the exception: they are told where their
 // space went and given the button back, because they are the only person the
 // news belongs to.
 //
@@ -1332,7 +1332,7 @@ let saved = async (
     )
   }
   // The selling block's button (sell.ts, T-34524). Its own form and its own
-  // POST, like the restore button above — and `start` answers a REDIRECT to
+  // POST, like the restore button above — and `start` answers a redirect to
   // Stripe's own hosted onboarding, which is the one thing on this page that
   // leaves the site. A Stripe call that fails is filed and the page comes back
   // saying so, rather than a 502 on somebody's own front door.
@@ -1395,8 +1395,8 @@ let saved = async (
   )
 }
 
-// Rung 1½ (D-34197): the home app is the space's ROUTER, and `home.first`
-// names the paths its worker sees BEFORE the app whose slug owns them. Null is
+// Rung 1½ (D-34197): the home app is the space's router, and `home.first`
+// names the paths its worker sees before the app whose slug owns them. Null is
 // "the order is unchanged" — no home app, no glob over this path, or a router
 // that passed, threw or hung (dispatch.ts `ahead`, which fails open).
 //
@@ -1436,40 +1436,40 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
 }
 
 // Serving an app, with the stopwatch running (timing.ts): every stage below
-// that WAITS is named, so `Server-Timing` on the answer says where the time
+// that waits is named, so `Server-Timing` on the answer says where the time
 // went — the directory, the app's own worker, the bytes — instead of leaving
 // a second to guess at (T-33176).
 //
-// THE ORDER, and it is a rule rather than an accident (D-34197). For a
+// The order, and it is a rule rather than an accident (D-34197). For a
 // request to `<space>.yaks.app<path>` — which is also every request a custom
 // domain carries, whether it names the space or one app mounted at its root
 // (index.ts `aimed`, T-34596) — five rungs, the first that answers winning:
 //
-//  1. PLATFORM PATHS are the kernel's and no app routes them: `/.well-known/`
-//     on a hostname of ours, where a site GRANTS AUTHORITY over a name that
+//  1. Platform paths are the kernel's and no app routes them: `/.well-known/`
+//     on a hostname of ours, where a site grants authority over a name that
 //     is not the space's (route.ts `platform`, decided before this part), an
 //     app's `/<app>/api/…` store doors, and the directory's own space, which
 //     nothing is served at to anyone (T-32585).
-//  2. AN APP'S SLUG owns the first path segment: `/<app>/…` is that app — its
+//  2. An app's slug owns the first path segment: `/<app>/…` is that app — its
 //     own worker first where it has one, its files behind it — whatever the
 //     home app has at the same address, so a home page that wants `/garden`
 //     has to be in a space where no app is called garden. A former slug
 //     redirects here.
-//  3. THE HOME APP'S FILES answer every path no app claims, at the bare
+//  3. The HOME app's files answer every path no app claims, at the bare
 //     hostname: `/photo.png` is its file, `/about` its page.
-//  4. THE SPACE'S INDEX is `/`'s last word — a space with no home app, or a
+//  4. The space's index is `/`'s last word — a space with no home app, or a
 //     home app with no front page — so a space that EXISTS is a door and not
 //     a 404 (pages.ts `spaceIndex`).
-//  5. EVERYTHING ELSE is the home app's worker where it has one, else 404.
+//  5. Everything else is the home app's worker where it has one, else 404.
 //
-// Rungs 3 and 5 are ONE call and the home app is asked exactly the way rung 2
+// Rungs 3 and 5 are one call and the home app is asked exactly the way rung 2
 // asks an app: its worker first, its files behind it. That is what makes it
 // the space's router — a worker that sees every path no other app claims,
-// and answers 404 to PASS (dispatch.ts `ran`), leaving the rest to its files.
+// and answers 404 to pass (dispatch.ts `ran`), leaving the rest to its files.
 // So rung 4 is what is left when neither half of the home app has anything at
 // `/`, and rung 5's 404 is what is left when there is no home app at all.
 //
-// And ONE rung is opted into, between 1 and 2: the paths the home app named
+// And one rung is opted into, between 1 and 2: the paths the home app named
 // in `home.first` are its worker's before they are the owning app's
 // (`firstly` below). Empty for almost every space, and it can only ever move
 // a path from the app that owns it to the home app — never off the platform's
@@ -1480,7 +1480,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   if (r.space == null) return nothingHere(env)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let space = await c.time('space', () => dir.space(r.space!))
-  // Not a space here — but it may be where one USED to be (T-34658): a rename
+  // Not a space here — but it may be where one used to be (T-34658): a rename
   // moves `space.slug` and keeps the old subdomain pointing at it, whole path
   // and query, the way a renamed app's old path does one level down. A
   // permanent move, because a space's address is on more links than an app's
@@ -1521,7 +1521,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     if (req.method != 'GET' && req.method != 'HEAD') return nothingHere(env)
     return index(req, env, dir, space, undefined, view)
   }
-  // The builder's socket (build.ts, T-34240). A SPACE's door, not an app's:
+  // The builder's socket (build.ts, T-34240). A space's door, not an app's:
   // the person it is for has no app yet, so it is answered here — before the
   // home app is looked for, since a space with none would be a 404 at every
   // path but `/`. It is a platform path (router.ts), so no app routes it.
@@ -1575,16 +1575,16 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       : nothingHere(env)
   }
   if (r.app && !app) {
-    // Not an app here — but it may be where one USED to be (directory.ts
+    // Not an app here — but it may be where one used to be (directory.ts
     // former): a rename moves the address and keeps the old one pointing at
     // it, files and `/api/…` alike.
     let was = await dir.former(space, r.app)
     if (was) return moved(req, `/${was.slug}${r.path || '/'}${url.search}`)
   }
-  // The space's front page is SERVED at its bare hostname (T-33040): rung 3
+  // The space's front page is served at its bare hostname (T-33040): rung 3
   // above. Before this the root answered a 302 into `/<app>/`, so the
   // sub-path was in the address bar and in every link anyone copied. On a
-  // customer's own domain that is the whole point: her site has to BE at
+  // customer's own domain that is the whole point: her site has to be at
   // herbusiness.com (T-33035, index.ts `aimed`), and one rule serves both
   // hostnames.
   //
@@ -1597,7 +1597,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   let path = r.path
   let front = !!app && app.home
   if (!app) {
-    // Which app is home is a DIRECTORY READ, so it happens here, where env
+    // Which app is home is a directory read, so it happens here, where env
     // is, and not in route.ts, which is pure (index.ts `aimed`, same reason).
     let home = await c.time('home', () => dir.home(space!))
     // No front page at all — the ordinary state of a space, since being the
@@ -1616,7 +1616,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     front = true
     path = url.pathname
   } else if (!mount && front && (path == '' || path == '/')) {
-    // The home app's OWN `/<app>/` forwards to the bare hostname, so its
+    // The home app's own `/<app>/` forwards to the bare hostname, so its
     // address is that and nothing else, and links anybody already holds still
     // arrive. Temporary, not permanent — which app is home is a word the owner
     // moves from one app to another (tools.ts `app_set`), and a 301 a browser
@@ -1625,7 +1625,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   } else if (path == '') return redirect(`${url.pathname}/`)
   // The app's own worker, coming back through its service binding for its
   // store or its files (dispatch.ts): the grant says who it is acting as, so
-  // there is no cookie to read — and a request holding one is never sent BACK
+  // there is no cookie to read — and a request holding one is never sent back
   // to the worker, which is what keeps `env.FILES.fetch('/index.html')` from
   // being a loop.
   // Where this app is mounted for the browser that asked: the prefix its
@@ -1659,9 +1659,9 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       return reporting(early.page, req, '/')
     }
   }
-  // A GUEST of this one app (T-37615). The roster is read space-wide, so
+  // A guest of this one app (T-37615). The roster is read space-wide, so
   // somebody invited to a single app holds no seat and the answer above is
-  // null; what they hold is a grant on THIS app, and from here on they are
+  // null; what they hold is a grant on this app, and from here on they are
   // that level — the app's page, its data, its `me()`, and the vouch its store
   // mirrors. Here rather than beside the seat, because rung 1.5 above hands
   // `who` to the HOME app's router: a guest of one app must not arrive at
@@ -1683,22 +1683,22 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       at,
     )
   }
-  // A private app hides its PAGE too, not only its data (C-32607 item 5):
+  // A private app hides its page too, not only its data (C-32607 item 5):
   // `access: private` says only its members can see it, and its files are
   // part of what they see. A stranger is sent to sign in and handed back to
   // the page (T-32593); someone signed in who is nobody here gets the same
   // nothing-here a wrong address gets — whether the app exists at all is its
   // owner's to tell.
   //
-  // ITS OWN WORKER IS THE EXCEPTION, both ways round (T-34303). The worker
-  // runs ahead of this gate, and a request coming BACK from it passes the gate
+  // Its own worker is the exception, both ways round (T-34303). The worker
+  // runs ahead of this gate, and a request coming back from it passes the gate
   // — `itself` is a grant the kernel minted for this store and this request,
   // which nothing but this app's own worker can hold, so `env.FILES` reads the
   // app's pages where a stranger asking directly is refused. On a private app
-  // the worker IS the gatekeeper: `access` is one word about the whole store,
+  // the worker is the gatekeeper: `access` is one word about the whole store,
   // and a rule finer than that — the invitation code that opens one
   // household's row and no other — can only live in the app's own code. What
-  // that code may do AS the app is `env.APP` and nothing else; its `env.STORE`
+  // that code may do as the app is `env.APP` and nothing else; its `env.STORE`
   // is still the visitor, so a worker that only passes a store read on refuses
   // exactly what the page would have.
   let mayRead = !!itself || reads(mode(app.access), who.role)
@@ -1708,7 +1708,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // dispatch namespace and only then the bucket cost two round trips end to
   // end — and almost every app has no worker at all, so almost every page
   // paid the first one purely to be told so. Started together, a page costs
-  // the LONGER of the two rather than their sum.
+  // the longer of the two rather than their sum.
   //
   // The wasted read is the rare case — an app whose worker answers — and it
   // is one small GET. The `catch` is there because a promise nobody awaits
@@ -1736,7 +1736,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   }
   // A page was served, so every plugin that is watching is told (plugin.ts
   // `watch`, T-34601; views.ts counts it, T-34496). Last, once, and only for
-  // what an APP answered: the `/api/` doors returned above, a file that is not
+  // what an app answered: the `/api/` doors returned above, a file that is not
   // HTML is not a page, and the platform's own pages — the space index, the
   // trash, a wrong address — never come back through here.
   watched(PLUGINS, { env, req, res: page, at: seen(space, app) })

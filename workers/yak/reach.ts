@@ -1,29 +1,29 @@
-// An entity SPANS apps (T-32698): the eid a client minted is the same thing
+// An entity spans apps (T-32698): the eid a client minted is the same thing
 // in every store, so the recipe an app saved and the loan another app wrote
 // about it are one entity wearing two components, one per app. A read that
 // names no app is therefore one question asked of every store the caller can
-// reach, answered as ONE bundle per eid. This module is that composition —
+// reach, answered as one bundle per eid. This module is that composition —
 // the fan-out, the split a mixed filter needs, and the merge — and tools.ts
 // owns which stores are in reach.
 //
-// The split is HERE and not in a store: a store refuses a word it never
+// The split is here and not in a store: a store refuses a word it never
 // planted ("unknown prop: .book"), so `.recipe!&.book!` cannot be asked of
 // either store whole. The line is cut on its own `&` seams — one part per
 // component named — each part asked of every store, and the eids in common
 // are the answer. The grammar itself is untouched: every part is an ordinary
 // filter line, and a store that cannot speak one is simply silent about it.
 //
-// Everything that crosses this seam is a BUNDLE (@yaks/graph): a store answers
+// Everything that crosses this seam is a bundle (@yaks/graph): a store answers
 // `GET /query?q=…` with bundles, takes a batch of bundles at `POST /apply`,
 // and answers that with the batch as applied. The merge is therefore what
 // bundles are for — one entity, the components it wears, gathered from
 // wherever they are kept. That is the Store on the packages (graph.ts), the one
 // object index.ts binds; the wire here is that one's, and only that one's.
 //
-// Two things this module does that no single store can. An ORDER over a
-// spanning answer is settled HERE, over the merged bundles, with @yaks/match:
+// Two things this module does that no single store can. An order over a
+// spanning answer is settled here, over the merged bundles, with @yaks/match:
 // each store can only order what it holds, and two stores' orders say nothing
-// about each other. And the space's VOCABULARY is the union of what its apps
+// about each other. And the space's vocabulary is the union of what its apps
 // declare — the language a merged bundle is written in, and the one @yaks/match
 // reads an order out of.
 import { asking, listed, PLATFORM, type Row } from './listing.ts'
@@ -54,7 +54,7 @@ import {
 // makes it the most specific thing said about a row.
 let CORE: Vocab = loadVocab(coreDocs, appKeywords)
 
-// The platform's own rows, screened out of the QUESTION (listing.ts `asking`)
+// The platform's own rows, screened out of the question (listing.ts `asking`)
 // — but only the ones a store actually plants. A store refuses a filter naming
 // a component it has no table for, so screening for a word the platform does
 // not declare would refuse the whole read instead of narrowing it.
@@ -71,7 +71,7 @@ export let at = (r: Reach) => `${r.space.slug}/${r.app.slug}`
 // sentence — the fan-out reads it as silence, a caller with one store reads
 // it as the error.
 //
-// `said` is the line the CALLER asked, which the listing rule reads and the
+// `said` is the line the caller asked, which the listing rule reads and the
 // store need not: a composed read asks each store a part of the line and
 // then gathers the bundle by `id=`, and the listing rule applied to those
 // words hid the stamps the caller had named — `.book!&.created!` came back
@@ -79,11 +79,11 @@ export let at = (r: Reach) => `${r.space.slug}/${r.app.slug}`
 // (C-32800 item 4). The words a listing is cut by are the caller's, wherever
 // the rows were fetched from.
 //
-// The QUESTION carries the same door's screen an app's page asks with
-// (listing.ts `asking`), because an APP's store keeps person rows as its own
+// The question carries the same door's screen an app's page asks with
+// (listing.ts `asking`), because an app's store keeps person rows as its own
 // bookkeeping — one per writer, so a byline has a name (graph.ts `#vouching`) —
 // and a person titled with what to call them matches `.doc!` like any row.
-// The directory's own store is the exception: there people ARE the data, and
+// The directory's own store is the exception: there people are the data, and
 // its reads are its own (identity.ts).
 let doorOf = (env: Env, r: Reach, said?: string) => async (line: string) => {
   let asked = line.replace(/^[?&]+/, '')
@@ -132,7 +132,7 @@ let limitOf = (line: string) =>
   Number(segsOf(line).find((s) => /^\.?limit=/.test(s))?.split('=')[1]) ||
   undefined
 
-// Does this line ask for EVERY component? `*` is a directive in the grammar
+// Does this line ask for every component? `*` is a directive in the grammar
 // (@yaks/query, T-34070), not a word a door cuts out of the line, so this asks
 // the parser rather than the text — the same question graph.ts `#wanted` asks.
 // A line this door was handed in pieces need not parse; one that does not asks
@@ -145,7 +145,7 @@ let every = (line: string) => {
   }
 }
 
-// The directives that settle a SEQUENCE rather than a set. An `.order=` is
+// The directives that settle a sequence rather than a set. An `.order=` is
 // what moves that decision past the merge: the column it names may be a word
 // only the other store speaks, so neither store can be asked to sort by it —
 // and neither may cut its answer short, or the rows the order wanted would be
@@ -178,7 +178,7 @@ let sorted = (
   orders.order ? matcher(orders.segs.join('&'), vocab)(bundles) : bundles
 
 // A filter line cut into parts: the segments that name each component, and
-// the ones that ride with every part. A part whose every segment is a REQUEST
+// the ones that ride with every part. A part whose every segment is a request
 // (`.loan?`) narrows nothing — it asks for the component, so it is fetched
 // and never intersected.
 export let split = (line: string) => {
@@ -201,7 +201,7 @@ let eidOf = (b: Bundle) => b.entity?.eid ?? ''
 
 // One line, asked of every store at once. A store that refuses contributes
 // nothing — the word is another app's, or this one is not the caller's to
-// read — but a line EVERY store refuses is a line nobody can answer, and then
+// read — but a line every store refuses is a line nobody can answer, and then
 // the first store's sentence is what the caller reads.
 type Heard = { at: string; bundles: Bundle[] }
 
@@ -227,13 +227,13 @@ let asked = async (
 }
 
 // The eids one fan-out selects, in the order the answer keeps. Ranked hits
-// (a text query wears a query-only `rank`) INTERLEAVE — a score is one
+// (a text query wears a query-only `rank`) interleave — a score is one
 // store's own measure and means nothing beside another's, so the merge takes
 // each store's best, then each store's second, which is the only ordering
 // both stores agree with. Everything else is store by store, each in its own
 // creation order.
 // The ranking a text query painted on its hits (graph_query's query-only
-// `rank`), kept off the CANDIDATE rows: the composing read addresses eids and
+// `rank`), kept off the candidate rows: the composing read addresses eids and
 // carries no text pred, so the snippet and the score would be lost between
 // the two halves of one search.
 let ranksIn = (heard: Heard[]) => {
@@ -263,11 +263,11 @@ let ordered = (heard: Heard[]) => {
 // platform kind from another store, and the union decides the rest.
 //
 // Between two app words the filter itself decides, and `must` names the
-// components it REQUIRED: `.loan?&.book!` asks for books, so a book is what
+// components it required: `.loan?&.book!` asks for books, so a book is what
 // each answer is, and `.book!&.loan?` must not call the same row something
 // else. Clause order used to decide it, which made one entity a book or a
 // loan by where the caller happened to type the word (C-32800 item 3).
-// The answer also speaks AS that store: `at` is the one whose own word won,
+// The answer also speaks as that store: `at` is the one whose own word won,
 // and the spine it holds for the row — its archetype — is the one a composed
 // bundle carries, so the fan-out says about an entity what the store the word
 // belongs to says about it.
@@ -293,10 +293,10 @@ let colsOf = (schema: PropSchema): Record<string, string> =>
     ) => [col, p.enum ? p.enum.join('|') : String(p.type ?? '?')]),
   )
 
-// Where one name means two things: the same word declared in two SPACES with
+// Where one name means two things: the same word declared in two spaces with
 // a column they spell differently (T-32728). Within a space a word has one
 // home and the other apps use it, so a disagreement can only be across
-// spaces — and there the name is two words. Columns only ONE side declares
+// spaces — and there the name is two words. Columns only one side declares
 // agree by construction: a vocabulary only ever grows.
 let apartIn = (vocabs: { r: Reach; doc: VocabDoc }[]) => {
   let seen = new Map<string, Map<string, Record<string, string>>>()
@@ -329,11 +329,11 @@ type Held = {
   // The kind each store called the row, by the store that said it.
   kinds: Record<string, string>
   // The archetype each store assigned the row, by the store that assigned it:
-  // a pointer at the tables THAT store holds, so the composition can only
+  // a pointer at the tables that store holds, so the composition can only
   // answer one of them, never a merge of them.
   arch: Record<string, string>
   home: Record<string, string>
-  // A word two SPACES mean two things by (`apartIn`), held per space instead
+  // A word two spaces mean two things by (`apartIn`), held per space instead
   // of merged: space → the store that has it and what it holds.
   split: Record<string, Record<string, { at: string; comp: unknown }>>
 }
@@ -341,10 +341,10 @@ type Held = {
 let spaceOf = (at: string) => at.split('/')[0]
 
 // What every store holds about these eids, gathered in one fan-out: the
-// components, the kind each store called the row, and WHERE each component
+// components, the kind each store called the row, and where each component
 // lives. The read composes bundles out of it; the write routes by it.
 //
-// `apart` names the words whose shapes DISAGREE across spaces. Those are kept
+// `apart` names the words whose shapes disagree across spaces. Those are kept
 // per space rather than merged, because one name meaning two things is two
 // answers, not one bundle.
 let gathered = async (
@@ -396,7 +396,7 @@ let gathered = async (
 // per component, so the first store that answers a component owns it here
 // too; `entity` keeps the first store's num, since a num is a store's own
 // counter and the eid is what the entity is called everywhere. Its archetype
-// is the one thing on the spine that is a CLAIM — the tables a store holds for
+// is the one thing on the spine that is a claim — the tables a store holds for
 // the row — so it comes from the store whose word named the kind, and a
 // fan-out says what that store alone would say (C-32800 item 2).
 //
@@ -493,13 +493,13 @@ export let composed = async (
 // The read, whole. One store in reach and this is that store's own answer,
 // untouched — the same door, the same words, the same refusal. Several, and
 // the line is split, each part asked of all of them, the eids in common taken
-// (a filter's `&` IS an intersection), and the bundles composed.
+// (a filter's `&` is an intersection), and the bundles composed.
 //
-// A window is the one place the split shows: `limit=` bounds each PART before
+// A window is the one place the split shows: `limit=` bounds each part before
 // the parts meet, so a mixed filter's window is the newest of each side, then
 // the newest of what they had in common.
 //
-// Unless the caller asked for an ORDER, and then the sequence is nobody's to
+// Unless the caller asked for an order, and then the sequence is nobody's to
 // cut until the bundles are one: `sorted` runs the order and the window over
 // the merged answer, in the space's own vocabulary (@yaks/match). A store can
 // only sort what it holds, and the column being sorted by may live in the
@@ -522,7 +522,7 @@ export let read = async (
   let plain = global.filter((s) =>
     !AGGS.includes(firstWord(s)) && !(orders.order && orderWord(s))
   )
-  // Which stores a word is asked of: the ones whose vocabulary DECLARES it
+  // Which stores a word is asked of: the ones whose vocabulary declares it
   // (T-32728 — a word has one home, and a second app declaring it uses that
   // home), and every store for a word nobody declares, which is the
   // platform's and spoken everywhere.
@@ -549,19 +549,19 @@ export let read = async (
   )
   let limit = limitOf(line)
   // The window is cut here only while the answer's sequence is already
-  // settled. An ORDER moves that decision past the merge, where the column it
+  // settled. An order moves that decision past the merge, where the column it
   // sorts by is in hand — so every candidate is gathered and `sorted` cuts.
   if (!orders.order && limit != null && eids.length > limit) {
     eids = eids.slice(0, limit)
   }
-  // `.count!` over a fan-out is how many ENTITIES the filter selects, which
+  // `.count!` over a fan-out is how many entities the filter selects, which
   // is the size of the composed set — summing each store's own count would
   // count an entity that lives in two of them twice.
   if (agg == 'count') return { count: eids.length }
   // The bundle is read from the stores that speak a word the line named, and
   // carries those components — the store's own rule (graph.ts `#wanted`),
   // applied here because the composing read addresses the eids and names no
-  // component. A part this door cannot confirm IS a component (an unqualified
+  // component. A part this door cannot confirm is a component (an unqualified
   // prop, a reference path) asks for the whole bundle rather than guess. `*` is
   // the grammar's widest projection (@yaks/query `every`, T-34070), read off the
   // parsed line the way the store reads it, so both doors agree about one word.
@@ -589,7 +589,7 @@ export let read = async (
 
 // A write is routed the same way a read is composed (T-32700): a bundle is
 // split by component and each part goes to the app that word belongs to. One
-// home per component — a word an app DECLARED is that app's row wherever the
+// home per component — a word an app declared is that app's row wherever the
 // call was aimed, and a word the platform shares (doc, comment, edge)
 // goes where the call, the entity's own history, or the rest of its bundle
 // says.
@@ -609,11 +609,11 @@ let vocabAt = async (env: Env, r: Reach): Promise<VocabDoc> => {
   return meant(await res.json())
 }
 
-// Every word in reach as ONE vocabulary: the platform's core plus each app's
+// Every word in reach as one vocabulary: the platform's core plus each app's
 // own, so a merged bundle can be read in the language it is written in. A word
-// two apps declare is loaded ONCE, from its first declarer — a word has one
+// two apps declare is loaded once, from its first declarer — a word has one
 // home (T-32728), and @yaks/vocab refuses a name declared twice. A word two
-// SPACES mean two things by is `apart`, and a merged bundle keeps those
+// spaces mean two things by is `apart`, and a merged bundle keeps those
 // unmerged rather than letting the union decide which one it is.
 let union = (docs: VocabDoc[]): Vocab => {
   let seen = new Set<string>()
@@ -631,7 +631,7 @@ let union = (docs: VocabDoc[]): Vocab => {
 // Which stores declare which word — the routing table a write follows and the
 // reach set a read narrows by, in app order (oldest first), so the first
 // declarer is the word's home. `apart` is the other half of the same read:
-// the words two SPACES mean two things by, which a bundle must not merge. And
+// the words two spaces mean two things by, which a bundle must not merge. And
 // `vocab` is the union: the space's whole language, which is what orders an
 // answer no single store could have ordered.
 let spoken = async (env: Env, reach: Reach[]) => {
@@ -663,8 +663,8 @@ let isComp = (k: string) => !NOT_A_COMP.includes(k) && !k.startsWith('$')
 // store can resolve.
 let elsewhere = (e: Bundle) => e.entity?.num != null
 
-// Every `$alias` in the batch, minted HERE. A bundle that lands in two stores
-// must land under ONE eid, and two stores minting their own would make two
+// Every `$alias` in the batch, minted here. A bundle that lands in two stores
+// must land under one eid, and two stores minting their own would make two
 // entities out of one — so the door mints, the answer maps the alias to what
 // it minted, and each store is handed an eid it has only to accept. A bundle
 // with no address at all is minted the same way, for the same reason.
@@ -694,7 +694,7 @@ let minted = (batch: Bundle[]) => {
   let entities = batch.map((e, i) => {
     let one = swap(e) as Bundle
     if (!eids[i]) return one
-    // The alias RIDES ALONG (T-34390). A store's own mint phase reads `$alias`
+    // The alias rides along (T-34390). A store's own mint phase reads `$alias`
     // to tell an id the graph picked from one a caller wrote down, which is
     // what decides whether a name somebody already holds moves this entity onto
     // theirs or is refused as a clash. Minting here would otherwise make every
@@ -714,7 +714,7 @@ let minted = (batch: Bundle[]) => {
 
 type Part = { r: Reach; entities: Bundle[] }
 
-// One store's /apply door, vouched. `check` REHEARSES the batch — every phase
+// One store's /apply door, vouched. `check` Rehearses the batch — every phase
 // runs and the transaction is rolled back (@yaks/graph `check`), so a refusal
 // is a refusal while nothing is written and no effect observes it. That is
 // what lets a batch spanning two stores be admitted everywhere before either
@@ -774,8 +774,8 @@ let routed = async (
     let declared = words.get(name) ?? []
     let mine = eid ? held.get(eid)?.home ?? {} : {}
     if (declared.length) {
-      // A word has ONE home: the first app to declare it (T-32728). A second
-      // app declaring the same word is a USE of it, and its writes land in
+      // A word has one home: the first app to declare it (T-32728). A second
+      // app declaring the same word is a use of it, and its writes land in
       // the home store — which is what lets a lending app write a `book` the
       // reading list owns. Where the entity already wears the word wins over
       // birth order, and a named app wins over both when it is one of the
@@ -802,7 +802,7 @@ let routed = async (
     if (holders.length == 1) return holders[0]!
     // A title beside a recipe is the recipe's title: a shared word with
     // nowhere else to go rides with the app whose own words are in the same
-    // bundle, which is what makes writing a NEW entity one call.
+    // bundle, which is what makes writing a new entity one call.
     if (mates.length == 1) return mates[0]
     if (reach.length == 1) return reach[0]
     throw new Error(
@@ -874,7 +874,7 @@ let routed = async (
 // The write, whole: routed, rehearsed everywhere, then committed. A refusal in
 // any store is the caller's error and leaves every other store unwritten,
 // because the dry run went first (`/apply?check=1`, @yaks/graph `check`) — a
-// single part needs no second round trip, since its commit IS its rehearsal.
+// single part needs no second round trip, since its commit is its rehearsal.
 //
 // The answer is what every part answered: the bundles as applied, and the
 // aliases this door minted so a caller can find what it just wrote.
@@ -896,9 +896,9 @@ export let written = async (
   }
   let outs = await Promise.all(parts.map((p) => sent(env, p, false, headers)))
   let bundles = outs.flat()
-  // Where a `$alias` actually LANDED. A store may put a bundle somewhere other
+  // Where a `$alias` actually landed. A store may put a bundle somewhere other
   // than the id this door minted for it: one carrying a name somebody already
-  // holds is a patch of THAT entity (@yaks/alias, T-34390). The batch as
+  // holds is a patch of that entity (@yaks/alias, T-34390). The batch as
   // applied says so, so the map a caller reads is corrected from the answer.
   for (let b of bundles) {
     if (typeof b.$alias == 'string') aliases[b.$alias] = b.entity.eid

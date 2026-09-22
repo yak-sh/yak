@@ -1,5 +1,5 @@
 // The cookie's life (session.ts): how long a session lasts, and the renewal
-// that makes it SLIDE. `SESSION` is ninety days of NOT signing in — an answer
+// that makes it slide. `SESSION` is ninety days of NOT signing in — an answer
 // to a request whose cookie is past half its life carries a fresh one, so
 // activity keeps a session for as long as it goes on and only silence ends it
 // (T-35380).

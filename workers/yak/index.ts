@@ -8,13 +8,13 @@
 // object (stream.ts), which holds a person's open agent stream, and the
 // Builder (build.ts), which holds a space's build conversation. Every route
 // runs inside one catch: a throw becomes an exception entity in the META
-// store — OUR code fell over, whatever app the URL named (T-33234, `report`
+// store — our code fell over, whatever app the URL named (T-33234, `report`
 // below) — and a soft page, so no failure goes unseen (D-32318 §Errors,
 // V-32361). A door's deliberate no is not a failure and files nothing
 // (unseen.ts `refusal`).
 //
 // One thing beyond routing happens here, and it is here because nowhere else
-// still knows it: a request at a GRAPH DOOR whose `Origin` names another
+// still knows it: a request at a graph door whose `Origin` names another
 // address is refused before it is served (route.ts `sameOrigin`). Sibling
 // spaces are subdomains of one registrable domain, so they are same-site and
 // the session cookie rides along to a door another space's page aims at; the
@@ -22,7 +22,7 @@
 // a custom domain's address the hostname the browser addressed is gone.
 //
 // One door answers a stranger's page anyway (route.ts `shared`, T-33408): an
-// app's READ door, asked with GET. The cookie is taken off the request before
+// app's read door, asked with GET. The cookie is taken off the request before
 // it is served and the answer is marked readable by any origin, so anybody's
 // page may read a public app the way anybody's curl already can — the apex's
 // own front page is a client of exactly that door and gets nothing extra.
@@ -30,10 +30,10 @@
 // There is no heartbeat: every store owes its own wakes and arms its own
 // Durable Object alarm for them (graph.ts, D-37562).
 //
-// The route table. Above every line of it sits what the PLATFORM owns
+// The route table. Above every line of it sits what the platform owns
 // (route.ts `platform`): the whole `/.well-known/` prefix on our own
 // hostnames, because that is where a site grants authority over its own name
-// and `<space>.yaks.app` is OUR name, not the space's. A customer's own
+// and `<space>.yaks.app` is our name, not the space's. A customer's own
 // domain is their name, so there the prefix is the app's, all of it:
 //   yaks.app (and any dev host)
 //     /                       the home page, from ./public
@@ -45,7 +45,7 @@
 //     /.well-known/oauth-*    identity.ts: the provider's metadata
 //     /stripe/webhook         billing.ts: what Stripe says happened
 //     /api/billing/*          billing.ts: checkout and the customer portal
-//     /stripe/connect         sell.ts: what a SELLER's account says happened
+//     /stripe/connect         sell.ts: what a seller's account says happened
 //     /mcp, /api/*            mcp.ts (T-32329; a JSON 404 until then)
 //     /robots.txt, /sitemap.xml, /llms.txt, /llms-full.txt
 //                             seo.ts: the site said as a list, generated —
@@ -58,7 +58,7 @@
 //     POST /deploy            drop.ts: a zip of files, or one index.html,
 //                             dropped on the space's page — an app made or
 //                             updated, by the member who dropped it
-//     /                       the space's front page — its home app, SERVED
+//     /                       the space's front page — its home app, served
 //                             here; "nothing here" if it has none
 //     /api/build              build.ts: the socket the builder talks on, the
 //                             space's own and ahead of every app
@@ -109,7 +109,7 @@ import * as sell from './sell.ts'
 import { slid } from './session.ts'
 import { metaBreaks, noted, refusal } from './unseen.ts'
 
-// THE Store, at every address the binding names — the directory at
+// The Store, at every address the binding names — the directory at
 // `yak/platform` and every app's own beside it (T-33815). It carries the DO's
 // own name, so wrangler's migration list never moves — the name is the one the
 // fleet-shaped object it replaced wore, and that object is gone (T-33807).
@@ -119,13 +119,13 @@ export { Builder } from './build.ts'
 
 // The builder's workbench (sandbox.ts, T-34264): Cloudflare's own Sandbox
 // Durable Object, whose container the deploy builds from
-// workers/yak/sandbox/Dockerfile. This is the ONE place the package is named
+// workers/yak/sandbox/Dockerfile. This is the one place the package is named
 // as a value — it imports `cloudflare:workers`, which only the runtime can
 // load, and sandbox.ts types the binding instead so every test can reach the
 // tools that use it.
 export { Sandbox } from '@cloudflare/sandbox'
 
-// The kernel's SECOND entrypoint, and the only one with a cache in front of it
+// The kernel's second entrypoint, and the only one with a cache in front of it
 // (cache.ts, wrangler.toml `[exports.Files]`). The default entrypoint below is
 // the gateway: it runs on every request, because the cache key does not
 // include the hostname and every space is a hostname — caching there would
@@ -157,7 +157,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
     if (req.method == 'POST' && asked == '/deploy') {
       return drop.fetch(req, env)
     }
-    // What a PLUGIN answers on this hostname (plugin.ts `routes`, T-34947).
+    // What a plugin answers on this hostname (plugin.ts `routes`, T-34947).
     // Ahead of apps.ts and so ahead of the home app, which answers every
     // address no app claims (T-33040) — the one place a door for a whole
     // hostname can sit. After the kernel's own line above, so a plugin never
@@ -195,8 +195,8 @@ let serve = async (req: Request, env: Env, r: Route) => {
   if (path == '/stripe/webhook' || path.startsWith('/api/billing/')) {
     return bound(env.BILLING, billing.fetch, env).fetch(req)
   }
-  // The OTHER Stripe door, and it is its own endpoint on purpose (sell.ts,
-  // T-34523): what a SELLER's connected account says happened, verified with a
+  // The other Stripe door, and it is its own endpoint on purpose (sell.ts,
+  // T-34523): what a seller's connected account says happened, verified with a
   // second signing secret. Not under `/api/` — that prefix is the graph's —
   // but named in route.ts `doorway` all the same, so both money doors keep the
   // same-origin guard their `/api/` spelling used to give them for free. It
@@ -222,18 +222,18 @@ let serve = async (req: Request, env: Env, r: Route) => {
       { headers: { 'content-type': 'text/plain; charset=utf-8' } },
     )
   }
-  // What a PLUGIN answers at the apex (plugin.ts `routes`), the same list the
+  // What a plugin answers at the apex (plugin.ts `routes`), the same list the
   // space branch above asks. What the apex says about itself to a crawler or a
   // model is the one door there is today (seo.ts `seoPlugin`): the robots
   // file, the sitemap, and the two llms.txt addresses, generated rather than
-  // static because each is a LIST — of the pages, of the guide — and a list
+  // static because each is a list — of the pages, of the guide — and a list
   // kept by hand goes stale the first time a page is added. Here, below the
   // kernel's own doors, so a plugin cannot take one of them.
   let said = await routed(PLUGINS, { env, req, path, space: null })
   if (said) return said
   // The gallery (gallery.ts, T-34477): the published apps their owners asked
   // us to show, and the door the approval link in our own letter lands at.
-  // Drawn rather than a file, because it is a LIST of what the directory
+  // Drawn rather than a file, because it is a list of what the directory
   // holds — and the same list is what the home page's showcase draws from,
   // which is why the directory is read once here for both.
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
@@ -269,7 +269,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
     headers.set('content-disposition', 'attachment; filename="yaks-app.png"')
     return new Response(page.body, { status: page.status, headers })
   }
-  // Two pages are files with something the CODE knows spliced into them: the
+  // Two pages are files with something the code knows spliced into them: the
   // home page's showcase (the newest listings) and the pricing page's selling
   // rate (sell.ts). Both splice into the bytes the assets door answered, and
   // both keep the file's own words when the directory will not answer.
@@ -287,11 +287,11 @@ let serve = async (req: Request, env: Env, r: Route) => {
   return page
 }
 
-// A foreign host that has reached the Worker (route.ts ORIGIN, T-33036) but
+// A foreign host that has reached the Worker (route.ts origin, T-33036) but
 // has nothing ready to answer with: a domain mid-provisioning, or one
-// Cloudflare has stopped serving. `aimed` below is what routes an ACTIVE
+// Cloudflare has stopped serving. `aimed` below is what routes an active
 // host to its app; this is what stands in front of it, because `aimed`
-// cannot tell a host that is not there YET apart from one it has simply
+// cannot tell a host that is not there yet apart from one it has simply
 // never heard of — both answer null, and both used to fall through to the
 // apex home page, which is the wrong thing on a stranger's domain.
 //
@@ -299,7 +299,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
 // directory.ts `Host`) answers `active` for free, so a live domain pays no
 // Cloudflare call on every request. Anything else asks Cloudflare directly
 // for the three steps a person waits through (domains.ts `steps`), because
-// the cached `stage` is one word and the page wants to say WHICH of DNS,
+// the cached `stage` is one word and the page wants to say which of DNS,
 // validation or certificate is still pending — the same reading
 // `domain_status` gives an agent, handed to the visitor instead. A platform
 // not configured to ask Cloudflare (`reachable`, domains.ts) falls back to a
@@ -333,18 +333,18 @@ let settling = async (env: Env, host: string): Promise<Response | null> => {
 }
 
 // A hostname someone else owns, aimed at a place of ours (T-33037, T-34596).
-// Routing stays pure and synchronous; this is a DIRECTORY READ, so it happens
+// Routing stays pure and synchronous; this is a directory read, so it happens
 // here, where the router already holds env — and only for a hostname that is
 // neither ours nor a dev host (route.ts `foreign`). A host the directory has
 // never been given answers null and keeps the route it already had, which is
 // the apex: every address that exists today is decided before this is asked.
 //
-// The request is CARRIED to the address that place already has on our own zone
+// The request is carried to the address that place already has on our own zone
 // (route.ts `aimedAt`, which is the whole of the space/app difference), and
 // every part below routes it from the pure route table the way it routes
 // everything else — so a domain on a space is served by the same rungs as
 // `<space>.yaks.app` rather than by a second copy of them. The browser stays on
-// the person's domain; only the address the PLATFORM derives from the request
+// the person's domain; only the address the platform derives from the request
 // moves, which is what puts a sign-in return on our own zone, where the session
 // cookie is (route.ts `onZone`).
 //
@@ -353,7 +353,7 @@ let settling = async (env: Env, host: string): Promise<Response | null> => {
 // below have no other way to tell: apps.ts gives the page a `<base href>` at
 // the mount, and never forwards the front page's `/<app>/` to `/` here, which
 // on a domain would be a loop back to the address that arrived (T-33040). A
-// domain on a SPACE sends no mount: nothing moved, so its apps are mounted
+// domain on a space sends no mount: nothing moved, so its apps are mounted
 // where their addresses say they are.
 let aimed = async (req: Request, env: Env, host: string) => {
   if (!foreign(host, env)) return null
@@ -400,7 +400,7 @@ let uncredentialed = (req: Request) => {
   return new Request(req, { headers })
 }
 
-// The mark on the answer. The WILDCARD, never the asking origin, and no
+// The mark on the answer. The wildcard, never the asking origin, and no
 // `Access-Control-Allow-Credentials`: a browser refuses to send a credentialed
 // request to `*`, so the pair is a promise the browser itself enforces, and
 // echoing the origin back would let a future mistake add credentials to it.
@@ -410,7 +410,7 @@ let uncredentialed = (req: Request) => {
 // The Workers cache is not in front of this entrypoint and must not be
 // (wrangler.toml, cache.ts): its key holds the path and not the hostname, so
 // `alice.yaks.app/recipes/api/query?x` and bob's are one entry. The answer is
-// public but it is not shareable BY US, which is why `sealed` still marks it
+// public but it is not shareable by US, which is why `sealed` still marks it
 // `private, no-store` and nothing here asks for more.
 let cors = (res: Response) => {
   if (res.status == 101) return res
@@ -433,7 +433,7 @@ let unmounted = (req: Request) => {
   return new Request(req, { headers })
 }
 
-// What OUR code threw, as an entity where WE read it: the meta store, always
+// What our code threw, as an entity where we read it: the meta store, always
 // (T-33234). Awaited, so the entity exists by the time the soft page lands.
 //
 // Nothing that reaches this catch was the app's code running. An app's code
@@ -443,19 +443,19 @@ let unmounted = (req: Request) => {
 // bucket: ours. The route may name an app, and that is all the app has to do
 // with it.
 //
-// It used to file by ROUTE, which made a platform failure the named app's:
-// evicting a Store object on one of OUR deploys throws into whatever socket
+// It used to file by route, which made a platform failure the named app's:
+// evicting a Store object on one of our deploys throws into whatever socket
 // was open, and `GET /<app>/api/ws` then wrote a regression that never
 // happened into a customer's store, stamped with their version, charged to
 // their metered writes, and pushed to every member of their space — at our
 // deploy rate rather than their usage. Jeff, 2026-09-03: "That's not just
 // noise; it's a bug".
 //
-// So the line carries the HOST, which is what names the space and the app the
+// So the line carries the host, which is what names the space and the app the
 // request was on its way to, and no version: the code that broke is ours, and
 // the meta store has no version to name.
 let report = async (env: Env, what: string, e: unknown) => {
-  // The BREAK, something our code hit unexpectedly — the self-healing
+  // The break, something our code hit unexpectedly — the self-healing
   // trigger (kernel.rs; `error` is a known failure state, kept for what the
   // platform reports deliberately). unseen.ts owns the entity's shape,
   // because a page reporting its own break writes the same one. No space is
@@ -495,7 +495,7 @@ let router = {
         )
       }
       // Custom-domain sign-in lands here (identity.ts `handoff`): the one
-      // identity door a customer's OWN hostname answers, caught BEFORE `aimed`
+      // identity door a customer's own hostname answers, caught before `aimed`
       // carries the request off to the app, so this hostname sets its own
       // host-only session cookie rather than the app store answering a sign-in
       // path. It is a foreign host by construction — a space's `.yaks.app`
@@ -513,8 +513,8 @@ let router = {
       let hold = await settling(env, host)
       if (hold) return sealed(hold, env)
       // Space isolation, and the one place it holds (route.ts `sameOrigin`).
-      // HERE, before `aimed` moves the address, because what must match is
-      // what the BROWSER addressed: a page at `herbusiness.com` asking its
+      // Here, before `aimed` moves the address, because what must match is
+      // what the browser addressed: a page at `herbusiness.com` asking its
       // own `/api/…` is same-origin even though the router is about to carry
       // the request to `<space>.yaks.app/<app>/api/…`.
       //
@@ -540,11 +540,11 @@ let router = {
     } catch (e) {
       // A refusal is not a break (unseen.ts `refusal`, T-32655). A part that
       // relays a door's deliberate no by throwing what it was answered is
-      // carrying an ANSWER out, not a failure, and the same rule holds here
+      // carrying an answer out, not a failure, and the same rule holds here
       // as at the report door: it files nothing.
       let said = e instanceof Error ? e.message : String(e)
       if (refusal(said)) return oops(env)
-      // The host the router ROUTED by, not the one the socket arrived on: it
+      // The host the router routed by, not the one the socket arrived on: it
       // is what names the space and the app this was on its way to, and after
       // `aimed` it is the address the platform derived rather than the
       // customer's own domain.
@@ -563,14 +563,14 @@ let router = {
   // files it in the store its local part named.
   //
   // Three outcomes, and they are not interchangeable. A letter that lands is
-  // an entity in an app's store. An address that is nobody's is REFUSED — a
+  // an entity in an app's store. An address that is nobody's is refused — a
   // bounce the sender reads, since a drop is silence and silence is the one
-  // answer that cannot be corrected later. And a failure of OURS is neither:
+  // answer that cannot be corrected later. And a failure of ours is neither:
   // it is written where every other break is, and the message is left
   // unanswered so the sending server tries again — refusing there would turn
   // our outage into somebody's lost mail.
   //
-  // The log carries the recipient's DOMAIN and nothing else: not the local
+  // The log carries the recipient's domain and nothing else: not the local
   // part, not the sender, never the body. A letter is somebody's, and the
   // question this line answers is only which of our names people write to.
   async email(message: Inbound, env: Env): Promise<void> {
@@ -591,7 +591,7 @@ let router = {
 }
 
 // The Worker itself: the router above, with every answer leaving past the
-// SLIDING session (session.ts `slid`, T-35380). A request whose cookie is
+// sliding session (session.ts `slid`, T-35380). A request whose cookie is
 // more than half way through its life is answered with a fresh one, so an
 // account that keeps asking never signs out. It is wrapped around the whole
 // router rather than written into a route, because every door has to slide

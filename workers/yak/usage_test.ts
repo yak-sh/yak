@@ -330,7 +330,7 @@ Deno.test('before the first sweep the line says so, not zero', () => {
   assertStringIncludes(said, 'App serving pauses at')
 })
 
-// A refusal points at the page that DESCRIBES the plans and never at anything
+// A refusal points at the page that describes the plans and never at anything
 // that starts a purchase — the agent surface's policy line (C-33033 on
 // D-32751), which is why the assertion is on both halves.
 Deno.test('a refusal names the ceiling and where the plans are written', () => {
@@ -342,7 +342,7 @@ Deno.test('a refusal names the ceiling and where the plans are written', () => {
   }
   assertStringIncludes(atCeiling(space(), 'apps'), '5 apps')
   // The letters are the one refusal that is not the free tier's alone, and
-  // the one that only stops the SEND (T-33688).
+  // the one that only stops the send (T-33688).
   assertStringIncludes(atCeiling(space(), 'emails'), '100 emails a month')
   assertStringIncludes(atCeiling(space(), 'emails'), 'still arrive')
   assertStringIncludes(
@@ -355,7 +355,7 @@ Deno.test('a refusal names the ceiling and where the plans are written', () => {
   )
 })
 
-// The builder's ceiling (T-34241). A build is one app SHIPPED, so the count is
+// The builder's ceiling (T-34241). A build is one app shipped, so the count is
 // written once by the loop that finished one (`countedBuild`) and read before
 // it starts (`refusedBuild`).
 
@@ -398,7 +398,7 @@ Deno.test('a free space gets five builds each month regardless of lifetime use',
   assert(refusedBuild(space({ builds: 6 }), NOW))
 
   // A refusal costs them nothing — not the build, and not the sentence: the
-  // count is written by the loop that FINISHED one, and this one never ran.
+  // count is written by the loop that finished one, and this one never ran.
   assertEquals(usedBuilds(after, NOW), 5)
   assertEquals(sent.length, 1)
 

@@ -5,16 +5,16 @@
 //   deno task content            rewrite content.ts
 //   deno task content --check    fail (exit 1) if it is stale
 //
-// WHY A STEP AT ALL. A Worker has no filesystem: a page, a prompt and a tool's
-// description have to be IN the bundle by the time the isolate starts, and the
+// Why A step at all. A Worker has no filesystem: a page, a prompt and a tool's
+// description have to be in the bundle by the time the isolate starts, and the
 // roster is assembled at module load. So the files are read here, where there
 // is a Deno, and what the runtime sees is a projection of them — the same deal
 // src/vocab/gen.ts makes with the fleet's vocabulary, and the reason
 // `deno task check` refuses a stale one.
 //
-// The guide pages are the exception that proves it: their BYTES already ship,
+// The guide pages are the exception that proves it: their bytes already ship,
 // under public/, and are served at the address the guide tool reads them back
-// from. What is projected here is only the ROW — the slug, title, description
+// from. What is projected here is only the row — the slug, title, description
 // and brief the connector lists a page by — which is what guide.ts held as a
 // literal until the page itself could say it.
 //
@@ -48,14 +48,14 @@ let said = (v: unknown, where: string): string =>
 /** Every guide page, read once: public/docs/<slug>.md, where `doc` says the
  * title, `guide` says what the connector lists it by, and the rest is the page.
  *
- * The file names no ENTITY: `guide.slug` is declared `identity` (see
+ * The file names no entity: `guide.slug` is declared `identity` (see
  * content.vocab.json), so the page is its slug wherever it is read — here, and
  * in a store the day one applies it (T-34649). Which is why the refusal below
  * matters as much as the row: the slug and the filename are one fact.
  *
  * A page of the documentation that says no `guide` row at all is not a guide
  * page and is skipped: the technical page is documentation the site draws
- * (docs.ts) and not a resource the connector offers. A page that DOES declare
+ * (docs.ts) and not a resource the connector offers. A page that does declare
  * one is held to it, so a row that drifted from its filename still refuses. */
 let guides = () =>
   filesIn(new URL('public/docs/', HERE), '.md').flatMap((name) => {
@@ -110,7 +110,7 @@ let prompts = () => {
       arguments: row.arguments ?? [],
       // The message starts at its first word and ends at its last: the blank
       // line under the frontmatter and the newline the file ends with are the
-      // FILE's punctuation, not the person's.
+      // file's punctuation, not the person's.
       body: body.replace(/^\n+/, '').replace(/\n+$/, ''),
     }
   }
@@ -135,7 +135,7 @@ let words = () => {
   return out
 }
 
-let HEAD = `// GENERATED — do not edit. The words live in the files:
+let HEAD = `// Generated — do not edit. The words live in the files:
 // public/docs/*.md (a page's frontmatter), prompts/*.md (a prompt's), and
 // tools.yml (what each tool says about itself). Change one of those and run
 // \`deno task content\`; \`deno task content --check\` refuses this file when it
@@ -166,7 +166,7 @@ let body = () =>
     }\n`,
   ].join('\n')
 
-// The emitted text as it will be COMMITTED — deno fmt is the last word on it,
+// The emitted text as it will be committed — deno fmt is the last word on it,
 // so the stale check compares like with like. The temp file lives inside the
 // project, where the fmt subprocess resolves this repo's config.
 let formatted = async (text: string) => {
@@ -185,7 +185,7 @@ let formatted = async (text: string) => {
 
 // ---- the plugin package (T-34666) ----------------------------------------
 //
-// What `plugins/yaks.app/` holds a COPY of, by path under the plugin root. A
+// What `plugins/yaks.app/` holds a copy of, by path under the plugin root. A
 // plugin is unpacked onto somebody else's disk and read there, so the guide
 // travels as files: one skill per page, whose frontmatter is the page's own
 // row and whose body is the page. The icons travel for the same reason — the
@@ -194,13 +194,13 @@ let formatted = async (text: string) => {
 // wear a different face than the connect page hands out.
 //
 // Everything else under the plugin root (.codex-plugin/plugin.json, .mcp.json)
-// is written by HAND: it is the package's own words and address, not a
+// is written by hand: it is the package's own words and address, not a
 // projection of anything.
 let OWNED = ['skills', 'assets']
 
 let bytes = new TextEncoder()
 
-// The skills as they will be COMMITTED. deno fmt formats markdown and its
+// The skills as they will be committed. deno fmt formats markdown and its
 // frontmatter, and this repo's config is the last word on a quote, so the
 // stale check has to compare what fmt would leave behind rather than what this
 // file happened to emit. One subprocess for the whole tree; the temp directory
@@ -270,7 +270,7 @@ let under = (dir: URL, at = ''): string[] => {
 let same = (a: Uint8Array, b: Uint8Array) =>
   a.length == b.length && a.every((x, i) => x == b[i])
 
-// The package is a DIRECTORY, so the stale check is the whole tree: a guide
+// The package is a directory, so the stale check is the whole tree: a guide
 // page that went away has to take its skill with it, and a set that still
 // matches path for path can still differ byte for byte.
 let stale = (files: Record<string, Uint8Array>) => {

@@ -2,7 +2,7 @@
 // The builder's loop (T-34239), on the stand-in: a scripted model instead of
 // a provider, and everything else the code that runs in production — the
 // platform's own tools, the directory, the Store, the bucket, the serving
-// door. What is proved here is that the loop is a MODEL away from building
+// door. What is proved here is that the loop is a model away from building
 // somebody an app: the fake asks for app_new, app_files and app_deploy, the
 // tools run as the person, and the page is served at the app's own address.
 //

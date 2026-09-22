@@ -6,7 +6,7 @@
 //
 // It is the one door here a person walks through with no assistant at all, so
 // it is a plain multipart form (pages.ts `dropZone`) and every no it answers is
-// a SENTENCE on a page rather than a code in a body.
+// a sentence on a page rather than a code in a body.
 //
 // What it does with what it took is not written here: unzip.ts turns the bytes
 // into files, and then the three tools an agent would call do the rest —
@@ -17,7 +17,7 @@
 //
 // The guard is `writes` (@yaks/member): a space's owner or editor deploys,
 // nobody else — the same rule as the file door in apps.ts, which is not the
-// app's `access` bargain. An app's `access` says what a STRANGER may do with
+// app's `access` bargain. An app's `access` says what a stranger may do with
 // its data; its bytes are always a member's.
 import { apex } from './host.ts'
 import * as dirPart from './directory.ts'

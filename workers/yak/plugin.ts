@@ -1,11 +1,11 @@
-// What a DOMAIN of this Worker contributes to the host, as data. The Worker is
+// What a domain of this Worker contributes to the host, as data. The Worker is
 // well split into files by domain already; what it lacked was a way for a
 // domain to say what it brings without every host module naming it back. So
 // this is the shape @yaks/graph's own `Plugin` has (packages/graph/plugin.ts) —
 // a plain object of optional slots, plus a combinator per slot — said in the
 // terms a Worker has rather than the terms `apply()` has.
 //
-// The slots are EXTRACTED, not invented: each one is a thing a domain file in
+// The slots are extracted, not invented: each one is a thing a domain file in
 // here was already doing by being named from a host module.
 //
 //   vocab    a JSON Schema document folded into the directory's words
@@ -20,10 +20,10 @@
 //   routes   a door at the apex or on a space's hostname, answered before any
 //            app is (index.ts `serve`)
 //   watch    what a plugin does about a page an app served (apps.ts `viewed`)
-//   rules    what it does INSIDE a store, as data: a query over one bundle in
+//   rules    what it does inside a store, as data: a query over one bundle in
 //            a batch plus what comes out (@yaks/graph `Rule`), run by the phase
 //            it names in every store this Worker builds (graph.ts `#boot`)
-//   effects  what it does AFTER a store commits: registrations on that store's
+//   effects  what it does after a store commits: registrations on that store's
 //            own post-commit registry (@yaks/effects, graph.ts `#boot`)
 //   wakes    rows seeded once in the directory: when to write `fired`, with
 //            the tags the plugin's effect rules match beside it
@@ -31,7 +31,7 @@
 //            them (versions.ts `pruned`)
 //
 // `rules` is the one slot that is not an extraction: it is @yaks/graph's own
-// phase seam, offered here so a domain says what it does about a WRITE in the
+// phase seam, offered here so a domain says what it does about a write in the
 // same object it says its words and its rows in. A rule about a component a
 // store does not speak is inert there (@yaks/graph rules.ts), which is what
 // lets one list serve the directory and every app store alike.
@@ -79,7 +79,7 @@ export type Answer = (
 ) => Promise<Response | null> | Response | null
 
 /**
- * A request as the ROUTER holds it, before any part of the kernel has taken
+ * A request as the router holds it, before any part of the kernel has taken
  * it: the whole path on the hostname, and which space that hostname names —
  * `null` at the apex. Not `Route`'s `path` (route.ts), which is already the
  * path within an app; a door here sits above the app split and needs the
@@ -126,7 +126,7 @@ export type Wake = Bundle & { wake: Schedule }
  * about it (graph.ts `#boot`): the Worker's bindings, whether this is the
  * platform's own directory store rather than an app's, and the app it holds.
  *
- * `mail` is a FUNCTION because the object learns its own address from the
+ * `mail` is a function because the object learns its own address from the
  * requests it answers — a registration reads it when the effect runs, never at
  * boot, or a store told its address after it woke would send from nowhere.
  */
@@ -141,7 +141,7 @@ export type Stored = {
 }
 
 /**
- * What a plugin does about data a store COMMITTED: registrations on that
+ * What a plugin does about data a store committed: registrations on that
  * store's own registry, made once per incarnation. It runs at boot, so it must
  * not throw — an effect a store cannot register is a store that will not
  * build.
@@ -164,7 +164,7 @@ export type Swept = {
 }
 
 /**
- * The pinned blobs a plugin still NAMES — bytes the sweep must keep because
+ * The pinned blobs a plugin still names — bytes the sweep must keep because
  * something of the plugin's own points at them, which a manifest and a path's
  * history cannot say.
  *
@@ -201,7 +201,7 @@ export type Plugin = {
 }
 
 /**
- * The row a guide page says about ITSELF: the frontmatter of
+ * The row a guide page says about itself: the frontmatter of
  * `public/docs/<slug>.md` (M-34605), which is where a page's title, brief and
  * description live now. Naming a slug is the whole of registering a page — the
  * words are the page's own — and a slug no file answers to throws at module
@@ -266,7 +266,7 @@ export let pagesOf = (plugins: Plugin[]): Page[] =>
   plugins.flatMap((p) => p.pages ?? [])
 
 /**
- * Every plugin door, in plugin order, as ONE door: the first plugin to answer
+ * Every plugin door, in plugin order, as one door: the first plugin to answer
  * wins, and `null` means no plugin claimed the path. Order is the list's, so
  * two plugins claiming one path is decided the way every other precedence
  * here is — by where they sit in `PLUGINS`.
@@ -285,7 +285,7 @@ export let answered = async (
 }
 
 /**
- * The same fold over the ROOT doors (index.ts `serve`), and the same rule: the
+ * The same fold over the root doors (index.ts `serve`), and the same rule: the
  * first plugin to answer wins, `null` means the kernel goes on to its own
  * table. It is asked ahead of the apps on a space's hostname — including the
  * home app, which otherwise answers every address no app claims (T-33040) — so

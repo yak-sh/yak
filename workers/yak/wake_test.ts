@@ -279,7 +279,7 @@ Deno.test('an app store keeps its own schedule, with no platform in the middle',
 })
 
 // An app's own vocabulary, with a rule in it: what an app declares to say what
-// a firing MEANS. The wake carries no action — the rule is the reaction.
+// a firing means. The wake carries no action — the rule is the reaction.
 let GARDEN = JSON.stringify({
   $defs: {
     plant: { properties: { name: { type: 'string' } } },
@@ -323,7 +323,7 @@ Deno.test("an app's rule on `fired` advances the row its wake was about", async 
     }])).status,
     200,
   )
-  // The write armed the object, and firing is the SERVER's write: an app's
+  // The write armed the object, and firing is the server's write: an app's
   // own guard is about a person writing its data, and no person is ticking.
   assertEquals(await ctx.storage.getAlarm(), now)
   await ctx.storage.deleteAlarm()
@@ -452,7 +452,7 @@ Deno.test('a recurring call is one invocation per firing, never a re-run', async
 // nobody has the page open. The whole of it is one row: the world wears the
 // ask (`call`) and the cadence (`wake{every}`), so every firing runs the
 // app's own command once — and a stretch nobody was there for collapses into
-// ONE firing, which is what catching up means here.
+// one firing, which is what catching up means here.
 let IDLER = JSON.stringify({
   $defs: {
     world: { properties: { name: { type: 'string' } } },
@@ -494,14 +494,14 @@ Deno.test('an idle world advances offline, a missed stretch in one firing', asyn
   assertEquals((await world()).fired.at, iso('09:05'))
   assertEquals((await world()).wake.at, iso('09:10'))
   // Half an hour with nothing awake to notice: the seven occurrences owed in
-  // between are one firing, so the command runs ONCE more and not seven
+  // between are one firing, so the command runs once more and not seven
   // times, and the cadence carries on from where the catch-up left it.
   await a.store.tick(at('09:40'))
   assertEquals((await a.rows('.tick!')).length, 2)
   let calls = await a.rows('.call.source=world&.created?')
   assertEquals(calls.length, 2)
   // Each invocation says when it was asked for, so the stretch a firing
-  // covered is the gap between the last two — what an idle world advances BY.
+  // covered is the gap between the last two — what an idle world advances by.
   assert(calls.every((c) => (c.created as { at: string })?.at))
   assertEquals((await world()).fired.at, iso('09:40'))
   assertEquals((await world()).wake.at, iso('09:45'))

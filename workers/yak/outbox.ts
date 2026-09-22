@@ -1,4 +1,4 @@
-// A letter leaving an app's store, as what it CONTRIBUTES (plugin.ts
+// A letter leaving an app's store, as what it contributes (plugin.ts
 // `effects`): the transport that store sends by, and the two registrations
 // that carry a letter out when it asks to go — whichever of its components
 // arrives last.
@@ -22,7 +22,7 @@ export let outboxPlugin: Plugin = {
     // own store writes its sign-in codes through mail.ts from the fleet's
     // address, and has no app whose name a letter could leave under.
     if (at.meta || !at.app) return
-    // No binding is a sender that REFUSES (post.ts), so a deploy without one
+    // No binding is a sender that refuses (post.ts), so a deploy without one
     // bounces a letter rather than swallowing it — and the send is metered
     // against the space's month on the way through (meter.ts), which is why
     // the address is read at send time and not here.

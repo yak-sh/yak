@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-// The one pass, end to end (T-33809): an object is SEEDED the way the store
+// The one pass, end to end (T-33809): an object is seeded the way the store
 // this replaces seeded one — its DDL out of src/store/schema.json, its own
 // apply() (src/db.ts), its own key-value slots — and then woken as the Store on
 // the packages, which finds the old rows and moves them.
@@ -11,7 +11,7 @@
 // envelope around them is gone, and this pass never reads one. The assertions
 // read the new store through its own `/query` door.
 //
-// SLOW tier: every one of these plants the fleet's whole 328-op schema to have
+// Slow tier: every one of these plants the fleet's whole 328-op schema to have
 // something to migrate, which is a third of a second an object — the cost of
 // the thing under test, not of the setup around it.
 import { assert, assertEquals, assertThrows } from '@std/assert'
@@ -53,7 +53,7 @@ import { appVocab } from './vocab.ts'
 import { slugsOf } from '../../src/types.ts'
 
 // One object's whole state, kept across incarnations: its storage, the key-value
-// slots the OLD store remembered everything in, and the socket list the runtime
+// slots the old store remembered everything in, and the socket list the runtime
 // holds. `blockConcurrencyWhile` is the runtime's; here an object is driven one
 // call at a time, so its absence is honest.
 let state = () => {
@@ -231,14 +231,14 @@ slow('an app store carries every row across, and reconciles', async () => {
   assertEquals((docs[0].doc as { title: string }).title, 'Lemon cake')
   assertEquals((docs[0].doc as { body: string }).body, '3 lemons')
 
-  // And the search index holds the PROSE, not the address (T-33978): the blob
+  // And the search index holds the prose, not the address (T-33978): the blob
   // row is written before the row that addresses it, so the trigger that fills
   // the index resolves a body the same way a read does.
   let found = await now.query('lemons', APP)
   assertEquals(found.length, 1)
   assertEquals(found[0].entity.eid, ONE)
 
-  // The app's OWN word, planted from the vocab.json the old object remembered.
+  // The app's own word, planted from the vocab.json the old object remembered.
   let cakes = await now.query('.recipe.serves=8', APP)
   assertEquals(cakes.length, 1)
   assertEquals((cakes[0].recipe as { title: string }).title, 'Lemon cake')
@@ -248,7 +248,7 @@ slow('an app store carries every row across, and reconciles', async () => {
   assertEquals((await now.query('.comment.target=' + ONE, APP)).length, 1)
   assertEquals((await now.query('.person!', APP)).length, 1)
 
-  // The edge said under the old spelling wears the new tag AND the address that
+  // The edge said under the old spelling wears the new tag and the address that
   // spelling derives; the one whose word never moved kept its own.
   let kept = await now.query('.requires!&.edge?', APP)
   assertEquals(kept.length, 1)
@@ -280,7 +280,7 @@ slow("the runtime's own table is not the object's to move", async () => {
   let ctx = state()
   await seedApp(ctx)
 
-  // What every DEPLOYED object carries and no probe ever had (T-34019): the
+  // What every deployed object carries and no probe ever had (T-34019): the
   // table behind `ctx.storage.kv`, which the old store kept everything it
   // remembered in. `sqlite_master` lists it like any other and the authorizer
   // then refuses to read it, so a pass that enumerated tables and selected from
@@ -339,7 +339,7 @@ slow(
       serves: { type: 'number' },
     })
     assertEquals((await now.query('.recipe.serves=8', APP)).length, 1)
-    // And what the object KEEPS is the document, so nothing reads a short map
+    // And what the object keeps is the document, so nothing reads a short map
     // again — including a later deploy, which would refuse one.
     let held = JSON.parse(
       (ctx.storage.sql.exec("select v from yak_kv where k = 'vocab'")
@@ -453,7 +453,7 @@ slow('the directory keeps its three seats', async () => {
     seats.map((s) => (s.member as { role: string }).role).sort(),
     ['editor', 'owner'],
   )
-  // Nor does one become a GRANT. The directory has that word too now — it is
+  // Nor does one become a grant. The directory has that word too now — it is
   // the other rung of its ladder, one app rather than a space (T-37615) — but
   // it is written by an invitation that names an app and never minted out of a
   // roster, so the table crosses empty.
@@ -483,7 +483,7 @@ slow('an app store splits the seat from the level', async () => {
   ])
   let files = bucket()
   let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
-  // The app is named on the request, which is what a grant is ON.
+  // The app is named on the request, which is what a grant is on.
   let seats = await now.query('.member!', APP)
   assertEquals(seats.length, 2)
   assertEquals(
@@ -504,7 +504,7 @@ slow('an app store splits the seat from the level', async () => {
 
 // A directory reaches version 2 from either side, so both are held here: the
 // store that carries with the column still in the fleet-shaped tables, and the
-// one that carried BEFORE the word existed, which is where every deployed
+// one that carried before the word existed, which is where every deployed
 // directory is — its `space` table still standing with a `home` column in it,
 // because SQLite never drops a column a vocabulary stopped declaring.
 let seedHomes = async (ctx: State) => {
@@ -532,9 +532,9 @@ let marker = (ctx: State): string | null =>
     .toArray()[0] as { v: string } | undefined)?.v ?? null
 
 /**
- * A directory as a DEPLOYED one stands right now: carried to version 1 and no
+ * A directory as a deployed one stands right now: carried to version 1 and no
  * further, its `space` table still holding the `home` column with the front
- * page named in it. Built over the NEW store, because that is what version 1
+ * page named in it. Built over the new store, because that is what version 1
  * leaves behind — the column outlives the word that declared it, which is the
  * whole reason there is a second pass.
  */
@@ -658,7 +658,7 @@ let seedFormer = async (ctx: State) => {
       name: 'alias',
       comp: { slug: 'ada/garden', slugs: 'ada/plot' },
     },
-    // A space wears no address of its own, which is the row that must NOT move.
+    // A space wears no address of its own, which is the row that must not move.
     { eid: TWO, name: 'space', comp: { slug: 'ben' } },
   ])
   return old
@@ -675,7 +675,7 @@ let answering = async (now: ReturnType<typeof newer>) =>
     .sort()
 
 /**
- * A directory as a DEPLOYED one stands right now: carried past the front-page
+ * A directory as a deployed one stands right now: carried past the front-page
  * pass and no further, its app addresses still in the table `alias` — which the
  * core word owns as of T-34390, so the columns are standing under a word that
  * declares neither.
@@ -733,7 +733,7 @@ slow('a store carrying now arrives with the addresses moved', async () => {
       note: '2 apps had an address of their own, spelled "alias"',
     },
   )
-  // The core word's table is planted and EMPTY: an address is not a name tag,
+  // The core word's table is planted and empty: an address is not a name tag,
   // so nothing was copied into it on the way past.
   assertEquals(count(ctx, 'alias'), 0)
   // Every pass in the same breath, so none of the later ones has anything left.
@@ -776,7 +776,7 @@ slow('a directory that already carried moves them on next touch', async () => {
 
 // ---- a domain's target: `hostname.app` → `hostname.serves` (T-34596) --------
 //
-// A directory as a DEPLOYED one stands: carried past the addresses and no
+// A directory as a deployed one stands: carried past the addresses and no
 // further, its domains still aimed by the old column, which the vocabulary no
 // longer declares. Nothing selects it, so a domain left there would serve
 // nobody — a customer's own address answering the branded page for good.
@@ -841,9 +841,9 @@ slow('a domain aimed by the old column is aimed by the new one', async () => {
 
 // ---- an app's handle: `former.slug` → `app.store` (T-34657) -----------------
 //
-// A directory as a DEPLOYED one stands: carried past the domains and no
+// A directory as a deployed one stands: carried past the domains and no
 // further, its apps still named by the address each was born at. The handle
-// each app ends up with is the string it was ALREADY stored under, which is
+// each app ends up with is the string it was already stored under, which is
 // what makes this a migration nothing moves for.
 let carriedFour = async (ctx: State) => {
   let now = newer(ctx, PLATFORM_STORE)
@@ -1322,7 +1322,7 @@ for (let door of ['constructor', 'vocab']) {
       JSON.parse(line)
     ).find((r) => r.kind == 'slots').slots
     assertEquals(slots.name, 'ada/cookbook')
-    // The slot keeps the DOCUMENT the manifest means (graph.ts `#vocabDoor`),
+    // The slot keeps the document the manifest means (graph.ts `#vocabDoor`),
     // whichever spelling the deploy was written in.
     assertEquals(JSON.parse(slots.vocab).$defs.recipe.properties, {
       title: { type: 'string' },
@@ -1428,7 +1428,7 @@ slow('a re-addressing that collides rolls the whole pass back', async () => {
 slow('counts that do not reconcile refuse the pass', async () => {
   let ctx = state()
   await seedApp(ctx)
-  // The rule itself, at its own seam. It guards the CODE, not the data — a copy
+  // The rule itself, at its own seam. It guards the code, not the data — a copy
   // that quietly loses or gains a row — so `plant` stands in for one that went
   // wrong: the schema is raised the way the object raises it, and then one row
   // too many lands in a table the pass is about to fill.
@@ -1502,7 +1502,7 @@ Deno.test('the export key names the object and the moment', () => {
 // ---- the definitions, when the schema moves under them ---------------------
 
 Deno.test('a schema that moves re-cuts its definitions and refills', async () => {
-  // No old rows here: this is a store already on the packages, whose SCHEMA
+  // No old rows here: this is a store already on the packages, whose schema
   // moves — a deploy that grew its vocabulary. `create ... if not exists` says
   // nothing about a trigger or a full-text index that is already standing, so
   // both are dropped and raised again and the index is rebuilt (T-33978).
@@ -1518,7 +1518,7 @@ Deno.test('a schema that moves re-cuts its definitions and refills', async () =>
   assertEquals((await now.query('lemons', APP)).length, 1)
 
   // The pre-fix definition, put back by hand: a trigger that indexes the column
-  // as it is STORED, which for a body is its address. A document written under
+  // as it is stored, which for a body is its address. A document written under
   // it is findable by its title and not by a word of its prose.
   ctx.storage.sql.exec('drop trigger doc_fts_insert')
   ctx.storage.sql.exec(

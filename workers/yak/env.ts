@@ -60,7 +60,7 @@ export type Env = {
   BLOBS: R2
   // Where a Store writes its whole old graph before it migrates (migrate.ts,
   // T-33809): one object per pass, kept, and the only restore path there is.
-  // Optional in the type and NOT optional in effect — a store with no bucket
+  // Optional in the type and not optional in effect — a store with no bucket
   // bound refuses to move a row and serves its old rows read-only — because the
   // bucket has to exist on the account before the cutover deploy (T-33808).
   EXPORTS?: R2
@@ -87,10 +87,10 @@ export type Env = {
   MAIL_TOKEN?: string
   MAIL_ACCOUNT?: string
   MAIL_API?: string
-  // The same product, reached the other way: Email Sending as a BINDING
+  // The same product, reached the other way: Email Sending as a binding
   // rather than the REST API (wrangler.toml `[[send_email]]`, T-33684). No
   // token rides with it — the deploy is the authorization — so it is what an
-  // APP's own address sends on (post.ts, T-33686): the Store is handed this
+  // app's own address sends on (post.ts, T-33686): the Store is handed this
   // whole env and reads this one binding out of it. Absent under `wrangler
   // dev` without `remote = true` and in the workerd probes, where a letter
   // bounces saying so; mail.ts still speaks the REST API, because the
@@ -120,7 +120,7 @@ export type Env = {
     }): void
   }
   ANALYTICS_API?: string
-  // An app's OWN code (dispatch.ts): the Workers for Platforms namespace its
+  // An app's own code (dispatch.ts): the Workers for Platforms namespace its
   // worker.js is uploaded into, and the token the upload speaks to the
   // Workers API with — the account tag above is the same one. The namespace
   // has no local implementation — it is remote-only — so under `wrangler dev`
@@ -154,21 +154,21 @@ export type Env = {
   STRIPE_WEBHOOK_SECRET?: string
   STRIPE_PRICE?: string
   STRIPE_API?: string
-  // Selling (sell.ts, T-34523): what the events from a SELLER's connected
-  // account are verified against. A SECOND secret, not the one above, because
+  // Selling (sell.ts, T-34523): what the events from a seller's connected
+  // account are verified against. A second secret, not the one above, because
   // Stripe delivers connected-account events to their own endpoint with their
   // own `whsec_…` — the owner creates it in the dashboard pointing at
   // `https://yaks.app/stripe/connect` (README.md's settings table has the
   // steps). Unset, that door answers 503 in one sentence and the rest of
   // selling still works: what is missing is only what an event would have told
-  // us. The platform KEY above is the same one for both — a direct charge is
+  // us. The platform key above is the same one for both — a direct charge is
   // our key acting on the merchant's account, never a key of theirs.
   STRIPE_CONNECT_WEBHOOK_SECRET?: string
   // The builder (builder.ts, T-34239): the model that makes somebody their
-  // first app. BOTH tiers run on Workers AI — `AI` is the binding
+  // first app. Both tiers run on Workers AI — `AI` is the binding
   // (wrangler.toml `[ai]`), no key of ours and nothing bought, absent under
   // the workerd probes where the loop says so rather than half-running.
-  // The four beside it are the OTHER provider, which nobody has switched on:
+  // The four beside it are the other provider, which nobody has switched on:
   // point BUILDER_MODEL_PAID at an OpenAI model and the loop reaches it
   // through the AI Gateway named by AI_GATEWAY, paid for by OPENAI_API_KEY or
   // by the gateway's own stored key (AI_GATEWAY_TOKEN). OPENAI_API is a
@@ -179,7 +179,7 @@ export type Env = {
     run(model: string, input: unknown, opts?: unknown): Promise<unknown>
     gateway(id: string): { getUrl(provider?: string): Promise<string> }
   }
-  // Where a space's memories are ranked by MEANING (memory.ts, T-34473):
+  // Where a space's memories are ranked by meaning (memory.ts, T-34473):
   // Cloudflare Vectorize, holding one vector per memory with the space it was
   // said in beside it, embedded through the `AI` binding above. Absent under
   // `wrangler dev` and the workerd probes, and absent until somebody has run
@@ -222,7 +222,7 @@ export type Env = {
   DIRECTORY?: Fetcher
   APPS?: Fetcher
   // The one binding that is not a part waiting to be split out: `Files` is a
-  // SECOND entrypoint of this same Worker (index.ts), bound here so that
+  // second entrypoint of this same Worker (index.ts), bound here so that
   // Cloudflare's cache sits between the gateway and the bucket (cache.ts,
   // T-33197). Absent under `wrangler dev` and the workerd probes, where
   // `bound` calls the module in-process and nothing is cached.

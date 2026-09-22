@@ -1,5 +1,5 @@
 // The suite has one kernel runtime: sharing must not share a directory,
-// session key, code letter or app even when the tests use the SAME names.
+// session key, code letter or app even when the tests use the same names.
 import { assertEquals, assertNotEquals } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { client, kernel, letters, seed, signIn } from './probe.ts'

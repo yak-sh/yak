@@ -196,7 +196,7 @@ Deno.test('the frame is asked for on the body, above what it frames', () => {
   }
 })
 
-// What the pages SELL is what the code holds a space to (T-33688). The two
+// What the pages sell is what the code holds a space to (T-33688). The two
 // allowances live in one place — meter.ts `LETTERS`, which the send door and
 // the standing line both read — so a page quoting a number nothing enforces is
 // exactly the copy this test exists to prevent: it was pulled once for saying
@@ -269,7 +269,7 @@ let fileAt = (path: string) =>
 let pathOf = (page: string) =>
   page == 'index.html' ? '/' : `/${page.replace('.html', '')}`
 
-// The gallery (T-34477) is a page of this site that is not a FILE: the worker
+// The gallery (T-34477) is a page of this site that is not a file: the worker
 // draws it from the directory, so its title and its line are written in seo.ts
 // and the page reads them from there. Everything the file pages are held to —
 // canonical, Open Graph, one h1, a place in the sitemap and in llms.txt — it is
@@ -454,7 +454,7 @@ Deno.test('robots names every crawler and points at the sitemap', () => {
     }
   }
   assertEquals([...groups.keys()], CRAWLERS)
-  // A named group REPLACES the wildcard for that agent, so each one has to
+  // A named group replaces the wildcard for that agent, so each one has to
   // carry the whole rule set rather than a bare allow.
   for (let [named, rules] of groups) {
     assertEquals(
@@ -527,7 +527,7 @@ Deno.test('the plan pages quote the price the offer names', () => {
   }
 })
 
-// What we take from a seller's sale is a SETTING now (sell.ts `feeOf`,
+// What we take from a seller's sale is a setting now (sell.ts `feeOf`,
 // T-34554), so the page is held to the rate rather than to a number: whatever
 // the owner sets, the sentence a reader gets says that. The file's own copy is
 // the fallback, and the splice is what makes it current.
@@ -543,7 +543,7 @@ Deno.test('the pages quote the selling fee the code charges', () => {
     `We take <span class="Fee">0%</span> of each`,
   )
   // The terms name the fee too — a seller has to read what it costs them where
-  // they read what they are responsible for — and they name it as a RATE, so
+  // they read what they are responsible for — and they name it as a rate, so
   // the "no price on this page" rule above (which is about dollars) still
   // holds.
   assertStringIncludes(flat(read('terms.html')), `we take a fee per sale`)
@@ -610,7 +610,7 @@ Deno.test('the terms leave every price to the pricing page', () => {
 Deno.test('the privacy policy names everywhere the code sends something', () => {
   let html = flat(read('privacy.html')).toLowerCase()
   // The feedback tool's letter: the words, who sent them, and where it goes
-  // (tools.ts `feedback` → mail.ts REPLY_TO and GRAPH).
+  // (tools.ts `feedback` → mail.ts REPLY_TO and graph).
   assertStringIncludes(html, 'feedback you send us')
   assertStringIncludes(html, REPLY_TO)
   // An app's own address, out and in (post.ts, inbox.ts).
@@ -621,9 +621,9 @@ Deno.test('the privacy policy names everywhere the code sends something', () => 
   assertStringIncludes(html, 'sandbox')
   // Stripe, who sell the plan and hold the card (billing.ts).
   assertStringIncludes(html, 'stripe')
-  // And selling, both ways round (sell.ts, T-34527): what a BUYER's order and
+  // And selling, both ways round (sell.ts, T-34527): what a buyer's order and
   // address do — they go to the seller and to Stripe, and we keep the order —
-  // and what a SELLER hands over, which is nothing but an address, because
+  // and what a seller hands over, which is nothing but an address, because
   // Stripe collects the rest directly.
   assertStringIncludes(html, 'the email address you gave at checkout')
   assertStringIncludes(html, 'never touch this platform')
@@ -768,7 +768,7 @@ Deno.test('ChatGPT gets a downloadable icon within its upload limit', async () =
   assert(icon.size < 10_000, `yaks-app.png is ${icon.size} bytes`)
 })
 
-// The four addresses, in workerd, at the apex and NOT on a space's hostname —
+// The four addresses, in workerd, at the apex and not on a space's hostname —
 // where robots.txt is the customer's own file (route.ts) and always has been.
 slow('the apex answers the crawler and the model', async () => {
   let k = await kernel()
@@ -837,7 +837,7 @@ slow('the apex answers the crawler and the model', async () => {
     )
 
     // And the whole rule, against the server that serves it: `.md` on a
-    // page's own address is the FILE, served by the assets binding, and the
+    // page's own address is the file, served by the assets binding, and the
     // page is that same text drawn (T-37793).
     for (let at of ['/docs', '/docs/querying', '/docs/technical']) {
       let file = await k.at('yaks.app', `${at}.md`, { redirect: 'manual' })

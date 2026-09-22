@@ -1,6 +1,6 @@
 // The gallery's pure seams (T-34475): the two stamps read as one state, the
 // letter that carries the decision, the ticket under its links, what words
-// find, and the two places a listing is DRAWN — the page itself and the home
+// find, and the two places a listing is drawn — the page itself and the home
 // page's showcase, which is a splice into a file that ships with its own
 // examples in it.
 //
@@ -191,7 +191,7 @@ Deno.test('staging gallery listings, reviews and mail stay on its own host', asy
   )
 })
 
-// The ticket carries WHICH answer, signed, so a decline cannot be talked into
+// The ticket carries which answer, signed, so a decline cannot be talked into
 // a listing by editing an address — and it lapses on its own after a week.
 slow(
   'a gallery ticket carries its answer for a week and no longer',

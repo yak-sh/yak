@@ -1,5 +1,5 @@
 import { archetypeDoc } from '@yaks/archetype'
-// The vocabulary ONE app speaks (T-33811): the core documents every store on
+// The vocabulary one app speaks (T-33811): the core documents every store on
 // the platform shares, plus the words that app declared for itself, loaded
 // through @yaks/vocab into one `Vocab` — the thing a Store reads its DDL, its
 // routing and its admission out of. One app, one vocabulary; the fleet's own
@@ -22,7 +22,7 @@ import { archetypeDoc } from '@yaks/archetype'
 //               (graph.ts `#vouching`) — what `created.by` points at.
 //   memberDoc   @yaks/member: who belongs to a space, what they may touch.
 //   edgeDoc     @yaks/edge: the link itself, `edge{from, to, ord}`.
-//   relationDoc the twelve verbs an edge may WEAR. @yaks/edge ships the link
+//   relationDoc the twelve verbs an edge may wear. @yaks/edge ships the link
 //               and not one relation, because which relations exist is the
 //               application's word — so the platform says its twelve here,
 //               through that package's `relation` keyword. They are core and
@@ -36,7 +36,7 @@ import { archetypeDoc } from '@yaks/archetype'
 // And the app's own `vocab.json` — or `vocab.yml`, read through the same door
 // (@yaks/yaml, M-34605). It is a JSON Schema 2020-12 document with `$defs`
 // (D-33490 gate 3), the same shape every `packages/*/vocab.json` is written in,
-// and it is the ONE spelling: a keyword belongs to the column — `search`,
+// and it is the one spelling: a keyword belongs to the column — `search`,
 // `stamped`, a reference's `death` — and a manifest flattened to bare type
 // words could not carry one (T-37546).
 import { type Host, url } from './host.ts'
@@ -86,7 +86,7 @@ let owned = (s: PropSchema): PropSchema => ({ ...s, stamped: true })
 // the component, `unique: [['space', 'slug']]`).
 let unique = (s: PropSchema): PropSchema => ({ ...s, unique: true })
 
-// A STAMP's three columns: when, by whom, through what. `created`, `updated`
+// A stamp's three columns: when, by whom, through what. `created`, `updated`
 // and every mark a served or fixed row wears are the same three words.
 let stampCols: Record<string, PropSchema> = {
   at: owned(time),
@@ -163,7 +163,7 @@ export let relationDoc: VocabDoc = {
 }
 
 /**
- * What the PLATFORM says in an app's store that the app never asked for: the
+ * What the platform says in an app's store that the app never asked for: the
  * breaks it noted there, the marks a served or fixed item wears, and the two
  * rows an upload makes. They are core rather than an app's own for the same
  * reason the relations are — every store already holds rows under these names,
@@ -172,7 +172,7 @@ export let relationDoc: VocabDoc = {
  *
  * The server-owned ones are `stamped`: an `exception` is the platform's word
  * about the app's own code, and the kernel's door (`x-yak-kernel`, graph.ts) is
- * its only writer. The MARKS are stamped too and written bare — `notified: {}`
+ * its only writer. The marks are stamped too and written bare — `notified: {}`
  * says the thing without saying a column.
  *
  * Their columns are the fleet's own (src/vocab/manifests/kernel.json,
@@ -204,7 +204,7 @@ export let kernelDoc: VocabDoc = {
       type: 'object',
       kind: true,
       before: ['doc'],
-      // `code` is @yaks/tools' half of this word: what a refused CALL says
+      // `code` is @yaks/tools' half of this word: what a refused call says
       // about itself, written by the runner rather than stamped by the
       // platform. One word, both meanings, so a store never has to choose.
       properties: { at: owned(time), message: owned(text), code: text },
@@ -224,8 +224,8 @@ export let kernelDoc: VocabDoc = {
       type: 'object',
       properties: stampCols,
     },
-    // The two rows a page's upload makes (apps.ts `took`): the CONTENT,
-    // addressed by its sha, and the USE of it, addressed off that. They stay
+    // The two rows a page's upload makes (apps.ts `took`): the content,
+    // addressed by its sha, and the use of it, addressed off that. They stay
     // apart because they are two things, and because a component may not point
     // at its own entity.
     blob: {
@@ -307,7 +307,7 @@ export let appsDoc: VocabDoc = {
       kind: true,
       before: ['doc'],
       properties: {
-        // READ, never written: what the entity WEARS says its state, so a
+        // Read, never written: what the entity wears says its state, so a
         // task is done because it wears `completed`, not because a column was
         // set to a word. `computed: true` says there is no column at all;
         // {@link appDerived} is the expression that reads it.
@@ -357,7 +357,7 @@ export let appsDoc: VocabDoc = {
     // Something for sale (sell.ts, T-34525). Platform's rather than each app's
     // for the reason every other word here is platform's — a `product` in one
     // shop is the same word as a `product` in the next, so one filter reads
-    // both — and for one more: the CHECKOUT DOOR reads `price_cents` off this
+    // both — and for one more: the checkout door reads `price_cents` off this
     // row, and a door that took the price off the wire would take a price a
     // buyer can edit. A word the platform charges money against is a word the
     // platform declares.
@@ -378,14 +378,14 @@ export let appsDoc: VocabDoc = {
         image: { type: 'string', format: 'uri' },
       },
     },
-    // Something SOLD (sell.ts, T-34526): one row per completed Stripe
+    // Something sold (sell.ts, T-34526): one row per completed Stripe
     // checkout, written into the app's own store by the Connect webhook, as
     // the app. Platform's rather than each app's for the reason `product` is:
     // the platform writes it, and a word the platform writes is a word the
     // platform declares — an app that spelled its own `order` would have the
     // platform writing into a shape it does not know.
     //
-    // It is the WHOLE record of a sale on this side. The money itself is
+    // It is the whole record of a sale on this side. The money itself is
     // Stripe's: `session` and `intent` are how a seller finds it there, and
     // `account` says whose books it landed on. Nothing here is authoritative
     // about the payment — Stripe is — and the row exists so the seller knows
@@ -426,7 +426,7 @@ export let appsDoc: VocabDoc = {
 }
 
 /**
- * The columns a store READS rather than stores, as the SQL that reads them
+ * The columns a store reads rather than stores, as the SQL that reads them
  * (@yaks/sql `Derived`). One today: a task's `status`, which is what the entity
  * wears. There is no `claim` in an app's store, so `wip` never happens here —
  * the word is declared because the platform's status grammar is one grammar,
@@ -459,7 +459,7 @@ export let appDerived = (): Record<
  * sends and the one that arrives. It brings `notified` with it, which is why
  * {@link kernelDoc} does not.
  *
- * `keyDoc` and `aliasDoc` are among them because a NAME is how an agent
+ * `keyDoc` and `aliasDoc` are among them because a name is how an agent
  * addresses a row it wrote last week without having kept the eid (T-34390).
  * @yaks/key's `key{of, value}` is the carrier — a value an entity answers to,
  * as an entity of its own, named after what it says — and `alias` is the kind
@@ -477,9 +477,9 @@ export const classificationDoc: VocabDoc = {
 }
 
 /**
- * The words an INVOCATION is made of (@yaks/tools): what was asked, what came
+ * The words an invocation is made of (@yaks/tools): what was asked, what came
  * back, the claim in between, and the tool a call names. Every store speaks
- * them, because asking is a ROW here — and a row is the only thing that can
+ * them, because asking is a row here — and a row is the only thing that can
  * wait: a `call` wearing a `wake` is work asked for later (D-37562), and the
  * store that will run it is the store that has to hold it.
  *
@@ -511,7 +511,7 @@ export let coreDocs: VocabDoc[] = [
   invocationDoc,
   // A schedule is every store's word now (D-37562): an app writes `wake{at}`
   // on anything it means to come back to, its Durable Object arms its own
-  // alarm for the earliest one (graph.ts), and what the firing MEANS is left
+  // alarm for the earliest one (graph.ts), and what the firing means is left
   // to the app's own rules on `fired`. The directory's sweeps are the same
   // rows in the same shape.
   wakeDoc,
@@ -519,21 +519,21 @@ export let coreDocs: VocabDoc[] = [
 
 // ---- the platform's own store (T-33814) -------------------------------------
 //
-// One object on this platform is not an app: the DIRECTORY, the meta space's
+// One object on this platform is not an app: the directory, the meta space's
 // store, named `yak/platform` and holding every space, app, member, hostname,
 // deploy, sign-in and meter there is. It runs the same Store class over the
-// same packages; what differs is the VOCABULARY it wakes with — these words
+// same packages; what differs is the vocabulary it wakes with — these words
 // instead of an app's `vocab.json`.
 //
 // It does not load @yaks/member's document. That package's `member.role` is
 // `owner|member` — belonging, with access spelled as a grant or the app's mode
-// — and the platform's roster IS its access ladder, three seats
+// — and the platform's roster is its access ladder, three seats
 // (`owner|editor|viewer`) read space-wide by apps.ts, so the word is declared
-// here at the platform's own meaning. A door that can address BOTH stores
+// here at the platform's own meaning. A door that can address both stores
 // therefore types that column nowhere ({@link PLATFORM_APART}). Nothing
 // installs @yaks/member's guard on this store either: the
 // kernel decides who may read and write the directory before the request
-// reaches the object (directory.ts), and there is no app to be a member OF.
+// reaches the object (directory.ts), and there is no app to be a member of.
 
 /**
  * The platform's own components — what the directory IS, as one JSON Schema
@@ -576,7 +576,7 @@ export let platformDoc: VocabDoc = {
         space: ref('cascade'),
         version: num,
         access: { enum: ['public', 'open', 'private'] },
-        // The app's HANDLE: what its Durable Object, its dispatch script, its
+        // The app's handle: what its Durable Object, its dispatch script, its
         // R2 export path and its analytics rows are named by (directory.ts
         // `storeName`). Written once at birth and never read as an address —
         // `<space>/<app>.<6 hex of the eid>`, so the Cloudflare dashboard still
@@ -602,10 +602,10 @@ export let platformDoc: VocabDoc = {
       },
     },
     // Every address an app has answered at, oldest first: `slug` the one it was
-    // born at, `slugs` each one a rename left behind. ADDRESS HISTORY and
+    // born at, `slugs` each one a rename left behind. Address history and
     // nothing else — the handle it is stored under is `app.store` above, which
     // is why a rename moves an address and never a byte (T-34657). Bare slugs,
-    // in the space's own namespace, so a SPACE rename leaves every app's
+    // in the space's own namespace, so a space rename leaves every app's
     // history standing.
     //
     // It was spelled `alias` until T-34390, when that word became the
@@ -616,7 +616,7 @@ export let platformDoc: VocabDoc = {
     //
     // A space wears it too, for the same reason and in the same shape
     // (T-34658): its birth subdomain and every one a rename left behind, each
-    // still redirecting. Not unique here — uniqueness is over an address WITHIN
+    // still redirecting. Not unique here — uniqueness is over an address within
     // a space for an app, and over the whole platform for a space, and neither
     // is one column's own race; the tools decide both (tools.ts `taken`).
     former: {
@@ -624,9 +624,9 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: { slug: text, slugs: text },
     },
-    // WHICH app is the space's front page, and the paths its worker sees FIRST
+    // Which app is the space's front page, and the paths its worker sees first
     // before the app whose slug owns them (D-34197, T-34227). One fact, one
-    // spelling: the app WEARING `home` is the home app, and its globs are
+    // spelling: the app wearing `home` is the home app, and its globs are
     // columns of the same word — a `space.home` beside it would be a second
     // place to say the same thing, and two spellings of one fact drift.
     //
@@ -657,12 +657,12 @@ export let platformDoc: VocabDoc = {
         role: { enum: ['owner', 'editor', 'viewer'] },
       },
     },
-    // A seat reaches every app in its space; this reaches ONE (T-37615). It is
+    // A seat reaches every app in its space; this reaches one (T-37615). It is
     // the word @yaks/member already spells for that — the same three levels,
     // the same meaning — said here because the ladder a page is read by is the
     // platform's roster and this is its other rung: somebody invited to one
     // app holds that app's data and its page as a member does, and holds no
-    // other app in the space at all. Never its FILES: writing an app's bytes
+    // other app in the space at all. Never its files: writing an app's bytes
     // stays a member's act (apps.ts, public/docs/sharing.md).
     grant: {
       component: true,
@@ -681,7 +681,7 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: { address: text },
     },
-    // A hostname somebody owns, and the ONE place it serves: a space, whose
+    // A hostname somebody owns, and the one place it serves: a space, whose
     // front page it opens at `/` with every app of it at `/<app>/`, or a single
     // app, which it opens at `/` outright (T-34596). One column for both,
     // because it is one fact — what this name is aimed at — and the two forms
@@ -712,14 +712,14 @@ export let platformDoc: VocabDoc = {
         worker: text,
       },
     },
-    // One time this app's STORE was put back to a moment (recover.ts,
+    // One time this app's store was put back to a moment (recover.ts,
     // T-34507): when it was asked for, the moment asked for, who asked, and
     // the bookmark the store stood at before it moved.
     //
     // An entity of its own per restore, like `deploy`, and not a word on the
     // app row — because the record exists so that a restore can itself be
     // undone, and a second restore overwriting the first would take away the
-    // way back from it. It lives in the DIRECTORY, which is a different object
+    // way back from it. It lives in the directory, which is a different object
     // from the store it describes, so the trail survives the very recovery it
     // is about: what the store held is wound back, and what happened to it is
     // still written down here.
@@ -746,7 +746,7 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: { of: ref('detach'), version: num },
     },
-    // That this app — or this SPACE — is IN THE TRASH, and since when
+    // That this app — or this space — is in the trash, and since when
     // (erase.ts, T-34430, T-34431). A delete marks it and keeps everything:
     // the bytes, the store, the slug. While it is worn the app answers
     // nothing on the web, leaves everyone's tool and view lists, is not the
@@ -756,7 +756,7 @@ export let platformDoc: VocabDoc = {
     // days on the daily sweep erases it for good.
     //
     // One word on the row rather than a state column beside it, for the
-    // reason `home` is one: what is in the trash is what WEARS this, and a
+    // reason `home` is one: what is in the trash is what wears this, and a
     // second spelling of the same fact drifts from it. That is also why an
     // app and a space share the word — it says one thing, thrown away and
     // since when, and every reader asks the row in front of it.
@@ -765,7 +765,7 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: { at: time, by: ref('keep') },
     },
-    // That this app's OFFER has been put forward for the gallery, and whether
+    // That this app's offer has been put forward for the gallery, and whether
     // we said yes (gallery.ts, T-34476). Two stamps rather than a state word:
     // `asked_at` is the owner of the app asking, `listed_at` is the platform
     // answering, and a row wearing both is on https://yaks.app/gallery. The
@@ -773,7 +773,7 @@ export let platformDoc: VocabDoc = {
     // was never asked for, and clearing the word un-asks and de-lists at once.
     //
     // Server-owned, both of them, and the only word on an app that is: the
-    // listing is on OUR site under OUR name (M-4522), so it may never be
+    // listing is on our site under our name (M-4522), so it may never be
     // something a write can lift for itself. The tools stamp them through the
     // kernel's own door (directory.ts `stamp`).
     gallery: {
@@ -782,7 +782,7 @@ export let platformDoc: VocabDoc = {
       properties: { asked_at: owned(time), listed_at: owned(time) },
     },
     // The colours an app's owner set for its installed chrome (apps.ts
-    // `manifesting`/`pinned`, T-33055) — settable BY THE APP, through
+    // `manifesting`/`pinned`, T-33055) — settable by the app, through
     // `app_set`, never guessed off its page: an app that names neither gets
     // the platform's own palette instead of a browser's default grey.
     theme: {
@@ -790,7 +790,7 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: { theme_color: text, background_color: text },
     },
-    // That this app's store has been SEEDED, and by which release (seed.ts,
+    // That this app's store has been seeded, and by which release (seed.ts,
     // T-34327). The mark is what makes the seed a once — a redeploy finds it
     // and writes nothing, so the data an app comes with never lands on top of
     // what the person has changed since. It lives on the app rather than in
@@ -801,7 +801,7 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: { at: time, version: num },
     },
-    // The Stripe account this space SELLS through (sell.ts, T-34524). Direct
+    // The Stripe account this space sells through (sell.ts, T-34524). Direct
     // charges: the connected account is the merchant, so this is the whole of
     // what the platform keeps about it — the id every call carries in its
     // `Stripe-Account` header, and the two words Stripe answers with about
@@ -822,8 +822,8 @@ export let platformDoc: VocabDoc = {
         details_submitted: owned(bool),
       },
     },
-    // What the platform takes from one sale, in BASIS POINTS (sell.ts `fee`),
-    // on the platform's OWN space row — `yak`, the one row in this directory
+    // What the platform takes from one sale, in basis points (sell.ts `fee`),
+    // on the platform's own space row — `yak`, the one row in this directory
     // that is the platform rather than a customer. Unset reads as 0, which is
     // every sale until somebody sets a rate.
     //
@@ -851,7 +851,7 @@ export let platformDoc: VocabDoc = {
       },
     },
     // What the hourly sweep read off Cloudflare (usage.ts). Written by the
-    // sweep, through the kernel's door — and NOT stamped, because the fleet
+    // sweep, through the kernel's door — and not stamped, because the fleet
     // contract does not stamp it (src/types.ts `comps`) and the meta space's
     // own graph tier is how a reading is planted or corrected by hand. Nobody
     // but an owner of `yak` reaches that door at all (directory.ts), which is
@@ -887,7 +887,7 @@ export let platformDoc: VocabDoc = {
       },
     },
     // When this person last got in, and how (identity.ts `landed`, T-34351).
-    // One row, so it holds the LAST way in rather than a trail — which is the
+    // One row, so it holds the last way in rather than a trail — which is the
     // question a standing sign-in link raises: has anybody used it at all. Not
     // `kind`: it is a mark a person wears, never a thing of its own.
     signed_in: {
@@ -924,11 +924,11 @@ export let platformDoc: VocabDoc = {
  *
  * A plugin's words land between the core documents and the platform's own
  * (plugin.ts `vocab`): after the words they are written in, and before the
- * platform's, which is what the directory IS and answers last. `memory` is
- * one of them, and is among the DIRECTORY's words and not an app's (T-34473):
+ * platform's, which is what the directory is and answers last. `memory` is
+ * one of them, and is among the directory's words and not an app's (T-34473):
  * a memory is a thing the person said about how they want things built, and it
  * holds whether they are looking at one app or another — so it belongs to the
- * SPACE, and the directory is the one store a space has. The words themselves
+ * space, and the directory is the one store a space has. The words themselves
  * are its `doc.body`, which is why @yaks/doc is loaded above every plugin. */
 export let platformDocs: VocabDoc[] = [
   coreDoc,
@@ -967,7 +967,7 @@ export let platformVocab = (): Vocab => loadVocab(platformDocs, appKeywords)
  * mailbox and no members.
  *
  * `gitDoc` carries the package's `ref` word too, and this store keeps no refs:
- * a branch belongs to one app, so its row is the DIRECTORY's (git.ts loads
+ * a branch belongs to one app, so its row is the directory's (git.ts loads
  * @yaks/git's `refDoc` there). A word a store holds no rows under costs it
  * nothing. */
 export let gitDocs: VocabDoc[] = [
@@ -982,22 +982,22 @@ export let gitDocs: VocabDoc[] = [
 /** The git object store's whole vocabulary (graph.ts, {@link gitDocs}). */
 export let gitVocab = (): Vocab => loadVocab(gitDocs, appKeywords)
 
-// What a column ADMITS, as a comparison makes it: the closed set, or the type.
+// What a column admits, as a comparison makes it: the closed set, or the type.
 // The same rule reach.ts `colsOf` holds two spaces to.
 let shapeOf = (s: PropSchema): string =>
   s.enum ? s.enum.join('|') : String(s.type ?? '?')
 
 /**
- * The columns the DIRECTORY spells at the platform's own meaning while every
+ * The columns the directory spells at the platform's own meaning while every
  * app store spells them at a package's — today `member.role` alone: three
  * seats here ({@link platformDoc}) against @yaks/member's two, because the
- * platform's roster IS its access ladder and the package keeps belonging and
+ * platform's roster is its access ladder and the package keeps belonging and
  * access apart.
  *
  * One name meaning two things is two words. A door whose reach holds the
- * directory AND an app therefore types these nowhere and leaves the answer to
+ * directory and an app therefore types these nowhere and leaves the answer to
  * the store the bundle lands in (agent.ts `spoken`, `reading`) — the same rule
- * a word two SPACES spell differently already gets (reach.ts `apartIn`).
+ * a word two spaces spell differently already gets (reach.ts `apartIn`).
  *
  * Derived rather than listed, so a platform column that starts disagreeing
  * cannot quietly be typed as the package's.
@@ -1055,7 +1055,7 @@ export let RESERVED: string[] = [
   ]),
 ].sort()
 
-// The five words a column's TYPE is spelled with, and the JSON Schema each is.
+// The five words a column's type is spelled with, and the JSON Schema each is.
 // A manifest writes the schema; these are for reading one back in a sentence —
 // a refusal saying what a column already is, the arguments a kind's tools take
 // (kinds.ts), the types a CSV's cells are coerced to (csv.ts).
@@ -1079,7 +1079,7 @@ export let wordOf = (s: PropSchema): string =>
 
 /**
  * A document as `{comp: {col: word}}` — every component's columns as the word
- * each one's type is spelled with. That is how the kernel READS a vocabulary
+ * each one's type is spelled with. That is how the kernel reads a vocabulary
  * where it needs the types and not the keywords (tools.ts `sheetOf`,
  * reach.ts `spoken`); the document itself is what a store keeps and answers.
  */
@@ -1096,17 +1096,17 @@ export let wordsOf = (doc: VocabDoc): Record<string, Record<string, string>> =>
   )
 
 /**
- * The manifest a store KEEPS after a deploy: columns only ever arrive. A column
+ * The manifest a store keeps after a deploy: columns only ever arrive. A column
  * the new manifest stopped naming stays declared — its rows are still there —
  * and one whose type changed is refused, because the values already stored were
  * written under the old word.
  *
- * A whole COMPONENT the manifest stopped naming is the one thing that may
+ * A whole component the manifest stopped naming is the one thing that may
  * leave, and only when it holds nothing: a name tried once and abandoned is a
  * probe's leftover, not data (C-32624 item 1). `rows` counts what a component
  * holds — the store's question, since only it has the tables.
  *
- * It also says WHAT MOVED, because additive growth is silent where it matters
+ * It also says what moved, because additive growth is silent where it matters
  * most: rename a column and the manifest reads as one word while the store
  * holds two, the old one still under every row already written (C-32652 item
  * 4). `added` is every column this manifest planted; `kept` is every column the
@@ -1152,7 +1152,7 @@ export let grew = (
 }
 
 /**
- * Where each word of a space LIVES: the component schemas one app homes, by
+ * Where each word of a space lives: the component schemas one app homes, by
  * name. Read off that app's `/vocab`, which answers only the words it homes —
  * so a use never looks like a second declaration (tools.ts `homesIn`).
  */
@@ -1163,18 +1163,18 @@ export type Homes = Record<
 
 /**
  * A manifest split by home. A word another app in the space already declares
- * is not a second declaration but a USE (T-32728): nothing is planted here,
+ * is not a second declaration but a use (T-32728): nothing is planted here,
  * the writes route to the home store (reach.ts), and a column this manifest
  * adds grows the HOME's table by the additive rule {@link grew} holds every
  * store to.
  *
  * So a manifest arrives split three ways: `mine` the words this app homes,
  * `uses` the words it borrows and where each lives, and `grows` the columns
- * each home has to add. A column travels as its SCHEMA, never as its type
+ * each home has to add. A column travels as its schema, never as its type
  * alone: `search` and every other keyword belong to the column, and the store
  * that plants it is the one that reads them (T-37546).
  *
- * The one refusal is a SHAPE conflict — the same column with two types —
+ * The one refusal is a shape conflict — the same column with two types —
  * because the rows already written under the home's type are the record of
  * what that column is, and no manifest may rewrite them.
  */
@@ -1220,12 +1220,12 @@ export let livesIn = (uses: Record<string, string>) =>
 
 /** One component an app declared. Its own word is the most specific thing said
  * about a row — an entity wearing `recipe` is a recipe, not the `doc` it also
- * wears for its title — so it is a KIND sorting before `doc` unless the
+ * wears for its title — so it is a kind sorting before `doc` unless the
  * manifest says otherwise, which is also what earns it its two tools
  * (kinds.ts). */
 let mine = (schema: PropSchema): PropSchema => ({
   // `component: true` is the marker @yaks/vocab wants on a component, and it
-  // is put on HERE rather than asked of the person: an app manifest's $defs
+  // is put on here rather than asked of the person: an app manifest's $defs
   // entries are its components, that is the whole of what the file is for, and
   // a store that accepted one before the marker existed reads back the same
   // way (T-37551).
@@ -1249,7 +1249,7 @@ let mine = (schema: PropSchema): PropSchema => ({
  * `.yml` (tools.ts `spelled`), and the sentence has to name the file they are
  * looking at.
  *
- * `"tools": false` is the one word a manifest says about ITSELF rather than
+ * `"tools": false` is the one word a manifest says about itself rather than
  * about a component — no tools synthesized for its kinds (kinds.ts, T-34513) —
  * so it is lifted off and carried on the document. A boolean tells it from a
  * component named `tools`, which is an object of columns like any other.
@@ -1309,12 +1309,12 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
 }
 
 /**
- * What a store's `/vocab` ANSWERED, as the document it means — and an empty
+ * What a store's `/vocab` answered, as the document it means — and an empty
  * document where it cannot be read at all. A door reading a vocabulary is
  * reading it to say something else (which words are in reach, which kinds an
  * app holds, what a batch may write), so one store with an answer nothing can
  * parse reads as an app with no words of its own rather than a failed request.
- * {@link appDoc} is the door a DEPLOY comes through, where a refusal is the
+ * {@link appDoc} is the door a deploy comes through, where a refusal is the
  * whole point.
  */
 export let meant = (said: unknown): VocabDoc => {

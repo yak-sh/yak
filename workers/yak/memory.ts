@@ -1,11 +1,11 @@
 // The platform's half of @yaks/memory (T-34473): where a space's memories are
 // kept, how they are ranked here, and how one is written down — and, at the
-// foot of the file, the four of those said as a PLUGIN (plugin.ts, T-34602),
+// foot of the file, the four of those said as a plugin (plugin.ts, T-34602),
 // which is how the host learns any of it. Nothing names this module from
 // above: the words reach the directory's vocabulary, the two tools reach the
-// roster and the page reaches the guide because `memoryPlugin` is in PLUGINS.
+// roster and the page reaches the guide because `memoryPlugin` is in plugins.
 //
-// WHERE. In the directory — the platform's own store (door.ts
+// Where. In the directory — the platform's own store (door.ts
 // PLATFORM_STORE), which is the one store a SPACE has. A memory is not an
 // app's: the person said it about how they want things built, and it holds
 // whether they are looking at the recipe app, the chores app or neither, so it
@@ -13,14 +13,14 @@
 // space reads them; a writer writes them, the same seat every other write here
 // takes.
 //
-// HOW THEY ARE RANKED. On Cloudflare, by MEANING: Workers AI embeds the words,
+// How they are ranked. On Cloudflare, by meaning: Workers AI embeds the words,
 // Vectorize answers which memories are nearest, filtered to the space. That
 // index is made once, outside a deploy —
 //
 //   wrangler vectorize create yak-memories --dimensions=768 --metric=cosine
 //
 // — and until somebody has, or wherever the bindings are absent (`wrangler
-// dev`, the workerd probes), there is no ranker and the WORDS rank themselves
+// dev`, the workerd probes), there is no ranker and the words rank themselves
 // through the store's own full-text index over `doc`, which is where a
 // memory's sentence lives. One line in the log says which, and nothing breaks.
 //
@@ -80,7 +80,7 @@ export let ranker = (env: Env): Ranker | undefined => {
     if (!asked) return []
     // A vector service that is bound and cannot answer — an index nobody has
     // created yet, `wrangler dev` refusing a binding it only serves remotely,
-    // an outage — is a worse ORDER, never a failed recall: the caller ranks by
+    // an outage — is a worse order, never a failed recall: the caller ranks by
     // the words instead.
     try {
       let found = await index.query(asked, {
@@ -120,7 +120,7 @@ let read = async (env: Env, q: string): Promise<Memory[]> =>
  * memories themselves, so a rank never decides what a caller may read — the
  * space on the line does.
  *
- * Words that find nothing answer the NEWEST rather than nothing at all. The
+ * Words that find nothing answer the newest rather than nothing at all. The
  * fallback is a full-text index, which matches the phrase and not the meaning
  * of it, so "how should the pages look" over a store that holds "keep it soft,
  * not technical" matches no word — and an agent told nothing has been kept
@@ -200,7 +200,7 @@ let MEMORY: Row[] = [
   // (etc) could be saved. And we could incorporate our 'grapevine' problem
   // learnings by prompting the agent to save what the user said verbatim
   // along with only the required context to understand it." An AGENTS.md is
-  // the rules for ONE app, written by an agent; these are the person's own
+  // the rules for one app, written by an agent; these are the person's own
   // sentences, space-wide, and every agent who can reach the space is handed
   // the newest few at connect (standing.ts).
   {
@@ -289,13 +289,13 @@ let MEMORY: Row[] = [
 ]
 
 /**
- * Memory, as what it CONTRIBUTES (plugin.ts): the words the directory keeps a
+ * Memory, as what it contributes (plugin.ts): the words the directory keeps a
  * memory under, the two tools that write and read them, and the guide page
  * that teaches when to reach for which.
  *
  * The words come straight from the package — `memoryDoc` is @yaks/memory's own
  * document — so a memory means the same thing in a hosted space as it does on
- * a box. What this plugin adds is WHERE they are loaded: the directory, which
+ * a box. What this plugin adds is where they are loaded: the directory, which
  * is the one store a space has.
  *
  * The ranker is not a slot, and deliberately: it is read by `memories` above

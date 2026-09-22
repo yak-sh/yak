@@ -11,8 +11,8 @@
 // so this exposes nothing new; it puts the same words through the door the
 // agent is already talking to, instead of making it open a browser.
 //
-// This file is the half of that surface with NOTHING TO LOOK UP, and the seam
-// is physical rather than a check: `answer` takes a METHOD and its params —
+// This file is the half of that surface with nothing to look up, and the seam
+// is physical rather than a check: `answer` takes a method and its params —
 // never a person, never a Ctx (tools.ts) — and the only binding it holds is
 // `Site`, the static assets. No store, no directory, no blob and no stream is
 // in reach of it, so nothing here can forget to check who is asking. What it
@@ -25,7 +25,7 @@
 //
 // And everything public is served signed in too: tools.ts lifts each `Says`
 // into an ordinary tool and mcp.ts's resources open with these `DOCS`, so the
-// public surface is a SUBSET of the full one by construction, never a second
+// public surface is a subset of the full one by construction, never a second
 // surface that could drift from it.
 //
 // One thing this surface may never say: yaks.app is declared to the plugin
@@ -61,7 +61,7 @@ export let spoken = (asked: unknown) =>
   typeof asked == 'string' && PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0]
 
 // A tool with nothing to look up: its whole answer is a text written here,
-// the same words for every caller. What it SAYS about itself is in tools.yml
+// the same words for every caller. What it says about itself is in tools.yml
 // under its name, like every other row (tool.ts `worded`), so the pre-auth
 // list and the signed-in one cannot say different things about one tool.
 //
@@ -128,7 +128,7 @@ export let publics = (env: Host = {}): Says[] => [about(env)]
 export let PUBLIC = publics()
 
 // What a tool declares about signing in, per tool. It is said out loud rather
-// than left off, because a host reads a MIXED-auth server one tool at a time —
+// than left off, because a host reads a mixed-auth server one tool at a time —
 // `securitySchemes` is the only place this door says which of its tools a
 // stranger may call, and a tool that says nothing is a tool ChatGPT will not
 // offer a sign-in button for (developers.openai.com/plugins/reference).
@@ -211,7 +211,7 @@ let listed = ({ uri, name, title, description, mimeType }: Doc) => ({
   mimeType,
 })
 
-// The part of the pre-auth surface that looks NOTHING up: a RESULT for a
+// The part of the pre-auth surface that looks nothing up: a result for a
 // method answered out of this file's own words and the static assets, or null
 // for everything else — the tools, which read data and are anon.ts's, and
 // every other method, every other resource and every other prompt, which meet
@@ -239,11 +239,11 @@ export let answer = async (
         prompts: { listChanged: true },
       },
       // The face, before signing in — the same one the signed-in door answers
-      // (seo.ts CONNECTOR, mcp.ts). It is what a directory reviewer and a
-      // connector form both read FIRST, so it must not wait on a grant.
+      // (seo.ts connector, mcp.ts). It is what a directory reviewer and a
+      // connector form both read first, so it must not wait on a grant.
       serverInfo: { ...connector(site), version: VERSION },
       // What a signed-in caller gets here is the whole recipe for building
-      // (guide.ts INSTRUCTIONS). Before signing in, that would be instructions
+      // (guide.ts instructions). Before signing in, that would be instructions
       // for tools this caller has not got, so the orientation is the one
       // thing that is true either way.
       instructions: about(site).text,

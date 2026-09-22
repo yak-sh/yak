@@ -1,16 +1,16 @@
 // Space isolation, held in workerd (T-33118). Every space is a subdomain of
-// one registrable domain, so sibling spaces are SAME-SITE and the session
+// one registrable domain, so sibling spaces are same-site and the session
 // cookie's `SameSite=Lax` does not separate them: without a check, a page on
 // one space's hostname can open a socket onto another space's store and read
-// it live, and can POST into it as a CORS-safelisted simple request that
+// it live, and can post into it as a CORS-safelisted simple request that
 // fires no preflight. What tells them apart is the browser's own `Origin`,
 // and this file is the two attacks and the traffic that must keep working —
-// a page at its own app's door, a page at a SIBLING app's door in the same
+// a page at its own app's door, a page at a sibling app's door in the same
 // space (app isolation is deliberately not here), a custom domain at its own
 // door, and a client that sends no `Origin` at all.
 //
 // The second test is the one door that is deliberately open to every page
-// (T-33408): an app's READ door, answered with the credentials taken off.
+// (T-33408): an app's read door, answered with the credentials taken off.
 import { assert, assertEquals } from '@std/assert'
 import { slow } from '../../src/testing.ts'
 import { client, connector, kernel, meta, relay, seed } from './probe.ts'
@@ -54,7 +54,7 @@ slow('a page at another address reaches no door here', async () => {
         },
       })
 
-    // THE WRITE. `text/plain` is CORS-safelisted, so this is a SIMPLE
+    // The write. `text/plain` is CORS-safelisted, so this is a simple
     // request: the browser sends it with no preflight, the cookie rides
     // along, and the attacker never has to read the answer — the write has
     // already happened. The kernel reads the body with `req.text()` and never
@@ -72,7 +72,7 @@ slow('a page at another address reaches no door here', async () => {
 
     // Every other door in the same breath — the store's identity, the file
     // door a deploy writes through, and the bytes door a page's uploads go to.
-    // The READ door is not among them any more: it answers a stranger's page
+    // The read door is not among them any more: it answers a stranger's page
     // anonymously, which is the test below this one.
     for (
       let [path, init] of [
@@ -86,7 +86,7 @@ slow('a page at another address reaches no door here', async () => {
       assertEquals((await r.json()).error.code, 'foreign_origin')
     }
 
-    // THE SOCKET. A websocket handshake is outside the same-origin policy
+    // The socket. A websocket handshake is outside the same-origin policy
     // altogether — no preflight exists for it — so a page on any address can
     // open one, and the cookie goes with it. Deno's WebSocket sends no
     // `Origin` of its own, so the relay puts the attacker's on the wire.
@@ -109,7 +109,7 @@ slow('a page at another address reaches no door here', async () => {
     assertEquals(mine.status, 200)
     assertEquals(titles(await owner.get('.doc!')), ['Lemon cake', 'Plum tart'])
 
-    // A SIBLING app in the same space, at this app's door: same hostname, so
+    // A sibling app in the same space, at this app's door: same hostname, so
     // same origin. App isolation is a different question and deliberately not
     // this one — borrowed words are written exactly this way.
     let sibling = await page(
@@ -137,7 +137,7 @@ slow('a page at another address reaches no door here', async () => {
       true,
     )
 
-    // A CUSTOM DOMAIN is same-origin at its own root. The browser addressed
+    // A custom domain is same-origin at its own root. The browser addressed
     // `herbusiness.com` and the page says `herbusiness.com`; the router
     // rewrites that to `jeff.yaks.app/recipes/…` on the way in, so a check
     // made after the rewrite would refuse the customer her own site.
@@ -189,7 +189,7 @@ slow('a page at another address reaches no door here', async () => {
     })
     assertEquals(home.status, 200)
 
-    // A PAGE is not a door: an app's bytes are the web's, and nothing about
+    // A page is not a door: an app's bytes are the web's, and nothing about
     // them is anyone's session.
     assert((await page('https://evil.yaks.app', '/recipes/')).status != 403)
   } finally {
@@ -198,10 +198,10 @@ slow('a page at another address reaches no door here', async () => {
 })
 
 // The one door that answers a stranger's page (index.ts, route.ts `shared`,
-// T-33408). The line above is about AMBIENT CREDENTIALS, not secrecy: a public
+// T-33408). The line above is about ambient credentials, not secrecy: a public
 // app's rows already answer anyone with curl, so a read with the cookie taken
 // off is curl with a referrer. This holds the two halves that make that safe —
-// the answer is marked readable by any origin, and it is the answer NOBODY
+// the answer is marked readable by any origin, and it is the answer nobody
 // gets, whatever cookie was on the request — and the two that must not move:
 // a write is still refused, on an `open` app most of all, and a private app
 // refuses a stranger's page even carrying its owner's own session.
@@ -242,7 +242,7 @@ slow(
       })
       assertEquals(read.status, 200)
       assertEquals(read.headers.get('access-control-allow-origin'), '*')
-      // The wildcard WITHOUT this is the browser's own guarantee that no cookie
+      // The wildcard without this is the browser's own guarantee that no cookie
       // was used: it refuses to send a credentialed request to `*` at all.
       assertEquals(read.headers.get('access-control-allow-credentials'), null)
       assertEquals(titles(await read.json()), ['Lemon cake'])
@@ -253,7 +253,7 @@ slow(
       assertEquals(cold.status, 200)
       assertEquals(titles(await cold.json()), ['Lemon cake'])
 
-      // IGNORED, not merely absent: the owner's own cookie opens the private
+      // Ignored, not merely absent: the owner's own cookie opens the private
       // app from the owner's own page and opens nothing from anyone else's.
       let shut = await page(AWAY, '/garden/api/query?.doc!', {
         headers: { cookie },
@@ -270,7 +270,7 @@ slow(
       assertEquals(hers.status, 200)
       assertEquals(titles(await hers.json()), ['Tomatoes'])
 
-      // An OPEN app is the sharpest write case: a stranger MAY write in it,
+      // An open app is the sharpest write case: a stranger may write in it,
       // from its own page, with no session at all. Not from another page.
       await agent.tool('app_set', {
         space: 'jeff',

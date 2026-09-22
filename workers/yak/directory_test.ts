@@ -3,7 +3,7 @@
 // answers are cached per isolate for 30 seconds — cheap, and stale for at
 // most that long. A deploy opens exactly that window: the isolate serving the
 // app has not heard of the version bump, so a break in those seconds named
-// the deploy BEFORE the one it happened on (C-32869 item 4). A break is rare,
+// the deploy before the one it happened on (C-32869 item 4). A break is rare,
 // so the report path asks fresh.
 import { assertEquals } from '@std/assert'
 import * as dirPart from './directory.ts'
@@ -76,8 +76,8 @@ let stub = () => {
 
 // A hostname someone else owns, resolved to the place it serves (T-33037,
 // T-34596) — the read index.ts makes before it falls back to the apex. One
-// aimed at an APP answers that app and the space it is in; one aimed at the
-// SPACE answers the space with no app, which is how `aimed` knows to leave the
+// aimed at an app answers that app and the space it is in; one aimed at the
+// space answers the space with no app, which is how `aimed` knows to leave the
 // path alone. A hostname nobody attached answers null, which is what keeps
 // every address that exists today routing as it always has.
 let hosts = () => {
@@ -170,14 +170,14 @@ Deno.test('a comped space reads as plus, everyone else as what they pay', () => 
   assertEquals(dirPart.tierOf('jeff', 'plus'), 'plus')
 })
 
-// The app's HANDLE (T-34657): the string the platform names everything it
+// The app's handle (T-34657): the string the platform names everything it
 // keeps for this app by, and the thing a rename — of the app, or of its space —
 // must never move.
 Deno.test('a handle reads as the app and is the app, not its address', () => {
   let eid = '9efd22a8-19a0-49b8-95f7-5ecec9385dac'
   // Legible in the dashboard, sorted under its space, with the key on the end.
   assertEquals(dirPart.handle(space, 'cookbook', eid), 'jeff/cookbook.385dac')
-  // Two apps born at ONE address, a year apart, are two strings — which is why
+  // Two apps born at one address, a year apart, are two strings — which is why
   // an address can be freed at all (T-34659).
   let other = '06d952a9-b26b-4ecb-9ea7-841a96e2b1a9'
   assertEquals(dirPart.handle(space, 'cookbook', other), 'jeff/cookbook.e2b1a9')
@@ -255,7 +255,7 @@ let held = () => {
         for (let [k, v] of Object.entries(cols)) cols[k] = named(v)
       }
       let row = put(eid, comps)
-      // The batch AS APPLIED, each minted bundle wearing the alias it was
+      // The batch as applied, each minted bundle wearing the alias it was
       // written under — what the graph's `/apply` answers.
       out.push({ ...row, ...(want?.startsWith('$') ? { $alias: want } : {}) })
     }
@@ -316,7 +316,7 @@ Deno.test("a person's own space is one they own, not one they were invited to", 
 //
 // `own()` is the heaviest stretch of it and the likeliest to grow — a new
 // question asked inside it is invisible to a test that only checks the answer
-// — so the questions are counted. Reads here are FRESH (`held` builds the
+// — so the questions are counted. Reads here are fresh (`held` builds the
 // client with the cache off), which is the honest worst case: what the deploy
 // pays is this or less.
 //

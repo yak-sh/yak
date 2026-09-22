@@ -4,39 +4,39 @@
 // file is only the mount — which app a URL names, who may read it, and where
 // its refs and its objects are.
 //
-// IT IS A ROOT DOOR (plugin.ts `routes`, git.ts), not an app's own, because a
-// repository is not a page OF the app: `<app>.git` is a sibling address of
+// It is A root door (plugin.ts `routes`, git.ts), not an app's own, because a
+// repository is not a page of the app: `<app>.git` is a sibling address of
 // `<app>/`, and route.ts admits no dot in a slug, so nothing an app can be
 // called reaches here. Answering ahead of apps.ts is what keeps the home
 // app's worker — which answers every address no app claims — from being
 // handed a clone it cannot parse.
 //
-// THE BROWSER'S ADDRESS REDIRECTS, IT IS NOT A SECOND MOUNT. `<app>.git` stays
+// The browser's address redirects, it is not A second mount. `<app>.git` stays
 // the one implementation; a clone of `<app>/` is answered by a 301 on the
 // advertisement alone, and git follows it and posts its fetch to the address it
 // landed on (`http.followRedirects=initial`, git's default since 2.11). So the
-// detector is the QUERY, never the user agent: `?service=git-upload-pack` is
+// detector is the query, never the user agent: `?service=git-upload-pack` is
 // something no browser asks for, and an app that ships a static `info/refs`
 // serves it to a browser exactly as before.
 //
-// THE REPOSITORY IS THE APP'S ACCESS, EXACTLY — asked of the same two words a
-// page is (`mode`/`reads`, @yaks/member). But a clone has to be ASKED for its
+// The repository is the app's access, exactly — asked of the same two words a
+// page is (`mode`/`reads`, @yaks/member). But a clone has to be asked for its
 // credential: git sends none unprompted, so a private app that simply said 404
 // was a 404 to its own owner, whose token never left their client. So a
 // private app answers `401 WWW-Authenticate: Basic`, and git comes back with a
-// `yak login` grant as the PASSWORD (the username beside it is decoration).
+// `yak login` grant as the password (the username beside it is decoration).
 //
 // The three answers are the three questions a clone can be asking. No usable
 // credential is 401 — ask again, this time with one. A credential that
 // verified, held by somebody this app is not for, is 403: it is terminal,
 // which is the point, since 401 would send git round to ask for the password
-// they already gave correctly. A TRASHED app is 404 to everyone, credential or
+// they already gave correctly. A trashed app is 404 to everyone, credential or
 // not, because it is not there to be refused (erase.ts). This is the one door
 // that tells a proven caller an app exists — the pages answer 404 — and it is
 // the price of a clone being able to end.
 //
-// THE TWO HALVES LIVE APART, and that is the whole shape of it: `ref` is the
-// DIRECTORY's row, on the app, because access is decided there; the objects
+// The two halves live apart, and that is the whole shape of it: `ref` is the
+// directory's row, on the app, because access is decided there; the objects
 // are one global graph in a store of their own, because an object is named by
 // the digest of its own bytes and the same file deployed twice is one row
 // (gitobj.ts). So this reads a branch from the directory and hands @yaks/git a
@@ -182,7 +182,7 @@ export let answer = async (at: Arrived): Promise<Response | null> => {
     refs,
     objects(
       graphOf(env.STORE),
-      // The prefix a PIN key is built from, so it ends in the separator:
+      // The prefix a pin key is built from, so it ends in the separator:
       // `pinned` (versions.ts) writes `<prefix>versions/<sha>`, where
       // `keyed` gets the same separator from a path's own leading slash.
       // Handed the slugs alone, the fallback that reads an unmigrated app's

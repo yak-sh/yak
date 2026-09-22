@@ -2,8 +2,8 @@
 // The shop example's own seam (T-34517): `cart.js`, the part of a store that
 // is logic rather than drawing.
 //
-// It is worth pinning for one reason above the others — NOTHING IN THE CART
-// HOLDS A PRICE. The page posts `{product, qty, options}` to the platform's
+// It is worth pinning for one reason above the others — nothing in the cart
+// holds A price. The page posts `{product, qty, options}` to the platform's
 // checkout door and the door reads `price_cents` off the row itself, because
 // a price a page posts is a price the buyer can edit. A regression here would
 // look like a helpful refactor.

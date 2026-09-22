@@ -2,13 +2,13 @@
 // person already has is a `.csv` — an export from a spreadsheet, a table off
 // the web — and nothing about it says which entity a row is or what its
 // columns mean. So the caller says it once: `store_load(app, path, as)` names
-// the component each ROW becomes, and the header row names the columns.
+// the component each row becomes, and the header row names the columns.
 //
 // The default mapping is the obvious one and needs no argument: a header lands
 // in the same-named column of `as`, coerced to that column's type; `title` and
 // `body` land in `doc`, because a row a person reads has words; an `id` (or
-// `alias`) column is the row's NAME — `alias{name}` (@yaks/alias), which lands
-// on the entity already holding it, so loading the file again PATCHES the same
+// `alias`) column is the row's name — `alias{name}` (@yaks/alias), which lands
+// on the entity already holding it, so loading the file again patches the same
 // rows instead of minting a second set, and the name stands wherever an eid
 // does. `map {header: column}` renames a header that does not match — it
 // renames, it does not re-route, so a mapped name resolves by the same three
@@ -29,7 +29,7 @@ import type { Sown } from './seed.ts'
  * is spelled with (vocab.ts `wordsOf`). */
 export type Cols = Record<string, string>
 
-/** What a CSV is read AS: the component every row wears, that component's
+/** What a CSV is read as: the component every row wears, that component's
  * columns, and any header the caller renamed. */
 export type Sheet = { as: string; cols: Cols; map?: Record<string, string> }
 
@@ -67,7 +67,7 @@ let value = (type: string, cell: string): unknown => {
  * name. */
 type Lands = { comp: string; col: string; type: string } | { named: true }
 
-// WHICH, by the three rules — the component's own columns first, so an app
+// Which, by the three rules — the component's own columns first, so an app
 // that declared `city.id` means that column and not the row's name.
 let landing = (file: string, spec: Sheet, header: string): Lands => {
   let name = spec.map?.[header] ?? header

@@ -2,8 +2,8 @@
 // platform answered, written to Workers Analytics Engine — an aggregate
 // column store, not a log — and read back out of it by the SQL API for the
 // app's own members. At the foot of the file the whole of that is said as a
-// PLUGIN (plugin.ts, T-34603): apps.ts calls no function here to count a page
-// or to answer `/stats` — it folds over PLUGINS, and this module is in the
+// plugin (plugin.ts, T-34603): apps.ts calls no function here to count a page
+// or to answer `/stats` — it folds over plugins, and this module is in the
 // list. (Its space index still reads `statsOf` directly for the owner's
 // visitor block: drawing a page out of this data is one module using another,
 // not a slot.)
@@ -19,7 +19,7 @@
 // Cloudflare keeps a data point for three months and no longer
 // (developers.cloudflare.com/analytics/analytics-engine/limits/), which is the
 // retention privacy.html promises. The other limits that bind us: 20 blobs and
-// 20 doubles per point, 16 KB of blobs, ONE index of at most 96 bytes — an eid
+// 20 doubles per point, 16 KB of blobs, one index of at most 96 bytes — an eid
 // is 36 characters, so the index is the app and the app is what every query
 // groups by.
 //
@@ -27,14 +27,14 @@
 // nothing, so no `ctx.waitUntil` is needed, and a throw here would take a page
 // down over a counter. A failure is one log line.
 //
-// READING it back is the other half (T-34497): the SQL API, which is a POST of
+// Reading it back is the other half (T-34497): the SQL API, which is a POST of
 // SQL text to the account's own endpoint carrying an Account Analytics Read
 // token shared with usage.ts, because both APIs need Account Analytics Read.
 // There is no read binding for a dataset. Unset, the
 // space page says analytics are not switched on yet and nothing errors.
 //
 // Every count in this file is `sum(_sample_interval)` and never `count()`.
-// Analytics Engine SAMPLES under load: it keeps one row and records how many
+// Analytics Engine samples under load: it keeps one row and records how many
 // that row stands for, so a plain `count()` under-reports a busy app by
 // exactly the factor that made it busy, and nothing would say so.
 import type { Env } from './env.ts'
@@ -52,7 +52,7 @@ let CAP = 512
 let clipped = (s: string) => (s.length > CAP ? s.slice(0, CAP) : s)
 
 // The AI assistants and the answer engines, which are neither a person's
-// browser nor an old-fashioned crawler. Tested FIRST, because most of them
+// browser nor an old-fashioned crawler. Tested first, because most of them
 // spell themselves `…Bot` and would otherwise land in the line below.
 let AGENTS =
   /claude|anthropic|gptbot|chatgpt|openai|oai-search|perplexity|gemini|google-extended|cohere|bytespider|amazonbot|meta-externalagent|applebot-extended|ccbot|duckassist|youbot/i
@@ -62,7 +62,7 @@ let BOTS =
   /bot|spider|crawler|crawl|slurp|curl|wget|python-requests|go-http-client|okhttp|libwww|httpclient|monitor|uptime|headlesschrome|phantomjs|scrapy|feedfetcher|preview|facebookexternalhit|embedly|pingdom/i
 
 /**
- * What kind of client asked, in one word — the ONLY thing kept out of a
+ * What kind of client asked, in one word — the only thing kept out of a
  * user-agent string. An absent UA is a script rather than a person: every
  * browser sends one.
  */
@@ -70,7 +70,7 @@ export let classed = (ua: string | null | undefined): string =>
   !ua ? 'bot' : AGENTS.test(ua) ? 'agent' : BOTS.test(ua) ? 'bot' : 'browser'
 
 /**
- * The site that linked the visitor here, as a HOST and nothing more — no path,
+ * The site that linked the visitor here, as a host and nothing more — no path,
  * no query, so a referrer that carried somebody's search terms carries none by
  * the time it is written down. A referral from this same hostname is not a
  * referring site at all, and is recorded as none.
@@ -154,7 +154,7 @@ export let viewed = (
 
 // ---- reading it back (T-34497) ---------------------------------------------
 
-/** The dataset the queries below read. wrangler.toml binds it as VIEWS. */
+/** The dataset the queries below read. wrangler.toml binds it as views. */
 export let DATASET = 'yak_views'
 
 /**
@@ -186,7 +186,7 @@ export let sqlAt = (env: Env) =>
   `${env.ANALYTICS_API ?? API}/accounts/${env.CF_ACCOUNT}/analytics_engine/sql`
 
 // There are no bound parameters in the SQL API — a query is a string of text —
-// so the SHAPES are the guard. An eid comes out of our own directory and a day
+// so the shapes are the guard. An eid comes out of our own directory and a day
 // count off a tool argument, and neither is spliced in on trust.
 let eid = (app: string) => {
   if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(app)) {
@@ -208,7 +208,7 @@ let table = (name: string) => {
 /** What a count is, everywhere here: sampled rows, each standing for many. */
 export let COUNT = 'sum(_sample_interval)'
 
-// One app, one window — the FROM and WHERE every query below shares.
+// One app, one window — the FROM and where every query below shares.
 let over = (app: string, days: number, dataset: string) =>
   `FROM ${table(dataset)} WHERE index1 = '${eid(app)}' ` +
   `AND timestamp >= NOW() - INTERVAL '${whole(days, KEPT_DAYS)}' DAY`
@@ -246,7 +246,7 @@ export let byClient = top(CLIENT, 'client', true)
 
 // The SQL API's default format, which is what these queries get back: the
 // schema, the rows, and the count. A number wider than a double arrives as a
-// STRING, which is why every number here goes through `num`.
+// string, which is why every number here goes through `num`.
 type Said = { data?: Record<string, unknown>[] }
 
 let num = (v: unknown) => Number(v) || 0
@@ -291,7 +291,7 @@ export type Stats = {
 let YMD = (t: number) => new Date(t).toISOString().slice(0, 10)
 
 /**
- * The day series, DENSE: one entry per day in the window whether or not
+ * The day series, dense: one entry per day in the window whether or not
  * anybody came, so a chart's flat stretches are quiet days rather than gaps.
  * Cloudflare answers a DateTime (`2026-09-01 00:00:00`) and the day is its
  * date part.
@@ -315,7 +315,7 @@ let lines = (rows: Record<string, unknown>[], col: string): Line[] =>
     .filter((l) => l.name)
 
 // A few minutes' worth of answers, per app and window, held in this isolate
-// and no further — the PROMISE rather than the value, so a page refreshed
+// and no further — the promise rather than the value, so a page refreshed
 // twice in a second makes one round trip and not two. A rejection is dropped
 // rather than kept: a read that failed must not be the answer for the next
 // five minutes.
@@ -378,7 +378,7 @@ export let NOT_ON =
 
 // ---- the plugin (T-34603) --------------------------------------------------
 
-// Who visited, at the app's OWN address. The app's PEOPLE, whatever its access
+// Who visited, at the app's own address. The app's people, whatever its access
 // says: a public app's pages are the world's to read and its visitor counts
 // are not, so this asks for a role rather than for read access. Not switched
 // on is a sentence and a 200, never a failure — the page showing it has
@@ -444,13 +444,13 @@ let STATS: Row[] = [
 ]
 
 /**
- * Analytics, as what it CONTRIBUTES (plugin.ts): the count of a page served,
+ * Analytics, as what it contributes (plugin.ts): the count of a page served,
  * the door an app's own page reads its numbers at, the tool an agent asks
  * with, and the guide page that says what is and is not recorded.
  *
  * `watch` is `viewed` above and nothing more — the host calls it on the way
  * out of a request it has already answered, which is why that function returns
- * nothing and swallows its own failures. A platform with no VIEWS binding
+ * nothing and swallows its own failures. A platform with no views binding
  * contributes all four and counts nothing, which is what `wrangler dev` and
  * every workerd probe run as.
  */

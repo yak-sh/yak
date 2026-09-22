@@ -2,7 +2,7 @@
 // test can drive the code that runs in production with nothing stubbed between
 // a request and the rows.
 //
-// It is a FILE rather than a helper inside one test because two suites need
+// It is a file rather than a helper inside one test because two suites need
 // it — serving_test.ts, which serves an app off it, and builder_test.ts, which
 // builds one on it — and a second copy of a Store namespace is a second answer
 // to what a Store namespace is.
@@ -72,7 +72,7 @@ class Rewriter {
  * answers `getCurrentBookmark` and refuses the other two — "This Durable
  * Object's storage back-end does not implement point-in-time recovery" —
  * so the probe kernel (probe.ts) cannot hold this gesture either. What is
- * imitated here is the CONTRACT and not the recovery: a bookmark that moves
+ * imitated here is the contract and not the recovery: a bookmark that moves
  * with every read, a bookmark for a moment inside the window and a throw
  * outside it, and the restore remembered rather than performed.
  *
@@ -131,7 +131,7 @@ export type Turn = {
 
 /**
  * Workers AI, scripted: the `AI` binding answering the turns it was given, in
- * the binding's OWN shape (`{response, tool_calls, usage}`), so a test drives
+ * the binding's own shape (`{response, tool_calls, usage}`), so a test drives
  * builder.ts's whole provider — the messages it writes, the tool calls it
  * reads back — and not just its loop. Past the end of the script it says
  * nothing, which ends the loop.
@@ -316,7 +316,7 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
     files,
     alive,
     // `getSandbox` addresses one by name off the namespace; nothing here
-    // needs an id object, so the name IS the id.
+    // needs an id object, so the name is the id.
     SANDBOX: {
       idFromName: (n: string) => n,
       getByName: (n: string) => box(n),
@@ -344,7 +344,7 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
   // are the runtime's half of a recovery and not the Store's (recover.ts).
   let recovery = new Map<string, Pitr>()
   // Each object's own state, by name: its sockets, its recovery, and the one
-  // ALARM it arms for the wakes it holds (graph.ts, D-37562). A test reads the
+  // alarm it arms for the wakes it holds (graph.ts, D-37562). A test reads the
   // instant back off it, which is what the runtime would deliver.
   let states = new Map<string, ReturnType<typeof state>>()
   let object = (name: string) => {

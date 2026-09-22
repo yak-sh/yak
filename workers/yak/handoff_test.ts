@@ -1,7 +1,7 @@
 // Custom-domain sign-in handoff (handoff.ts): the security contract, as pure
 // logic. The platform authenticates, then hands a customer's own hostname a
 // one-time token it spends for a host-only cookie. The token is bound to the
-// person AND the host, single-use, and short-lived; `opener` refuses every way
+// person and the host, single-use, and short-lived; `opener` refuses every way
 // it can be misused, and `handoffTo` mints only for a directory-verified host.
 // These functions carry no Cloudflare import, so this suite runs in plain Deno.
 import { assertEquals, assertMatch } from '@std/assert'

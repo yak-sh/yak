@@ -1,12 +1,12 @@
-// The deploy history AS A REPOSITORY, held end to end over harness.ts's
+// The deploy history as A repository, held end to end over harness.ts's
 // stand-in: a real directory, a real object store beside it, and real bytes in
 // the bucket. What is pinned is the four promises a clone depends on — a deploy
-// makes one commit, its tree IS the manifest, the next deploy follows the last
+// makes one commit, its tree is the manifest, the next deploy follows the last
 // one and moves the branch, and the sweep fills a hole without making a second
 // commit where there is already one.
 //
 // It goes through `record()` (versions.ts) rather than calling the effect,
-// because the whole claim is that a DEPLOY mints a commit: the plugin list, the
+// because the whole claim is that a deploy mints a commit: the plugin list, the
 // registration, the cross-store write and the vocabulary all have to be right
 // for this file to pass.
 import { assert, assertEquals } from '@std/assert'
@@ -141,7 +141,7 @@ Deno.test('a deploy mints one commit whose tree is the manifest', async () => {
   assert(body.includes('committer yaks.app <git@yaks.app>'), body)
   assert(body.endsWith('deploy 1\n'), body)
 
-  // The tree IS the manifest: one entry per top-level name, the blob under
+  // The tree is the manifest: one entry per top-level name, the blob under
   // `index.html` named by the very bytes the deploy pinned.
   let tree = body.match(/^tree ([0-9a-f]{40})$/m)![1]
   let entries = await git.query(`.tree_entry!&.edge.from=${tree}`)

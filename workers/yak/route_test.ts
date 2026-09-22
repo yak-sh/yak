@@ -43,9 +43,9 @@ Deno.test('route: hostname and path name the space, app, and the rest', () => {
 })
 
 // Where a domain of someone's own is served from (T-34596): the address the
-// place it names already has on our zone. A SPACE's domain is the space's own
+// place it names already has on our zone. A space's domain is the space's own
 // hostname with the path untouched — which is the same address `route` above
-// reads, so the two forms are one rule and not two — and an APP's is that
+// reads, so the two forms are one rule and not two — and an app's is that
 // app's prefix, mounted at the domain's root.
 Deno.test('aimedAt: a domain is carried to the address of what it serves', () => {
   assertEquals(aimedAt('jeff', null, '/'), {
@@ -102,7 +102,7 @@ Deno.test("foreign: someone else's hostname, and nothing of ours", () => {
   for (let [host, want] of cases) assertEquals(foreign(host), want, host)
 })
 
-// The fallback origin is out of the space namespace by its SHAPE: `route`
+// The fallback origin is out of the space namespace by its shape: `route`
 // reads everything before `.yaks.app` as a slug, and no slug holds a dot, so
 // no space can ever be minted that shadows our own origin.
 Deno.test('the fallback origin is no space', () => {
@@ -118,7 +118,7 @@ Deno.test('onZone: our own https hostnames, and nothing else', () => {
     ['https://JEFF.yaks.app/x?a=1', 'https://jeff.yaks.app/x?a=1'],
     ['http://jeff.yaks.app/notes/', null],
     ['https://yaks.app.example.com/', null],
-    // A custom domain is a place we SERVE and still not a place we send
+    // A custom domain is a place we serve and still not a place we send
     // anyone back to (T-33037): the session cookie is this zone's, and the
     // guard against an open redirect stays pure.
     ['https://herbusiness.com/', null],
@@ -153,7 +153,7 @@ Deno.test("platform: a grant on our name is not an app's to make", () => {
     // identity.ts's own metadata is under the prefix too, and stays its
     // door's: the apex answers what it owns (index.ts).
     ['yaks.app', '/.well-known/oauth-authorization-server', true],
-    // A grant is read at the ROOT, so the same name under an app's own
+    // A grant is read at the root, so the same name under an app's own
     // prefix is that app's file and stays it.
     ['jeff.yaks.app', '/site/.well-known/acme-challenge/tok', false],
     // `robots.txt` is about the whole host and grants nobody anything, so it
@@ -163,7 +163,7 @@ Deno.test("platform: a grant on our name is not an app's to make", () => {
     // A customer's own domain is one app's outright, so the whole prefix is
     // the app's — no carve-out. Proving domain control to a third party,
     // Apple Pay's merchant association, App Links, `security.txt`: all of it
-    // is what a domain is FOR, and our own renewal never depends on it,
+    // is what a domain is for, and our own renewal never depends on it,
     // because Cloudflare's edge answers a CA before this Worker runs.
     ['herbusiness.com', '/.well-known/acme-challenge/tok', false],
     ['herbusiness.com', '/.well-known/pki-validation/ca3-0052.txt', false],

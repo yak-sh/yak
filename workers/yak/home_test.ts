@@ -3,7 +3,7 @@
 //
 //   no front page   the apps this visitor may open, listed — the ordinary
 //                   state, since being the first app claims nothing
-//   a front page    that app, SERVED at the bare hostname; its own `/<app>/`
+//   a front page    that app, served at the bare hostname; its own `/<app>/`
 //                   forwards there, and every path no other app claims is
 //                   its own
 //
@@ -11,7 +11,7 @@
 // carries the address it was served at as its `<base href>` (apps.ts
 // `based`), so `photo.png` written in the page has to find the app's file.
 // The test resolves the page's own relative URLs against the base the kernel
-// gave it and fetches THOSE, rather than asserting a path by hand, so a base
+// gave it and fetches those, rather than asserting a path by hand, so a base
 // that moved would fail here.
 //
 // The listing's rule is that it names only what the viewer may open: a
@@ -65,7 +65,7 @@ slow('a space with no front page lists what you may open', async () => {
     // Nothing about choosing a front page: the choice is not a stranger's.
     // The words move (7b586b44 reworded them); what has to hold is that only
     // the owner is offered the choice, so both halves name the thing the
-    // block is ABOUT rather than the sentence it says it in.
+    // block is about rather than the sentence it says it in.
     assert(!cold.includes('front page'), cold)
 
     // The owner: both apps, the block offering the front-page choice, and no
@@ -300,7 +300,7 @@ Deno.test('connected pages show the named client and put setup behind a disclosu
 })
 
 // Who visited (views.ts, T-34497): the owner's block, drawn straight. What
-// matters here is that it is the OWNER's, that it draws itself without a
+// matters here is that it is the owner's, that it draws itself without a
 // script, and that a platform with no analytics token says one sentence rather
 // than an empty chart.
 let VISITS = {
@@ -437,7 +437,7 @@ slow('the front page is served at the space root', async () => {
     await owner.put('/style.css', 'h1 { color: peru }')
     await owner.put('/deep/note.txt', 'down a directory')
 
-    // The root IS the app: 200 with its page, not a 302 into `/site/`.
+    // The root is the app: 200 with its page, not a 302 into `/site/`.
     let root = await k.at('jeff.yaks.app', '/', { redirect: 'manual' })
     assertEquals(root.status, 200)
     let served = await root.text()
@@ -473,8 +473,8 @@ slow('the front page is served at the space root', async () => {
       assertEquals((await k.at('jeff.yaks.app', path)).status, 200, path)
     }
     // Every path no app claims — except `/.well-known/`, which is the
-    // PLATFORM's on a hostname of ours (route.ts `platform`). That is where a
-    // site GRANTS AUTHORITY over its own name, and this name is not the
+    // platform's on a hostname of ours (route.ts `platform`). That is where a
+    // site grants authority over its own name, and this name is not the
     // space's to grant on: `assetlinks.json` would hand a native Android app
     // the right to intercept URLs for `jeff.yaks.app`, and an
     // `acme-challenge` token would pass HTTP-01 at a public CA and yield a

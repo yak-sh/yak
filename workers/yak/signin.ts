@@ -8,7 +8,7 @@
 // secret over `<email>:<code>`, so a row read out of the store cannot be
 // brute-forced back to the digits, and a row whose email was edited stops
 // matching its own code — the address is inside the mac, not beside it.
-// A code is looked up by its ADDRESS and compared, so a wrong guess still
+// A code is looked up by its address and compared, so a wrong guess still
 // finds the row it is guessing at and spends one of its `tries`; a lookup by
 // digest would leave brute force uncounted.
 //
@@ -32,7 +32,7 @@ export let TRIES = 5
 // the address, so the count only ever reaches three for someone who asked and
 // never arrived — whose mail is broken, which a fourth code does not fix —
 // while a loop pointed at a stranger gets three letters an hour instead of as
-// many as it can ask for. A per-SOURCE ceiling is deliberately not here: the
+// many as it can ask for. A per-source ceiling is deliberately not here: the
 // address is what an email bomb is aimed at, and an IP is both meaningless
 // behind a shared egress and the zone's rate-limiting rules to bound, not this
 // worker's.
@@ -128,7 +128,7 @@ export let mint = async (store: Meta, secret: string, email: string) => {
 // the records that counted them go together, so a person who gets in starts
 // over with a full three.
 //
-// A wrong guess costs a try on EVERY open code, so five guesses is five
+// A wrong guess costs a try on every open code, so five guesses is five
 // however many letters are in the inbox. A row out of tries opens nothing and
 // stays only as the record; burning one is what an attacker would do to buy
 // another letter, and it buys nothing.
@@ -171,7 +171,7 @@ export let chose = (title?: string | null) =>
   title && !title.includes('@') ? title : null
 
 // What to call someone: the name they chose, else the front of their address
-// — `dana` from `dana@example.com`. This is the ONLY name that leaves the
+// — `dana` from `dana@example.com`. This is the only name that leaves the
 // directory.
 export let nameOf = (title: string | null | undefined, email: string) =>
   chose(title) ?? canon(email).split('@')[0]
@@ -203,7 +203,7 @@ export let personOf = async (store: Meta, email: string, name?: string) => {
     return row.entity.eid
   }
   // An eid the batch mints is a `$alias`, and the reply says what it became:
-  // a bundle names an EXISTING entity by eid, so a client cannot hand the
+  // a bundle names an existing entity by eid, so a client cannot hand the
   // store a uuid it invented (D-23827).
   let eid = minted(
     await apply(store, [{

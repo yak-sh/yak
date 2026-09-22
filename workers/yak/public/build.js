@@ -4,11 +4,11 @@
 // happens — the words, each tool as it starts and as it answers, the address
 // at the end.
 //
-// NOTHING HERE IS REQUIRED. The form under it POSTs to the same address and is
+// Nothing here is required. The form under it POSTs to the same address and is
 // answered a page with the same conversation in it (build.ts `posting`), so a
 // browser with no script, a socket that never opened and a socket that dropped
 // all leave a working door: the submit handler below only takes the line when
-// the socket is OPEN, and hands it back to the browser otherwise.
+// the socket is open, and hands it back to the browser otherwise.
 //
 // The frames are build.ts's wire, and the rules are pages.ts's, kept twice on
 // purpose: one row per tool, which its own result replaces; the address as a

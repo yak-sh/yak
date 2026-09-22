@@ -1,4 +1,4 @@
-// GENERATED — do not edit. The words live in the files:
+// Generated — do not edit. The words live in the files:
 // public/docs/*.md (a page's frontmatter), prompts/*.md (a prompt's), and
 // tools.yml (what each tool says about itself). Change one of those and run
 // `deno task content`; `deno task content --check` refuses this file when it

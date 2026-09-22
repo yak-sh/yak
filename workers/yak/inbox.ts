@@ -3,17 +3,17 @@
 // every address the specific rules did not claim to `email()` (index.ts), and
 // this is what that door does with one.
 //
-// The whole of the routing is the LOCAL PART: `<space>.<app>@yaks.app` is that
+// The whole of the routing is the local part: `<space>.<app>@yaks.app` is that
 // app's store, `<space>@yaks.app` is the space's home app (post.ts `mailedTo`,
 // the same derivation an app's letters leave under). An address the app has
-// LEFT still reaches it, the way its old hostname does. An address naming a
+// left still reaches it, the way its old hostname does. An address naming a
 // space or an app that is not
-// there is REFUSED — a bounce the sender reads — rather than accepted and
+// there is refused — a bounce the sender reads — rather than accepted and
 // dropped, because silence is the one answer that cannot be corrected later.
-// Anything that fails on OUR side throws instead: a throw is a temporary
+// Anything that fails on our side throws instead: a throw is a temporary
 // failure the sending server retries, where a reject is forever.
 //
-// An arrival's `from` is the SENDER's, out on the web, where an app's own
+// An arrival's `from` is the sender's, out on the web, where an app's own
 // letters are stamped with the app's address (graph.ts `#posting`). The kernel
 // door is what tells them apart, and it is the same door that admits the batch
 // at all.
@@ -27,14 +27,14 @@
 // Two things this door is careful about, because a letter is a stranger's
 // bytes:
 //
-//   THE SENDER IS DATA, NEVER AN ACTOR. The batch is applied at the kernel's
+//   The sender is data, never an actor. The batch is applied at the kernel's
 //   door (meta.ts `KERNEL`) with no person on it, so nothing an arrival says
 //   can put words in a member's mouth. Who wrote it is `mail.from`, a column,
 //   and the reader decides what that is worth — helped by `mail.verified`,
-//   which is the receiving MTA's DKIM verdict. An unsigned letter is RECORDED
+//   which is the receiving MTA's DKIM verdict. An unsigned letter is recorded
 //   with `verified: false`, never dropped.
 //
-//   THE MIME IS PARSED BY A PARSER. postal-mime turns the raw RFC 5322 stream
+//   The MIME is parsed by A parser. postal-mime turns the raw RFC 5322 stream
 //   into a subject, a body and attachments; @yaks/mail composes the bundles
 //   around what it read and asks the graph nothing. An html-only letter is
 //   read as its own text (`plain` below), so a body is words in every case and
@@ -65,7 +65,7 @@ let opened = async (
   let box = mailedTo(to, env)
   if (!box) throw new Refused(`no mailbox for ${to}`)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  // A subdomain the SPACE has left still finds it, as its old hostname does
+  // A subdomain the space has left still finds it, as its old hostname does
   // (apps.ts `served`, T-34658): a rename moves `space.slug` and keeps the old
   // one in the space's `former`, so a letter to `<was>.<app>@yaks.app` lands
   // where a link to `<was>.yaks.app/<app>/` lands. Asked second, so a live
@@ -77,7 +77,7 @@ let opened = async (
   // deleted their space. Refused before the app is looked for, so a letter to
   // any address under it bounces the same way.
   if (!space || space.trashed) throw new Refused(`no mailbox for ${to}`)
-  // An address the app has LEFT still finds it, as its old hostname does
+  // An address the app has left still finds it, as its old hostname does
   // (apps.ts `served`, directory.ts `former`): a rename moves `app.slug` and
   // keeps the old name in the app's `former`, so a letter to
   // `<space>.<was>@yaks.app` lands in the store a link to `/<was>/` reaches.
@@ -102,7 +102,7 @@ let opened = async (
 }
 
 // An html-only letter, as words. Not a renderer and not a sanitizer: the
-// markup is CUT, because a body is prose that a person and a search index
+// markup is cut, because a body is prose that a person and a search index
 // both read, and nothing downstream is asked to be careful with it.
 export let plain = (html: string) =>
   html
@@ -133,7 +133,7 @@ let when = (said: string | undefined) => {
     : new Date().toISOString()
 }
 
-// The letter's headers, with the PARSER's reading in front of the raw one: a
+// The letter's headers, with the parser's reading in front of the raw one: a
 // subject is `=?UTF-8?B?…?=` on the wire and words only after it is decoded,
 // and only the parser decoded it. Everything else is the header as it arrived
 // — the DKIM verdict is read off `Authentication-Results`, which the receiving
@@ -205,10 +205,10 @@ export let arrived = async (m: Inbound, env: Env): Promise<string> => {
     ...letter,
     ...(await carried(env, space, app, mail, eid)),
   ], KERNEL)
-  // The month's letters, one higher (meter.ts). AFTER the letter is filed and
+  // The month's letters, one higher (meter.ts). After the letter is filed and
   // never before it: the count is what the space received, and a meter that
   // ran ahead of the graph would bill for words nobody can read. Over the
-  // allowance it still lands — the ceiling is the SEND door's (`metering`),
+  // allowance it still lands — the ceiling is the send door's (`metering`),
   // because a letter refused here is somebody else's words lost.
   await counted(env, space)
   return eid

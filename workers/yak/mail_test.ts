@@ -8,8 +8,8 @@
 // runs the guard and the effects, and what the transport was handed is what
 // @yaks/mail composed out of the rows.
 //
-// The METER is here too (T-33688), and for the same reason: the second store
-// in these tests is the DIRECTORY — the same class, woken on the platform's own
+// The meter is here too (T-33688), and for the same reason: the second store
+// in these tests is the directory — the same class, woken on the platform's own
 // vocabulary because of the name it is given — so a letter counted against a
 // space is counted through the wire that counts it in life.
 import { assert, assertEquals } from '@std/assert'
@@ -63,7 +63,7 @@ Deno.test('every address an app writes from is one it can be written to', () => 
   }
 })
 
-// The PLATFORM's own letter (mail.ts), which is a different sender: one send
+// The platform's own letter (mail.ts), which is a different sender: one send
 // carries every reader, so a feedback report cannot reach the person at
 // REPLY_TO and miss the fleet's graph inbox at GRAPH (or the other way).
 // Whatever the list, the letter still comes FROM the bot address — the only
@@ -126,7 +126,7 @@ Deno.test('mail: the Worker account carries the send when MAIL_ACCOUNT is unset'
   assertEquals(urls, ['https://api.test/accounts/acct/email/sending/send'])
 })
 
-// The graph inbox is an address in the FLEET's mail namespace, not a spelling
+// The graph inbox is an address in the fleet's mail namespace, not a spelling
 // of its own: src/mailaddr.ts is what the tasks server's sweep routes by, and
 // the two must name the same mailbox or the report lands nowhere.
 //
@@ -306,7 +306,7 @@ Deno.test("a member's letter leaves from the app's own address", async () => {
 })
 
 // The whole point of writing the outcome through apply() rather than straight
-// through storage (T-34044): a page watching the letter is TOLD it left, in the
+// through storage (T-34044): a page watching the letter is told it left, in the
 // same second, instead of finding out on its next query.
 Deno.test('a page watching the letter is told it left', async () => {
   let ctx = state()
@@ -396,7 +396,7 @@ Deno.test('the same letter written twice is sent once', async () => {
   let { store, mail } = await cookbook()
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
   // The replay: the same bundles, the same eids. `mail` and `deliver` are
-  // already there, so nothing is CREATED and no handler wakes; a handler that
+  // already there, so nothing is created and no handler wakes; a handler that
   // did wake would find the `delivered` and leave the letter alone.
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
   assertEquals(mail.sent.length, 1)
@@ -430,7 +430,7 @@ Deno.test('a letter delivered is one letter on the month', async () => {
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
   assertEquals(mail.sent.length, 1)
   assertEquals((await spent()).emails, 1)
-  // And the count is per LETTER, not per batch or per boot.
+  // And the count is per letter, not per batch or per boot.
   assertEquals(
     (await post(store, '/apply', [
       { entity: { eid: ANA }, email: { address: 'ana@example.com' } },
@@ -493,7 +493,7 @@ Deno.test('no binding, no letter: the sender that refuses says why', async () =>
 // ---- the binding itself (T-34179) -------------------------------------------
 
 // Every test above hands the letter to a fake. This one hands it to the
-// RUNTIME's own `send_email` binding, under `wrangler dev`, because that is the
+// runtime's own `send_email` binding, under `wrangler dev`, because that is the
 // half a fake cannot stand for: the payload post.ts builds is Email Sending's
 // Workers API (`send({from, to, subject, text, html})` → `{messageId}`), and a
 // runtime that does not speak it bounces every letter the platform sends.

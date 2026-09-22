@@ -1,9 +1,9 @@
 // An app's letters, as two tools at the agent door (T-34149): `mail_list` and
 // `mail_send`.
 //
-// THEY EXIST FOR THE SCOPING SENTENCE. A letter is `doc` + `mail` + `deliver`
+// They exist for the scoping sentence. A letter is `doc` + `mail` + `deliver`
 // and nothing else, so `graph_apply` could always send one and `.mail!` read
-// one back — these add no power. What the generic tier cannot say is WHICH
+// one back — these add no power. What the generic tier cannot say is which
 // mailbox is meant: an agent holding a mail connector beside this one hears
 // "check my email" as the person's own account, and a bundle wire has nowhere
 // to tell it that `<space>.<app>@yaks.app` is a different thing. A tool's name
@@ -44,14 +44,14 @@ export let scope = (env: Host = {}) =>
 export let SCOPE = scope()
 
 // The components a letter is made of, asked for by name: a row carries only
-// what its filter NAMES (listing.ts), and what a reader wants off a letter is
+// what its filter names (listing.ts), and what a reader wants off a letter is
 // the words, the envelope, who it was for, and what became of it.
 let LETTER = '.mail!&.doc?&.deliver?&.delivered?&.bounced?'
 
 // Which side of the mailbox, given the app's own address.
 //
-// SENT is the ask to send, which is what makes a letter outbound (@yaks/mail
-// `sending`). RECEIVED is neither that nor written here: the `from` on a
+// Sent is the ask to send, which is what makes a letter outbound (@yaks/mail
+// `sending`). Received is neither that nor written here: the `from` on a
 // letter of the app's own is stamped with its address whether or not it ever
 // asked to go (graph.ts `#posting`), so a letter from anywhere else is one
 // that arrived — and a draft, which is both kept and unsent, is honestly in
@@ -87,7 +87,7 @@ let SPACE = 'the space slug in <space>.yaks.app; omit to infer it from the ' +
   'one matches, the error asks you to choose'
 
 // The recipient an address already names in this app, if any. A letter is
-// addressed to an ENTITY here, so writing a second row for a person the app
+// addressed to an entity here, so writing a second row for a person the app
 // already has would scatter their correspondence across two of them.
 let known = async (
   ctx: Ctx,
@@ -206,7 +206,7 @@ let sending = (ctx: Ctx): Tool => ({
     let eid = out.aliases['$letter']
     let letter = out.bundles.find((b) => b.entity?.eid == eid)
     if (!letter) throw new Error('the letter was not written')
-    // The letter went through the APP's own door, vouched as the caller, so
+    // The letter went through the app's own door, vouched as the caller, so
     // what comes back is the answer — there is nothing left for the host to
     // land on the platform's own graph.
     return [letter]
@@ -216,6 +216,6 @@ let sending = (ctx: Ctx): Tool => ({
 /**
  * The two mail tools, bound to this caller. They ride the platform plugin
  * (agent.ts) beside the app_* family, since a mailbox is a fact about an app,
- * and they answer BUNDLES where the rest of that family answers words.
+ * and they answer bundles where the rest of that family answers words.
  */
 export let letters = (ctx: Ctx): Tool[] => [listing(ctx), sending(ctx)]

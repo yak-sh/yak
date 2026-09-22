@@ -1,4 +1,4 @@
-// The site's own chrome for a page the WORKER draws rather than serves out of
+// The site's own chrome for a page the worker draws rather than serves out of
 // public/: the head an engine and a model read, the header, the footer, and
 // the response they are wrapped in. It was the gallery's alone until the
 // documentation pages needed the same thing (T-37752), and two copies of a

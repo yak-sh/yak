@@ -1,4 +1,4 @@
-// THE list. Every domain of this Worker that says what it contributes as data
+// The list. Every domain of this Worker that says what it contributes as data
 // (plugin.ts) is named here, once, and the host modules read the list instead
 // of naming a domain each: vocab.ts folds in the words, tools.ts the rows,
 // guide.ts the pages, apps.ts the doors at an app's address and the watchers,

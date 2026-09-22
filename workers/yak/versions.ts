@@ -2,15 +2,15 @@
 // V-32361: "we want to prioritize error-correction over initial correctness").
 // When an agent breaks a page the person was using, their own repair is "put
 // it back" — so every `app_deploy` records the version it made and
-// `app_rollback` restores one, as a NEW version, so history is never
+// `app_rollback` restores one, as a new version, so history is never
 // rewritten.
 //
-// A version is a MANIFEST — path to the SHA-256 of that file's bytes — and
-// never a copy of the bytes: the ADDRESS is the person's. The bytes are pinned
+// A version is a manifest — path to the SHA-256 of that file's bytes — and
+// never a copy of the bytes: the address is the person's. The bytes are pinned
 // once, content-addressed, under one key space for the whole bucket (`sha/`,
 // D-34942), so a file unchanged across twenty deploys is one object and the
 // same file in two apps is one object as well. Everything a deploy plants is a
-// FILE — vocab.json, tools.json, worker.js — so restoring the files and
+// file — vocab.json, tools.json, worker.js — so restoring the files and
 // deploying them again is the whole of a rollback; tools.ts spends no second
 // vocabulary on it.
 //
@@ -24,24 +24,24 @@
 // An app keeps every version it ever deployed: a manifest is a few hundred
 // bytes, and git derives an app's commit chain from them (D-34942), so burying
 // the twenty-first would cut the history that promises. What KEEP bounds is
-// only how many a LIST shows at once.
+// only how many a list shows at once.
 //
-// Bytes are kept by LIVENESS instead (T-34952): a blob lives while anything
+// Bytes are kept by liveness instead (T-34952): a blob lives while anything
 // names it — a deploy manifest, an entry in a path's history, a plugin's pins
 // — and the sweep recomputes that set from the referrers every time rather
 // than counting references, so a batch that died halfway is healed by the next
 // run instead of drifting forever.
 //
-// And the same machinery a size down (T-34508): every WRITE pins what it
+// And the same machinery a size down (T-34508): every write pins what it
 // replaced. A deploy is the release a person names; a write is the thing that
 // actually breaks a file, and the twenty minutes between two deploys is where
 // an agent overwrites the page somebody was using. So `replaced` puts the
 // outgoing bytes in the same content-addressed store, notes them in that path's
 // own history, and `app_files` op history and op restore are the two words that
-// read it back. One store, one pin, and therefore ONE prune (`pruned`): the
+// read it back. One store, one pin, and therefore one prune (`pruned`): the
 // rule "delete only what nothing names any more" can only be right if the thing
-// applying it can see everything that names — the kept versions AND the kept
-// history — which is why both live in this file. What a PLUGIN names is the
+// applying it can see everything that names — the kept versions and the kept
+// history — which is why both live in this file. What a plugin names is the
 // third (plugin.ts `pins`): the sweep asks the list rather than guessing, since
 // a domain holding its own pinned bytes is the one thing this file cannot see.
 // With one key space the sweep is one pass for the whole bucket rather than one
@@ -85,7 +85,7 @@ export let KEEP = 20
 // costs one more day of bytes nobody wants.
 export let GRACE = 24 * 60 * 60_000
 
-// What the platform keeps BESIDE an app's files, under the app's own prefix:
+// What the platform keeps beside an app's files, under the app's own prefix:
 // the bytes a page uploaded (apps.ts `blobKey`), what each path has held
 // (`history/`), and — until `moved` has emptied it — the pins that used to live
 // per app. None is a file anyone wrote, so none is listed, snapshotted,
@@ -94,7 +94,7 @@ let KEPT = ['blobs/', 'versions/', 'history/']
 
 let kept = (path: string) => KEPT.some((k) => path.startsWith(k))
 
-// The app's OWN files among its keys — what a person wrote and what the app
+// The app's own files among its keys — what a person wrote and what the app
 // serves.
 export let own = (paths: string[]) => paths.filter((p) => !kept(p))
 
@@ -113,7 +113,7 @@ export let SHA = 'sha/'
 /** Where bytes with this address are pinned, for the whole bucket. */
 export let addressed = (sha: string) => SHA + sha
 
-// Where bytes WERE pinned, per app. Read-only from here on: `pins` falls back
+// Where bytes were pinned, per app. Read-only from here on: `pins` falls back
 // to it so an app not yet carried across still answers, and `moved` is what
 // empties it.
 export let pinned = (prefix: string, sha: string) => `${prefix}versions/${sha}`
@@ -123,12 +123,12 @@ export let pinned = (prefix: string, sha: string) => `${prefix}versions/${sha}`
  * over the same bucket the app's own files live in, so a caller pinning bytes
  * names them and never a key.
  *
- * It is built from the KEY store rather than `objectBlobs` on the binding
+ * It is built from the key store rather than `objectBlobs` on the binding
  * because the sweep needs `list`, `uploaded` and `delete` over these same
  * objects and the addressed interface has none of them — one adapter over one
  * bucket seam beats two clients of one binding disagreeing about what is in it.
  *
- * `prefix` is the app's own, and is read for the OLD key only: `put` writes the
+ * `prefix` is the app's own, and is read for the old key only: `put` writes the
  * global key alone, and `has`/`get` try it first and fall back, which is what
  * keeps a rollback working for an app the migration has not reached. A hit on
  * the global key costs exactly what the old key cost, so nothing pays for the
@@ -140,7 +140,7 @@ export let pins = (blobs: Blobs, prefix: string): Pins => ({
   get: async (sha) =>
     await blobs.read(addressed(sha)) ?? await blobs.read(pinned(prefix, sha)) ??
       undefined,
-  // The address IS the content, so bytes already there are the bytes being
+  // The address is the content, so bytes already there are the bytes being
   // written: one head, and a put only where there is nothing.
   put: async (sha, bytes) => {
     if (!(await blobs.has(addressed(sha)))) {
@@ -161,9 +161,9 @@ let must = async (store: Pins, sha: string) => {
 // One pass over the app's own files, naming each by its bytes — and, for a
 // deploy, pinning those bytes where a later rollback can find them again.
 // Reading and pinning are the same pass because the bytes are in hand either
-// way; bytes already pinned are left alone, since the address IS the content.
+// way; bytes already pinned are left alone, since the address is the content.
 //
-// The files are walked AT ONCE: each is its own chain of round trips to the
+// The files are walked at once: each is its own chain of round trips to the
 // bucket, and one file's chain has nothing to wait on in another's, so a
 // deploy's snapshot costs one file's time rather than every file's added up
 // (T-34986: pinning three files took three times one).
@@ -197,7 +197,7 @@ export let snapshot = (blobs: Blobs, prefix: string) =>
 // a file a later deploy added. The app's data, the pins and everything a page
 // uploaded are untouched.
 //
-// It does NOT write the per-path history (`replaced`), on purpose: a rollback's
+// It does not write the per-path history (`replaced`), on purpose: a rollback's
 // way back is the deploy list itself — every version it could land on is
 // already kept, so a rollback is undone by another — and noting each file it
 // moved would be the same fact written down twice, in two grains, free to
@@ -250,7 +250,7 @@ let same = (a: Files, b: Files) => {
     paths.every((p) => a[p] == b[p])
 }
 
-// The version this one PUT BACK, or 0 where it put nothing back — what a
+// The version this one PUT back, or 0 where it put nothing back — what a
 // rollback did, said in the list rather than only in the moment (C-32905 item
 // 6). Read off the manifests, because restoring files is the whole of a
 // rollback and the files are therefore its own record: this version's files
@@ -303,7 +303,7 @@ export let record = async (
 /**
  * One write, as this app remembers it.
  *
- * The `sha` is the bytes the path held UNTIL this write — what a restore puts
+ * The `sha` is the bytes the path held until this write — what a restore puts
  * back — and `at` and `by` are the write that took their place, which is the
  * same moment those bytes stopped being what the app served. So an entry reads
  * "index.html was these bytes until Ada wrote over them at 14:20", and the
@@ -324,14 +324,14 @@ export type Wrote = {
  * is why each says its own.
  *
  * The floor under it is {@link KEEP}: an entry survives if it is inside the
- * thirty days OR among the newest KEEP, so a file rewritten twenty times in an
+ * thirty days or among the newest KEEP, so a file rewritten twenty times in an
  * afternoon still remembers all twenty a month later, and a file written once a
  * year still remembers the write before this one.
  */
 export let AGE = 30 * 24 * 60 * 60_000
 
 // Where one path's history lives: under a prefix the platform keeps, so it is
-// not one of the app's own files, and keyed BY THE PATH, so reading a file's
+// not one of the app's own files, and keyed by the path, so reading a file's
 // history is one get rather than a walk. Per path is also what keeps two
 // concurrent writes from losing each other's entry — the only race left is two
 // writes to the same file, where the bytes themselves are already
@@ -406,7 +406,7 @@ export let replaced = async (
 }
 
 /**
- * What the path held at a moment: the bytes the first write AFTER that moment
+ * What the path held at a moment: the bytes the first write after that moment
  * took away. Null when no write has happened since, which means the file
  * already is what it was then — the truthful answer, and not a restore that
  * changes nothing.
@@ -432,11 +432,11 @@ export let held = (all: Wrote[], at: number): Wrote | null => {
 }
 
 /**
- * Every pinned blob nothing names any more, gone — the ONE place a pinned byte
+ * Every pinned blob nothing names any more, gone — the one place a pinned byte
  * is ever deleted, run on the daily sweep (erase.ts `collected`) and nowhere
  * else.
  *
- * MARK AND SWEEP, not reference counts (D-34942). The live set is recomputed
+ * Mark and sweep, not reference counts (D-34942). The live set is recomputed
  * from the referrers on every run: a count kept beside each write and delete
  * drifts the first time a batch dies halfway and nothing can tell that it has,
  * while a sweep that reads the referrers heals whatever the last one got
@@ -455,18 +455,18 @@ export let held = (all: Wrote[], at: number): Wrote | null => {
  * named by is exactly what the trim decides: the two cannot be separate passes
  * without one of them working from a stale answer.
  *
- * A file's LIVE bytes are never at risk here. They sit at the path's own key,
+ * A file's live bytes are never at risk here. They sit at the path's own key,
  * not under `sha/`, so this loop cannot reach them — and its pinned copy, if
  * nothing else names it, is a copy of bytes the app still has.
  *
- * The key space is the BUCKET's now (T-34953), so the mark set has to be too:
+ * The key space is the bucket's now (T-34953), so the mark set has to be too:
  * an object one app stopped naming may be the very file another app serves, and
  * an app cannot decide alone about a key it does not own. So the caller hands
  * every app still standing — erase.ts `collected` walks the directory for
  * them — and the sweep marks from all of them before it deletes anything.
  * Missing one app from that list is missing its referrers, which is why a
  * trashed app inside its thirty days and the platform's own space are in it:
- * what frees an app's bytes is its ERASURE, not its trash mark.
+ * what frees an app's bytes is its erasure, not its trash mark.
  *
  * The fourth referrer D-34942 names — an app's `blob` attachment rows — is
  * still not asked, and still cannot matter: an upload's bytes live under the
@@ -519,7 +519,7 @@ export let pruned = async (
 /**
  * The old per-app pins carried into the one key space, and the old keys let go
  * (D-34942 §Migration). It rides the same daily wake the sweep does (erase.ts
- * `collected`) and runs BEFORE it, so nothing is ever marked from a key space
+ * `collected`) and runs before it, so nothing is ever marked from a key space
  * the sweep no longer reads.
  *
  * Idempotent and resumable, because each object is its own step: bytes already
@@ -530,7 +530,7 @@ export let pruned = async (
  *
  * The bytes are re-addressed before they are trusted. An old key was written by
  * `sha256` of its own bytes and should agree, but this is the one moment those
- * bytes become an object OTHER apps will read, so a key that lies about its
+ * bytes become an object other apps will read, so a key that lies about its
  * content is left exactly where it is rather than published under a name it
  * does not have.
  *

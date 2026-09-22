@@ -1,4 +1,4 @@
-// What a space is ALLOWED, and the letters it spends (T-32758, T-33688): the
+// What a space is allowed, and the letters it spends (T-32758, T-33688): the
 // numbers the free and paid plans are sold on (public/pricing.html), the line
 // the agent reads before it runs into one, and the sentence every door says no
 // with. usage.ts is the other half — the hourly sweep that reads three of these
@@ -116,7 +116,7 @@ export let ceilings = (tier: Tier | null, slug = '') =>
   COMPED.includes(slug) ? null : tier == 'plus' ? PLUS : FREE
 
 // The letters, both directions, a space may spend in a month — the one
-// allowance BOTH tiers carry, because a letter costs money to carry however
+// allowance both tiers carry, because a letter costs money to carry however
 // the plan is paid for, and the pricing page sells a number on each
 // (public/pricing.html). Counted at the two mail doors as they happen:
 // `metering` below for a letter that left, inbox.ts for one that arrived.
@@ -130,11 +130,11 @@ export let BUILDS: Record<Tier, number> = { free: 5, plus: 100 }
 
 export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
 
-// What a tier COSTS a month, in whole dollars (D-32751). The number is
+// What a tier costs a month, in whole dollars (D-32751). The number is
 // tax-inclusive: $9 is what a customer pays anywhere, so this is the whole
 // price rather than a subtotal something is added to. Stripe holds the same
 // number as a price id (wrangler.toml STRIPE_PRICE) and that is what a card is
-// charged against; this is the number the SITE says out loud — the pricing
+// charged against; this is the number the site says out loud — the pricing
 // copy, and the `Offer`s in the home page's JSON-LD, which is what a search
 // engine shows beside the result. A price change also updates the static HTML
 // in public/index.html and public/pricing.html, billing_workerd_test.ts, and
@@ -145,7 +145,7 @@ export let CURRENCY = 'USD'
 
 // What one build's model calls cost, as the builder's loop reports them
 // (T-34239 `build()` returns it). Input and output are summed into
-// `meter.tokens`, because the meter is read for COST and the two prices differ
+// `meter.tokens`, because the meter is read for cost and the two prices differ
 // per model — a split here would be a number nobody could add up.
 export type Usage = { input: number; output: number }
 
@@ -331,7 +331,7 @@ export let atCeiling = (
       `${space.slug} is on the ${tier} tier, which is ${size(FILES[tier])}` +
       ` of photos and files — delete files it no longer needs to upload more`,
     // The one refusal both tiers can hit, and the one a person cannot clear
-    // by deleting something: the month is what lifts it. An ARRIVAL is never
+    // by deleting something: the month is what lifts it. An arrival is never
     // refused — a letter turned away at the door is somebody else's words
     // lost — so it says which half stopped.
     emails: () =>
@@ -339,7 +339,7 @@ export let atCeiling = (
         count(letters(space.tier))
       } emails a month, and this month's are sent — it can send again on the ` +
       `1st, and letters written to it still arrive`,
-    // The builder's refusal, which it SAYS in the chat rather than bouncing
+    // The builder's refusal, which it says in the chat rather than bouncing
     // (T-34242 renders it): a person asked for an app in words, and a person
     // asked in words is owed an answer in words. What it leaves them is the
     // app they already have and the tools to change it themselves.
@@ -359,7 +359,7 @@ export let atCeiling = (
 // ---- the letters (T-33688) --------------------------------------------------
 //
 // Mail rides no store, so nothing in the analytics counts it: a letter is
-// counted where it happens, one per letter DELIVERED (post.ts's binding took
+// counted where it happens, one per letter delivered (post.ts's binding took
 // it) and one per letter that arrived (inbox.ts filed it). An attempt is not a
 // letter — a bounce costs the space nothing — and an arrival is counted but
 // never refused, because turning a letter away at the door loses somebody
@@ -390,11 +390,11 @@ export let counted = async (
 // ---- the builds (T-34241) ---------------------------------------------------
 //
 // A build is counted where it happens, like a letter and for the same reason:
-// nothing in the analytics knows what the builder did. One count per COMPLETED
+// nothing in the analytics knows what the builder did. One count per completed
 // build — an `app_deploy` the builder performed — and never per message, so a
 // long conversation that ships one app costs one build.
 //
-// The refusal is a SENTENCE the builder says, not a bounce: the person is
+// The refusal is a sentence the builder says, not a bounce: the person is
 // talking to it, and a door slamming mid-conversation is not an answer. The
 // builder asks before it starts and repeats what comes back.
 
@@ -410,11 +410,11 @@ export let refusedBuild = (space: Space, now = new Date(), env: Host = {}) =>
  *
  * This is the call the builder's loop makes with the `usage` its `build()`
  * returns (T-34239) and the seconds its workbench held (sandbox.ts
- * `released`). A build that was REFUSED never reaches it, so a refusal costs
+ * `released`). A build that was refused never reaches it, so a refusal costs
  * a person nothing — not a build, and not the tokens of the sentence that
  * turned it down.
  *
- * The seconds ride HERE rather than in a second call because both figures are
+ * The seconds ride here rather than in a second call because both figures are
  * derived from one reading of the space: on a month with no row yet each
  * write starts from `empty()`, and the second would put the first one's
  * columns back at zero.
@@ -450,11 +450,11 @@ export let countedBuild = async (
 //
 // Container seconds, counted where they happen like the letters and the
 // builds: nothing in the analytics knows what the builder compiled. The unit
-// is ONE SECOND OF CONTAINER WALL TIME — what Cloudflare bills on — measured
+// is one second of container wall time — what Cloudflare bills on — measured
 // from the first sandbox call in a build to the moment the build lets the
 // container go (sandbox.ts `Spend`), rounded up.
 //
-// There is no ceiling on the PLAN here, only the per-build budget the tools
+// There is no ceiling on the plan here, only the per-build budget the tools
 // refuse at (sandbox.ts `BUDGET`), because the builds ceiling already bounds
 // how many builds a plan gets and a build cannot spend more than its budget.
 // What `meter.seconds` is for is the bill: the one place a month of container
@@ -463,10 +463,10 @@ export let countedBuild = async (
 /**
  * The container seconds spent, on the space's month, on their own.
  *
- * The door for the seconds that ride BESIDE no build: a conversation that
+ * The door for the seconds that ride beside no build: a conversation that
  * compiled something and shipped nothing (builder.ts `end`), and a lone
  * sandbox tool call somebody's own agent made over the connector (tools.ts
- * `bench`). Where a build IS being counted the seconds go with it
+ * `bench`). Where a build is being counted the seconds go with it
  * ({@link countedBuild}), so that one reading of the space makes one write.
  */
 export let countedSandbox = async (
@@ -492,7 +492,7 @@ export let countedSandbox = async (
 // callers hold, over the meta store directly, since a Durable Object is handed
 // the namespace and no service binding. Memoized per namespace so the meta
 // space is seeded once per isolate rather than once per letter, and read
-// FRESH — two letters a second apart must not both see the same count.
+// fresh — two letters a second apart must not both see the same count.
 let dirs = new WeakMap<Namespace, Directory>()
 let reaching = (ns: Namespace) => {
   let held = dirs.get(ns)
@@ -513,7 +513,7 @@ let reaching = (ns: Namespace) => {
  * before it goes, the count written after it went.
  *
  * It wraps the transport rather than sitting in the effect, so the two rules
- * ride the one seam @yaks/mail already has: over the allowance this THROWS,
+ * ride the one seam @yaks/mail already has: over the allowance this throws,
  * which the sending effect comes to rest on as `bounced{reason}` naming the
  * ceiling, and a transport that refused for its own reasons never reaches the
  * count.

@@ -1,13 +1,13 @@
 /// <reference types="@cloudflare/workers-types/index.d.ts" />
-// The Store Durable Object, held to the RUNTIME's own types (T-33810).
+// The Store Durable Object, held to the runtime's own types (T-33810).
 // graph.ts names the slice of a `DurableObjectState` it needs structurally, so
 // nothing in it depends on Cloudflare at runtime — and this file is where that
 // claim is checked, against @cloudflare/workers-types itself. Every assertion
 // is an assignment: if the runtime's types stop satisfying the class, the check
 // fails here rather than `wrangler deploy` failing later.
 //
-// It is CHECKED ON ITS OWN (`deno task check:workers`) and excluded from the
-// repo-wide check, because @cloudflare/workers-types arrives as GLOBALS — the
+// It is checked on its own (`deno task check:workers`) and excluded from the
+// repo-wide check, because @cloudflare/workers-types arrives as globals — the
 // package declares them and exports nothing — and those globals merge into
 // whatever program includes them, redefining `Response`, `WebSocket` and
 // friends for every other file in it. @yaks/durable-object and @yaks/workerd

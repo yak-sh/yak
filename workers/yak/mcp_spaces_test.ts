@@ -37,7 +37,7 @@ slow('the front page moves, and only the owner moves it', async () => {
     let front = async () => {
       let r = await k.at('front.yaks.app', '/api/graph')
       // The handle carries a key minted off the app's eid (directory.ts
-      // `handle`), so what is asked here is WHICH app answers, not the key.
+      // `handle`), so what is asked here is which app answers, not the key.
       return r.status == 200
         ? String((await r.json()).db).replace(/\.[0-9a-f]+$/, '')
         : r.status
@@ -121,7 +121,7 @@ slow('the front page moves, and only the owner moves it', async () => {
   }
 })
 
-// A SPACE moves (T-34658). Jeff, on T-34656: "let's add space re-naming and we
+// A space moves (T-34658). Jeff, on T-34656: "let's add space re-naming and we
 // can use the former concept for now and keep them reserved". So: the space
 // answers at its new subdomain, the old one redirects there with the path kept
 // and stays reserved, and what the platform keeps for the space — the store
@@ -163,7 +163,7 @@ slow('a space moves, and the subdomain it leaves points at it', async () => {
     let [kept] = await client(k, 'ada-cooks.yaks.app', 'cookbook', them.cookie)
       .get(`id=${cake}`) as unknown as { doc: { title: string } }[]
     assertEquals(kept.doc.title, 'Lemon cake')
-    // The store handle did NOT move: it is the app's own, not the address's.
+    // The store handle did not move: it is the app's own, not the address's.
     assertEquals(await handle('ada-cooks.yaks.app', 'cookbook'), was)
 
     // The subdomain it left keeps answering, as the permanent move it was,
@@ -232,7 +232,7 @@ slow('a space moves, and the subdomain it leaves points at it', async () => {
 // redirects should be a simple config change, not a infrastructure migration".
 // So it is one argument, and what it changes is the redirect and nothing else —
 // which is only true because the store is named by the app's own handle
-// (T-34657): a freed address can be taken by a NEW app, and the two are two
+// (T-34657): a freed address can be taken by a new app, and the two are two
 // objects with two sets of data.
 slow('an address is forgotten, freed, and taken by another app', async () => {
   let k = await kernel()
@@ -256,7 +256,7 @@ slow('an address is forgotten, freed, and taken by another app', async () => {
       '/cookbook/',
     )
 
-    // An address it never left, and the one it is AT, are both refused: the
+    // An address it never left, and the one it is at, are both refused: the
     // one act here that breaks a link is not a thing to guess at.
     await assertRejects(
       () =>
@@ -290,7 +290,7 @@ slow('an address is forgotten, freed, and taken by another app', async () => {
     )
     assertEquals((await asked('/recipes/')).status, 404)
 
-    // And the address is free: a NEW app is born there, with its own handle
+    // And the address is free: a new app is born there, with its own handle
     // and its own store — the old app's rows are not in it.
     await agent.tool('app_new', {
       space: 'ada',
@@ -307,7 +307,7 @@ slow('an address is forgotten, freed, and taken by another app', async () => {
 
 // Jeff, on T-34227: "and if i screw up my home app, can i reset it back to the
 // default in some way? maybe if you delete the home app, it just resets to the
-// default?" — it does, and it falls out of the word being ON the app rather
+// default?" — it does, and it falls out of the word being on the app rather
 // than beside it: an app in the trash is nobody's front page, and an erased
 // one takes `home` with it, so either way nothing is left saying which app the
 // bare hostname opens. The word itself stays on the trashed row, because a
@@ -321,7 +321,7 @@ slow('deleting the front page puts the space back to the default', async () => {
     let front = async () => {
       let r = await k.at('reset.yaks.app', '/api/graph')
       // The handle carries a key minted off the app's eid (directory.ts
-      // `handle`), so what is asked here is WHICH app answers, not the key.
+      // `handle`), so what is asked here is which app answers, not the key.
       return r.status == 200
         ? String((await r.json()).db).replace(/\.[0-9a-f]+$/, '')
         : r.status
@@ -341,7 +341,7 @@ slow('deleting the front page puts the space back to the default', async () => {
     assertEquals(back.status, 200)
     assertStringIncludes(await back.text(), 'href="/garden/"')
     assertEquals(await front(), 404)
-    // Nothing ANSWERING carries the word, so nothing carries its globs
+    // Nothing answering carries the word, so nothing carries its globs
     // either: `/garden/x` is the garden app's again. The row in the trash
     // still wears it — that is what a restore puts back — and no listing of
     // the space's apps says anything is the front page.
@@ -488,7 +488,7 @@ slow('an app goes to the trash, and app_restore brings it back', async () => {
   }
 })
 
-// The same trash one row up (T-34431): a whole SPACE. The agent still cannot
+// The same trash one row up (T-34431): a whole space. The agent still cannot
 // delete one — the letter is the door and the owner is the only caller who
 // reaches it — so this walks the whole way an owner actually goes, and then
 // every answer that named the space stops naming it while nothing it holds is
@@ -536,7 +536,7 @@ slow(
       assertStringIncludes(await agent.tool('about'), 'binspace/notes')
 
       // The agent deletes nothing, as ever: it mails the owner. What the letter
-      // and the answer say is what the trash DOES — every line something that
+      // and the answer say is what the trash does — every line something that
       // stops, and the address held rather than released.
       let said = await agent.tool('space_delete', { space: 'binspace' })
       assertStringIncludes(said, 'nothing is deleted')
@@ -644,7 +644,7 @@ slow(
   },
 )
 
-// The front page is the space's ROUTER, and `first` is how it opts in
+// The front page is the space's router, and `first` is how it opts in
 // (D-34197): the paths its worker sees before the app whose slug owns them,
 // written as columns of the `home` component the front page wears (T-34227).
 // Routing itself is T-34200/T-34201; what this proves is the vocabulary, the
@@ -688,7 +688,7 @@ slow('the front page says which paths it answers first', async () => {
     // And the column itself: one text column holding the JSON list, in order.
     assertEquals(await stored(), ['["/recipes/*","/*/print"]'])
 
-    // An empty list is an empty COLUMN now, not a component that goes away:
+    // An empty list is an empty column now, not a component that goes away:
     // the word is what says this app is the front page, and it still is.
     assertStringIncludes(
       await agent.tool('app_set', { ...at, first: [] }),
@@ -716,7 +716,7 @@ slow('the front page says which paths it answers first', async () => {
       assertEquals(await stored(), [null], `${glob} was written anyway`)
     }
 
-    // AT MOST ONE per space, which the vocabulary cannot say and the
+    // At most one per space, which the vocabulary cannot say and the
     // directory therefore does (T-34227): moving the front page is one batch
     // that takes the word off the app that had it, globs and all.
     await agent.tool('app_set', { ...at, first: ['/recipes/*'] })

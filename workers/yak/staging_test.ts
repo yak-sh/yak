@@ -44,7 +44,7 @@ Deno.test('staging repeats the kernel bindings without production resources', ()
       )
     }
   }
-  // Explicit empty list, not absent: staging emits to NO tail consumer (never
+  // Explicit empty list, not absent: staging emits to no tail consumer (never
   // production's yak-tail), and spelling it silences the wrangler config warning
   // that otherwise crashes the deploy verifier (2cb41812).
   assertEquals(staging.tail_consumers, [])

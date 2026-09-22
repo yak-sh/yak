@@ -56,7 +56,7 @@ slow('a read with no app composes every app the caller can reach', async () => {
     await made(agent, 'recipes', 'recipe', { serves: num })
     await made(agent, 'lending', 'loan', { to: txt })
 
-    // ONE entity, its title and recipe in one app, its loan in the other:
+    // One entity, its title and recipe in one app, its loan in the other:
     // the eid is minted by the caller, so it names the same thing in both.
     let cake = crypto.randomUUID()
     await agent.tool('graph_apply', {
@@ -117,7 +117,7 @@ slow('a read with no app composes every app the caller can reach', async () => {
       (await rows('.recipe!&.loan!')).map((r) => r.entity.eid),
       [cake],
     )
-    // An answer carries the components the filter NAMES and no more, so the
+    // An answer carries the components the filter names and no more, so the
     // title is asked for beside the recipe.
     assertEquals(
       (await rows('.recipe!&.doc?')).map((r) => r.doc!.title),
@@ -134,7 +134,7 @@ slow('a read with no app composes every app the caller can reach', async () => {
       ['Maya', undefined],
     )
     // The fan-out answers what a single store answers (C-32800 items 2-4).
-    // A REQUEST rides anywhere in the line, last included: it asks for a
+    // A request rides anywhere in the line, last included: it asks for a
     // component beside the filter and narrows nothing, so a store that never
     // planted the word answers the same rows without it — which is what the
     // guide's own example asks of the app the person names.
@@ -145,14 +145,14 @@ slow('a read with no app composes every app the caller can reach', async () => {
       ),
       [4, 2],
     )
-    // And the kind follows the component the filter REQUIRED, never the
+    // And the kind follows the component the filter required, never the
     // clause the caller happened to type first: a recipe is a recipe either
     // way round, exactly as the recipes store alone calls it.
     assertEquals(
       (await rows('.loan?&.recipe!')).map((r) => r.kind),
       (await rows('.recipe!', agent, 'recipes')).map((r) => r.kind),
     )
-    // A stamp NAMED in the filter comes back from the fan-out too: the
+    // A stamp named in the filter comes back from the fan-out too: the
     // listing rule is cut by the caller's own line, not by the `id=` the
     // composition gathers with, which dropped every byline (item 4).
     assertEquals(
@@ -190,14 +190,14 @@ slow('a read with no app composes every app the caller can reach', async () => {
       found.map((r) => r.doc.title).sort(),
       ['Lemon cake', 'Lemon zester'],
     )
-    // And a hit carries the app's OWN components, not a doc and a rank
+    // And a hit carries the app's own components, not a doc and a rank
     // alone: a word names nothing to leave out, so a page drawing cards from
     // a search has what to draw (T-33144).
     assertEquals(
       found.find((r) => r.doc.title == 'Lemon cake')?.recipe?.serves,
       4,
     )
-    // What a search reads is what the VOCABULARY declares searched — @yaks/doc
+    // What a search reads is what the vocabulary declares searched — @yaks/doc
     // says so of its title and body, and a column that declares nothing is
     // stored, readable, and not found by a bare word. These two apps declare
     // nothing of their own; the one below declares `"search": true` and is
@@ -237,7 +237,7 @@ slow('a read with no app composes every app the caller can reach', async () => {
       entities: [{ entity: { eid: cake }, entryline: { note: 'he baked it' } }],
     })
     assertEquals('entryline' in (await rows(`id=${cake}`))[0], false)
-    // His word is not even a WORD in her reach: the one store she can read
+    // His word is not even a word in her reach: the one store she can read
     // never planted `recipe`, and a line every store in reach refuses is the
     // first store's sentence (reach.ts asked). It answered an empty set while
     // the grammar's learned words were process-wide — her parse borrowed his
@@ -306,7 +306,7 @@ slow('a write with no app routes each component to its own app', async () => {
     ])
     assertEquals((await rows('.doc!', 'lending')).length, 0)
 
-    // ONE bundle wearing two apps' words: the loan is the lending app's row,
+    // One bundle wearing two apps' words: the loan is the lending app's row,
     // the retitle lands where the title already lives, and the call is one.
     let spans = JSON.parse(
       await agent.tool('graph_apply', {
@@ -322,7 +322,7 @@ slow('a write with no app routes each component to its own app', async () => {
       loan?: { to: string }
       $actor?: unknown
     }[]
-    // And ONE bundle back, though two stores each answered their own half
+    // And one bundle back, though two stores each answered their own half
     // (T-34294) — with none of the `$` words the pipeline speaks in.
     assertEquals(spans.length, 1)
     assertEquals(spans[0].entity.eid, cake)
@@ -343,7 +343,7 @@ slow('a write with no app routes each component to its own app', async () => {
 
     // A routed write carries the same vouch a page's write does, so a store
     // it lands in — one that had never met this person — mints them with a
-    // NAME and the byline reads as one: `created.by` is {eid, name} in the
+    // name and the byline reads as one: `created.by` is {eid, name} in the
     // lending store, and the fan-out says the same (C-32800 item 5).
     for (
       let by of [
@@ -651,7 +651,7 @@ slow('a word the space already has is used where it lives', async () => {
       [piranesi],
     )
     // And there is no second copy: the fan-out answers one bundle, while each
-    // store REFUSES the word it never planted. Two stores live in one isolate,
+    // store refuses the word it never planted. Two stores live in one isolate,
     // so this used to depend on which of them parsed first — the grammar's
     // learned words were process-wide, and the answer was an empty row set
     // where a refusal is owed (T-32814). The vocabulary now rides the parse,
@@ -687,7 +687,7 @@ slow('a word the space already has is used where it lives', async () => {
       '978',
     )
 
-    // A COMMAND of the lending app may name the borrowed word — the word is
+    // A command of the lending app may name the borrowed word — the word is
     // this app's to write either way — and the call goes where it lives.
     await agent.tool('app_files', {
       app: 'lending',
@@ -721,7 +721,7 @@ slow('a word the space already has is used where it lives', async () => {
     assertStringIncludes(shelf.content[0].text, 'shelf: 2 rows')
 
     // The spelling before this one is refused at the door, in the sentence
-    // that says what to write instead. What is already IN a store is upgraded
+    // that says what to write instead. What is already in a store is upgraded
     // on the way out (store/tools.ts `modern`), so an app deployed then goes
     // on working; nothing new arrives in two spellings.
     await agent.tool('app_files', {
@@ -783,7 +783,7 @@ slow('a word the space already has is used where it lives', async () => {
   }
 })
 
-// Which prose is worth finding is the VOCABULARY's sentence (T-37546):
+// Which prose is worth finding is the vocabulary's sentence (T-37546):
 // @yaks/doc says `"search": true` of its title and body, and an app says it of
 // its own columns, beside the type, in the one JSON Schema spelling the guide
 // teaches.
@@ -852,7 +852,7 @@ slow('an app declares which of its own columns are searched', async () => {
     )
     assertEquals(await titles('marzipan'), ['Lemon cake'])
 
-    // A sibling app BORROWS the word and brings a searched column of its own.
+    // A sibling app borrows the word and brings a searched column of its own.
     // The column is planted in the home's table, and its keywords travel with
     // it — the deploy writes the home's whole manifest back, so this is also
     // where the home's own `search` would be erased if that manifest went back
@@ -898,7 +898,7 @@ slow('an app declares which of its own columns are searched', async () => {
 
     // A number holds no words. The deploy refuses the manifest in @yaks/vocab's
     // own sentence rather than planting an index over nothing, and refuses it
-    // whole: the column that WAS searched still is.
+    // whole: the column that was searched still is.
     await agent.tool('app_files', {
       app: 'kitchen',
       op: 'write',
@@ -1035,7 +1035,7 @@ slow(
 // says nothing about the read that came before it: two callers who both read
 // 40 gold both write 50, and the second is wrong about the world rather than
 // about the write. `$was` is the graph's `--ff-only` — the SHA-256 of the
-// value as it was READ, per column — and the batch is refused WHOLE when that
+// value as it was read, per column — and the batch is refused whole when that
 // column has moved since.
 slow(
   'a $was precondition refuses a batch built on a value that moved',

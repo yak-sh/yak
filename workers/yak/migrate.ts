@@ -1,24 +1,24 @@
 // The one-pass move from the fleet-shaped store (src/store/schema.json, whose
 // Durable Object class went with T-33807) to the packages-shaped one (graph.ts,
 // @yaks/sqlite from a loaded vocabulary). Nothing here imports that class: the
-// pass reads the old tables BY NAME, which is why it outlives the code that
+// pass reads the old tables by name, which is why it outlives the code that
 // wrote them and must stay until every deployed object has been touched once.
-// Jeff, 2026-09-05: "there are a few users! can't just drop" — so this is a DATA
+// Jeff, 2026-09-05: "there are a few users! can't just drop" — so this is a data
 // migration, and the rows a deployed object holds are the whole subject.
 //
 // Three things happen, in this order, and the order is the safety:
 //
-//   1. EXPORT   {@link taken} reads every old table as it stands and
+//   1. Export   {@link taken} reads every old table as it stands and
 //               {@link lines} writes it out as JSON lines. The caller puts that
 //               in R2 before a row moves, so a migration that is wrong is still
 //               a migration nothing was lost to. This is the restore path.
-//   2. CARRY    {@link carry} runs the whole pass inside ONE `transactionSync`:
+//   2. Carry    {@link carry} runs the whole pass inside one `transactionSync`:
 //               the derived objects go, the base tables are renamed aside, the
 //               new schema is planted, the rows are copied across, and the
 //               counts are read back. A throw anywhere unwinds all of it and
 //               the object is bit-for-bit what it was.
-//   3. RECONCILE per table, old count against new, with every expected delta
-//               NAMED ({@link Moved.note}). One that does not reconcile throws
+//   3. Reconcile per table, old count against new, with every expected delta
+//               named ({@link Moved.note}). One that does not reconcile throws
 //               {@link Refused}, which is the rollback — the caller then serves
 //               the old rows read-only and says so.
 //
@@ -38,7 +38,7 @@
 //                 is renamed aside before the new one is planted.
 //   references    the fleet wrote the tag for `referenced` under its present
 //                 tense, and an edge's eid is derived from `from|tag|to` — so
-//                 the tag is rewritten AND the entity re-addressed under the new
+//                 the tag is rewritten and the entity re-addressed under the new
 //                 spelling (`update entity set eid`, which keeps the integer id
 //                 and so keeps every row that points at it).
 //   recalled      wore `source` and `at`; the relation is a bare tag now, so
@@ -47,7 +47,7 @@
 //                 out levels as `grant{app, person, access}`. An app's store
 //                 therefore splits: an owner keeps the seat, and anyone else
 //                 becomes a `member` plus a grant at the level they had. The
-//                 DIRECTORY does NOT split — its vocabulary declares the three
+//                 directory does not split — its vocabulary declares the three
 //                 seats itself (vocab.ts `platformDoc`), so its rows copy whole.
 //
 // ## The passes after it
@@ -56,15 +56,15 @@
 // standing with its values in it. That is a second kind of migration and it is
 // numbered ({@link MARKS}): {@link homed} is version 2, `space.home` becoming
 // `home{}` on the app (T-34227); {@link addressed} is version 3, the
-// directory's app addresses moving out of the table the CORE word `alias` now
+// directory's app addresses moving out of the table the core word `alias` now
 // owns and into `former` (T-34390). Same three steps, same order — export, one
-// transaction, reconcile — over the NEW schema rather than the old one.
+// transaction, reconcile — over the new schema rather than the old one.
 //
 // ## What cannot be carried
 // The fleet's other ~100 words (`card`, `pin`, `mail`, `session`, the journal…)
 // are not in any store's vocabulary now, so there is no table for their rows to
 // go to. They are in the export, they are named in the report with their row
-// counts, and the tables are dropped — which is step 4 of T-33809. The JOURNAL
+// counts, and the tables are dropped — which is step 4 of T-33809. The journal
 // is one of them: nothing in workers/yak installs @yaks/journal, so an app store
 // keeps no `journal_tx`/`journal_change`/`journal_field` of its own. They are
 // archived to R2 with the rest and said so.
@@ -81,7 +81,7 @@ export type Bucket = {
   put(key: string, value: string | ArrayBuffer | Uint8Array): Promise<unknown>
 }
 
-/** The object's own key-value slots beside its SQL — where the OLD store kept
+/** The object's own key-value slots beside its SQL — where the old store kept
  * everything it remembered (its name, the app's `vocab.json`, the words it
  * borrows, its tools). `ctx.storage.kv`, which graph.ts's Store does not use. */
 export type Slots = {
@@ -100,7 +100,7 @@ export let SLOTS = [
 ]
 
 /** The five type words the short manifest spelled, and the JSON Schema each
- * meant. Frozen here rather than read off vocab.ts: what a stored slot MEANT is
+ * meant. Frozen here rather than read off vocab.ts: what a stored slot meant is
  * history, and history does not move when the platform's words do. */
 let WAS: Record<string, Record<string, unknown>> = {
   text: { type: 'string' },
@@ -180,11 +180,11 @@ export let HOMED = 'yak/store/home/2'
 export let FORMER = 'yak/store/former/3'
 
 /** The fourth pass (T-34596): a domain's target — the column that said which
- * APP a hostname opens — becomes `serves`, which names the app or the whole
+ * app a hostname opens — becomes `serves`, which names the app or the whole
  * space. The directory's alone; no other object has a hostname. */
 export let SERVES = 'yak/store/serves/4'
 
-/** The fifth pass (T-34657): an app's HANDLE — the string its Durable Object,
+/** The fifth pass (T-34657): an app's handle — the string its Durable Object,
  * its script, its export path and its analytics rows are named by — becomes a
  * column of its own, `app.store`, instead of being read back off the address it
  * was born at. The directory's alone; no other object has an app row. */
@@ -204,7 +204,7 @@ export let BOUNDARIES = [MARK, HOMED, FORMER, SERVES, HANDLED, FILED]
 /** The two tables the two layouts spell identically, and so never move. */
 let SPINE = ['entity', 'tombstone']
 
-/** This object's own memory in the NEW store (graph.ts `KV`), which the pass
+/** This object's own memory in the new store (graph.ts `KV`), which the pass
  * writes but never reads out of the old schema. */
 let KEEP = [...SPINE, 'yak_kv']
 
@@ -212,7 +212,7 @@ let KEEP = [...SPINE, 'yak_kv']
 let ASIDE = 'yak_old_'
 
 /** What the directory's app addresses were spelled before T-34390 — and what
- * the CORE word is called now, which is why their rows have to move out of it
+ * the core word is called now, which is why their rows have to move out of it
  * ({@link addressed}). */
 let FORMERLY = 'alias'
 
@@ -267,7 +267,7 @@ export type Taken = {
 }
 
 /**
- * Whether this object still holds the FLEET-shaped store. The journal is the
+ * Whether this object still holds the fleet-shaped store. The journal is the
  * tell: `journal_tx` is the old schema's and only the old schema's — the new
  * store installs no journal at all — so a table by that name is an object that
  * has not moved, and its absence is one that never was or already has.
@@ -279,7 +279,7 @@ export let stale = (storage: DurableStorage): boolean =>
   ).length > 0
 
 /**
- * Every definition of one type that is THIS OBJECT'S — the single place the
+ * Every definition of one type that is this object's — the single place the
  * pass learns what tables there are, so both halves of it, the export and the
  * carry, enumerate the same list.
  *
@@ -298,7 +298,7 @@ let columns = (d: Drive, table: string): string[] =>
   d.query(`pragma table_info(${q(table)})`, []).map((r) => String(r.name))
 
 /**
- * Every DEFINITION this object stands on, dropped: its views, its triggers and
+ * Every definition this object stands on, dropped: its views, its triggers and
  * its full-text indexes.
  *
  * They hold no rows of their own — a view is a query, a trigger is a rule, and
@@ -378,7 +378,7 @@ let shadowed = (d: Drive): string[] =>
   )
 
 /**
- * Everything the object holds, read out of the OLD schema: its key-value slots
+ * Everything the object holds, read out of the old schema: its key-value slots
  * and every base table's rows. Synchronous, and it writes nothing — this runs
  * before the pass, so that what it hands back can reach R2 first.
  */
@@ -467,7 +467,7 @@ export type Carry = {
   /** the object's own name, which says whether it is the directory */
   store: string
   /** the app this store holds, when the kernel has said — what a split grant is
-   * ON. Absent, a level that cannot be carried is named in the report instead of
+   * on. Absent, a level that cannot be carried is named in the report instead of
    * being invented. */
   app: string | null
   /** the vocabulary the new schema is raised from */
@@ -608,7 +608,7 @@ export let filed = (
 // ---- `space.home` → `home{}` (T-34227) -------------------------------------
 //
 // The fact "this app is the space's front page" was a column on the space and
-// is now a word the app WEARS (vocab.ts). It moves in both passes, because a
+// is now a word the app wears (vocab.ts). It moves in both passes, because a
 // store reaches it from either side: one carrying now finds the column in the
 // table renamed aside, one that carried before this word existed finds it
 // standing in `space` itself — SQLite never drops a column a vocabulary stopped
@@ -634,7 +634,7 @@ let homeward = (d: Drive, from: string): { named: number; stamped: number } => {
 }
 
 /**
- * Whether this object still says which app a space opens in the OLD place: a
+ * Whether this object still says which app a space opens in the old place: a
  * `space` table with a `home` column. False for every app store — no `space`
  * table at all — and for a directory {@link homed} has already been over, since
  * that pass drops the column.
@@ -666,7 +666,7 @@ export let homes = (storage: DurableStorage): Taken => {
  * inside `transactionSync` for the same reason {@link carry} is: a throw is how
  * it refuses and the rollback is how it leaves nothing behind.
  *
- * THE RULE: one `home` row per space that named an app, and not one more. A
+ * The rule: one `home` row per space that named an app, and not one more. A
  * count that does not match is two spaces naming one app, or a row the insert
  * would not take, and neither is a directory to go on serving from — so it
  * refuses, the column keeps the fact, and the rows are in the export.
@@ -704,7 +704,7 @@ export let homed = (
         'two spaces cannot open the same app',
     ))
   }
-  // The old place, swept up. TIDYING, not the move: the fact is already on the
+  // The old place, swept up. Tidying, not the move: the fact is already on the
   // apps, the vocabulary no longer declares this column, and nothing selects
   // it — so a drop the engine will not do leaves a dead column and a working
   // directory. Refusing over it would answer 503 to the whole platform for a
@@ -739,7 +739,7 @@ export let homed = (
 // wear, a kind tag on `key{of, value}`), and two things cannot share one word,
 // so the record is `former` (vocab.ts `platformDoc`).
 //
-// The table NAME is what makes this a migration and not a rename. The core tag
+// The table name is what makes this a migration and not a rename. The core tag
 // declares no columns, so its table is `alias(entity)` — and `create table if
 // not exists` over a directory that already has `alias(entity, slug, slugs)`
 // leaves the old columns standing under the new word, with the addresses still
@@ -766,7 +766,7 @@ let formerly = (d: Drive, from: string): { rows: number; moved: number } => {
 
 /**
  * Whether a table is the app-address record as the platform used to spell it:
- * both of the old word's columns, with an address in them. Rows AND columns,
+ * both of the old word's columns, with an address in them. Rows and columns,
  * because an app store has neither and a directory the pass has been over has
  * the columns swept — and because the core word writes rows of its own into
  * the same table, which are not addresses and are not this pass's business.
@@ -809,7 +809,7 @@ export let addresses = (storage: DurableStorage): Taken => {
  * run it inside `transactionSync` for the same reason {@link carry} is: a throw
  * is how it refuses and the rollback is how it leaves nothing behind.
  *
- * THE RULE: every address carries across. One that does not is an address an
+ * The rule: every address carries across. One that does not is an address an
  * app answers at and the directory can no longer find, which is a rename that
  * strands every open page — so it refuses, the rows stay where they are, and
  * they are in the export.
@@ -846,7 +846,7 @@ export let addressed = (
     ))
   }
   d.exec(`delete from ${q(FORMERLY)} where slug is not null`)
-  // The old place, swept up. TIDYING, not the move: the addresses are in
+  // The old place, swept up. Tidying, not the move: the addresses are in
   // `former`, the vocabulary declares neither column, and nothing selects
   // them — so a drop the engine will not do leaves two dead columns and a
   // working directory. The unique index goes first because SQLite will not
@@ -872,7 +872,7 @@ export let addressed = (
 
 // ---- a domain's target: `hostname.app` → `hostname.serves` (T-34596) --------
 //
-// A hostname used to name the one APP it opened. It now names the PLACE it
+// A hostname used to name the one app it opened. It now names the place it
 // opens — that app, or the whole space, whose front page it serves at `/` with
 // every app of it at `/<app>/` — and one column says which (vocab.ts). The
 // column a word loses is still standing with its values in it, and nothing
@@ -908,7 +908,7 @@ export let aims = (storage: DurableStorage): Taken => {
  * inside `transactionSync` for the same reason {@link carry} is: a throw is how
  * it refuses and the rollback is how it leaves nothing behind.
  *
- * THE RULE: every hostname keeps a target. One left without is a domain the
+ * The rule: every hostname keeps a target. One left without is a domain the
  * platform serves nothing at — a customer's own address answering the branded
  * "still connecting" page for good — so it refuses, the eids stay where they
  * are, and they are in the export.
@@ -954,7 +954,7 @@ export let served = (
       `${rows} domains and ${aimed} with a target: one would serve nothing`,
     ))
   }
-  // The old place, swept up. TIDYING, not the move: the targets are in
+  // The old place, swept up. Tidying, not the move: the targets are in
   // `serves`, the vocabulary no longer declares this column, and nothing
   // selects it — so a drop the engine will not do leaves a dead column and a
   // working directory.
@@ -978,9 +978,9 @@ export let served = (
 // ---- an app's handle: `former.slug` → `app.store` (T-34657) -----------------
 //
 // An app's store, script, export path and analytics rows were named by the
-// address it was BORN at, kept in `former.slug`. That made the platform's own
+// address it was born at, kept in `former.slug`. That made the platform's own
 // object names a projection of a string a person picks — so an address could
-// never be freed and reused, and renaming the SPACE was not a thing that could
+// never be freed and reused, and renaming the space was not a thing that could
 // be offered at all. The handle moves into a column of the app's own,
 // `app.store`. An unambiguous name stays put; apps sharing one are separated
 // without copying any bytes, and the report names which app keeps the rows.
@@ -1020,7 +1020,7 @@ export let handles = (storage: DurableStorage): Taken => {
 
 /** One address with the space prefix taken off it: `ada/cookbook` is
  * `cookbook`, and a bare `cookbook` is already itself. A slug holds no slash
- * (route.ts SLUG), so the seam is never in doubt. */
+ * (route.ts slug), so the seam is never in doubt. */
 let bare = (address: string) => address.slice(address.indexOf('/') + 1)
 
 /**
@@ -1028,7 +1028,7 @@ let bare = (address: string) => address.slice(address.indexOf('/') + 1)
  * — run it inside `transactionSync` for the same reason {@link carry} is: a
  * throw is how it refuses and the rollback is how it leaves nothing behind.
  *
- * THE RULE: every app ends with a handle, and no two share one. An app left
+ * The rule: every app ends with a handle, and no two share one. An app left
  * without is an app whose store nothing can open — every recipe in it gone from
  * the platform's point of view — so it refuses, the rows stay where they are,
  * and they are in the export.
@@ -1146,14 +1146,14 @@ export let handled = (
       throw new Refused(report(false, 'the written handles did not reconcile'))
     }
     d.exec('create unique index if not exists app_store on app (store)')
-    // The unique index the OLD name was decided by. It stands on `former.slug`,
+    // The unique index the old name was decided by. It stands on `former.slug`,
     // and that column is address history now — two apps may hold one address a
     // year apart, which is the whole point of freeing one (T-34659) — so the
     // index has to come down or the second app could never be born. Its name is
     // the vocabulary's own (@yaks/sqlite `indexDdl`), which is why it can be
     // named here at all.
     d.exec(`drop index if exists ${q('former_slug')}`)
-    // The addresses, unqualified. `former` is the app's history WITHIN its space
+    // The addresses, unqualified. `former` is the app's history within its space
     // now, so the space's name has no business in it: leave it and a space rename
     // strands every redirect the space's apps ever earned.
     let rows = stands(d, 'former')
@@ -1218,7 +1218,7 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // rows are written before the row that addresses them.
   recut(d)
   // A named index would collide with one the new vocabulary declares under the
-  // same name; an implicit one (a UNIQUE column) has no SQL and goes with its
+  // same name; an implicit one (a unique column) has no SQL and goes with its
   // table.
   for (let i of named(d, 'index')) {
     if (i.sql) d.exec(`drop index if exists ${q(i.name)}`)
@@ -1250,7 +1250,7 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // name. A column the old store had and the vocabulary does not declare has no
   // home and is left behind (named below); a column the vocabulary declares and
   // the old store never had is simply null.
-  // A word another word is renamed INTO is filled by that rename below, never
+  // A word another word is renamed into is filled by that rename below, never
   // here — otherwise a store that held both spellings would write the same
   // entity twice.
   // The table the core word took over is never a straight copy either: its old
@@ -1321,7 +1321,7 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
         [],
       )
     let seen = new Set<string>()
-    // A doc that ADDRESSES a body the blob table does not hold. Every body a
+    // A doc that addresses a body the blob table does not hold. Every body a
     // store wrote went in there, so this is a row nobody can read — and a body
     // that cannot be read is exactly the thing this pass may not lose.
     let unread = rows.filter((r) => r.at != null && r.body == null).length
@@ -1411,7 +1411,7 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // that names them now. The integer `entity` is the spine's and never moved,
   // which is what joins the two. A store carrying now arrives at version 4 in
   // the same breath, so {@link served} has nothing left to do for it.
-  // The DIRECTORY's alone: an app store's old schema has the table and the new
+  // The directory's alone: an app store's old schema has the table and the new
   // vocabulary does not declare it, so there is nothing to update into.
   if (
     there('hostname') && words.includes('hostname') &&
@@ -1487,7 +1487,7 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // The levels the copy above set aside, as grants.
   let grants = 0
   let stranded = 0
-  // Spine rows the pass MINTED rather than found: a grant is a new entity, and
+  // Spine rows the pass minted rather than found: a grant is a new entity, and
   // so is the app it is on when this store has never written a row about it.
   // The only rows this pass adds, and the reconciliation names them.
   let minted = { n: 0 }
@@ -1556,9 +1556,9 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
     if (rows) dropped.push({ table: name, rows })
   }
 
-  // THE RULE. Every table carries across the number of rows it had, and the
+  // The rule. Every table carries across the number of rows it had, and the
   // three exceptions are each a delta this pass can name:
-  //   blob_text  was one row per body, is one row per DISTINCT body
+  //   blob_text  was one row per body, is one row per distinct body
   //   grant      had none, has one per non-owner seat the split moved
   //   home       had none, has one per space that named a front page
   //   former     had none, has the addresses the old `alias` table held

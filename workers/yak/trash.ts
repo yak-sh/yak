@@ -1,10 +1,10 @@
 // The trash's date, stamped where the word is written rather than computed by
-// whoever asked for it (T-34619). Deleting an app or a space writes ONE word on
+// whoever asked for it (T-34619). Deleting an app or a space writes one word on
 // its row — `trashed` (erase.ts, T-34430/T-34431) — and the thirty days are
 // counted off the `at` in it, so the ask and the clock were both the caller's:
 // every door that trashes anything had to remember to date its own mark.
 //
-// It is a RULE instead: `*trashed, trashed.at=` says what it needs (a row
+// It is a rule instead: `*trashed, trashed.at=` says what it needs (a row
 // wearing the word — the write set says so — with no date on it) and what it
 // does about it (write one), while `#Actor, #Now` name the two singletons the
 // tick hands it. The store that holds the row runs it in the `stamp` phase
@@ -18,7 +18,7 @@
 // the graph commits. erase.ts reaches the host modules, so the effect loads
 // it when it runs, after the plugin list has been composed.
 //
-// `trashed` is the DIRECTORY's word (vocab.ts `platformDoc`), so this rule is
+// `trashed` is the directory's word (vocab.ts `platformDoc`), so this rule is
 // inert in an app's store, which speaks no such component.
 import type { Plugin } from './plugin.ts'
 import type { Env } from './env.ts'

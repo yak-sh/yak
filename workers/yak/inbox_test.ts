@@ -5,9 +5,9 @@
 // so what is exercised here is the whole path, address to row.
 //
 // The rules this holds:
-//   an app's address    `<space>.<app>@yaks.app` lands in THAT app's store
+//   an app's address    `<space>.<app>@yaks.app` lands in that app's store
 //   the home app        `<space>@yaks.app` lands in the space's front page
-//   a stranger's word    the letter is DATA — `mail.from` is a column, the
+//   a stranger's word    the letter is data — `mail.from` is a column, the
 //                        writer is nobody, and an unsigned letter is recorded
 //                        with `verified: false` rather than dropped
 //   attachments          filed where a page's upload is, hung off the letter
@@ -146,7 +146,7 @@ slow('a letter lands in the app its address named', async () => {
       { timeout: 15_000 },
     )
 
-    // An unsigned letter is RECORDED, not dropped: the verdict rides the row
+    // An unsigned letter is recorded, not dropped: the verdict rides the row
     // and the reader decides what it is worth.
     assertEquals(
       (await arrives(k, {
@@ -327,7 +327,7 @@ slow(
         })).status,
         200,
       )
-      // And a whole SPACE in the trash has no mailboxes at all (T-34431):
+      // And a whole space in the trash has no mailboxes at all (T-34431):
       // every address under it bounces as the same nothing, whichever app it
       // names, and they all land again when the space comes back.
       let door = (path: string, fields: Record<string, string>) =>
@@ -361,7 +361,7 @@ slow(
 )
 
 // The meter, on the receiving side (T-33688). A letter that arrives is one
-// letter on the space's month, the same column a letter that LEAVES is counted
+// letter on the space's month, the same column a letter that leaves is counted
 // on (meter.ts `metering`, mail_test.ts) — and it is counted past the
 // allowance rather than refused there, because a letter turned away at the
 // door is somebody else's words lost.
@@ -436,7 +436,7 @@ slow(
         (await page.get('.doc.title="The hundred and first"&.doc!')).length,
         1,
       )
-      // And the SEND door, past the same allowance, says so on the letter.
+      // And the send door, past the same allowance, says so on the letter.
       let why = await outbound(SECOND)
       assertStringIncludes(why, '100 emails a month')
       assertStringIncludes(why, 'still arrive')

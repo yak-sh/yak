@@ -9,7 +9,7 @@
 // writes zeros for the sizes, and the index at the end is the one place those
 // sizes exist.
 //
-// Everything else here is a refusal, and each one answers a SENTENCE, because
+// Everything else here is a refusal, and each one answers a sentence, because
 // what reads it is a person who dragged a file onto a page (apps.ts `SAYS` is
 // the same rule one floor down). A zip may hold anything, and this door takes
 // exactly what an app is: files, under the app's own address, small enough to
@@ -30,7 +30,7 @@ export type Entry = { path: string; bytes: Uint8Array<ArrayBuffer> }
 
 // The most one drop may unpack to. The same 20 MB apps.ts puts on one upload,
 // for the same reason — an app's files are pages, not an archive — and here it
-// is counted on the way OUT of the decompressor, so a small zip that claims to
+// is counted on the way out of the decompressor, so a small zip that claims to
 // be a large one is refused by what it actually produces.
 export let MAX = 20 * 1024 * 1024
 
@@ -53,13 +53,13 @@ let name = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 /// escapes('a\\b') -> true
 /// escapes('C:/x') -> true
 /** A path that would land somewhere other than under the app's own address.
- * Read as SEGMENTS, so `..` is caught wherever it sits and a name that merely
+ * Read as segments, so `..` is caught wherever it sits and a name that merely
  * starts with two dots (`..hidden`) is not. */
 export let escapes = (path: string) =>
   !path || path.startsWith('/') || path.includes('\\') ||
   /^[A-Za-z]:/.test(path) || path.split('/').includes('..')
 
-// What macOS packs beside the files somebody meant to send. By SEGMENT, at any
+// What macOS packs beside the files somebody meant to send. By segment, at any
 // depth: which level the resource fork folder lands at depends on what made
 // the zip, and neither name is ever a file anybody wants served.
 let junk = (path: string) => {

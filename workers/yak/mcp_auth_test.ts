@@ -68,8 +68,8 @@ slow('the door before anyone signs in', async () => {
     assertEquals(init.instructions.includes('app_new'), false)
     assertEquals(await anon.call('ping'), {})
 
-    // The tools a stranger may CALL (anon.ts): about, the guide, the gallery,
-    // feedback, and the generic READS scoped to one app — beside the MENU of
+    // The tools a stranger may call (anon.ts): about, the guide, the gallery,
+    // feedback, and the generic reads scoped to one app — beside the menu of
     // the ones they may not (T-34465). The callable half is held whole in the
     // test below; here it is `about`, the one lifted out of preauth.ts.
     let schemes = async (of: typeof anon) =>
@@ -88,13 +88,13 @@ slow('the door before anyone signs in', async () => {
     let about = listed.find((t) => t.name == 'about')!
     // And the menu around it: every platform verb a stranger may not call,
     // listed all the same, each saying `oauth2` — the tools that give a host
-    // something to offer the sign-in FOR (T-34465, mcp.ts `menu`). Mixed auth
+    // something to offer the sign-in for (T-34465, mcp.ts `menu`). Mixed auth
     // is a list plus a refusal, and a list holding only the open tools is a
     // connector that can never ask anybody to sign in.
     assert(listed.length > 1, 'the menu, not the open tools alone')
     assert(listed.some((t) => t.name == 'app_new'), 'the verbs are on the menu')
     // What a stranger may call is the other test's subject; here it is only
-    // that everything ELSE on the menu wants a token.
+    // that everything else on the menu wants a token.
     let callable = [
       'about',
       'app_published',
@@ -230,7 +230,7 @@ slow('the door before anyone signs in', async () => {
       '<base href=',
     )
 
-    // THE thing that must not have moved: every protected method answers the
+    // The thing that must not have moved: every protected method answers the
     // 401 it always answered, carrying the challenge that names our
     // authorization server. A client reads this header to find the OAuth
     // door; without it, making anything public would have cost everybody the
@@ -273,7 +273,7 @@ slow('the door before anyone signs in', async () => {
     }
     // A tool of the platform's, an app's own command, and a tool nobody
     // wrote: one answer for all three, so nothing here says which apps exist.
-    // The generic tier's WRITE is among them — it is LISTED signed out
+    // The generic tier's write is among them — it is listed signed out
     // (T-34541) and it is this refusal that answers a call, which is the
     // sequence a host walks into the sign-in.
     await shut('tools/call', { name: 'graph_apply', arguments: { change: [] } })
@@ -302,7 +302,7 @@ slow('the door before anyone signs in', async () => {
     })
     assertEquals(bad.status, 401)
     await bad.body?.cancel()
-    // A credential that did not VERIFY is not an anonymous caller (T-34344).
+    // A credential that did not verify is not an anonymous caller (T-34344).
     // Nobody at all gets the public surface; somebody whose token expired, was
     // revoked, was minted for another resource, or is simply garbage gets the
     // 401 and the challenge — the answer MCP's spec requires, and the only one
@@ -350,7 +350,7 @@ slow('the door before anyone signs in', async () => {
     assertEquals(stream.headers.get('www-authenticate'), challenge)
     await stream.body?.cancel()
 
-    // Signing in swaps no surface and adds no NAME: the roster is one list
+    // Signing in swaps no surface and adds no name: the roster is one list
     // for everybody (T-34541), and what changes is which of them will answer
     // — said per tool in `securitySchemes`, which is the field a host reads to
     // know when to ask for the sign-in. Every public resource is still listed.
@@ -411,7 +411,7 @@ slow('the door before anyone signs in', async () => {
 // much as possible to the anon users, but obviously, most things will require
 // auth." So the rule is the web's own — anything a browser at the address
 // would show somebody who never signed in, this door shows: the guide, the
-// gallery of published apps, and the DATA of one app anyone with the link can
+// gallery of published apps, and the data of one app anyone with the link can
 // read, named on the call. Nothing else, and no write.
 slow('signed out: the gallery, the guide, and one public app', async () => {
   let k = await kernel()
@@ -470,7 +470,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
       about: 'A log of everybody runs',
     })
 
-    // THE LIST a stranger reads: what they may CALL — the four generic READS,
+    // The list a stranger reads: what they may call — the four generic reads,
     // each scoped to one app, and the platform tools that need nobody — beside
     // the menu of what they may not (T-34465). A tool says which it is in the
     // one field a host reads for exactly that, so the two halves are told
@@ -503,7 +503,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
         { type: 'oauth2', scopes: ['graph'] },
       ], t.name)
     }
-    // The write is LISTED and refused (T-34541), like every other tool a
+    // The write is listed and refused (T-34541), like every other tool a
     // stranger may not call: the list is one list for everybody, because it is
     // the list a directory snapshots, and `securitySchemes` is what tells the
     // two halves apart.
@@ -569,12 +569,12 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
     ) as { entity: { eid: string } }[]
     assertEquals(found[0].entity.eid, run)
     // And the app's own word is in the schema it answers — the vocabulary of
-    // THAT app, because it is the only one this caller is reading.
+    // that app, because it is the only one this caller is reading.
     let words = await anon.tool('graph_schema', { space: 'ada', app: 'runs' })
     assertStringIncludes(words, 'jog')
     assertEquals(words.includes('confession'), false)
 
-    // A private app is refused BY NAME: its address already answers a browser
+    // A private app is refused by name: its address already answers a browser
     // that way, so saying it plainly is what tells "not that app" from "not
     // signed in".
     let hidden = await assertRejects(
@@ -595,7 +595,7 @@ slow('signed out: the gallery, the guide, and one public app', async () => {
     )
     assertStringIncludes(bare.message, 'signed out, a read answers for ONE app')
     assertStringIncludes(bare.message, 'app_published')
-    // Naming an app on the query LINE is not a way around it either: `.in=`
+    // Naming an app on the query line is not a way around it either: `.in=`
     // asks about a membership, and a stranger holds none.
     let inLine = await assertRejects(
       () => anon.tool('graph_query', { q: '.in=ada/diary&.confession!' }),
@@ -742,7 +742,7 @@ slow('?auth=required answers the challenge a probing host needs', async () => {
       await held.body?.cancel()
     }
 
-    // Step 6, signed in. The strict address is the SAME door: the whole tool
+    // Step 6, signed in. The strict address is the same door: the whole tool
     // list, not the stranger's one, and byte for byte what `/mcp` serves.
     let jeff = await signIn(k)
     let tools = async (at: string) => {
@@ -773,12 +773,12 @@ slow('?auth=required answers the challenge a probing host needs', async () => {
   }
 })
 
-// MIXED AUTH, played through at plain `/mcp` in the order OpenAI documents it
+// Mixed auth, played through at plain `/mcp` in the order OpenAI documents it
 // (developers.openai.com/plugins/build/auth, read 2026-09-06) — owner,
 // 2026-09-06: "mixed auth is documented and should work correctly. chatgpt
 // will then prompt auth on the first auth-required tool use".
 //
-// The host connects with nobody signed in, lists the WHOLE surface, reads each
+// The host connects with nobody signed in, lists the whole surface, reads each
 // tool's `securitySchemes` to see which want a token, and offers the sign-in
 // the first time the person asks for one of those — the refusal carrying
 // `_meta['mcp/www_authenticate']` is what it draws that button from. Then the
@@ -817,14 +817,14 @@ slow(
       }
 
       // 1. The probe. A host doing mixed auth opens with no credential, and
-      // being ANSWERED is what tells it this server has an anonymous surface.
+      // being answered is what tells it this server has an anonymous surface.
       let hello = await say('initialize', HELLO)
       assertEquals(hello.status, 200)
       facing(hello.body.result.serverInfo)
 
       // 2. The menu. Every tool a stranger is shown says what it wants: `about`
       // is `noauth` and callable now, the platform's verbs are `oauth2` and are
-      // the reason there is anything to sign in FOR. A list holding only what a
+      // the reason there is anything to sign in for. A list holding only what a
       // stranger may call is a connector that can never ask them to sign in.
       let listed = (await say('tools/list')).body.result.tools as {
         name: string
@@ -834,7 +834,7 @@ slow(
       for (let [name, schemes] of wants) {
         assert(schemes?.length, `${name} declares nothing about signing in`)
       }
-      // A tool a stranger may call says BOTH: no token is needed and one is
+      // A tool a stranger may call says both: no token is needed and one is
       // welcome, which is how a host tells the open half of a mixed-auth
       // surface from the closed half (T-34467).
       assertEquals(wants.get('about'), [
@@ -860,7 +860,7 @@ slow(
       assertEquals(open.body.result.isError, undefined)
 
       // 3. The person asks for an app, so the host calls the tool that makes
-      // one — and the refusal is a tool RESULT carrying the challenge, which is
+      // one — and the refusal is a tool result carrying the challenge, which is
       // the half ChatGPT reads to draw its sign-in button.
       let asked = await say('tools/call', { name: 'app_list', arguments: {} })
       assertEquals(asked.status, 401)

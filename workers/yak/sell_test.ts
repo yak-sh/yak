@@ -2,7 +2,7 @@
 // fee arithmetic, the seller row derived off an account object, and the one
 // word the page, the tool and the checkout door all read.
 //
-// The CONTROLLER PROPERTIES are pinned here in full, and that is the point of
+// The controller properties are pinned here in full, and that is the point of
 // this file. They are four sentences about who is responsible for what — who
 // pays Stripe's fee, who carries a lost dispute, who gets a dashboard, who
 // collects the identity documents — and every one of them is a promise made to
@@ -63,7 +63,7 @@ Deno.test('the account is the charge-merchants-directly model, in full', () => {
       fees: { payer: 'account' },
       // Stripe carries a lost dispute, not this platform.
       losses: { payments: 'stripe' },
-      // The merchant reads their money in their OWN Stripe dashboard —
+      // The merchant reads their money in their own Stripe dashboard —
       // `full`, not `express`: Stripe refuses the cut-down one beside a
       // merchant who pays their own fees.
       stripe_dashboard: { type: 'full' },
@@ -87,7 +87,7 @@ Deno.test('the account asks for no capabilities and names no type', () => {
   assertEquals('type' in made, false)
 })
 
-// An address we do not have is LEFT OUT rather than sent empty: an empty
+// An address we do not have is left out rather than sent empty: an empty
 // `email` is not the same ask as no email at all, and Stripe's form asks for
 // one either way.
 Deno.test('an account with no address for the seller sends none', () => {
@@ -122,7 +122,7 @@ Deno.test('the rate reads the way a person says it', () => {
   assertEquals(rate(1000), '10%')
 })
 
-// The rate is a SETTING on the platform's own space row (T-34554), so it is
+// The rate is a setting on the platform's own space row (T-34554), so it is
 // asked of `yak` and of no other space — a seller's row saying 500 would be a
 // seller choosing what they pay us.
 Deno.test('the fee is read off the platform’s own space row', async () => {
@@ -140,7 +140,7 @@ Deno.test('the fee is read off the platform’s own space row', async () => {
   assertEquals(await feeOf(dir(null)), 0)
 })
 
-// The pricing page is a FILE. The live rate is spliced into its one marked
+// The pricing page is a file. The live rate is spliced into its one marked
 // element on the way out, and the number in the file is what a crawler reading
 // the repo sees and what serves when the directory will not answer.
 Deno.test('the pricing page is quoted the rate that is set', () => {
@@ -166,7 +166,7 @@ Deno.test('the seller row is the account object, flags and all', () => {
     sellerOf({ id: 'acct_1', charges_enabled: true, details_submitted: true }),
     { account: 'acct_1', charges_enabled: true, details_submitted: true },
   )
-  // A flag Stripe did not send is FALSE, not "unchanged": the account object
+  // A flag Stripe did not send is false, not "unchanged": the account object
   // arrives whole on every `account.updated`, so an absent capability is an
   // absent capability — and a reader that guessed otherwise would leave a
   // seller marked ready after Stripe stopped them.
@@ -187,7 +187,7 @@ Deno.test('a redelivered account.updated moves no column at all', () => {
     details_submitted: true,
   })
   assertEquals(moved(now, next), {})
-  // And the one that DID change is the only column written.
+  // And the one that did change is the only column written.
   assertEquals(moved(now, { ...next, charges_enabled: false }), {
     charges_enabled: false,
   })
@@ -207,7 +207,7 @@ Deno.test('ready is charges_enabled and nothing else', () => {
     })),
     'setup',
   )
-  // The form is finished and Stripe is still verifying: NOT ready. Taking a
+  // The form is finished and Stripe is still verifying: not ready. Taking a
   // customer's money in that window is a payment that fails at the till.
   assertEquals(
     selling(space({
@@ -334,7 +334,7 @@ Deno.test('the packed items keep the product, the count and the variant', () => 
   )
 })
 
-// The buyer comes back INSIDE the app, always. This door is callable by a guest
+// The buyer comes back inside the app, always. This door is callable by a guest
 // on an open app, so an absolute URL off the wire would let a stranger have
 // yaks.app's own checkout hand buyers to a page they wrote.
 Deno.test('success and cancel resolve inside the app, and never outside it', () => {
@@ -388,11 +388,11 @@ Deno.test('the session is a payment, with the cart in numbered line items', () =
     space: 'e-space',
     app: 'shop',
     items: asked.packed,
-    // And the rate THIS sale was charged at, so the order the webhook files
+    // And the rate this sale was charged at, so the order the webhook files
     // minutes later says what was taken rather than what is set by then.
     fee: '0',
   })
-  // The SAME metadata on the PaymentIntent, and that is not a duplicate: a
+  // The same metadata on the PaymentIntent, and that is not a duplicate: a
   // refund arrives as a charge, which inherits the intent's metadata and knows
   // nothing of the session — so without this a refund could not be attributed.
   assertEquals(made.payment_intent_data.metadata, made.metadata)
@@ -400,8 +400,8 @@ Deno.test('the session is a payment, with the cart in numbered line items', () =
   assertEquals('customer_email' in session(asked), false)
 })
 
-// With no rate set the platform takes nothing — and Stripe requires a POSITIVE
-// application fee, so a fee of nothing has to be NO FEE rather than a zero.
+// With no rate set the platform takes nothing — and Stripe requires a positive
+// application fee, so a fee of nothing has to be no fee rather than a zero.
 Deno.test('the fee rides payment_intent_data, and is absent when it is zero', () => {
   assertEquals(
     'application_fee_amount' in session(asked).payment_intent_data,
@@ -415,8 +415,8 @@ Deno.test('the fee rides payment_intent_data, and is absent when it is zero', ()
   assertEquals(made.metadata.fee, '250')
 })
 
-// The rate is a SETTING (T-34554), so it can move between the checkout and the
-// event that files the order. What the order records is what was TAKEN, which
+// The rate is a setting (T-34554), so it can move between the checkout and the
+// event that files the order. What the order records is what was taken, which
 // is the rate the session carries and never the rate in force now.
 Deno.test('an order is charged the rate its session carried', () => {
   let paid = (fee: Record<string, string>) =>
@@ -435,14 +435,14 @@ Deno.test('an order is charged the rate its session carried', () => {
 
 // ---- the order the webhook writes (T-34526) --------------------------------
 
-// THE IDEMPOTENCE, and it is the whole of it: the order's entity is DERIVED
+// The idempotence, and it is the whole of it: the order's entity is derived
 // from Stripe's session id, so a second delivery of `checkout.session.completed`
 // addresses the row the first one wrote instead of minting a second order.
 // There is no remembered-event list to keep correct.
 Deno.test('an order is written at an eid derived from its session', () => {
   assertEquals(orderEid('cs_test_1'), orderEid('cs_test_1'))
   assert(orderEid('cs_test_1') != orderEid('cs_test_2'))
-  // Shaped as a uuid, because that is what a store's eids are — VERSION 8,
+  // Shaped as a uuid, because that is what a store's eids are — version 8,
   // the one reserved for an id derived from a name rather than drawn at
   // random, which is exactly what this is (src/edge.ts `edgeEid` again).
   assertMatch(
@@ -484,7 +484,7 @@ Deno.test('the order row is what one completed session says', () => {
     items: '[{"p":"x","q":1}]',
     total_cents: 6850,
     fee_cents: 0,
-    // What they TYPED on Stripe's page, not the prefill the door sent: the
+    // What they typed on Stripe's page, not the prefill the door sent: the
     // receipt has to go where they said, and `customer_email` is only what we
     // suggested.
     email: 'ana@example.com',
@@ -523,7 +523,7 @@ Deno.test('the buyer is told what they bought and what it cost', () => {
   assertStringIncludes(letter.body, '- Everyday Tee (M) × 2')
   assertStringIncludes(letter.body, '- Mug × 1')
   assertStringIncludes(letter.body, '**Total $68.50**')
-  // It says where a reply goes, because a reply DOES go somewhere: an app's
+  // It says where a reply goes, because a reply does go somewhere: an app's
   // own address takes mail back into its store.
   assertStringIncludes(letter.body, 'reaches the seller')
 })

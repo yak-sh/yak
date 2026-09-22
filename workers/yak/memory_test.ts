@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-// Memory arrives through the HOST, not through an import (memory.ts
+// Memory arrives through the host, not through an import (memory.ts
 // `memoryPlugin`, T-34602). Nothing names memory.ts from tools.ts, guide.ts or
 // vocab.ts any more, so what is pinned here is that the four contributions
 // still land: the component in the directory's words, the two rows in the

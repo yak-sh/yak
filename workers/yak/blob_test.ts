@@ -105,7 +105,7 @@ slow('the file door: a page uploads bytes and gets an address', async () => {
     assertMatch(got.headers.get('cache-control') ?? '', /immutable/)
     assertEquals(new Uint8Array(await got.arrayBuffer()), png)
 
-    // And it is a ROW: the app's own store knows what the file is called, and
+    // And it is a row: the app's own store knows what the file is called, and
     // an ordinary listing shows the file and not the bytes behind it — a
     // doc's body is a blob row too, and nobody saved that.
     let files: Row[] = await store.query('.attachment!')
@@ -145,7 +145,7 @@ slow('the file door: a page uploads bytes and gets an address', async () => {
       }),
     )
     assertEquals([list.w, list.h], [undefined, undefined])
-    // The size sits on the CONTENT row, at the sha a photo row points at, so
+    // The size sits on the content row, at the sha a photo row points at, so
     // a wall reads it by the eid it already holds.
     let sizes = new Map(
       (await store.query('.image!') as Row[]).map((
@@ -186,7 +186,7 @@ slow('the file door: a page uploads bytes and gets an address', async () => {
       'that file is too big to send — try a smaller one',
     )
 
-    // A stranger on a `public` app may LOOK at the bytes and may not add any:
+    // A stranger on a `public` app may look at the bytes and may not add any:
     // the write rule is the app's own, and the refusal says where to sign in.
     let strangers = mod.store(`${anyone.origin}/photos/api/`)
     let no = await strangers.upload(
@@ -199,7 +199,7 @@ slow('the file door: a page uploads bytes and gets an address', async () => {
       200,
     )
 
-    // On an `open` app, though, a stranger IS a writer: the door that lets
+    // On an `open` app, though, a stranger is a writer: the door that lets
     // anyone with the link save a row lets them put a photo beside it.
     let agent = connector(k, them.cookie)
     await agent.tool('app_set', {

@@ -1,4 +1,4 @@
-// The agent door's other half: the stream a client leaves open to HEAR from
+// The agent door's other half: the stream a client leaves open to hear from
 // the server between its own calls (T-32686, T-32734). Streamable HTTP gives
 // a session two channels — the POST that carries a call and its reply, and a
 // GET the client holds open as Server-Sent Events — and what goes down the
@@ -9,25 +9,25 @@
 // itself moved. The person's agent listed the tools once at connect; this is
 // how it learns to list them again.
 //
-// The stream lives in a DURABLE OBJECT, one per signed-in person — the
+// The stream lives in a durable object, one per signed-in person — the
 // McpAgent shape mcp.ts's header names, arrived at. The first cut queued the
 // news in plain isolate memory, because a response body belongs to the
 // request that made it and writing to it from the request that deployed the
 // app would be "I/O on behalf of a different request". That works only when
 // the deploy and the open stream land on the same isolate, which in
-// production they rarely do. A Durable Object is ONE place: every request for
+// production they rarely do. A Durable Object is one place: every request for
 // this person is routed to this object, and the object's own I/O context owns
 // the open streams, so the request that deployed the app can write to the
 // stream the GET opened. Everything else stays stateless — a POST is still
 // one call in, one JSON out, and this object is asked only for this.
 //
-// The news is a LOG, not a fanout: each line takes a monotonic event id, the
+// The news is a log, not a fanout: each line takes a monotonic event id, the
 // last few are kept in the object's storage, and a stream that drops
 // reconnects with `Last-Event-ID` and is handed what it missed (the MCP
 // transport's resumability). So the object being evicted between two deploys
 // costs nothing, and neither does a connection that blinked.
 //
-// The object also holds what each session LISTED at connect (`roster`,
+// The object also holds what each session listed at connect (`roster`,
 // T-34277). A notification only reaches a client holding a stream and willing
 // to act on it; the roster is how the same news reaches one that is not, as a
 // line on the next tool result naming which tools moved. Both are per session,
@@ -35,7 +35,7 @@
 //
 // One log per person, one cursor per stream, and at most one copy of a line
 // per session: the transport forbids broadcasting one message across two
-// streams of the SAME session, while two sessions are two clients and each
+// streams of the same session, while two sessions are two clients and each
 // needs its own copy. A stream that names no session is a client that was
 // never told an id, and every one of those hears — they cannot be told apart,
 // and silence is the worse failure.
@@ -68,7 +68,7 @@ type Told = { method: string; params?: unknown }
 // but which tools moved. Recorded at `initialize` — the moment the client
 // cached the list — and replaced when the session is told.
 //
-// It moves for ONE reason now (T-34541): a platform release. Nothing a person
+// It moves for one reason now (T-34541): a platform release. Nothing a person
 // does touches it — an app made, a command declared, a word grown are all
 // things the fixed roster already carries (declared.ts) — so a session is
 // told its list is stale only when the names actually moved under it.
@@ -125,7 +125,7 @@ export class Wire {
   // back to the human VERSION there (which those never move either, so the
   // fallback stays quiet across their restarts).
   mark: string
-  // The streams open RIGHT NOW, oldest first. This is the only thing here
+  // The streams open right now, oldest first. This is the only thing here
   // that does not survive the object being evicted — which is what the log
   // in storage is for.
   open = new Set<Held>()
@@ -166,7 +166,7 @@ export class Wire {
 
   // A platform release replaces the Worker, restarts this object and drops
   // every open stream; the client resumes with `Last-Event-ID` and nothing
-  // in that tells it the platform's OWN tools, resources, prompts and guide
+  // in that tells it the platform's own tools, resources, prompts and guide
   // pages moved with the release (T-33005). So the object remembers, per
   // session, the deploy `mark` it last spoke for: a stream attaching for a
   // session last spoken to under another release hears that all three lists
@@ -195,7 +195,7 @@ export class Wire {
   }
 
   // A release nobody here has spoken for yet. `crossed` above catches a
-  // stream ATTACHING after one; this catches a stream that was already open
+  // stream attaching after one; this catches a stream that was already open
   // when the platform moved under it, which is possible whenever this object
   // outlives the isolate that made it — a rolling deploy, where one request
   // arrives from the new version while a stream opened under the old one is
@@ -224,7 +224,7 @@ export class Wire {
 
   // What one session is holding, against what this door lists now (T-34277).
   // `init` is the client caching the list at connect: recorded, never
-  // compared. Otherwise the version is compared and the line said ONCE per
+  // compared. Otherwise the version is compared and the line said once per
   // changed set — the new roster is recorded with it, so a client that never
   // reconnects is told about the next move and not about this one again.
   //
@@ -336,7 +336,7 @@ export class Wire {
 // The person's own object. The kernel spells the name and it is the person's
 // eid, never anything a client says: who is asking was settled by identity.ts
 // before anything here is reached, and a session id only picks a stream
-// WITHIN the person it already belongs to.
+// within the person it already belongs to.
 let wireOf = (ns: Namespace, person: string) => fetchOf(ns, person)
 
 // The GET's answer: this person's stream, resumed where the client says it

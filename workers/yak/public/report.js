@@ -8,15 +8,15 @@
 // it: a script error, a file that never loaded, a promise nobody caught, and
 // a call to the app's own doors that came back a no. The first three are
 // events; the last is a thin wrapper around `fetch` that watches same-origin
-// /api/ answers and passes everything through untouched. A no the door MEANT
+// /api/ answers and passes everything through untouched. A no the door meant
 // — sign in to change this app — is not a break, and the door drops those
 // (apps.ts, unseen.ts `refusal`); this script reports what it saw and judges
 // none of it.
 //
 // A file that never loaded is the one that hurts most: an installed copy's
 // module 404'd, the page painted a heading and empty space, and nobody was
-// told (C-32905 items 2 and 8). That failure fires ON the element and does
-// not bubble, so the listener below is in the CAPTURE phase, where one
+// told (C-32905 items 2 and 8). That failure fires on the element and does
+// not bubble, so the listener below is in the capture phase, where one
 // handler sees both a script that threw and a script, link or image — or a
 // module graph — that never arrived.
 //
@@ -63,7 +63,7 @@ let broke = (body) => {
 
 // The element a resource error happened on, if that is what this was: a
 // script, link, img, or the module graph one of them pulled. A script that
-// THREW targets the window instead, and has an `error` of its own.
+// threw targets the window instead, and has an `error` of its own.
 // On the app's own origin, and not this script's door: what happened there
 // is the app's, and what happened on somebody else's server is not ours to
 // file — a script on another origin may have 404'd, or been blocked by the
@@ -124,7 +124,7 @@ addEventListener('unhandledrejection', (e) => {
 
 let plain = globalThis.fetch
 globalThis.fetch = async (input, init) => {
-  // Against the page's BASE, not its address: the kernel gives every page a
+  // Against the page's base, not its address: the kernel gives every page a
   // `<base>` at the app's own root (apps.ts `based`), so that is what the
   // browser resolved `./api/query` against — resolving it against
   // `location.href` here would name a path nothing was ever asked for.
@@ -136,14 +136,14 @@ globalThis.fetch = async (input, init) => {
       send({
         message: `${r.status} ${where.pathname}: ${why}`.slice(0, 2000),
         url: location.href,
-        // The answer as it came, so the door can tell a no it MEANT — a
+        // The answer as it came, so the door can tell a no it meant — a
         // signed-out visitor sent to sign in — from one it did not
         // (unseen.ts `refusal`). This script decides nothing: it is cached
         // in browsers we cannot reach, and the rule lives where we can.
         status: r.status,
         answer: why.slice(0, 2000),
       })
-      // The one thing this script does read the status FOR: whether to draw
+      // The one thing this script does read the status for: whether to draw
       // over the page. A no somebody meant is the platform working and never
       // becomes a sorry line; a 5xx is nobody's choice.
       if (r.status >= 500) sorry()

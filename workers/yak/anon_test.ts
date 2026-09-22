@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 // Who a stranger is served (anon.ts): which tools say they need nobody, and
-// which app a signed-out read is scoped to. The list is PINNED on purpose — a
+// which app a signed-out read is scoped to. The list is pinned on purpose — a
 // tool that grows `noauth` lands here in a diff, which is the whole point of
 // declaring it.
 import {
@@ -29,7 +29,7 @@ let OPEN = [
 
 Deno.test('the tools that need nobody are the pinned ones', () => {
   assertEquals(TOOLS.filter(openly).map((t) => t.name).sort(), OPEN)
-  // Each says BOTH schemes: it works with a token and without one, which is
+  // Each says both schemes: it works with a token and without one, which is
   // what a host reads to offer the sign-in beside an open tool.
   for (let t of TOOLS.filter(openly)) {
     assertEquals(t.security, [
@@ -103,9 +103,9 @@ Deno.test('a read that names no app says it is needed signed out', async () => {
   }
 })
 
-// The one place this door promises an ARGUMENT in prose (T-37617). `about` is
+// The one place this door promises an argument in prose (T-37617). `about` is
 // what an agent reads before anything else, and it says the generic reads take
-// a space and a slug — true HERE, where the pair is the call's whole scope, and
+// a space and a slug — true here, where the pair is the call's whole scope, and
 // not signed in, where there is a reach to read and `.in=` narrows it. An
 // assistant read it signed in, went looking for an app argument the schema does
 // not have, and asked how to target one app (E#868fa3f25c answer 5). So the

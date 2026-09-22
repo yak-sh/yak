@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 // Putting a store back to a moment (recover.ts, T-34507), at the two seams
-// that are ours: the WINDOW a caller is refused by, and the ORDER a restore
+// that are ours: the WINDOW a caller is refused by, and the order a restore
 // happens in.
 //
 // The recovery itself is Cloudflare's and is not tested anywhere, because
@@ -32,7 +32,7 @@ Deno.test('a moment outside the window is refused by name', () => {
     moment('2026-09-01T00:00:00Z', NOW).toISOString(),
     '2026-09-01T00:00:00.000Z',
   )
-  // Each refusal says what is wrong AND what the window is, because a caller
+  // Each refusal says what is wrong and what the window is, because a caller
   // told only "no" reaches for a different wrong time next.
   let no = (said: string) => {
     try {
@@ -81,7 +81,7 @@ Deno.test('a restore writes down the way back before it moves anything', async (
     'ada',
     new Date(NOW),
   )
-  // The record FIRST. This is the whole point of the function: the bookmark
+  // The record first. This is the whole point of the function: the bookmark
   // the store stood at is written to a different object before the store is
   // told to go anywhere, so a restore that turns out to be the mistake has a
   // moment to be asked back from.
@@ -167,7 +167,7 @@ Deno.test('the store answers where it stands, and wakes where it is told', async
   })
   assertEquals(await done.json(), { undo: 'undo-at-2026-09-01T00:00:00.000Z' })
   assertEquals(ctx.pitr.restore, 'at-2026-09-01T00:00:00.000Z')
-  // The restart is asked for AFTER the answer went out — `abort` fails every
+  // The restart is asked for after the answer went out — `abort` fails every
   // in-flight request, this one included — so it lands a turn later.
   assertEquals(ctx.pitr.aborts, 0)
   await new Promise((go) => setTimeout(go, 0))

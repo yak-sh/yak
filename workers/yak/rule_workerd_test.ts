@@ -1,17 +1,17 @@
-// A rule an APP declared, running inside the deployed Worker, on the app's own
+// A rule an app declared, running inside the deployed Worker, on the app's own
 // clock. Nothing here is code: the app ships a `rule: true` entry in its own
 // vocab.json, writes a row wearing a `wake`, and the row comes back wearing
 // what the rule said — because the object holding it armed its own Durable
 // Object alarm and fired the wake when it came due (D-37562).
 //
 // What this proves that no in-process test can is the two things the runtime
-// owns. The OVERLAY: a rule is a query over the batch as though it had landed,
+// owns. The overlay: a rule is a query over the batch as though it had landed,
 // and @yaks/sqlite makes the batch readable by prefixing the statement with a
 // CTE per component it moved. It was temp tables shadowing the committed ones
 // until this test ran — a Durable Object's SQLite refuses a temp object
 // outright (`not authorized: SQLITE_AUTH`), so the overlay had to become
 // something a query carries rather than something a database is left holding.
-// And the ALARM: the wake's own `at` is the clock here, so a row written a
+// And the alarm: the wake's own `at` is the clock here, so a row written a
 // second ahead is delivered by workerd itself, to an object no request is
 // touching.
 
@@ -27,7 +27,7 @@ let withRule = JSON.stringify({
     plant: { properties: { name: txt } },
     watered: { properties: { by: txt, at: when } },
     // A plant whose wake has gone off has been watered. The gate is what makes
-    // it fire once: after it writes, the entity HAS the mark.
+    // it fire once: after it writes, the entity has the mark.
     waters: {
       rule: true,
       description: 'a plant whose wake has fired is watered',
@@ -87,7 +87,7 @@ slow(
         'the wake says when it went',
       )
 
-      // And it fires ONCE: waking the plant again finds the gate closed.
+      // And it fires once: waking the plant again finds the gate closed.
       await app.post([{
         entity: { eid: 'fern' },
         wake: { at: new Date(Date.now() + 500).toISOString() },

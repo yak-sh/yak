@@ -112,7 +112,7 @@ Deno.test('the deploy id drives the marker, not the human VERSION', async () => 
   }
 })
 
-// The ROSTER a session connected against (T-34277): recorded at initialize,
+// The roster a session connected against (T-34277): recorded at initialize,
 // compared on every later call, and the line said once per changed set — for
 // the client that holds no stream, or whose host ignores the notification.
 Deno.test('a session is told which tools moved, once per changed set', async () => {

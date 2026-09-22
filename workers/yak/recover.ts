@@ -3,10 +3,10 @@
 // point in that history, `onNextSessionRestoreBookmark` says which point the
 // object wakes at next, and restarting it is what makes that happen now. The
 // door onto all three is the store's own `/restore` (graph.ts `#recovery`);
-// what is here is the ORDER, the window, and the record.
+// what is here is the order, the window, and the record.
 //
 // The order is the whole of it. Where the store stands right now is read and
-// WRITTEN DOWN before anything moves, in the directory — a different object,
+// written down before anything moves, in the directory — a different object,
 // which this recovery does not touch — so the restore can itself be undone by
 // asking for a moment just before it. Without that the way back is a bookmark
 // nobody kept, and "put it back" becomes a thing you get exactly one of.
@@ -21,7 +21,7 @@ import { KERNEL } from './meta.ts'
 /**
  * How far back a store can be put. Cloudflare's own window on a Durable
  * Object's SQLite — a fact about the runtime, which is why it is spelled here
- * and not shared with erase.ts `GRACE`, the thirty days OUR trash keeps. The
+ * and not shared with erase.ts `GRACE`, the thirty days our trash keeps. The
  * two agree today and are not the same promise.
  */
 export let WINDOW = 30 * 24 * 60 * 60_000
@@ -46,7 +46,7 @@ export type Restore = {
  *
  * Asking for a moment outside the thirty days is the commonest way this is
  * asked wrong — someone reaches for "last month" — so the refusal says what the
- * window IS rather than that the answer was no. A time in the future is the
+ * window is rather than that the answer was no. A time in the future is the
  * same mistake with the sign flipped, and it would otherwise quietly restore
  * to now, which is a no-op that reads as a success.
  */
@@ -100,7 +100,7 @@ export let mark = (store: Door) => asked(store, '/restore')
 
 /**
  * One restore, in the order that leaves a way out of it: read where the store
- * stands and the bookmark for the moment asked for, WRITE THAT DOWN, and only
+ * stands and the bookmark for the moment asked for, write that down, and only
  * then tell the object to wake up there.
  *
  * `write` is handed the record rather than making it, so the order this

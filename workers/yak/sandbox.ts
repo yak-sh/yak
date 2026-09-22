@@ -5,7 +5,7 @@
 // Owner, 2026-09-05: "and can we also give the agent some sandbox tools so
 // they could compile rust, etc. if they needed to?"
 //
-// ONE SANDBOX PER BUILD SESSION, and a build session is a SPACE — the same key
+// One sandbox per build session, and a build session is a space — the same key
 // the builder's conversation is held under (T-34240), so a person talking to
 // the builder and the same person's own agent over the connector reach one
 // workbench rather than two. It is a Cloudflare Container behind a Durable
@@ -18,17 +18,17 @@
 // installs it for the session with apt or a download, and the container it
 // installed into is destroyed at the end of that build (T-34516).
 //
-// THE BINDING IS TYPED, NEVER IMPORTED, the way every other binding in this
+// The binding is typed, never imported, the way every other binding in this
 // kernel is (env.ts). @cloudflare/sandbox is a Worker package: it imports
-// `cloudflare:workers`, which Deno cannot LOAD, so a value import here would
+// `cloudflare:workers`, which Deno cannot load, so a value import here would
 // take every test that reaches a tool down with it. The one place its name
 // appears as a value is index.ts, where the deploy needs the Durable Object
 // class and no test ever looks. What that costs is the two lines of
 // `getSandbox` we actually use — the object per name and the idle timeout —
 // spelled below beside the SDK function each mirrors.
 //
-// WHAT IT COSTS, AND WHO SAYS SO. A container bills for the wall time it is
-// awake, so the seconds counted here are the seconds from the FIRST sandbox
+// What it costs, and who says so. A container bills for the wall time it is
+// awake, so the seconds counted here are the seconds from the first sandbox
 // call in a build to the moment the build lets it go ({@link Spend}) — the
 // figure Cloudflare bills on, not a sum of command durations. Past
 // {@link BUDGET} the tools refuse in a sentence, the way every other ceiling
@@ -38,16 +38,16 @@
 // token and a container-second are priced differently and one number made of
 // both is a number nobody can add up.
 //
-// WHAT KEEPS IT FROM RUNNING FOREVER: the build destroys it when it ends, and
+// What keeps it from running forever: the build destroys it when it ends, and
 // {@link SLEEP} is the backstop for a build that never says so — the container
 // sleeps on its own after that long idle, which is where the billing stops.
 // A sleeping sandbox wakes with its files still there.
 //
-// AND IT IS SIGNED IN AS THE CALLER (T-34387). Every command runs with
+// And it is signed in as the caller (T-34387). Every command runs with
 // `YAKS_TOKEN` and `YAKS_HOST` in its environment — a grant (grants.ts),
 // narrowed to this space and living about as long as the container can — so
 // the `yaks` CLI the image carries, and plain `curl`, reach the platform's own
-// door as the person whose build this is. One grant per CONTAINER rather than
+// door as the person whose build this is. One grant per container rather than
 // one per command ({@link signed}), and it dies with the container
 // ({@link destroyed}). It rides the SDK's per-invocation env and is never
 // exported into a shell, so nothing puts it in the builder's transcript.
@@ -195,14 +195,14 @@ let alive = (g: Grant | null, now: number): g is Grant =>
  * has — as the person, narrowed to this space, and no longer than the
  * container lives ({@link LIFE}).
  *
- * ONE GRANT PER CONTAINER, not one per command: the ledger row (grants.ts
+ * One grant per container, not one per command: the ledger row (grants.ts
  * `wear`) is what makes the second wake say the same grant as the first, since
  * the token itself is kept nowhere and re-derived from what the ledger holds.
  * A grant revoked by hand (tools.ts `grant`) is gone from the ledger, so the
  * next wake mints rather than saying a dead one again.
  *
  * Nothing to sign with — no secret, no KV, which is every probe and every
- * test — is an EMPTY environment rather than a refusal: the workbench still
+ * test — is an empty environment rather than a refusal: the workbench still
  * compiles, and `yaks` inside it says it is not signed in.
  */
 export let signed = async (
@@ -287,7 +287,7 @@ export let boxOf = (
   // Named rather than spread: the stub is a Durable Object proxy, and what a
   // proxy answers is its methods, never its own properties.
   return {
-    // The grant rides HERE — the SDK's per-invocation env, awaited by the
+    // The grant rides here — the SDK's per-invocation env, awaited by the
     // first command and handed to every one after it — rather than
     // `setEnvVars`, which reaches the container by exporting the token into a
     // shell where an `echo` would put it in the transcript.
@@ -356,7 +356,7 @@ export let paid = async (
  * for the caller to count. A build that never woke one destroys nothing and
  * answers 0.
  *
- * It does NOT write the meter itself, where {@link paid} does, because the
+ * It does not write the meter itself, where {@link paid} does, because the
  * build counts its seconds in the same write as its build (builder.ts `end`,
  * meter.ts `countedBuild`) — two writes derived from one reading of the space
  * would each put the other's columns back.

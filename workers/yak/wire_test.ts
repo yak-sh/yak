@@ -17,7 +17,7 @@ let cases: [string, string][] = [
   ['.doc.title~=lemon%20cake', '.doc.title~=lemon cake'],
   // An `&` is the other wire's separator, so a value carrying one is glued
   // back together with quotes (@yaks/query); a space inside one dot-param
-  // needs none, since a segment that IS one keeps its spaces.
+  // needs none, since a segment that is one keeps its spaces.
   ['.doc.title~=salt%26pepper', '.doc.title~="salt&pepper"'],
   ['.doc.title~=two%20words', '.doc.title~=two words'],
   ['.doc.title~=a%20.b', '.doc.title~="a .b"'],

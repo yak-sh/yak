@@ -1,7 +1,7 @@
 // The repository at an app's address, judged by git: a real `git clone` over a
 // real socket against the door the plugin mounts, then `git log` and `git fsck`
 // in what it wrote. Everything below the wire is @yaks/git's and is checked
-// there (packages/git/http_test.ts); what is pinned here is the MOUNT — which
+// there (packages/git/http_test.ts); what is pinned here is the mount — which
 // app a URL names, who may clone it and how they say so, and that a path which
 // is no repository is left for the apps.
 import { assert, assertEquals } from '@std/assert'
@@ -85,7 +85,7 @@ let deploy = async (
 let asked = (env: Env, address: string, headers: HeadersInit = {}) => {
   let url = new URL(`https://ada.yaks.app${address}`)
   let req = new Request(url, { headers })
-  // What index.ts hands a door: the PATH, never the query beside it.
+  // What index.ts hands a door: the path, never the query beside it.
   return gitPlugin.routes![0]({ env, req, path: url.pathname, space: 'ada' })
 }
 
@@ -219,10 +219,10 @@ Deno.test('the browser address redirects to the repository, query and all', asyn
 let pkt = (line: string) =>
   (utf8.encode(line).length + 4).toString(16).padStart(4, '0') + line
 
-// An app deployed before the pins moved to one global key has its bytes ONLY
+// An app deployed before the pins moved to one global key has its bytes only
 // under its own prefix (versions.ts `pinned`), and the door has to read them
 // there. Handed the slugs without their separator it asked for
-// `ada/recipesversions/<sha>`, found nothing, and threw INSIDE the response
+// `ada/recipesversions/<sha>`, found nothing, and threw inside the response
 // stream — a 200 that stops after the section header, which git reports as
 // `early EOF` and which no status code says anything about.
 Deno.test('an app whose bytes are pinned per-app still serves a pack', async () => {

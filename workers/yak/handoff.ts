@@ -1,8 +1,8 @@
 // Custom-domain sign-in handoff (T-33037), as pure logic — identity.ts wires
 // it to a request. The platform authenticates a person, then hands the
-// customer's OWN hostname a one-time token it spends here for a host-only
+// customer's own hostname a one-time token it spends here for a host-only
 // cookie of its own, because the platform cookie is `yaks.app`'s and never
-// rides to `herbusiness.com`. The token is bound to the person AND the exact
+// rides to `herbusiness.com`. The token is bound to the person and the exact
 // host, minted only for a directory-verified customer hostname, spent once, and
 // dead in a minute — so it can neither be replayed to another host, made to
 // name another person, nor used twice. No Cloudflare provider import lives here
@@ -62,10 +62,10 @@ export let safeNext = (next: string) =>
   next.startsWith('/') && !next.startsWith('//') ? next : '/'
 
 // The person a valid token names, or null. Valid means: written under this
-// secret, unexpired, minted for THIS host, and not already spent. `spend`
+// secret, unexpired, minted for this host, and not already spent. `spend`
 // records the jti and answers false if it was already spent (single use); it is
 // injected so the store is the caller's (KV) and the test's (a map). It runs
-// LAST, so a token that fails any other check is never consumed.
+// last, so a token that fails any other check is never consumed.
 export let opener = async (
   t: string,
   secret: string,

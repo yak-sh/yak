@@ -30,7 +30,7 @@ or in a GitHub secret.
 
 Nothing gates that push. `.github/workflows/gate.yml` runs the check, the fast
 tests, and — where the diff touches `workers/` or `packages/` — the complete
-`deno task test:workerd` tier, and it REPORTS what it finds: a red tier is a bug
+`deno task test:workerd` tier, and it reports what it finds: a red tier is a bug
 to fix, not a deploy held back. T-37197 briefly promoted a gated `deploy` branch
 instead; it was reverted the same day (M-37262).
 
@@ -208,7 +208,7 @@ report and refuse to serve without the declared constraint.
 - Rollback boot failed on an old vocabulary index the migrated rows violated.
 
 `migrate.ts` lists every stored-shape pass in `BOUNDARIES`, in marker order;
-today that is all of `MARKS`. A REFUSED pass is not a boundary: its transaction
+today that is all of `MARKS`. A refused pass is not a boundary: its transaction
 rolls back, the data did not move, and its marker stays unchanged. `yak deploys`
 still treats a version carrying that pass as a potential boundary, because
 another Store may have completed it.

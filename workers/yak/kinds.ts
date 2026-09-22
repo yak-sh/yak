@@ -1,4 +1,4 @@
-// The commands a KIND is worth (T-34513). An app that declares a `recipe` in
+// The commands a kind is worth (T-34513). An app that declares a `recipe` in
 // its vocab.json gets `add_recipe` and `find_recipe` for nothing, so the next
 // agent the person talks to — one that has never read this app's pages —
 // discovers there is somewhere to put a recipe the way it discovers anything
@@ -14,7 +14,7 @@
 //   "tools": false   at the top of vocab.json — this app wants none of them
 //   a tools.json entry spelling `add_recipe` or `find_recipe` — that one wins,
 //                    whole, since a hand-written template says what the app
-//                    MEANS and a generated one only says what it holds
+//                    means and a generated one only says what it holds
 // A redeploy regenerates them from the manifest as it then reads, so a column
 // added to a kind is an argument added to its two tools.
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
@@ -22,7 +22,7 @@ import type { PropType } from '../../src/types.ts'
 import type { ToolDef, Tools } from '../../src/store/tools.ts'
 import { wordOf } from './vocab.ts'
 
-// The columns a caller may WRITE: a server-owned column is nobody's to send,
+// The columns a caller may write: a server-owned column is nobody's to send,
 // and a computed one has no column at all.
 let colsOf = (schema: PropSchema): Record<string, PropType> =>
   Object.fromEntries(

@@ -193,7 +193,7 @@ Deno.test('deleted before an older updated does not revive the plan', () => {
     AT,
   )
   assertEquals(dead.tier, 'free')
-  // ...and the update that was written EARLIER but arrived later is refused,
+  // ...and the update that was written earlier but arrived later is refused,
   // by the rule that an ended subscription is never revived — note its `at` is
   // LATER, so a clock comparison alone would have let it through.
   let late = planOf(sub({ status: 'active' }), LATER)

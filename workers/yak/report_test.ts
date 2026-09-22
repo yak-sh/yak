@@ -89,7 +89,7 @@ slow('a page reports its own breaks, and the agent hears', async () => {
     assertEquals((await report('not a report')).status, 204)
 
     // Both reach the agent, once, on its next reply.
-    // …on a PLATFORM tool's answer, which is prose (T-33812): the generic
+    // …on a platform tool's answer, which is prose (T-33812): the generic
     // tier answers a described value, and words appended to it would be
     // something else.
     let told = await agent.tool('app_files', { ...app, op: 'list' })
@@ -171,11 +171,11 @@ slow('a refusal the door meant is not a break', async () => {
       204,
     )
 
-    // And the same rule for a no the APP answered (C-32869 item 5, T-32874):
+    // And the same rule for a no the app answered (C-32869 item 5, T-32874):
     // the app's worker asked an outside service with a key its owner
     // mistyped, was told 401, and answered the page a sentence in its own
     // words. That is the app working; an outside service does not spell its
-    // no the way our doors spell theirs, so the rule reads the STATUS.
+    // no the way our doors spell theirs, so the rule reads the status.
     assertEquals(
       (await report({
         message: '401 /runs/weather: the weather service refused our key',
@@ -211,7 +211,7 @@ slow('a refusal the door meant is not a break', async () => {
   }
 })
 
-// A break names the deploy it happened ON. The directory's read cache is 30
+// A break names the deploy it happened on. The directory's read cache is 30
 // seconds wide and private to an isolate, so a version bump made anywhere
 // else is invisible to an ordinary read — which is how the ninth user test's
 // first throw after a deploy filed as `weather v1` while the deploy had just
@@ -315,7 +315,7 @@ slow('a page that dies on its first import says so', async () => {
 // its analytics beacon into every page we serve and cannot be told not to
 // from here (T-32487); an ad blocker in the visitor's browser blocks it, and
 // six of those filed as a person's app being broken (T-32953). The browser is
-// the part a probe cannot boot, so the reporter the kernel serves is RUN
+// the part a probe cannot boot, so the reporter the kernel serves is run
 // here, over a page that is only what this script touches: where it was
 // injected, what it beacons, and the body it draws the soft state on.
 let browser = (code: string, page: string) => {
@@ -361,7 +361,7 @@ let browser = (code: string, page: string) => {
   )
   return {
     // A file that never loaded, on the element it never loaded into: that
-    // event fires ON the element and does not bubble, which is why the
+    // event fires on the element and does not bubble, which is why the
     // reporter listens in the capture phase (T-32909).
     blocked: (tagName: string, src: string) =>
       ears.error?.forEach((fn) => fn({ target: { tagName, src } })),
@@ -430,10 +430,10 @@ slow("the platform's own scripts are never the app's break", async () => {
 // Whose break it is (T-33234). Jeff, 2026-09-03: "That's not just noise;
 // it's a bug".
 //
-// The catch-all used to file by ROUTE: whatever app the URL named wore every
-// failure that escaped it. So one of OUR platform deploys evicting a Store
+// The catch-all used to file by route: whatever app the URL named wore every
+// failure that escaped it. So one of our platform deploys evicting a Store
 // object threw into whatever `GET /<app>/api/ws` was open, and that was
-// written into a CUSTOMER's store as a regression that never happened —
+// written into a customer's store as a regression that never happened —
 // stamped with their version, charged against their metered writes, and
 // pushed to every member of their space, at our deploy rate rather than their
 // usage.

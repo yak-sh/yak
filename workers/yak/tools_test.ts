@@ -120,7 +120,7 @@ Deno.test('staging tool URLs and app mail use the same configured host', async (
   }])
 })
 
-// The listing answers WHO THE CALLER IS in each space it lists, off the
+// The listing answers who the caller is in each space it lists, off the
 // directory's own `member` row (T-35384). It is the only door that says a role
 // for every space at once: before this, a client had to ask each space's front
 // app `/me`, one round trip apiece, for a fact the directory already held.
@@ -155,7 +155,7 @@ Deno.test('app_list says the caller’s role in each space it lists', async () =
 
 let bytes = (s: string) => new TextEncoder().encode(s)
 
-// The tool as an agent reads it, since the description IS the contract and
+// The tool as an agent reads it, since the description is the contract and
 // the builder gets it through the same roster (builder.ts).
 let app_files = TOOLS.find((t) => t.name == 'app_files')!
 
@@ -221,7 +221,7 @@ Deno.test('a patch replaces exactly one match, or refuses saying how many', () =
     patched(page, '<p>Old news</p>\n', '', 'index.html'),
     '<h1>Old</h1>\n',
   )
-  // A replacement is TEXT: `$&` is two characters, not a back-reference.
+  // A replacement is text: `$&` is two characters, not a back-reference.
   assertEquals(patched('a b', 'b', '$& $`', 'x.js'), 'a $& $`')
   // Two matches would edit a place nobody looked at; none would answer
   // "patched" having changed nothing. Both say the count, which is what
@@ -290,7 +290,7 @@ Deno.test('a fetch takes https, a live answer, and nothing over the ceiling', as
     () => new Response('nope', { status: 404 }),
     () => refuses('answered 404', 'https://cdnjs.example/gone.js'),
   )
-  // A header is a claim, so it is refused on the claim AND on the bytes.
+  // A header is a claim, so it is refused on the claim and on the bytes.
   await served(
     () =>
       new Response('small', {
@@ -351,7 +351,7 @@ Deno.test('view metadata leaves portable sandbox selection to the host', () => {
   assertEquals(acceptsClaude(bare), true)
   assertEquals(Object.hasOwn(bare.ui, 'domain'), false)
 
-  // An empty allowlist is a DECLARATION — this page fetches nothing — and is
+  // An empty allowlist is a declaration — this page fetches nothing — and is
   // what the platform's own two inline views say. Saying nothing at all is
   // what a host reads as no policy, and stamps "CSP off" on.
   assertEquals(bare.ui.csp, {})
@@ -373,7 +373,7 @@ Deno.test('view metadata leaves portable sandbox selection to the host', () => {
 // How many round trips a deploy took, on its own answer (timing.ts, hops.ts):
 // `hops` is the store doors it went through (door.ts) and `r2` the bucket
 // operations it made (store/blobs.ts `counted`), both counted where they are made.
-// The numbers are asserted EXACTLY, and that is the point of the test: a
+// The numbers are asserted exactly, and that is the point of the test: a
 // duration says a deploy got slower, and only a count says it got slower
 // because something started asking one file at a time. Read back through the
 // bench's own parser (bin/app-deploy-time.ts `stages`), so what a run records
@@ -414,8 +414,8 @@ Deno.test('a deploy says how many round trips it took', async () => {
   )
 })
 
-// And what a LISTING costs (T-35431). The shape is what the exact numbers are
-// here to hold: the directory is asked a FIXED five times however many spaces
+// And what a listing costs (T-35431). The shape is what the exact numbers are
+// here to hold: the directory is asked a fixed five times however many spaces
 // and apps the answer has — the caller's seats, the apps across them, what is
 // bound to those apps — and only the one fact an app's own store alone holds
 // (what is broken in it, unseen.ts `noted`) costs per app, two facets each,

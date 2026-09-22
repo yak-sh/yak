@@ -140,7 +140,7 @@ for (let aggregate of [false, true]) {
 let words = async (store: Store) =>
   (await (await get(store, '/vocab')).json()).$defs
 
-// What a store KEEPS is the DOCUMENT, so a keyword a column declares is still
+// What a store keeps is the document, so a keyword a column declares is still
 // on it when the kernel reads the manifest back (T-37546).
 Deno.test("an app's vocab.json is read back as the document it means", async () => {
   assertEquals(
@@ -188,7 +188,7 @@ Deno.test('a manifest the vocabulary refuses leaves the store as it was', async 
       recipe: { serves: 8 },
     }], owner)
     assertEquals(wrote.status, 200)
-    // The batch AS APPLIED, plus everything the graph synthesized: the number
+    // The batch as applied, plus everything the graph synthesized: the number
     // storage minted, and the byline the stamp phase wrote, each riding a
     // bundle of its own.
     let applied = await wrote.json() as Bundle[]
@@ -196,7 +196,7 @@ Deno.test('a manifest the vocabulary refuses leaves the store as it was', async 
     assert(applied.some((b) => (b.entity.num ?? 0) >= 1))
     assert(applied.some((b) => by(b) == ADA))
 
-    // An answer carries the components the line NAMES and no more, so the doc
+    // An answer carries the components the line names and no more, so the doc
     // is asked for beside the recipe (the `#wanted` projection).
     let read = await (await get(
       store,
@@ -277,7 +277,7 @@ Deno.test('a subscription is answered, and a commit reaches the socket', async (
   assertEquals(pushed.bundles[0].entity.eid, CAKE)
 })
 
-// `*` is the grammar's widest projection, so ONE reading of the line serves
+// `*` is the grammar's widest projection, so one reading of the line serves
 // both doors: it used to be cut out of `/query`'s line by hand and handed to
 // `subs.open` whole, where it reached @yaks/match as a full-text term nothing
 // matches — the subscription answered empty and stayed silent forever (T-34070).
@@ -377,7 +377,7 @@ Deno.test('an open app is written by nobody', async () => {
   assert(applied.every((b) => by(b) == null))
 })
 
-// A NAME outlives the batch (T-34390): @yaks/key carries it, @yaks/alias
+// A name outlives the batch (T-34390): @yaks/key carries it, @yaks/alias
 // spells it, and both are composed into every store — so the same seed written
 // twice is one entity, and the name stands where an eid does.
 Deno.test('a named row written twice is one entity, and answers to its name', async () => {
@@ -500,7 +500,7 @@ Deno.test('the object plants core + member + edge + the app, and nothing else', 
   )
 })
 
-// The separator inside a grant id is a NUL BYTE, and it is load-bearing: it is
+// The separator inside a grant id is a NUL byte, and it is load-bearing: it is
 // what keeps grantEid of ('a\x00b', 'c') from colliding with ('a', 'b\x00c').
 // It was once written as a raw 0x00 in the source, which made git call the
 // file binary and refuse to merge it (T-33946); the escape spells the same
@@ -521,9 +521,9 @@ Deno.test('a grant id is the sha of app and person joined by a NUL', () => {
 
 // ---- the rules slot (T-34619) ----
 //
-// A plugin says what it does about a WRITE as data, and the host hands every
+// A plugin says what it does about a write as data, and the host hands every
 // plugin's rules to the store it builds (plugin.ts `rulesOf`, graph.ts
-// `#boot`). What these pin is the ARRIVAL — a fixture plugin on the list, a
+// `#boot`). What these pin is the arrival — a fixture plugin on the list, a
 // store built after it, and the rule firing on a batch that store applied —
 // because the seam is the wiring and the rule engine itself is @yaks/graph's
 // (rules_test.ts). The list is a module value, so it is put back afterwards.

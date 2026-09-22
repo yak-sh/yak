@@ -103,7 +103,7 @@ Deno.test('point: the columns, in the order the queries read them', () => {
 })
 
 // developers.cloudflare.com/analytics/analytics-engine/limits/: 20 blobs,
-// 20 doubles, ONE index of at most 96 bytes, 16 KB of blobs all together. A
+// 20 doubles, one index of at most 96 bytes, 16 KB of blobs all together. A
 // point over any of those is not recorded, and nothing would say so.
 Deno.test('point: inside every Analytics Engine limit, even given junk', () => {
   let long = (n: number) => 'x'.repeat(n)
@@ -301,7 +301,7 @@ Deno.test('with no token there is nothing to ask, and one sentence to say', () =
 })
 
 // ---- the plugin (T-34603) --------------------------------------------------
-// Analytics arrives through the HOST now (views.ts `viewsPlugin`): apps.ts
+// Analytics arrives through the host now (views.ts `viewsPlugin`): apps.ts
 // calls nothing here to count a page or to answer `/stats`. What is pinned is
 // that the door and the counter still land through the list — the two slots
 // this conversion exercises — and the tool and the page with them.

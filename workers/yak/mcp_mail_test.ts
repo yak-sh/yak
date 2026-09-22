@@ -48,7 +48,7 @@ slow("an app's letters, listed and sent through the connector", async () => {
 
     // And the app writes one of its own. The answer is the letter as applied,
     // leaving from the app's own address whatever the tool was handed, and
-    // addressed to an ENTITY rather than to a string.
+    // addressed to an entity rather than to a string.
     let [sent] = JSON.parse(
       await agent.tool('mail_send', {
         app: 'recipes',
@@ -89,7 +89,7 @@ slow("an app's letters, listed and sent through the connector", async () => {
     // What became of the one that went is a row on that same letter, written
     // back a moment after the tool answered — which is what makes mail_list
     // the way to read it, rather than the send's own reply. What the letter
-    // came to rest AS is mail_test.ts's; what is held here is that the tool's
+    // came to rest as is mail_test.ts's; what is held here is that the tool's
     // own answer names the letter that settled.
     let settled = await until(async () => {
       let [one] = JSON.parse(
@@ -99,7 +99,7 @@ slow("an app's letters, listed and sent through the connector", async () => {
     }, { timeout: 30_000, poll: 250, label: 'the letter to come to rest' })
     assertEquals(settled!.entity.eid, sent.entity.eid)
 
-    // A DRAFT — a letter kept and never asked for — is neither side: it did
+    // A draft — a letter kept and never asked for — is neither side: it did
     // not arrive and it has not gone. It is in the whole mailbox and in
     // neither half, which is what the two words mean.
     await agent.tool('graph_apply', {
@@ -127,7 +127,7 @@ slow("an app's letters, listed and sent through the connector", async () => {
     assertEquals(again.deliver!.to, sent.deliver!.to)
 
     // Only a member sends: the platform tier is the space's, and an app that
-    // anyone with the link may WRITE is still not an open relay (the letter
+    // anyone with the link may write is still not an open relay (the letter
     // leaves DKIM-signed as ours). A stranger's own agent is refused, and so
     // is an anonymous batch through the app's own page door — 403, whole, so
     // the letter is not written either.
@@ -173,7 +173,7 @@ slow("an app's letters, listed and sent through the connector", async () => {
 // The data an app comes with (seed.ts, T-34327). Owner, 2026-09-05: "so when
 // the app is first launced or installed, it comes with some initial data."
 // The whole of it: one batch out of a file and a folder, an alias resolving
-// across them, the app's OWN component seeded because the vocabulary is
+// across them, the app's own component seeded because the vocabulary is
 // planted first, a redeploy that writes nothing more, and files the web never
 // sees.
 slow(
@@ -206,7 +206,7 @@ slow(
           },
           // A folder as well, because the data can be large and an agent writes
           // it a call at a time — and the alias `seed.json` minted resolves
-          // here, which is what says the two are ONE batch.
+          // here, which is what says the two are one batch.
           {
             path: 'seed/01-notes.json',
             content: JSON.stringify([{
@@ -223,7 +223,7 @@ slow(
         out,
         'seeded 2 entities from seed.json, seed/01-notes.json',
       )
-      // The rows are there, wearing the app's own word — so the seed ran AFTER
+      // The rows are there, wearing the app's own word — so the seed ran after
       // the vocabulary was planted — and the comment points at the entity the
       // other file minted.
       let [soup] = JSON.parse(
@@ -251,8 +251,8 @@ slow(
       ) as { doc: { title: string } }[]
       assertEquals(all.map((r) => r.doc.title), ['Dal'])
 
-      // And the seed is the app's INSIDE, like vocab.json: deployed, never
-      // served (apps.ts MANIFEST).
+      // And the seed is the app's inside, like vocab.json: deployed, never
+      // served (apps.ts manifest).
       for (
         let path of ['/cookbook/seed.json', '/cookbook/seed/01-notes.json']
       ) {
@@ -270,7 +270,7 @@ slow(
         'Lentil soup',
       )
 
-      // And a SECOND person taking the app gets their own store seeded — which
+      // And a second person taking the app gets their own store seeded — which
       // is the other half of the ask: an app arrives furnished wherever it is
       // installed, and what he renamed to `Dal` is his and travels with neither.
       await agent.tool('app_publish', {

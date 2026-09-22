@@ -1,13 +1,13 @@
-// A store as a GRAPH (T-33814, T-33815): bundles in, bundles out, and one
+// A store as a graph (T-33814, T-33815): bundles in, bundles out, and one
 // filter line for a read. Every caller that reaches the meta space — the
 // directory part's door, sign-in, the platform's own crash reports, the
-// feedback tool, the invitation that mints a person — speaks THIS, and so does
-// every caller that writes the platform's own rows into an APP's store
+// feedback tool, the invitation that mints a person — speaks this, and so does
+// every caller that writes the platform's own rows into an app's store
 // (unseen.ts). None of them spells a store path or a mutation envelope.
 //
 // A bundle is `{entity: {eid}, comp: {...}}`, the read shape written back: an
 // omitted column is untouched, a null column is cleared, a null component is
-// dropped, and `tombstone: {}` is death. An eid the batch MINTS is a `$alias`,
+// dropped, and `tombstone: {}` is death. An eid the batch mints is a `$alias`,
 // and the applied bundle says what it became. A filter line is the dot-param
 // grammar @yaks/query parses — `.space.slug=ada&.doc?` — with values written
 // RAW: this door does the escaping, so no caller reaches for
@@ -16,7 +16,7 @@
 // `KERNEL` is the platform writing about its own data — a `plan`, a `meter`, a
 // `signin`, an `exception` — whose columns are server-owned and refused at the
 // ordinary door. It is never forwarded from anywhere a client can reach
-// (directory.ts VOUCH), so it cannot arrive from outside.
+// (directory.ts vouch), so it cannot arrive from outside.
 import type { Bundle } from '@yaks/graph'
 import { type Door, type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
 
@@ -65,7 +65,7 @@ export let minted = (applied: Bundle[]): Record<string, string> =>
     ),
   )
 
-// One door per binding, so the answer is the SAME object every time: what is
+// One door per binding, so the answer is the same object every time: what is
 // memoized on a door (the seed the directory part runs once, directory.ts) is
 // memoized per isolate, and a test that builds its own gets its own.
 let doors = new WeakMap<object, Meta>()
@@ -74,7 +74,7 @@ let doors = new WeakMap<object, Meta>()
  * object — which holds the namespace and no service binding — reaches the
  * directory the way the kernel does (meter.ts `metering`).
  *
- * The directory object ITSELF hands its jobs an env carrying `META`: a Durable
+ * The directory object itself hands its jobs an env carrying `META`: a Durable
  * Object shares one I/O context across every request in flight on it, so a
  * fetch to its own stub does not start a new chain but deepens the one it is
  * on, and a sweep that asks the directory once per space ran out of depth

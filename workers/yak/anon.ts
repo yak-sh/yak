@@ -6,7 +6,7 @@
 //
 // So the rule is the web's own. Anything a browser at an address would show
 // somebody who never signed in, this door shows too: the guide, the gallery of
-// published apps, and the DATA of one app whose pages anyone with the link can
+// published apps, and the data of one app whose pages anyone with the link can
 // read. Nothing else — no app of anybody's listed, no space named, no write.
 //
 // Two halves, and they are declared in different places on purpose:
@@ -47,7 +47,7 @@ export let openly = (t: { security?: Security[] }) =>
   !!t.security?.some((s) => s.type == 'noauth')
 
 /**
- * One tool a stranger is SHOWN and may not call (T-34465, T-34541).
+ * One tool a stranger is shown and may not call (T-34465, T-34541).
  *
  * Mixed auth is a menu, not a smaller restaurant: the host lists the whole
  * surface with nobody signed in, reads `securitySchemes` to see which tools
@@ -55,9 +55,9 @@ export let openly = (t: { security?: Security[] }) =>
  * of those (developers.openai.com/plugins/build/auth). Owner, 2026-09-06:
  * "mixed auth is documented and should work correctly. chatgpt will then
  * prompt auth on the first auth-required tool use." A list holding only what a
- * stranger may CALL is a connector that can never ask them to sign in.
+ * stranger may call is a connector that can never ask them to sign in.
  *
- * It is also what makes the roster FIXED: the same names in the same order for
+ * It is also what makes the roster fixed: the same names in the same order for
  * everybody, which is the only list a directory's snapshot can go on matching
  * (declared.ts). So a tool is never dropped for want of a token — it is listed
  * saying `oauth2`, and refused if called.
@@ -74,7 +74,7 @@ export let barred = (t: Tool, env: Host = {}): Tool => ({
 })
 
 /**
- * What a tool of THIS door declares about signing in, per tool: the pair for
+ * What a tool of this door declares about signing in, per tool: the pair for
  * anything a stranger may call, and `oauth2` for the rest. It is a function
  * because the generic tier's tools are the package's own — a read a stranger
  * makes needs no token and the write does — and a host reads this field to
@@ -85,7 +85,7 @@ export let asked = (t: { name: string }): Security[] =>
 
 // The generic tier's READS, which signed out answer for one named app. They
 // are pinned rather than read off a built door because the door checks a call
-// against this list BEFORE it builds anything — a tool nobody may call
+// against this list before it builds anything — a tool nobody may call
 // anonymously must meet the challenge, not a graph. @yaks/mcp `core` owns the
 // names; one it grows lands here in a diff rather than silently.
 export let READS = ['graph_query', 'graph_show', 'graph_schema', 'search']
@@ -128,8 +128,8 @@ let nameIt = (env: Host = {}) =>
 let said = (v: unknown) => typeof v == 'string' ? v.trim() : ''
 
 /**
- * The ONE app a signed-out read is scoped to, as the reach the graph is built
- * over. An app nobody may read without signing in is refused BY NAME — the
+ * The one app a signed-out read is scoped to, as the reach the graph is built
+ * over. An app nobody may read without signing in is refused by name — the
  * address already answers that way to a browser, so saying it plainly is what
  * lets the agent tell "not that app" from "not signed in".
  */

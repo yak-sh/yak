@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-// The DIRECTORY on the packages, end to end (T-33814): the meta space's store
+// The directory on the packages, end to end (T-33814): the meta space's store
 // is the same Store class every app runs on, woken at the name `yak/platform`
 // and so speaking the platform's own vocabulary — spaces, apps, members,
 // hostnames, deploys, sign-ins, meters — instead of an app's `vocab.json`.
@@ -190,14 +190,14 @@ Deno.test('a person is found by their address, or minted at it', async () => {
   assertEquals((row.email as { address: string }).address, 'ana@yaks.app')
 })
 
-// The platform's own admin (D-35373). It is SEEDED — a fresh kernel has one
+// The platform's own admin (D-35373). It is seeded — a fresh kernel has one
 // before anybody signs in — and a store holding half of it is completed rather
 // than left: production was seeded long before the admin existed, and on a
 // kernel where the admin signs in first, `personOf` mints its person straight
 // at the store and never a seat.
 let planted = async (before: Bundle[]) => {
   let p = platform()
-  // Written AROUND the door, so nothing is seeded by putting them there.
+  // Written around the door, so nothing is seeded by putting them there.
   if (before.length) await p.at.apply(before)
   await p.dir.apply({
     entities: [{
@@ -232,7 +232,7 @@ Deno.test('the platform seeds an admin person, and completes a half-seeded store
     { entity: { eid: '$who' }, person: {}, email: { address: ADMIN } },
   ])
   // The sign-in door asks for the person at that address and is answered the
-  // seeded row, so a session at the admin's address IS the admin.
+  // seeded row, so a session at the admin's address is the admin.
   assertEquals(
     await personOf(at, ADMIN),
     ((await at.query(`.email.address=${ADMIN}`))[0].entity as { eid: string })
@@ -402,7 +402,7 @@ Deno.test('the directory plants the platform, and not one app word', async () =>
     .toArray()
     .map((r) => String((r as { name: unknown }).name))
     .filter((n) => !n.startsWith('doc_fts') && !n.startsWith('sqlite_'))
-  // @yaks/member's DOCUMENT is not loaded here: the platform declares the two
+  // @yaks/member's document is not loaded here: the platform declares the two
   // rungs of its own ladder — `member`, with three seats instead of two, and
   // `grant`, one app rather than a space (T-37615) — and the kernel is the
   // directory's guard. An app's own mode is a word on its `app` row, so
@@ -438,7 +438,7 @@ Deno.test('the directory plants the platform, and not one app word', async () =>
 })
 
 // The one bundle the app half writes to its own store today, proving the
-// header that picks a vocabulary picks the OTHER one when the name is an app's.
+// header that picks a vocabulary picks the other one when the name is an app's.
 Deno.test('a store that is not the directory is still an app', async () => {
   let store = new Store(state())
   let no = await store.fetch(

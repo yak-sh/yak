@@ -100,7 +100,7 @@ Deno.test('an alias minted in one file is the batch the next one joins', async (
       comment: { target: '$here' },
     }]),
   ], apply)
-  // ONE batch, so `$here` resolves where `$soup` names it.
+  // One batch, so `$here` resolves where `$soup` names it.
   assertEquals(asked.length, 1)
   assertEquals(asked[0].check, false)
   assertEquals(asked[0].batch.length, 2)

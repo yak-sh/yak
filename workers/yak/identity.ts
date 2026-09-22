@@ -9,7 +9,7 @@
 // the mail seam (mail.ts);
 // `POST /login/code` spends it, finds or mints the person, and sets the
 // platform session cookie (src/token.ts). No password exists to lose. Those
-// two steps are the WHOLE of signing up (T-34236): give the address, prove it,
+// two steps are the whole of signing up (T-34236): give the address, prove it,
 // and land on your own space. The card asks nothing else — what a person is
 // called (T-32654) and the address their apps live at (T-32967) are set on the
 // space page's owner block, where they can see what they are naming, and at
@@ -24,10 +24,10 @@
 //
 // Or they follow a LINK (link.ts, T-34351). Every code letter carries one that
 // spends that same code, so a person reading it on a phone types nothing; and
-// `POST /login/link` mints a STANDING one, which signs its holder in until the
+// `POST /login/link` mints a standing one, which signs its holder in until the
 // expiry its minter set. That is the credential an app directory's reviewer is
 // given — OpenAI rejects anything behind a mailbox — and it is worth a session
-// and no more: it is minted BY the account it signs in, from a browser cookie
+// and no more: it is minted by the account it signs in, from a browser cookie
 // that is the longer-lived of the two, and `GET /login/link` lands whoever
 // follows it exactly where a spent code lands them.
 //
@@ -35,13 +35,13 @@
 // `@cloudflare/workers-oauth-provider`, which owns `/oauth/token`,
 // `/oauth/register`, and the two well-known metadata documents. Both ways a
 // connector can name itself are open: Client ID Metadata Documents, which
-// MCP's 2026-07-28 revision prefers — the client_id IS an https URL serving
+// MCP's 2026-07-28 revision prefers — the client_id is an https URL serving
 // its own metadata, which the provider fetches and validates — and dynamic
 // registration, kept for clients that only speak RFC 7591. CIMD needs the
 // `global_fetch_strictly_public` compatibility flag beside the option
 // (wrangler.toml), and the provider advertises
 // `client_id_metadata_document_supported` only when it has both. The consent
-// page is the sign-in page: signing in IS granting, and an already-signed-in
+// page is the sign-in page: signing in is granting, and an already-signed-in
 // browser gets one Allow button. The grant carries `{person}` as its props,
 // so a token resolves to the same eid a cookie does.
 //
@@ -51,7 +51,7 @@
 // `asking` opens it here — and it resolves to the same eid the other two do,
 // with a life of hours and a row that can be deleted to end it.
 //
-// Whether we CLAIM CIMD at all is the `CIMD` env var (`cimd` below), on
+// Whether we claim CIMD at all is the `CIMD` env var (`cimd` below), on
 // unless it says `off`. It works for both: Claude's hosted document signs a
 // person in through it (T-32465), and ChatGPT's — chatgpt.com/oauth/client.json,
 // a 404 when T-33027 looked and published since — renders our consent page
@@ -140,7 +140,7 @@ import { type Caller, minted } from './session.ts'
 type Props = { person: string }
 
 // Who is asking, and how they got in: session.ts's word, beside `Who`. Said
-// again here because this door is what MINTS one, and every caller of it
+// again here because this door is what mints one, and every caller of it
 // reads the type off this module.
 export type { Caller }
 
@@ -149,7 +149,7 @@ export type { Caller }
 // configuration `fetch` runs, so the two never disagree.
 let api = (env: Env) => getOAuthApi<Env>(opts(env), env)
 
-// Who is asking, and whether anybody TRIED: `who` is the caller — by session
+// Who is asking, and whether anybody tried: `who` is the caller — by session
 // cookie or by bearer token — and `tried` says a credential was presented at
 // all. They are two different answers and a lazy door needs both: a token that
 // expired, was revoked, or was minted for somebody else is not a caller, but
@@ -206,7 +206,7 @@ export let asking = async (
   }
 }
 
-// THE contract every other part reads (mcp.ts swaps its stub for this import):
+// The contract every other part reads (mcp.ts swaps its stub for this import):
 // who is asking, by session cookie or by bearer token, or nobody. It answers
 // an identity and never a permission — what a person may do in a space is
 // their membership (session.ts, directory.ts). A door that must refuse a
@@ -222,7 +222,7 @@ export let withAuth = async (
 // server. It is how an MCP client discovers the door at all, so it lives
 // here beside the door rather than in each resource.
 //
-// It is its own export because the challenge is said TWICE for one refusal:
+// It is its own export because the challenge is said twice for one refusal:
 // as this header, which is what an MCP client follows into the OAuth flow, and
 // inside the refused tool call's `_meta['mcp/www_authenticate']`, which is what
 // ChatGPT reads to draw its sign-in button (mcp.ts `refused`). One builder, so
@@ -234,9 +234,9 @@ export let challenge = (url: URL, env: Host = {}) =>
   }/.well-known/oauth-protected-resource${url.pathname}"`
 
 // Where signing in happens, and the sentence a refusal says about it. A
-// refusal is read by a person's agent, so it says a SENTENCE beside its code
+// refusal is read by a person's agent, so it says a sentence beside its code
 // and names where signing in happens — the treatment every other door already
-// had, and the one this one missed (C-32607 item 1, apps.ts SAYS). The address
+// had, and the one this one missed (C-32607 item 1, apps.ts says). The address
 // itself lives in route.ts, with the platform's other spellings of itself, and
 // is re-exported here because this is where the doors read it.
 export { SAYS, SIGN_IN } from './route.ts'
@@ -291,7 +291,7 @@ export let connections = (env: Env, person: string) => {
   }, person)
 }
 
-// Who is asking, out of the platform session COOKIE and nothing else. It is
+// Who is asking, out of the platform session cookie and nothing else. It is
 // deliberately not `withAuth` above, which also answers an agent's bearer:
 // the door below belongs to the signed-in web surface, and an agent that
 // cannot reach it cannot be talked into it (billing.ts `buyer` takes the same
@@ -306,7 +306,7 @@ let browser = async (env: Env, req: Request) => {
 // space is ever closed at — so a person, signed in, is the only caller who
 // ever reaches it.
 //
-// TWO ACTS, one door (T-34431). By default it puts the space in the TRASH:
+// Two acts, one door (T-34431). By default it puts the space in the trash:
 // nothing is erased, everything is kept for thirty days, and the owner takes
 // it back from the space's own address. `forever` is the other one, and the
 // only way to ask for it is a ticket the letter carried, because the kernel
@@ -314,7 +314,7 @@ let browser = async (env: Env, req: Request) => {
 // straight off the web is offered the act that can be taken back, and the one
 // that cannot is the one their assistant had to be asked for out loud.
 //
-// The GET only ever DRAWS. A mail client that fetches every link in a letter
+// The GET only ever draws. A mail client that fetches every link in a letter
 // before anyone reads it must not be able to delete a space by doing its job,
 // so the act is the POST and the page is what asks for it.
 //
@@ -343,14 +343,14 @@ let closing = async (
   // Fresh reads, every one: this is the one act that cannot be taken back, so
   // an app made a moment ago must not be missed because a 30-second read cache
   // had not heard of it — its store and its bytes would outlive the space and
-  // be inherited by whoever takes the address next (directory.ts FRESH,
+  // be inherited by whoever takes the address next (directory.ts fresh,
   // billing.ts reads the same way).
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
   let space = await dir.space(slug)
   if (!space || (await dir.role(space, person)) != 'owner') return lost(env)
   let d = await doomed(dir, space)
-  // The letter's ticket, if this visit carries one: minted for THIS space and
-  // THIS person, and dead after an hour (erase.ts). It stands in for typing
+  // The letter's ticket, if this visit carries one: minted for this space and
+  // this person, and dead after an hour (erase.ts). It stands in for typing
   // the name, because following a link out of a letter that named everything
   // about to go is the deliberate act the typing is there to be — and it is
   // what carries `forever`.
@@ -455,7 +455,7 @@ let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
 // properly, with the redirect a rename wants (T-32576). Answers the address
 // or a sentence, never both; the card renders whichever it gets.
 //
-// `at` names WHICH space, for the owner block on a space's own page, where
+// `at` names which space, for the owner block on a space's own page, where
 // the answer is the space being looked at rather than whichever one `own()`
 // calls theirs (apps.ts `saved`, T-34236). `/connect` names none and means
 // their own.
@@ -510,8 +510,8 @@ let secret = (env: Env) => {
 }
 
 // The custom-domain end of the handoff (index.ts routes HANDOFF here on a
-// foreign host, BEFORE `aimed` would carry it to the app): the person
-// authenticated on the platform and arrived with a one-time token bound to THIS
+// foreign host, before `aimed` would carry it to the app): the person
+// authenticated on the platform and arrived with a one-time token bound to this
 // host. `opener` (handoff.ts) verifies and spends it; on success we mint this
 // hostname's own host-only cookie — `domainOf` answers '' for a foreign host,
 // so the cookie sticks to it and no other — and send them on with the token
@@ -549,7 +549,7 @@ export let handoff = async (req: Request, env: Env): Promise<Response> => {
 //
 // `via` is how they proved it, when this visit proved anything — a code typed
 // or a link followed (link.ts). It is stamped on the person, one row, so it
-// says the LAST way in rather than a trail, which is the question a standing
+// says the last way in rather than a trail, which is the question a standing
 // link raises: has anybody used it at all. An already-signed-in browser lands
 // here too and names none, because nothing was proved.
 let landed = async (
@@ -562,7 +562,7 @@ let landed = async (
 ) => {
   let store = meta(env)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  // Signing in IS having a space (T-32482): theirs already, or minted here at
+  // Signing in is having a space (T-32482): theirs already, or minted here at
   // the front of their address — so no agent ever has to ask them for a name,
   // and the card asks nothing but the address and the code (T-34236). It is
   // also where they land when nothing else aims them (`backTo`).
@@ -581,7 +581,7 @@ let landed = async (
     }], KERNEL)
   }
   let set = await minted(req, env, secret(env), person)
-  // See Other: the code was POSTed, and where it sends them is a page to GET,
+  // See Other: the code was POSTed, and where it sends them is a page to get,
   // never that form again. A return on a customer's own hostname becomes a
   // HANDOFF (the platform cookie just set never rides there); anything else is
   // our own zone or the fallback, decided by `backTo`.
@@ -748,14 +748,14 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     return askEmail(null, back, undefined, undefined, undefined, env)
   }
 
-  // An address, and a code on its way to it. The platform reads NOTHING about
+  // An address, and a code on its way to it. The platform reads nothing about
   // the address here — not whether anyone has named it, not whether it has
   // spaces or apps or an account at all (T-34236 took the last of that away
   // with the card's second question): a stranger learns exactly what a letter
   // to somebody else's address teaches them, which is nothing.
   //
   // An address that has had its letters for the hour mints nothing (signin.ts
-  // SENDS) and this answers the card it always answers: same status, same
+  // sends) and this answers the card it always answers: same status, same
   // bytes. A refusal that showed would say that somebody had been asking about
   // this address, which is more than the door was ever willing to tell.
   if (path == '/login' && req.method == 'POST') {
@@ -767,14 +767,14 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // A deploy that cannot post a letter says so in one sentence, the way
     // sell.ts answers for a missing secret, rather than minting a code nobody
     // can receive and breaking on the send. Asked before `mint`, so the
-    // address spends none of its hour's letters (signin.ts SENDS) on it; and
+    // address spends none of its hour's letters (signin.ts sends) on it; and
     // the same card for every address, which is all this door ever tells.
     if (!mailable(env)) {
       return askEmail(field('q') || null, back, undefined, NO_MAIL, 503, env)
     }
     let code = await mint(meta(env), secret(env), email)
     if (code) {
-      // The letter carries the code AND the one click that spends it
+      // The letter carries the code and the one click that spends it
       // (link.ts): the same code said as a link, so it lasts the same ten
       // minutes and dies the moment either one is used. Somebody reading this
       // on a phone should not have to retype anything.
@@ -853,13 +853,13 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     )
   }
 
-  // A STANDING link, minted for whoever is signed in and for nobody else — the
+  // A standing link, minted for whoever is signed in and for nobody else — the
   // reviewer credential an app directory asks for, since it needs no mailbox
   // (T-34351). It grants nothing the request's own cookie does not already
   // carry, a session being the longer-lived credential of the two, and unlike
   // that cookie it can be taken back by name.
   //
-  // The COOKIE is the only credential it takes (`browser`): an agent holding a
+  // The cookie is the only credential it takes (`browser`): an agent holding a
   // bearer must not be able to turn API access into a browser session it could
   // mail anywhere, which is the line billing.ts takes for a purchase (C-33033).
   if (path == LINK && req.method == 'POST') {
@@ -969,7 +969,7 @@ let opts = (env: Env): OAuthProviderOptions<Env> => ({
   clientIdMetadataDocumentEnabled: cimd(env),
   // The owner, 2026-09-05: "the oauth should never expire". A connector is a
   // door a person opened, and it closes when they close it and not before —
-  // so the refresh token has NO expiry (the library's own spelling for never
+  // so the refresh token has no expiry (the library's own spelling for never
   // is an explicit `undefined`, which leaves the grant's KV row with no
   // expiration at all) and the access token lives a year, which is as near to
   // never as an integer TTL gets: the library will not take a value under a
@@ -999,7 +999,7 @@ let context = () => ({
   passThroughOnException: () => {},
 })
 
-// A secret a PUBLIC client was never issued, dropped before the provider sees
+// A secret a public client was never issued, dropped before the provider sees
 // it (T-34416). ChatGPT registers itself `token_endpoint_auth_method: none`
 // and then puts a `client_secret` in the token request anyway — an empty one
 // counts, the provider only asks whether the field is there — and the mismatch
@@ -1010,7 +1010,7 @@ let context = () => ({
 // check the presented one against; what protects its code is PKCE, which is
 // unchanged, and the check that just fired only compares two labels. So the
 // field is removed and the request goes on as the `none` it always was — and
-// ONLY for a client that registered `none`. A client that registered a secret
+// only for a client that registered `none`. A client that registered a secret
 // method still has to present the right one, which is the check that matters.
 //
 // Basic is the same mistake said in a header, and it takes the client_id with

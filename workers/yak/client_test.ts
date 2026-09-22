@@ -69,7 +69,7 @@ slow('the served client: a page saves, lists and watches', async () => {
     let mod = await import(`file://${dir}/client.js`)
     let store = mod.store(`${mine.origin}/recipes/api/`)
 
-    // Who is looking, asked BEFORE anything is asked of them (T-32679): the
+    // Who is looking, asked before anything is asked of them (T-32679): the
     // page shapes itself on load instead of learning from a refusal after
     // someone has typed (C-32675 items 5 and 6).
     let owner = await store.me()
@@ -110,7 +110,7 @@ slow('the served client: a page saves, lists and watches', async () => {
       1,
     )
 
-    // A search that names no component answers the WHOLE bundle, the way an
+    // A search that names no component answers the whole bundle, the way an
     // `id=` fetch does: a bare word names nothing to leave out, and a page
     // drawing cards from a search needs the app's own components (T-33144).
     // Name one and the ordinary rule is back.
@@ -150,13 +150,13 @@ slow('the served client: a page saves, lists and watches', async () => {
       await store.apply({ entity: { eid: cake }, doc: { title: 'Lime cake' } })
       await until(() => seen.length == 2, { timeout: 15_000 })
       assertEquals(titles(seen[1]), ['Lime cake'])
-      // A subscription is that query STILL ANSWERING, so it answers with the
+      // A subscription is that query still answering, so it answers with the
       // same rows: a doc written after subscribing arrives deep-equal to what
       // `query()` hands back for the same filter — its kind, its body, and no
       // eid inside a component. The live door used to stream the wire's raw
       // changes, so the first push wiped the words the first paint drew
       // (C-32624 item 2).
-      // `status` is READ, never written (the guide says so): wearing `task` at
+      // `status` is read, never written (the guide says so): wearing `task` at
       // all is what makes a row open, so the write is the bare component.
       await store.apply({
         doc: { title: 'Fig tart', body: 'six figs, honey' },
@@ -189,7 +189,7 @@ slow('the served client: a page saves, lists and watches', async () => {
       await wire.stop()
     }
 
-    // A byline, on the row: `created.by` names the writer AND says what this
+    // A byline, on the row: `created.by` names the writer and says what this
     // store calls them — the name they gave at sign-in — so a view that gets
     // one query still draws a name instead of "someone" (C-32730 item 5), and
     // two people on a page are told apart (C-32624 item 3). The guide's one
@@ -222,7 +222,7 @@ slow('the served client: a page saves, lists and watches', async () => {
     )
 
     // The precondition, at the page's own door (T-37614): a write that names
-    // what it was BASED on. Two readers of one value — two tabs, a tab and an
+    // what it was based on. Two readers of one value — two tabs, a tab and an
     // agent — each write it back, and the second one loses instead of winning
     // by being last. This is the duplicate reward the guide's store page
     // spells out.
@@ -282,7 +282,7 @@ slow('the served client: a page saves, lists and watches', async () => {
       Error,
       'work lanes',
     )
-    // A door that answers a PAGE — the platform's 404 — is not quoted at the
+    // A door that answers a page — the platform's 404 — is not quoted at the
     // person: the status and a short line of it, never the whole document
     // (C-32574 item 4, where a club saw the HTML in its error line).
     let dumped = await assertRejects(
@@ -301,8 +301,8 @@ slow('the served client: a page saves, lists and watches', async () => {
 })
 
 // Two things a page needs told once, both of them a path (C-32800 items 6
-// and 7): an app's pretty paths make a RELATIVE import wrong, and `store()`
-// takes an address that IS a path, since every app in a space shares one
+// and 7): an app's pretty paths make a relative import wrong, and `store()`
+// takes an address that is a path, since every app in a space shares one
 // hostname.
 slow('the client at a pretty path, and a sibling app by path', async () => {
   let k = await kernel()
@@ -310,9 +310,9 @@ slow('the client at a pretty path, and a sibling app by path', async () => {
   let them = await seed(k, [{ slug: 'nora', apps: ['reading', 'lending'] }])
   let mine = browser(k, 'nora.yaks.app', them.cookie)
   try {
-    // The page imports the client ABSOLUTELY, by the app's own slug, and is
+    // The page imports the client absolutely, by the app's own slug, and is
     // opened at an address that names no file — served the app's index.html
-    // (T-32769). A relative import would have resolved against THAT address.
+    // (T-32769). A relative import would have resolved against that address.
     let page = '<!doctype html><h1>Books</h1><script type="module">' +
       "import { query, store } from '/reading/api/client.js'</script>"
     await client(k, 'nora.yaks.app', 'reading', them.cookie)
@@ -330,7 +330,7 @@ slow('the client at a pretty path, and a sibling app by path', async () => {
     assertEquals(missed.status, 404)
     await missed.body?.cancel()
 
-    // The module as that page holds it: a page has an ORIGIN, which is what
+    // The module as that page holds it: a page has an origin, which is what
     // an address that is a path resolves against.
     let source = await (await k.at('nora.yaks.app', '/reading/api/client.js'))
       .text()
@@ -350,7 +350,7 @@ slow('the client at a pretty path, and a sibling app by path', async () => {
         (await lending.query('.doc!')).map((r: Row) => r.doc.title),
         ['Piranesi, lent'],
       )
-      // The doors hang UNDER that address, so a path that names the api
+      // The doors hang under that address, so a path that names the api
       // directory without the slash still means the directory.
       assertEquals((await mod.store('/lending/api').query('.doc!')).length, 1)
       // And the page's own app is a path like any other.

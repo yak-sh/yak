@@ -23,6 +23,6 @@ export let INCIDENTS = {
 // address the tasks server's inbound sweep pulls into `mail` entities aimed at
 // P-19 (src/inbound.ts `routeTo`, the address book's entry for the project),
 // which is what puts a letter in `task inbox` and on the comms bus. FROM is a
-// bot.yak.sh address, so the arrival is DKIM-aligned and grades VERIFIED —
+// bot.yak.sh address, so the arrival is DKIM-aligned and grades verified —
 // the sweep delivers nothing else to the bus.
 export let GRAPH = 'task@bot.yak.sh'

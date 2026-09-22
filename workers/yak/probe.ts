@@ -9,12 +9,12 @@
 // the process is its own session so `stop` takes workerd down with it, and
 // proves the port closed before it returns.
 //
-// `script` below boots workerd the same way for a THROWAWAY Worker that is
+// `script` below boots workerd the same way for a throwaway Worker that is
 // not the kernel at all — the modules an app's own script is made of, run in
 // the runtime that would run them.
 //
-// TWO ports, both allocated by the runtime: the server's and the inspector's.
-// Wrangler binds the inspector on a FIXED 9229 unless told otherwise, so both
+// Two ports, both allocated by the runtime: the server's and the inspector's.
+// Wrangler binds the inspector on a fixed 9229 unless told otherwise, so both
 // ask for port zero. Parallel probes neither share that default nor race over
 // a port selected and released before their child can bind it.
 import { fileURLToPath } from 'node:url'
@@ -94,7 +94,7 @@ export let kernel = async (vars: Record<string, string> = {}) => {
   let secret = crypto.randomUUID()
   let state = Deno.makeTempDirSync({ prefix: 'tasks-yak-' })
   let log = Deno.makeTempFileSync({ prefix: 'tasks-yak-', suffix: '.log' })
-  // The child writes the log ITSELF, both streams into the one file: the
+  // The child writes the log itself, both streams into the one file: the
   // shell's own redirect, `$0` the file and `"$@"` the command, so nothing
   // depends on this process pumping a pipe. Piping them here read empty —
   // which left the boot-failure label blank and every letter unreadable.
@@ -130,7 +130,7 @@ export let kernel = async (vars: Record<string, string> = {}) => {
       // Any extra vars a test asks for: a domain-verification token
       // (index.ts), or a kernel wearing CIMD=off (identity.ts).
       ...Object.entries(vars).flatMap(([k, v]) => ['--var', `${k}:${v}`]),
-      // The builder's workbench is a CONTAINER (wrangler.toml
+      // The builder's workbench is a container (wrangler.toml
       // `[[containers]]`, sandbox.ts), and `wrangler dev` builds its image
       // from the Dockerfile before it serves anything — which needs a
       // container engine. No probe here calls a sandbox tool, and a test
@@ -189,11 +189,11 @@ export let kernel = async (vars: Record<string, string> = {}) => {
 }
 
 /**
- * A THROWAWAY Worker under workerd — not the kernel: a directory of files, a
+ * A throwaway Worker under workerd — not the kernel: a directory of files, a
  * wrangler.toml naming the entry, `wrangler dev` on two runtime-allocated ports of its
  * own, and one `at(path)`.
  *
- * It is how a test runs code the platform would UPLOAD rather than serve. A
+ * It is how a test runs code the platform would upload rather than serve. A
  * dispatch namespace has no local implementation (dispatch.ts), so an app's
  * own script can otherwise only be asserted as a multipart body; this runs
  * the same module set in the same runtime, which is where a module that is
@@ -294,7 +294,7 @@ export let script = async (
 // the hostname a probe can only spell in `x-yak-host` (route.ts), and the
 // cookie that says who is asking — so a client module running under Deno
 // reaches an app's doors through here exactly as a page's would. The request
-// passes through whole, BYTES included: an upload is a body that is not text
+// passes through whole, bytes included: an upload is a body that is not text
 // (apps.ts `/api/blob`).
 export let browser = (k: Kernel, host: string, cookie?: string) => {
   let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
@@ -506,7 +506,7 @@ export let mailed = (k: Pick<Kernel, 'log'>, to: string, after = 0) =>
     { timeout: 20_000, poll: 100, label: `a letter for ${to}` },
   )
 
-// A letter INTO the kernel, at the door workerd keeps for exactly this: the
+// A letter into the kernel, at the door workerd keeps for exactly this: the
 // runtime's local email endpoint hands the body to `email()` as a message
 // (index.ts, inbox.ts). The envelope rides the query string — `from` and `to`
 // as the SMTP session gave them, which is why a message may be addressed at an
@@ -515,7 +515,7 @@ export let mailed = (k: Pick<Kernel, 'log'>, to: string, after = 0) =>
 //
 // The answer is the handler's: 200 where the letter landed, 400 carrying the
 // reason where it was rejected. A rejection only reaches the status because
-// index.ts AWAITS `setReject` — the message is an RPC stub, and a rejection
+// index.ts awaits `setReject` — the message is an RPC stub, and a rejection
 // that is not awaited lands after the answer is built.
 export let arrives = (
   k: Kernel,
@@ -542,7 +542,7 @@ export let rfc822 = (head: Record<string, string>, body: string) =>
 
 // A person signs in the way a browser does — an address, the code off the
 // log, the cookie back — and the kernel mints their person row and their own
-// space. The FIRST sign-in on a fresh kernel owns the meta space, which is
+// space. The first sign-in on a fresh kernel owns the meta space, which is
 // how any directory row comes to be written at all (identity.ts).
 // A person, signed in: the code card asks what to call them the first time
 // (T-32654), so `name` is what a probe answers it — left out, the front of
@@ -602,7 +602,7 @@ export let meta = (k: Kernel, cookie: string) => {
   }
 }
 
-// The two shapes a tool's WORDS carry, read back out of them. A tool answers
+// The two shapes a tool's words carry, read back out of them. A tool answers
 // bundles now, so what a probe used to pick off `structuredContent` is in the
 // prose — and every test that wants it wants it the same way.
 
@@ -702,7 +702,7 @@ export let seed = async (
 //
 // Stripe's v1 API is form-encoded POSTs to one base URL, and `STRIPE_API`
 // aims that base anywhere — so a probe can be Stripe for the length of a test.
-// What it is FOR is the two things only a runtime can answer: that the fields
+// What it is for is the two things only a runtime can answer: that the fields
 // the code builds actually go out on the wire in the shape Stripe's docs spell,
 // and that the whole route — tool to door to Stripe and back into the graph —
 // joins up. The seams are pinned in sell_test.ts and billing_test.ts, where
@@ -717,7 +717,7 @@ export type Call = { path: string; on: string; sent: URLSearchParams }
  * that", which comes back in the error shape billing.ts `said` reads.
  *
  * Every call is recorded in `calls`, in order, because the assertion that
- * matters is usually what was SENT: an `application_fee_amount` under the right
+ * matters is usually what was sent: an `application_fee_amount` under the right
  * key, a `Stripe-Account` on the right request.
  */
 export let stripe = (
@@ -751,8 +751,8 @@ export let stripe = (
 //
 // The three calls a domain makes — list by name, create, delete — over the
 // account API's `{success, errors, result}` envelope, kept in memory. A
-// hostname is answered ACTIVE, which is the state a domain reaches once the
-// person's record resolves; the words each step is READ by are held against
+// hostname is answered active, which is the state a domain reaches once the
+// person's record resolves; the words each step is read by are held against
 // recorded bytes in domains_test.ts, so what this is for is the other half:
 // that the tools attach, report and detach a domain end to end.
 export let hostnames = () => {
@@ -859,7 +859,7 @@ export type Packed = {
   content?: string | Uint8Array<ArrayBuffer>
   // Deflate the bytes rather than storing them.
   deflate?: boolean
-  // What the header SAYS, for a zip the door must refuse: a method it does not
+  // What the header says, for a zip the door must refuse: a method it does not
   // read, or the encrypted bit.
   method?: number
   flags?: number

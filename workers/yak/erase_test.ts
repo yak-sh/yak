@@ -106,7 +106,7 @@ Deno.test('a ticket opens one space for one person, for an hour', async () => {
   assertEquals(await ticketed('not a ticket', secret), null)
 })
 
-// WHICH act the link opens rides inside the signature (T-34431), so the only
+// Which act the link opens rides inside the signature (T-34431), so the only
 // way to reach the erase is a letter the platform sent: a link off the web,
 // or one somebody edited, opens the trash.
 Deno.test('a ticket carries whether it erases or trashes', async () => {
@@ -140,7 +140,7 @@ Deno.test('what a delete would destroy is named, not counted', () => {
   assertStringIncludes(l.body, 'It cannot be undone')
 })
 
-// What a TRASH says is a different list, not a softer wording of that one
+// What a trash says is a different list, not a softer wording of that one
 // (T-34431): every line names something that stops, and the last one is the
 // opposite of the last line above — the address is held, never released.
 Deno.test('a space in the trash is told what stops, not what is destroyed', () => {
@@ -233,7 +233,7 @@ Deno.test('the sweep takes the trash that is out of days, and nothing else', () 
   assertEquals(overdue(apps, then(0)).map((a) => a.eid), ['old'])
 })
 
-// A SPACE wears the same word and is counted out of the trash by the same
+// A space wears the same word and is counted out of the trash by the same
 // days (T-34431) — one selection, asked of whichever rows the sweep is
 // holding, because "thirty days ago" cannot be allowed to mean two things.
 Deno.test('a space out of days is taken the same way an app is', () => {
@@ -305,7 +305,7 @@ let wire = () => {
   }
 }
 
-// The two things a space keeps OUTSIDE the graph, and therefore outside the
+// The two things a space keeps outside the graph, and therefore outside the
 // cascade the directory tombstone sets off (T-34371): the builder's
 // conversation, in an object of its own keyed by the eid (build.ts), and the
 // container that conversation compiled in (sandbox.ts, same key). `/privacy`
@@ -356,7 +356,7 @@ slow('a space erased: the letter, the act, and the name back', async () => {
     assertEquals((await shop.get('.doc!')).length, 1)
     assertEquals((await k.at('shoplab.yaks.app', '/shop/')).status, 200)
 
-    // The AGENT asks. It deletes nothing: it mails the owner, and says so.
+    // The agent asks. It deletes nothing: it mails the owner, and says so.
     let said = await agent.tool('space_delete', {
       space: 'shoplab',
       forever: true,
@@ -434,7 +434,7 @@ slow('a space erased: the letter, the act, and the name back', async () => {
     assertEquals(await dir.query(`.member.space=${them.eids.shoplab}`), [])
 
     // Then the name, which is back in circulation: somebody else takes it,
-    // and what they get is EMPTY — no files under the address, and a store
+    // and what they get is empty — no files under the address, and a store
     // with none of the last space's rows in it. The store is named for the
     // address an app was born at (directory.ts storeName), so this is the
     // proof that matters for releasing a slug at all.
@@ -504,7 +504,7 @@ slow(
   },
 )
 
-// And the same sweep on the row above (T-34431): a SPACE out of days goes
+// And the same sweep on the row above (T-34431): a space out of days goes
 // whole, taking its apps and their bytes with it, while a space still inside
 // its thirty days is a space its person can still have back.
 slow(
@@ -572,7 +572,7 @@ slow('a space with a domain attached refuses to die quietly', async () => {
         stage: 'active',
       },
     }])
-    // The ERASE, which is the only act that gives a hostname back — the trash
+    // The erase, which is the only act that gives a hostname back — the trash
     // leaves every one of them exactly where it is. Its ticket is the one the
     // letter would have carried (erase.ts `ticket`), minted here rather than
     // waited for, since what is under test is the act and not the letter.

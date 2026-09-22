@@ -30,8 +30,8 @@ Deno.test('globs: a list of path globs, handed back', () => {
   ])
 })
 
-// Each refusal names the glob AND the rule, because the agent reading it has
-// no other source (vocab.ts TEACH, same reason).
+// Each refusal names the glob and the rule, because the agent reading it has
+// no other source (vocab.ts teach, same reason).
 Deno.test('globs: refuses what is not a path glob', () => {
   assertEquals(
     assertThrows(() => globs('/recipes/*', KERNELS), Error).message,
@@ -51,7 +51,7 @@ Deno.test('globs: refuses what is not a path glob', () => {
   )
 })
 
-// The platform's own paths, from both directions: a glob that NAMES one, and a
+// The platform's own paths, from both directions: a glob that names one, and a
 // glob wide enough to swallow one.
 Deno.test('globs: refuses a glob that names a platform path', () => {
   let refused = (glob: string) =>
@@ -88,7 +88,7 @@ Deno.test('globs: refuses a glob that names a platform path', () => {
   )
 })
 
-// A glob that merely CONTAINS a platform path is fine: the kernel answers rung
+// A glob that merely contains a platform path is fine: the kernel answers rung
 // 1 before it ever consults the home app, so `/recipes/*` never sees
 // `/recipes/api/query`.
 Deno.test('globs: a glob under an app is not a platform path', () => {

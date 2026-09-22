@@ -1,6 +1,6 @@
 // The data an app comes with (T-34327). A `seed.json` beside index.html, or a
 // `seed/` folder of `*.json` files, each holding a list of bundles in the wire
-// shape `graph_apply` takes. A release applies them to the app's store ONCE —
+// shape `graph_apply` takes. A release applies them to the app's store once —
 // on the first deploy that finds them, and again in the space an `app_install`
 // copies the app into — so a person opening a new app finds it furnished
 // instead of blank, and a redeploy never writes over what they changed since.
@@ -9,16 +9,16 @@
 // is a YAML file, so a seed already written stays a seed and `.yml` is simply
 // the spelling that is also legible.
 //
-// A FOLDER as well as a file, because the data is the large thing here. Owner,
+// A folder as well as a file, because the data is the large thing here. Owner,
 // 2026-09-05: "i noticed the agent was struggling with the very large seed data
 // json it was making for its custom loader. so if the seed data could be a
 // seed.json file or a seed/*.json folder, that might help." An agent writes it
 // a call at a time and the pieces are one batch: filename order, applied
-// atomically, aliases resolving ACROSS files, so a bundle in
+// atomically, aliases resolving across files, so a bundle in
 // `seed/02-menu.json` may point at an entity `seed/01-places.json` minted.
 //
-// The files are the app's INSIDE, like vocab.json and tools.json: deployed,
-// never served to the web (apps.ts MANIFEST).
+// The files are the app's inside, like vocab.json and tools.json: deployed,
+// never served to the web (apps.ts manifest).
 //
 // The reading is the seed's only where `seedy` and the once-only mark are. The
 // rest — the order, the aliases across files, the file a refusal is blamed on —
@@ -35,7 +35,7 @@ import { type Sheet, sheet } from './csv.ts'
  * JSON, which YAML reads anyway, and a spreadsheet (csv.ts). */
 let DATA = ['.yml', '.json', '.csv']
 
-/** The bundle spellings, for the file BESIDE index.html. A `.csv` is not one:
+/** The bundle spellings, for the file beside index.html. A `.csv` is not one:
  * a spreadsheet needs to be told which component a row is, which only a load
  * that names it can say. */
 let BUNDLES = ['.yml', '.json']
@@ -71,7 +71,7 @@ let SHAPE = 'a seed file is a list of bundles — ' +
   '[{"entity": {"eid": "$a"}, "doc": {"title": "…"}}] as JSON, or the same ' +
   'list written as YAML'
 
-// One file's bundles, refused in the FILE's own name: an agent that wrote ten
+// One file's bundles, refused in the file's own name: an agent that wrote ten
 // of them needs to know which one it mistyped, and the parser is the only place
 // that still knows.
 let bundles = (file: string, text: string): Bundle[] => {
@@ -110,27 +110,27 @@ export let loaded = (files: Text[], as?: Sheet): Sown[] =>
           .map((bundle, index) => ({ file: f.path, index, bundle }))
     )
 
-/** Every bundle an app's SEED holds — the seed files among its own, read as
+/** Every bundle an app's seed holds — the seed files among its own, read as
  * one. */
 export let sown = (files: Text[]): Sown[] =>
   loaded(files.filter((f) => seedy(f.path)))
 
 /** The door a seed is written through: a batch in, the refusal's own sentence
- * out, or null when the store took it. `check` asks only whether it WOULD —
+ * out, or null when the store took it. `check` asks only whether it would —
  * every phase runs and the transaction rolls back. */
 export type Applying = (
   batch: Bundle[],
   check: boolean,
 ) => Promise<string | null>
 
-// WHICH bundle the store refused. The refusal names the word that was wrong,
-// never the entry that carried it, so the batch is asked again as PREFIXES —
+// Which bundle the store refused. The refusal names the word that was wrong,
+// never the entry that carried it, so the batch is asked again as prefixes —
 // `?check=1`, which writes nothing — and the shortest prefix refused in the
 // same words ends at the bundle that caused it. Binary search, because a seed
 // is exactly the large thing this feature exists for and a bundle-at-a-time
 // walk of ten thousand of them is ten thousand round trips.
 //
-// A bundle that names an alias a LATER one mints reads as a refusal of its own
+// A bundle that names an alias a later one mints reads as a refusal of its own
 // until that one is in the prefix, so blame lands on the later of the two.
 // Rare, and the sentence is right either way; the whole batch refusing is what
 // is being explained.

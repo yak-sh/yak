@@ -1,4 +1,4 @@
-// Deleting, and taking it back. An APP and a SPACE go to the same 30-day
+// Deleting, and taking it back. An app and a space go to the same 30-day
 // trash (T-34430, T-34431, the bottom of this file) and are erased by the
 // same daily sweep; a space still dies behind a link in a letter (T-33166,
 // everything above it), because it is the owner's act and never an agent's,
@@ -13,29 +13,29 @@
 // behind that sentence — nor any way to give a slug back, which a space made
 // by mistake took out of circulation for good.
 //
-// WHO MAY. Two callers reach a space, and they are not the same (T-33070).
-// A PERSON signed in on the web deletes directly: the door reads the platform
+// Who may. Two callers reach a space, and they are not the same (T-33070).
+// A person signed in on the web deletes directly: the door reads the platform
 // session cookie only (identity.ts `/space/<slug>/delete`, the shape
 // billing.ts's checkout established), so an agent holding a bearer token
 // cannot reach it at all, and the person types the slug back before anything
-// happens. An AGENT deletes nothing: `space_delete` (tools.ts) mails the
+// happens. An agent deletes nothing: `space_delete` (tools.ts) mails the
 // owner a link to that same door and answers saying so. The letter is the
-// second channel an agent has no way into, and it NAMES what is about to go —
+// second channel an agent has no way into, and it names what is about to go —
 // the apps, the domains, the people — because whoever reads it may not be
 // whoever asked.
 //
 // The ticket the letter carries is a `seal` (src/token.ts): the space, the
 // person, and the hour it dies, signed under the session secret, kept nowhere.
-// Single-use is what it AUTHORIZES rather than a row somewhere: the one act
+// Single-use is what it authorizes rather than a row somewhere: the one act
 // it opens can happen once, and a second visit finds a space that is gone. It
-// also carries WHICH act — the trash, or `forever` — so the page a person
+// also carries which act — the trash, or `forever` — so the page a person
 // reads and the thing the button does are the one the agent asked for.
 //
-// THE SLUG COMES BACK. Owner, 2026-09-03: "i'd release the names." So the
+// The slug comes back. Owner, 2026-09-03: "i'd release the names." So the
 // space row goes and its slug is free the moment it does — no cooling-off
 // period, deliberately. A held name is a name nobody may have, including the
 // person who deleted by mistake and wants it straight back; and a hold only
-// DELAYS the cost it is meant to prevent, since a link someone was given
+// delays the cost it is meant to prevent, since a link someone was given
 // resolves to a stranger's space after the hold exactly as it would without
 // one. What makes reuse safe is that nothing survives the name: an app's
 // store is named for the address it was born at (directory.ts `storeName`)
@@ -43,12 +43,12 @@
 // here — the next space at this slug wakes up in an empty graph with an empty
 // prefix, never in the last one's.
 //
-// The thirty days a TRASHED space holds its name are not a cooling-off period
+// The thirty days a trashed space holds its name are not a cooling-off period
 // against that: the space is still there, whole, and the name is held for the
 // same reason a trashed app's is — a second space at the address is the one
 // thing a restore could not put back.
 //
-// ORDER: everything OUTSIDE the directory first — the custom hostnames at
+// Order: everything outside the directory first — the custom hostnames at
 // Cloudflare, the app scripts in the dispatch namespace, the stores, the
 // bytes, the builder's conversation and the workbench it ran commands in
 // (T-34371) — and the row that says the space exists last, because that row is
@@ -90,7 +90,7 @@ import { moved, own, type Pinner, pruned } from './versions.ts'
 export let LIFE = 60 * 60_000
 
 // What the letter carries: the space, the person it was mailed to, the second
-// it dies, and whether the button under it TRASHES or erases. The kernel signs
+// it dies, and whether the button under it trashes or erases. The kernel signs
 // it; nobody else can mint one — so `forever` cannot be talked onto a link,
 // which is the whole reason it rides in here rather than in the query string.
 export type Ticket = {
@@ -203,9 +203,9 @@ export let naming = (d: Doomed, env: HostEnv = {}): string[] => [
   'somebody else may take it later — any link to it stops being yours',
 ]
 
-// The same census said as what a TRASH does, which is a different list and
+// The same census said as what a trash does, which is a different list and
 // not a softer wording of that one: nothing here is destroyed, so every line
-// says what STOPS rather than what goes, and the last line is the opposite of
+// says what stops rather than what goes, and the last line is the opposite of
 // the last line above — the address is held, not released.
 export let keeping = (d: Doomed, env: HostEnv = {}): string[] => [
   ...d.apps.map((app) =>
@@ -226,7 +226,7 @@ export let keeping = (d: Doomed, env: HostEnv = {}): string[] => [
   'restore the space',
 ]
 
-// The letter an agent's ask sends, and the ONE letter the platform never
+// The letter an agent's ask sends, and the one letter the platform never
 // counts against a space's month (usage.ts `sending`): refusing to send it
 // would lock a person inside a space they are trying to close, and a person
 // deleting a space is a person we are about to stop billing anyway.
@@ -274,7 +274,7 @@ let swept = async (env: Env, prefix: string) => {
 let under = (space: Space, app?: App) =>
   `${space.slug}/${app ? `${app.slug}/` : ''}`
 
-// One app's STORAGE emptied — its bytes, the worker script that answers for
+// One app's storage emptied — its bytes, the worker script that answers for
 // it, and the store that holds what it saved. Everything but the row, which
 // is the caller's to bury: app_delete tombstones the app, and a space's death
 // cascades to it. Answers the keys that went, so the caller can say how many
@@ -370,21 +370,21 @@ export let went = (
 //
 // Jeff, 2026-09-05: "can deleted apps be brought back if done by mistake?" —
 // "there should be a grace period. like a 30 day trash". So `app_delete`
-// keeps everything and writes ONE word on the app row (vocab.ts `trashed`),
+// keeps everything and writes one word on the app row (vocab.ts `trashed`),
 // and every reader of an app asks it: the web serves nothing, the roster
 // drops its tools and views, the front page is not it, and its mail bounces.
 // Nothing is copied anywhere and nothing is moved — which is what makes
 // `app_restore` exact rather than approximate.
 //
-// A SPACE wears the same word one row up (T-34431), and the readers that ask
+// A space wears the same word one row up (T-34431), and the readers that ask
 // an app ask its space first: every hostname of a trashed space answers the
 // platform's 404, every app in it leaves every roster at once, its mail
 // bounces and its slug is held. One mark rather than a mark per app, because
 // a restore has to put the space back exactly as it was — including which of
 // its apps were already in the trash of their own.
 //
-// The SLUG is held with it, deliberately, and that is the one place this
-// disagrees with a space's DEATH above ("i'd release the names"): a name
+// The slug is held with it, deliberately, and that is the one place this
+// disagrees with a space's death above ("i'd release the names"): a name
 // comes straight back from an erase because nothing survives it, where
 // something in the trash is still here in every other way, and a second app
 // or space born at its address would be the thing a restore could not undo.
@@ -398,21 +398,21 @@ export let GRACE = 30 * 24 * 60 * 60_000
 export let daysLeft = (t: Trashed, now = Date.now()) =>
   Math.max(0, Math.ceil((Date.parse(t.at) + GRACE - now) / 86_400_000))
 
-// Whether the trash has run out. A mark with no readable `at` is DUE —
+// Whether the trash has run out. A mark with no readable `at` is due —
 // something nothing can count the days of cannot be kept forever on a null.
 export let due = (t: Trashed, now = Date.now()) =>
   !(Date.parse(t.at) + GRACE > now)
 
 // What the sweep takes: the rows in the trash whose days have run out, and
 // nothing else. Apps or spaces, since both wear the one word — the whole of
-// the selection, as one pure answer, because what a sweep DELETES is the part
+// the selection, as one pure answer, because what a sweep deletes is the part
 // worth holding to a test.
 export let overdue = <T extends { trashed: Trashed | null }>(
   rows: T[],
   now = Date.now(),
 ) => rows.filter((r) => r.trashed && due(r.trashed, now))
 
-// What an app's coming or going does to everyone's RESOURCE list (T-33004): a
+// What an app's coming or going does to everyone's resource list (T-33004): a
 // trashed app's views leave it and a restored one's rejoin it, so both ask the
 // same question of its store — did any command of its own draw in a page — and
 // the space is told only when one did.
@@ -432,7 +432,7 @@ export let rostered = async (
   }
 }
 
-// The word on, or off. `trashed: {}` is the ASK, and the store dates it and
+// The word on, or off. `trashed: {}` is the ask, and the store dates it and
 // signs it (trash.ts, the `trashed` rule) the way it dates a birth — so a
 // caller never carries a clock. `trashed: null` drops the whole component,
 // which is the whole of a restore — every other word the row wears was never
@@ -459,7 +459,7 @@ export let trash = async (
 
 // And out of it. Both doors call this, the tool and the space page's form.
 // `untrash` rather than `restore` because versions.ts already owns that word
-// for putting an app's FILES back, and these are two different acts on the
+// for putting an app's files back, and these are two different acts on the
 // same app.
 export let untrash = async (
   env: Env,
@@ -475,7 +475,7 @@ export let untrash = async (
 // Everyone in the space, told their reach moved (declared.ts, T-33004) — the
 // same news being added to or removed from a space makes, because that is
 // exactly what happened to them: every view every app here declared appeared
-// or went. Not `rostered`, which asks ONE app's store what it declares: the
+// or went. Not `rostered`, which asks one app's store what it declares: the
 // whole space went, so nothing is asked and everybody is told.
 let reachMoved = async (env: Env, dir: Directory, space: Space) => {
   for (let person of await dir.members(space)) await reachChanged(env, person)
@@ -546,7 +546,7 @@ export { DAILY } from './trash.ts'
 // The daily sweep (trash.ts's wake and effect rule):
 // every app and every space whose thirty days have run out, erased. It walks
 // the platform because the promise is the platform's, not a space's — and it
-// erases AS the person who threw the thing away, since the delete is what it
+// erases as the person who threw the thing away, since the delete is what it
 // is finishing.
 //
 // A space out of days takes its apps with it and is not walked for them: the
@@ -559,7 +559,7 @@ export let collected = async (env: Env, now = new Date()) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let gone = 0
   // Every app left standing when the erasures are done, which is exactly the
-  // set of things that can NAME a pinned blob. It is collected rather than
+  // set of things that can name a pinned blob. It is collected rather than
   // acted on app by app because the pins are one key space for the whole bucket
   // now (versions.ts `pruned`, D-34942): an object one app stopped naming may
   // be a file another app serves. A trashed app inside its thirty days is in

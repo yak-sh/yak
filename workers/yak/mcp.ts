@@ -6,7 +6,7 @@
 // `notifications/resources/list_changed` when the pages an app's commands draw
 // in move (T-33004), and the three lists when the platform is released.
 //
-// THE PROTOCOL IS THE PACKAGE'S (T-33812). @yaks/mcp implements all of it —
+// The protocol is the package's (T-33812). @yaks/mcp implements all of it —
 // initialize, ping, tools, resources, prompts — over the graph and the
 // `Authenticate` it is given, exactly as the Store's own MCP endpoint does
 // (graph.ts `door`). Two tiers of tools are listed on that one server:
@@ -20,9 +20,9 @@
 //                      plugin's tools (agent.ts `platform`) rather than read
 //                      from a table here
 //
-// THE TOOL LIST IS FIXED (T-34541): the same names, in the same order, for
+// The tool list is fixed (T-34541): the same names, in the same order, for
 // every caller — anonymous, signed in, one app or thirty. What an app of the
-// person's own declares is not a tool but a COMMAND (declared.ts), listed by
+// person's own declares is not a tool but a command (declared.ts), listed by
 // `commands` and run by `command`, because a directory snapshots this list
 // when a connector is submitted and serves that snapshot forever: a per-caller
 // name in it is a name the published connector can never match. Nothing is
@@ -43,7 +43,7 @@
 // Who is asking is identity.ts's `asking`: the platform session cookie a
 // browser carries, or the OAuth bearer an agent carries, one answer either
 // way — and beside it whether a credential was offered at all, because the two
-// refusals differ. It is deliberately NOT the vouched `x-yak-person` header —
+// refusals differ. It is deliberately not the vouched `x-yak-person` header —
 // the platform sets that header on the request it hands an app, and this code
 // is at the apex reading a request straight off the internet, where the header
 // is only ever a client's claim about itself. A 401 carries identity's
@@ -59,17 +59,17 @@
 // person, no `Ctx`, nothing to read anybody's data with. Everything else a
 // stranger may call comes from `stranger` below: the same @yaks/mcp server the
 // signed-in path mounts, over a graph with nobody in it. What a stranger may
-// CALL is the tools that declare they need nobody (anon.ts `openly`) and the
-// generic READS scoped to the ONE public or open app the call names;
+// call is the tools that declare they need nobody (anon.ts `openly`) and the
+// generic READS scoped to the one public or open app the call names;
 // everything else on the list meets the same challenge as ever.
 //
-// MIXED AUTH is what that adds up to, and it is the path (T-34465): a stranger
-// is answered, is SHOWN the whole tool list with `securitySchemes` marking
+// Mixed auth is what that adds up to, and it is the path (T-34465): a stranger
+// is answered, is shown the whole tool list with `securitySchemes` marking
 // which tools want a token (anon.ts `asked`, `barred`), and is met with the
 // challenge the moment one of those is called — which is the sequence OpenAI
 // documents and ChatGPT follows (developers.openai.com/plugins/build/auth).
 // The half that used to be missing was the menu: a list holding only what a
-// stranger may call gives the client nothing to offer a sign-in FOR — and,
+// stranger may call gives the client nothing to offer a sign-in for — and,
 // since a directory scans a mixed-auth server with no token, it is also the
 // list the published connector gets forever.
 //
@@ -117,7 +117,7 @@ let result = (id: unknown, result: unknown) =>
 
 // A refusal sent to a caller that named a JSON-RPC id. The status and the
 // `WWW-Authenticate` header are what they always were — the half every MCP
-// client follows into the OAuth flow — and the body carries the SAME challenge
+// client follows into the OAuth flow — and the body carries the same challenge
 // a second way, in `_meta['mcp/www_authenticate']` with the `error` and
 // `error_description` that half wants, because that is the half ChatGPT reads
 // to draw its sign-in button. Without it the tool it refused has no link to
@@ -147,7 +147,7 @@ let refused = (req: Request, id: unknown, env: Env) => {
 // The resources are the guide and its deep pages, which anybody may read, and
 // the pages an app declares (declared.ts, T-32687), which only someone who can
 // reach that app is told about. The platform contributes none of its own. The
-// prompts are the ones a PERSON picks by name (prompts.ts, T-32981).
+// prompts are the ones a person picks by name (prompts.ts, T-32981).
 let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
   for (let doc of docs(ctx.env)) {
     server.registerResource(doc.name, doc.uri, {
@@ -209,7 +209,7 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
     }))
   }
   // And one per app that keeps notes beside it (standing.ts, T-34425),
-  // offered to the PERSON under the app's own name so they can ask for "the
+  // offered to the person under the app's own name so they can ask for "the
   // recipes notes" and have them read back. It takes no arguments — the file
   // is the whole message — and `prompts` is already a declared capability,
   // since the four above registered it.
@@ -237,13 +237,13 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
 // tier's argument names changed when those tools became @yaks/mcp's (T-33812)
 // — `entities` is now `change`, `filter` and `query` are `q`, `text` is
 // `words` — and a connector configured against the old names is somebody's,
-// already installed. So the argument names are translated HERE, as the request
+// already installed. So the argument names are translated here, as the request
 // arrives, and the tool sees one shape.
 //
-// The `app`/`space` pair that named ONE app moves too: on a write it becomes
+// The `app`/`space` pair that named one app moves too: on a write it becomes
 // `$app` on each bundle, on a read the `.in=` prefix on the filter — both the
 // platform's own forms, each written where the thing it is about is
-// (agent.ts). Signed out it moves nowhere: the pair IS the call's scope there,
+// (agent.ts). Signed out it moves nowhere: the pair is the call's scope there,
 // read off the arguments before any graph exists (anon.ts `opened`), so
 // `scoped` tells us whether this caller has a reach for an app to be narrowed
 // out of.
@@ -276,7 +276,7 @@ let heard = (
     )
   }
   // Signed out, the pair stays exactly where the caller put it: it is the
-  // call's own scope there, declared on the tool (anon.ts SCOPE) and read
+  // call's own scope there, declared on the tool (anon.ts scope) and read
   // here, not a narrowing of a reach nobody has.
   if (!scoped) return out
   let { app, space, ...rest } = out
@@ -304,24 +304,24 @@ let markOf = (env: Env) => env.CF_VERSION_METADATA?.id ?? VERSION
 // as a plugin, and the same `Authenticate` callback every other way into this
 // data uses — here it has already run, so it returns what the edge decided.
 //
-// It returns the handler and the TOOL LIST it is about to serve (T-34277): the
+// It returns the handler and the tool list it is about to serve (T-34277): the
 // tool names, and the version naming them, which `initialize` records for this
 // session and every later call is compared against.
 let door = async (ctx: Ctx, session: string) => {
   // Each read made before any tool runs is a named stage on the call's
-  // `Server-Timing` (timing.ts): this runs on EVERY call, so what it costs is
+  // `Server-Timing` (timing.ts): this runs on every call, so what it costs is
   // the floor under every write (T-34986).
   let c = ctx.clock ?? clock()
   let reach = await c.time('reach', () => inReach(ctx, {}))
-  // The COMMANDS the apps in reach declare (declared.ts). They are not tools
+  // The commands the apps in reach declare (declared.ts). They are not tools
   // and never appear in the tool list; they are read here so the instructions
   // can name them under their app, and `commands` lists them again with their
   // arguments when an agent asks.
   // What the apps in reach report about themselves (standing.ts, T-34425):
   // every one of them named, with what it holds and its own commands. That
-  // list is carried in the INSTRUCTIONS, which is what a model reads before it
+  // list is carried in the instructions, which is what a model reads before it
   // reads anything else, so an app already made is found rather than made a
-  // second time. What an app's owner WROTE beside it, and what they have said
+  // second time. What an app's owner wrote beside it, and what they have said
   // in this space, is `about`'s answer instead (T-34632): an MCP client treats
   // the instructions and the tool list as the platform's own, and somebody
   // else's prose there reads as an attempt to steer the model rather than as
@@ -333,7 +333,7 @@ let door = async (ctx: Ctx, session: string) => {
   // the tool list are derived through it, so they describe what this server
   // actually accepts and returns.
   //
-  // The two are read AT ONCE, over the reach just paid for: each is its own
+  // The two are read at once, over the reach just paid for: each is its own
   // fan-out across the apps, and what both need — a store's vocabulary — is
   // read once per request (tool.ts `once`). The commands are not listed here
   // any more: the instructions name them from each app's declaration as it is
@@ -346,15 +346,15 @@ let door = async (ctx: Ctx, session: string) => {
   ctx.standing = apps.notes
   let opts = {
     graph,
-    // Where the CALL about to be served is recorded (ledger.ts): its own
+    // Where the call about to be served is recorded (ledger.ts): its own
     // in-memory graph, because the one above is a composition over other
     // people's stores and a question is not their data.
     calls: ledger(graph),
     column,
-    // A READ's schema is left at column names here, while the write tools are
+    // A read's schema is left at column names here, while the write tools are
     // typed in full (@yaks/mcp, T-34153). Measured over a space of three apps:
     // the typed write tools cost 9 KB of tool list, and typing the four read
-    // schemas as well costs 33 KB more. The types are what a WRITE needs — a
+    // schemas as well costs 33 KB more. The types are what a write needs — a
     // read hands over the values themselves — and this connector's vocabulary
     // is a union of every store in reach, so those 33 KB are the least exact
     // part of it, paid on every connection.
@@ -367,7 +367,7 @@ let door = async (ctx: Ctx, session: string) => {
     undo: UNDO,
     authenticate: () => ({ by: ctx.person }),
     // The name, the one-line description and the picture, from the one place
-    // they are written (seo.ts CONNECTOR, T-34415): a client that reads
+    // they are written (seo.ts connector, T-34415): a client that reads
     // `serverInfo` shows this connector with a face, and nobody has to type
     // any of it into a form.
     ...connector(ctx.env),
@@ -380,7 +380,7 @@ let door = async (ctx: Ctx, session: string) => {
     // works either way declares that itself and keeps it (tools.ts
     // `security: EITHER`) — which is every tool a stranger may call except the
     // generic reads, and those are anonymous only on the anonymous server
-    // below, where they read ONE named app rather than the whole of somebody's
+    // below, where they read one named app rather than the whole of somebody's
     // reach.
     security: SIGNIN,
     extend: (server: McpServer) =>
@@ -390,7 +390,7 @@ let door = async (ctx: Ctx, session: string) => {
   // `about` returns both (tools.ts), so a client that suspects its list is old
   // has one call that settles it without reconnecting.
   //
-  // A RELEASE is the only thing that changes that version (T-34541). Nothing a
+  // A release is the only thing that changes that version (T-34541). Nothing a
   // person does moves this list any more: an app made, an app that grew a
   // component, a deploy that declared a command — all of those are commands
   // and components, and the tools that carry them are the same tools they
@@ -424,19 +424,19 @@ let erred = (id: unknown, err: unknown) =>
   })
 
 // The server for a caller who has not signed in (anon.ts, T-34467). It is the
-// same @yaks/mcp server, over a graph with NOBODY in it:
+// same @yaks/mcp server, over a graph with nobody in it:
 //
 //   the platform's tools that declare they need nobody — about, the guide,
 //   the gallery and feedback (tools.ts `security: EITHER`);
 //   the generic READS, scoped to the one public or open app the call names,
 //   which read that app's store exactly as its own page does;
-//   and the WHOLE of the rest of the tool list beside them — the write, the
+//   and the whole of the rest of the tool list beside them — the write, the
 //   mail pair, every platform tool — listed as requiring `oauth2` and refusing
 //   the call (anon.ts `barred`, `asked`), so the client has something to offer
 //   the sign-in for and the list is the same one a signed-in caller sees.
 //
 // Claim-later — a stranger writing now and owning it once they sign in — is
-// what would be built HERE, and is deliberately not: it needs somewhere to
+// what would be built here, and is deliberately not: it needs somewhere to
 // hold a write nobody owns yet, and there is nowhere on this platform to put
 // one. Signing in first is the whole of it for now.
 //
@@ -461,7 +461,7 @@ let stranger = async (
     // (directory.ts `member`, agent.ts `platform`).
     person: '',
   }
-  // The app a READ answers for, resolved before anything is built — so a call
+  // The app a read answers for, resolved before anything is built — so a call
   // that named none, or named one nobody may read, is refused with a message
   // rather than with an empty answer. Listing the tools names no app and needs
   // none: the schemas are the same whichever app is read.
@@ -485,7 +485,7 @@ let stranger = async (
     // Every tool, and what each one declares about signing in (anon.ts
     // `asked`): `EITHER`, both schemes, for what a stranger may call, `oauth2`
     // alone for the rest, which is the field an MCP client reads to offer the
-    // sign-in. The WRITE is listed too — signed out it is a tool that refuses
+    // sign-in. The write is listed too — signed out it is a tool that refuses
     // rather than a tool that is not there (T-34541), because this list is the
     // one a directory snapshots at submission, and a name missing from that
     // snapshot is a tool the published connector can never offer its signed-in
@@ -532,14 +532,14 @@ let answered = async (
   }
   // The same endpoint, told to skip the pre-auth surface: `?auth=required`
   // (T-34416). An MCP client that decides whether a server has an
-  // authorization server by PROBING it anonymously reads our 200 as "no auth"
+  // authorization server by probing it anonymously reads our 200 as "no auth"
   // and never looks at `WWW-Authenticate`, so it configures the connector with
   // the tools a stranger gets and never offers to sign in. The address is the
   // lever because the client's behaviour is not ours to change: a client that
   // cannot ask twice is given an address that only ever answers the challenge,
   // and `/mcp` stays lazy — and mixed — for the clients that can (anon.ts
   // `asked`). A query parameter rather than a second path so there is still
-  // ONE resource here — one route, one `WWW-Authenticate`, one
+  // one resource here — one route, one `WWW-Authenticate`, one
   // `/.well-known/…/mcp`, which the challenge already builds from the
   // pathname.
   let strict = url.searchParams.get('auth') == 'required'
@@ -554,7 +554,7 @@ let answered = async (
   // answering the public surface instead is a connector silently losing every
   // tool where it should have been asked to sign in again (T-34344).
   if (!auth && (tried || strict)) return unauthorized(req, env)
-  // The GET is the session's STREAM (stream.ts): a client holds it open to
+  // The GET is the session's stream (stream.ts): a client holds it open to
   // hear what the server sends between its own calls, which today is one
   // thing — that its tool list moved, because an app of theirs deployed new
   // tools (T-32686). It lives in a Durable Object of the person's own, so a
@@ -571,7 +571,7 @@ let answered = async (
   // hand over, and anything that was not a request at all. So a body that does
   // not parse, and a JSON-RPC batch (an array of requests), which are refusals
   // every caller gets, are still the 401 for an anonymous one.
-  // The body is read HERE and passed on as text: who is answered is decided
+  // The body is read here and passed on as text: who is answered is decided
   // before the protocol handler sees anything, and a request body is read
   // once.
   let said = await req.text()
@@ -630,7 +630,7 @@ let answered = async (
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
   let ctx: Ctx = {
     env,
-    // A grant narrowed to one space is narrowed HERE, over the directory every
+    // A grant narrowed to one space is narrowed here, over the directory every
     // tool reads membership out of (grants.ts `narrowed`), so the narrowing
     // holds for the generic tier, the platform tier and an app's own tools at
     // once rather than tool by tool.

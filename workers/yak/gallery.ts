@@ -1,4 +1,4 @@
-// The gallery (T-34475): the published apps their owners asked us to SHOW, at
+// The gallery (T-34475): the published apps their owners asked us to show, at
 // https://yaks.app/gallery, in the sitemap, and answerable to an agent over
 // `gallery_search` signed in or out.
 //
@@ -7,21 +7,21 @@
 // our website or searchable via mcp".
 //
 // Publishing already makes an app installable by anybody (tools.ts
-// app_publish, app_install). This is the other half: being SHOWN. The two are
+// app_publish, app_install). This is the other half: being shown. The two are
 // deliberately different acts, because they are different promises — an offer
 // is between the person who made the app and whoever goes looking for one, and
 // a listing is us putting somebody's app on our own front door. So the app's
 // owner asks (`gallery: true`) and the platform answers, and until it answers
 // the app is not on any page here.
 //
-// WHY THE APPROVAL. M-4522: what goes out under our name is ours to allow.
+// Why the approval. M-4522: what goes out under our name is ours to allow.
 // Nothing an agent says and nothing a person types can put an app on this
 // site — the ask is one stamp, the listing is a second one, and the second is
 // only ever written by somebody opening a link out of a letter to
 // hello@yaks.app. That letter is the one channel an agent has no way into,
 // which is exactly the shape space_delete's confirmation already has
 // (erase.ts): the same `seal` from the kernel's own secret, the same GET that
-// only ever DRAWS, the same POST that acts.
+// only ever draws, the same POST that acts.
 //
 // The two words on the row (vocab.ts `gallery`) say the whole state:
 //
@@ -29,9 +29,9 @@
 //   asked_at     the owner asked, the letter went, nobody has answered
 //   listed_at    we said yes — it is on the page and in the search
 //
-// WHAT DELISTS. Withdrawing is one word off the row: `gallery: false` and
+// What delists. Withdrawing is one word off the row: `gallery: false` and
 // `app_unpublish` clear it, so a later publish has to ask again — a listing on
-// our site is not something that comes back on its own. The TRASH is the other
+// our site is not something that comes back on its own. The trash is the other
 // direction and does the opposite: nothing is written at all (erase.ts keeps
 // every other word exactly as it was, which is what makes a restore exact) and
 // every reader here screens a trashed app and a trashed space out. So a
@@ -54,7 +54,7 @@ import { GALLERY } from './seo.ts'
 import { foot, head, html, top } from './shell.ts'
 import { type Host, replyTo, url as siteUrl } from './host.ts'
 
-// Where the gallery lives, and where a letter's links land. What the page SAYS
+// Where the gallery lives, and where a letter's links land. What the page says
 // about itself — its title and its line — is seo.ts's, beside the same two
 // facts about every other page of this site; a page the worker draws is still
 // one of the site's pages, and the list it belongs to is kept in one place.
@@ -74,7 +74,7 @@ export let DESK = REPLY_TO
 // both keep saying so, and asking again mints a fresh pair.
 export let LIFE = 7 * 24 * 60 * 60_000
 
-// What the letter's links carry: which app, which ANSWER, and the second it
+// What the letter's links carry: which app, which answer, and the second it
 // dies. The answer rides in the ticket rather than the query string for the
 // reason `forever` does in erase.ts — the kernel signs it, so nobody can talk
 // a decline into an approval by editing an address.
@@ -151,7 +151,7 @@ let shownOf = (space: Space, app: App, env: Host): Shown => ({
   app,
 })
 
-// Every app on the gallery, newest listing first. It reads the OFFERS
+// Every app on the gallery, newest listing first. It reads the offers
 // (directory.ts) rather than a query of its own, because a listing is a
 // published app and nothing else: unpublishing is what takes an app out of
 // that list, and it takes it out of this one at the same moment without a
@@ -172,7 +172,7 @@ export let listed = async (dir: Directory, env: Host = {}): Promise<Shown[]> =>
 export let install = (a: Shown) => `app_install(name: '${a.name}')`
 
 // Matching by words, over the title and the description and nothing else —
-// which is all a listing HAS to be matched on, and all it should be: a gallery
+// which is all a listing has to be matched on, and all it should be: a gallery
 // entry is two short strings its owner wrote, so a word that is in neither is
 // a word this app does not answer.
 //
@@ -223,7 +223,7 @@ export let said = (hits: Shown[], asked: string, env: Host = {}) =>
 // The whole of `gallery_search`, in one function, because it is answered at
 // two doors: the signed-in tool (tools.ts) and the pre-auth one (preauth.ts
 // `Looks`, mcp.ts), which must answer a stranger exactly what they would get
-// signed in. The gallery is public — that is what being listed MEANS — so
+// signed in. The gallery is public — that is what being listed means — so
 // there is nothing here to narrow per caller, and one function is what keeps
 // the two answers from drifting.
 export let TOP = 25
@@ -260,7 +260,7 @@ export let pictured = (html: string, at: string) => {
   if (!src) return ''
   try {
     // An app writes its card relative to its own page as often as not, and a
-    // relative address on OUR page would point at OUR files.
+    // relative address on our page would point at our files.
     return new URL(src, at).href
   } catch {
     return ''
@@ -399,7 +399,7 @@ ${at.no}
 These links expire in one week.`,
 })
 
-// The review page. It DRAWS on GET and acts on POST, for the reason the space
+// The review page. It draws on GET and acts on POST, for the reason the space
 // delete does (erase.ts): a mail client that fetches every link in a letter
 // before anyone reads it must not be able to list an app by doing its job.
 //
@@ -590,11 +590,11 @@ export let answer = async (
 // "Made with yaks.app" on the front page (public/index.html), drawn from the
 // same source as the gallery: the newest three listings, in place of the
 // hand-written examples. Those examples stay in the file and stay the
-// FALLBACK — a page whose showcase empties itself the first week nothing is
+// fallback — a page whose showcase empties itself the first week nothing is
 // listed is worse than one showing what could be made — so this replaces the
 // list only when there is something to replace it with.
 //
-// A string splice rather than a template, because the page is a FILE: it is
+// A string splice rather than a template, because the page is a file: it is
 // the one every crawler and every reader gets, it is edited by hand, and the
 // showcase is one `<ul>` in it.
 export let LIST = '<ul class="Make_List">'
@@ -619,7 +619,7 @@ export let made = async (env: Env, dir: Directory, file: Response) => {
     pictures(env, all.slice(0, 3))
   )
     .catch(() => [] as Shown[])
-  // The headers the assets door set, minus the two that describe the BYTES:
+  // The headers the assets door set, minus the two that describe the bytes:
   // the body just changed length, and it is no longer the file that etag names.
   let headers = new Headers(file.headers)
   headers.delete('content-length')

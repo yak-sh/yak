@@ -171,7 +171,7 @@ Deno.test('the technical page is markdown drawn like the rest', async () => {
   assertEquals(html.includes('versions.ts'), false)
 })
 
-// The whole rule, on one page: the `.md` address is the FILE, the address
+// The whole rule, on one page: the `.md` address is the file, the address
 // without it is that same file drawn, and neither redirects to the other.
 Deno.test('a page and its markdown are one text at two addresses', async () => {
   for (let at of [PATH, ...CONTENTS.map((p) => pathOf(p.slug))]) {

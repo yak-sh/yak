@@ -1,6 +1,6 @@
 // The cached half of serving an app's file (T-33197): bytes out of R2, and
 // nothing else. This part knows an app's eid, the R2 prefix its files live
-// under, and a path. It does NOT know who is asking, and that is the whole
+// under, and a path. It does not know who is asking, and that is the whole
 // point — Cloudflare's cache sits in front of this entrypoint (cache.ts), so
 // anything this part could learn about a person would end up shared with
 // strangers.
@@ -24,7 +24,7 @@ import { sha256 } from './versions.ts'
 import { parse, WORKER } from './wrangler_app.ts'
 
 // What the gateway tells this part, in headers rather than the path, because
-// the PATH is the cache key and these two are not part of what distinguishes
+// the path is the cache key and these two are not part of what distinguishes
 // one answer from another. The prefix moves when an app's slug moves
 // (tools.ts `app_set` copies the bytes across), and the same bytes at the new
 // prefix are the same answer — so keying on it would throw away a warm cache
@@ -74,7 +74,7 @@ export let keyed = (prefix: string, path: string) =>
 export let prefixOf = (space: { slug: string }, app: { slug: string }) =>
   `${space.slug}/${app.slug}`
 
-// A path behind no file whose last segment names no file TYPE is a route, not
+// A path behind no file whose last segment names no file type is a route, not
 // a miss (T-32769): `/recipes/42` is the page asking to be opened at a place,
 // so the app's own index.html answers it. Anything with an extension is a file
 // that is not there — a missing stylesheet must never answer HTML.
@@ -105,12 +105,12 @@ let mainOf = async (blobs: Blobs, prefix: string) => {
 }
 
 // The address the purge door answers at. A POST, so it can never be confused
-// with a file: only GET and HEAD are cached, so this request runs the
+// with a file: only GET and head are cached, so this request runs the
 // entrypoint every time — which is exactly what a purge needs, since the purge
-// must be ISSUED from in here (cache.ts).
+// must be issued from in here (cache.ts).
 let PURGE = '/purge'
 
-// The purge a door calls when it has changed an app's BYTES: one call empties
+// The purge a door calls when it has changed an app's bytes: one call empties
 // every address this app answers at, at every edge. A door that changed only
 // who may read does not call this and does not need to (cache.ts `tagsOf`).
 //
@@ -133,7 +133,7 @@ export let purged = async (env: Env, app: App) => {
 // The inner door. The gateway has already decided this request may be served;
 // everything here is about which bytes.
 //
-// The tag is derived from the SAME path segment the cache key is made of, so
+// The tag is derived from the same path segment the cache key is made of, so
 // the entry and the tag that purges it cannot disagree — the thing a purge
 // must reach and the thing it names come from one read of one string.
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
@@ -150,13 +150,13 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let prefix = req.headers.get(PREFIX)
   if (!prefix || !eid) return missing(keep)
   let blobs = r2Blobs(env.BLOBS)
-  // ONE read, not a stat and then a read (T-33176): the bucket is a round trip
+  // One read, not a stat and then a read (T-33176): the bucket is a round trip
   // away, and asking whether the file is there before asking for it paid that
   // trip twice for every file the app serves.
   let key = keyed(prefix, path)
   // Server source is not a public asset, even when `main` names a nested build
   // output. apps.ts `MANIFEST` already refuses the default `/worker.js` at the
-  // gateway; this covers the CONFIGURED path, which only the config names.
+  // gateway; this covers the configured path, which only the config names.
   // Started here and awaited after the file, so the lookup rides in the same
   // round trip as the bytes rather than in front of every script an app serves.
   let source = /\.(?:js|mjs)$/.test(key) ? mainOf(blobs, prefix) : null

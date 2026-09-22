@@ -1,4 +1,4 @@
-// The `/api/*` wire an app's PAGES speak, and the translation between it and
+// The `/api/*` wire an app's pages speak, and the translation between it and
 // the Store's own (T-33815). Two wires meet at the app door, and they are not
 // the same shape:
 //
@@ -9,13 +9,13 @@
 //                 POST /apply       [ …bundles… ]
 //                                → [ …the batch as applied… ]
 //
-// The page's half is FIXED, and that is the whole reason this file exists: it
+// The page's half is fixed, and that is the whole reason this file exists: it
 // is documented (public/docs.md), it is what `public/client.js` wraps, and
 // every app already deployed imports that client and reads `aliases` off an
 // answer. So the store moved and the door translates, rather than every page
 // in the world being asked to move with it.
 //
-// Only the ENVELOPE is translated. The bundles are the same bundles either way
+// Only the envelope is translated. The bundles are the same bundles either way
 // — `{entity: {eid}, ...components}`, a `$alias` wherever an eid goes — and the
 // filter grammar is the same grammar; what differs is that a page spells its
 // line as the query string itself and the Store takes it as one parameter, and
@@ -31,7 +31,7 @@ let RIDERS: Record<string, string> = {
   after: '.after',
 }
 
-// Where a segment's NAME ends and its value begins: the operators the grammar
+// Where a segment's name ends and its value begins: the operators the grammar
 // spells, longest first, so `!=` is not read as `!`.
 let OPERATOR = /^([A-Za-z_.\-[\]][A-Za-z0-9_.\-[\]]*)(!=|~=|<=|>=|<|>|=|!|\?)/
 
@@ -47,7 +47,7 @@ let plain = (value: string) => {
   }
 }
 
-// A decoded value the grammar would otherwise read as STRUCTURE. `&` separates
+// A decoded value the grammar would otherwise read as structure. `&` separates
 // segments, and a ` .` inside one splits it into words; quotes glue a value
 // across both (@yaks/query `segments`/`words`), and a dot-param's own spaces
 // survive unquoted, which is why a bare term is left alone for them. There is
@@ -61,7 +61,7 @@ let glued = (value: string, term = false) =>
 
 /**
  * A page's filter line, off the search string it arrived as: the riders
- * re-spelled and every value decoded, so the whole line can be escaped ONCE
+ * re-spelled and every value decoded, so the whole line can be escaped once
  * into the Store's `?q=` (meta.ts `metaOf`).
  *
  * A bare token is a full-text term and carries no operator, so it is decoded
@@ -80,21 +80,21 @@ export let lined = (search: string): string =>
 
 // One entry of a batch, in whichever spelling reached the door.
 //
-// A bundle that names NO entity is a page saving something new — the shape the
+// A bundle that names no entity is a page saving something new — the shape the
 // guide shows first, `apply({doc: {title}})` — and the Store takes an alias
 // wherever an eid goes, so it gets one. An alias rather than a fresh uuid,
 // because a content-addressed component names its own entity (@yaks/blob) and
 // only an alias leaves that decision to the graph.
 //
-// A FLAT change — `{eid, name, comp}` — is the older spelling of one component
+// A flat change — `{eid, name, comp}` — is the older spelling of one component
 // on one entity, and pages and headless clients deployed against it before the
 // bundle was the wire. It says exactly what a bundle says, so it is lowered
 // here rather than refused: this is the door whose job is that both spellings
 // mean one thing at the store.
 //
-// It STAYS, after the store that spoke it natively was deleted (T-33807).
+// It stays, after the store that spoke it natively was deleted (T-33807).
 // `public/client.js` is ours and moved with the store, but this door is a
-// PUBLIC one: a page or a headless client written against the flat spelling is
+// public one: a page or a headless client written against the flat spelling is
 // somebody else's code, on somebody else's machine, and nothing here can know
 // whether one exists. Lowering it costs six lines; refusing it would break a
 // caller we cannot see and cannot warn.
@@ -124,7 +124,7 @@ export let batched = (body: unknown): Bundle[] => {
 }
 
 // The keys of a bundle that are not a component: its address, and the wire's
-// own sugar. `tombstone` IS one — a death is a change like any other, and a
+// own sugar. `tombstone` Is one — a death is a change like any other, and a
 // page folding an answer needs to hear it.
 let SPINE = ['entity', 'kind', '$alias', '$was', '$actor', '$delete']
 
@@ -144,7 +144,7 @@ export let lowered = (applied: Bundle[]) => ({
       .filter(([name]) => !SPINE.includes(name))
       .map(([name, comp]) => ({ eid: b.entity.eid, name, comp }))
   ),
-  // The aliases the PAGE wrote. The ones this door invented for a bundle that
+  // The aliases the page wrote. The ones this door invented for a bundle that
   // named no entity (`bundled`) are its own bookkeeping, and a page that never
   // spelled one has no use for the answer.
   aliases: Object.fromEntries(

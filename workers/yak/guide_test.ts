@@ -1,9 +1,9 @@
 // The guide is the map an agent building an app reads (mcp.ts serves it as a
 // resource, with a page per subject beside it), so a list printed there has to
 // be true.
-// What can rot is anything the guide PRINTS that the code also decides: the
+// What can rot is anything the guide prints that the code also decides: the
 // reserved words a manifest is refused against (the code's list, never the
-// page's — C-32624 item 1), the components an app has, whose COLUMNS and
+// page's — C-32624 item 1), the components an app has, whose columns and
 // types are what a refusal now spells and what the seventh user test had to
 // guess five times over (C-32675 items 2 and 3), and the doors and limits an
 // app's own worker.js runs under (T-32780).
@@ -22,7 +22,7 @@ let guide = Deno.readTextFileSync(
 )
 
 // A page as it is written: the row in its frontmatter, and the document under
-// it (M-34605). Everything below reads the DOCUMENT, so a rule about the
+// it (M-34605). Everything below reads the document, so a rule about the
 // prose is never fooled by the bundle at the top.
 let pageFile = (slug: string) =>
   front(
@@ -51,7 +51,7 @@ Deno.test("the guide's Deeper links are exactly the pages offered", () => {
 })
 
 // And what it says about itself is where the row an agent is offered comes
-// from: the page IS the declaration (M-34605, gen.ts), so a page edited
+// from: the page is the declaration (M-34605, gen.ts), so a page edited
 // without its frontmatter, or a row that drifted from it, fails here.
 Deno.test('every page offered is a file, and says what it is', () => {
   for (let p of PAGES) {
@@ -97,7 +97,7 @@ Deno.test('no worker route on a page is under /api/', () => {
 })
 
 // A page may print the reserved words too — it is the page an app's author
-// meets them on. Wherever it does, it is the CODE's list, the same rule the
+// meets them on. Wherever it does, it is the code's list, the same rule the
 // map is held to (C-32624 item 1).
 Deno.test('a page printing the reserved words prints the code list', () => {
   for (let p of PAGES) {
@@ -122,7 +122,7 @@ Deno.test('no page links a page that is not there', () => {
   }
 })
 
-// The client is imported RELATIVELY, wherever the guide shows an import, and
+// The client is imported relatively, wherever the guide shows an import, and
 // no app's own files name the app: the copy someone installs lives at
 // whatever address they took it at, so `/chores/api/client.js` written into a
 // page 404s there and the page renders as bare HTML (C-32905 item 1). The
@@ -335,7 +335,7 @@ Deno.test('the guide and its page point a domain where the code does', () => {
 // look: one object or a `@graph` of them, a value that is a string here and
 // an object there, instructions in four shapes. So the page's own helpers are
 // lifted out of it and run against a document wearing all of that. What is
-// NOT exercised is the HTMLRewriter pass around them, which needs the Workers
+// not exercised is the HTMLRewriter pass around them, which needs the Workers
 // runtime; the helpers are where every shape is decided.
 // The page's indented code blocks, whole: a block runs from its first
 // indented line through every indented or blank line after it, since the

@@ -1,9 +1,9 @@
 // An app's post room: the address it writes from, the (space, app) an address
-// names, and Cloudflare's Email Sending BINDING as an @yaks/mail `Sender`.
+// names, and Cloudflare's Email Sending binding as an @yaks/mail `Sender`.
 //
-// THE ADDRESS IS A LOCAL PART AT THE APEX, and that is not a style choice.
-// Cloudflare onboards mail per DOMAIN, thirty to a zone, and a wildcard MX is
-// refused at RCPT — a probe to `probe@cf-bounce.yaks.app`, which HAS the
+// The address is A local part at the apex, and that is not a style choice.
+// Cloudflare onboards mail per domain, thirty to a zone, and a wildcard MX is
+// refused at RCPT — a probe to `probe@cf-bounce.yaks.app`, which has the
 // Cloudflare MX, came back `550 5.1.1 Domain does not exist` (C-33769 on
 // T-33684). So `<app>@<space>.yaks.app` is undeliverable in both directions
 // for every space but the handful anyone could onboard by hand, and the one
@@ -11,7 +11,7 @@
 // `yaks.app`. Jeff, 2026-09-05: "yeah, let's do space.app@yaks.app.
 // space@yaks.app should also work (home app)".
 //
-// The two directions are ONE derivation read each way, in one file, because an
+// The two directions are one derivation read each way, in one file, because an
 // app that writes from an address nobody can write back to is worse than an
 // app with no address at all: this is what holds the outbound `from` (the
 // sending effect, graph.ts) and the inbound route (`email()`, index.ts) to the
@@ -77,10 +77,10 @@ export let mailedTo = (address: string, env: Host = {}): Mailbox | null => {
 /**
  * The slice of the Email Sending binding one letter needs (wrangler.toml
  * `[[send_email]]`, env.ts `MAIL`). No token rides with it — the deploy is the
- * authorization — and what a binding may send FROM is the set of domains
+ * authorization — and what a binding may send from is the set of domains
  * onboarded to Email Sending on the zone, which is the check that matters.
  *
- * This is the BUILDER overload of the runtime's own `SendEmail.send`
+ * This is the builder overload of the runtime's own `SendEmail.send`
  * (conform.ts holds it there): Email Sending's Workers API takes the letter as
  * an object and answers `{messageId}`. `send(EmailMessage)` — Email Routing's
  * older shape, a raw RFC 5322 message — is the other overload, and the one a
@@ -105,7 +105,7 @@ export type Binding = {
  * The binding as an @yaks/mail {@link Sender}: the seam the sending effect
  * hands one composed letter to.
  *
- * NO BINDING IS A SENDER THAT REFUSES — `wrangler dev` without `remote = true`,
+ * No binding is A sender that refuses — `wrangler dev` without `remote = true`,
  * the workerd stand-in, a deploy that lost the binding. A letter then comes to
  * rest as a `bounced` saying so, which someone can read off the entity, rather
  * than sitting unsent with nothing written about it.

@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
 // The seam itself (plugin.ts): a fixture plugin composed the way a real one
 // is, and every slot's contribution seen arriving. Nothing here knows a
-// domain — the domains have their own tests that go through the HOST list
+// domain — the domains have their own tests that go through the host list
 // (memory_test.ts, views_test.ts) — so this is the contract on its own, and
 // what it pins is the two things a host relies on: order is the list's, and a
 // slot nobody filled contributes nothing.
@@ -38,7 +38,7 @@ let row = (name: string) => ({
   run: async () => await Promise.resolve({ text: name }),
 })
 
-// A rule, as a plugin declares one. What it MEANS is @yaks/graph's (its own
+// A rule, as a plugin declares one. What it means is @yaks/graph's (its own
 // rules_test.ts); what is pinned here is that the list carries it.
 let rule = (name: string): Rule => ({
   name,
@@ -91,7 +91,7 @@ let seen: Visit[] = []
 let registered: string[] = []
 
 // A registry, as much of one as a registration can tell (@yaks/effects owns
-// what a handler MEANS — its own registry_test.ts): what was registered, on
+// what a handler means — its own registry_test.ts): what was registered, on
 // what component.
 let registry = () => {
   let on: string[] = []

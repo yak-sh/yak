@@ -7,11 +7,11 @@
 // chain took. A stage that grew is now visible in a curl.
 //
 // The clock is `Date.now()`, which in a Worker advances only when I/O
-// completes — so a mark measures WAITING and reads zero for pure compute.
+// completes — so a mark measures waiting and reads zero for pure compute.
 // That is exactly the thing being measured here; a stage that is slow because
 // of CPU belongs in a profile, not a header.
 //
-// Two entries carry a COUNT in `dur` rather than milliseconds: `hops`, the
+// Two entries carry a count in `dur` rather than milliseconds: `hops`, the
 // round trips this request made to a store (door.ts), and `r2`, the operations
 // it made against the bucket (store/blobs.ts `counted`). Server-Timing has no unit
 // but time, and a count is worth more than the field's tidiness: a duration

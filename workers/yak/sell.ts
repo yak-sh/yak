@@ -3,15 +3,15 @@
 // past. Jeff configured Connect on our sandbox with the "charge merchants
 // directly" model, and every decision below follows from that one choice.
 //
-// DIRECT CHARGES, and what that means for every line here. The connected
-// account is the MERCHANT: the charge is on their books, Stripe's processing
+// Direct charges, and what that means for every line here. The connected
+// account is the merchant: the charge is on their books, Stripe's processing
 // fee comes out of their money, the customer's statement says their name, and
 // a refund or a dispute is theirs to answer and theirs to pay. We are not in
 // the middle of it. What we do is act on their account with our own platform
 // key — one `Stripe-Account` header (billing.ts `ask`) — and name an
 // `application_fee_amount` that Stripe moves to us out of the same payment.
 //
-// So the platform holds THREE FACTS about a seller and no more (vocab.ts
+// So the platform holds three facts about a seller and no more (vocab.ts
 // `stripe` on the space row): the `acct_…` id, whether Stripe says charges are
 // enabled, and whether they finished the form. Their bank details, their
 // balance, their payouts and their disputes live at Stripe, where they belong,
@@ -19,19 +19,19 @@
 // them would be a platform holding money data it does not need and cannot keep
 // current.
 //
-// This is a DIFFERENT relationship from billing.ts, which is the platform's own
+// This is a different relationship from billing.ts, which is the platform's own
 // plan: there Stripe sells to us and we are the customer. Nothing crosses
 // between them — a different account object, a different webhook endpoint, a
 // different signing secret — and the two share exactly one thing, the request
 // helper and the signature verifier, because Stripe's API is Stripe's API.
 //
-// v1 THROUGHOUT, deliberately (Jeff, 2026-09-06, on the endpoint he was
+// v1 throughout, deliberately (Jeff, 2026-09-06, on the endpoint he was
 // creating: "v1"). `POST /v1/accounts` with controller properties, and the v1
 // event names. There is a v2 Accounts API with its own thin `v2.core.*`
 // events; mixing the two would mean a handler reading one spelling and a
 // dashboard ticking the other, which is a webhook that silently does nothing.
 //
-// NOTHING HERE MAY FAIL QUIETLY, the same rule billing.ts keeps: a break is an
+// Nothing here may fail quietly, the same rule billing.ts keeps: a break is an
 // exception entity in the meta store, a refusal is a sentence the person reads,
 // and the webhook's filing is capped so a stranger posting garbage at a public
 // door cannot write rows without end.
@@ -55,8 +55,8 @@ import { whoIs } from './session.ts'
 // ---- the fee ---------------------------------------------------------------
 
 /**
- * What the platform takes from one sale, in BASIS POINTS — hundredths of a
- * percent, so 250 is 2.5%. It is a SETTING and not a number in this file
+ * What the platform takes from one sale, in basis points — hundredths of a
+ * percent, so 250 is 2.5%. It is a setting and not a number in this file
  * (T-34554): `fee.bps` on the platform's own space row (vocab.ts), read at
  * request time, so the owner changes what we charge with `yak fee 250` and the
  * next sale pays the new rate with nothing deployed.
@@ -80,7 +80,7 @@ export let feeOf = async (
   dir: { space: (slug: string) => Promise<Space | null> },
 ) => (await dir.space(dirPart.META.space))?.fee ?? 0
 
-/** The fee on a total, in cents. Rounded DOWN, so the fee is never a cent more
+/** The fee on a total, in cents. Rounded down, so the fee is never a cent more
  * than the rate says, and never more than the sale itself.
  *
  * ```ts
@@ -97,10 +97,10 @@ export let fee = (cents: number, bps: number) =>
 export let rate = (bps: number) => `${Math.round(bps / 100 * 100) / 100}%`
 
 /**
- * The rate as the pricing page says it. The page is a FILE — hand-written,
+ * The rate as the pricing page says it. The page is a file — hand-written,
  * crawled, served straight off the assets binding — so the live rate is
  * spliced into one marked element on the way out, the way the home page's
- * showcase is (gallery.ts `made`). The number in the file stays the FALLBACK,
+ * showcase is (gallery.ts `made`). The number in the file stays the fallback,
  * which is what a crawler reading the repo sees and what serves if the
  * directory will not answer.
  */
@@ -119,9 +119,9 @@ export let quoted = (file: string, bps: number) => {
 /**
  * The account we ask Stripe for, as the form fields of `POST /v1/accounts`.
  *
- * THE CONTROLLER PROPERTIES ARE THE WHOLE MODEL. "Charge merchants directly"
+ * The controller properties are the whole model. "Charge merchants directly"
  * is these four answers, and each is a sentence about who is responsible for
- * what. They are also, all four, Stripe's own DEFAULTS — the combination it
+ * what. They are also, all four, Stripe's own defaults — the combination it
  * documents as the Standard mapping
  * (docs.stripe.com/connect/migrate-to-controller-properties). They are written
  * out anyway, because a liability decision that four omitted parameters happen
@@ -129,10 +129,10 @@ export let quoted = (file: string, bps: number) => {
  * one day would move it silently.
  *
  *   `controller[fees][payer] = account`
- *       the CONNECTED ACCOUNT pays Stripe's processing fee, out of its own
+ *       the connected account pays Stripe's processing fee, out of its own
  *       money, on its own charge. Not us — we are not reselling payments.
  *   `controller[losses][payments] = stripe`
- *       STRIPE, not this platform, carries the negative balance when a dispute
+ *       Stripe, not this platform, carries the negative balance when a dispute
  *       is lost. There is no `account` value here and the spelling is not a
  *       mistake: `stripe` is what "the platform is not liable" is called, and
  *       the merchant is still the one whose charge is reversed.
@@ -143,18 +143,18 @@ export let quoted = (file: string, bps: number) => {
  *       `fees.payer = account`: an Express dashboard is for a platform that
  *       pays the fees and carries the losses, which is the opposite of this.
  *   `controller[requirement_collection] = stripe`
- *       STRIPE collects and re-collects the identity requirements, through the
+ *       Stripe collects and re-collects the identity requirements, through the
  *       Account Link below. The platform never sees, stores or forwards a
  *       seller's identity documents, which is exactly the property that lets
- *       this integration exist without us becoming a KYC operator.
+ *       this integration exist without us becoming a kyc operator.
  *
- * NO `capabilities`, deliberately. Stripe requires them only where the account
+ * No `capabilities`, deliberately. Stripe requires them only where the account
  * has no Stripe-hosted dashboard; with `full` the payment capabilities are
  * requested automatically for the account's country, and the seller manages
  * them themselves. `transfers` in particular would be wrong — that is the
- * capability a DESTINATION charge needs, and a direct charge never transfers.
+ * capability a destination charge needs, and a direct charge never transfers.
  *
- * NO `type` either. It is deprecated in favour of exactly these four
+ * No `type` either. It is deprecated in favour of exactly these four
  * properties, and the two ways of saying one thing are not passed together.
  *
  * `metadata` carries the space both ways, so an account read back out of
@@ -175,7 +175,7 @@ export let account = (space: Space, email: string) => ({
  *
  * `return_url` is where Stripe sends them when they finish, and `refresh_url`
  * is where it sends them when the link is spent — an Account Link is
- * SINGLE-USE and expires in about five minutes, since it is an authenticated
+ * single-use and expires in about five minutes, since it is an authenticated
  * door into somebody's identity form. Stripe's own instruction for
  * `refresh_url` is "generate a new account link with the same parameters, then
  * redirect", and the space page's "Start selling" button is precisely that, so
@@ -209,7 +209,7 @@ export let link = (space: Space, id: string, env: Host = {}) => ({
  * created, an `account.updated` event, a seller who deauthorized us — so there
  * is one derivation of the row and no state machine.
  *
- * A missing field reads FALSE rather than "unchanged". Stripe sends the whole
+ * A missing field reads false rather than "unchanged". Stripe sends the whole
  * account object on every `account.updated`, so an absent flag is an absent
  * capability, and a reader that treated it as unchanged would leave a seller
  * marked ready after Stripe stopped them. */
@@ -277,8 +277,8 @@ let wrote = (env: Env, space: Space, row: Record<string, unknown> | null) =>
 /**
  * Connect this space to a Stripe account, and answer the link that finishes it.
  *
- * The account is minted ONCE and kept: a space that starts onboarding, wanders
- * off and comes back a week later gets a new LINK onto the same account, never
+ * The account is minted once and kept: a space that starts onboarding, wanders
+ * off and comes back a week later gets a new link onto the same account, never
  * a second account — two accounts for one space would be a merchant whose
  * money is split across books nobody can add up. So the id is written the
  * moment Stripe answers with it, before the link is asked for, and the second
@@ -309,7 +309,7 @@ export let connect = async (env: Env, space: Space, email: string) => {
 }
 
 /**
- * Stop selling: the platform FORGETS the account, and Stripe keeps it.
+ * Stop selling: the platform forgets the account, and Stripe keeps it.
  *
  * Deliberately not a delete. The account is the merchant's own — their money,
  * their payouts, their records of every sale they have made, and Stripe's own
@@ -323,11 +323,11 @@ export let disconnect = (env: Env, space: Space) => wrote(env, space, null)
 // ---- the checkout door -----------------------------------------------------
 //
 // `POST /<app>/api/pay/checkout` (apps.ts): a cart in, a Stripe address out.
-// The whole reason it is the PLATFORM's door and not something an app writes is
+// The whole reason it is the platform's door and not something an app writes is
 // that it is the only place the platform key is spent — an app holds no Stripe
 // key, writes no worker, and cannot charge anybody a penny it did not ask for.
 //
-// NOTHING ABOUT MONEY COMES OFF THE WIRE. The caller names a product and how
+// Nothing about money comes off the wire. The caller names a product and how
 // many; the price is read off that product's own row in the app's store. A page
 // that posted a price would be a page a buyer can edit with the developer
 // tools, and the first person to try it would buy a shirt for a cent.
@@ -388,7 +388,7 @@ export let packed = (items: Item[]) =>
  * The cart priced against the store's own rows: Stripe's `line_items`, the
  * total in cents, and the items packed for the metadata.
  *
- * Every refusal here happens BEFORE Stripe is asked, and each says which line
+ * Every refusal here happens before Stripe is asked, and each says which line
  * is wrong: a product this store does not have (an eid off another app, or one
  * somebody made up), and a product with no price, which is a seller's row that
  * is not finished rather than a free shirt.
@@ -425,15 +425,15 @@ export let priced = (rows: Product[], items: Item[]) => {
 }
 
 /**
- * Where Stripe sends the buyer, from what the caller asked for. RELATIVE to the
+ * Where Stripe sends the buyer, from what the caller asked for. Relative to the
  * app's own root, always — so nothing in a page spells the app's name and an
  * installed copy sends its buyers back to itself.
  *
- * And it may not leave that root. This door is callable by a GUEST on an open
+ * And it may not leave that root. This door is callable by a guest on an open
  * app, so an absolute URL from the wire would let a stranger have yaks.app's
  * own checkout hand buyers to a page they wrote. `new URL(asked, root)` resolves
  * the ordinary relative case and swallows the absolute one, so what is checked
- * is the ANSWER rather than the input — a filter over the input would be a list
+ * is the answer rather than the input — a filter over the input would be a list
  * of the escapes somebody thought of.
  *
  * The braces come back afterwards, and only those two characters.
@@ -441,7 +441,7 @@ export let priced = (rows: Product[], items: Item[]) => {
  * the way back, `new URL` percent-encodes braces in a query, and
  * `%7BCHECKOUT_SESSION_ID%7D` is a string Stripe does not recognise — so the
  * buyer would land on a page that never learns which order it is about. Undone
- * AFTER the check, so nothing about where this points has been decided by it.
+ * after the check, so nothing about where this points has been decided by it.
  */
 export let backAt = (root: string, asked: unknown) => {
   let at = String(asked ?? '').trim()
@@ -460,18 +460,18 @@ export let backAt = (root: string, asked: unknown) => {
 
 /**
  * The Checkout Session, as the form fields of `POST /v1/checkout/sessions` —
- * created ON the seller's account (the `Stripe-Account` header, which the
+ * created on the seller's account (the `Stripe-Account` header, which the
  * caller adds).
  *
  * `payment_intent_data[application_fee_amount]` is the platform's cut, and it
- * is the ONLY place Stripe takes one for a Checkout Session — there is no
+ * is the only place Stripe takes one for a Checkout Session — there is no
  * top-level spelling. It is left out entirely when it is zero: Stripe requires a
  * positive amount, so a fee of nothing has to be no fee rather than a fee of 0,
  * and with no rate set that is every sale.
  *
  * `metadata` says whose sale this is in the two words the webhook routes by,
  * plus the cart. It is copied onto `payment_intent_data[metadata]` as well, and
- * that is not redundancy: a REFUND arrives as a `charge.refunded`, whose object
+ * that is not redundancy: a refund arrives as a `charge.refunded`, whose object
  * inherits the PaymentIntent's metadata and knows nothing of the session, so
  * without this the refund of a sale could not be told whose it was.
  */
@@ -488,7 +488,7 @@ export let session = (at: {
   cancel: string
 }) => {
   let cut = fee(at.total, at.bps)
-  // The RATE THIS SALE WAS CHARGED AT rides with it. The rate is a setting now
+  // The rate this sale was charged at rides with it. The rate is a setting now
   // (`feeOf`), so the number in force when the session was made is not
   // necessarily the number in force when the webhook files the order minutes
   // later — and what an order records has to be what was actually taken.
@@ -519,7 +519,7 @@ export let session = (at: {
  * makes, as whoever is asking, so a private app's shelf is its members' and a
  * public one's is the world's. The door adds no reading power of its own.
  *
- * A space that is not ready is refused BY NAME with the way out, because that
+ * A space that is not ready is refused by name with the way out, because that
  * refusal is the one a page will actually meet: a seller deploys their shop
  * before they finish Stripe's form nearly every time.
  */
@@ -556,8 +556,8 @@ export let buying = async (
   try {
     items = cart(body)
     // One read, whatever the cart's length: the products it names, whole.
-    // `.eid=` and not `id=` — the bare spelling is the PAGE's grammar and this
-    // is a line built for the STORE (wire.ts `RIDERS` is the translation, and
+    // `.eid=` and not `id=` — the bare spelling is the page's grammar and this
+    // is a line built for the store (wire.ts `RIDERS` is the translation, and
     // this side of it never sees one).
     priceless = priced(
       await rows(`.eid=${items.map((i) => i.product).join(',')}`),
@@ -581,7 +581,7 @@ export let buying = async (
         lines: priceless.lines,
         total: priceless.total,
         packed: priceless.packed,
-        // The rate as it stands RIGHT NOW, read fresh (`dirOf`): a sale is
+        // The rate as it stands right now, read fresh (`dirOf`): a sale is
         // charged what the owner set a moment ago, never what a cached row
         // still says.
         bps: await feeOf(dirOf(env)),
@@ -609,7 +609,7 @@ export let buying = async (
 // ---- the Connect webhook ---------------------------------------------------
 
 /**
- * An event as it arrives from a CONNECTED account. The `account` field is the
+ * An event as it arrives from a connected account. The `account` field is the
  * whole difference from billing.ts's Event: an event delivered to a Connect
  * endpoint names the `acct_…` it happened on, and that is what turns it back
  * into a space (`dir.seller`). An event with no `account` on this door is one
@@ -629,7 +629,7 @@ export type Event = {
  * The entity a sale is written at, derived from Stripe's own session id rather
  * than minted.
  *
- * THIS IS THE IDEMPOTENCE, and it is stronger than remembering event ids would
+ * This is the idempotence, and it is stronger than remembering event ids would
  * be. At-least-once delivery means `checkout.session.completed` arrives twice
  * for one sale; a minted eid would make two orders and a remembered-event list
  * would be a second thing to keep correct. Deriving it means the second
@@ -691,14 +691,14 @@ let idOf = (v: string | { id?: string } | undefined | null) =>
  * The `order` row one completed session makes.
  *
  * The buyer's address is `customer_details.email` and only falls back to
- * `customer_email`: the second is the PREFILL the door sent, and the person may
+ * `customer_email`: the second is the prefill the door sent, and the person may
  * have typed a different one on Stripe's page — which is the address the
  * receipt has to go to.
  *
  * `fee_cents` is derived here rather than read back off Stripe. The session
  * carries no application fee at all (it lives on the PaymentIntent), and one
  * more round trip to learn a number we computed on the way out would be a call
- * that can fail for nothing. It is derived from the RATE THE SESSION CARRIES
+ * that can fail for nothing. It is derived from the rate the session carries
  * (`metadata.fee`) and never from the rate in force now: the owner may have
  * moved it between the checkout and this event, and the order says what was
  * taken. A session made before that column existed carries no rate and reads
@@ -772,7 +772,7 @@ export let apply = async (env: Env, event: Event): Promise<string> => {
   if (type == 'account.updated') {
     let next = sellerOf(event.data?.object as Account ?? {})
     // The id comes from the row we already hold, never from the payload: the
-    // event was ATTRIBUTED by that id, and an account object that answered a
+    // event was attributed by that id, and an account object that answered a
     // different one would be Stripe telling us the account changed identity.
     next.account = on
     let changed = moved(held(space), next)
@@ -809,7 +809,7 @@ let inApp = async (env: Env, space: Space, slug: string) => {
   return app && !app.trashed ? app : null
 }
 
-/** The app's own store, opened as THE APP (dispatch.ts `owning`, T-34303). The
+/** The app's own store, opened as the app (dispatch.ts `owning`, T-34303). The
  * platform is writing the app's data on its behalf, so the byline on the row is
  * the app's entity and not a person's — nobody signed in, and the buyer is not
  * a member here and never will be. `editor` is what puts that write past the
@@ -824,7 +824,7 @@ let asApp = (env: Env, space: Space, app: App) => {
  * A completed checkout, as one batch into the app's store: the order, the buyer
  * as an entity, and the letter to them.
  *
- * ONE BATCH on purpose. A store applies it atomically, so there is no state
+ * One batch on purpose. A store applies it atomically, so there is no state
  * where the money is recorded and the receipt is not, or the other way round —
  * and because the order's eid is derived from the session, a redelivery writes
  * the identical batch and the store moves nothing.
@@ -844,7 +844,7 @@ let sold = async (env: Env, space: Space, event: Event) => {
   if (!order.session) return 'a session with no id'
   let items = unpacked(order.items)
   let store = asApp(env, space, app)
-  // What the products are CALLED, for the letter. Read from the app's own
+  // What the products are called, for the letter. Read from the app's own
   // store, because the session carries the name the buyer saw and this is the
   // name the seller wrote — and a product renamed between the sale and the
   // receipt should read as it does today.
@@ -897,7 +897,7 @@ let sold = async (env: Env, space: Space, event: Event) => {
  * A refund that finds no order is not a break: a merchant refunds charges they
  * made outside this platform too, on the same account.
  *
- * TODO, and it cannot bite while `FEE_BPS` is 0: Stripe does NOT refund an
+ * TODO, and it cannot bite while `FEE_BPS` is 0: Stripe does not refund an
  * application fee when a charge is refunded, so the day the owner sets a rate,
  * a seller who refunds from their own dashboard is out of pocket by our fee.
  * The fix is ours to make here — `POST /v1/refunds` takes
@@ -944,7 +944,7 @@ let settled = async (env: Env, space: Space, event: Event) => {
   return `${app.slug}: ${status}`
 }
 
-// The webhook door is on the open internet, so what it FILES has a ceiling:
+// The webhook door is on the open internet, so what it files has a ceiling:
 // per isolate, per minute, the way billing.ts caps its own. A refused signature
 // is worth seeing once — a secret rolled, or somebody poking — and worth seeing
 // a hundred times an hour never.
@@ -965,19 +965,19 @@ let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
 
 /**
- * Stripe's Connect door, at `https://yaks.app/stripe/connect`. Its OWN endpoint
- * with its OWN signing secret, because that is how Stripe delivers connected-
+ * Stripe's Connect door, at `https://yaks.app/stripe/connect`. Its own endpoint
+ * with its own signing secret, because that is how Stripe delivers connected-
  * account events: the platform's endpoint (billing.ts) hears about our
  * subscription, and this one hears about our sellers. Two endpoints, two
  * `whsec_…`, and a secret that verified the wrong one is a door that answers
  * nothing.
  *
- * The body is read as TEXT once and verified as that exact string: the
+ * The body is read as text once and verified as that exact string: the
  * signature covers the raw bytes, so parsing and re-serializing would verify
  * something Stripe never signed. The scheme is identical to the platform
  * endpoint's, which is why the verifier is billing.ts's and not a second copy.
  *
- * UNTIL THE SECRET IS SET this answers 503 in one sentence, and everything else
+ * Until the secret is set this answers 503 in one sentence, and everything else
  * about selling still works: a space connects, a checkout session is created, a
  * buyer pays. What is missing is only what the events would have told us —
  * whether the seller became ready, and the order row. That is deliberate: the
@@ -1016,7 +1016,7 @@ let hook = async (env: Env, req: Request) => {
   } catch {
     return json(400, 'bad_event', 'that was not an event')
   }
-  // A failure past this line is OURS, so it throws: index.ts files it and
+  // A failure past this line is ours, so it throws: index.ts files it and
   // answers a 5xx, and Stripe delivers again. That is exactly what we want for
   // a store that was busy or a Stripe call that timed out.
   return Response.json({ received: true, did: await apply(env, event) })
@@ -1036,7 +1036,7 @@ export let priceAt = async (dir: Directory, file: Response) => {
   let html = await file.text()
   let bps = await feeOf(dir).catch(() => 0)
   let headers = new Headers(file.headers)
-  // The two headers that describe the BYTES: the body just changed length, and
+  // The two headers that describe the bytes: the body just changed length, and
   // it is no longer the file that etag names.
   headers.delete('content-length')
   headers.delete('etag')
@@ -1047,9 +1047,9 @@ export let priceAt = async (dir: Directory, file: Response) => {
  * `GET /api/fee` reads the platform's cut and `POST /api/fee` (`bps=250`) sets
  * it — `yak fee` on the owner's box, and the only writer of the column.
  *
- * THE GATE IS A SEAT IN `yak`, the platform's own space: whoever owns that row
+ * The gate is A seat in `yak`, the platform's own space: whoever owns that row
  * owns the platform, which is the same authority `space_sell` and the meter
- * already answer to. Read through `whoIs`, so it is the session COOKIE and
+ * already answer to. Read through `whoIs`, so it is the session cookie and
  * never an agent's bearer — what a tool may do is deliberately not this
  * (T-34541 fixed the connector's roster, and a rate is not on it).
  *
@@ -1073,7 +1073,7 @@ export let fees = async (req: Request, env: Env) => {
     return json(403, 'not_owner', `the fee is set by an owner of ${meta.slug}`)
   }
   if (req.method == 'POST') {
-    // Read as DIGITS and not as a number: `Number('')` and `Number(null)` are
+    // Read as digits and not as a number: `Number('')` and `Number(null)` are
     // both 0, so a post that named no rate at all would otherwise read as the
     // owner setting the fee to nothing.
     let said = (await req.formData()).get('bps')

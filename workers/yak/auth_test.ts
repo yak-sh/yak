@@ -15,7 +15,7 @@
 //                  names, and is nothing at all once it has expired
 //   the mount      @yaks/mcp over the same graph under the same seam
 //
-// The half NOT here is turning a cookie or an OAuth bearer into a person:
+// The half not here is turning a cookie or an OAuth bearer into a person:
 // that is identity.ts's `withAuth`, and identity_test.ts walks the whole OAuth
 // flow in workerd to prove a bearer resolves to the same person the cookie
 // does. From there on, every credential is a vouch, which is what this file
@@ -83,7 +83,7 @@ let cookbook = async (access?: string) => {
 }
 
 // A reference, whichever way the door said it: the eid a write carries, or the
-// `{eid, name}` a READ speaks it as (graph.ts `#speak`).
+// `{eid, name}` a read speaks it as (graph.ts `#speak`).
 let idOf = (v: unknown): string | null =>
   typeof v == 'string' ? v : (v as { eid?: string } | null)?.eid ?? null
 
@@ -259,7 +259,7 @@ Deno.test('an expired grant is nobody, and nobody reads a private app', async ()
     STORE,
   )
   assertEquals(who, null)
-  // A grant for ANOTHER store is the same nothing, however fresh it is.
+  // A grant for another store is the same nothing, however fresh it is.
   let elsewhere = await granting(SECRET, 'ada/notes', ada)
   assertEquals(
     await granted(

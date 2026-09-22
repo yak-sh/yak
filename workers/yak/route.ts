@@ -45,7 +45,7 @@ export let manageView = (path: string): ManageView | null => {
 // other: billing.ts writes the plan, usage.ts says where a space stands
 // against its ceilings, and unseen.ts already joins them.
 //
-// It is the ONE address the agent surface may give (C-33033 on D-32751):
+// It is the one address the agent surface may give (C-33033 on D-32751):
 // OpenAI's app-directory policy forbids a plugin selling a subscription and
 // allows explaining that a feature needs a plan and linking to a page that
 // describes the plans. So a tool answer may name this and never a checkout
@@ -57,7 +57,7 @@ export let planSettings = (slug: string, env: Host = {}) =>
   `https://${spaceHost(env, slug)}${managePath('billing')}`
 
 // The agent door, as an address a person types into a connector form: two
-// spellings of ONE resource (mcp.ts). `MCP` is lazy — it tells a stranger
+// spellings of one resource (mcp.ts). `MCP` is lazy — it tells a stranger
 // what this place is before anybody has signed in — and `MCP_ASK` never does,
 // so a host that decides whether a server needs OAuth by calling it with no
 // credential and reading the status gets the 401 and its challenge instead of
@@ -80,14 +80,14 @@ export let says = (env: Host = {}) =>
 // And the sentence every refusal says about it: what a person's agent reads
 // when it asked for something nobody signed in may have. It lives here beside
 // the address rather than at one of the doors, because three of them say it —
-// the 401 and its challenge (identity.ts), and the tools a stranger is SHOWN
+// the 401 and its challenge (identity.ts), and the tools a stranger is shown
 // but may not call (anon.ts `barred`).
 export let SAYS = says()
 
 // And what an agent's connector form asks for when it will not go and find it
 // (T-34414): the authorization server's own addresses and the one scope.
-// identity.ts CONFIGURES the provider with these, so they are the same strings
-// the two `/.well-known` documents serve, and the connect page TYPES THEM OUT
+// identity.ts configures the provider with these, so they are the same strings
+// the two `/.well-known` documents serve, and the connect page types them out
 // for a person whose form has empty boxes. Paths, not absolute URLs, because
 // the provider matches an endpoint by hostname and path and the probe kernel
 // is not at this hostname; the page absolutes them against PLATFORM.
@@ -102,7 +102,7 @@ export let OAUTH = {
 // own hostname is CNAME'd to, and the one place that name is written — the
 // attach flow and the guide both read it here.
 //
-// TWO labels deep on purpose. `route()` below reads everything before
+// Two labels deep on purpose. `route()` below reads everything before
 // `.yaks.app` as a space slug, and `SLUG` admits no dot, so `x.y.yaks.app` is
 // already outside the space namespace and no person can ever claim the space
 // that would shadow our own origin. A one-label name (`origin.yaks.app`)
@@ -111,7 +111,7 @@ export let OAUTH = {
 //
 // This is also the reason a domain mid-provisioning reaches the Worker at
 // all instead of timing out (T-33036): the CNAME above and the `*/*` route
-// mean traffic for ANY custom hostname on this zone arrives here, active or
+// mean traffic for any custom hostname on this zone arrives here, active or
 // not — a visitor of a domain whose DNS, validation or certificate step has
 // not finished yet used to get a raw 522 with nothing between them and it.
 // index.ts `settling` is the branded page that answers there now.
@@ -120,7 +120,7 @@ export let ORIGIN = `origin.saas.${PLATFORM}`
 // Where the app serving this request is mounted for the browser that asked:
 // the prefix its pages resolve relative URLs against, and the address its own
 // `/<app>/` would forward to. `/<app>/` normally, and `/` when a custom
-// domain carried the request here — there the app IS the domain's root
+// domain carried the request here — there the app is the domain's root
 // (index.ts `aimed`), even though the address the platform routes on names
 // the app's prefix. The router sets this header on a request it rewrote
 // itself and strips it off anything a client sent, so it is never a way to
@@ -139,18 +139,18 @@ export type Route = {
 
 export let SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/
 
-// Where a hostname somebody else owns is SERVED FROM: the address on our own
+// Where a hostname somebody else owns is served from: the address on our own
 // zone that the request is carried to, and the mount the app sits at there
 // (T-34596). The directory says which place the domain names — a space, or one
 // app of it — and this is the whole of what that difference means.
 //
-// A domain on a SPACE is that space's own hostname with the path untouched, so
+// A domain on a space is that space's own hostname with the path untouched, so
 // it routes through `route()` and every rung of apps.ts exactly as
 // `<space>.yaks.app` does: the front page at `/`, each app at `/<app>/`, the
 // space's own doors where they always were. There is no second path rule for
-// it, because it IS the rule.
+// it, because it is the rule.
 //
-// A domain on an APP is that app's prefix under the same hostname, mounted at
+// A domain on an app is that app's prefix under the same hostname, mounted at
 // `/`: `herbusiness.com/menu` is `<space>.yaks.app/<app>/menu`, and the mount
 // says the app's pages resolve from the domain's root rather than from the
 // prefix the platform routed by. Both may point at one space at once — the
@@ -190,7 +190,7 @@ export let foreign = (host: string, env: Host = {}) =>
 // stranger's address is nowhere we send anyone, so it answers null and the
 // caller goes home instead. Pure, like the rest of this file.
 //
-// A custom domain is deliberately NOT on the zone (T-33037). We serve it, but
+// A custom domain is deliberately not on the zone (T-33037). We serve it, but
 // the return address arrives from whoever asked, this check is the only thing
 // between that and an open redirect, and it is pure and synchronous — reading
 // the directory here to see whether a stranger's hostname is a customer's
@@ -238,14 +238,14 @@ export let route = (host: string, pathname: string, env: Host = {}): Route => {
 }
 
 // What the PLATFORM owns rather than an app, read from the hostname and the
-// path. The whole rule in one idea: `/.well-known/` is where a site GRANTS
-// AUTHORITY over its own name, and the name under `<space>.yaks.app` is ours
+// path. The whole rule in one idea: `/.well-known/` is where a site grants
+// authority over its own name, and the name under `<space>.yaks.app` is ours
 // — a space rents a label of our hostname, it does not own it.
 //
 // The test is NOT whether a file is host-scoped. `robots.txt` is host-scoped
 // and stays the app's, deliberately: a robots file grants nobody anything,
 // it is a preference about the site, and the site's face is the home app.
-// The test is whether the file hands somebody a CAPABILITY over a name we
+// The test is whether the file hands somebody a capability over a name we
 // own. `assetlinks.json` grants a native Android app the right to intercept
 // URLs for the whole hostname; `apple-app-site-association` does the same on
 // iOS; an HTTP-01 challenge yields a publicly trusted certificate for a
@@ -259,7 +259,7 @@ export let route = (host: string, pathname: string, env: Host = {}): Route => {
 // grant authority is a thing to forget — the next one ships without us —
 // and on our own hostname there is nothing under it we lose by keeping.
 //
-// The SAME files are the app's on a customer's own domain (`foreign`), by
+// The same files are the app's on a customer's own domain (`foreign`), by
 // this idea rather than despite it: there the name is theirs, so the
 // authority is theirs to grant. Proving domain control to a third party is
 // exactly what `pki-validation` is for at Sectigo and DigiCert, Stripe asks
@@ -268,18 +268,18 @@ export let route = (host: string, pathname: string, env: Host = {}): Route => {
 // delegation and fediverse verification all live here, and obtaining a
 // certificate for your own domain is your own business. Nothing is reserved
 // there, and there is no list of exceptions to keep: a path is the
-// platform's when the platform has something to SERVE at it, and everything
+// platform's when the platform has something to serve at it, and everything
 // else falls through to the app. The apps-directory token is the shape of
 // that — the apex has content at `/.well-known/openai-apps-challenge` and
 // answers it (index.ts), while `/.well-known/anything-else` is nobody's and
 // 404s. When Stripe or Apple Pay needs to answer somewhere, it will answer
-// because it HAS content, not because a string was added to a table.
+// because it has content, not because a string was added to a table.
 //
 // Our own renewal of a customer's custom-hostname certificate is not at risk
 // from that. This zone has a `*/*` Worker route (wrangler.toml, T-33036), and
 // Cloudflare warns it can intercept a CA's request
 // (developers.cloudflare.com/ssl/edge-certificates/changing-dcv-method/troubleshooting/).
-// MEASURED 2026-09-03: with that route live and the Worker answering these
+// Measured 2026-09-03: with that route live and the Worker answering these
 // paths itself, a probe hostname was attached as a custom hostname and
 // ssl.com issued its certificate within a minute, while a request to
 // `/.well-known/acme-challenge/x` on that hostname reached the Worker and got
@@ -293,24 +293,24 @@ export let platform = (host: string, pathname: string, env: Host = {}) =>
 // The doors the graph answers at, read from the path a browser asked for:
 // an app's `/<app>/api/…`, a front page's own `/api/…` (apps.ts `fetch`
 // serves the home app everything no other app claims), and the connector at
-// `/mcp`. Pages, files and images are deliberately NOT here — an app's bytes
+// `/mcp`. Pages, files and images are deliberately not here — an app's bytes
 // are the web's, and a cross-origin GET of one carries no `Origin` anyway.
 // The shape over-reaches a little: a static asset at `/x/api/y` on the apex
 // matches too, which costs nothing, since nothing a browser fetches
 // cross-origin without CORS can read the answer either way.
 //
 // The drop door is here too (drop.ts, T-34230). It is not a graph door — it is
-// a form a member posts a file to — but it CHANGES a space with nothing but
+// a form a member posts a file to — but it changes a space with nothing but
 // the session cookie behind it, and sibling spaces are same-site, so a page in
 // anybody's space could aim a form at anybody else's `/deploy` and the cookie
 // would ride along. Same guard, same reason.
 //
-// So are the two money doors, by NAME rather than by prefix (T-35357). Both
+// So are the two money doors, by name rather than by prefix (T-35357). Both
 // were `/api/…` when they were written and were guarded by the shape above;
 // renaming the billing webhook to `/stripe/webhook` (ea6ddda6, 1855f420)
 // carried it out of that shape and quietly out of the guard, while the test
 // that asserts a stranger's page is refused there kept passing on the old
-// spelling. A door that MOVES money must not depend on its spelling for that,
+// spelling. A door that moves money must not depend on its spelling for that,
 // so it is listed. Guarding costs Stripe nothing: it posts server to server
 // with no `Origin`, and an absent one is allowed below.
 export let doorway = (pathname: string) =>
@@ -319,15 +319,15 @@ export let doorway = (pathname: string) =>
   /^(?:\/[^/]+)?\/api\//.test(pathname)
 
 // The browser's own word for the page that asked, against the hostname it
-// asked AT. Every space is a subdomain of one registrable domain, so sibling
-// spaces are SAME-SITE: `SameSite=Lax` does not keep the session cookie off a
+// asked at. Every space is a subdomain of one registrable domain, so sibling
+// spaces are same-site: `SameSite=Lax` does not keep the session cookie off a
 // request one space's page aims at another's, and a websocket handshake is
 // outside the same-origin policy altogether. This is the line that separates
 // them, and it is the whole of it everywhere except the one door below, where
 // the answer carries CORS headers precisely because no cookie was read.
 //
-// ABSENT is allowed on purpose. A browser sends `Origin` on every
-// cross-origin fetch and on every handshake, so refusing only a MISMATCH
+// Absent is allowed on purpose. A browser sends `Origin` on every
+// cross-origin fetch and on every handshake, so refusing only a mismatch
 // closes the browser attack completely; curl, a server-to-server client and
 // the kernel's own internal requests send none and have no page to be tricked
 // through. Requiring the header would break them for no security at all.
@@ -345,13 +345,13 @@ export let sameOrigin = (host: string, origin: string | null) => {
 }
 
 // The one door above that a stranger's page may reach anyway (T-33408), and
-// the shape of the whole permission: the app's READ door, asked with GET, and
-// answered as NOBODY — the router drops the request's credentials before it is
+// the shape of the whole permission: the app's read door, asked with GET, and
+// answered as nobody — the router drops the request's credentials before it is
 // served and sends `Access-Control-Allow-Origin: *` with no
 // `Access-Control-Allow-Credentials` beside it, which is the browser's own
 // guarantee that no cookie was used and none can be read (index.ts `cors`).
 //
-// It is safe because what `sameOrigin` closes is AMBIENT CREDENTIALS, not
+// It is safe because what `sameOrigin` closes is ambient credentials, not
 // secrecy: a public app's rows already answer to anyone with curl, and the
 // attack was the session cookie riding along on a request one space's page
 // aimed at another's. Take the cookie away and the request is curl with a
@@ -359,11 +359,11 @@ export let sameOrigin = (host: string, origin: string | null) => {
 // and decided downstream: `public` and `open` answer a stranger, `private`
 // refuses one.
 //
-// WRITES are not here and must not be. An `open` app lets a stranger write —
+// Writes are not here and must not be. An `open` app lets a stranger write —
 // with the link, from its own page — and a cross-origin write is the forgery
 // origin_test.ts fires. Nor is `/ws`, which is a read but carries the write
 // grant on the same socket, nor `/graph`, `/me` or `/blob`: this is the door
-// the answer is DATA at, and nothing else has asked to be shared.
+// the answer is data at, and nothing else has asked to be shared.
 //
 // No preflight door is needed and none is built: a GET with no author-set
 // headers is a CORS simple request, so the browser sends it and reads the

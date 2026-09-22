@@ -5,10 +5,10 @@
 // the app's graph — the same bundle shape the MCP tools speak
 // (`{entity: {eid}, ...components}`, a `$alias` wherever an eid goes), entity
 // JSON back. Nothing to install and nothing to configure: the module's own
-// address IS the app's api directory, so a page at any depth reaches its own
+// address is the app's api directory, so a page at any depth reaches its own
 // store, and the browser's cookie says who is asking.
 //
-// The import is RELATIVE, and nothing in an app names the app: the kernel
+// The import is relative, and nothing in an app names the app: the kernel
 // gives every page it serves a `<base href>` at the app's own address
 // (apps.ts `based`), so `./api/client.js` is this app's client from a page at
 // any depth — a pretty path like `/lending/loans/1` included — and stays this
@@ -42,7 +42,7 @@
 // Errors need no wiring here: the kernel injects a reporter into every page
 // it serves (public/report.js), so a throw, an uncaught rejection, or a
 // refusal from these doors is already on its way to the app's store and the
-// person's agent. Catch what you want to SHOW; the telling is done.
+// person's agent. Catch what you want to show; the telling is done.
 //
 // A refusal is thrown with the server's own words — 'not a writer of jeff',
 // or what the store said about the batch — because that sentence is what the
@@ -51,7 +51,7 @@
 // A refusal, as one Error. The kernel and the store both answer a sentence —
 // `{error: {code, message}}` from the kernel, plain words from the store —
 // and that sentence is the whole of what a page shows and an agent reads.
-// A body that is neither is a PAGE (a 404 answers the platform's "Nothing
+// A body that is neither is a page (a 404 answers the platform's "Nothing
 // here yet." HTML), so it never rides the throw: the status and a short line
 // of it say what happened without dumping a document into an error message
 // (C-32574 items 2 and 4).
@@ -82,7 +82,7 @@ let door = (base) => async (path, init) => {
 }
 
 // The address a store's doors hang off. Every app in a space shares one
-// hostname, so the address a page names is a PATH — `store('/lending/api/')`,
+// hostname, so the address a page names is a path — `store('/lending/api/')`,
 // which the guide's own line — and a path is no `new URL` base by itself:
 // the documented call threw `Invalid base URL` (C-32800 item 6). It is
 // resolved against this origin, and a path that names the api directory
@@ -96,7 +96,7 @@ let based = (base) => {
 }
 
 // The precondition a read-modify-write carries: the SHA-256 of a value as the
-// page READ it, which a bundle names under `$was` — per component, per column.
+// page read it, which a bundle names under `$was` — per component, per column.
 // The store refuses the whole batch if that column has moved since, so two
 // tabs, two phones or an agent and a page cannot both spend one balance or
 // claim one reward. `null` is "it held none", which guards a column that must
@@ -134,7 +134,7 @@ export let store = (base) => {
   // by the number the store minted; a windowed read is the newest page of
   // that same order.
   //
-  // A row carries ONLY the components the filter names, so name the ones the
+  // A row carries only the components the filter names, so name the ones the
   // page will draw: '.recipe!' answers recipes with no titles, and
   // '.recipe!&.doc?' answers both — '&' joins filters and '?' asks for a
   // component without filtering on it. A dotted word addresses that
@@ -221,7 +221,7 @@ export let store = (base) => {
   }
   // The filter's matches now, and again on every change — a write from
   // another device, another tab, or an agent. `cb` is handed the same rows
-  // `query()` answers with — the components the filter NAMES and no others,
+  // `query()` answers with — the components the filter names and no others,
   // so '.recipe!&.doc?' where the page draws titles — and a page swaps one
   // for the other and nothing else changes; the returned function ends the
   // subscription.
@@ -245,7 +245,7 @@ export let store = (base) => {
   return { apply, me, query, search, subscribe, upload }
 }
 
-// One subscription frame folded into its rows. A frame carries whole ROWS —
+// One subscription frame folded into its rows. A frame carries whole rows —
 // the same answer `query()` gives, because the store paints the same word on
 // both — so folding is just keeping them: a row replaces the one it names, and
 // one that is `gone` (it died, or it stopped matching) leaves.
@@ -254,7 +254,7 @@ let fold = (rows, f) => {
   for (let eid of f.gone ?? []) rows.delete(eid)
 }
 
-// A page's filter as the STORE spells it. A fetch goes through the app's door,
+// A page's filter as the store spells it. A fetch goes through the app's door,
 // which does this on the way (workers/yak/wire.ts `lined`, listing.ts
 // `asking`); a socket goes straight to the store, so a subscription is
 // translated here — the same two rules, so `query(f)` and `subscribe(f)` ask

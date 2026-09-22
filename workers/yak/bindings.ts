@@ -38,7 +38,7 @@ export let resourceName = async (
   return `${label || 'app'}-${key}`
 }
 
-// What is bound to an app — or to MANY apps in one read, which is how a
+// What is bound to an app — or to many apps in one read, which is how a
 // listing asks (tools.ts `app_list`, T-35431). Every row names its own app, so
 // the flat answer groups without a second question.
 export let bindings = async (

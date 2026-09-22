@@ -49,7 +49,7 @@ let ONE: Pinner[] = [{ prefix: PREFIX, app: APP }]
 // each object landed, which the sweep's grace period reads — `clock` moves it,
 // so a test can put bytes that look a day old.
 //
-// It is COUNTED by the platform's own counter (store/blobs.ts `counted`), told this
+// It is counted by the platform's own counter (store/blobs.ts `counted`), told this
 // test's tally rather than a request's, so what the numbers below assert is
 // what a deploy reports as `r2;dur=<n>` on its Server-Timing — one truth, and
 // not a second tally that can drift from it. `trips()` is a snapshot, so a
@@ -210,13 +210,13 @@ Deno.test('a rollback restores the bytes, and only the files', async () => {
   // app's — a photo someone uploaded — is untouched.
   assertEquals(await blobs.has(PREFIX + 'broken.js'), false)
   assertEquals(await read(blobs, 'blobs/deadbeef'), 'a photo')
-  // And the version it rolled FORWARD from is still restorable: history is
+  // And the version it rolled forward from is still restorable: history is
   // never rewritten, so its bytes are still pinned.
   await restore(blobs, PREFIX, two)
   assertEquals(await read(blobs, 'index.html'), '<h1>OOPS</h1>')
 })
 
-// What a version PUT BACK, read off the manifests: a rollback restores files,
+// What a version PUT back, read off the manifests: a rollback restores files,
 // so the files are its record (T-32910, C-32905 item 6).
 Deno.test('a version made by a rollback says which one it restored', () => {
   let v = (version: number, index: string): Version => ({
@@ -341,7 +341,7 @@ Deno.test('a write pins what it replaced, and a path answers its own past', asyn
   // Newest first: the last thing it was is the first thing offered back.
   assertEquals(all.map((w) => w.sha), [then!.sha, was!.sha])
 
-  // What it held at a moment is the bytes the first write AFTER that moment
+  // What it held at a moment is the bytes the first write after that moment
   // took away.
   assertEquals(held(all, ago(3).getTime())!.sha, was!.sha)
   assertEquals(held(all, ago(1.5).getTime())!.sha, then!.sha)
@@ -369,7 +369,7 @@ Deno.test('the prune lets go only of bytes nothing names any more', async () => 
   await blobs.put(PREFIX + 'index.html', bytes('<h1>middle</h1>'))
   let recent = await replaced(blobs, PREFIX, 'index.html', 'p1', ago(1))
   await blobs.put(PREFIX + 'index.html', bytes('<h1>now</h1>'))
-  // The forty-day-old entry names the DEPLOYED bytes, which is the case that
+  // The forty-day-old entry names the deployed bytes, which is the case that
   // matters: an entry aging out must not take a version's bytes with it.
   assertEquals(old!.sha, one['index.html'])
 
@@ -402,7 +402,7 @@ Deno.test('the prune lets go only of bytes nothing names any more', async () => 
 })
 
 // The liveness rule itself (T-34952, D-34942): what keeps a blob is that
-// something NAMES it, and never how recent it is — plus the day's grace that
+// something names it, and never how recent it is — plus the day's grace that
 // keeps a deploy still in flight from being swept out from under.
 Deno.test('a blob lives while anything names it, and a day besides', async () => {
   let { blobs, clock, trips } = memory()
@@ -497,7 +497,7 @@ Deno.test('two apps holding the same file hold one object', async () => {
   let mine = await snapshot(blobs, PREFIX)
   let yours = await snapshot(blobs, theirs)
   assertEquals(mine['index.html'], yours['index.html'])
-  // The address is the key, so the second deploy's pin IS the first one's.
+  // The address is the key, so the second deploy's pin is the first one's.
   assertEquals(await blobs.list(SHA), [addressed(mine['index.html'])])
   // And each app still puts its own copy back from it.
   await blobs.delete(theirs + 'index.html')
@@ -528,7 +528,7 @@ Deno.test('a pin at the old per-app key is read until it is carried', async () =
   assertEquals(await read(blobs, 'index.html'), '<h1>one</h1>')
 })
 
-// The mark set is the BUCKET's: an object one app has stopped naming may be
+// The mark set is the bucket's: an object one app has stopped naming may be
 // the very file another app serves, so a sweep that saw one app at a time
 // would delete it.
 Deno.test('the sweep keeps a sha another app still names', async () => {

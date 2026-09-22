@@ -12,9 +12,9 @@ import {
 } from './probe.ts'
 import { hearing, HELLO } from './mcp-probe.ts'
 
-// The stream is DURABLE and resumable (T-32734): it lives in a Durable Object
+// The stream is durable and resumable (T-32734): it lives in a Durable Object
 // of the person's own, so the request that deploys reaches the stream a
-// DIFFERENT request opened — which is what makes the notification arrive at
+// different request opened — which is what makes the notification arrive at
 // all outside one isolate — and a client whose connection dropped picks up
 // what it missed from its `Last-Event-ID`.
 slow('the stream names its session and replays a missed line', async () => {
@@ -38,7 +38,7 @@ slow('the stream names its session and replays a missed line', async () => {
     await init.json()
     assertMatch(session, /^[0-9a-f-]{36}$/)
 
-    // An app of his own, whose VIEWS are what move — the one list an app's
+    // An app of his own, whose views are what move — the one list an app's
     // deploy still moves, now that its commands are not tools (T-34541).
     let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
       .exec(await agent.tool('app_new', { slug: 'walks', title: 'Walks' }))![1]
@@ -134,7 +134,7 @@ slow('the stream names its session and replays a missed line', async () => {
   }
 })
 
-// The ROSTER (T-34277, T-34541). Jeff: "is there anything else we can do about
+// The roster (T-34277, T-34541). Jeff: "is there anything else we can do about
 // claude having stale mcp tools?" The answer arrived at is that the list does
 // not move: a person's apps, their words and their commands all travel inside
 // tools that are always there, so a client's cached list stays right. `about`
@@ -203,7 +203,7 @@ slow(
   },
 )
 
-// A release that moved a VIEW says so (T-33004): the pages an app's commands
+// A release that moved a view says so (T-33004): the pages an app's commands
 // draw their answers in are what resources/list is made of, and a client
 // holding that list is told on the stream. The tool list is not told about,
 // because it did not move — an app's commands are not tools (T-34541).

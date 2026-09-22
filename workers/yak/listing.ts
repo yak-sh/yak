@@ -1,4 +1,4 @@
-// What a LISTING carries, in one place, because a filter line has one answer:
+// What a listing carries, in one place, because a filter line has one answer:
 // the same query asked by the person's agent (tools.ts graph_query), by their
 // page (apps.ts `/api/query`) and by the socket that keeps answering it
 // (graph.ts `/ws`) is the same question, and the doors answered it differently
@@ -8,7 +8,7 @@
 // and every door reads it.
 //
 // The rule itself is T-32506's (C-32498 item 10): a listing answers the rows
-// a person SAVED, without the bookkeeping the store keeps about saving them,
+// a person saved, without the bookkeeping the store keeps about saving them,
 // and without a row that is nothing but bookkeeping. Naming a stamp in the
 // filter (`.created!`, `.created.by=…`) asks for it back — a door never hides
 // what was asked for. Anything that is not a row listing (an aggregate, a
@@ -19,7 +19,7 @@
 // (it is how an error is marked fixed), so it is the person's business too.
 export let STAMPS = ['created', 'updated', 'notified', 'opened', 'quarantined']
 
-// The kernel's own rows ABOUT the app, which nobody saved: a break the
+// The kernel's own rows about the app, which nobody saved: a break the
 // platform wrote down (unseen.ts `noted`) and a failure it expected. They are
 // read through `app_errors`, not through a listing, so a listing leaves them
 // out unless the filter names one — the deliberate opt-in src/query.ts
@@ -28,21 +28,21 @@ export let STAMPS = ['created', 'updated', 'notified', 'opened', 'quarantined']
 // list of their own rows (C-32607 item 4).
 export let KERNEL = ['exception', 'error']
 
-// A PERSON is the platform's row too — a store mints one for whoever writes to
+// A person is the platform's row too — a store mints one for whoever writes to
 // it, so `created.by` has a name to resolve (graph.ts `#vouching`) — but only in an
-// APP's store: the directory's own graph is made of people, and the agent tier
+// app's store: the directory's own graph is made of people, and the agent tier
 // reads that through the same listing. So a person is screened out of the
-// QUESTION, which only a page's doors ask, and never out of an answer.
+// question, which only a page's doors ask, and never out of an answer.
 export let PLATFORM = [...KERNEL, 'person']
 
 export type Row = Record<string, unknown>
 
 // The same rule, asked instead of answered: the platform's own rows left out
-// of the QUESTION. A listing can only screen an answer's rows, so a `.count!`
+// of the question. A listing can only screen an answer's rows, so a `.count!`
 // over one filter still counted what the list beside it did not show — a
 // person row wears a `doc` title now, so it matches `.doc!` (T-32627).
 // Screening the ask is what makes an aggregate, a search and a list agree, and
-// every door that serves a PAGE asks this way. Naming one asks for it back,
+// every door that serves a page asks this way. Naming one asks for it back,
 // and an address asks for its row whatever kind of row it is.
 // `words` names which of them to screen for, because a store refuses a filter
 // naming a component it never planted — screening for a word this store has no
@@ -75,14 +75,14 @@ export let listed = (rows: Row[], asked: string): Row[] => {
 }
 
 // Outputs speak human (db.ts `human()`) at an app's store too: a column that
-// REFERENCES a person answers `{eid, name}` when this store knows the person,
-// and the bare eid when it does not. A view gets ONE query, and a byline it
+// references a person answers `{eid, name}` when this store knows the person,
+// and the bare eid when it does not. A view gets one query, and a byline it
 // would need a second question for is no byline: the inline leaderboard drew
 // "someone" on every row while `created.by` was a uuid (C-32730 item 5). So
 // the name rides on the row that names the eid. Writes are unmoved — the value
 // is the eid, and a read shape handed back is lowered to it (db.ts `admitted`).
 //
-// Which columns REFERENCE, and what the store calls the people among them, are
+// Which columns reference, and what the store calls the people among them, are
 // the caller's word: the rule is the same over a fetch and over a socket, and
 // only the caller holds a store to ask with (graph.ts).
 export type Ref = (comp: string, col: string) => boolean

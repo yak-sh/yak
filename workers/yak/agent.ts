@@ -1,5 +1,5 @@
 // The agent door's two halves (T-33812), so mcp.ts is a mount and nothing
-// else: the caller's REACH as one `Graph`, and the platform's own tools as a
+// else: the caller's reach as one `Graph`, and the platform's own tools as a
 // `Plugin` on it.
 //
 // @yaks/mcp brings the generic tier — graph_apply, graph_query, graph_show,
@@ -11,7 +11,7 @@
 // mailbox, said in the tool list so nobody confuses it with a person's.
 // One server lists every tier because all of them are `Tool`s.
 //
-// THE GRAPH IS A COMPOSITION, not a database. A person's data lives in one
+// The graph is A composition, not a database. A person's data lives in one
 // Store object per app (graph.ts), an entity spans several, and reach.ts
 // already asks them all and merges one bundle per eid. `reaching()` wears that
 // as the `Graph` the package takes: `read` is the fan-out, `apply` is the
@@ -103,10 +103,10 @@ export let inputOf = (
 }
 
 /**
- * A platform tool's answer, as BUNDLES: one entity carrying the sentence it
+ * A platform tool's answer, as bundles: one entity carrying the sentence it
  * always said, saying which call produced it.
  *
- * These tools answer PROSE — that is what a platform verb has to say, and the
+ * These tools answer prose — that is what a platform verb has to say, and the
  * rows it worked on live in a directory nobody's reach holds — so the bundle
  * is `content{body}` with `output{source}` beside it, which is exactly what
  * the vocabulary has for an answer somebody's words. The structured `data` a
@@ -116,7 +116,7 @@ export let inputOf = (
  *
  * What is unseen in the space it worked in (unseen.ts) rides on the sentence —
  * every break not yet served, once, then the month's ceiling. It rode on the
- * DOOR before (mcp.ts `call`) and rides on the tool now, because the door no
+ * door before (mcp.ts `call`) and rides on the tool now, because the door no
  * longer knows what a space is.
  */
 export let answered = async (
@@ -143,7 +143,7 @@ export let answered = async (
 }
 
 /**
- * One of the platform's own tools, CALLED: the tool, then what is unseen in
+ * One of the platform's own tools, called: the tool, then what is unseen in
  * the space it worked in.
  *
  * It is its own export because two doors run these tools — the connector
@@ -180,7 +180,7 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
   // transport hands it over verbatim, and a host without views ignores it.
   ...metaOf(t),
   // The runner hands a tool the call's bundles and a host; what a platform
-  // verb reads is its ARGUMENTS, which the runner has already checked, and the
+  // verb reads is its arguments, which the runner has already checked, and the
   // call it is answering.
   run: (_, c) => running(ctx, t)(c.args, c.call),
 })
@@ -190,7 +190,7 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
  * table, for everybody. It contributes no components — the words are the apps'
  * own — only tools, and every one of them is bound to the person asking.
  *
- * With nobody asking it is the SAME list (T-34541): a tool that needs a token
+ * With nobody asking it is the same list (T-34541): a tool that needs a token
  * (anon.ts `openly` says which do not) is listed saying `oauth2` and refuses
  * the call (anon.ts `barred`), rather than being dropped. One roster, in one
  * order, whoever is asking — which is what a directory that snapshots
@@ -207,7 +207,7 @@ export let platform = (ctx: Ctx): Plugin => ({
 /**
  * The post room's own verbs, as a second plugin (letters.ts): `mail_list` and
  * `mail_send`. They are apart from the table above because they answer the
- * letters themselves as BUNDLES, where every other verb there answers words.
+ * letters themselves as bundles, where every other verb there answers words.
  */
 export let post = (ctx: Ctx): Plugin => ({
   name: 'yak/mail',
@@ -215,14 +215,14 @@ export let post = (ctx: Ctx): Plugin => ({
 })
 
 /**
- * ONE app, named: `recipes`, or `space/app` where a slug means two things.
+ * One app, named: `recipes`, or `space/app` where a slug means two things.
  *
  * Naming is also what reaches the platform's own store, which is in nobody's
  * ordinary reach on purpose (directory.ts `spaces`, apps.ts `kernels`) — its
  * owner's door to it is this tier, and this is how they open it.
  */
 export let named = (ctx: Ctx, said: string, write = false): Promise<Reach> => {
-  // Naming an app is asking about a MEMBERSHIP, so a caller with no identity
+  // Naming an app is asking about a membership, so a caller with no identity
   // cannot do it: signed out, the app a read answers for is the one the call
   // names and the door resolved (anon.ts `opened`), never a rider on the line.
   if (!ctx.person) {
@@ -235,7 +235,7 @@ export let named = (ctx: Ctx, said: string, write = false): Promise<Reach> => {
   return inApp(ctx, two ? { space: one, app: two } : { app: one }, write)
 }
 
-// The `.in=` rider: which app a READ is scoped to. It is the platform's word,
+// The `.in=` rider: which app a read is scoped to. It is the platform's word,
 // not the query grammar's, so it comes off the line before any store sees it —
 // a store knows about components, and which of several stores to ask is a
 // question only this side of the hop can answer.
@@ -246,9 +246,9 @@ let scope = (line: string) => {
 }
 
 // The identity operand list, wherever it appears on a line: `.eid=a,b` — which
-// is what the page's `id=` becomes (wire.ts `lined`) — names a SET rather than
+// is what the page's `id=` becomes (wire.ts `lined`) — names a set rather than
 // comparing a column, so its operands are ids and a word among them may be a
-// NAME (T-34390, @yaks/alias). `.eid!=` and the rest are untouched: this is the
+// name (T-34390, @yaks/alias). `.eid!=` and the rest are untouched: this is the
 // one operator whose right-hand side is an identity.
 let IDS = /(^|&)(\.(?:entity\.)?eid=)([^&]*)/g
 
@@ -287,7 +287,7 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
   let rows = async (q: unknown) => {
     let { said, line } = scope(String(q))
     let where = said ? [await named(ctx, said)] : reach
-    // An agent's grammar is the PAGE's (guide.md): `id=`, `limit=` and `after=`
+    // An agent's grammar is the page's (guide.md): `id=`, `limit=` and `after=`
     // where the store spells `.eid=`, `.limit=` and `.after=`, and a value
     // written as it reads rather than as a store would parse it. One
     // translation for every door a person's own line arrives at (wire.ts).
@@ -311,28 +311,28 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
 }
 
 // Every reachable app's `vocab.json`, merged over the core documents. First
-// declaration wins, which is where a word LIVES (T-32728), so the schema an
+// declaration wins, which is where a word lives (T-32728), so the schema an
 // agent is handed says each column the way the store that owns it does.
 //
-// It also says which columns the reach CANNOT agree on: two spaces may spell
+// It also says which columns the reach cannot agree on: two spaces may spell
 // one word differently (mcp_test.ts "a word two spaces spell differently
 // stays two words"), and the merged vocabulary keeps one of the two. A schema
 // derived from it would then refuse a write the other store takes, so those
 // columns are named here and typed nowhere (`reading` below).
 //
-// The DIRECTORY is the other side of that same disagreement, and it is not an
+// The directory is the other side of that same disagreement, and it is not an
 // app: it answers no `/vocab`, and the words it holds are the platform's own
 // (vocab.ts `platformDoc`), loaded into that store instead of the packages'
-// documents. One of them — `member.role` — both sides spell and MEAN
+// documents. One of them — `member.role` — both sides spell and mean
 // differently: the platform's roster is its access ladder
 // (`owner|editor|viewer`, read space-wide by apps.ts), while @yaks/member
 // keeps belonging (`owner|member`) apart from access, which it spells as a
 // grant or the app's mode. Typed as the package's, the door refused a seat the
 // directory itself takes (T-34273).
 //
-// It is never in the default REACH — `dir.spaces` leaves the meta space out,
+// It is never in the default reach — `dir.spaces` leaves the meta space out,
 // so a person who owns `yak` still means their own space when they name none
-// — yet a batch may be AIMED at it by name (`$app: yak/platform`, `named`
+// — yet a batch may be aimed at it by name (`$app: yak/platform`, `named`
 // below). So the question is who may address it, which is who holds a seat in
 // the meta space, and that is the same question `named` asks.
 let spoken = async (
@@ -354,13 +354,13 @@ let spoken = async (
         defs[name] = schema
         continue
       }
-      // Two apps in two SPACES may each home one word, and then one name
+      // Two apps in two spaces may each home one word, and then one name
       // means two things (reach.ts `apartIn`). The first declarer is the word
       // here — the same rule the space's own union loads by — and a column
       // they spell differently is typed nowhere (`reading` below).
       //
       // Inside one space there is nothing to merge: a word has one home, and
-      // a column a BORROWER declared was planted on the home's manifest by
+      // a column a borrower declared was planted on the home's manifest by
       // the deploy that brought it (tools.ts `released`), so the home's
       // document already says every column the word has.
       for (let [col, s] of Object.entries(schema.properties ?? {})) {
@@ -380,7 +380,7 @@ let spoken = async (
  * How this door's columns read and write, where that is not what the
  * vocabulary declares (@yaks/mcp `BundleOpts.column`):
  *
- * - a REFERENCE reads back as the eid or as `{eid, name}`, because outputs
+ * - a reference reads back as the eid or as `{eid, name}`, because outputs
  *   speak human (graph.ts `#speak`); a write takes the id;
  * - a column two reachable apps spell differently is typed nowhere, since the
  *   store that owns the word is the one that decides.
@@ -399,7 +399,7 @@ export let reading =
 // is how a caller matches the id it just minted to the word it asked for.
 //
 // Each store composed its own answer (@yaks/graph `composed`), and an entity
-// SPANNING apps was answered once per store it landed in (reach.ts `written`);
+// spanning apps was answered once per store it landed in (reach.ts `written`);
 // composing the parts is what makes that one entity again. The alias is put on
 // after, because this door minted the aliases itself before the batch was
 // split, so no store ever saw one.
@@ -420,7 +420,7 @@ let aliased = (
 // a brand-new entity wearing nothing but shared words has no home to go to,
 // and then somebody has to name one.
 //
-// It is said ON THE BUNDLE, `$app`, beside the other `$` words the wire
+// It is said on the bundle, `$app`, beside the other `$` words the wire
 // already carries, rather than as an argument to the tool: which store a
 // component lives in is a fact about the entity, which is what a read answers
 // in `_stores`. One batch names one app, because one batch is one write.
@@ -458,7 +458,7 @@ export let searching =
   }
 
 /**
- * The caller's reach as ONE graph: every app they can read, asked together and
+ * The caller's reach as one graph: every app they can read, asked together and
  * answered as one bundle per entity, with the platform's tools on it — and
  * beside it how a column of this graph reads and writes ({@link reading}),
  * which the schema an agent is handed is derived through.
@@ -474,7 +474,7 @@ export let reaching = async (
   let { vocab, clashes } = await spoken(ctx, reach)
   let storage = held(ctx, reach)
   // The post room is a person's own mailbox work (letters.ts), and it is
-  // LISTED for everybody: a caller who has not signed in has no letters to
+  // listed for everybody: a caller who has not signed in has no letters to
   // list and none to send, and hears that as the sign-in challenge rather than
   // as two tools that are not there. One roster, one order, whoever is asking
   // (`platform`, T-34541).
@@ -488,7 +488,7 @@ export let reaching = async (
     install: () => {},
     read: (q) => storage.read(q),
     rows: (q) => storage.rows(q),
-    // A NAME where an eid goes (T-34390). The ladder is @yaks/alias's and it
+    // A name where an eid goes (T-34390). The ladder is @yaks/alias's and it
     // is nothing but reads by id, so it works here exactly as it does inside a
     // store: `get` fans across the reach, and a name held in whichever store
     // this caller can see answers.
@@ -496,7 +496,7 @@ export let reaching = async (
     apply: async (change) => {
       let asked = (Array.isArray(change) ? change : [change]) as Bundle[]
       let { batch, where } = await aimed(ctx, asked)
-      // The SAME `Reach` the fan-out is holding, where it holds one: reach.ts
+      // The same `Reach` the fan-out is holding, where it holds one: reach.ts
       // routes by identity — a word's declarers are picked out of this very
       // list — so a second object naming the same app is not it.
       let one = where &&

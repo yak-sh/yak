@@ -28,18 +28,18 @@ import { level, standing } from './meter.ts'
 // A refusal is NOT a break (C-32652 item 3, T-32655; C-32869 item 5) — one
 // rule, read off whichever half of the answer the platform is holding.
 //
-// The STATUS is the rule. A 4xx is somebody's deliberate no: the app doors'
-// `not_a_writer`/`not_a_reader` (apps.ts SAYS), identity's `unauthorized`,
+// The status is the rule. A 4xx is somebody's deliberate no: the app doors'
+// `not_a_writer`/`not_a_reader` (apps.ts says), identity's `unauthorized`,
 // the store's `method_not_allowed` — and equally an app's own worker saying
 // "no city by that name", or passing on the 401 an outside service gave it
 // for a key its owner mistyped. Nobody's code fell over, and the page that
-// catches one is meant to ACT on it, since the guide teaches
+// catches one is meant to act on it, since the guide teaches
 // `e.signIn ? location = e.signIn`. A break is what nobody chose: a throw,
 // or a 5xx (`failed` below).
 //
 // Where there is no status — a kernel part that relayed a door's no by
-// THROWING what it was answered (index.ts's catch-all) — the answer's own
-// SHAPE stands in for it: every door here spells a no one way, a body
+// throwing what it was answered (index.ts's catch-all) — the answer's own
+// shape stands in for it: every door here spells a no one way, a body
 // carrying `{"error":{"code":…}}`, and what fell over never wears it.
 //
 // The shape alone was the whole rule until C-32869 item 5, where a weather
@@ -65,7 +65,7 @@ export let refusal = (answer: string, status?: number) =>
 // reads it (dispatch.ts `ran`); everything under it is the app working.
 export let failed = (status: number) => status >= 500
 
-// The version the app is SERVING, read past the directory's read cache
+// The version the app is serving, read past the directory's read cache
 // (directory.ts `FRESH`). A break names the deploy it happened on, and the
 // likeliest moment for one is right after a deploy — when the isolate serving
 // the app is still holding the version from before the bump, so the ninth
@@ -82,7 +82,7 @@ export let serving = async (env: Env, space: Space, app: App) => {
   }
 }
 
-// The ceiling on what one app may PUSH down its members' streams in a
+// The ceiling on what one app may push down its members' streams in a
 // minute (T-33006): a crash-looping page writes a break per frame, and every
 // break past the first few says the same thing. Per-isolate memory, like the
 // report door's own write ceiling (apps.ts `flooding`) — approximate on
@@ -107,8 +107,8 @@ let hushed = (space: Space, app: App) => {
 // kernel flag into apply()'s server-writer mode; the shape is the wire's own
 // entity literal.
 //
-// WHOSE break it is, is the caller's to know, and only three callers can
-// (T-33234). An APP's store takes one from the two places the app's own code
+// Whose break it is, is the caller's to know, and only three callers can
+// (T-33234). An app's store takes one from the two places the app's own code
 // was running — its worker, which threw or answered a 5xx (dispatch.ts `ran`),
 // and its page, which reported its own (apps.ts `/report`). The META store
 // takes everything the platform hit in its own code (index.ts `report`),
@@ -116,7 +116,7 @@ let hushed = (space: Space, app: App) => {
 // routing, our dispatch. Nothing here decides that, and nothing should try:
 // the message never says whose code it was.
 //
-// A break in a space's app is also PUSHED as it lands (T-33006, V-32361):
+// A break in a space's app is also pushed as it lands (T-33006, V-32361):
 // `notifications/message` to each member's stream, for whoever is connected
 // and idle — MCP's logging door, declared in initialize (mcp.ts). The push
 // marks nothing: served-in-a-reply stays the only `notified`, so the unseen
@@ -128,12 +128,12 @@ let hushed = (space: Space, app: App) => {
 // `.doc!` — the query a person's agent is taught as "everything you saved" —
 // where one showed up in a recipe box as a recipe (C-32531 item 1).
 // Where a break is written: one bundle, under the kernel flag, because an
-// `exception` is wholly server-owned. The PLATFORM's own breaks go to the meta
+// `exception` is wholly server-owned. The platform's own breaks go to the meta
 // store ({@link metaBreaks}); an app's go to that app's store.
 export type Breaks = (bundles: Bundle[]) => Promise<unknown>
 
 /** The platform's own breaks: the directory's store, in the graph's wire. An
- * APP's breaks go to that app's own store the same way — `metaOf(door).apply`
+ * app's breaks go to that app's own store the same way — `metaOf(door).apply`
  * at the call site — because it is the same Store class and the same wire. */
 export let metaBreaks = (env: Env): Breaks => (bundles) =>
   meta(env).apply(bundles, KERNEL)
@@ -194,7 +194,7 @@ export type Seen = { app: App; hit: Hit }
 
 let broke = (h: Hit) => h.exception ?? h.error ?? {}
 
-// One line: id, when, the PLACE to open, the deploy, the message. An item
+// One line: id, when, the place to open, the deploy, the message. An item
 // written before exceptions carried their own request still reads: its doc's
 // title said the same thing.
 //
@@ -216,7 +216,7 @@ export let line = ({ app, hit }: Seen) => {
 // apps.ts `broken`); one thrown in a page's own code arrives as a JS stack,
 // whose frames say the same with a column after them.
 //
-// Only an ADDRESS counts — a file the app serves, `/recipes/index.html:42`.
+// Only an address counts — a file the app serves, `/recipes/index.html:42`.
 // A break on the way in has a stack too, but its frames are inside the
 // kernel's own bundle, and `…/.wrangler/tmp/dev-Z7MP9l/index.js:12341` is
 // not a place the person can open. No spot leaves the card its request,
@@ -264,7 +264,7 @@ let graphAt = (env: Env, space: Space, app: App, who: Who) => {
 // the facet as its `kind`, which is what an id is spelled from (`line`).
 //
 // Two reads because they are two tables and the filter grammar has no
-// alternation — but ONE round trip, since the second never needed the first's
+// alternation — but one round trip, since the second never needed the first's
 // answer. Asked in turn, a listing over a person's apps paid the app store's
 // latency twice per app (T-35431).
 export let openIn = async (
@@ -289,14 +289,14 @@ export let openIn = async (
   }
 }
 
-// What the app has already moved past, for the RIDER only (T-34338). A break
+// What the app has already moved past, for the rider only (T-34338). A break
 // names the version it happened on, read past the directory's cache
 // ({@link serving}), so one naming a version under the app's own was produced
 // by code a later release replaced — `healed` archived its cohort at that
 // release and this one only arrived afterwards. A break naming no version at
 // all predates the counter and goes with them.
 //
-// It stays OPEN, and `app_errors` still lists it: this decides only what is
+// It stays open, and `app_errors` still lists it: this decides only what is
 // worth interrupting a reply with. Unseen means unheard, not merely unstamped,
 // and news about code that no longer runs is neither.
 export let past = (app: { version?: number | null }, h: Hit) => {
@@ -305,13 +305,13 @@ export let past = (app: { version?: number | null }, h: Hit) => {
 }
 
 // Serve, then mark: what is open, and `notified` on each item that had
-// none, so the next reply is quiet about them. The mark is the PLATFORM's own
+// none, so the next reply is quiet about them. The mark is the platform's own
 // stamp, so it rides the kernel's door — a viewer who may read an app's breaks
 // is not thereby a writer of it.
 //
 // `all` is the difference between the two callers: `app_errors` asks for the
 // whole open list and gets it, while the rider asks for what is news and gets
-// the fresh ones only. A stale break is still STAMPED here — it was offered
+// the fresh ones only. A stale break is still stamped here — it was offered
 // and passed over, and offering it again on the next reply would be the same
 // noise a reply later.
 export let serve = async (
@@ -348,7 +348,7 @@ let WHEN = /^\d{4}-\d{2}-\d{2}([T ].*)?$/
 let DAY = /^\d{4}-\d{2}-\d{2}$/
 let VERSION = /^v(\d+)$/i
 
-// A bound as a moment: a bare day means the END of it, because "everything
+// A bound as a moment: a bare day means the end of it, because "everything
 // through the 14th" is what a person says and midnight is not what they mean.
 let moment = (word: string) =>
   Date.parse(DAY.test(word) ? `${word}T23:59:59.999Z` : word)
@@ -358,7 +358,7 @@ let moment = (word: string) =>
 // An id is the plainest — the human id off a line, or an eid a card carries,
 // since a card names every eid in its fold. But listing ids is
 // exactly what nobody can do cheaply when a page filed six breaks for a file
-// that did not exist yet (T-34338), so a word may be a BOUND instead, and one
+// that did not exist yet (T-34338), so a word may be a bound instead, and one
 // word closes the lot: `all`, `v<n>` for everything up to and including that
 // deploy, or a day or an instant for everything at or before it.
 //
@@ -397,7 +397,7 @@ export let archive = async (
   return close(env, space, app, who, hits)
 }
 
-// And fixed by a RELEASE, which is how a break usually ends. D-32318 §Errors,
+// And fixed by a release, which is how a break usually ends. D-32318 §Errors,
 // verbatim: "One is open until a later deploy stops producing it or the agent
 // marks it fixed." The code that produced it is not what serves any more, so
 // every deploy, install and rollback closes what the versions before it broke
@@ -419,7 +419,7 @@ export let healed = async (
   return old.length ? close(env, space, app, who, old) : 0
 }
 
-// The app's OWN file a break happened on, if it names one. A request reads
+// The app's own file a break happened on, if it names one. A request reads
 // `<type> <path>` (apps.ts `broken`) where the path is the address as the
 // browser asked for it — `page /recipes/app.js` — so the app's own name comes
 // off the front and a directory answers with its index. An app serving the
@@ -435,8 +435,8 @@ export let fileOf = (slug: string, request = '') => {
   return path && !path.endsWith('/') ? path : `${path}index.html`
 }
 
-// And fixed by a WRITE, which is the other way a break ends without anyone
-// saying so (T-34338). An app's files serve live — a write IS the fix, with
+// And fixed by a write, which is the other way a break ends without anyone
+// saying so (T-34338). An app's files serve live — a write is the fix, with
 // the deploy only naming it — so a break open against a path this write just
 // changed was produced by bytes that are not there any more. That is the same
 // bargain {@link healed} makes, and it is why six "failed to load app.js" from

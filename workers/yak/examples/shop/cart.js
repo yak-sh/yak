@@ -2,7 +2,7 @@
 // the page below is only drawing and this is the part worth being sure of.
 //
 // A cart is this browser's alone until it is paid for — it is never written
-// to the store. What the shop KNOWS lives in the store; what one visitor is
+// to the store. What the shop knows lives in the store; what one visitor is
 // still deciding lives here.
 
 /** The sizes a product row offers, in the order the seller wrote them. */
@@ -14,7 +14,7 @@ export let sizes = (row) =>
 export let money = (cents) => `$${((cents ?? 0) / 100).toFixed(2)}`
 
 /**
- * One more of something, as a NEW cart. A line is a product and a size
+ * One more of something, as a new cart. A line is a product and a size
  * together, so two sizes of one shirt are two lines and a second helping of
  * one of them is a bigger count on the line already there.
  *

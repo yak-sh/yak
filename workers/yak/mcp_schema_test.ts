@@ -19,7 +19,7 @@ import {
 } from './probe.ts'
 import { hearing, HELLO } from './mcp-probe.ts'
 
-// An app's OWN tools (T-32685): a tools.json beside vocab.json, planted by
+// An app's own tools (T-32685): a tools.json beside vocab.json, planted by
 // the same deploy, called at the same door as `<app>__<tool>` — and doing
 // through it exactly what the caller could do on the app's own page.
 slow('an app declares its own commands, and command runs them', async () => {
@@ -74,7 +74,7 @@ slow('an app declares its own commands, and command runs them', async () => {
     assertStringIncludes(deployed, 'commands: log_run, leaderboard')
     assertStringIncludes(deployed, 'components: jog')
 
-    // What the app can be ASKED to do, said by the one fixed tool (T-34541):
+    // What the app can be asked to do, said by the one fixed tool (T-34541):
     // the commands, the app each belongs to, and the arguments each takes.
     let commands = async (args: Record<string, unknown> = {}) =>
       commandsIn(await agent.tool('commands', args))
@@ -88,7 +88,7 @@ slow('an app declares its own commands, and command runs them', async () => {
     ])
     assertEquals(new Set(all.map((c) => c.at)), new Set([`${space}/runs`]))
     let log = all.find((c) => c.name == 'log_run')!
-    // The app's TITLE and address ride in the description: a slug is not what
+    // The app's title and address ride in the description: a slug is not what
     // the person called it, and a model choosing reads the words.
     assertStringIncludes(log.description, 'Run club')
     assertStringIncludes(log.description, `${space}.yaks.app/runs/`)
@@ -158,7 +158,7 @@ slow('an app declares its own commands, and command runs them', async () => {
     assertEquals(rows.length, 1)
     assertEquals(rows[0].jog, { who: 'Ada', miles: 5 })
     // Who wrote it, by name: a reference to somebody the store knows answers
-    // `{eid, name}`, so the leaderboard a VIEW draws from its one query says
+    // `{eid, name}`, so the leaderboard a view draws from its one query says
     // who ran instead of "someone" (C-32730 item 5).
     assertEquals(rows[0].created.by, { eid: jeff.person, name: jeff.name })
     // And the read half answers the listing a page gets — the same byline,
@@ -171,7 +171,7 @@ slow('an app declares its own commands, and command runs them', async () => {
       eid: jeff.person,
       name: jeff.name,
     })
-    // And the reply carries that answer as what it IS: a tool answers BUNDLES,
+    // And the reply carries that answer as what it IS: a tool answers bundles,
     // so the words are one bundle's `content{body}` and the bundle says which
     // call it came from. An app's own declared command goes down the same path
     // as every other tool here, and this is where that shows.
@@ -193,7 +193,7 @@ slow('an app declares its own commands, and command runs them', async () => {
       Error,
     )
     assertStringIncludes(short.message, 'miles')
-    // A command nobody declared says what there IS instead of nothing: the
+    // A command nobody declared says what there is instead of nothing: the
     // list is this person's own, so a model cannot have known it.
     let nope = await assertRejects(
       () => agent.tool('command', { name: 'nope' }),
@@ -234,7 +234,7 @@ slow('an app declares its own commands, and command runs them', async () => {
       'you can read this app but not change it',
     )
 
-    // A manifest that cannot work is refused at DEPLOY, whole, and the tools
+    // A manifest that cannot work is refused at deploy, whole, and the tools
     // the app already had keep answering.
     await agent.tool('app_files', {
       ...app,
@@ -272,7 +272,7 @@ slow('an app declares its own commands, and command runs them', async () => {
   }
 })
 
-// The commands a KIND is worth (T-34513): an app that declares a `recipe` and
+// The commands a kind is worth (T-34513): an app that declares a `recipe` and
 // no tools.json at all still has a verb for adding one and a verb for finding
 // it, so the next agent the person talks to discovers the app the way it
 // discovers anything else here — by asking what the apps in reach can do.
@@ -400,11 +400,11 @@ slow('a kind an app declares is two commands, with no tools.json', async () => {
   }
 })
 
-// ONE ROSTER, for everybody (T-34541). A directory snapshots `tools/list`
+// One roster, for everybody (T-34541). A directory snapshots `tools/list`
 // when a connector is submitted and serves that snapshot forever — only
 // `tools/call` reaches us — so a list that moves with whose token arrived, or
 // with what somebody deployed this morning, is a list the published connector
-// can never match. What an app declares is a COMMAND instead: `commands` says
+// can never match. What an app declares is a command instead: `commands` says
 // which there are, `command` runs one, and neither name ever moves.
 slow(
   'the roster is one list for everybody, and apps carry commands',
@@ -477,7 +477,7 @@ slow(
         "no app's own verb is a tool",
       )
 
-      // What differs is the COMMANDS, which are a caller's own: his app's, and
+      // What differs is the commands, which are a caller's own: his app's, and
       // nothing of hers — her app is in her space, and he is nobody there.
       let commands = async (agent: ReturnType<typeof connector>) =>
         commandsIn(await agent.tool('commands'))
@@ -506,7 +506,7 @@ slow(
       assertStringIncludes(init.instructions, 'Commands: log_run')
       assertStringIncludes(init.instructions, 'command')
 
-      // The session's stream: held open, and QUIET through a deploy that grew a
+      // The session's stream: held open, and quiet through a deploy that grew a
       // command. The tool list did not move, so nothing is said about it — the
       // one thing that moves it now is a release (stream.ts `crossed`).
       let stream = await k.at('yaks.app', '/mcp', {
@@ -552,7 +552,7 @@ slow(
   },
 )
 
-// And the schema DOOR (T-34156). Jeff: "can we otherwise add some vocab tools?
+// And the schema door (T-34156). Jeff: "can we otherwise add some vocab tools?
 // for getting specific parts and also the full thing probably? should come
 // with docs, i expect, to explain the meaning". Three sizes over the caller's
 // own words: the index, one component whole, and a kind.
@@ -611,7 +611,7 @@ slow('graph_schema answers the index, a word whole, and a kind', async () => {
     assertEquals(mail.guide, 'https://yaks.app/docs/mail.md')
     assertEquals(mail.worn_with, ['doc'])
     assertEquals(Object.keys(mail.example!.mail).includes('from'), true)
-    // What points AT a letter, from anywhere in reach: its own `reply_to`,
+    // What points at a letter, from anywhere in reach: its own `reply_to`,
     // which is how a thread hangs together.
     assertEquals(
       mail.references!.in.some((r) => r.comp == 'mail' && r.prop == 'reply_to'),
@@ -637,7 +637,7 @@ slow('graph_schema answers the index, a word whole, and a kind', async () => {
   }
 })
 
-// The WRITE door's schema is the caller's vocabulary (T-34153). Jeff, on an
+// The write door's schema is the caller's vocabulary (T-34153). Jeff, on an
 // agent trying to send a letter with graph_apply: "how are agents supposed to
 // learn our comp schema? claude was trying to send mail ... but is just
 // guessing at the comp types". So the published input schema is checked here
@@ -661,7 +661,7 @@ slow(
           .find((t) => t.name == 'graph_apply')!
         return {
           input: one.inputSchema,
-          // What a tool list COSTS the agent that reads it, before it has asked
+          // What a tool list costs the agent that reads it, before it has asked
           // anything: the number worth watching when the schema grows.
           bytes: JSON.stringify(tools).length,
         }
@@ -715,9 +715,9 @@ slow(
         false,
       )
 
-      // A vocabulary GROWS mid-connection, and the schema a client is holding
+      // A vocabulary grows mid-connection, and the schema a client is holding
       // goes stale with it — app_deploy plants the words and the next
-      // `tools/list` is typed for them. The tool NAMES did not move, so
+      // `tools/list` is typed for them. The tool names did not move, so
       // nothing is said on the stream (T-34541): a client is told its list
       // moved only when it did, and the open write door is what makes a
       // client holding the older schema work anyway.

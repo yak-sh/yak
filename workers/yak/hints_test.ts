@@ -1,11 +1,11 @@
 /// <reference lib="deno.ns" />
-// What every platform tool SAYS about itself: its title and the four MCP
+// What every platform tool says about itself: its title and the four MCP
 // behavior hints (T-34345, T-34346, T-34347, T-34356). A host reads the hints
 // to decide what it may call without stopping to ask, and both connector
 // directories review them mechanically — a read-only tool advertised
 // destructive is a person asked to approve a list of their own apps.
 //
-// The lists below are PINNED on purpose. A new tool with no hints lands in
+// The lists below are pinned on purpose. A new tool with no hints lands in
 // none of them and the diff says which line to add it to, which is the whole
 // point: the table is the declaration, and a tool that forgot to declare
 // cannot slip through wearing whatever the default happened to be.
@@ -37,7 +37,7 @@ let READS = [
   'sandbox_read',
 ]
 
-// It can delete, or change something no second call takes back. A CREATE is
+// It can delete, or change something no second call takes back. A create is
 // not here: it only adds, and the undo of a create is the delete that is.
 let DESTROYS = [
   'app_delete',
@@ -87,7 +87,7 @@ let sorted = (names: string[]) => [...names].sort()
 let picked = (has: (t: (typeof TOOLS)[number]) => boolean) =>
   sorted(TOOLS.filter(has).map((t) => t.name))
 
-// The words are the FILE's (tools.yml, M-34605), and this is the pair of
+// The words are the file's (tools.yml, M-34605), and this is the pair of
 // checks that keeps the file and the roster one list: a row whose name the
 // file does not know throws at load (tool.ts `worded`), and an entry no row
 // claims is a description nobody will ever read.
@@ -103,7 +103,7 @@ Deno.test('the tool words are the file, and the file is the roster', () => {
     'tools.yml and the roster name different tools',
   )
   // And what a row wears is what its entry says — the one row with a slot
-  // (`guide`) says the pages there are, so its description GROWS from the
+  // (`guide`) says the pages there are, so its description grows from the
   // file rather than matching it.
   for (let t of TOOLS) {
     assertEquals(t.title, yml[t.name].title, t.name)

@@ -1,4 +1,4 @@
-// Every app's deploy history AS A GIT REPOSITORY, contributed as data
+// Every app's deploy history as A git repository, contributed as data
 // (plugin.ts): the two words the directory gains, the effect that mints a
 // commit when a version is deployed, and the daily sweep that mints the ones
 // that were missed. D-34943 is the shape; @yaks/git does the work, and
@@ -13,7 +13,7 @@
 // the object store because access to an app is decided in the directory: a ref
 // is the one part of a repository that belongs to one app.
 //
-// The OBJECTS do not live here at all. They are one global graph in a store of
+// The objects do not live here at all. They are one global graph in a store of
 // their own (door.ts `GIT_STORE`), because a git object is named by the digest
 // of its own bytes and the same file deployed by two apps is one row.
 //
@@ -31,7 +31,7 @@ import type { Plugin } from './plugin.ts'
 import { reporting } from './wake.ts'
 
 /** The component a deploy wears once it has been committed. `target` dies with
- * the deploy: a commit is ABOUT that release, and a release nobody kept is a
+ * the deploy: a commit is about that release, and a release nobody kept is a
  * commit about nothing. */
 export let gitDirectoryDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
@@ -64,7 +64,7 @@ export let gitPlugin: Plugin = {
   name: 'yak/git',
   vocab: [gitDirectoryDoc, refDoc],
   // `<app>.git` on a space's hostname, ahead of the apps (git_door.ts,
-  // T-34946). Loaded when it RUNS, for seo_door.ts's reason: the door reaches
+  // T-34946). Loaded when it runs, for seo_door.ts's reason: the door reaches
   // directory.ts and apps.ts's neighbours, and plugins.ts is what those are
   // composed from — a load-time import here would close the circle.
   routes: [
@@ -82,7 +82,7 @@ export let gitPlugin: Plugin = {
     sweep: { kind: 'git' },
   }],
   effects: [(on, at) => {
-    // Deploys are the DIRECTORY's rows; an app's own store has none, so this
+    // Deploys are the directory's rows; an app's own store has none, so this
     // registration would never fire there.
     if (!at.meta) return
     // @yaks/git's own step (`minting`), mounted on this Worker's post-commit

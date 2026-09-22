@@ -3,7 +3,7 @@
 // page listening on a WebSocket. The loop is the last ticket's (T-34239); what
 // is here is the place it happens and the wire it happens on.
 //
-// WHY AN OBJECT AT ALL. A build is a minute of tool calls, and the person is
+// Why an object at all. A build is a minute of tool calls, and the person is
 // watching it: the words, each tool as it starts and as it answers, the
 // address at the end. A Worker isolate cannot be that — the request that
 // starts the build is not the one holding the socket, and there is no second
@@ -11,18 +11,18 @@
 // arrives at it, its memory is the conversation, and its single thread is what
 // makes "one build at a time here" a fact rather than a lock.
 //
-// A PLAIN OBJECT, NOT THE AGENTS SDK. `agents` (the Agent class, hibernatable
+// A plain object, not the agents SDK. `agents` (the Agent class, hibernatable
 // sockets, state sync) is the obvious fit and was tried first; four things
 // sent it back, each checked against agents@0.22.0 rather than the docs:
 //
 //   1. its peers are this Worker's pins, moved — `zod ^4` where the MCP SDK
 //      pins us to 3, `@modelcontextprotocol/sdk 1.30.0` exactly where we are
 //      on 1.29.0 — so it installs only with --legacy-peer-deps;
-//   2. `AIChatAgent`, the half that holds a transcript, has LEFT the package
+//   2. `AIChatAgent`, the half that holds a transcript, has left the package
 //      (`agents/ai-chat-agent` throws at import) for `@cloudflare/ai-chat`,
 //      whose own peers are `ai ^6||^7` and `@ai-sdk/react`;
 //   3. its client is `agents/client` / `agents/react`, npm modules over the
-//      AI SDK's UI-message stream — and OUR pages are hand-written ESM with
+//      AI SDK's UI-message stream — and our pages are hand-written ESM with
 //      no build step, so the page could not import them and would be writing
 //      those frames by hand anyway (T-34242);
 //   4. `Agent extends DurableObject` from `cloudflare:workers`, which nothing
@@ -34,16 +34,16 @@
 // `#frames`. The SDK is the right answer the day our pages take a build step —
 // its React chat client is the payoff — and none of that is true today.
 //
-// THE TRANSCRIPT LIVES HERE, in the object's own SQLite, and not as entities
+// The transcript lives here, in the object's own SQLite, and not as entities
 // in the space's home store: the builder's whole reason to exist is a person
-// who has NO app yet, so there is no app store to write to, and a conversation
+// who has no app yet, so there is no app store to write to, and a conversation
 // that shipped nothing is not somebody's data to keep, quota and bill. What a
 // build produces — the app, its files, the deploy — is already in the graph,
 // written by the tools as the person. Living outside the graph, it also dies
 // outside it: closing a space calls `wiped` below, because no tombstone in the
 // directory reaches an object keyed by eid (T-34371).
 //
-// THE WIRE is one JSON frame per event, and the KEY names the frame:
+// The wire is one JSON frame per event, and the key names the frame:
 //
 //   page → object   {say}                        a person's line
 //   object → page   {said, text}                 a line of the conversation
@@ -58,7 +58,7 @@
 // frames, in order, then `{ready}` — so a reload costs nothing and the page
 // has one renderer for a live build and a replayed one.
 //
-// AND THE SAME FRAMES WITH NO SOCKET AT ALL. A browser that ran no script
+// And the same frames with no socket at all. A browser that ran no script
 // posts one line to `/api/build` and is answered a page (pages.ts `building`,
 // T-34242); what that page draws is `POST /say` below — the round waited for,
 // then the whole conversation as this same list. One wire, two ways to read
@@ -173,7 +173,7 @@ export let frames = (said: Line[]): Frame[] => {
 }
 
 // The Beat a build reports, as the frame the page draws. `done` carries the
-// last sentence, which is the refusal where there was one — and a REFUSAL is
+// last sentence, which is the refusal where there was one — and a refusal is
 // also said as a builder's line, because that is what the loop wrote into the
 // conversation (builder.ts `end`) and a replay would say it that way. So the
 // live stream and the replay are the same sequence, and `done` is only ever
@@ -241,7 +241,7 @@ export class Builder {
    * and erase.ts calls this so the sentence is true.
    *
    * Idempotent, because a delete that died halfway is finished by asking
-   * again (erase.ts ORDER): emptying an empty object empties it again. The
+   * again (erase.ts order): emptying an empty object empties it again. The
    * table is planted back so the next space at this name — the eid is fresh,
    * but nothing here relies on that — wakes with a schema rather than none.
    *
@@ -292,11 +292,11 @@ export class Builder {
 
   /**
    * One line from a person: the build it starts, and the frames it casts. What
-   * it ANSWERS is the turn's last frame — `{done}` or `{busy}` — for the door
+   * it answers is the turn's last frame — `{done}` or `{busy}` — for the door
    * below, which waits for the round rather than listening to it. Everyone on
    * a socket has already heard it.
    *
-   * ONE AT A TIME, and the flag is raised before the first `await` on purpose:
+   * One at A time, and the flag is raised before the first `await` on purpose:
    * two frames a moment apart are two handlers interleaving at every await, so
    * a check that yielded first would let both builds start.
    */
@@ -384,7 +384,7 @@ export class Builder {
   }
 
   /**
-   * A line from a browser with no socket: the round WAITED for, and the whole
+   * A line from a browser with no socket: the round waited for, and the whole
    * conversation answered as the frames a page draws — the replay a socket
    * would have heard, plus the `{done}` or `{busy}` this line came to. The
    * page is pages.ts's; this is the same wire, said once instead of streamed.
@@ -450,7 +450,7 @@ export let builderOf = (env: Env, space: string) => fetchOf(env.BUILDER, space)
 /**
  * The handshake, carried to the object with the kernel's own vouch on it and
  * nothing of the client's. apps.ts is the only caller: `/api/build` on a
- * space's hostname. The upgrade request IS the init, which is how the
+ * space's hostname. The upgrade request is the init, which is how the
  * `Upgrade` header reaches the object (door.ts, same reason).
  */
 export let joining = (env: Env, space: string, req: Request, who: Who) =>
@@ -467,12 +467,12 @@ export let joining = (env: Env, space: string, req: Request, who: Who) =>
 
 /**
  * A space's conversation, buried (T-34371). erase.ts is the only caller, and
- * it makes this call BEFORE the directory tombstone like everything else
+ * it makes this call before the directory tombstone like everything else
  * outside the directory: a wipe that fails leaves the space still named, and
  * asking again finishes it, where a wipe after the row would leave a
  * transcript nothing points at and nobody could ask about again.
  *
- * It THROWS on a refusal for that reason — a delete that says a space is gone
+ * It throws on a refusal for that reason — a delete that says a space is gone
  * has to have taken the conversation with it.
  */
 export let wiped = async (env: Env, space: string) => {
@@ -489,7 +489,7 @@ export let wiped = async (env: Env, space: string) => {
 
 /**
  * The other door on the same address (T-34242): a plain form POST, from a
- * browser that ran no script. One line, the round waited for, and a PAGE back
+ * browser that ran no script. One line, the round waited for, and a page back
  * — the way a drop answers a page rather than a code (drop.ts, same reason).
  *
  * apps.ts is the only caller, and it has already said who is asking.

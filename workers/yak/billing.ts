@@ -1,12 +1,12 @@
 // The paid tier (D-32751, T-33125): what a space pays, and the three doors it
 // takes — checkout, the customer portal, and the webhook Stripe posts the
-// truth to. Stripe is the MERCHANT OF RECORD here (Managed Payments): the
+// truth to. Stripe is the merchant of record here (Managed Payments): the
 // Checkout Session carries `managed_payments[enabled]=true`, Stripe sells,
 // collects and remits the tax, and the parameters it controls — automatic_tax,
 // payment_method_types, tax_id_collection, customer_update, invoice_creation —
 // must not be sent at all, so none of them appear below.
 //
-// THE ONE IDEA: `plan` on a space is a FUNCTION of one Stripe subscription
+// The one idea: `plan` on a space is a function of one Stripe subscription
 // object, never a running total of the events that arrived. Every webhook ends
 // at `planOf(sub)` — derive the whole row, then write what moved. That is what
 // makes an at-least-once, out-of-order delivery safe, and it is why there is no
@@ -16,7 +16,7 @@
 //
 // Two rules make `stale`, and neither is a clock alone:
 //
-//   1. A subscription this row has already seen END is never revived. Stripe
+//   1. A subscription this row has already seen end is never revived. Stripe
 //      never moves a subscription out of `canceled`, so an event that says
 //      otherwise is an older one that took a slower road — `deleted` before an
 //      older `updated` is the ordinary case, and a timestamp comparison is not
@@ -24,7 +24,7 @@
 //   2. Otherwise the newest event wins: an event created before the one that
 //      wrote the row is dropped.
 //
-// NOTHING HERE MAY FAIL QUIETLY. A signature we cannot verify, a checkout we
+// Nothing here may fail quietly. A signature we cannot verify, a checkout we
 // cannot create, a subscription we cannot attribute to a space — each is
 // written as an exception in the meta store, where the platform's own breaks
 // go (unseen.ts `noted`, index.ts, V-32361), not a line on a log nobody opens.
@@ -54,7 +54,7 @@ let API = 'https://api.stripe.com'
 // than this.
 
 // Stripe's form encoding: nested keys are `a[b][c]`, and everything is a
-// string. Undefined and null are LEFT OUT rather than sent empty — an empty
+// string. Undefined and null are left out rather than sent empty — an empty
 // `customer` is not the same ask as no customer at all.
 export let form = (
   fields: Record<string, unknown>,
@@ -84,10 +84,10 @@ let said = (body: unknown, status: number) => {
 // One call. A GET has no body; a POST is form-encoded, which is the only shape
 // Stripe's v1 API takes.
 //
-// `on` is a connected account (sell.ts): the platform key acting ON somebody
+// `on` is a connected account (sell.ts): the platform key acting on somebody
 // else's account, which Stripe reads off the `Stripe-Account` header and
 // nothing else — the same key, the same path, a different merchant. It is one
-// header rather than a second client because it IS one header: a direct charge
+// header rather than a second client because it is one header: a direct charge
 // differs from our own only in whose books it lands on.
 export let ask = async (
   env: Env,
@@ -134,7 +134,7 @@ let bytes = (hex: string) => {
 }
 
 // The header as its pairs, in order. A Map would not do: a header carries
-// SEVERAL `v1=` signatures while a secret is being rolled, and every one of
+// several `v1=` signatures while a secret is being rolled, and every one of
 // them has to be tried.
 let pairs = (header: string) =>
   header.split(',').map((p) => {
@@ -213,7 +213,7 @@ let when = (unix?: number | null) =>
   unix == null ? null : new Date(unix * 1000).toISOString()
 
 // When the paid-for period runs out. The field moved off the subscription onto
-// each of its ITEMS in API version 2025-03-31.basil, and the account's default
+// each of its items in API version 2025-03-31.basil, and the account's default
 // version is well past that — but the webhook endpoint pins no version of its
 // own, so the version it sends can move under us. Read either spelling and the
 // answer survives that: the latest item wins, since one subscription of ours
@@ -314,7 +314,7 @@ export let broke = async (env: Env, request: string, e: unknown) => {
   }).catch((why) => console.error(`yak: could not file ${request}`, why, e))
 }
 
-// The webhook door is on the open internet, so what it FILES has a ceiling:
+// The webhook door is on the open internet, so what it files has a ceiling:
 // per isolate, per minute, the way unseen.ts caps a crash-looping page. A
 // refused signature is worth seeing once — it means a secret rolled, or
 // somebody is poking — and worth seeing a hundred times an hour never.
@@ -334,7 +334,7 @@ let hushed = (what: string) => {
 let dirOf = (env: Env) =>
   directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
 
-// Who is buying: the platform session COOKIE, and nothing else. Deliberately
+// Who is buying: the platform session cookie, and nothing else. Deliberately
 // not identity.ts's `withAuth`, which also answers an agent's OAuth bearer —
 // these two doors belong to the signed-in web surface, and an agent that
 // cannot reach them cannot be talked into starting a purchase (C-33033 on
@@ -436,7 +436,7 @@ export let checkout = async (env: Env, req: Request, at?: Space) => {
 
 // Manage what is already paid for: Stripe's own customer portal, where a
 // person cancels, changes their card and reads their invoices. It needs a
-// portal CONFIGURATION on the account; without one Stripe refuses, and the
+// portal configuration on the account; without one Stripe refuses, and the
 // refusal is filed and said rather than swallowed.
 export let portal = async (env: Env, req: Request, at?: Space) => {
   let person = await buyer(env, req)
@@ -561,7 +561,7 @@ export let apply = async (env: Env, event: Event) => {
   return `${space.slug} is ${next.tier}`
 }
 
-// Stripe's door. The body is read as TEXT once and verified as that exact
+// Stripe's door. The body is read as text once and verified as that exact
 // string: the signature covers the raw bytes, so parsing and re-serializing
 // would verify something Stripe never signed.
 //
@@ -602,7 +602,7 @@ let hook = async (env: Env, req: Request) => {
   } catch {
     return json(400, 'bad_event', 'that was not an event')
   }
-  // A failure past this line is OURS, so it throws: index.ts files it and
+  // A failure past this line is ours, so it throws: index.ts files it and
   // answers a 5xx, and Stripe delivers again. That is exactly what we want for
   // a store that was busy or a Stripe call that timed out.
   return Response.json({ received: true, did: await apply(env, event) })

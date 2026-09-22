@@ -6,7 +6,7 @@
 // site (`ran`) and tools.ts one (`upload`).
 //
 // The hard part is identity. The app's script is code its owner's agent
-// wrote, so nothing it SAYS can be believed — and it still has to reach its
+// wrote, so nothing it says can be believed — and it still has to reach its
 // own store and its own files as the person looking at the page. So the
 // kernel seals a GRANT (src/token.ts `seal`) naming the store, the visitor
 // and their role, good for a minute, and sends it in with the request; the
@@ -18,16 +18,16 @@
 // binding has no grant that names it. Nothing durable is handed to app code:
 // the grant dies in a minute and belongs to one request.
 //
-// THE SECOND DOOR is `env.APP`, and it is the same machinery pointed at a
-// different actor (T-34303). The kernel seals a second grant naming the APP
-// ENTITY with `editor`, sends it in its own header, and the shim holds that
+// The second door is `env.APP`, and it is the same machinery pointed at a
+// different actor (T-34303). The kernel seals a second grant naming the app
+// entity with `editor`, sends it in its own header, and the shim holds that
 // one too — so `env.APP.fetch('/apply', …)` writes the app's own store
 // whatever the app's `access` says, and the batch is signed by the app. It is
 // what makes a per-row rule buildable at all: an app that is `private` to the
 // world, with a worker that checks an invitation code and then writes the one
 // row that code names. Both grants are the kernel's own word, minted per
 // request from the directory's row and never from anything a client sent, and
-// both name ONE store, so neither opens anywhere else.
+// both name one store, so neither opens anywhere else.
 //
 // The platform's session cookie never crosses into app code either — it is
 // stripped on the way in (session.ts: what serves an app gets the vouched
@@ -37,7 +37,7 @@
 // Local development has no dispatch namespace: it is remote-only
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/local-development/),
 // so under `wrangler dev` there is no worker to reach and every app serves its
-// files the way it always did. HOW that absence arrives depends on the
+// files the way it always did. How that absence arrives depends on the
 // wrangler: older ones left the binding undefined, current ones bind a stub
 // that throws `needs to be run remotely`, which `nowhere` reads as the same
 // fact. `remote = true` in wrangler.toml would point local dev at the deployed
@@ -72,7 +72,7 @@ export let namespace = (env: Env) => env.DISPATCH_NAMESPACE ?? NAMESPACE
 // sees is the kernel's.
 export let GRANT = 'x-yak-grant'
 
-// The APP's own grant, on the way IN only. The shim takes it off and spends
+// The app's own grant, on the way in only. The shim takes it off and spends
 // it under `GRANT` like any other, so the kernel has one header to open and
 // the inner hop cannot tell the two apart — which is the point: `granted`
 // answers who a grant names, and this one names the app.
@@ -94,13 +94,13 @@ type Grant = {
   exp: number
 }
 
-// The script's name in the namespace: the app's HANDLE (directory.ts
+// The script's name in the namespace: the app's handle (directory.ts
 // `storeName` — written at birth, which no rename moves), with every character
 // a script name may not carry made an underscore. Cloudflare documents a
 // script name as alphanumerics and dashes; the separators the handle is built
 // out of — the slash between space and app, the dot before the key — are
 // neither, so both fold. A slug holds neither of them and neither an
-// underscore (route.ts SLUG) and the key is hex, so the fold is still one
+// underscore (route.ts slug) and the key is hex, so the fold is still one
 // script per app: `jeff/recipes.1f7c9a` is `jeff_recipes_1f7c9a`, and the
 // bare `jeff/recipes` an older app is named by is `jeff_recipes` as it always
 // was.
@@ -169,7 +169,7 @@ export let granting = (secret: string, store: string, who: Who) =>
     secret,
   )
 
-// The APP acting as itself, for the same minute, on the same one store: the
+// The app acting as itself, for the same minute, on the same one store: the
 // app entity as the actor, at `editor`, which is what puts it past its own
 // `access` mode and no further — the two rules @yaks/member keeps for an
 // editor still hold, so `env.APP` writes the app's data and never its roster
@@ -186,7 +186,7 @@ export let itsApp = (who: Who | null, app: App) =>
   !!who && who.person == app.eid
 
 // Whether this request is an app's worker coming back through the service
-// binding at all — ANY app's, whoever the grant names and whether or not it
+// binding at all — any app's, whoever the grant names and whether or not it
 // still opens. It is the loop guard on the home app's router (apps.ts
 // `served`, D-34197): the router's own onward request carries the grant it was
 // handed, so this is what keeps a path it just intercepted from arriving back
@@ -252,7 +252,7 @@ let missing = (e: unknown) =>
   e instanceof Error && e.message.startsWith('Worker not found')
 
 // A namespace bound where it cannot be reached. Dispatch namespaces are
-// remote-only, so `wrangler dev` and the workerd probes bind a STUB that
+// remote-only, so `wrangler dev` and the workerd probes bind a stub that
 // throws `Binding DISPATCH needs to be run remotely` rather than leaving the
 // binding off — which is the same fact as no binding at all, this runtime has
 // no app workers, and never the app's break (T-34179).
@@ -283,14 +283,14 @@ let broke = (
     }, { env, space, app })
   )
 
-// THE SEAM (T-33234). `worker.fetch` below is the one line in the whole
+// The seam (T-33234). `worker.fetch` below is the one line in the whole
 // kernel where the code running is the app's and not ours, so it is the one
-// place a throw may be filed as the APP's break. Everything on either side of
+// place a throw may be filed as the app's break. Everything on either side of
 // it — routing, the directory, a store object, the bucket, the dispatch
 // binding itself — is the platform's own code, and what falls over there is
 // the platform's however loudly the URL names an app.
 //
-// It used to be left to throw, and index.ts's catch-all filed it by ROUTE:
+// It used to be left to throw, and index.ts's catch-all filed it by route:
 // whatever app the URL named wore every failure that escaped, so evicting a
 // Store object on a platform deploy wrote "your app broke" into a customer's
 // store, on their version, against their metered writes, to every member of
@@ -298,7 +298,7 @@ let broke = (
 //
 // Null is "there is no script": no dispatch namespace (local dev), or an app
 // that never deployed a worker. A throw is the app's code falling over, and
-// what that MEANS is the callers' — it ends the request for the app that owns
+// what that means is the callers' — it ends the request for the app that owns
 // the path (`ran`) and is skipped for the home app's router (`ahead`).
 let called = async (
   env: Env,
@@ -328,7 +328,7 @@ let called = async (
 }
 
 // The app's code fell over, written where its agent reads it. A no it relayed
-// by THROWING what a door answered it is not a break, the same rule the
+// by throwing what a door answered it is not a break, the same rule the
 // answered status reads (unseen.ts `refusal`).
 let threw = async (
   env: Env,
@@ -345,8 +345,8 @@ let threw = async (
   })
 }
 
-// What the worker's answer MEANS, whichever caller asked for it: a 404 is the
-// PASS verdict — null, so the files answer behind it — a 4xx is the app's own
+// What the worker's answer means, whichever caller asked for it: a 404 is the
+// pass verdict — null, so the files answer behind it — a 4xx is the app's own
 // deliberate no and files nothing (unseen.ts `refusal`), and a 5xx is not a
 // throw and would otherwise go unseen, so it is written here.
 let verdict = async (
@@ -393,7 +393,7 @@ export let ran = async (
 }
 
 // How long the home app's router has to answer before the kernel routes
-// without it. It sits in FRONT of another app's page, so this is time the
+// without it. It sits in front of another app's page, so this is time the
 // visitor waits before the page they asked for even begins: long enough for a
 // store read and an outside call, short enough that a stuck router costs the
 // page a beat rather than the request. The grant it is handed outlives it by
@@ -416,13 +416,13 @@ let patient = <T>(work: Promise<T>) => {
 }
 
 /**
- * The HOME app's worker, run AHEAD of the app whose slug owns the path
+ * The HOME app's worker, run ahead of the app whose slug owns the path
  * (`home.first`, router.ts, D-34197). The same call `ran` makes, so the
- * router acts as the CALLER — `handed` seals the visitor's own grant on the
+ * router acts as the caller — `handed` seals the visitor's own grant on the
  * home app's store, and there is no other store it may name — and its 404 is
  * the same pass verdict every app worker already speaks.
  *
- * What differs is the other rule: FAIL OPEN. A throw or a hang is written on
+ * What differs is the other rule: fail open. A throw or a hang is written on
  * the home app and answered null, so the owning app answers as if the router
  * were not there. A broken router costs a space its customizations, never its
  * pages.
@@ -532,7 +532,7 @@ let IMPORT = /\bimport\s*\(?\s*(['"])([^'"\n]+)\1/g
 
 // In the order the file names them, so the module list is the app's own
 // reading order and not an artefact of which pattern matched first. Only the
-// app's OWN files: a bare specifier is the runtime's (`cloudflare:`, `node:`),
+// app's own files: a bare specifier is the runtime's (`cloudflare:`, `node:`),
 // and it resolves without us.
 let specifiers = (source: string) =>
   [...source.matchAll(FROM), ...source.matchAll(IMPORT)]
@@ -610,7 +610,7 @@ export let carried = async (
 // billed
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/custom-limits/).
 //
-// What it ANSWERS is Cloudflare's own name for this release of the script,
+// What it answers is Cloudflare's own name for this release of the script,
 // which a deploy keeps beside its file manifest (versions.ts). The account
 // API has spelled that several ways — a version id on the versioned upload
 // door, a deployment id and an etag on this one — so whichever it hands back
@@ -650,7 +650,7 @@ export let upload = async (
     ], { type: 'application/json' }),
   )
   // Each part is named by the module name that imports it, and typed by what
-  // it IS — a `.wasm` as `application/wasm`, so the runtime compiles it
+  // it is — a `.wasm` as `application/wasm`, so the runtime compiles it
   // instead of trying to parse it as JavaScript.
   let part = (
     name: string,
@@ -700,7 +700,7 @@ export let drop = async (env: Env, store: string, forever = false) => {
 // ── Secrets (T-32779) ──────────────────────────────────────────────────────
 //
 // The first thing an app's own code is for: calling an outside service
-// without the page holding the key. A secret lives on the SCRIPT and nowhere
+// without the page holding the key. A secret lives on the script and nowhere
 // else — never in the app's store, never in the journal, never in a tool's
 // answer — and the app's worker reads it as `env.NAME`, since the shim hands
 // its own env through. Cloudflare's own list answers names and types without

@@ -281,7 +281,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     // tier is their door into it.
     let dir = meta(k, cookie)
 
-    // Signing in IS having a space (T-32482): one named for their address,
+    // Signing in is having a space (T-32482): one named for their address,
     // with them as its owner, so nothing ever asks them for a name.
     let [them] = await dir.query(
       `.person!&.email.address=${encodeURIComponent(email)}&.doc?`,
@@ -411,7 +411,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     }
     assertEquals(new Set(cards).size, 1, 'the refusal is the acceptance')
     // The log is the only witness that a letter went out, and it lags the
-    // response that sent it, so a letter to a FRESH address is the barrier:
+    // response that sent it, so a letter to a fresh address is the barrier:
     // one line per letter in the order they were sent, so once this one shows,
     // a fourth to `bombed` would have shown before it.
     let barrier = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`
@@ -567,7 +567,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
     let bearer = (await tok.json()).access_token
     assert(bearer, 'an access token')
 
-    // And the token IS the person: what withAuth answers for a bearer is
+    // And the token is the person: what withAuth answers for a bearer is
     // what it answers for the cookie.
     let mine = await k.at('yaks.app', '/oauth/me', {
       headers: { authorization: `Bearer ${bearer}` },
@@ -607,7 +607,7 @@ slow('a person signs in by mail, and an agent by OAuth', async () => {
 
     // And the same token once it no longer verifies — one character of it
     // changed is what an expired, revoked or foreign one reads as, since every
-    // one of them is a token the provider cannot find — is REFUSED there, not
+    // one of them is a token the provider cannot find — is refused there, not
     // quietly handed the surface a stranger gets: 401, with the challenge that
     // sends the connector back through this flow (T-34344).
     let stale = await k.at('yaks.app', '/mcp', {
@@ -697,7 +697,7 @@ slow('a connector keeps its door until the person closes it', async () => {
       }),
     })
     let client_id = (await open.json()).client_id
-    // And beside it one that DID take a secret, so the leniency below can be
+    // And beside it one that did take a secret, so the leniency below can be
     // shown to be the public client's alone.
     let shut = await k.at('yaks.app', '/oauth/register', {
       method: 'POST',
@@ -798,7 +798,7 @@ slow('a connector keeps its door until the person closes it', async () => {
   }
 })
 
-// The sign-in box is for somebody signed OUT (T-34209). A browser carrying a
+// The sign-in box is for somebody signed out (T-34209). A browser carrying a
 // session is never asked again: `GET /login` reads the cookie first and sends
 // them on — to the page they were headed for when it is ours to send them to,
 // and to where a fresh sign-in lands when it is nowhere or a stranger's, which
@@ -856,7 +856,7 @@ slow('/login never draws the box for a browser already signed in', async () => {
   }
 })
 
-// A space in the trash is still THEIR space (erase.ts, T-34431): signing in
+// A space in the trash is still their space (erase.ts, T-34431): signing in
 // mints nothing beside it, and where the code lands them is the one page that
 // space serves — the owner's, with the button that brings it back. This is the
 // half of the trash a person meets without ever being told about it.
@@ -868,7 +868,7 @@ slow(
       let them = await signIn(k)
       let slug = them.email.split('@')[0]
       // Straight off the web with no letter in hand: typing the name back is
-      // the other way to confirm, and what it confirms is the TRASH — the erase
+      // the other way to confirm, and what it confirms is the trash — the erase
       // rides in a ticket the platform signed and nothing else (erase.ts).
       let shut = await form(
         k,
@@ -930,7 +930,7 @@ slow(
 // The two questions the sign-in card stopped asking (T-34236), asked on the
 // page a sign-in now lands on instead: what to call them, and the address
 // their apps live at. One form, one POST to the space's own address, and the
-// answer is a redirect — a changed address MOVES this hostname, so where they
+// answer is a redirect — a changed address moves this hostname, so where they
 // land is wherever the space now is.
 slow('account settings save the name and address', async () => {
   let k = await kernel()
@@ -1026,7 +1026,7 @@ slow('account settings save the name and address', async () => {
     assert((await dir.query(`.space.slug=${want}`)).length, 'still theirs')
 
     // And nor may their own cookie, carried by somebody else's page. Sibling
-    // spaces are SAME-SITE, so `SameSite=Lax` lets the session ride a form one
+    // spaces are same-site, so `SameSite=Lax` lets the session ride a form one
     // space's page posts at another's — the origin check is what does not
     // (route.ts `sameOrigin`).
     let forged = await k.at(`${want}.yaks.app`, managePath('settings'), {
@@ -1174,7 +1174,7 @@ slow('the connector page, and the address chosen on it', async () => {
   }
 })
 
-// The CIMD claim is a lever, not a constant. The suite above rides the ON
+// The CIMD claim is a lever, not a constant. The suite above rides the on
 // default — the metadata claims support, and a URL client_id is a document we
 // go and fetch — so this holds the other side: a kernel wearing `CIMD=off`
 // says it does not support CIMD, still offers dynamic registration, and reads
@@ -1331,7 +1331,7 @@ slow('a cold sign-in stays well under the budget', async () => {
 slow('a link signs a person in, once or until it is revoked', async () => {
   let k = await kernel()
   try {
-    // THE LETTER'S ONE CLICK. The same code, said as a link.
+    // The letter's one click. The same code, said as a link.
     let email = `probe-${crypto.randomUUID().slice(0, 8)}@yaks.app`
     let sent = await form(k, '/login', { email })
     assertEquals(sent.status, 200)
@@ -1358,7 +1358,7 @@ slow('a link signs a person in, once or until it is revoked', async () => {
     let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
     assertMatch(cookie, /^yak_session=/)
 
-    // SINGLE USE: the link WAS the code, and the code is spent. The card
+    // Single use: the link was the code, and the code is spent. The card
     // again, and no session with it.
     let twice = await click(one)
     assertEquals(twice.status, 400)
@@ -1373,7 +1373,7 @@ slow('a link signs a person in, once or until it is revoked', async () => {
     )
     assertEquals((them.signed_in as { via: string }).via, 'link')
 
-    // A CONNECTION IN FLIGHT is finished by the link, because the authorize
+    // A connection in flight is finished by the link, because the authorize
     // request rides inside the seal rather than on the URL.
     let back = 'https://probe.invalid/cb'
     let reg = await k.at('yaks.app', '/oauth/register', {
@@ -1413,7 +1413,7 @@ slow('a link signs a person in, once or until it is revoked', async () => {
     assertEquals(to.searchParams.get('state'), 'a-probe-state')
     assert(to.searchParams.get('code'), 'the connector got its code')
 
-    // THE STANDING LINK: minted by whoever is signed in, for themselves, and
+    // The standing link: minted by whoever is signed in, for themselves, and
     // worth a session and nothing more.
     let minted = await form(k, '/login/link', { days: '90' }, cookie)
     assertEquals(minted.status, 200)

@@ -54,7 +54,7 @@ slow('a dropped zip becomes an app at its own address', async () => {
     assertStringIncludes(page, 'index.html')
     assertStringIncludes(page, 'style.css')
     assert(!page.includes('__MACOSX'), page)
-    // And the app is SERVING, at the address the page named, with the folder
+    // And the app is serving, at the address the page named, with the folder
     // prefix gone.
     let live = await k.at('jeff.yaks.app', '/recipes/')
     assertEquals(live.status, 200)
@@ -126,7 +126,7 @@ slow('a dropped zip carries a worker and the wasm it imports', async () => {
     assertEquals(back.headers.get('content-type'), 'application/wasm')
     assertEquals(new Uint8Array(await back.arrayBuffer()), wasm)
     // The worker is the app's inside, here as anywhere: it is deployed, not
-    // served (apps.ts MANIFEST).
+    // served (apps.ts manifest).
     assertEquals((await k.at('jeff.yaks.app', '/adder/worker.js')).status, 404)
   } finally {
     await k.stop()
@@ -189,7 +189,7 @@ slow('what the door will not take, it says in a sentence', async () => {
     assertEquals((await k.at('jeff.yaks.app', '/bad/')).status, 404)
     assertEquals((await k.at('jeff.yaks.app', '/big/')).status, 404)
 
-    // Nobody, and somebody who is nobody HERE: the first is sent to sign in,
+    // Nobody, and somebody who is nobody here: the first is sent to sign in,
     // the second is told whose space it is.
     let cold = await drops(
       k,

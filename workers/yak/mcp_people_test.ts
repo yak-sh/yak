@@ -30,7 +30,7 @@ import { HELLO, minted } from './mcp-probe.ts'
 // said, since a person reads it at a glance.
 // What the person said, kept as they said it (memory.ts, T-34473, T-34474).
 // The whole point is that the words survive the conversation they were said
-// in, so the proof is a SECOND connection reading them without asking.
+// in, so the proof is a second connection reading them without asking.
 slow('what the person said is kept, and read back whole', async () => {
   let k = await kernel()
   try {
@@ -154,7 +154,7 @@ slow('feedback reaches the platform, in the words it was said in', async () => {
     assertStringIncludes(sent.body, 'kitchen/recipes v1')
     assertStringIncludes(sent.body, 'https://kitchen.yaks.app/recipes/')
     assertStringIncludes(sent.body, `yaks.app ${VERSION}`)
-    // The SAME letter is addressed to the fleet's graph inbox as well, so it
+    // The same letter is addressed to the fleet's graph inbox as well, so it
     // lands in `task inbox` instead of waiting on a person to relay it. One
     // send, two readers: the graph copy is the letter, not a summary of it.
     assertEquals(sent.to, ['hello@yaks.app', 'task@bot.yak.sh'])
@@ -218,10 +218,10 @@ slow('feedback reaches the platform, in the words it was said in', async () => {
 })
 
 // The funnel (T-33142): somebody invited into a space before they have ever
-// signed in still gets a space of their OWN, and every tool that defaults to
+// signed in still gets a space of their own, and every tool that defaults to
 // "theirs" aims at it. Belonging to the inviter's space is not having one —
 // while it was, an invited person's first app_install aimed at the
-// PUBLISHER's space and was refused there by the publisher's own app ceiling.
+// publisher's space and was refused there by the publisher's own app ceiling.
 slow('an invited person gets a space of their own', async () => {
   let k = await kernel()
   try {
@@ -238,7 +238,7 @@ slow('an invited person gets a space of their own', async () => {
     await his.tool('app_deploy', { app: 'recipes' })
     await his.tool('app_publish', { app: 'recipes', name: 'recipe-box' })
 
-    // Invited FIRST, signed in after: the order a new person arrives in.
+    // Invited first, signed in after: the order a new person arrives in.
     let ana = `ana-${crypto.randomUUID().slice(0, 8)}@yaks.app`
     let hers = ana.split('@')[0]
     await his.tool('member_add', { email: ana, role: 'editor' })
@@ -256,7 +256,7 @@ slow('an invited person gets a space of their own', async () => {
       'index.html',
     )
 
-    // And what she makes lands in HERS.
+    // And what she makes lands in hers.
     assertStringIncludes(
       await agent.tool('app_install', { name: 'recipe-box', as: 'cooking' }),
       `as ${hers}/cooking`,
@@ -270,7 +270,7 @@ slow('an invited person gets a space of their own', async () => {
   }
 })
 
-// A guest of ONE app (T-37615). The roster is read space-wide, so a seat is
+// A guest of one app (T-37615). The roster is read space-wide, so a seat is
 // everything the space holds; naming the app on the invitation is the other
 // rung — a grant on that app alone. What it proves is the "alone": the app she
 // was invited to answers her as a member, the app beside it does not exist as
@@ -366,7 +366,7 @@ slow(
 
 // Where a document goes (T-37616, E#868fa3f25c answer 4). `memory_save` keeps
 // the person's sentence and nothing else, and a NOTES.md is four kilobytes of
-// house rules — so the overview an agent WRITES belongs in the app's own store,
+// house rules — so the overview an agent writes belongs in the app's own store,
 // as the entity `doc` already is. This is the guide's own example, run: the
 // section stops being true by failing here rather than by misleading somebody.
 slow('a project document is an entity, and search finds it', async () => {
@@ -406,7 +406,7 @@ slow('a project document is an entity, and search finds it', async () => {
       })
     await write('# Combat\n\nA tick is ten seconds and a swing resolves once.')
 
-    // Found by what it SAYS, the moment it is written.
+    // Found by what it says, the moment it is written.
     let hits = JSON.parse(
       await agent.tool('search', { text: 'a swing resolves' }),
     ) as { doc: { title: string } }[]
@@ -480,7 +480,7 @@ slow('the answers four builders had to guess at', async () => {
       }[]
 
     // A `time` column takes an ISO 8601 string with a zone, and gives it back
-    // byte for byte. Noon UTC for a plain DATE is the trap: midnight renders
+    // byte for byte. Noon UTC for a plain date is the trap: midnight renders
     // as the day before for anyone west of Greenwich.
     let written = await agent.tool('graph_apply', {
       app: 'diary',
@@ -501,7 +501,7 @@ slow('the answers four builders had to guess at', async () => {
     assertEquals((await rows('.dayline.written>=2026-04-01')).length, 1)
     assertEquals((await rows('.dayline.written>=2026-05-01')).length, 0)
 
-    // A column nobody wrote is PRESENT and null, not absent, so `in` is the
+    // A column nobody wrote is present and null, not absent, so `in` is the
     // wrong test for "was this written" and the value is the right one.
     assertEquals(
       [one.dayline!.mood, one.dayline!.pages, one.dayline!.aloud],

@@ -11,7 +11,7 @@
 //
 // `printed` is the local adapter: the letter on the Worker's own log, where
 // whoever is running `wrangler dev` reads it (and a probe reads it out of the
-// captured output). It is chosen ONLY when MAIL_DEV says so: a deploy missing
+// captured output). It is chosen only when MAIL_DEV says so: a deploy missing
 // its mail secrets fails loudly at the send rather than quietly filing
 // everybody's codes where they can be read. A code is a key, and a key is
 // never written down: nothing in any store holds one in a form that opens
@@ -21,7 +21,7 @@ import type { Env } from './env.ts'
 import { esc } from './html.ts'
 
 // `to` is one address or several. Email Sending takes a list, and one send to
-// several recipients is ONE letter: it either reaches every reader or none, so
+// several recipients is one letter: it either reaches every reader or none, so
 // a caller never has to say which half of a delivery worked.
 export type Letter = { to: string | string[]; subject: string; body: string }
 export type Mail = (l: Letter) => Promise<void>
@@ -74,7 +74,7 @@ export let account = (env: Pick<Env, 'MAIL_ACCOUNT' | 'CF_ACCOUNT'>) =>
   env.MAIL_ACCOUNT || env.CF_ACCOUNT || ''
 
 // Whether a letter can leave this deploy at all: the local adapter, or Email
-// Sending with its token and an account. A door asks BEFORE it mints what the
+// Sending with its token and an account. A door asks before it mints what the
 // letter would carry, so a deploy missing its mail secret answers in one
 // sentence (identity.ts `/login`) instead of a 500 after the fact.
 export let mailable = (

@@ -6,14 +6,14 @@
 // submission portal in the way.
 //
 // `deno task content --check` already refuses a stale package. What it cannot
-// see is whether the package is COHERENT, and three facts hold it together:
+// see is whether the package is coherent, and three facts hold it together:
 //
 //   - the plugin's name, its folder name and the marketplace entry's name are
-//     one name. Codex resolves a local `source.path` against the REPO root
+//     one name. Codex resolves a local `source.path` against the repo root
 //     rather than the manifest's own directory (core-plugins marketplace.rs
 //     `resolve_local_plugin_source_path`), so a rename that misses one of the
 //     three offers a plugin that is not there.
-//   - the address it hands out is THE address (route.ts `MCP`). A package that
+//   - the address it hands out is the address (route.ts `MCP`). A package that
 //     drifted to another host would be this product wearing a stranger's door.
 //   - every asset the manifest names is a file in the package. OpenAI's own
 //     validator refuses a logo that points at nothing, and it refuses it after

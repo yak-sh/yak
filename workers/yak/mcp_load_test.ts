@@ -22,7 +22,7 @@ import { HAS_NOTES } from './standing.ts'
 import { managePath } from './route.ts'
 import { HELLO } from './mcp-probe.ts'
 
-// And a bundle the store refuses refuses the DEPLOY, naming the file and the
+// And a bundle the store refuses refuses the deploy, naming the file and the
 // entry: an agent that wrote ten seed files needs to know which one it
 // mistyped, and the refusal itself only ever names the word.
 slow('a refused seed bundle names its file and index', async () => {
@@ -246,7 +246,7 @@ slow(
 
 // The spreadsheet half (csv.ts, T-34393): `as` is what a row IS, the headers
 // are its columns, and the id column names each row — which is what makes the
-// SECOND load patch the same two rows rather than mint two more (T-34454).
+// second load patch the same two rows rather than mint two more (T-34454).
 slow('store_load reads a CSV as rows of one component', async () => {
   let k = await kernel()
   try {
@@ -301,13 +301,13 @@ slow('store_load reads a CSV as rows of one component', async () => {
       }[]).map((r) => r.doc.title).sort(),
       ['Fig tart', 'Lentil soup'],
     )
-    // Again: the id column NAMED these two entities, so the second load lands
+    // Again: the id column named these two entities, so the second load lands
     // on the same two where a bare `$` mint would have made two more.
     assertStringIncludes(await load(), 'loaded 2 entities into')
     let again = await recipes()
     assertEquals(again.length, 2)
     assertEquals(again[0].entity.eid, soup.entity.eid)
-    // And the name stands where an eid does: `lentil` is that row. WITH the
+    // And the name stands where an eid does: `lentil` is that row. With the
     // backrefs, which is `.refs=` — one term per reference column, over a
     // vocabulary with thirty of them, and workerd's SQLite takes five in a
     // compound (@yaks/sql `ARMS`, T-34489). The name row points back, so it
@@ -373,7 +373,7 @@ slow('an app says what it holds, and keeps notes about itself', async () => {
       ],
     })
     await agent.tool('app_deploy', { space, app: 'recipes' })
-    // A second app with words of its own and NO rules beside it: it is still
+    // A second app with words of its own and no rules beside it: it is still
     // named, because being found is the point.
     await agent.tool('app_new', { slug: 'chores', title: 'Chores' })
     await agent.tool('app_files', {
@@ -397,7 +397,7 @@ slow('an app says what it holds, and keeps notes about itself', async () => {
     assertStringIncludes(init.instructions, 'Commands: add, add_recipe')
     assertStringIncludes(init.instructions, `## ${space}/chores`)
     assertStringIncludes(init.instructions, 'holds chores')
-    // The app's own words are NOT there (T-34632): a host classifies these
+    // The app's own words are not there (T-34632): a host classifies these
     // instructions, and somebody else's prose in them reads as an attempt to
     // steer the model. The roster says the notes exist and where they are.
     assertEquals(init.instructions.includes('Weights in grams'), false)
@@ -410,7 +410,7 @@ slow('an app says what it holds, and keeps notes about itself', async () => {
     assertStringIncludes(about, `## ${space}/chores`)
 
     // The person's own door onto the same words: a prompt named after the
-    // app, described in OUR words, carrying the file as its text.
+    // app, described in our words, carrying the file as its text.
     let listed = async (
       c: ReturnType<typeof connector>,
     ) => ((await c.call('prompts/list')).prompts as {
@@ -439,8 +439,8 @@ slow('an app says what it holds, and keeps notes about itself', async () => {
     assertStringIncludes(ideas, `- Chores — https://${space}.yaks.app/chores/`)
     assertEquals(ideas.includes('https://yaks.app/login'), false)
 
-    // It is the app's INSIDE: deployed, never served, whichever way the path
-    // is spelled (apps.ts MANIFEST).
+    // It is the app's inside: deployed, never served, whichever way the path
+    // is spelled (apps.ts manifest).
     assertEquals(
       (await k.at(`${space}.yaks.app`, '/recipes/NOTES.md')).status,
       404,
@@ -474,7 +474,7 @@ slow('an app says what it holds, and keeps notes about itself', async () => {
     )
 
     // An app written before the rename keeps its notes: the old name is read
-    // where there is no new one, and nothing migrates (standing.ts NAMES).
+    // where there is no new one, and nothing migrates (standing.ts names).
     await agent.tool('app_new', { slug: 'garden', title: 'Garden' })
     await agent.tool('app_files', {
       space,
@@ -672,7 +672,7 @@ slow('space_sell connects an account and hands back one link', async () => {
       1,
     )
 
-    // The tool hands back ONE link and says to stop there — an assistant that
+    // The tool hands back one link and says to stop there — an assistant that
     // kept going would be an assistant clicking through somebody's identity
     // form.
     let said = await agent.tool('space_sell', { space: 'ada' })

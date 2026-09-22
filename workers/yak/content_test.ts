@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
 // A content file names its own entity (T-34649). Owner: "it should maintain
 // its identity between reads" — so the frontmatter carries no `entity` line
-// and no `$alias` that means anything: a page IS its slug and a prompt IS its
+// and no `$alias` that means anything: a page is its slug and a prompt is its
 // name, declared `identity: true` in content.vocab.json, and the eid is
 // derived from that value (@yaks/graph identity.ts).
 //

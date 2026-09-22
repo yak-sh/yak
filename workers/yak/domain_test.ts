@@ -1,9 +1,9 @@
 // A person's own domain, held in workerd (T-33037, T-34596): a hostname the
 // directory has never been given gets the branded provisioning page (index.ts
 // `settling`, T-33036 — provisioning_test.ts is where that page itself is
-// held), and one it HAS been given, marked active, serves the place it names.
-// Both places are here: an APP, at the root of the domain with the paths below
-// it the app's own, and a SPACE, which is that space's own hostname under
+// held), and one it has been given, marked active, serves the place it names.
+// Both places are here: an app, at the root of the domain with the paths below
+// it the app's own, and a space, which is that space's own hostname under
 // another name — front page at `/`, every app at `/<app>/`. The hostname is the
 // key, so two spaces cannot both claim it.
 import {
@@ -82,8 +82,8 @@ slow('a hostname finds its app, and only one app', async () => {
     let menu = await k.at('herbusiness.com', '/menu.html')
     assertEquals(menu.status, 200)
     assertStringIncludes(await menu.text(), 'The menu')
-    // A DOMAIN IS THE APP'S OUTRIGHT, `/.well-known/` included (route.ts
-    // `platform`). Those files GRANT AUTHORITY over the whole name — App
+    // A domain is the app's outright, `/.well-known/` included (route.ts
+    // `platform`). Those files grant authority over the whole name — App
     // Links, Universal Links, Apple Pay's merchant association, control
     // proved to a certificate authority — and on her own domain the name is
     // hers, so the authority is hers to grant. That is the same idea that
@@ -103,12 +103,12 @@ slow('a hostname finds its app, and only one app', async () => {
       assertEquals(r.status, 200, `${path} never reached the app`)
       assertEquals(await r.text(), said, path)
     }
-    // Her own `acme-challenge` costs us nothing: OUR renewal of her custom
+    // Her own `acme-challenge` costs us nothing: our renewal of her custom
     // hostname is answered by Cloudflare's edge before this Worker route ever
     // runs, which is measured rather than assumed (route.ts `platform`).
     //
-    // The claim is read at the ROOT, so the same name under an app's own
-    // prefix on a hostname of OURS is that app's file, and stays it.
+    // The claim is read at the root, so the same name under an app's own
+    // prefix on a hostname of ours is that app's file, and stays it.
     let deep = await k.at('jeff.yaks.app', '/recipes/.well-known/security.txt')
     assertEquals(deep.status, 200)
     assertEquals(await deep.text(), 'Contact: mailto:her@x.com')
@@ -140,7 +140,7 @@ slow('a hostname finds its app, and only one app', async () => {
     assert((await stray.text()) != apex)
     // The space's own hostname is untouched by the domain: no app is its
     // front page, so it lists its apps (T-33040, home_test.ts). The app is at
-    // the ROOT of the domain and at `/recipes/` here — the domain is the one
+    // the root of the domain and at `/recipes/` here — the domain is the one
     // address with nothing else in it.
     let space = await k.at('jeff.yaks.app', '/', { redirect: 'manual' })
     assertEquals(space.status, 200)
@@ -165,7 +165,7 @@ slow('a hostname finds its app, and only one app', async () => {
   }
 })
 
-// A domain on the SPACE (T-34596), which is the other form: it serves the
+// A domain on the space (T-34596), which is the other form: it serves the
 // space exactly as `<space>.yaks.app` does — the front page at `/`, every app
 // at `/<app>/` — because the request is carried to that hostname and routed by
 // the same rungs, not by a second copy of them (route.ts `aimedAt`). An app of
@@ -220,7 +220,7 @@ slow('a domain on the space opens the space, apps and all', async () => {
     // is the front page's.
     assertEquals((await k.at('ourbookclub.com', '/nope.html')).status, 404)
 
-    // AND an app of it may hold its own domain at the same time. There the
+    // And an app of it may hold its own domain at the same time. There the
     // app is the root; at the space's domain the same app is still a
     // directory, and neither address moves the other.
     await dir.apply([{
@@ -269,7 +269,7 @@ slow('attaching a domain: what it refuses, and what it says', async () => {
     let said = (p: Promise<string>) => p.then((t) => t, (e: Error) => e.message)
 
     // A custom domain is Plus's (meter.ts `ceilings`). Free, the tool answers
-    // the upsell and nothing about a domain — which is an ANSWER, so the
+    // the upsell and nothing about a domain — which is an answer, so the
     // fields it has none of are not fields its reply is refused for missing
     // (tool_outputs.ts). The rest of the refusals are the ones a space that
     // may have a domain still meets.
@@ -360,7 +360,7 @@ slow('attaching a domain: what it refuses, and what it says', async () => {
 })
 
 // The three tools end to end, with Cloudflare stood in for (probe.ts
-// `hostnames`): the SPACE form and the APP form side by side, each saying what
+// `hostnames`): the space form and the app form side by side, each saying what
 // it points at, and a detach that leaves what it carried at the address it
 // always had (T-34596).
 slow(
@@ -382,7 +382,7 @@ slow(
       let agent = connector(k, cookie)
       await agent.tool('app_set', { space: 'jeff', app: 'site', home: true })
 
-      // No app named: the domain is the SPACE's, and the answer says what that
+      // No app named: the domain is the space's, and the answer says what that
       // means at the address rather than leaving it to be guessed.
       let space = await agent.tool('domain_attach', {
         space: 'jeff',

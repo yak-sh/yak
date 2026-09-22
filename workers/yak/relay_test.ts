@@ -4,7 +4,7 @@
 //
 // This is the whole point of the `sync: peers` tier — a value that reaches
 // everyone and is kept by no one — so the test is mostly about the ways it
-// STOPS: the writer clears it, a late subscriber still learns it, and a
+// stops: the writer clears it, a late subscriber still learns it, and a
 // connection going away un-says everything it was saying, including across an
 // eviction that took the value itself with it. The duration's own clock is
 // proven where a clock can be held, in @yaks/api's relay_test.ts.
@@ -180,7 +180,7 @@ Deno.test('a finger lost to an eviction is still taken away', async () => {
     JSON.stringify({ relay: says(CAKE, { x: 3, y: 9, name: 'Ada' }) }),
   )
 
-  // The object is evicted. Its memory went with it — the VALUE is gone, and a
+  // The object is evicted. Its memory went with it — the value is gone, and a
   // cook arriving now is told nothing …
   let woken = new Store(ctx)
   let late = wire()

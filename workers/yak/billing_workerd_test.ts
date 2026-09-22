@@ -85,15 +85,15 @@ slow(
       assertEquals(paid?.status, 'active')
       assertEquals(paid?.until, new Date(PERIOD * 1000).toISOString())
 
-      // ---- THE SAME EVENT AGAIN. At-least-once delivery is the normal case,
+      // ---- the same event again. At-least-once delivery is the normal case,
       // and it must write nothing at all rather than write the same thing twice.
       let again = await post(started, now)
       assertEquals(again.status, 200)
       assertEquals(again.body.did, 'unchanged')
       assertEquals(await plan(), paid, 'the row did not move')
 
-      // ---- deleted, THEN an older updated. Stripe delivers out of order, and
-      // the second of these was written BEFORE the cancellation: a system that
+      // ---- deleted, then an older updated. Stripe delivers out of order, and
+      // the second of these was written before the cancellation: a system that
       // applied events as transitions would put this space back on Plus.
       let killed = now + 60
       let gone = await post(
@@ -163,9 +163,9 @@ slow('an unsigned webhook is refused, and no Origin is not', async () => {
     })
     assertEquals((await old.json()).error.message, 'the signature is too old')
 
-    // THE ONE THAT MATTERS. This door is behind the Origin guard that
+    // The one that matters. This door is behind the Origin guard that
     // separates spaces (route.ts `sameOrigin`, named in `doorway`, T-33118),
-    // and Stripe posts server to server with NO Origin at all. An absent
+    // and Stripe posts server to server with no Origin at all. An absent
     // Origin is allowed deliberately — a browser always sends one — and a
     // webhook silently 403ing is a plan that never activates, which nobody
     // would see until a customer complained. So: no Origin gets in...
@@ -175,7 +175,7 @@ slow('an unsigned webhook is refused, and no Origin is not', async () => {
     assertEquals(stripe.status, 200, 'Stripe sends no Origin and must get in')
     assertEquals((await stripe.json()).did, 'jeff is plus')
 
-    // ...and a PAGE at somebody else's address still does not.
+    // ...and a page at somebody else's address still does not.
     let page = await send({
       'stripe-signature': await signed(SECRET, raw, at),
       origin: 'https://evil.example',
@@ -187,7 +187,7 @@ slow('an unsigned webhook is refused, and no Origin is not', async () => {
     // a secret has rolled or somebody is poking, and either is worth seeing:
     // it lands as an exception in the meta store, where the platform's own
     // breaks go, rather than on a log nobody opens.
-    // Read as TEXT, not parsed: the answer arrives with the unseen block
+    // Read as text, not parsed: the answer arrives with the unseen block
     // appended, which is these very exceptions being delivered — the channel
     // working is part of what is being asserted.
     let broke = await connector(k, cookie).tool('graph_query', {

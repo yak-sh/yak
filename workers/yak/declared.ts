@@ -1,23 +1,23 @@
-// The COMMANDS an app declares (T-32685, T-34541): the `tools.json` a deploy
+// The commands an app declares (T-32685, T-34541): the `tools.json` a deploy
 // handed its store (store/tools.ts) and the two tools each word it holds is
 // worth (kinds.ts), read back here and run through the platform's `command`
 // tool. tools.ts owns the tools the platform has; this owns the verbs a
 // person's own app grew.
 //
-// THEY ARE NOT MCP TOOLS, and that is the whole shape of this file (T-34541).
-// A directory SNAPSHOTS `tools/list` when a connector is submitted and serves
+// They are not MCP tools, and that is the whole shape of this file (T-34541).
+// A directory snapshots `tools/list` when a connector is submitted and serves
 // that snapshot forever — only `tools/call` reaches us
 // (developers.openai.com/plugins/deploy/app-review). So a tool list that moves
 // with whose token arrived, or with what somebody deployed this morning, is a
 // list the published connector can never match: a name in the snapshot that is
 // not here breaks the call, and a name here that is not in the snapshot is
-// never offered. The roster is therefore FIXED — the same names for everybody,
+// never offered. The roster is therefore fixed — the same names for everybody,
 // signed in or not — and an app's own verbs ride inside two of them:
 // `commands` lists them with their arguments, `command` runs one. Jeff,
 // 2026-09-06: "maybe we could have some custom 'commands' and those get added,
 // and then we just have tools for calling commands?"
 //
-// A command is a TEMPLATE, never code: its `apply` bundle or `query` line is
+// A command is a template, never code: its `apply` bundle or `query` line is
 // filled from the call's arguments and sent through the app's ordinary doors
 // with the caller vouched (apps.ts `acting`), so admission, `created.by` and
 // every refusal are a page's. Code commands — an app's own Worker answering a
@@ -72,7 +72,7 @@ export let toolsOf = async (
 // slug, and then one name means two things: the first is the one that
 // answers, and a call for the other says which spaces have it.
 //
-// Read ONCE per request and every space's apps at once (tool.ts `once`,
+// Read once per request and every space's apps at once (tool.ts `once`,
 // T-34986): the door asks for this from four places while it assembles
 // itself, and asked in turn each was its own walk of the directory.
 export let reachable = (ctx: Ctx) =>
@@ -268,7 +268,7 @@ export type Command = {
  * A command's own name is its whole name — `add_recipe`, not
  * `recipes__add_recipe` — because the app is said beside it rather than
  * spliced into it, and nothing here has to be a host-safe MCP tool name any
- * more. Its description carries the app's TITLE and address: a slug is not
+ * more. Its description carries the app's title and address: a slug is not
  * what the person called it, and a model choosing between commands reads the
  * words. Two apps may spell one command; both are listed, and `command` asks
  * which when it is called with neither named.
@@ -311,14 +311,14 @@ export let listCommands = async (
   return out
 }
 
-// An app whose VIEWS moved is news to everyone who can reach it: their
+// An app whose views moved is news to everyone who can reach it: their
 // resource list is stale, and MCP's word for that is `notifications/resources/
 // list_changed` on the session's stream (stream.ts, T-33004). Reaching the app
 // is being in the space, so the space's members are who to tell — each on
 // their own object, which holds the line whether or not they are listening
 // this second. One directory read per event, and nothing at all otherwise.
 //
-// The TOOL list is not news any more (T-34541), because it does not move: an
+// The tool list is not news any more (T-34541), because it does not move: an
 // app's own verbs are commands inside `command` and every caller sees the same
 // roster, so a deploy that grew a verb, a person added to a space and an app
 // into the trash all leave the tool list exactly where it was. A release still
@@ -338,14 +338,14 @@ export let viewsMoved = async (
 }
 
 // One person's reach moved without any deploy (T-33004): added to or removed
-// from a space, every view its apps declare appeared or went for THEM, and
+// from a space, every view its apps declare appeared or went for them, and
 // `viewsMoved` above walks members — which they only just are, or no longer
 // are. Told directly.
 export let reachChanged = async (env: Env, person: string) => {
   await told(env, person, 'notifications/resources/list_changed')
 }
 
-// A view a tool declares (T-32687): a page in the app's OWN files, offered
+// A view a tool declares (T-32687): a page in the app's own files, offered
 // at this door as a `ui://` resource the host renders the answer in. The
 // address is the app's own, with the scheme swapped — `ui://<space>/<app>/
 // <file>` — so a host that read the resource and a host that read the tool
@@ -382,7 +382,7 @@ export let metaFor = (space: Space, env: Host = {}) =>
   })
 
 // The pages the caller can reach, one entry each however many tools draw in
-// them. What is listed is what a tool NAMED: an app's other files are the
+// them. What is listed is what a tool named: an app's other files are the
 // web's business, not this door's, and a private app's are nobody's.
 export let listViews = async (ctx: Ctx) => {
   let out: {
@@ -419,7 +419,7 @@ export let listViews = async (ctx: Ctx) => {
 }
 
 // One view's bytes, or null when no app the caller can reach declares that
-// page. A file is readable here only because a TOOL named it: this is not a
+// page. A file is readable here only because a tool named it: this is not a
 // door onto an app's files, and a private app's pages stay private.
 export let readView = async (ctx: Ctx, uri: string) => {
   let at = AT.exec(uri)

@@ -141,7 +141,7 @@ Deno.test('a spanning read merges the two stores into one bundle per eid', async
   assertEquals(onlyBooks.length, 1)
   assertEquals(onlyBooks[0].loan, undefined)
 
-  // …and the read that names no app answers ONE bundle wearing both, saying
+  // …and the read that names no app answers one bundle wearing both, saying
   // which store holds which component.
   let both = bundles(await read(env, reach, '.book!&.loan?'))
   assertEquals(both.length, 1)
@@ -184,7 +184,7 @@ Deno.test('an order holds across the merge, and its window cuts after it', async
     200,
     100,
   ])
-  // The window is of the ORDER, not of what each store happened to answer
+  // The window is of the order, not of what each store happened to answer
   // first: the two smallest, not the two oldest.
   assertEquals(
     await by('.book!&.loan?&.book.pages>0&.order=book.pages&.limit=2'),
@@ -215,7 +215,7 @@ Deno.test('a batch refused by one store lands in neither', async () => {
   assertEquals(comp(now, 'loan').to, 'Ada')
 })
 
-// The door mints every `$alias` itself, so the alias has to RIDE to the store
+// The door mints every `$alias` itself, so the alias has to ride to the store
 // that writes the part — it is what tells a store's mint phase an id this door
 // picked from one the caller wrote down. Dropped in the split, a named row
 // written twice was refused as a clash instead of patching its holder.

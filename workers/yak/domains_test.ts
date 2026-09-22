@@ -100,7 +100,7 @@ Deno.test('the certificate step is read apart from the hostname', () => {
     'pending',
   )
   // A certificate authority that refused says why, and the why is what the
-  // person needs — a CAA record is theirs to fix.
+  // person needs — a caa record is theirs to fix.
   let caa = steps({
     ...LIVE,
     ssl: {

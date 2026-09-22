@@ -32,7 +32,7 @@ slow(
       // Nobody is answered anything of the person's — and the refusal says
       // so in a sentence, with where signing in happens, like every other
       // door (C-32607 item 1), and carries the challenge a host reads to
-      // offer signing in (T-34349). What nobody IS answered is the pre-auth
+      // offer signing in (T-34349). What nobody is answered is the pre-auth
       // surface, held in its own test below (T-33030).
       let shut = await k.at('yaks.app', '/mcp', {
         method: 'POST',
@@ -131,7 +131,7 @@ slow(
         // way (gallery.ts, T-34478).
         'about',
         'gallery_search',
-        // Then what the PLUGINS bring, after the platform's own rows and in
+        // Then what the plugins bring, after the platform's own rows and in
         // list order (plugin.ts, T-34601): what the person said, in their own
         // words (memory.ts, T-34473), then who visited, in counts and never in
         // names (views.ts, T-34498).
@@ -214,7 +214,7 @@ slow(
         openWorldHint: false,
       })
       assertEquals(hints('mail_send')?.openWorldHint, true)
-      // And none of them promises the SHAPE of its answer (T-37596): an answer
+      // And none of them promises the shape of its answer (T-37596): an answer
       // is bundles, in the vocabulary the caller already reads, so there is no
       // second schema to declare or to drift from what a tool really says.
       for (
@@ -233,10 +233,10 @@ slow(
 
       // What a model reads before anything else: the address, the four
       // steps, and the store a page writes to — enough to build the first
-      // app WITH its data without opening anything (T-32481).
+      // app with its data without opening anything (T-32481).
       for (
         let said of [
-          // The platform's NAME, said before anything else: an agent that
+          // The platform's name, said before anything else: an agent that
           // only ever read the address called the place "Yaks" (T-34302).
           'This is yaks.app',
           '<space>.yaks.app/<app>/',
@@ -274,7 +274,7 @@ slow(
       // in, whole bundles out, and a batch of bundles to write.
       assertStringIncludes(says('graph_query'), 'A query string')
       assertStringIncludes(says('graph_apply'), 'an array of bundles')
-      // Both mail tools say WHICH mailbox they are, because the tool list is
+      // Both mail tools say which mailbox they are, because the tool list is
       // where a model with a mail connector beside this one decides what
       // "check my email" meant (T-34149).
       for (let name of ['mail_list', 'mail_send']) {
@@ -329,7 +329,7 @@ slow(
       assertEquals(got.status, 200)
       assertEquals(await got.text(), deep.contents[0].text)
 
-      // And the same words as a TOOL (T-34284), because an agent that cannot
+      // And the same words as a tool (T-34284), because an agent that cannot
       // fetch yaks.app cannot follow a link and a resource is a thing only
       // some clients read. No page is the map, which opens with its own
       // heading; the description names every page, so the choice is made from
@@ -358,7 +358,7 @@ slow(
 
       // The platform draws nothing of its own (T-37572): no `ui://` view of
       // its own on the resource list, and no tool naming one. A page a host
-      // merely READS carries no render metadata either; only an app's own
+      // merely reads carries no render metadata either; only an app's own
       // view does (declared.ts).
       for (let name of ['app_list', 'app_errors']) {
         assertEquals(
@@ -380,7 +380,7 @@ slow(
         'not found',
       )
 
-      // The doors a PERSON picks by name (T-32981): declared beside tools,
+      // The doors a person picks by name (T-32981): declared beside tools,
       // listed with the arguments a client asks them to fill in, and got as
       // one message written in their own voice.
       assertEquals(init.capabilities.prompts, { listChanged: true })
@@ -481,7 +481,7 @@ slow(
         Error,
         'name one of jeff, jeff-work',
       )
-      // But naming the APP is naming the space: someone in two spaces is not
+      // But naming the app is naming the space: someone in two spaces is not
       // asked which of them their own app sits in, the way the app's own
       // namespaced tool never asks (C-32730 item 6). app_new keeps asking —
       // it names an app nobody has yet.
@@ -531,7 +531,7 @@ slow(
             new TextEncoder().encode(page),
           )}`,
       )
-      // And `op` is not needed to say so: path and content ARE the write,
+      // And `op` is not needed to say so: path and content are the write,
       // which is what the description always promised (T-34337).
       await agent.tool('app_files', {
         ...app,
@@ -544,8 +544,8 @@ slow(
       )
       // A whole app in one call, and one answer naming every file it wrote
       // (C-32624 item 5). Spelled out rather than spread, because the point
-      // is what is ABSENT: no `op` at all, the way `initialize` step 2
-      // teaches it, since a `files` batch IS the write (C-32730 item 1).
+      // is what is absent: no `op` at all, the way `initialize` step 2
+      // teaches it, since a `files` batch is the write (C-32730 item 1).
       assertEquals(
         await agent.tool('app_files', {
           space: 'jeff',
@@ -736,7 +736,7 @@ slow(
       assertStringIncludes(await bare.text(), 'href="/recipes/"')
 
       // The graph tier, which is @yaks/mcp's (T-33812): bundles in, the batch
-      // AS APPLIED out — every entity it touched, wearing what moved, and the
+      // as applied out — every entity it touched, wearing what moved, and the
       // `$alias` the batch called a minted one by, so a second batch can use
       // the eids the first minted without reading a sentence.
       let cake = minted(
@@ -797,7 +797,7 @@ slow(
         [cake],
       )
 
-      // A NAME outlives the batch (T-34390, @yaks/key + @yaks/alias): the same
+      // A name outlives the batch (T-34390, @yaks/key + @yaks/alias): the same
       // seed written again patches the entity that already holds the name
       // instead of writing a second one, and the name stands where an eid
       // does.
@@ -840,7 +840,7 @@ slow(
         ),
         [],
       )
-      // The app's OWN components: vocab.json declares them, app_deploy plants
+      // The app's own components: vocab.json declares them, app_deploy plants
       // them in this app's store, and nothing about them exists in any other.
       // Both doors teach the same missing act, with no other graph's ids in
       // the sentence.
@@ -888,9 +888,9 @@ slow(
       assertEquals(own.entity.eid, box)
       assertEquals(own.recipe, { title: 'Pancakes', serves: 4 })
       // A column the manifest never named is still a typo, not a new word.
-      // The write schema DESCRIBES the vocabulary (T-34153) and stays open, so
+      // The write schema describes the vocabulary (T-34153) and stays open, so
       // a client's cached copy cannot refuse a word deployed since it
-      // connected (T-34277) — the SERVER refuses this, naming the column, the
+      // connected (T-34277) — the server refuses this, naming the column, the
       // columns that do exist, and where to read them.
       let typo = (await assertRejects(
         () =>
@@ -904,7 +904,7 @@ slow(
       assertStringIncludes(typo, 'graph_schema')
 
       // A manifest that reaches for one of the platform's words is refused
-      // WHOLE and before anything is planted, naming every collision at once
+      // whole and before anything is planted, naming every collision at once
       // — so probing for a free name is one deploy, and the names tried on
       // the way do not stay in the app (C-32624 item 1).
       let manifest = (json: string) =>
@@ -986,7 +986,7 @@ slow(
         1,
       )
 
-      // A RENAMED column is two columns: the new spelling arrives, the old
+      // A renamed column is two columns: the new spelling arrives, the old
       // one keeps every row already written under it, and the deploy says
       // both — the manifest reads as one word and the store answers two.
       await agent.tool('graph_apply', {
@@ -1017,7 +1017,7 @@ slow(
         { text: null, body: 'said it' },
       ])
 
-      // And the same manifest written the OTHER way (M-34605): a `vocab.yml`
+      // And the same manifest written the other way (M-34605): a `vocab.yml`
       // beside index.html is the app's words in the warm spelling, read
       // through the one loader (@yaks/yaml) and preferred over the `.json`
       // when an app has both, so the two files are never both in force.
@@ -1055,7 +1055,7 @@ slow(
 
       // A break in the app reaches the agent on its next reply, once; after
       // that only app_errors lists it, and a fresh break rides again. It is a
-      // PAGE's break because that is what an app's break is: the platform's
+      // page's break because that is what an app's break is: the platform's
       // own failures are the platform's, whatever app the URL named
       // (T-33234, report_test.ts).
       let dies = (said: string) =>
@@ -1068,7 +1068,7 @@ slow(
           }),
         })
       assertEquals((await dies('sift is not a function')).status, 204)
-      // It rides on a PLATFORM tool's answer, which is prose a person's agent
+      // It rides on a platform tool's answer, which is prose a person's agent
       // reads; the generic tier answers a described value, and a section of
       // words appended to it would be something else (T-33812).
       let told = await agent.tool('app_files', { ...app, op: 'list' })
@@ -1116,7 +1116,7 @@ slow(
       )
 
       // A page's own break, reported the way public/report.js reports one:
-      // the stack names a file and a line in the app's OWN pages, which is
+      // the stack names a file and a line in the app's own pages, which is
       // what the card shows and what the person opens.
       for (
         let broke of [
@@ -1389,7 +1389,7 @@ slow(
         Error,
         'not a member of jeff',
       )
-      // And the generic tier is HIS reach and nobody else's: jeff's rows are
+      // And the generic tier is his reach and nobody else's: jeff's rows are
       // not in it, whatever he asks for.
       assertEquals(
         JSON.parse(await stranger.tool('graph_query', { q: '.doc!' })),

@@ -1,7 +1,7 @@
 // The kernel's door onto one store: the Durable Object namespace as a slice,
 // and `storeOf`, which builds every request the kernel makes to an object.
 //
-// It is its OWN module because two kinds of caller reach a store and only one
+// It is its own module because two kinds of caller reach a store and only one
 // of them may carry the kernel with it. The Worker's parts (apps.ts, tools.ts,
 // directory.ts, …) hold the whole kernel; the Store object itself holds nothing
 // but its bindings — it is checked against the runtime's own types with no Deno
@@ -21,7 +21,7 @@ export type Fetcher = { fetch(req: Request): Promise<Response> }
 // give only the message's prefix to know it by
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/dynamic-dispatch/).
 //
-// Here rather than in dispatch.ts, which is what USES it: a binding's slice is
+// Here rather than in dispatch.ts, which is what uses it: a binding's slice is
 // what env.ts is made of, and naming this one from dispatch.ts made the whole
 // of that module — and everything it reaches — part of the type graph of
 // anything that reads `Env`. That is the same reason `Fetcher` is here.
@@ -30,7 +30,7 @@ export type Dispatch = { get(name: string): Fetcher }
 /** The store the directory lives in, named the way every app's store is. Its
  * slugs are the platform's own and never move, so the name is a constant.
  *
- * A store's NAME is addressing and not vocabulary, which is why it is here and
+ * A store's name is addressing and not vocabulary, which is why it is here and
  * not beside the platform's words: meta.ts and directory.ts want the name and
  * nothing else from vocab.ts, and that one import was what made the words a
  * dependency of the directory — so vocab.ts could not itself read a list of
@@ -54,7 +54,7 @@ export type Namespace = {
 // (directory.ts storeName — the address it was born at, which a rename never
 // moves), told its name on every call (the object keeps the first). The
 // kernel spells the name; a client never names a store. An incoming Request
-// may BE the init: that is how a socket upgrade reaches the object with its
+// may be the init: that is how a socket upgrade reaches the object with its
 // `Upgrade` header on it, since the header a route adds rides beside it.
 export type Door = (
   path: string,
@@ -63,7 +63,7 @@ export type Door = (
 ) => Promise<Response>
 
 // The statement only the kernel may make, and therefore the set every request
-// to a store is scrubbed of before the kernel makes it. An init that IS a
+// to a store is scrubbed of before the kernel makes it. An init that is a
 // Request carries its headers across — that is how a socket upgrade reaches
 // the object with its `Upgrade` header on it — so a visitor's own
 // `x-yak-person` would ride along with it and the object would believe it
@@ -89,16 +89,16 @@ let VOUCH = [
  * `mailFrom`). The store remembers all three (graph.ts `#learn`), so a door
  * that cannot name its app simply says nothing about it.
  *
- * The address is the DIRECTORY's to derive rather than the store's, because
+ * The address is the directory's to derive rather than the store's, because
  * only the directory knows the app's current slug and whether it is the
  * space's home — a store is named at birth and never renamed (`storeName`). */
 export type Served = { eid: string; access: string | null; mail?: string }
 
-/** The door as a request BUILDER over whatever answers it: the stub, or the
+/** The door as a request builder over whatever answers it: the stub, or the
  * object itself when the caller is that object (graph.ts). Either way the
  * request is the kernel's, built from scratch here and nowhere else.
  *
- * And therefore the ONE place a hop to a store is counted (hops.ts): every
+ * And therefore the one place a hop to a store is counted (hops.ts): every
  * caller reaches an object through here — `storeOf` below is this function
  * with a stub behind it, and the store's own door onto the directory is this
  * function with the object behind it — so `hops;dur=<n>` on a request is
@@ -157,7 +157,7 @@ let rebuildable = (init: RequestInit | Request) =>
   init instanceof Request ? !init.body : !(init.body instanceof ReadableStream)
 
 export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
-  // The stub is taken PER CALL. It is an I/O object, and the runtime binds
+  // The stub is taken per call. It is an I/O object, and the runtime binds
   // one to the request that created it: a door memoized for the isolate
   // (meta.ts `doors`) and reused on the next request throws "cannot perform
   // I/O on behalf of a different request". Getting one costs nothing, so an

@@ -51,9 +51,9 @@ export let HOST =
 // `herbusiness.co.uk` three labels and still an apex.
 let SECOND = /^(?:co|com|net|org|edu|gov|ac|or|ne|nom|sch|ltd|plc|firm|gen)$/
 
-// Whether this looks like a domain's APEX — the bare name with nothing in
+// Whether this looks like a domain's apex — the bare name with nothing in
 // front — which is the one place DNS forbids a CNAME, and the step where a
-// person gives up. A HINT, and said as one wherever it is printed: the agent
+// person gives up. A hint, and said as one wherever it is printed: the agent
 // reading the answer already knows whether the person's domain has a label
 // in front of it, and this only saves it having to say so.
 export let apex = (host: string) => {
@@ -63,7 +63,7 @@ export let apex = (host: string) => {
 }
 
 // The DNS a person adds where their domain's records live. One record: the
-// hostname itself, aimed at the fallback origin (route.ts ORIGIN), which is
+// hostname itself, aimed at the fallback origin (route.ts origin), which is
 // the name Cloudflare for SaaS routes back to this Worker.
 export type Rec = { type: string; name: string; value: string }
 
@@ -157,7 +157,7 @@ export type Step = {
   said: string
 }
 
-// Cloudflare's hostname `status`, which is the VALIDATION step: whether it
+// Cloudflare's hostname `status`, which is the validation step: whether it
 // has accepted this hostname as one we may serve.
 // developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/hostname-validation/validation-status/
 let VALID: Record<string, [State, string]> = {
@@ -178,7 +178,7 @@ let VALID: Record<string, [State, string]> = {
   ],
 }
 
-// And `ssl.status`, which is the CERTIFICATE step.
+// And `ssl.status`, which is the certificate step.
 // developers.cloudflare.com/ssl/reference/certificate-statuses/
 let CERT: Record<string, [State, string]> = {
   active: ['done', 'the certificate is issued and serving'],

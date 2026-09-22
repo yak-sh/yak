@@ -2,7 +2,7 @@
 // of every agent's context (T-34425). Two things live here, and they are one
 // passage:
 //
-//   DISCOVERY   Owner, 2026-09-05: "is there a mechanism to ensure future
+//   Discovery   Owner, 2026-09-05: "is there a mechanism to ensure future
 //               agents discover the app? like how the mcp tools are
 //               discovered. if i later say, 'add this recipe', i want them to
 //               know there's a recipe app to add it to". So every reachable
@@ -17,8 +17,8 @@
 //               followed for them or other agents that are granted access to
 //               the app?"
 //
-// It is the app's INSIDE, like `vocab.json`, `tools.json` and the seeds
-// (apps.ts MANIFEST): written and read through `app_files`, never served to
+// It is the app's inside, like `vocab.json`, `tools.json` and the seeds
+// (apps.ts manifest): written and read through `app_files`, never served to
 // the web. An install copies it with the rest of the app's files (tools.ts
 // `copied`), so a published app carries its notes to everyone who takes one.
 //
@@ -27,13 +27,13 @@
 // instructions: a passage that named that file and said how a model was to
 // treat what it found there reads as prompt injection, and the person got a
 // warning about this connector before they had used it once. So the two
-// halves are served at different moments. The ROSTER — every app, its address,
+// halves are served at different moments. The roster — every app, its address,
 // what it holds, its commands — rides on the instructions, where discovery has
 // to be. The NOTES are handed over when something asks for them: `about`
 // (tools.ts), the prompt a person picks by name, and the builder we run
 // ourselves (builder.ts).
 //
-// BOUNDED, because the notes are read on every call at the door: the file is
+// Bounded, because the notes are read on every call at the door: the file is
 // refused over CAP at the write rather than truncated at the read — half of
 // what somebody wrote is worse than a pointer to all of it.
 import { r2Blobs } from '../../src/blobs_r2.ts'
@@ -104,7 +104,7 @@ export let notesOf = async (
 ): Promise<string> => {
   let blobs = r2Blobs(env.BLOBS)
   // Both names at once, not one and then the other: this runs per app on
-  // every call at the door, and most apps have notes under NEITHER name — so
+  // every call at the door, and most apps have notes under neither name — so
   // asking in turn would put a second round trip on the common case. `read`
   // rather than has-then-get for the same reason.
   let both = await Promise.all(
@@ -195,7 +195,7 @@ the commands tool says which there are and what each one takes.
 Some apps keep notes of their own about how they are kept: the about tool
 returns them, along with anything the person has said here.`
 
-// What the person has SAID, one section per space they belong to (memory.ts,
+// What the person has said, one section per space they belong to (memory.ts,
 // T-34474). It rides here rather than beside it because it is the same
 // passage: what an agent is handed before it has been told anything, so a
 // preference said once is followed after. A space with no memories says
@@ -213,7 +213,7 @@ let heard = async (ctx: Ctx): Promise<string[]> => {
 /**
  * The passage, in its two lengths, and the apps it was made of.
  *
- * `text` is the ROSTER — every app, its address, what it holds, its commands
+ * `text` is the roster — every app, its address, what it holds, its commands
  * — and it is what rides on the `initialize` instructions, where an app made
  * this morning has to be named or it is made a second time this afternoon.
  * `notes` is that same roster with what each app's person wrote under it and
@@ -251,7 +251,7 @@ export let passage = (apps: Entry[], notes = false, env: Host = {}): string =>
 /**
  * The prompts a person picks by name (mcp.ts): one per app that keeps notes,
  * so somebody can say "the recipes notes" out loud without asking an agent to
- * go and read a file. The notes are the prompt's TEXT, which is fetched by
+ * go and read a file. The notes are the prompt's text, which is fetched by
  * name; the listing says only that the app has some, because a prompt list is
  * read by the same classifier the tool list is (T-34632) and somebody else's
  * words are not ours to put in front of it.

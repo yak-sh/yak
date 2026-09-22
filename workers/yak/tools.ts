@@ -1,4 +1,4 @@
-// The connector's PLATFORM tools (D-32318 §Code, build, deploy): the least
+// The connector's platform tools (D-32318 §Code, build, deploy): the least
 // that makes an app. The generic graph tier is no longer here — @yaks/mcp
 // brings graph_apply, graph_query, graph_show, graph_schema and search over
 // the caller's reach as one graph (agent.ts, T-33812), and a second copy of
@@ -335,7 +335,7 @@ let OPS = [
 let WRITES = ['write', 'patch', 'fetch', 'delete', 'restore']
 
 /**
- * What an `app_files` call is asking for, when it did not say. BYTES say what
+ * What an `app_files` call is asking for, when it did not say. Bytes say what
  * a call is: a `files` batch is a write, and so is a lone path with `content`
  * (or `base64`) beside it, whether or not `op` came along — which is what the
  * tool's description has always promised and what used to refuse (T-34337).
@@ -354,7 +354,7 @@ export let opOf = (args: Record<string, unknown>, batch: number) =>
 let list = (v: unknown, what: string) =>
   v == null ? [] : (Array.isArray(v) ? v : [v]).map((one) => text(one, what))
 
-// A file's BYTES, from either spelling of them (T-34263): `content` is the
+// A file's bytes, from either spelling of them (T-34263): `content` is the
 // text an app is almost always made of, and `base64` is what a file that is
 // not text arrives as — the `.wasm` an app's worker imports, a picture. One
 // of the two; naming neither is the `content` refusal, since text is what a
@@ -506,7 +506,7 @@ let needsToken = (ctx: Ctx) => {
   }
 }
 
-// The caller as the space's OWNER: who belongs is the owner's to say. An
+// The caller as the space's owner: who belongs is the owner's to say. An
 // editor writes the data and the files; they do not hand out keys.
 let owns = async (ctx: Ctx, args: Args) => {
   let { space, who } = await inSpace(ctx, args, true)
@@ -514,7 +514,7 @@ let owns = async (ctx: Ctx, args: Args) => {
   return { space, who }
 }
 
-// The caller as the space's OWNER, on one of its apps. Offering an app to the
+// The caller as the space's owner, on one of its apps. Offering an app to the
 // whole platform is the space's act, not one its editors make: an editor
 // writes the app's files, and publishing hands the code to strangers.
 let ownsApp = async (ctx: Ctx, args: Args) => {
@@ -548,7 +548,7 @@ let toGallery = async (ctx: Ctx, space: Space, app: App) => {
   }
   let owner = await ctx.dir.nameAt(ctx.person) ?? space.slug
   let secret = ctx.env.SESSION_SECRET
-  // The letter FIRST, the mark second: an ask nobody was told about is an app
+  // The letter first, the mark second: an ask nobody was told about is an app
   // waiting on a decision no one was asked to make, and it would sit there
   // saying so on the space page forever. A letter that will not send leaves
   // the row exactly as it was, and asking again is the whole retry.
@@ -573,12 +573,12 @@ let toGallery = async (ctx: Ctx, space: Space, app: App) => {
   return 'asked' as const
 }
 
-// What every app in the space declares as its OWN, in app order, oldest
+// What every app in the space declares as its own, in app order, oldest
 // first — the routing table a deploy reads to find a word's home (T-32728).
 // A store's `/vocab` answers only the words it homes, so a use never looks
 // like a second declaration and the first entry here is always the home.
 //
-// Each answer is the DOCUMENT that store keeps (vocab.ts `meant`), keywords
+// Each answer is the document that store keeps (vocab.ts `meant`), keywords
 // and all: a home's manifest is written back whole when a sibling grows it,
 // and read as types alone it would come back with every `search` erased.
 let vocabs = async (ctx: Ctx, space: Space, app: App) => {
@@ -595,8 +595,8 @@ let vocabs = async (ctx: Ctx, space: Space, app: App) => {
   return new Map(read)
 }
 
-// Where each word of the space LIVES, oldest app first — the first app to
-// declare a word is its home (T-32728), and a word THIS app already declares
+// Where each word of the space lives, oldest app first — the first app to
+// declare a word is its home (T-32728), and a word this app already declares
 // stays its own, because a store's vocabulary is additive forever. `said` is
 // every app's manifest beside it, since growing a home means writing the
 // home's whole manifest back.
@@ -653,7 +653,7 @@ let applying =
     }
   }
 
-// `map {header: column}` as one argument: its SHAPE, checked once, so a model
+// `map {header: column}` as one argument: its shape, checked once, so a model
 // that sent a list or a nested object hears that rather than a header that
 // silently went nowhere. Whether a mapped name is a column is csv.ts's, which
 // is where the header it came from is still known.
@@ -670,7 +670,7 @@ let mapping = (v: unknown): Record<string, string> | undefined => {
   )
 }
 
-// What a CSV is read AS (csv.ts): the component a row becomes, and the type
+// What a CSV is read as (csv.ts): the component a row becomes, and the type
 // each of its columns takes. The words are the platform's own plus this app's,
 // each column as the word its type is spelled with (vocab.ts `wordsOf`) — an
 // app declares scalars, and a core column that is a reference or a closed set
@@ -703,7 +703,7 @@ let byCaller = async (ctx: Ctx, who: Who) => ({
   ...await titling(ctx.dir, who.person),
 })
 
-// Whether a manifest can land on this app AT ALL, asked before anything moves
+// Whether a manifest can land on this app at all, asked before anything moves
 // (app_update). The same two rules a deploy holds it to, both of which throw
 // rather than answer: a word another app in the space homes keeps that home's
 // column types (vocab.ts `homed`), and this app's own columns keep the types
@@ -726,13 +726,13 @@ let fits = async (
   grew(mine, split.mine)
 }
 
-// A RELEASE, whichever door asked for it — app_deploy, app_install,
+// A release, whichever door asked for it — app_deploy, app_install,
 // app_update. The app's files are already live; this is everything else a
 // version means: the components its vocab.json declares planted where the
 // space says each word lives, the tools its tools.json declares handed to the
 // store, its worker.js uploaded to the dispatch namespace, and the version
 // moved on — recorded as a version of its own (versions.ts), so app_rollback
-// can put this release back later. The answer is every line said BENEATH the
+// can put this release back later. The answer is every line said beneath the
 // door's own sentence.
 let released = async (
   ctx: Ctx,
@@ -762,14 +762,14 @@ let released = async (
   let vocabFile = key?.split('/').pop() ?? 'vocab.json'
   let planted: string[] = []
   let dropped: string[] = []
-  // What this manifest MOVED, which naming the components does not say: a
+  // What this manifest moved, which naming the components does not say: a
   // renamed column arrives beside the old one, and the old one keeps every
   // row already written under it (C-32652 item 4).
   let added: string[] = []
   let kept: string[] = []
-  // And the words this app USES rather than homes (T-32728).
+  // And the words this app uses rather than homes (T-32728).
   let uses: Record<string, string> = {}
-  // The manifest as WRITTEN, which is where a kind says what it means. It is
+  // The manifest as written, which is where a kind says what it means. It is
   // what the tools below are generated from.
   let manifest: VocabDoc = {}
   let vocabTook = c.since()
@@ -780,14 +780,14 @@ let released = async (
     // that plants it.
     manifest = appDoc(source, vocabFile)
     // One word, one home: a word another app in the space already declares is
-    // that app's, so this release records a USE of it instead of planting a
+    // that app's, so this release records a use of it instead of planting a
     // second table, and any column it adds grows the HOME's.
     let { said, homes } = await homesIn(ctx, space, app)
     let split = homed(manifest, homes)
     uses = split.uses
     // The home's table grows first: a use whose column the home does not have
     // yet is not a use anyone can write until it does. Its whole manifest is
-    // written back, so it goes back as the DOCUMENT the home declared —
+    // written back, so it goes back as the document the home declared —
     // projected to types, a sibling's deploy would silently unsearch the
     // home's own columns (T-37546).
     for (let [slug, grown] of Object.entries(split.grows)) {
@@ -830,7 +830,7 @@ let released = async (
     )
   }
   vocabTook('vocab')
-  // And the data the app comes with (seed.ts, T-34327), AFTER the words it is
+  // And the data the app comes with (seed.ts, T-34327), after the words it is
   // written in — an app's own components seed like the platform's — and once
   // per store: `app.seeded` is the mark, so a redeploy leaves what the person
   // has changed since exactly as they left it. It writes through the app's
@@ -868,7 +868,7 @@ let released = async (
       toolsFile,
     )
     : {}
-  // A `view` names a page in the app's OWN files (T-32687), so this is the one
+  // A `view` names a page in the app's own files (T-32687), so this is the one
   // thing about the manifest the store cannot check: it holds the words, the
   // blobs hold the pages. A view nobody deployed would be a tool whose answer
   // renders nothing, which is worse than a refusal.
@@ -882,13 +882,13 @@ let released = async (
         "app's own files; deploy the page beside index.html",
     )
   }
-  // And the manifest is CHECKED here, against the words this app has after the
+  // And the manifest is checked here, against the words this app has after the
   // release above: a tool writing a component nobody declared is refused where
   // the vocabulary can be read. The store keeps a declaration as written
   // (graph.ts `/tools`) — a store that parsed its own tools would be a second
   // vocabulary inside the object, and the one that plants the words is the one
   // that can say which they are.
-  // A tool is checked against the NAMES, so the names are all this reads.
+  // A tool is checked against the names, so the names are all this reads.
   let words = Object.fromEntries(
     Object.keys(
       appDoc(JSON.parse(await answer(await store('/vocab')))).$defs ?? {},
@@ -898,7 +898,7 @@ let released = async (
     string,
     string
   >
-  // And the two tools every KIND this app declares is worth (kinds.ts,
+  // And the two tools every kind this app declares is worth (kinds.ts,
   // T-34513), beside whatever the manifest said: an app that declared a recipe
   // and no tools.json still has a verb for putting one in and one for finding
   // it again, which is how the next agent discovers the app at all.
@@ -916,11 +916,11 @@ let released = async (
     ),
   )
   let declared: string[] = tooled.tools ?? []
-  // A VIEW list that moved is news to every agent connected who can reach this
+  // A view list that moved is news to every agent connected who can reach this
   // app (declared.ts, T-33004): a page a command draws its answer in is a
   // resource of theirs, and it appeared or went.
   //
-  // The TOOL list is not news, because it did not move (T-34541): what this
+  // The tool list is not news, because it did not move (T-34541): what this
   // deploy grew is a command inside `command`, and what a moved vocabulary
   // grew is graph_apply's schema, not its name. The roster is the same for
   // everybody and moves only when the platform is released (stream.ts).
@@ -956,7 +956,7 @@ let released = async (
       () => healed(ctx.env, space, app, who, version),
     )
   } catch { /* the files are out; an open break is the softer wrong */ }
-  // A published app's OFFER does not move with a deploy: publishing is the
+  // A published app's offer does not move with a deploy: publishing is the
   // owner's deliberate act and pins the version strangers install, so an
   // editor's deploy must not change what the whole platform gets. Silence
   // was the bug (T-33146) — installers kept taking v1 while v2 served and
@@ -975,7 +975,7 @@ let released = async (
           closed == 1 ? 'break' : 'breaks'
         } from earlier versions`
         : '') +
-      // What this app can now be ASKED to do, as `command` takes them: bare
+      // What this app can now be asked to do, as `command` takes them: bare
       // names, because a command is said with its app beside it rather than
       // spliced into it (declared.ts, T-34541).
       (declared.length ? `\ncommands: ${declared.join(', ')}` : '') +
@@ -1007,13 +1007,13 @@ let released = async (
   }
 }
 
-// One app's code copied ONTO another's, which is what an install is and what
+// One app's code copied onto another's, which is what an install is and what
 // an update is again: every file of the source written under the target's own
 // prefix, and every file the target has that the source does not, gone — so
 // what serves after is what the publisher wrote, and nothing of a version
 // before it lingers. What the platform keeps beside an app's files travels
 // with neither (versions.ts `own`): `blobs/` is where a page's own bytes land
-// (apps.ts `blobKey`) — a photo somebody picked, the app's DATA — and
+// (apps.ts `blobKey`) — a photo somebody picked, the app's data — and
 // `versions/` is one app's own deploy history, which the copy earns for
 // itself on the release that follows.
 let copied = async (
@@ -1037,7 +1037,7 @@ let copied = async (
 }
 
 // Every store this call reaches. An app named is that one store, as it always
-// was; no app is the FEDERATED read (T-32698) — every app in every space the
+// was; no app is the federated read (T-32698) — every app in every space the
 // caller belongs to, or in the space they named, since an entity spans apps
 // and only the whole set can compose it. What "reach" means is membership
 // plus the app's own access: the door remembers nothing about which apps a
@@ -1045,7 +1045,7 @@ let copied = async (
 // not in is on the web and not here.
 //
 // And the trash is out of reach, whichever row wears the word (erase.ts,
-// T-34430, T-34431). This is the same answer `reachable` gives the ROSTER, and
+// T-34430, T-34431). This is the same answer `reachable` gives the roster, and
 // the two have to agree: a deleted app that still turned up in the passage
 // `about` and `initialize` put at the top of an agent's context would be an
 // app the agent goes on filing things in after the person threw it away.
@@ -1091,13 +1091,13 @@ let fileKey = (space: Space, app: App, path: string) =>
   `${space.slug}/${app.slug}/${path.replace(/^\/+/, '')}`
 
 /**
- * Every file under one R2 prefix laid down under another, ANSWERING WITH THE
- * OLD KEYS — which the caller sweeps once the directory write has landed. Copy
+ * Every file under one R2 prefix laid down under another, answering with the
+ * old keys — which the caller sweeps once the directory write has landed. Copy
  * first and delete last is the order that matters: whichever address the app
  * answers at while the move is in flight has the whole app behind it, and a
  * move that dies halfway leaves the app whole at the address it started from.
  *
- * A file's key carries the space's slug and the app's, so BOTH renames move
+ * A file's key carries the space's slug and the app's, so both renames move
  * bytes: app_set moves one app's files, space_set moves every app's (T-34658).
  * Keying them by the app's handle instead would move none, and is the follow-up
  * this helper exists to make obvious.
@@ -1163,8 +1163,8 @@ let lost = (address: string) =>
   'or a letter still aimed there now finds nothing'
 
 /**
- * An app's row as it is BORN, at both doors that make one — app_new and
- * app_install. The eid is minted HERE rather than by a `$alias` the store
+ * An app's row as it is born, at both doors that make one — app_new and
+ * app_install. The eid is minted here rather than by a `$alias` the store
  * resolves, because the handle everything the platform keeps for this app is
  * named by is made out of it (directory.ts `handle`) and there is no second
  * moment to write it in. `former` opens at the slug it is born at: the first
@@ -1214,7 +1214,7 @@ let spelled = async (
  * by other doors too: a zip somebody dropped on their space's page carries
  * pictures (drop.ts, T-34230), and `sandbox_ship` carries what a compiler
  * made (T-34264). Neither is `content: string` — a `.wasm` would not survive
- * a decode — which is why this takes BYTES. Answers the paths as the app
+ * a decode — which is why this takes bytes. Answers the paths as the app
  * serves them.
  */
 export let wrote = async (
@@ -1250,7 +1250,7 @@ export let wrote = async (
   // deploy is the release a person names, and this is the twenty minutes
   // between two of them, where the page somebody was using gets overwritten.
   //
-  // The files go out AT ONCE: each path's pin-then-put is its own chain of
+  // The files go out at once: each path's pin-then-put is its own chain of
   // round trips to the bucket with nothing to wait on in another path's, so a
   // three-file write costs one file's time, not three (T-34986). `pin` and
   // `put` are still summed per file — total waiting, which overlaps — and
@@ -1294,7 +1294,7 @@ export let stored = (path: string, bytes: Uint8Array, sha: string) =>
   (/\.(json|yml)$/.test(path) ? `, ${parses(path, bytes)}` : '')
 
 // A declaration file's verdict, in its own language: a `.json` through
-// JSON.parse, whose error carries the POSITION — "at position 45971" names the
+// JSON.parse, whose error carries the position — "at position 45971" names the
 // bracket, and nothing else in the answer could — and a `.yml` through the
 // YAML door, whose error names the line.
 export let parses = (path: string, bytes: Uint8Array) => {
@@ -1362,7 +1362,7 @@ export let fetched = async (said: string) => {
   return {
     bytes,
     // What the response said it is, without its parameters. An app serves
-    // the file by its PATH (files.ts mimeOf), so this is a fact about where
+    // the file by its path (files.ts mimeOf), so this is a fact about where
     // the bytes came from — and the sentence to read when a `.js` written to
     // a `.txt` path serves as text.
     mime: (r.headers.get('content-type') ?? '').split(';')[0].trim(),
@@ -1376,7 +1376,7 @@ export let sri = (sha: string) =>
   btoa(String.fromCharCode(...sha.match(/../g)!.map((b) => parseInt(b, 16))))
 
 /**
- * One of these tools, run as this caller. The drop door (drop.ts) is a PAGE
+ * One of these tools, run as this caller. The drop door (drop.ts) is a page
  * doing what an agent does — make the app, write its files, release it — and
  * this is how it does exactly that rather than a second spelling of it:
  * every ceiling, guard and sentence is the tool's own.
@@ -1393,7 +1393,7 @@ export let call = (ctx: Ctx, name: string, args: Args): Promise<Out> => {
  * One turn at the build session's workbench: the container, and the seconds
  * it cost.
  *
- * A BUILD holds its own `spend` and pays for the whole thing when it ends,
+ * A build holds its own `spend` and pays for the whole thing when it ends,
  * destroying the container with it (builder.ts). A lone connector call arrives
  * with none, mints one, and pays for its own seconds here — leaving the
  * container to sleep on its own (sandbox.ts `SLEEP`), because the person may
@@ -1464,7 +1464,7 @@ let told = (access: Access | null) =>
 
 // The inviter's own message, where they sent one (T-32963): a line or two
 // saying what this is, carried at the top of the invitation. A paragraph, not
-// a newsletter — an invitation mails an address the SENDER chose, so free text
+// a newsletter — an invitation mails an address the sender chose, so free text
 // stays modest, and past the cap it is a refusal rather than a silent trim,
 // which would send half a sentence in somebody's name. Control characters go
 // because a letter is lines; markup cannot happen at all, since mail.ts
@@ -1507,7 +1507,7 @@ let STRANGERS = 1
 // counts nothing: a rate limit is never the reason feedback is lost.
 //
 // Nobody signed in spells `.created.by=` on the line, which the filter grammar
-// reads as ABSENT — so the bucket for a stranger is every report nobody
+// reads as absent — so the bucket for a stranger is every report nobody
 // signed, which is exactly the anonymous ones.
 let recently = async (ctx: Ctx) => {
   try {
@@ -1575,7 +1575,7 @@ let argsOf = (input: unknown) => {
 let SLUGS = PAGES.map((p) => p.slug).join(', ')
 let COVERING = PAGES.map((p) => `${p.slug} (${p.brief})`).join(', ')
 
-// The platform's OWN rows. The roster every door serves is these plus what
+// The platform's own rows. The roster every door serves is these plus what
 // the plugins bring — `TOOLS`, at the foot of this file.
 let OURS: Row[] = [
   {
@@ -1616,7 +1616,7 @@ let OURS: Row[] = [
             : `space ${s} is taken`,
         )
       }
-      // An address a space has LEFT still points at it (space_set below), so it
+      // An address a space has left still points at it (space_set below), so it
       // is not free for a new space either — the refusal app_new gives, one
       // level up.
       let was = await ctx.dir.formerly(s)
@@ -1701,7 +1701,7 @@ let OURS: Row[] = [
       // someone was given is forever, and a space's address is on more of
       // them than an app's — until the person says to forget one.
       let had = kept(space.slug, space.slugs, moving, drop)
-      // Every app's FILES move with the space, because a file's key carries
+      // Every app's files move with the space, because a file's key carries
       // the space's slug (`laid`). Copied before anything is deleted, so the
       // apps are whole at whichever address answers while the move is in
       // flight. Nothing else moves: the store handles are the apps' own
@@ -1806,7 +1806,7 @@ let OURS: Row[] = [
       // A letter that will not send is not a link to hand over (member_add
       // does that for an invitation, which is not an irreversible act): the
       // web door is said instead, and it still wants their cookie, their
-      // ownership and the name typed back. That door TRASHES whatever was
+      // ownership and the name typed back. That door trashes whatever was
       // asked for here — the erase rides in the ticket, and the ticket was in
       // the letter that did not arrive — so what it would do is said in the
       // trash's words however this call was made.
@@ -1950,7 +1950,7 @@ let OURS: Row[] = [
       // An app costs money to keep, so this is a refusal and not a warning —
       // the warning came at 80%, on the unseen channel (unseen.ts `ceiling`).
       let free = ceilings(space.tier, space.slug)
-      // What the space HAS: an app in the trash is one the person has already
+      // What the space has: an app in the trash is one the person has already
       // said they are done with, so it stands against nothing (erase.ts).
       let apps = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
       if (free?.apps != null && apps.length >= free.apps) {
@@ -1972,7 +1972,7 @@ let OURS: Row[] = [
             : `app ${s} exists in ${space.slug}`,
         )
       }
-      // An address an app has LEFT still points at it (app_set below), so it
+      // An address an app has left still points at it (app_set below), so it
       // is not free for a new app either.
       let moved = await ctx.dir.former(space, s)
       if (moved) {
@@ -2066,7 +2066,7 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let batch = files(args.files)
       let op = opOf(args, batch.length)
-      // The refusal names the ops AND the batch, because a bare "op is
+      // The refusal names the ops and the batch, because a bare "op is
       // required" leaves an agent guessing at both (C-32624 item 5).
       if (!OPS.includes(op)) {
         throw new Error(
@@ -2083,7 +2083,7 @@ let OURS: Row[] = [
       let prefix = fileKey(space, app, '')
       if (op == 'list') {
         let keys = await blobs.list(prefix)
-        // The app's OWN files: what the platform keeps beside them — the
+        // The app's own files: what the platform keeps beside them — the
         // bytes a page uploaded, the bytes a version pins — is addressed by
         // its content and was never a file anyone wrote (versions.ts `own`).
         return {
@@ -2142,7 +2142,7 @@ let OURS: Row[] = [
           space,
         }
       }
-      // And putting one back, as a NEW write — so the bytes it replaces are
+      // And putting one back, as a new write — so the bytes it replaces are
       // themselves kept, and a restore can be undone by another.
       if (op == 'restore') {
         let path = fileKey(space, app, text(args.path, 'path'))
@@ -2576,7 +2576,7 @@ let OURS: Row[] = [
       let all = await versions(ctx.dir, app)
       let want: Version | undefined
       if (args.version == null) {
-        // The one BEFORE the live one: the deploy that broke the page is the
+        // The one before the live one: the deploy that broke the page is the
         // newest, so "put it back" means the one under it.
         want = all[1]
         if (!want) {
@@ -2602,9 +2602,9 @@ let OURS: Row[] = [
       let prefix = fileKey(space, app, '')
       let now = await manifest(blobs, prefix)
       await restore(blobs, prefix, want.files)
-      // A rollback IS a release — of files that were live once — so the same
+      // A rollback is a release — of files that were live once — so the same
       // door plants the vocabulary, the tools and the worker this version
-      // pinned, and records it as a NEW version. History is never rewritten.
+      // pinned, and records it as a new version. History is never rewritten.
       let { version, said } = await released(ctx, space, app, who, store)
       return {
         text: `put ${space.slug}/${app.slug} back to v${want.version}, live ` +
@@ -2617,7 +2617,7 @@ let OURS: Row[] = [
   },
   // The store's own way back (recover.ts, T-34507). It sits beside
   // app_rollback because the two are the same word said about the two halves an
-  // app is made of: a rollback puts the FILES back, this puts the DATA back.
+  // app is made of: a rollback puts the files back, this puts the data back.
   {
     name: 'store_restore',
     destructive: true,
@@ -2736,7 +2736,7 @@ let OURS: Row[] = [
       let open = args.access == null ? null : access(args.access)
       let home = args.home == null ? null : flag(args.home, 'home')
       let drop = args.forget == null ? null : slug(args.forget, 'forget')
-      // The globs are checked BEFORE anything is written or any file moves:
+      // The globs are checked before anything is written or any file moves:
       // a refusal here has to leave the app exactly as it was (router.ts).
       let first = args.first == null ? null : globs(args.first, [META.app])
       let show = args.gallery == null ? null : flag(args.gallery, 'gallery')
@@ -2765,7 +2765,7 @@ let OURS: Row[] = [
         }
         forgotten(app.slug, app.slugs, drop)
       }
-      // Being SHOWN is the space owner's, the way publishing is: an editor
+      // Being shown is the space owner's, the way publishing is: an editor
       // writes the app, and putting it on our own front page is not that.
       if (show != null && who.role != 'owner') {
         throw new Error(`not the owner of ${space.slug}`)
@@ -2820,7 +2820,7 @@ let OURS: Row[] = [
             : {}),
         })
       }
-      // The globs are COLUMNS of the word that says which app is home
+      // The globs are columns of the word that says which app is home
       // (vocab.ts), so an app that is not the front page has nowhere to put
       // them — and routing another app's paths from a page nobody is served
       // is a rule that would never fire. Said rather than silently kept.
@@ -2837,7 +2837,7 @@ let OURS: Row[] = [
       // that had it and puts it on this one, which is what keeps a space to
       // one (directory.ts `homing`). The write empties the directory's cache,
       // so the hostname answers the new front page on the next request rather
-      // than a TTL later. `home: false` is about THIS app: a space whose front
+      // than a TTL later. `home: false` is about this app: a space whose front
       // page is some other app keeps the one it has.
       if (home == false) {
         if (app.home) entities.push(...homing(app, null))
@@ -2865,7 +2865,7 @@ let OURS: Row[] = [
         }: ${url(space, now, ctx.env)}${
           moving ? ` (moved from /${app.slug}/, which now redirects here)` : ''
         }${open ? ` — ${told(open)}` : ''}${
-          // What the app IS now, off the row just read back: `home: false` on
+          // What the app is now, off the row just read back: `home: false` on
           // an app that was never the front page changes nothing, and saying
           // it did would be a sentence the address disagrees with.
           home == null || now.home == app.home
@@ -2880,7 +2880,7 @@ let OURS: Row[] = [
             }/ ` +
               "lists the space's apps again until another one is set home"}${
           // Read off the row that was just written, never off what arrived:
-          // the sentence says what the app IS now (directory.ts `appOf`).
+          // the sentence says what the app is now (directory.ts `appOf`).
           first == null
             ? ''
             : now.first.length
@@ -3139,7 +3139,7 @@ let OURS: Row[] = [
       },
     },
     // The listing is one question, so it is asked as one (T-35431): five
-    // directory reads that do not grow with the answer — the caller's SEATS
+    // directory reads that do not grow with the answer — the caller's seats
     // (which spaces, and what they are in each), every app across them, and
     // everything bound to those apps — then one parallel wave for the single
     // fact only an app's own store holds. Asked space by space and app by app
@@ -3157,7 +3157,7 @@ let OURS: Row[] = [
       let seatOf = new Map(seats.map((s) => [s.space.eid, s]))
       let every = await ctx.dir.apps(seats.map((s) => s.space))
       // Two lists, because they are two different things to say: what the
-      // person HAS, and what they threw away and can still have back
+      // person has, and what they threw away and can still have back
       // (erase.ts, T-34430).
       let living = every.filter((a) => !a.trashed)
       let bound = await bindings(ctx.env, living)
@@ -3180,10 +3180,10 @@ let OURS: Row[] = [
         let apps = mine.filter((a) => !a.trashed)
         let bin = mine.filter((a) => a.trashed)
         // The space itself may be in the trash (erase.ts, T-34431), and then
-        // NOTHING under it is answering however true the rest of the listing
+        // nothing under it is answering however true the rest of the listing
         // still is — every app is kept exactly as it is, and that address is
         // where the person restores it.
-        // What the caller IS here — the directory's `member` row, which this
+        // What the caller is here — the directory's `member` row, which this
         // listing already read to answer at all. Said out loud because
         // membership is the directory's fact: a client that asked an app's
         // `/me` for it instead would wake a Durable Object per space to learn
@@ -3253,7 +3253,7 @@ let OURS: Row[] = [
     },
   },
   // The apps' own verbs, in two fixed tools (T-34541). What an app declares is
-  // a COMMAND, not a tool: `commands` says which there are and what each takes,
+  // a command, not a tool: `commands` says which there are and what each takes,
   // `command` runs one. The roster never moves for them — which is the whole
   // point, since a directory snapshots this list at submission and serves that
   // snapshot forever (declared.ts).
@@ -3295,7 +3295,7 @@ let OURS: Row[] = [
           seen.add(one.at)
           lines.push(`${lines.length ? '\n' : ''}## ${one.at}`)
         }
-        // Whether it READS or writes, in the line: half of these commands
+        // Whether it reads or writes, in the line: half of these commands
         // mutate and half do not, and a model choosing between them is owed
         // that before it picks. It used to ride as a field on the answer, and
         // an answer is bundles now, so it is said in the words like the rest.
@@ -3401,7 +3401,7 @@ let OURS: Row[] = [
         )
       }
       reachable(ctx.env)
-      // The ROW first, then Cloudflare. The unique index on the name is what
+      // The row first, then Cloudflare. The unique index on the name is what
       // decides who gets a hostname, so it decides before we spend a billable
       // custom hostname on it; an attach that Cloudflare then refuses takes
       // its own row back out.
@@ -3429,7 +3429,7 @@ let OURS: Row[] = [
       }
       let how = steps(custom)
       let stage = stageOf(how)
-      // What Cloudflare says is the PLATFORM's word, not the person's, so it
+      // What Cloudflare says is the platform's word, not the person's, so it
       // is stamped rather than written as them (directory.ts `stamp`) — which
       // is also what lets a viewer's domain_status refresh a stage below.
       if (stage != 'pending') {
@@ -3553,7 +3553,7 @@ let OURS: Row[] = [
         )
       }
       reachable(ctx.env)
-      // Cloudflare FIRST, the row last. The row is the only record we keep
+      // Cloudflare first, the row last. The row is the only record we keep
       // that the hostname exists, so a detach that dies between the two
       // leaves a row pointing at a hostname already given back — which the
       // next call finds and finishes. The other order leaves a billable
@@ -3610,7 +3610,7 @@ let OURS: Row[] = [
     },
     run: async (ctx, args) => {
       let { space, app, who } = await ownsApp(ctx, args)
-      // A name is claimed ONCE. Publishing again with none said keeps the
+      // A name is claimed once. Publishing again with none said keeps the
       // name the offer already has: a republish that quietly renamed
       // `chore-chart` to the app's slug left everyone who had been told to
       // install `chore-chart` finding nothing (C-32905 item 4). Only a first
@@ -3629,7 +3629,7 @@ let OURS: Row[] = [
             'this one under another (app_publish name: …)',
         )
       }
-      // What is on offer is what is SERVING, and an app that never deployed
+      // What is on offer is what is serving, and an app that never deployed
       // serves nothing an installer could copy.
       let version = app.version ?? 0
       if (!version) {
@@ -3648,7 +3648,7 @@ let OURS: Row[] = [
           published: { name, version, at: new Date().toISOString(), about },
         }],
       }, vouched(who))
-      // What the answer has to carry is whether the NAME moved, because that
+      // What the answer has to carry is whether the name moved, because that
       // is the half nobody can see: a rename strands every link and every
       // instruction holding the old one.
       let said = was == null
@@ -3660,7 +3660,7 @@ let OURS: Row[] = [
         : `\nit was offered as ${was}, and that name no longer resolves: ` +
           `anyone holding it finds nothing, so tell them ${name}`
       // The gallery, where the call said anything about it: true puts the
-      // offer forward, false takes it back. The row is read BACK first — the
+      // offer forward, false takes it back. The row is read back first — the
       // letter names the offer as it now stands, and on a first publish the
       // app in hand has no offer on it at all.
       let shown: Standing | null = null
@@ -3702,7 +3702,7 @@ let OURS: Row[] = [
       )
       // And the gallery with it (gallery.ts): the page shows what a person can
       // install, so an app nobody can install is not on it. The word comes
-      // OFF rather than being remembered — being shown is a thing we agreed
+      // off rather than being remembered — being shown is a thing we agreed
       // to, and a later publish asks again.
       let was = onGallery(app)
       if (was != 'no') await unGallery(ctx.env, app)
@@ -3792,7 +3792,7 @@ let OURS: Row[] = [
       if (free?.apps != null && apps.length >= free.apps) {
         throw new Error(atCeiling(space, 'apps', ctx.env))
       }
-      // The address the copy takes: the SOURCE app's own slug, not the
+      // The address the copy takes: the source app's own slug, not the
       // published name. An app is written at its own address — a page that
       // names `/chores/api/client.js`, an app that reaches a sibling by name
       // — so a copy landing at `chore-chart` is renamed out from under its
@@ -3839,8 +3839,8 @@ let OURS: Row[] = [
       let onto = { space, app }
       let { wrote } = await copied(ctx, offer, onto)
       // A release of the copy, in the installer's own space: the components
-      // its vocab.json declares planted in ITS store, its tools listed under
-      // ITS slug, its worker.js uploaded as ITS own script.
+      // its vocab.json declares planted in its store, its tools listed under
+      // its slug, its worker.js uploaded as its own script.
       let out = await released(
         ctx,
         space,
@@ -3865,7 +3865,7 @@ let OURS: Row[] = [
     name: 'app_update',
     // The copy's files are replaced by the publisher's current ones and the
     // version it was on is not offered again — app_rollback's shape, and its
-    // hint. Their DATA is untouched, which is a different promise.
+    // hint. Their data is untouched, which is a different promise.
     destructive: true,
     input: {
       type: 'object',
@@ -3897,7 +3897,7 @@ let OURS: Row[] = [
           space,
         }
       }
-      // The publisher's words against this store's own, BEFORE a byte of code
+      // The publisher's words against this store's own, before a byte of code
       // moves: a vocabulary that only grew lands through the store's own
       // additive graft, and one that conflicts is refused here with the
       // sentence a deploy gives (T-32728), leaving the copy as it was.
@@ -3931,7 +3931,7 @@ let OURS: Row[] = [
   },
   {
     name: 'member_add',
-    // The seat is additive and member_remove takes it back; the LETTER is
+    // The seat is additive and member_remove takes it back; the letter is
     // what leaves, and asking twice mails twice — so not idempotent either.
     destructive: false,
     openWorld: true,
@@ -3973,7 +3973,7 @@ let OURS: Row[] = [
       // Read before anything is written: a note too long is a refusal, and a
       // refused invitation mails nothing at all (T-32963).
       let note = args.note == null ? '' : noteOf(args.note)
-      // What they were invited TO: the app, if one was named, else the
+      // What they were invited to: the app, if one was named, else the
       // space. Name the app: the space's own address is its front page or a
       // list of what they may open (T-33040), and neither is the thing they
       // were invited to look at (C-32624 item 4).
@@ -4001,8 +4001,8 @@ let OURS: Row[] = [
       if (person == ctx.person && had) {
         throw new Error(`${email} is you, and you own ${space.slug}`)
       }
-      // ONE app, or the space (T-37615). A seat is read space-wide — that is
-      // what the roster IS — so the way to invite somebody to a single app is
+      // One app, or the space (T-37615). A seat is read space-wide — that is
+      // what the roster is — so the way to invite somebody to a single app is
       // the other rung: a grant on that app, which gives them its page and its
       // data and nothing else in the space. Naming the app is asking for that,
       // because an invitation that named one app and handed over the space was
@@ -4044,7 +4044,7 @@ let OURS: Row[] = [
         await reachChanged(ctx.env, person)
       }
       // The letter, from the platform's own sender — the one the sign-in
-      // code rides (mail.ts). It goes AFTER the membership, which stands
+      // code rides (mail.ts). It goes after the membership, which stands
       // whatever the mail does: a letter that cannot be sent is a link to
       // relay by hand, never a lost invitation.
       let what = app ? `${app.title} (${space.slug}/${app.slug})` : space.title
@@ -4205,7 +4205,7 @@ let OURS: Row[] = [
               'it expires, so an old one needs no revoking.',
         }
       }
-      // Naming a space they cannot reach is refused HERE, where the refusal
+      // Naming a space they cannot reach is refused here, where the refusal
       // can say which — a grant is never more than the person, so a narrowing
       // to somewhere they do not belong would only ever be a token that
       // reaches nothing.
@@ -4233,7 +4233,7 @@ let OURS: Row[] = [
     name: 'feedback',
     destructive: false,
     openWorld: true,
-    // The one door that takes something FROM a stranger (anon.ts). What it
+    // The one door that takes something from a stranger (anon.ts). What it
     // writes is the platform's own inbox and nobody's graph, so it is no more
     // an anonymous write than a letter is: harder-limited, and unsigned.
     security: EITHER,
@@ -4307,7 +4307,7 @@ let OURS: Row[] = [
       // the fleet's task graph (mail.ts GRAPH), where the sweep turns it into
       // mail an operator is notified of instead of one a person must relay.
       // One send, so it reaches both or neither and the answer below stays
-      // true either way. It leads with the WORDS: what was said is the report,
+      // true either way. It leads with the words: what was said is the report,
       // and everything else is a line of context under a rule, so a person
       // takes it in at a glance.
       // Who it is from, on the letter. Nobody signed in is said plainly —
@@ -4411,7 +4411,7 @@ let OURS: Row[] = [
   // And the tools anybody may call, signed in or not (preauth.ts, T-33030):
   // each says one fixed text and reads nothing, so the same words serve a
   // stranger and a member. They are lifted here rather than listed only at
-  // the door, which is what makes the pre-auth list a SUBSET of this one
+  // the door, which is what makes the pre-auth list a subset of this one
   // instead of a second surface that could drift from it.
   ...PUBLIC.map((t): Row => ({
     name: t.name,
@@ -4464,10 +4464,10 @@ let OURS: Row[] = [
 ]
 
 /**
- * THE roster: the platform's own rows, then every plugin's in PLUGINS order
+ * The roster: the platform's own rows, then every plugin's in PLUGINS order
  * (plugin.ts `tools`).
  *
- * Composed once, at load. The list a caller is offered is FIXED and the same
+ * Composed once, at load. The list a caller is offered is fixed and the same
  * for everybody (T-34541) — a plugin adds a row to the table and never decides
  * one per person, which is the whole reason a plugin's tools are data here and
  * not a function of who is asking.

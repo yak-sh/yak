@@ -12,8 +12,8 @@
 // where a pass becomes a session, at the same `landed` a spent code reaches.
 // The two passes die differently, and that difference is the design:
 //
-//   ONCE      the link every code letter carries. It seals the ADDRESS and the
-//             CODE, so it IS that code said another way — spending the link
+//   Once      the link every code letter carries. It seals the address and the
+//             code, so it is that code said another way — spending the link
 //             spends the code (signin.ts `spend`), which makes it single use,
 //             ten minutes old and counted against the same ceilings without a
 //             ledger of its own. A person is not minted for it either, so
@@ -21,7 +21,7 @@
 //             row that already counted it. And a leaked store row still cannot
 //             be turned into a link, because that store keeps a mac and never
 //             the digits.
-//   STANDING  the link that signs ONE person in until an expiry its minter
+//   Standing  the link that signs one person in until an expiry its minter
 //             set. It seals the person and a row id, and it is worth a session
 //             and nothing more: what the holder may then do is their
 //             membership, read at request time exactly as a cookie's is
@@ -112,7 +112,7 @@ export let stand = async (
 
 /**
  * What a link says, or null for anything but a well-formed pass under this
- * secret. Nothing is SPENT here: who a pass names is settled by the caller —
+ * secret. Nothing is spent here: who a pass names is settled by the caller —
  * a `once` against the code it carries (signin.ts `spend`), a `standing`
  * against {@link whose} — so a pass that fails there is refused without this
  * having to know either story.

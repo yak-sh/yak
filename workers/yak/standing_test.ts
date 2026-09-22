@@ -59,7 +59,7 @@ Deno.test('the notes are refused over the cap, with the number', () => {
   // The same file named the other way is the same file.
   assertEquals(tooLong('/NOTES.md', CAP + 1), no)
   // And the name it was written under before T-34632 keeps its ceiling, since
-  // an app that still carries one is still read (standing.ts NAMES).
+  // an app that still carries one is still read (standing.ts names).
   assert(tooLong('AGENTS.md', CAP + 1).includes('AGENTS.md'), 'old name')
   assertEquals(tooLong('AGENTS.md', CAP), '')
 })
@@ -100,7 +100,7 @@ Deno.test("an app's notes ride under its heading, when asked for", () => {
   assert(notes.includes('## kitchen/recipes\n'), notes)
   assert(notes.includes('Grams, never cups.'), notes)
   assert(notes.indexOf('Grams') < notes.indexOf('## kitchen/chores'), notes)
-  // And NOT on the roster, which is the half that rides on the `initialize`
+  // And not on the roster, which is the half that rides on the `initialize`
   // instructions (T-34632): the app is named there and its words are not, so
   // a host classifying the instructions reads ours and nobody else's.
   let roster = passage(apps)
@@ -115,7 +115,7 @@ Deno.test('a prompt is named after the app, and never over something taken', () 
   let rules = '# Recipes\n\nGrams, never cups.'
   let one = prompted([entry('recipes', { said: rules })], ['make', 'fix'])
   assertEquals(one.map((p) => p.name), ['recipes'])
-  // The listing is OUR words about the app, never the app's own: a prompt
+  // The listing is our words about the app, never the app's own: a prompt
   // list is classified the way a tool list is (T-34632). The file is the
   // prompt's text, which is fetched by name.
   assertEquals(one[0].title, 'Recipes: notes')

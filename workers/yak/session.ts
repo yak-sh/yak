@@ -1,24 +1,24 @@
 // Who is asking (D-32318 §Auth): the platform session cookie, verified with
 // the shared secret (src/token.ts), joined to the person's membership in the
 // space the request is for. The kernel is the one reader of the cookie —
-// what serves an app gets the VOUCH instead, and never the cookie — and the
+// what serves an app gets the vouch instead, and never the cookie — and the
 // only writer of it, so a client cannot send one: every request to a store is
 // built from scratch by `storeOf` (door.ts), which strips the set before it
 // stamps its own.
 //
-// THE RULE IS NOT KEPT HERE. `member`, `grant` and `access` are @yaks/member's
+// The rule is not kept here. `member`, `grant` and `access` are @yaks/member's
 // components, and the two questions they answer — may this level read a thing
 // in this mode (`reads`), may it write one (`edits`, or `writes` for a level
 // alone) — are that package's own words, asked at each door with `who.role` and
-// the app's `access` in hand. The kernel's `Role` IS member's `Level` and its
-// `Access` IS member's `Mode`, so a door and the graph that enforces it
+// the app's `access` in hand. The kernel's `Role` is member's `Level` and its
+// `Access` is member's `Mode`, so a door and the graph that enforces it
 // (graph.ts `authenticating`, @yaks/member's precondition guard) read the same
 // predicate off the same words, with nothing in between to drift.
 //
-// The cookie's LIFE is here too, at the bottom: how long one lasts, what one
+// The cookie's life is here too, at the bottom: how long one lasts, what one
 // is minted as, and the renewal that makes a session slide. The doors that
 // mint one (identity.ts) and the router the renewal hangs off (index.ts) are
-// elsewhere; what a session IS belongs beside who is asking.
+// elsewhere; what a session is belongs beside who is asking.
 import { COOKIE, cookie, cookieValue, sign, verify } from '../../src/token.ts'
 import type { Role } from './directory.ts'
 import type { Env } from './env.ts'
@@ -28,16 +28,16 @@ import { hostOf } from './route.ts'
 export type Who = {
   person: string | null
   role: Role | null
-  /** The role above is held by a GRANT on the one app this request is for,
+  /** The role above is held by a grant on the one app this request is for,
    * not by a seat on the space's roster (T-37615). A guest of one app reads
    * and writes that app's data and sees its page exactly as a member does, and
-   * reaches nothing else in the space — its FILES included, since writing an
+   * reaches nothing else in the space — its files included, since writing an
    * app's bytes stays a member's act (apps.ts, public/docs/sharing.md). */
   guest?: boolean
 }
 
 /**
- * Who is asking at a door that takes a CREDENTIAL rather than a cookie alone
+ * Who is asking at a door that takes a credential rather than a cookie alone
  * — the connector, the CLI (identity.ts `asking`, which is what mints one).
  * Beside `Who` because it is the same question one step earlier: `Who` is the
  * person and their seat in a space, this is the person and how they got in.
@@ -77,15 +77,15 @@ export let vouched = (who: Who): Record<string, string> => ({
   ...(who.role ? { 'x-yak-role': who.role } : {}),
 })
 
-// The header a WRITE adds to that vouch: what to call this person, so the
+// The header a write adds to that vouch: what to call this person, so the
 // store titles the person row it mints beside their rows (graph.ts `#vouching`)
 // and a byline resolves to `{eid, name}` (listing.ts `named`). The name is
 // the one they chose, else the front of their address (directory.ts
 // `nameAt`); their address stays in the directory, since an app's store
 // learns a name and never an address book (T-32654).
 //
-// Read at the WRITE doors only — a read never mints a person, and every page
-// load would otherwise pay for a name nobody wrote down — and by EVERY write
+// Read at the write doors only — a read never mints a person, and every page
+// load would otherwise pay for a name nobody wrote down — and by every write
 // door: the page's (apps.ts `acting`) had it while the agent's routed write
 // did not, so a loan written through graph_apply left the lending store
 // calling the borrower a bare uuid (C-32800 item 5).
@@ -99,7 +99,7 @@ export let titling = async (
 
 // ── The cookie's life ──────────────────────────────────────────────────────
 
-// Ninety days of INACTIVITY; activity keeps a session alive without limit.
+// Ninety days of inactivity; activity keeps a session alive without limit.
 // The cookie is minted for this long and re-minted past half its life
 // (`slid`), so a browser or a CLI that keeps asking never signs out and one
 // that goes quiet for ninety days does. The cookie is the browser's; an
@@ -118,7 +118,7 @@ let domainOf = (req: Request, env: Host) => {
   return host == apex(env) || host.endsWith(`.${apex(env)}`) ? apex(env) : ''
 }
 
-// ONE session cookie, minted: the token this secret signs and the Set-Cookie
+// One session cookie, minted: the token this secret signs and the Set-Cookie
 // that carries it — on the apex, or host-only on a customer's own domain.
 // Signing in, the custom-domain handoff and the renewal below all mint the
 // same thing, so a session's life is said in one place.
@@ -140,7 +140,7 @@ export let minted = (
 let sets = (res: Response) =>
   new RegExp(`(?:^|,\\s*)${COOKIE}=`).test(res.headers.get('set-cookie') ?? '')
 
-// The session SLIDES (T-35380). `SESSION` was always meant as a span of NOT
+// The session slides (T-35380). `SESSION` was always meant as a span of NOT
 // signing in — the cookie was minted once and never renewed, which made it a
 // hard limit instead — so an answer to a request whose cookie is past half
 // its life carries a fresh one: the same person, the same standing, another
@@ -151,7 +151,7 @@ let sets = (res: Response) =>
 // revoke it in, and a browser that has taken the new cookie will not send the
 // old one again.
 //
-// It happens on the way OUT of the router (index.ts), where every request
+// It happens on the way out of the router (index.ts), where every request
 // passes whatever door answered it, because every door has to slide and no
 // door should have to remember to. An answer that sets the cookie itself is
 // left alone (`sets`), and so is a socket, which has no body to copy.

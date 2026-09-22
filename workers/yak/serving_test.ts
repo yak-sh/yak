@@ -3,7 +3,7 @@
 // beside it, and the `/api/*` doors its client speaks — over the workerd
 // stand-in, with nothing stubbed between the request and the rows.
 //
-// The whole point is that TWO wires meet here and the door translates
+// The whole point is that two wires meet here and the door translates
 // (wire.ts): a page sends `{entities: […]}` and reads `{ok, changes, aliases}`
 // back, spells its filter as the query string itself, and folds a socket's
 // frames — while the Store takes a bare array of bundles, answers the batch as
@@ -15,7 +15,7 @@
 // this serves are real rows written the way `space_new` and `app_new` write
 // them (platform_test.ts is that half on its own).
 //
-// The ROUTING ORDER is held here as well, at the end: which part answers a
+// The routing order is held here as well, at the end: which part answers a
 // path — an app, the home app, the platform's own index — is the same door
 // asked the same way, and the stand-in is where a home app with a worker can
 // be stood up at all (apps.ts `served`, D-34197).
@@ -361,7 +361,7 @@ Deno.test("/api/stats answers the app's own people, and nobody else", async () =
     assertEquals(api.asked.length, 4)
     for (let q of api.asked) assertStringIncludes(q, 'sum(_sample_interval)')
 
-    // A public app's PAGES are the world's; its visitor counts are not.
+    // A public app's pages are the world's; its visitor counts are not.
     let theirs = await apps.fetch(visit('/cookbook/api/stats'), env)
     assertEquals(theirs.status, 401)
     await theirs.body?.cancel()
@@ -416,7 +416,7 @@ Deno.test('the page wire: apply, query and search round-trip', async () => {
   let hits = await page.search('drizzle')
   assertEquals(hits.length, 1)
   assertEquals((hits[0].entity as { eid: string }).eid, eid)
-  // And over the BODY, which is the half a blob address could have eaten:
+  // And over the body, which is the half a blob address could have eaten:
   // `doc.body` is swapped for its SHA-256 before the row is written
   // (@yaks/blob `store: "blob"`), so the index is told how to read one back
   // (T-33978) — a word only the body says still finds the doc, and the
@@ -475,7 +475,7 @@ Deno.test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () =
   assertEquals(saved[0].doc.title, 'Recipe 0')
   assertEquals((await page.query('.doc!')).length, 3)
 
-  // A bad line is the LAST line of the answer, and it says which line it was.
+  // A bad line is the last line of the answer, and it says which line it was.
   let no = await lines(
     await poured([
       JSON.stringify({ entity: { eid: '$ok' }, doc: { title: 'Fine' } }),
@@ -663,14 +663,14 @@ Deno.test('DELETE / empties the app store and bears it again', async () => {
 
 // ---- the routing order (apps.ts `served`, D-34197) --------------------------
 
-// One rung a test, over the same stand-in: which PART answers a path is the
+// One rung a test, over the same stand-in: which part answers a path is the
 // whole of what these hold, so each one asks an address whose answer only the
 // rung it names can give.
 //
 // The home app's worker is a stub. A dispatch namespace is remote-only — there
 // is no workerd implementation and `wrangler dev` leaves the binding undefined
 // (dispatch.ts) — so what the seam itself does with a grant is dispatch_test.ts
-// and what is proved here is that the kernel ASKS it, and where in the order.
+// and what is proved here is that the kernel asks it, and where in the order.
 // The `/.well-known/` half of rung 1 is decided before this part (route.ts
 // `platform`, index.ts) and is held in route_test.ts and home_test.ts.
 
@@ -842,7 +842,7 @@ Deno.test("rung 4: the space's index is `/`'s last word", async () => {
   assert((await listed.text()).includes('href="/garden/"'))
   assertEquals((await bare.at('/nothing.txt')).status, 404)
 
-  // A home worker that PASSES on `/` (its 404 is the pass verdict) leaves the
+  // A home worker that passes on `/` (its 404 is the pass verdict) leaves the
   // index to answer, and one that owns it wins: the index is what is left when
   // neither half of the home app has anything there.
   using passing = await router(() => new Response('no', { status: 404 }))
@@ -968,7 +968,7 @@ Deno.test("rung 1½: the router's own onward request is not intercepted again", 
   using k = await fronted(async (req) => {
     ran++
     // The grant the kernel handed it, forwarded — which is what the router's
-    // own `env.STORE`/`env.FILES` calls carry (dispatch.ts SHIM). A request
+    // own `env.STORE`/`env.FILES` calls carry (dispatch.ts shim). A request
     // wearing one lands on the app that owns the path, or this is a loop.
     let asked = await apps.fetch(
       new Request(visit('/garden/print'), { headers: req.headers }),
@@ -1009,7 +1009,7 @@ Deno.test('an app in the trash serves nothing, and says so to its owner', async 
   assertStringIncludes(said, '30 more days')
 })
 
-// The front page is a word ON the app (T-34227), so a trashed app that wears
+// The front page is a word on the app (T-34227), so a trashed app that wears
 // it is still wearing it — and the space is a space with no front page until
 // it comes back. The restore itself is a form on that space's own page: no
 // assistant, no script, one POST.
@@ -1052,7 +1052,7 @@ Deno.test("a trashed front page is nobody's, and the owner restores it there", a
   assertStringIncludes(await (await k.at('/')).text(), 'cookbook')
 })
 
-// A SPACE in the trash answers nothing at any of its addresses (T-34431) —
+// A space in the trash answers nothing at any of its addresses (T-34431) —
 // ahead of every rung of the order above, since none of them is reached. Its
 // owner is the exception, and the page they get carries the one button that
 // brings the space back.
@@ -1106,8 +1106,8 @@ Deno.test('a space in the trash serves nothing, and its owner restores it', asyn
 
 // The RSVP shape, end to end over the same stand-in: a `private` app nobody
 // may read, and a worker route that checks an invitation code and writes the
-// one row it names as the APP. The grant is spent the way the shim spends it
-// (dispatch.ts SHIM) — under GRANT, on the app's own door — because the shim
+// one row it names as the app. The grant is spent the way the shim spends it
+// (dispatch.ts shim) — under grant, on the app's own door — because the shim
 // runs inside the dispatch namespace and this harness stands where that
 // namespace would be.
 Deno.test('env.APP: a private app is written by its own worker, and by nobody else', async () => {
@@ -1128,7 +1128,7 @@ Deno.test('env.APP: a private app is written by its own worker, and by nobody el
   using k = await router(async (req) => {
     let url = new URL(req.url)
     if (url.pathname == '/rsvp') {
-      // THE CHECK COMES FIRST, and its refusal says nothing else.
+      // The check comes first, and its refusal says nothing else.
       if (url.searchParams.get('code') != 'OPEN-SESAME') {
         return new Response('no invitation by that code', { status: 403 })
       }
@@ -1169,7 +1169,7 @@ Deno.test('env.APP: a private app is written by its own worker, and by nobody el
   // path, never a hole in the app's mode.
   assertEquals((await k.at('/api/query?.doc!')).status, 401)
 
-  // One household row, signed by the APP — not by a guest, and not by Ada.
+  // One household row, signed by the app — not by a guest, and not by Ada.
   let cookie = await as(ADA)
   let asAda = (path: string) =>
     apps.fetch(visit(path, { headers: { cookie } }), env)
@@ -1194,7 +1194,7 @@ Deno.test('env.APP: a private app is written by its own worker, and by nobody el
 // its base and its reporter, and the inside of the app stays inside.
 //
 // Then the buying half, as far as this side of it goes. Taking money is the
-// PLATFORM's door — `POST /api/pay/checkout`, on the seller's connected Stripe
+// platform's door — `POST /api/pay/checkout`, on the seller's connected Stripe
 // account (T-34525) — so the app holds no key, writes no worker, and has
 // exactly one obligation: the items it posts must name products this store
 // has, and must carry no money, because the door reads `price_cents` off the
@@ -1300,7 +1300,7 @@ let paying = async (env: Env, body: unknown, cookie?: string) => {
 Deno.test('the shop example deploys, seeds itself and serves its front', async () => {
   using k = await shopping()
   let out = await k.deploy()
-  // The shop declares NO components of its own, and that is the point: both
+  // The shop declares no components of its own, and that is the point: both
   // words it is made of are the platform's — `product`, which the checkout
   // door reads a price off, and `order`, which the platform writes when Stripe
   // says money moved — so there is no vocab.json here and nothing to plant.
@@ -1352,7 +1352,7 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
     { product: long.entity.eid },
   )
   let items = asked(cart)
-  // What goes to the door names rows this store HAS, and says nothing about
+  // What goes to the door names rows this store has, and says nothing about
   // money.
   assertEquals(items.map((i: { product: string }) => i.product), [
     tee.entity.eid,
@@ -1399,7 +1399,7 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
       entities: [{ entity: { eid: k.space.eid }, plan: { tier: 'plus' } }],
     })
 
-    // The shop is deployed and the space has NOT connected Stripe. That is the
+    // The shop is deployed and the space has not connected Stripe. That is the
     // refusal a page will actually meet — a seller deploys before they finish
     // Stripe's form nearly every time — so it is refused by name, with the way
     // out in the sentence.
@@ -1430,7 +1430,7 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
     assertEquals(paid.status, 200, JSON.stringify(paid.body))
     assertStringIncludes(paid.body.url, 'checkout.stripe.com')
 
-    // THE ONE HEADER that makes it the seller's charge and not ours.
+    // The one header that makes it the seller's charge and not ours.
     let made = fake.at('/v1/checkout/sessions')!
     assertEquals(made.on, 'acct_seller')
     // The door priced it off the store, and carried the size into the name the
@@ -1460,7 +1460,7 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
       'https://ada.yaks.app/shop/?ordered={CHECKOUT_SESSION_ID}',
     )
     assertEquals(made.sent.get('cancel_url'), 'https://ada.yaks.app/shop/')
-    // The two words the webhook routes by, on the session AND on the intent —
+    // The two words the webhook routes by, on the session and on the intent —
     // a refund arrives as a charge and knows nothing of the session.
     assertEquals(made.sent.get('metadata[space]'), k.space.eid)
     assertEquals(made.sent.get('metadata[app]'), 'shop')
@@ -1469,7 +1469,7 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
       made.sent.get('metadata[items]'),
     )
     // The owner has set no rate, so no fee is sent at all: Stripe wants a
-    // POSITIVE application fee, and a fee of nothing is no fee.
+    // positive application fee, and a fee of nothing is no fee.
     assertEquals(
       made.sent.get('payment_intent_data[application_fee_amount]'),
       null,
@@ -1571,9 +1571,9 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
     assertStringIncludes(post[0].doc.body, 'Everyday Tee — Charcoal (M) × 2')
     assertStringIncludes(post[0].doc.body, '**Total $92.00**')
 
-    // ---- THE SAME EVENT AGAIN. At-least-once delivery is the normal case,
+    // ---- the same event again. At-least-once delivery is the normal case,
     // and the order's eid is derived from the session — so this addresses the
-    // row already there, derives the same columns, and leaves ONE order.
+    // row already there, derives the same columns, and leaves one order.
     await connectHook(k.env, WHSEC, {
       id: 'evt_paid',
       type: 'checkout.session.completed',
@@ -1617,7 +1617,7 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
     assertEquals(back.body.did, 'shop: refunded')
     assertEquals((await orders())[0].order.status, 'refunded')
 
-    // ---- disputed. A dispute carries no metadata at all, so its CHARGE is
+    // ---- disputed. A dispute carries no metadata at all, so its charge is
     // read back from Stripe on the seller's own account and the metadata
     // comes off that.
     let charged = false
@@ -1661,7 +1661,7 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
 // with STRIPE_API), so what is asserted is the request that actually left
 // rather than a mock's word for it.
 //
-// The SPACE PAGE's half of this — the three states an owner reads, and the
+// The space page's half of this — the three states an owner reads, and the
 // button that posts back — is in mcp_test.ts instead: drawing that page reaches
 // identity.ts for whether an assistant has ever connected, and the OAuth
 // provider it carries imports `cloudflare:` modules that only workerd can load.
@@ -1748,7 +1748,7 @@ Deno.test('a space connects Stripe, and the webhook makes it ready', async () =>
     // Nothing connected.
     assertEquals(await sold(env), null)
 
-    // The button. It answers a redirect to STRIPE's own hosted form — the one
+    // The button. It answers a redirect to Stripe's own hosted form — the one
     // thing on that page that leaves the site.
     let went = await pressed(env, 'start')
     assertEquals(went.status, 303)
@@ -1757,7 +1757,7 @@ Deno.test('a space connects Stripe, and the webhook makes it ready', async () =>
       'https://connect.stripe.com/setup/c/acct_probe/TOKEN',
     )
 
-    // What actually went to Stripe: the four controller properties that ARE
+    // What actually went to Stripe: the four controller properties that are
     // the charge-merchants-directly model, and no `type` beside them.
     let made = fake.at('/v1/accounts')!
     assertEquals(made.sent.get('controller[fees][payer]'), 'account')
@@ -1778,7 +1778,7 @@ Deno.test('a space connects Stripe, and the webhook makes it ready', async () =>
       'https://ada.yaks.app/_yaks/selling',
     )
 
-    // The id is written the moment Stripe answers with it, BEFORE the link is
+    // The id is written the moment Stripe answers with it, before the link is
     // asked for — so a person who wanders off mid-onboarding comes back to the
     // account they started rather than a second one.
     assertEquals(await sold(env), {
@@ -1787,7 +1787,7 @@ Deno.test('a space connects Stripe, and the webhook makes it ready', async () =>
       detailsSubmitted: false,
     })
 
-    // Pressing it again mints a NEW LINK on the SAME account — an account link
+    // Pressing it again mints a new link on the same account — an account link
     // is single-use, and a second account would split one merchant's money
     // across books nobody can add up.
     await pressed(env, 'start')
@@ -1815,7 +1815,7 @@ Deno.test('a space connects Stripe, and the webhook makes it ready', async () =>
       detailsSubmitted: true,
     })
 
-    // The SAME event again writes nothing at all: at-least-once delivery is
+    // The same event again writes nothing at all: at-least-once delivery is
     // the normal case, and the row is derived rather than transitioned.
     assertEquals(
       (await connectHook(
@@ -1826,7 +1826,7 @@ Deno.test('a space connects Stripe, and the webhook makes it ready', async () =>
       'unchanged',
     )
 
-    // ---- Stripe changes its mind: a flag it does not send is FALSE ----
+    // ---- Stripe changes its mind: a flag it does not send is false ----
     assertEquals(
       (await connectHook(
         env,
@@ -1897,7 +1897,7 @@ Deno.test('the connect door refuses what Stripe did not sign', async () => {
       .error.code,
     'bad_signature',
   )
-  // The PLATFORM's secret is not this door's secret. Two endpoints, two
+  // The platform's secret is not this door's secret. Two endpoints, two
   // `whsec_`, and a door that verified the wrong one is a door answering
   // nothing.
   let at = Math.floor(Date.now() / 1000)
@@ -1967,7 +1967,7 @@ Deno.test('stopping selling forgets the account and calls nothing', async () => 
 
 // ---- the fee (T-34554) -----------------------------------------------------
 
-// The rate is a SETTING on the platform's own space row, not a number in the
+// The rate is a setting on the platform's own space row, not a number in the
 // code, and this is the whole of what that has to mean: an owner of `yak` sets
 // it, nobody else can, the next request is charged the new rate with nothing
 // deployed, and the pricing page says what is being charged.
@@ -2013,7 +2013,7 @@ Deno.test('the fee is an owner’s to set, and is charged on the next request', 
     bps: 250,
     rate: '2.5%',
   })
-  // The NEXT request, with no deploy and no waiting out the read cache — the
+  // The next request, with no deploy and no waiting out the read cache — the
   // write went through `stamp`, which empties it.
   assertEquals(await sell.feeOf(dir), 250)
   assertEquals(await (await feeAt(env, { headers: { cookie } })).json(), {

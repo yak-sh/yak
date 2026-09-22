@@ -84,7 +84,7 @@ export type Tier = 'free' | 'plus'
 // every home page example links to (T-33053), one over the free five — and it
 // pays nobody, so it has no app/data ceiling (meter.ts `ceilings`).
 //
-// A comp is a CONSTANT, read here and written nowhere. `plan` is stamped
+// A comp is a constant, read here and written nowhere. `plan` is stamped
 // precisely so that a person cannot lift their own ceilings (billing.ts), and
 // that has to hold for a comp too: comping is a deploy, reviewable in the
 // diff, rather than a request anybody can make. T-33164 asks for the operator
@@ -134,12 +134,12 @@ export type Space = {
   // The same row whole, for the one caller that needs every column of it
   // (billing.ts). Null where no `plan` row has ever been written.
   plan: Plan | null
-  // What this space SELLS through (sell.ts, T-34524): the connected Stripe
+  // What this space sells through (sell.ts, T-34524): the connected Stripe
   // account, and whether Stripe says it may take money yet. Null for a space
   // that has never asked to sell, which is almost all of them.
   stripe: Stripe | null
   // What the platform takes from a sale here, in basis points (sell.ts
-  // `feeOf`). It is asked of ONE space — `yak`, the platform's own row — and
+  // `feeOf`). It is asked of one space — `yak`, the platform's own row — and
   // 0 on every other, where nobody has ever written one.
   fee: number
   meter: Meter | null
@@ -170,7 +170,7 @@ export type App = {
   // 'private'. Null for an app born before the word, which means public —
   // what every app did before there was one.
   access: Access | null
-  // The app's HANDLE: the name of everything the platform keeps for it — its
+  // The app's handle: the name of everything the platform keeps for it — its
   // Durable Object, its dispatch script, its export path, its analytics rows
   // (`storeName` below). Written once at birth and never derived from a slug
   // again. Null only for an app the backfill has not reached (migrate.ts
@@ -182,11 +182,11 @@ export type App = {
   // resolve like ids (types.ts slugsOf), which is how an old link still finds
   // the app it was made for.
   slugs: string[]
-  // Whether this app is the space's FRONT PAGE — the app wearing `home`
+  // Whether this app is the space's front page — the app wearing `home`
   // (T-34227). At most one app in a space does; `homing` below is what keeps
   // that true.
   home: boolean
-  // The paths its worker answers BEFORE the app whose slug owns them, the
+  // The paths its worker answers before the app whose slug owns them, the
   // columns of that same word (D-34197, router.ts). Empty for every app that
   // never opted in, which is almost all of them.
   first: string[]
@@ -249,7 +249,7 @@ export type Sowed = { at: string; version: number }
 export type Trashed = { at: string; by: string }
 
 // A hostname a person owns, aimed at one place (platform.rs `Hostname`,
-// T-33037): `serves` is the eid of the SPACE it opens, or of the one APP it
+// T-33037): `serves` is the eid of the space it opens, or of the one app it
 // opens (T-34596). How far provisioning has come, and when that was last read
 // from Cloudflare.
 export type HostStage = 'pending' | 'active' | 'error'
@@ -261,7 +261,7 @@ export type Host = {
   at: string
 }
 
-// A reference column, as a READ hands it back: the bare eid, or `{eid, name}`
+// A reference column, as a read hands it back: the bare eid, or `{eid, name}`
 // where the store could name what it points at (listing.ts `named`, T-32733).
 // What the directory wants either way is the id — the same lowering client.ts
 // `where` does on the write side.
@@ -367,18 +367,18 @@ let cached = (store: Meta) => {
   return held
 }
 
-// One seed per isolate, awaited by the WRITE door and by nothing else
+// One seed per isolate, awaited by the write door and by nothing else
 // (T-33176). It used to sit in front of every read, which cost a round trip
 // to the meta store on every cold isolate — and an isolate is cold for
 // almost every request a quiet platform serves, so that trip was ~100ms on
 // the front of every page load, forever, to re-confirm two rows that have
 // existed since the platform's first day. A read needs none of it: a meta
 // space that is not there answers empty, which is what an unseeded platform
-// should say. Every path that MINTS anything goes through /apply, so the
+// should say. Every path that mints anything goes through /apply, so the
 // seed still happens before there is anything to describe.
 //
 // A second isolate racing the first bounces on the unique slug and is
-// ignored: its query then finds the winner. Held against the DOOR rather than
+// ignored: its query then finds the winner. Held against the door rather than
 // the module, so that one door is seeded once and a test with its own store
 // seeds its own.
 let seeded = new WeakMap<Meta, Promise<void>>()
@@ -405,7 +405,7 @@ let seed = async (store: Meta) => {
       entity: { eid: '$app' },
       doc: { title: META.app },
       // The one app whose handle is not minted (`handle`): the meta store is
-      // the object this very row is being written INTO, and it has been called
+      // the object this very row is being written into, and it has been called
       // `yak/platform` since the platform's first day. Said outright rather
       // than left to the backfill, which would only ever arrive at the same
       // string by a longer road.
@@ -446,7 +446,7 @@ let notFound = () => new Response('not found', { status: 404 })
 // A read that must not be a moment old, asked for by the caller. The cache
 // above is per-isolate and 30 seconds wide, which is exactly the window a
 // deploy opens: the isolate serving the app has not heard of the bump the
-// deploy just made, so the first break after one named the version BEFORE it
+// deploy just made, so the first break after one named the version before it
 // (C-32869 item 4). A break is rare and its read is fresh; everything else
 // keeps the cache. The header is the kernel's own — a client's copy never
 // reaches here, since this part is only ever called with `bound`.
@@ -546,19 +546,19 @@ export let stamp = async (
   cached(metaStore(env)).clear()
 }
 
-// A listing carries the components the filter NAMES (graph.ts `#wanted`),
+// A listing carries the components the filter names (graph.ts `#wanted`),
 // so every read here asks for what it reads: a space with its title, plan and
 // meter, an app with its title, the address its store is named by, and its
 // meter. `.eid=` names no component and answers the whole bundle, which is why
 // those are bare.
-// What every read of an APP asks for beside the app row itself, in one place
+// What every read of an app asks for beside the app row itself, in one place
 // because `appOf` reads all of it and a filter that forgets one answers null
 // where there is a value.
 let ABOUT =
   '.doc?&.former?&.home?&.meter?&.published?&.installed?&.gallery?&.seeded?' +
   '&.trashed?&.theme?'
 
-// And what every read of a SPACE asks for, for the same reason.
+// And what every read of a space asks for, for the same reason.
 let SPACE_ABOUT =
   '.doc?&.plan?&.meter?&.notified?&.trashed?&.stripe?&.fee?&.former?'
 
@@ -681,7 +681,7 @@ export let deployOf = (r: Row) => ({
 })
 
 // One restore of an app's store, as recover.ts reads it (T-34507). `from` is
-// the bookmark the store stood at BEFORE this one moved it, which is the way
+// the bookmark the store stood at before this one moved it, which is the way
 // back out of it if the recovery itself turns out to be the mistake.
 export let restoreOf = (r: Row) => ({
   eid: r.entity.eid,
@@ -707,7 +707,7 @@ export let storeName = (space: Space, app: App) =>
  * must therefore leave alone: the address it was born at, plus a short key off
  * its eid so the string is the app's and not the address's (T-34657).
  *
- * The key is a SUFFIX because the dashboard sorts by the string: `ada/cookbook
+ * The key is a suffix because the dashboard sorts by the string: `ada/cookbook
  * .1f7c` still reads as ada's cookbook and still sits beside her other apps,
  * which is the whole reason the handle is legible at all rather than a bare
  * eid. Jeff: "i *do* like being able to see these names in the cloudflare
@@ -721,7 +721,7 @@ export let storeName = (space: Space, app: App) =>
 export let handle = (space: Pick<Space, 'slug'>, slug: string, eid: string) =>
   `${space.slug}/${slug}.${eid.replaceAll('-', '').slice(-6)}`
 
-// The door onto one app's store, told WHICH app it holds and what this
+// The door onto one app's store, told which app it holds and what this
 // directory says its access mode is (T-33813). A store keeps both (graph.ts
 // `#learn`) and answers @yaks/member's questions with them, so every caller
 // that has an App in hand opens its store this way; the ones that only have a
@@ -742,16 +742,16 @@ export let appStore = (
 // The other address a (space, app) has, beside {@link url}: what its letters
 // leave from, and what a reader writes back to (post.ts `mailFrom`, T-33686).
 // The home app's is the bare space name, for the same reason its page is the
-// bare hostname. Derived HERE and carried to the store on every request,
+// bare hostname. Derived here and carried to the store on every request,
 // because the store is named at birth and knows neither the app's current slug
 // nor which app the space's front page is.
 export let mailbox = (space: Space, app: App, env: HostEnv = {}) =>
   mailFrom(space.slug, app.home ? null : app.slug, env)
 
-// The address a person is handed for an app. A space's front page IS its
+// The address a person is handed for an app. A space's front page is its
 // bare hostname (T-33040, apps.ts `fetch`) — its own `/<app>/` only forwards
 // there — so every answer that hands out a link hands out the one to hold.
-// The app must be the one read back AFTER the caller's own write, or a tool
+// The app must be the one read back after the caller's own write, or a tool
 // that just moved the front page reports the address it had before. It lives
 // here beside the store's name because it is the other name a (space, app)
 // has, and everything that says one out loud reads it from one place: the
@@ -762,7 +762,7 @@ export let url = (space: Space, app: App, env: HostEnv = {}) =>
 
 /**
  * Moving the front page, as the bundles that do it (T-34227): the word comes
- * OFF the app that had it and goes ON the one that gets it, in whatever batch
+ * off the app that had it and goes on the one that gets it, in whatever batch
  * the caller is already writing, so the space is never for one moment a space
  * with two front pages or none it did not ask for.
  *
@@ -801,8 +801,8 @@ export let homing = (
  * rest in `slugs`, oldest first — `former` written the way types.ts `slugsOf`
  * reads it. An app wears one and so does a space (T-34658).
  *
- * The WHOLE record every time rather than a patch of one column, because a
- * single call may both LEAVE an address and FORGET another (T-34659), and two
+ * The whole record every time rather than a patch of one column, because a
+ * single call may both leave an address and forget another (T-34659), and two
  * patches of one history disagree about what the history is. A history that has
  * emptied clears both columns, which is a row that redirects from nowhere.
  */
@@ -820,7 +820,7 @@ export type Directory = ReturnType<typeof directory>
 // marked the version before it live (C-32905 item 5). Page traffic keeps the
 // cache; an agent's answer never disagrees with the write it just made.
 export let directory = (via: Fetcher, now = false) => {
-  // The whole filter line as ONE parameter, values written raw: the door
+  // The whole filter line as one parameter, values written raw: the door
   // hands it to the graph as the query it is (meta.ts), rather than each
   // caller escaping the pieces of a search string.
   let query = async (q: string, fresh = now): Promise<Row[]> => {
@@ -858,10 +858,10 @@ export let directory = (via: Fetcher, now = false) => {
       let row = await one(`.space.slug=${slug}&${SPACE_ABOUT}`)
       return row ? spaceOf(row) : null
     },
-    // A subdomain the space has LEFT, still pointing at it (T-34658) — what
+    // A subdomain the space has left, still pointing at it (T-34658) — what
     // `former` is to an app, one level up. Asked only after `space` has
     // answered nobody, so a space is never found by an address it still lives
-    // at: what IS at an address and what redirects to it are two questions,
+    // at: what is at an address and what redirects to it are two questions,
     // and this is only the second. One query over the spaces that have ever
     // moved, which is a handful of rows and never grows with the platform.
     formerly: async (slug: string) => {
@@ -880,16 +880,16 @@ export let directory = (via: Fetcher, now = false) => {
       )
       return row ? appOf(row) : null
     },
-    // An address the app has LEFT, still pointing at it. A rename moves
+    // An address the app has left, still pointing at it. A rename moves
     // `app.slug` and keeps the old address in the app's `former`, so the answer
-    // is the app of THIS space that still answers to the address asked for —
+    // is the app of this space that still answers to the address asked for —
     // a move to follow (T-32576: a rename used to strand every open page).
     former: async (space: Space, slug: string) => {
       let app = (await self.apps(space))
         .find((a) => a.slug != slug && a.slugs.includes(slug))
       return app ?? null
     },
-    // Every app in a space, oldest first — the order they were made. MANY
+    // Every app in a space, oldest first — the order they were made. Many
     // spaces is one read rather than one per space, because a person's whole
     // listing is one question (tools.ts `app_list`, T-35431); the answer is
     // still one flat list, and a caller wanting them per space groups by
@@ -901,7 +901,7 @@ export let directory = (via: Fetcher, now = false) => {
     },
     // The space that pays as this Stripe customer (billing.ts). It is how a
     // subscription event is attributed when its metadata does not say — a
-    // space keeps ONE customer for its whole life, so the answer is one space
+    // space keeps one customer for its whole life, so the answer is one space
     // or nobody.
     payer: async (customer: string) => {
       let row = await one(
@@ -909,7 +909,7 @@ export let directory = (via: Fetcher, now = false) => {
       )
       return row?.space ? spaceOf(row) : null
     },
-    // The space that SELLS through this connected Stripe account (sell.ts).
+    // The space that sells through this connected Stripe account (sell.ts).
     // The Connect webhook's only way in: an event from a connected account
     // names the `acct_…` and nothing of ours, so this is what turns it back
     // into a space. One account per space, so the answer is one space or
@@ -936,7 +936,7 @@ export let directory = (via: Fetcher, now = false) => {
       return space ? { space, app } : null
     },
     // What a hostname someone else owns is aimed at (T-33037, T-34596): the
-    // hostname row, the space it opens, and the app when it opens ONE app
+    // hostname row, the space it opens, and the app when it opens one app
     // rather than the whole space — `app` null is the space form, which is the
     // difference index.ts `aimed` routes by. One hostname, one place, which the
     // unique index on `hostname.name` is what makes true. Null for a hostname
@@ -1007,10 +1007,10 @@ export let directory = (via: Fetcher, now = false) => {
     all: async (): Promise<Space[]> =>
       (await query(`.space!&${SPACE_ABOUT}`)).map(spaceOf),
     // The app that answers the space's bare hostname, if it has one: the one
-    // in this space WEARING `home` (T-34227). At most one does — `homing`
+    // in this space wearing `home` (T-34227). At most one does — `homing`
     // below is the rule — so the first row is the answer.
     // A trashed app is nobody's front page (erase.ts, T-34430): the word
-    // stays ON it so a restore puts the space back exactly as it was, and
+    // stays on it so a restore puts the space back exactly as it was, and
     // until then the space is one with no front page — which is the ordinary
     // state and already has an answer everywhere.
     home: async (space: Space) => {
@@ -1023,8 +1023,8 @@ export let directory = (via: Fetcher, now = false) => {
     // shorter.
     member: async (space: Space, person: string) => {
       // Nobody is a member of nothing. An empty person is a caller who has not
-      // signed in (anon.ts), and it must never be ASKED: `.member.person=`
-      // reads as that column being ABSENT, which is a question that could
+      // signed in (anon.ts), and it must never be asked: `.member.person=`
+      // reads as that column being absent, which is a question that could
       // answer yes and hand a stranger a seat.
       if (!person) return null
       let row = await one(
@@ -1034,7 +1034,7 @@ export let directory = (via: Fetcher, now = false) => {
     },
     role: async (space: Space, person: string) =>
       (await self.member(space, person))?.role ?? null,
-    // What one person holds on ONE app, by a grant rather than a seat
+    // What one person holds on one app, by a grant rather than a seat
     // (T-37615): a guest invited to this app and nothing else in the space.
     // The same guard as `member` — an empty person is a caller who has not
     // signed in, and `.grant.person=` would read as that column being absent
@@ -1083,7 +1083,7 @@ export let directory = (via: Fetcher, now = false) => {
     // "spaces of theirs", which is not the set they can see (T-33142).
     spaces: async (person: string, role?: Role): Promise<Space[]> =>
       (await self.seats(person, role)).map((s) => s.space),
-    // The same question with the seat kept: what the person IS in each space,
+    // The same question with the seat kept: what the person is in each space,
     // which the membership read already answered. Asking `role` back per space
     // afterwards was a second read for a row this one held, and reading the
     // spaces one eid at a time was a third per space — three spaces cost eight
@@ -1105,7 +1105,7 @@ export let directory = (via: Fetcher, now = false) => {
         if (m.member) held.set(idOf(m.member.space), m.member.role)
       }
       if (!held.size) return []
-      // Bare `.eid=` and nothing else: naming components would PROJECT the row
+      // Bare `.eid=` and nothing else: naming components would project the row
       // down to them, and a space is read whole ({@link spaceOf}).
       let rows = await query(`.eid=${[...held.keys()].join(',')}`)
       return rows
@@ -1122,7 +1122,7 @@ export let directory = (via: Fetcher, now = false) => {
     },
     // The person's own space, minted the moment they first need one — at
     // sign-in, or at the first tool call by someone who signed in before this
-    // existed (T-32482). Theirs is a space they OWN — the one their address
+    // existed (T-32482). Theirs is a space they own — the one their address
     // spells, if they own it, else the first they own — and being a member of
     // somebody else's is not having one, so an invited person is minted theirs
     // here rather than handed the inviter's (T-33142). A race that loses on

@@ -1,5 +1,5 @@
 // An app's own worker, held against a stub namespace. A dispatch namespace
-// is REMOTE-ONLY — there is no workerd implementation, so `wrangler dev`
+// is remote-only — there is no workerd implementation, so `wrangler dev`
 // leaves the binding undefined
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/local-development/)
 // — and the probe kernel therefore proves only the other half: an app with no
@@ -9,7 +9,7 @@
 // imported as the module it is.
 //
 // What must hold, and what a mistake in any of it would cost:
-//   - the grant is the app's ONLY claim to an identity, so a forged, expired
+//   - the grant is the app's only claim to an identity, so a forged, expired
 //     or borrowed one grants nothing
 //   - the app's code never sees the grant, and never sees the person's
 //     platform-wide session cookie
@@ -76,7 +76,7 @@ let app: App = {
   theme: null,
 }
 
-// Every entity the kernel wrote while a test ran, and WHICH store it went
+// Every entity the kernel wrote while a test ran, and which store it went
 // into (door.ts `storeOf` names it on every request) — so a break can be read
 // back the way `app_errors` reads one, and whose store it landed in is part of
 // what a test can say.
@@ -269,7 +269,7 @@ Deno.test('a 404 from the worker, and no worker, both mean the files', async () 
   assertEquals(await ran(envOf(gone), space, app, visit(), who), null)
   // No namespace at all is local development, which serves the files too.
   assertEquals(await ran({} as Env, space, app, visit(), who), null)
-  // And so is a namespace BOUND where it cannot be reached: `wrangler dev`
+  // And so is a namespace bound where it cannot be reached: `wrangler dev`
   // binds a stub that throws, since a dispatch namespace is remote-only, and
   // a runtime with no app workers is not an app that broke (T-34179).
   let elsewhere = () => {
@@ -296,11 +296,11 @@ Deno.test("a worker's own no is not a break; its 5xx is", async () => {
   assertEquals(broke.message, "the app's worker answered 503")
 })
 
-// THE SEAM (T-33234). `worker.fetch` is the one line in the kernel where the
+// The seam (T-33234). `worker.fetch` is the one line in the kernel where the
 // code running belongs to the app, so it is the one place a throw may be filed
-// as the APP's break — and it is filed HERE, rather than left to index.ts's
-// catch-all, which files by ROUTE and so wore the same entity for anything the
-// PLATFORM broke on a URL that happened to name an app.
+// as the APP's break — and it is filed here, rather than left to index.ts's
+// catch-all, which files by route and so wore the same entity for anything the
+// platform broke on a URL that happened to name an app.
 //
 // A throw and an answered 5xx are one event, so they are one entity: the app's
 // own store, its serving version, and the soft page the visitor already got.
@@ -321,7 +321,7 @@ Deno.test("a worker that throws is the app's break, and is filed here", async ()
 })
 
 // And the same rule the answered status reads: a no the app's worker relayed
-// by THROWING what one of our doors told it is an answer carried out, not
+// by throwing what one of our doors told it is an answer carried out, not
 // something that fell over.
 Deno.test('a no the worker threw is not the app breaking', async () => {
   wrote = []
@@ -474,7 +474,7 @@ Deno.test('an upload sends the shim, the app, and one way home', async () => {
   assertEquals(calls[0].auth, 'Bearer a-token')
   let form = calls[0].body as FormData
   let meta = JSON.parse(await (form.get('metadata') as File).text())
-  // The entry is OURS, and the app's own module rides beside it.
+  // The entry is ours, and the app's own module rides beside it.
   assertEquals(meta.main_module, '__yak_entry.js')
   assertEquals(await (form.get('__yak_entry.js') as File).text(), SHIM)
   assertEquals(
@@ -680,7 +680,7 @@ Deno.test('a wasm module goes up as a module part of its own type', async () => 
 })
 
 /**
- * And the modules RUN. A dispatch namespace has no local implementation, so
+ * And the modules run. A dispatch namespace has no local implementation, so
  * what the account would run cannot be exercised here; this runs the same
  * module set — the shim, the app's worker.js, and the wasm it imports — in
  * the same runtime (probe.ts `script`), which is where a mislabelled or

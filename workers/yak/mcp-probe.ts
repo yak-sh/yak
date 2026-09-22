@@ -8,7 +8,7 @@ import { assertEquals } from '@std/assert'
 // A client's own reading of the published schema: the tool list is JSON
 // Schema, so what proves it describes a batch is a JSON Schema validator.
 
-// The connector's face, on BOTH doors (T-34415): the same name, line and
+// The connector's face, on both doors (T-34415): the same name, line and
 // square picture whether the caller has signed in or not, because a directory
 // reviewer and a connector form both read it before any grant exists.
 export let facing = (info: Record<string, unknown>) => {
@@ -29,7 +29,7 @@ export let facing = (info: Record<string, unknown>) => {
   ])
 }
 
-// The eid a batch minted under an alias, read off the batch AS APPLIED
+// The eid a batch minted under an alias, read off the batch as applied
 // (T-33812): graph_apply answers every entity the write touched, each carrying
 // the `$alias` the batch called it by.
 export let minted = (applied: string, alias: string) =>
@@ -79,7 +79,7 @@ export let hearing = (res: Response) => {
 
 // An app's own mailbox at the agent door (T-34149). Mail already rode the
 // generic tier — a letter is `doc` + `mail` + `deliver` and `.mail!` reads one
-// back — so what is held here is the two things the tools add: the SCOPE, said
+// back — so what is held here is the two things the tools add: the scope, said
 // where a model chooses (the block above), and the two verbs answering bundles
 // through the doors graph_apply and graph_query already use, guard and all.
 export type Letter = {

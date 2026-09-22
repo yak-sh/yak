@@ -1,4 +1,4 @@
-// A deploy as a git commit — the ADAPTER, and only the adapter. @yaks/git owns
+// A deploy as a git commit — the adapter, and only the adapter. @yaks/git owns
 // the objects, the branch and the landing (`commitOnto`, refs.ts); what is left
 // here is the four things that are yaks.app's and could not be anyone else's:
 //
@@ -7,25 +7,25 @@
 //   what a deploy is  its manifest, its clock, and who signed it
 //   what to record  the `commit{target}` row joining a commit to its release
 //
-// TWO STORES, AND WHICH IS WHICH. A git object is named by the digest of its
+// Two stores, and which is which. A git object is named by the digest of its
 // own bytes, so the same file deployed by two apps in two spaces is one row —
 // which a per-app graph could not say — and the objects live in a store of
-// their own, reached over its door like any other. A REF belongs to one app,
+// their own, reached over its door like any other. A ref belongs to one app,
 // and access to an app is decided in the directory, so that is where it stays.
 //
-// A DEPLOY ALREADY SAYS EVERYTHING A COMMIT NEEDS. Its manifest is `path →
+// A deploy already says everything A commit needs. Its manifest is `path →
 // sha256` over bytes the platform pinned (versions.ts), its `created` is the
 // moment and the actor, and the version before it is the parent. So nothing
 // here computes: it reads a deploy and hands @yaks/git a landing.
 //
-// IDENTITY. The author is the actor who deployed, at a pseudonym —
+// Identity. The author is the actor who deployed, at a pseudonym —
 // `<actor>@users.yaks.app` — until somebody opts into their own address
 // standing in a public history. The committer is always the platform. Both
 // clocks are the deploy's own `created.at`, which is what makes minting
-// REPEATABLE: the same deploys make the same object ids however often this
+// repeatable: the same deploys make the same object ids however often this
 // runs, so the backfill below is idempotent by construction and not by a flag.
 //
-// NOTHING HERE MAY FAIL A DEPLOY. It runs as an effect — post-commit, isolated
+// Nothing here may fail A deploy. It runs as an effect — post-commit, isolated
 // by @yaks/effects — so a bucket that will not answer costs the release its
 // commit and nothing else, and the daily sweep mints whatever was missed.
 import type { Blobs as Bytes } from '@yaks/blob'
@@ -50,12 +50,12 @@ import { pins } from './versions.ts'
 export { MAIN, refEid }
 
 /**
- * Where a body we MINTED is kept — a tree's or a commit's — in its own key
+ * Where a body we minted is kept — a tree's or a commit's — in its own key
  * space, two segments deep so no app file key (`<space>/<app>/<path>`) can
  * reach it.
  *
  * Not the app pins' `sha/` (versions.ts, D-34942), and for one reason: that
- * key space is swept against what the APPS name, and a tree is nobody's file.
+ * key space is swept against what the apps name, and a tree is nobody's file.
  * A body under it would be deleted the day after it was written. Nothing
  * sweeps this space yet — an object graph's own retention is its own question,
  * for when a deleted app's orphaned objects are worth collecting.
@@ -114,7 +114,7 @@ export let graphOf = (ns: Namespace): Writes =>
  * Two key spaces, because there are two kinds of body and only one of them is
  * ours. A BLOB's bytes are the app's own file, already pinned by the deploy
  * that named it, so they are read through versions.ts's `pins` and never
- * written here. A TREE's or a COMMIT's bytes are ours, so they are written to
+ * written here. A tree's or a commit's bytes are ours, so they are written to
  * {@link BODY} and read from there first. Serving a pack reads through this
  * same door (@yaks/git `objects`), which is why it is exported.
  */
@@ -139,7 +139,7 @@ type Deploy = {
 
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 
-// A REFERENCE column, in either spelling a store answers with: the bare eid a
+// A reference column, in either spelling a store answers with: the bare eid a
 // read inside the transaction gives (the effect's own door), and the `{eid,
 // name}` a read over the store's HTTP door gives, which names what it points
 // at as it goes (listing.ts). One reader, so minting is the same act from the
@@ -169,7 +169,7 @@ let deployOf = (b: Bundle): Deploy | null => {
 }
 
 /** Where an app's files are in the bucket, and what its repository is called
- * on the web. Both are ADDRESSES — they move when a slug does — which is why
+ * on the web. Both are addresses — they move when a slug does — which is why
  * they are read at mint time and not kept. */
 let placed = async (dir: Held, env: Bound, app: Eid) => {
   let [row] = await dir.read(`.eid=${app}`)
@@ -233,7 +233,7 @@ let landing = async (
     author: await author(dir, deploy),
     committer: { ...COMMITTER, at: deploy.at },
     message,
-    // The word the DIRECTORY gains about a release, written with the moved ref
+    // The word the directory gains about a release, written with the moved ref
     // (git.ts): `target` is what the commit is about, so a history joins to the
     // releases people already look at.
     beside: (oids) => [{

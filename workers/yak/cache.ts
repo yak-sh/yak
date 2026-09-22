@@ -10,7 +10,7 @@
 // zoneless and one Worker answering `api.example.com` and `api.example.net`
 // wants one cache. For us that rule is a cross-tenant leak: every space is a
 // hostname and they all share one path namespace, so `alice.yaks.app/app/x.css`
-// and `bob.yaks.app/app/x.css` are the SAME cache key, and a customer's own
+// and `bob.yaks.app/app/x.css` are the same cache key, and a customer's own
 // domain serving its app at `/` collides with every other front page. Turning
 // caching on at the door the browser reaches would serve one space's bytes to
 // another's visitors on the second request.
@@ -28,9 +28,9 @@
 // and the work of assembling the page, which is where the time actually went
 // (timing.ts, T-33176).
 //
-// ── Why this is also the answer for a PRIVATE app ─────────────────────────
+// ── Why this is also the answer for a private app ─────────────────────────
 //
-// The cached thing is an app's BYTES, never anybody's response. The bytes of
+// The cached thing is an app's bytes, never anybody's response. The bytes of
 // `style.css` are the same whoever may read them; what differs per person is
 // only whether they may. So the access check stays in front, on the uncached
 // gateway, run on every single request, and the cache below it holds something
@@ -62,7 +62,7 @@ export let keepable = (tags: string[]) => ({
 // The address the gateway asks the inner entrypoint at, and therefore the
 // cache key. The hostname is a placeholder that never resolves — the request
 // goes over the service binding, not the network — and everything that
-// distinguishes one answer from another is in the PATH, because the path is
+// distinguishes one answer from another is in the path, because the path is
 // what the key is made of:
 //
 //   /<app eid>/<the app's own path>
@@ -75,11 +75,11 @@ export let keepable = (tags: string[]) => ({
 export let at = (eid: string, path: string) =>
   `https://files.invalid/${eid}${path.startsWith('/') ? '' : '/'}${path}`
 
-// The tag a purge names. ONE tag, the app's eid, and the reason there is only
-// one is the reason this design is safe: what is cached is BYTES, so the only
+// The tag a purge names. One tag, the app's eid, and the reason there is only
+// one is the reason this design is safe: what is cached is bytes, so the only
 // thing that can make a cache entry wrong is a write that changes the bytes.
 //
-// Everything else a door can change is about IDENTITY, and identity is decided
+// Everything else a door can change is about identity, and identity is decided
 // in front of the cache, on every request. An app going private needs no purge
 // — the access check that now says no runs before the bytes are asked for. A
 // slug moving needs none — the key is the eid, so the entry is already the
@@ -104,16 +104,16 @@ export let tagsOf = (eid: string) => [`a:${eid}`]
 // Response constructor here can copy, so a socket passes untouched — the same
 // rule apps.ts `reporting` and timing.ts `timed` read.
 //
-// Framing policy (T-33409): an app is a FRAMED resource, and only its own
+// Framing policy (T-33409): an app is a framed resource, and only its own
 // space (its own origin, `'self'` — a space's apps share `space.yaks.app`, so
 // they frame each other) and the platform homepage (`https://yaks.app`, the
-// T-33424 iframe) may embed it. Any OTHER space's page is refused by the
+// T-33424 iframe) may embed it. Any other space's page is refused by the
 // browser, which is the whole clickjacking defense: a same-site frame would
 // otherwise carry the viewer's session cookie and load authenticated, and the
 // browser — not a spoofable request header — is the one thing that knows the
-// full ancestor chain. This rides on EVERY sealed response: apps are the
+// full ancestor chain. This rides on every sealed response: apps are the
 // resource it protects, and on the apex's own pages it only governs who may
-// frame THEM (never what they may frame), so the apex still frames apps.
+// frame them (never what they may frame), so the apex still frames apps.
 // Appended, not set, so it stacks with a response's own CSP (the blob sandbox
 // at apps.ts `gave`) instead of clobbering it, and no app can widen past this
 // baseline by declaring its own frame-ancestors. Deferred, not here: opt-in
@@ -137,13 +137,13 @@ export let sealed = (res: Response, env: Host = {}) => {
 }
 
 // Emptying it, and the rule that makes this harder than it looks: a purge is
-// scoped to the ENTRYPOINT that calls it — "an entrypoint cannot reach into
+// scoped to the entrypoint that calls it — "an entrypoint cannot reach into
 // another entrypoint's cache". So this is only ever called from inside
 // `Files`, the entrypoint that owns the entries. Called from the gateway,
 // where every write door actually runs, it empties the gateway's own cache —
 // which holds nothing — and reports success while the stale bytes go on being
 // served. That is not a theory: it is what shipped first, and what serving
-// VERSION ONE after writing VERSION TWO looked like. files.ts `purged` is the
+// version one after writing version two looked like. files.ts `purged` is the
 // door a write path uses, and the hop to `Files` is the whole reason it exists.
 //
 // `cache.purge` comes from `cloudflare:workers` rather than an
@@ -151,7 +151,7 @@ export let sealed = (res: Response, env: Host = {}) => {
 // plain `fetch(req, env)` (env.ts), and the `ctx` an MCP tool receives is the
 // kernel's own (tools.ts `Ctx`), not the runtime's.
 //
-// A purge NEVER throws into the write that called it — failing `app_files`
+// A purge never throws into the write that called it — failing `app_files`
 // because a cache was busy would be worse than the staleness. But a purge that
 // quietly fails is the "my edit did not appear" report this design exists to
 // prevent, so every way of failing says so on the log, the runtime simply not
@@ -172,7 +172,7 @@ export let purge = async (tags: string[]) => {
   }
   if (typeof mod.cache?.purge != 'function') {
     // `wrangler dev` and the workerd probes land here, where there is no cache
-    // to empty and nothing is wrong. A DEPLOYED Worker landing here means every
+    // to empty and nothing is wrong. A deployed Worker landing here means every
     // write is silently stale, so it is worth the line either way.
     console.error('yak: this runtime has no cache.purge', tags)
     return false

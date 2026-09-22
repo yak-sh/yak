@@ -11,7 +11,7 @@ import { connector, kernel, meta, seed, signIn } from './probe.ts'
 
 // The whole of T-32907 (C-32905 items 1 and 3): an app's own files never name
 // the app. Its pages say `./api/client.js` and `./style.css`, the kernel gives
-// every page it serves a `<base href>` at the app's OWN address, and the copy
+// every page it serves a `<base href>` at the app's own address, and the copy
 // someone installs works at whatever address it took — including from a pretty
 // path, where a relative URL would otherwise resolve against the page's depth.
 // Before this, an install under another name served bare HTML: no stylesheet,
@@ -84,7 +84,7 @@ slow('an app names no app, and the copy works at its own address', async () => {
     assertEquals(own.split('<base').length - 1, 1)
     assertStringIncludes(own, '<base href="/elsewhere/">')
 
-    // With no address asked for, a copy lands at the app's OWN slug — the one
+    // With no address asked for, a copy lands at the app's own slug — the one
     // its code was written at — and falls back to the published name when
     // that address is already spoken for here.
     assertStringIncludes(
@@ -103,7 +103,7 @@ slow('an app names no app, and the copy works at its own address', async () => {
 // Putting an app back (T-32886, V-32361: error-correction over initial
 // correctness). The person's own repair when their assistant breaks a working
 // page is "put it back", so every deploy is a version and one word restores
-// one — as a NEW version, since history is never rewritten.
+// one — as a new version, since history is never rewritten.
 slow('a deploy is a version, and one word puts it back', async () => {
   let k = await kernel()
   try {
@@ -184,7 +184,7 @@ slow('a deploy is a version, and one word puts it back', async () => {
       ['broken.js', 'index.html'],
     )
 
-    // A size down from a deploy: every WRITE keeps what it replaced
+    // A size down from a deploy: every write keeps what it replaced
     // (versions.ts, T-34508). The page has been written three times by now, so
     // the path can already answer its own past.
     let past = await agent.tool('app_files', {
@@ -248,7 +248,7 @@ slow('a deploy is a version, and one word puts it back', async () => {
       'nothing has replaced it',
     )
 
-    // And the other half of the same word (recover.ts, T-34507): the STORE's
+    // And the other half of the same word (recover.ts, T-34507): the store's
     // way back. With no moment named it says the window and does nothing —
     // which is all this can be held to here, because local workerd answers
     // `getCurrentBookmark` and refuses the two that would move anything.
@@ -343,7 +343,7 @@ slow(
 // Who visited (views.ts, T-34498). The SQL API is an HTTP call rather than a
 // binding, so the probe aims it at a server of this test's own (ANALYTICS_API,
 // the way MAIL_API and STRIPE_API are aimed) and answers each of the four
-// queries fixed rows. What is being held here is the SENTENCE the agent reads
+// queries fixed rows. What is being held here is the sentence the agent reads
 // and the structured half beside it — and that the numbers can be had at all
 // without the account.
 slow('app_stats answers counts, and never a visitor', async () => {

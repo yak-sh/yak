@@ -2,7 +2,7 @@
 // person — the agent that makes somebody their first app without them having
 // to bring an agent of their own.
 //
-// IT IS THE SAME DOOR THE CONNECTOR IS. The tools here are `TOOLS` (tools.ts)
+// It is the same door the connector is. The tools here are `TOOLS` (tools.ts)
 // worn as `sugared` wears them for MCP (agent.ts), so `app_new` called from
 // this loop runs the one function `app_new` has ever been — the space guard,
 // the ceilings, the unseen block on the answer, all of it — and there is no
@@ -10,7 +10,7 @@
 // wants: the table's own JSON Schema as a function tool, and the tool's
 // sentence back as the result.
 //
-// TWO PROVIDERS, ONE SEAM. A `Model` answers one turn: what it said, which
+// Two providers, one seam. A `Model` answers one turn: what it said, which
 // tools it wants, what it spent. Workers AI needs no key — the `AI` binding is
 // the authorization — and OpenAI through the AI Gateway is the other. Neither
 // shape is pretended to be the other: Workers AI takes `messages` and answers
@@ -18,7 +18,7 @@
 // `function_call` items, and each provider spells {@link Line} in its own
 // words. The id says which: a Workers AI model is always `@cf/…`.
 //
-// BOTH TIERS RUN ON THE BINDING TODAY. Owner, 2026-09-05: "can't we use
+// Both tiers run on the binding today. Owner, 2026-09-05: "can't we use
 // workers AI instead of AI Gateway to start now without purchasing anything?
 // we already have free usage" — so the free build is GLM Flash and the paid
 // one is the full GLM, both on `AI`, and nothing has to be bought or made
@@ -28,11 +28,11 @@
 //
 // The loop has three ends: a round limit, an output ceiling per turn, and a
 // wall budget. Every one of them, every refusal a provider makes, and the
-// month's build ceiling comes back as a SENTENCE in the conversation rather
+// month's build ceiling comes back as a sentence in the conversation rather
 // than a thrown error, because the person reading it is not a programmer and
 // the page that will draw this (T-34240) draws lines.
 //
-// A BUILD is an `app_deploy` the builder performed, not a message: the loop
+// A build is an `app_deploy` the builder performed, not a message: the loop
 // asks the meter before it spends anything (`refusedBuild`) and counts one
 // afterwards where a deploy went through (`countedBuild`), so a long
 // conversation that ships one app costs one build and one that ships nothing
@@ -212,7 +212,7 @@ let tooLong = (ms: number) =>
 
 /**
  * The platform's verbs as function tools. The description and the schema come
- * off the TABLE, where they are already JSON Schema — going through the Zod
+ * off the table, where they are already JSON Schema — going through the Zod
  * the MCP SDK wants and back would lose what `propOf` cannot carry, an `enum`
  * among it — and the `run` is `running`, which is the very call the connector
  * makes (agent.ts).
@@ -260,7 +260,7 @@ export let prompt = async (env: Env, ctx?: Ctx): Promise<string> => {
   // they have said here (standing.ts, T-34425). The builder is our own agent
   // and this is our own prompt, not a tool list a host classifies, so it takes
   // the passage whole where the connector puts the roster on its instructions
-  // and hands the notes over at `about` (T-34632). It goes LAST: it is about
+  // and hands the notes over at `about` (T-34632). It goes last: it is about
   // this person's apps, and the guide it follows is about apps in general.
   let apps = ctx ? (await standing(ctx)).notes : ''
   let after = apps ? `\n\n---\n\n${apps}` : ''
@@ -544,7 +544,7 @@ export let build = async (
   // the `Ctx` to know they are inside a build, and one that never woke a
   // container costs nothing and destroys nothing.
   let spend = spending()
-  // Every way out of the loop, including the refusals: a build that HAPPENED
+  // Every way out of the loop, including the refusals: a build that happened
   // is counted whichever end the conversation came to, and a conversation
   // that deployed nothing is counted nowhere (meter.ts `countedBuild`). The
   // container goes on every one of those ends too — a refusal is not a reason
@@ -552,7 +552,7 @@ export let build = async (
   let end = async (refused?: string): Promise<Built> => {
     if (refused) lines.push({ said: 'builder', text: refused })
     let seconds = await released(env, space, spend)
-    // ONE write, from one reading of the space: the build and the seconds it
+    // One write, from one reading of the space: the build and the seconds it
     // compiled for go together, and a conversation that compiled something
     // and shipped nothing pays for the container alone (meter.ts).
     if (built) await countedBuild(env, space, usage, seconds)
@@ -569,7 +569,7 @@ export let build = async (
     }
   }
   if (!who.person) return await end(anonymous(env))
-  // The month's builds (meter.ts, T-34241). It is asked BEFORE anything is
+  // The month's builds (meter.ts, T-34241). It is asked before anything is
   // spent, and what comes back is a sentence the builder says rather than a
   // door slammed mid-conversation — so a refused build costs the person
   // nothing, not a build and not the tokens of the refusal.
@@ -631,7 +631,7 @@ export let build = async (
         text: said.text,
         ok: said.ok,
       })
-      // What makes this conversation a BUILD: an app_deploy that went
+      // What makes this conversation a build: an app_deploy that went
       // through. A conversation that ships one app costs one build however
       // many turns it took, and one that ships nothing costs none.
       if (c.name == 'app_deploy' && said.ok) built = true

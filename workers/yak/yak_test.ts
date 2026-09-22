@@ -64,7 +64,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
         'form[method="post"][action="/login"] input[name="email"][type="email"][required]',
       ),
     )
-    // The connector answers POST (the calls) and GET (the session's stream,
+    // The connector answers POST (the calls) and get (the session's stream,
     // T-32686), both to someone it knows; mcp_test.ts drives them.
     let mcp = await k.at('yaks.app', '/mcp')
     assertEquals(mcp.status, 401)
@@ -96,7 +96,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
 
     // The file door: nobody and a forgery are refused, the owner is not; the
     // planted file then serves at its path with its type.
-    // A forgery is one character of the mac changed — the FIRST one. The
+    // A forgery is one character of the mac changed — the first one. The
     // last character of a base64url mac carries only padding bits, so
     // flipping it decodes to the same 32 bytes and verifies, which made this
     // check pass or fail with the secret of the run.
@@ -125,7 +125,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     assertEquals(await style.text(), 'h1 { color: peru }')
     // A place inside the app, named by a path with no file behind it: the
     // page itself answers, reporter and all, and routes on the pathname
-    // (T-32769). A missing FILE — it has an extension — is still nothing.
+    // (T-32769). A missing file — it has an extension — is still nothing.
     let deep = await k.at('jeff.yaks.app', '/recipes/recipes/42')
     assertEquals(deep.status, 200)
     assertMatch(deep.headers.get('content-type') ?? '', /text\/html/)
@@ -184,7 +184,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     assertEquals(who.role, 'owner')
     let anon = await (await k.at('jeff.yaks.app', '/recipes/api/graph')).json()
     assertEquals([anon.person, anon.role], [null, null])
-    // And the door a PAGE asks before it asks a person for anything
+    // And the door a page asks before it asks a person for anything
     // (T-32679): who they are, what this app lets them do, and where signing
     // in happens if it lets them do nothing. It answers everyone.
     let asMe = (cookie?: string) =>
@@ -204,7 +204,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     assertEquals([guest.reads, guest.writes], [true, false])
     assertMatch(guest.signIn, /^https:\/\/yaks\.app\/login\?return=/)
     let cake = crypto.randomUUID()
-    // A refusal answers a SENTENCE beside its code: the page catches it and
+    // A refusal answers a sentence beside its code: the page catches it and
     // shows it, and the person's agent reads it after that (C-32574 item 2,
     // where a club member's vote showed them the bare code).
     let refusal = await nobody.post([])
@@ -221,7 +221,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     let [hit] = await owner.get(`id=${cake}`)
     assertEquals((hit.doc as { title: string }).title, "Grandma's lemon cake")
     assertEquals(await nobody.get(`id=${cake}`), [hit])
-    // A body is stored as a content-addressed blob ENTITY, so the store's own
+    // A body is stored as a content-addressed blob entity, so the store's own
     // rows live in the spine a filter selects from. A listing must answer docs
     // and nothing else: the tester's first list rendered `undefined` for each
     // blob it got back (C-32498 item 4). An empty needle is the case that found
@@ -247,7 +247,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
       (await owner.get('.created.at!')).every((r) => !r.blob),
       'a filter answers the graph, never the store rows behind it',
     )
-    // A body is content-addressed but it is not a ROW: the text is kept once
+    // A body is content-addressed but it is not a row: the text is kept once
     // beside the graph (@yaks/blob), not as a second entity wearing `blob`, so
     // there is nothing here to leave out of a listing in the first place.
     assertEquals(await owner.get('.blob!'), [])
@@ -313,7 +313,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     assertMatch(await broke.text(), /Something went wrong/)
     assertEquals(await owner.get('.exception!'), [])
 
-    // What the app's own PAGE threw, at the app's own door: an exception
+    // What the app's own page threw, at the app's own door: an exception
     // entity naming the request and carrying the message and stack; nothing
     // wears `error`, the facet for a failure the platform expected.
     let filed = await k.at('jeff.yaks.app', '/recipes/api/report', {
@@ -344,7 +344,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     // A signed-in page's write says who saved it: the kernel vouches for the
     // person, the store learns them as a row of its own, and `created.by` is
     // theirs (T-32534). A break the kernel reported names nobody. The stamp
-    // comes back because the filter NAMED it — a listing that did not ask
+    // comes back because the filter named it — a listing that did not ask
     // carries the rows a person saved and no bookkeeping, at this door and at
     // the tools' alike (listing.ts, C-32574 item 5).
     let [mine] = await owner.get('.doc!&.created!')
@@ -432,16 +432,16 @@ slow('an app says who may read it and who may write it', async () => {
     // open: the vote page. Anyone with the link writes, without signing in.
     await anyone('vote').applied(line('my vote'))
     assertEquals((await anyone('vote').get('.doc!')).length, 2)
-    // Which the page can KNOW on load (T-32679): `/api/me` says a stranger
+    // Which the page can know on load (T-32679): `/api/me` says a stranger
     // writes here, and that their write will carry no `created.by` — so a
     // page wanting a byline asks them their name itself (C-32675 item 5).
     let voter = await (await k.at('club.yaks.app', '/vote/api/me')).json()
     assertEquals([voter.person, voter.writes], [null, true])
-    // Signing in is still OFFERED — an open app may want named guests — it is
+    // Signing in is still offered — an open app may want named guests — it is
     // simply not the way through here.
     assertMatch(voter.signIn, /^https:\/\/yaks\.app\/login\?return=/)
 
-    // private: members only, and the PAGE is part of what only they see
+    // private: members only, and the page is part of what only they see
     // (C-32607 item 5). A stranger is sent to sign in, holding the page as
     // the address to come back to; its owner reads it.
     await agent.tool('app_files', {
@@ -479,7 +479,7 @@ slow('an app says who may read it and who may write it', async () => {
       })).status,
       200,
     )
-    // What a browser may KEEP of each of them (T-33176). A private app's
+    // What a browser may keep of each of them (T-33176). A private app's
     // bytes must never sit in a shared cache — access is decided per viewer,
     // so a proxy holding one member's copy would hand it to a stranger — and
     // `private` is the word that says so. A public app's may. Neither is held
@@ -505,11 +505,11 @@ slow('an app says who may read it and who may write it', async () => {
     assertEquals(await again.text(), '')
     let mine = await k.at('club.yaks.app', '/diary/', { headers: { cookie } })
     assertEquals(mine.headers.get('cache-control'), 'private, no-cache')
-    // And nothing of the INNER cache reaches the wire (T-33197). `Files` is a
+    // And nothing of the inner cache reaches the wire (T-33197). `Files` is a
     // second entrypoint with Cloudflare's cache in front of it, and what it
     // answers wears `Cache-Tag` and a long `s-maxage` — safe there, because it
     // is addressed by the app's eid and holds bytes rather than anybody's
-    // response. If either header ever rode out to the browser on a PRIVATE
+    // response. If either header ever rode out to the browser on a private
     // app's page, a cache between here and its member would keep that page and
     // hand it to a stranger. The gateway builds its own headers, so it cannot;
     // this is the assertion that says so out loud.
@@ -548,7 +548,7 @@ slow('an app says who may read it and who may write it', async () => {
     // And the letter itself carries the same link, from the platform's own
     // sender, saying who invited them and what signing in takes.
     let invite = await letter(k, 'maya@example.com', 'invited you')
-    // Both people in it by NAME: the one who invited, and the one invited —
+    // Both people in it by name: the one who invited, and the one invited —
     // the address is the envelope, never what anyone is called (T-32654).
     assertStringIncludes(invite.subject, name)
     assertEquals(invite.subject.includes(email), false)
@@ -563,7 +563,7 @@ slow('an app says who may read it and who may write it', async () => {
     )
     assertEquals((named.doc as { title: string }).title, 'Maya')
     // An invitation with nothing added is the letter above, unchanged; with a
-    // note, the inviter's own words ride at the TOP of it, attributed and
+    // note, the inviter's own words ride at the top of it, attributed and
     // quoted, so nobody reads them as the platform's (T-32963).
     let hello = 'Come add what you are bringing — potluck is Saturday at 6.'
     let withNote = await agent.tool('member_add', {
@@ -581,7 +581,7 @@ slow('an app says who may read it and who may write it', async () => {
       'the note is under the platform lines',
     )
     assertStringIncludes(noted.body, 'https://club.yaks.app/list/')
-    // A note past a paragraph is refused in a sentence — and refused BEFORE
+    // A note past a paragraph is refused in a sentence — and refused before
     // anything is written, so an invitation and its note stand or fall
     // together rather than half-arriving.
     await assertRejects(
@@ -613,12 +613,12 @@ slow('an app says who may read it and who may write it', async () => {
     let maya = row.entity.eid
     let mayaIn = await signedIn(k, maya)
     let editor = (app: string) => client(k, 'club.yaks.app', app, mayaIn)
-    // She was invited to ONE app (T-37615), so the app beside it is somebody
+    // She was invited to one app (T-37615), so the app beside it is somebody
     // else's: a signed-in stranger at a public list, who reads it and does
     // not write it.
     assertEquals((await editor('list').post(line('her line'))).status, 403)
     assertEquals((await anyone('list').get('.doc!')).length, 1)
-    // The private app she WAS invited to is hers to read and to write — its
+    // The private app she was invited to is hers to read and to write — its
     // page included.
     await editor('diary').applied(line('her secret'))
     assertEquals((await editor('diary').get('.doc!')).length, 2)
@@ -718,7 +718,7 @@ slow('the apex serves the OpenAI apps challenge token, exactly', async () => {
     let body = await res.text()
     assertEquals(body, token)
     assert(!body.endsWith('\n'), 'the token carries a trailing newline')
-    // A space host never gets it. The path is the PLATFORM's at every
+    // A space host never gets it. The path is the platform's at every
     // hostname (route.ts `platform`), so no app can answer it — and the
     // token is the apex's own, so it does not travel there either.
     let onSpace = await k.at(

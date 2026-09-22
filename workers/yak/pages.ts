@@ -164,7 +164,7 @@ export let nothingHere = (env: Host = {}) =>
 
 // An app in the trash, at its own address (erase.ts, T-34430). Everyone else
 // gets `nothingHere` — a deleted app is not a stranger's news — so this is
-// the space's OWNER, told the one thing that is actually true of this
+// the space's owner, told the one thing that is actually true of this
 // address: nothing serves here, and it is theirs to take back from the page
 // their apps are listed on. A 404 with words in it, because the address
 // really is answering nothing.
@@ -181,9 +181,9 @@ export let binned = (at: { title: string; days: number }, env: Host = {}) =>
     }">Restore it from your apps</a></p>`,
   )
 
-// A SPACE in the trash, at any address of its own (erase.ts, T-34431).
+// A space in the trash, at any address of its own (erase.ts, T-34431).
 // Everyone else gets `nothingHere` at every one of them — a deleted space is
-// not a stranger's news — so this is its OWNER, told where their space went,
+// not a stranger's news — so this is its owner, told where their space went,
 // how long they have, and given the one button that brings it back. A form
 // POSTing to `/`, the same door the space page's own forms use (apps.ts
 // `saved`), so a restore needs no assistant and no script. A 404 with words
@@ -213,14 +213,14 @@ export let spaceBinned = (at: {
 exactly as they were.</p>${home(env)}`,
   )
 
-// Deploying by DROPPING a file (T-34230): the one door on this platform that
+// Deploying by dropping a file (T-34230): the one door on this platform that
 // makes an app with no assistant in the room. A file input, which a file can
 // also be dragged onto, and the name the app lives at — one plain form that
 // POSTs to `/deploy` (drop.ts) and needs no script at all. The script below
 // only fills the name in from the file's own and lets a drag land on the
 // label; nothing it does is required for the form to work.
 //
-// `slug` given is an app's OWN page, where the name is not a question: the
+// `slug` given is an app's own page, where the name is not a question: the
 // drop goes to that app and nowhere else.
 let dropZone = (slug?: string) =>
   `<form class="Drop" method="post" action="/deploy" enctype="multipart/form-data">
@@ -291,13 +291,13 @@ if (drop) {
 // page. The script beside it (public/build.js) opens the socket instead and
 // draws the same frames as they happen; nothing it does is required.
 //
-// One RENDERER, drawn twice. The frames below are build.ts's wire, whole, and
+// One renderer, drawn twice. The frames below are build.ts's wire, whole, and
 // the rules here are the rules the script keeps: a tool is one row that turns
 // into its own result, the address is a card, `busy` is a line, and `done`
 // draws nothing because the sentence it carries is already a line above it.
 
 // A https address inside a sentence the builder said — the app it just made,
-// the pricing page a refusal ends with — as a link. Refused by SHAPE, not by a
+// the pricing page a refusal ends with — as a link. Refused by shape, not by a
 // scheme list (the repo's md.ts rule): `https://`, then nothing that could
 // close the attribute or open a tag, and no trailing punctuation of the
 // sentence it sits in.
@@ -376,7 +376,7 @@ ${transcript([])}${chatAsk()}
 let chatLive = '<script type="module" src="/api/build.js"></script>'
 
 /**
- * What a posted line answers (T-34242), and it is a PAGE for the same reason a
+ * What a posted line answers (T-34242), and it is a page for the same reason a
  * drop's is: whoever typed it ran no script, so the conversation has to come
  * back as something to read. The round is over by the time this is written —
  * the frames are the whole of it, ending in the address where one was built.
@@ -398,7 +398,7 @@ ${transcript(at.frames ?? [])}${chatAsk()}
 ${chatLive}`,
   )
 
-// What a drop answers, either way it went (T-34230), and it is a PAGE because
+// What a drop answers, either way it went (T-34230), and it is a page because
 // the form that sent it is a plain form: whoever dropped the file reads this,
 // script or no script. What is live and where, the files that went in, and the
 // same drop zone again with this app's name fixed — which makes it the app's
@@ -452,7 +452,7 @@ ${dropping}`,
 // One thing to say, and a button that puts it on the clipboard (T-34420). The
 // words are selectable on their own (`.Pick` is `user-select: all`), so a
 // browser that ran no script still takes them in one gesture — the button is
-// all the script below adds, and it stays HIDDEN until that script un-hides
+// all the script below adds, and it stays hidden until that script un-hides
 // it, because a button that does nothing is worse than no button.
 //
 // One control, everywhere something is meant to be pasted: the three things to
@@ -469,7 +469,7 @@ let copyable = (said: string, what = '') =>
 // words come from the span beside it rather than an attribute of its own, so
 // there is one copy of them on the page and nothing to keep in step. Where the
 // clipboard is refused — an insecure origin, a browser that asks first — the
-// words are SELECTED instead, so the person's own copy keystroke lands.
+// words are selected instead, so the person's own copy keystroke lands.
 let copying = `<script>
 for (let go of document.querySelectorAll('.Copy_Go')) {
   let said = go.previousElementSibling
@@ -1040,7 +1040,7 @@ let carried = (q: string | null, back?: string | null) =>
     : '')
 
 // Ask for an address. `who` names the app asking, when one is (the OAuth
-// consent page IS this page — signing in is the consent), and `why` is the
+// consent page is this page — signing in is the consent), and `why` is the
 // soft refusal, when there was one: a sign-in link that had already been used
 // lands here, carrying whatever it was going to finish (identity.ts, T-34351).
 export let askEmail = (
@@ -1099,12 +1099,12 @@ export let askCode = (
   )
 
 // Closing a space (T-33166, erase.ts): the page that stands in front of it.
-// It NAMES what goes — every app, every domain, everyone who loses their way
+// It names what goes — every app, every domain, everyone who loses their way
 // in, and the address — because a person about to lose all of it should read
 // the list rather than remember it.
 //
 // Two acts, and the page says which one this is (T-34431). By default the
-// space goes to the TRASH, and then each line names something that STOPS
+// space goes to the trash, and then each line names something that stops
 // rather than something destroyed; `forever` is the letter's other link, and
 // only then does the page speak of no undo. The lines themselves are the
 // caller's (erase.ts `keeping` and `naming`), so the page never has to know
@@ -1176,7 +1176,7 @@ ${home(env)}`,
 
 // And after: what went, and the one thing worth knowing next — the address
 // belongs to nobody now, theirs to take again or somebody else's to take
-// later. A space that went to the TRASH has the opposite next thing: the
+// later. A space that went to the trash has the opposite next thing: the
 // address is still theirs, and so is everything under it.
 export let deleted = (said: string, forever = true, env: Host = {}) =>
   shell(
@@ -1232,7 +1232,7 @@ export type Yours = {
   no?: boolean
   // What this space pays (billing.ts, T-33125): whether it is on Plus, the
   // day it lapses if it is leaving, and whether Stripe has ever known this
-  // space — which is what makes the manage door worth offering. THIS is the
+  // space — which is what makes the manage door worth offering. This is the
   // surface that starts a purchase, and it is signed-in web only: the agent
   // surface may name the pricing page and nothing else (C-33033).
   plan: { plus: boolean; ends: string; known: boolean }
@@ -1360,7 +1360,7 @@ let request = copyable(
 let at = (path: string, env: Host) => `<code>${url(env, path)}</code>`
 
 // What to write in an OAuth box, for the forms that have boxes (T-34414).
-// Every value is the authorization server's OWN — route.ts `OAUTH` is what
+// Every value is the authorization server's own — route.ts `OAUTH` is what
 // identity.ts configures the provider with and what both `/.well-known`
 // documents serve — so this page cannot come to teach an address the door
 // does not answer.
@@ -1379,11 +1379,11 @@ let oauthHelp = (env: Host) =>
 // This repository is itself a plugin marketplace (T-34666): `.agents/plugins/
 // marketplace.json` offers `plugins/yaks.app/`, whose `.mcp.json` names the
 // same MCP address every other door on this page hands out. So the shorthand
-// is a THIRD route to the same connection, not a different product.
+// is a third route to the same connection, not a different product.
 let REPO = 'yak-sh/yak'
 
 // Nothing interpolated below is anybody's input, so it is written as the
-// markup it is; everything that IS a person's is escaped where it enters.
+// markup it is; everything that is a person's is escaped where it enters.
 //
 // Keep setup paths and field labels matched to each client's form, including
 // differences between its desktop and mobile interfaces.
@@ -1564,8 +1564,8 @@ let connectionSetup = (connections: Connection[], env: Host) =>
 ${doors(env)}</details>`
 
 // The only script a tab needs, and it is not what switches one: the radios do
-// that with no script at all. This keeps the CHOSEN one in the address, so a
-// link can name a tab and a reload comes back to it. Matched by VALUE, never
+// that with no script at all. This keeps the chosen one in the address, so a
+// link can name a tab and a reload comes back to it. Matched by value, never
 // built into a selector — a hash is whatever a stranger put in it.
 let tabbing = `<script>
 let tabs = document.querySelector('.Tabs')

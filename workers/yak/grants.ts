@@ -4,8 +4,8 @@
 // and no connector — the person says "give me a token", pastes one line into a
 // terminal, and the CLI speaks to the same door with the same tools.
 //
-// It is a SEALED value (src/token.ts `seal`), like the platform session cookie
-// and the custom-domain handoff beside it, and deliberately NOT an OAuth
+// It is a sealed value (src/token.ts `seal`), like the platform session cookie
+// and the custom-domain handoff beside it, and deliberately not an OAuth
 // access token: the provider mints those only at the end of a browser redirect
 // flow it owns, and their life is one number for the whole provider
 // (`accessTokenTTL`), where a grant's is the caller's to pick up to a day. So
@@ -20,8 +20,8 @@
 // be more than the person who asked for it, and a space narrowed to is always
 // a narrowing (`narrowed` below).
 //
-// And it is REVOCABLE, which a sealed value is not on its own: minting writes
-// a row in the same KV the OAuth grants live in, verifying REQUIRES that row,
+// And it is revocable, which a sealed value is not on its own: minting writes
+// a row in the same KV the OAuth grants live in, verifying requires that row,
 // and revoking deletes it. The row expires with the token, so nothing has to
 // sweep it. KV is eventually consistent, so a revocation lands everywhere
 // within about a minute rather than instantly — which is why the life is short
@@ -65,14 +65,14 @@ export type Row = { id: string; person: string; exp: number }
 // A shelf of those over the KV, keyed `<what>:<person>:<id>`. Both revocable
 // credentials here are one — a CLI grant, and the standing sign-in link beside
 // it (link.ts) — because a sealed value nobody can forge is still one nobody
-// could END: verifying asks whether the row is there, and revoking deletes it.
+// could end: verifying asks whether the row is there, and revoking deletes it.
 // The row expires with what it names, so nothing has to sweep it, and a token
 // naming somebody else's id finds no row at all, since the person is in the
 // key.
 //
 // Null when there is no KV (a probe with none wired): minting refuses rather
 // than handing out something nothing could ever take back. `kv` and `ttl` are
-// answered too, for the rows a shelf's owner keeps BESIDE its own (`wearing`).
+// answered too, for the rows a shelf's owner keeps beside its own (`wearing`).
 export let shelf = <T extends Row>(kv: unknown, what: string) => {
   let store = kv as Kv | undefined
   if (!store?.get) return null
@@ -110,7 +110,7 @@ export let ledger = (kv: unknown) => {
   let worn = (holder: string) => `wearing:${holder}`
   return {
     ...book,
-    // WHICH grant a long-lived holder is wearing — one build container
+    // Which grant a long-lived holder is wearing — one build container
     // (sandbox.ts). The token is answered once and kept nowhere, so this row
     // is not the token: it is whose grant and which one, which is enough for
     // the holder's next wake to say the same grant again, and enough for
@@ -135,7 +135,7 @@ export let ledger = (kv: unknown) => {
 }
 
 // The token that carries a grant. The seal is deterministic, so a grant still
-// on the books can be SAID again from what the ledger holds — which is what
+// on the books can be said again from what the ledger holds — which is what
 // lets one build container keep one grant across every command that wakes it
 // (sandbox.ts `worn`) instead of minting one per command. It is not a way to
 // recover a token somebody lost: nothing but this kernel can read the ledger.
@@ -200,14 +200,14 @@ export let revoke = async (
   return gone
 }
 
-// A grant narrowed to one space, said over the DIRECTORY the tools read
+// A grant narrowed to one space, said over the directory the tools read
 // membership out of (tools.ts `inSpace`, `inReach`, declared.ts): every space
 // but this one is a space the caller does not belong to, which is the answer
 // this platform already gives for a space that is not theirs. One wrapper, so
 // the narrowing holds for every tool at once rather than tool by tool.
 //
 // `own` answers the narrowed space too: a tool that was given no space asks
-// for the caller's own, and under a grant for one space that IS the space it
+// for the caller's own, and under a grant for one space that is the space it
 // means. Whether they may write there is still their membership, read below.
 export let narrowed = (dir: Directory, slug: string): Directory => ({
   ...dir,

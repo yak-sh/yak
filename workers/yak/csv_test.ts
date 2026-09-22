@@ -62,7 +62,7 @@ Deno.test('title and body land in doc, and the component wins the name', () => {
     city: { name: 'Oslo' },
     doc: { title: 'Oslo', body: 'the capital' },
   })
-  // An app that declared `city.title` means THAT column, not the doc's.
+  // An app that declared `city.title` means that column, not the doc's.
   assertEquals(
     bundles('title\nOslo\n', { as: 'city', cols: { title: 'text' } })[0],
     { entity: { eid: '$data/cities.csv:0' }, city: { title: 'Oslo' } },

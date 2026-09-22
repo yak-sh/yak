@@ -41,7 +41,7 @@ Deno.test('one app is one tag, and the tag names the app', () => {
 Deno.test('a cached file is held indefinitely and can be purged', () => {
   let keep = keepable(tagsOf(A))
   assertStringIncludes(keep['cache-control'], 'public')
-  // A year in the SHARED cache, because the answer to "how long" is the purge,
+  // A year in the shared cache, because the answer to "how long" is the purge,
   // not the clock.
   assertStringIncludes(keep['cache-control'], 's-maxage=31536000')
   assertStringIncludes(keep['cache-control'], 'stale-while-revalidate=')
@@ -68,7 +68,7 @@ Deno.test('a socket is left alone', () => {
   assertEquals(sealed(up), up)
 })
 
-// The framing policy (T-33409): an app is the FRAMED resource, and the browser
+// The framing policy (T-33409): an app is the framed resource, and the browser
 // refuses to render it inside any space but its own — the clickjacking defense,
 // since a same-site frame would otherwise load with the viewer's cookie.
 Deno.test('every sealed response refuses framing by a foreign space', () => {
@@ -105,7 +105,7 @@ Deno.test('the frame policy rides even on a door with its own cache policy', () 
 
 Deno.test('the frame policy stacks with a response CSP, never clobbers it', () => {
   // The blob door (apps.ts `gave`) serves user bytes under a sandbox CSP.
-  // Appending keeps that inert-content protection AND adds our framing rule;
+  // Appending keeps that inert-content protection and adds our framing rule;
   // setting would have wiped the sandbox.
   let csp = sealed(
     new Response('bytes', {

@@ -269,7 +269,7 @@ Deno.test('a socket with nobody on it never opens', async () => {
 })
 
 // The page with no script (T-34242): the same conversation, said once. A form
-// POST to the same address waits for the round and is answered a PAGE — the
+// POST to the same address waits for the round and is answered a page — the
 // transcript, each tool as a row, and the address the build ended at.
 Deno.test('a form posted with no script is answered the conversation', async () => {
   let { env } = await seeded(MAKES_ONE)

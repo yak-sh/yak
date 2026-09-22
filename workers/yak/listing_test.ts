@@ -67,7 +67,7 @@ Deno.test('what is not a row listing passes through as it came', () => {
 })
 
 // Outputs speak human: a reference to somebody the store knows carries their
-// name, so a view's ONE query draws a byline (C-32730 item 5).
+// name, so a view's one query draws a byline (C-32730 item 5).
 Deno.test('a reference to a person answers with a name', () => {
   let rows = [
     {

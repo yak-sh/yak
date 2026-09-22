@@ -1,4 +1,4 @@
-// The zip reader (T-34230), and mostly what it REFUSES: the bytes come off a
+// The zip reader (T-34230), and mostly what it refuses: the bytes come off a
 // file somebody dragged onto a page, so every no has to be a sentence they can
 // act on, and each one is asserted by the words a person would look for.
 //
@@ -107,7 +107,7 @@ Deno.test('an encrypted entry is refused', () =>
 Deno.test('more than the ceiling is refused', () =>
   refuses([{ path: 'big.txt', content: 'x'.repeat(600) }], 'more than', 500))
 
-// The ceiling is counted on the way OUT of the decompressor: 600 KB of one
+// The ceiling is counted on the way out of the decompressor: 600 KB of one
 // letter deflates to almost nothing, so a zip that lies about its size is
 // still stopped by what it produces.
 Deno.test('a zip that unpacks past the ceiling is refused', () =>
