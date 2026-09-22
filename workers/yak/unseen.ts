@@ -24,6 +24,7 @@ import { vouched, type Who } from './session.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import { told } from './stream.ts'
 import { level, standing } from './meter.ts'
+import { defect } from './sentry.ts'
 import { refuse } from './tool.ts'
 
 // A refusal is NOT a break (C-32652 item 3, T-32655; C-32869 item 5) — one
@@ -112,7 +113,7 @@ let hushed = (space: Space, app: App) => {
 // (T-33234). An app's store takes one from the two places the app's own code
 // was running — its worker, which threw or answered a 5xx (dispatch.ts `ran`),
 // and its page, which reported its own (apps.ts `/report`). The META store
-// takes everything the platform hit in its own code (index.ts `report`),
+// takes everything the platform hit in its own code ({@link fault}),
 // including on a route that names an app: a DO eviction, our storage, our
 // routing, our dispatch. Nothing here decides that, and nothing should try:
 // the message never says whose code it was.
@@ -173,6 +174,24 @@ export let noted = async (breaks: Breaks, broke: {
   } catch (why) {
     console.error('yak: could not push the break', why)
   }
+}
+
+/** A defect in the platform's own code (T-33234): sent to Sentry with its
+ * tags, and written to the meta store where the platform's breaks are read.
+ * Awaited, so the entity exists by the time the caller answers; failing to
+ * write it is telemetry, never a second failure to serve. */
+export let fault = async (
+  env: Env,
+  request: string,
+  e: unknown,
+  tags: Record<string, string | null | undefined> = {},
+) => {
+  defect(e, { request, ...tags })
+  await noted(metaBreaks(env), {
+    request,
+    message: e instanceof Error ? e.message : String(e),
+    stack: e instanceof Error ? e.stack ?? '' : '',
+  }).catch((why) => console.error(`yak: could not file ${request}`, why))
 }
 
 type Broke = {

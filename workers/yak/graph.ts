@@ -147,6 +147,7 @@ import type { Binding } from './post.ts'
 import { ledger } from './ledger.ts'
 import { doorOf, GIT_STORE, type Namespace, PLATFORM_STORE } from './door.ts'
 import { type Meta, metaOf } from './meta.ts'
+import { defect } from './sentry.ts'
 import { apex, url } from './host.ts'
 import {
   addressed,
@@ -1199,7 +1200,9 @@ export class Store {
 
   // A break this object noted about itself, written where it notes an app's
   // (unseen.ts `noted`): server-owned columns, through the kernel's own door.
+  // Sentry hears it too, named by the store it happened in (sentry.ts).
   #broke = async (request: string, error: unknown) => {
+    defect(error, { request, store: this.#get('name') })
     try {
       await this.#trust([{
         entity: { eid: crypto.randomUUID() },

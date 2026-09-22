@@ -43,7 +43,7 @@ import { bound, type Env } from './env.ts'
 import { apex, type Host, spaceHost } from './host.ts'
 
 import { cookieValue, verify } from '../../src/token.ts'
-import { metaBreaks, noted } from './unseen.ts'
+import { fault } from './unseen.ts'
 
 let API = 'https://api.stripe.com'
 
@@ -302,18 +302,6 @@ let whose = async (
 let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
 
-// A break, where the owner reads the platform's own (index.ts `report`). It is
-// awaited, so the entity exists by the time the door answers. Exported because
-// sell.ts files its own the same way and there is nothing about this that is
-// billing's.
-export let broke = async (env: Env, request: string, e: unknown) => {
-  await noted(metaBreaks(env), {
-    request,
-    message: e instanceof Error ? e.message : String(e),
-    stack: e instanceof Error ? e.stack ?? '' : '',
-  }).catch((why) => console.error(`yak: could not file ${request}`, why, e))
-}
-
 // The webhook door is on the open internet, so what it files has a ceiling:
 // per isolate, per minute, the way unseen.ts caps a crash-looping page. A
 // refused signature is worth seeing once — it means a secret rolled, or
@@ -425,7 +413,7 @@ export let checkout = async (env: Env, req: Request, at?: Space) => {
     if (!url) throw new Error('stripe made a checkout session with no url')
     return Response.json({ url })
   } catch (e) {
-    await broke(env, 'POST /api/billing/checkout', e)
+    await fault(env, 'POST /api/billing/checkout', e)
     return json(
       502,
       'checkout_failed',
@@ -472,7 +460,7 @@ export let portal = async (env: Env, req: Request, at?: Space) => {
     if (!url) throw new Error('stripe made a portal session with no url')
     return Response.json({ url })
   } catch (e) {
-    await broke(env, 'POST /api/billing/portal', e)
+    await fault(env, 'POST /api/billing/portal', e)
     return json(
       502,
       'portal_failed',
@@ -542,7 +530,7 @@ export let apply = async (env: Env, event: Event) => {
     // a second delivery finds the same nothing — so it is filed where the
     // owner reads it and the door answers 200 rather than making Stripe repeat
     // an unanswerable question for three days.
-    await broke(
+    await fault(
       env,
       'POST /stripe/webhook',
       new Error(
@@ -577,7 +565,7 @@ let hook = async (env: Env, req: Request) => {
   let raw = await req.text()
   if (!env.STRIPE_WEBHOOK_SECRET) {
     if (!hushed('unset')) {
-      await broke(
+      await fault(
         env,
         'POST /stripe/webhook',
         new Error('STRIPE_WEBHOOK_SECRET is not set — an event went unread'),
@@ -592,7 +580,7 @@ let hook = async (env: Env, req: Request) => {
   )
   if (no) {
     if (!hushed(no)) {
-      await broke(env, 'POST /stripe/webhook', new Error(no))
+      await fault(env, 'POST /stripe/webhook', new Error(no))
     }
     return json(400, 'bad_signature', no)
   }

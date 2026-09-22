@@ -36,7 +36,8 @@
 // and the webhook's filing is capped so a stranger posting garbage at a public
 // door cannot write rows without end.
 import { sha256 } from '@yaks/graph'
-import { ask, broke, moved, verified } from './billing.ts'
+import { ask, moved, verified } from './billing.ts'
+import { fault } from './unseen.ts'
 import * as dirPart from './directory.ts'
 import {
   type App,
@@ -611,7 +612,7 @@ export let buying = async (
     if (!url) throw new Error('stripe made a checkout session with no url')
     return Response.json({ url })
   } catch (e) {
-    await broke(env, `POST /${at.app}/api/pay/checkout`, e)
+    await fault(env, `POST /${at.app}/api/pay/checkout`, e)
     return no(
       502,
       'checkout_failed',
@@ -1005,7 +1006,7 @@ let hook = async (env: Env, req: Request) => {
   let raw = await req.text()
   if (!env.STRIPE_CONNECT_WEBHOOK_SECRET) {
     if (!hushed('unset')) {
-      await broke(
+      await fault(
         env,
         'POST /stripe/connect',
         new Error(
@@ -1021,7 +1022,7 @@ let hook = async (env: Env, req: Request) => {
     env.STRIPE_CONNECT_WEBHOOK_SECRET,
   )
   if (no) {
-    if (!hushed(no)) await broke(env, 'POST /stripe/connect', new Error(no))
+    if (!hushed(no)) await fault(env, 'POST /stripe/connect', new Error(no))
     return json(400, 'bad_signature', no)
   }
   let event: Event

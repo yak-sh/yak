@@ -112,7 +112,7 @@ import {
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { mail, mailable } from './mail.ts'
-import { broke } from './billing.ts'
+import { fault } from './unseen.ts'
 
 // What the sign-in card says when no letter can leave: the deploy's operator
 // reads which secret is missing, and a visitor reads that nothing is wrong
@@ -797,7 +797,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         // The provider refused or the network did: a break for us to read
         // (the same row a thrown one would have filed) and a card the person
         // can act on, instead of a page that says nothing about what to do.
-        await broke(env, 'POST /login', e)
+        await fault(env, 'POST /login', e)
         return askEmail(field('q') || null, back, undefined, NO_SEND, 503, env)
       }
     }

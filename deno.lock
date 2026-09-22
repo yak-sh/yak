@@ -35,6 +35,8 @@
     "npm:@modelcontextprotocol/sdk@^1.29.0": "1.29.0_zod@3.25.76",
     "npm:@preact/signals-core@^1.14.0": "1.14.4",
     "npm:@preact/signals@^2.9.0": "2.9.4_preact@10.29.7__preact-render-to-string@6.7.0_preact-render-to-string@6.7.0__preact@10.29.7",
+    "npm:@sentry/cloudflare@10.75.0": "10.75.0_@cloudflare+workers-types@4.20260702.1_wrangler@4.111.0__@cloudflare+workers-types@4.20260702.1",
+    "npm:@sentry/core@10.75.0": "10.75.0",
     "npm:@sqliteai/sqlite-vector-darwin-arm64@1.0.0": "1.0.0",
     "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.0.0": "1.0.0",
     "npm:@sqliteai/sqlite-vector-linux-arm64@1.0.0": "1.0.0",
@@ -603,6 +605,9 @@
         "zod-to-json-schema"
       ]
     },
+    "@opentelemetry/api@1.9.1": {
+      "integrity": "sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q=="
+    },
     "@poppinss/colors@4.1.6": {
       "integrity": "sha512-H9xkIdFswbS8n1d6vmRd8+c10t2Qe+rZITbbDHHkQixH5+2x1FDGmi/0K+WgWiqQFKPSlIYB7jlH6Kpfn6Fleg==",
       "dependencies": [
@@ -659,6 +664,37 @@
     },
     "@protobufjs/utf8@1.1.2": {
       "integrity": "sha512-b1UQwcEZ4yCnMCD8DAL1VlbvBJE9/IX4FTIp7BG1xYpf29SLazLSrqUkj4w7Y5y7cCVP6E5tcqqcI0xemPkHug=="
+    },
+    "@sentry/cloudflare@10.75.0_@cloudflare+workers-types@4.20260702.1_wrangler@4.111.0__@cloudflare+workers-types@4.20260702.1": {
+      "integrity": "sha512-2TvEXTihK8tNT0KB7WraoiSsSJ9dX6h4F7Wr0+k5rldPH9G1l6zc+6xP/u9CCB+m44XOHiI2omPGDkQ9uEo1ew==",
+      "dependencies": [
+        "@cloudflare/workers-types",
+        "@opentelemetry/api",
+        "@sentry/core",
+        "@sentry/server-utils",
+        "magic-string",
+        "wrangler"
+      ],
+      "optionalPeers": [
+        "@cloudflare/workers-types",
+        "wrangler"
+      ]
+    },
+    "@sentry/conventions@0.16.0": {
+      "integrity": "sha512-fO9PLmHdVURcSPUpWCItWAtgKiMwGdJHbovoSEyLplX5sxs2ugvI4CBPTrkkgqhObnZOD0CnWBKDzSVQYBKEyQ=="
+    },
+    "@sentry/core@10.75.0": {
+      "integrity": "sha512-5wDQpQqjJ6RHdPR+z6Q+47XlwoxRKBv0yyB0LKHqL/1azPOQbR+nllyLmmQDcoJpaksuLSmLA1q6hFX7gjDT2w==",
+      "dependencies": [
+        "@sentry/conventions"
+      ]
+    },
+    "@sentry/server-utils@10.75.0": {
+      "integrity": "sha512-7fIa9vFGNzB13hmxl8Sip3xImSkqpc4wETzuQ7CLzVOwPvwI6y/gVEm0pxRhtJSq8SzfOp26eJWl80u8v78Osg==",
+      "dependencies": [
+        "@sentry/conventions",
+        "@sentry/core"
+      ]
     },
     "@sindresorhus/is@7.2.0": {
       "integrity": "sha512-P1Cz1dWaFfR4IR+U13mqqiGsLFf1KbayybWwdd2vfctdV6hDpUkgCY0nKOLLTMSoRd/jJNjtbqzf13K8DCCXQw=="
@@ -1239,6 +1275,12 @@
     "lucide@1.31.0": {
       "integrity": "sha512-iPJC7py8o990ZSmvFZlS+4+bNasP+ANDkD0IeDOGgQZjTm3p85F2Ldut7leM1yhYavr1pmoPfigm9MDHyyCOrw=="
     },
+    "magic-string@0.30.21": {
+      "integrity": "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==",
+      "dependencies": [
+        "@jridgewell/sourcemap-codec"
+      ]
+    },
     "marked@18.0.6": {
       "integrity": "sha512-MrV5puXBfuiy6wl6DLaq3BtIJQAJToAd5zt/ZKhRfGRAuFPALE7/4Y7jnxRQoEgK/pBgurGqLyAuRgZ2xOjr6w==",
       "bin": true
@@ -1774,6 +1816,8 @@
       "npm:@modelcontextprotocol/sdk@^1.12.0",
       "npm:@preact/signals-core@^1.14.0",
       "npm:@preact/signals@^2.9.0",
+      "npm:@sentry/cloudflare@10.75.0",
+      "npm:@sentry/core@10.75.0",
       "npm:@sqliteai/sqlite-vector-darwin-arm64@1.0.0",
       "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.0.0",
       "npm:@sqliteai/sqlite-vector-linux-arm64@1.0.0",
@@ -2153,6 +2197,8 @@
             "npm:@jsr/std__csv@1.0.6",
             "npm:@jsr/std__yaml@1.2.0",
             "npm:@modelcontextprotocol/sdk@1.29.0",
+            "npm:@sentry/cloudflare@10.75.0",
+            "npm:@sentry/core@10.75.0",
             "npm:ajv@8.20.0",
             "npm:croner@10.0.1",
             "npm:lucide@1.31.0",

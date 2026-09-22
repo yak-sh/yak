@@ -35,11 +35,6 @@ routes = [
   { pattern = "*/*", zone_name = "yaks.app" },
 ]
 
-# Pages on kernel exceptions and Store/default console errors; its incident
-# KV is also the reader for `yak errors` (workers/yak-tail/README.md).
-[[tail_consumers]]
-service = "yak-tail"
-
 # Workers logs (T-33178). Off until 2026-09-03, which is why "where did that
 # second go" could only be answered by guessing: the platform had no logs at
 # all, and every deploy was pushing observability_enabled: false. `logs` is
@@ -78,6 +73,9 @@ APEX = "yaks.app"
 WORKER_NAME = "yak"
 DISPATCH_NAMESPACE = "yak-apps"
 VIEWS_DATASET = "yak_views"
+# Which deploy a defect in Sentry came from (sentry.ts). A local .dev.vars that
+# sets SENTRY_DSN should set SENTRY_ENVIRONMENT=development beside it.
+SENTRY_ENVIRONMENT = "production"
 
 # The zone a customer's own domain is attached to as a Cloudflare for SaaS
 # custom hostname (domains.ts, T-33038) — this zone, the one every route above
@@ -352,6 +350,7 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # keys and point BUILDER_MODEL_PAID at an OpenAI model, and the paid build
 # speaks to OpenAI instead. BUILDER_MODEL_FREE and BUILDER_MODEL_PAID are the
 # model ids, unset meaning builder.ts's own defaults.
+# SENTRY_DSN is where defects are sent (sentry.ts); unset, nothing is sent.
 # CIMD is not a secret but rides the same door, because that door needs no
 # code deploy: `printf off | wrangler secret put CIMD` stops the well-known
 # claiming Client ID Metadata Document support, `printf on | ...` restores it,
@@ -438,10 +437,6 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # routing are repeated too, keeping the whole deployment visible in one place.
 [env.staging]
 name = "yak-staging"
-# Empty on purpose: staging failures are logged and never page the owner.
-# Spelled out because wrangler warns on every run about a top-level list an
-# environment does not inherit.
-tail_consumers = []
 routes = [
   { pattern = "yaks.fyi/*", zone_name = "yaks.fyi" },
   { pattern = "*.yaks.fyi/*", zone_name = "yaks.fyi" },
@@ -459,6 +454,7 @@ CF_ZONE = ""
 WORKER_NAME = "yak-staging"
 DISPATCH_NAMESPACE = "yak-apps-staging"
 VIEWS_DATASET = "yak_views_staging"
+SENTRY_ENVIRONMENT = "staging"
 # Set a recurring price from the Stripe sandbox before testing Plus billing.
 STRIPE_PRICE = ""
 # MAIL_SINK is the owner's address, set as a staging secret, never a var.

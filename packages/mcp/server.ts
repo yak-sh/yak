@@ -32,6 +32,7 @@ import {
 import {
   answerOf,
   faulted,
+  type Opts as RunnerOpts,
   type Runner,
   runner,
   toolEid,
@@ -52,6 +53,9 @@ export type Security =
   | { type: 'noauth' }
   | { type: 'oauth2'; scopes?: string[] }
 
+/** The default `report`: a defect, said on the console. */
+export let logged = (err: unknown) => console.error('tool failed —', err)
+
 /** How an MCP server over a graph is built. */
 export type Options = {
   /** the graph its tools read and write */
@@ -67,6 +71,9 @@ export type Options = {
    * into them — passes a separate graph here; the tools still read and write
    * `graph`. */
   calls?: Graph
+  /** where a tool's defect goes, with the call and the tool's name (default:
+   * the console). A refusal (`CallError`) is never reported. */
+  report?: RunnerOpts['report']
   /** who is calling — every write this server makes is signed with this actor:
    * `by` the identity it acts for, `via` the run it came through (default:
    * nobody, and writes are stored unattributed) */
@@ -420,7 +427,7 @@ export let server = (opts: Options): McpServer => {
   let run = opts.runner ?? runner(calls, {
     tools,
     host: graph,
-    report: (err) => console.error('tool failed —', err),
+    report: opts.report ?? logged,
   })
   let names = tools.map((t) => t.name)
 

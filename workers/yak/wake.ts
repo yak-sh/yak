@@ -56,12 +56,8 @@ export let seeded = async (
 
 // Job failures and refused wake writes share the platform's exception log.
 let reported = async (env: Env, job: string, error: unknown): Promise<void> => {
-  let { metaBreaks, noted } = await import('./unseen.ts')
-  await noted(metaBreaks(env), {
-    request: `wake ${job}`,
-    message: error instanceof Error ? error.message : String(error),
-    stack: error instanceof Error ? error.stack ?? '' : '',
-  }).catch((why) => console.error('yak: could not report', why, 'after', error))
+  let { fault } = await import('./unseen.ts')
+  await fault(env, `wake ${job}`, error)
 }
 
 /** Keep a failed platform job in the directory's exception log. */

@@ -6,6 +6,8 @@
     "@cloudflare/sandbox": "0.12.9",
     "@cloudflare/workers-oauth-provider": "0.10.3",
     "@modelcontextprotocol/sdk": "1.29.0",
+    "@sentry/cloudflare": "10.75.0",
+    "@sentry/core": "10.75.0",
     "@std/csv": "npm:@jsr/std__csv@1.0.6",
     "@std/yaml": "npm:@jsr/std__yaml@1.2.0",
     "ajv": "8.20.0",

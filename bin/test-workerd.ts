@@ -14,7 +14,7 @@ try {
       '--parallel',
       '--unstable-net',
       '--unstable-worker-options',
-      ...(Deno.args.length ? Deno.args : ['workers/yak/', 'workers/yak-tail/']),
+      ...(Deno.args.length ? Deno.args : ['workers/yak/']),
     ],
     env: { ...suite.env, TASKS_SLOW: '1' },
   }], { terminateOnSignal: false })

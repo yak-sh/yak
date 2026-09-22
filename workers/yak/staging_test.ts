@@ -44,14 +44,11 @@ Deno.test('staging repeats the kernel bindings without production resources', ()
       )
     }
   }
-  // Explicit empty list, not absent: staging emits to no tail consumer (never
-  // production's yak-tail), and spelling it silences the wrangler config warning
-  // that otherwise crashes the deploy verifier (2cb41812).
-  assertEquals(staging.tail_consumers, [])
   assertEquals(staging.name, 'yak-staging')
   let vars = staging.vars as Record<string, string>
   assertEquals(vars.APEX, 'yaks.fyi')
   assertEquals(vars.WORKER_NAME, staging.name)
+  assertEquals(vars.SENTRY_ENVIRONMENT, 'staging')
   assertEquals(
     vars.DISPATCH_NAMESPACE,
     (staging.dispatch_namespaces as { namespace: string }[])[0].namespace,

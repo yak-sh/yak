@@ -102,6 +102,8 @@ import { type Entry, prompted, standing } from './standing.ts'
 import { type Ctx, inReach, VIEW_MIME } from './tools.ts'
 import { listen, rostered } from './stream.ts'
 import { type Clock, clock, timed } from './timing.ts'
+import { reporter } from './sentry.ts'
+import { isTestAddress } from '../../src/bots.ts'
 import { refuse } from './tool.ts'
 
 type Rpc = {
@@ -300,6 +302,19 @@ let heard = (
 // the human VERSION stands in.
 let markOf = (env: Env) => env.CF_VERSION_METADATA?.id ?? VERSION
 
+// Which client a session is: `initialize` mints the session id with the
+// client's own name in front (`claude-ai~<uuid>`), so every later POST says
+// which client it came from without a read, and every POST stays stateless.
+// A session minted before this, or a client that named nothing, is none.
+let minted = (info: unknown): string => {
+  let name = String((info as { name?: unknown } | null)?.name ?? '')
+    .replace(/[^\w.-]/g, '')
+    .slice(0, 40)
+  return name ? `${name}~${crypto.randomUUID()}` : crypto.randomUUID()
+}
+let clientOf = (session: string): string | undefined =>
+  session.includes('~') ? session.split('~')[0] : undefined
+
 // The MCP server itself, built per request around the person the edge
 // verified: the caller's whole reach as one graph, the platform's tools on it
 // as a plugin, and the same `Authenticate` callback every other way into this
@@ -367,6 +382,7 @@ let door = async (ctx: Ctx, session: string) => {
     // know: a store is not a place a mistake is final (recover.ts, T-34509).
     undo: UNDO,
     authenticate: () => ({ by: ctx.person }),
+    report: reporter(ctx, clientOf(session)),
     // The name, the one-line description and the picture, from the one place
     // they are written (seo.ts connector, T-34415): a client that reads
     // `serverInfo` shows this connector with a face, and nobody has to type
@@ -493,6 +509,7 @@ let stranger = async (
     // people.
     security: asked,
     scope: scope(env),
+    report: reporter(ctx, clientOf(req.headers.get('mcp-session-id') ?? '')),
     ...connector(env),
     version: VERSION,
   }
@@ -510,6 +527,26 @@ let stranger = async (
   )
 }
 
+// The canary (T-37865): a test account's POST here is a defect sent to Sentry
+// as that account's, through the same `reporter` a tool's defect takes, which
+// is how a deploy proves its defects arrive with their tags. Anyone else finds
+// nothing here.
+let CANARY = '/api/defect'
+let canary = async (req: Request, env: Env): Promise<Response> => {
+  let { who } = await asking(env, req)
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  if (!who || !isTestAddress(await dir.emailAt(who.person) ?? '')) {
+    return json(404, { error: { code: 'not_found' } })
+  }
+  let ctx: Ctx = { env, dir, person: who.person }
+  await reporter(ctx, 'canary')(
+    new Error('a deliberate defect, from a test account'),
+    { entity: { eid: CANARY }, call: {} },
+    'canary',
+  )
+  return json(500, { error: { code: 'defect', message: 'sent' } })
+}
+
 // The entry point, with the stopwatch and the round-trip tally running
 // (timing.ts, hops.ts): `answered` below is the whole call, and everything it
 // awaits counts its hops here, so `Server-Timing` reports both where the time
@@ -525,6 +562,7 @@ let answered = async (
   c: Clock,
 ): Promise<Response> => {
   let url = new URL(req.url)
+  if (url.pathname == CANARY && req.method == 'POST') return canary(req, env)
   if (url.pathname != '/mcp') {
     return json(404, { error: { code: 'not_found' } })
   }
@@ -647,7 +685,7 @@ let answered = async (
   // answer to who is asking, and a client that has never seen this header
   // still works, sharing the nameless session with every other such client.
   let session = rpc.method == 'initialize'
-    ? crypto.randomUUID()
+    ? minted(rpc.params?.clientInfo)
     : req.headers.get('mcp-session-id') ?? ''
   let built = await c.time('door', () => door(ctx, session))
   let out = timed(

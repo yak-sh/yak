@@ -44,7 +44,7 @@ import * as dirPart from './directory.ts'
 import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { pilled, standing } from './gallery.ts'
-import { broke, checkout, portal } from './billing.ts'
+import { checkout, portal } from './billing.ts'
 import {
   buying,
   connect,
@@ -86,7 +86,7 @@ import type { Bundle } from '@yaks/graph'
 import { edits, mode, reads, writes } from '@yaks/member'
 import { type Door, storeOf } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
-import { noted, refusal, serving } from './unseen.ts'
+import { fault, noted, refusal, serving } from './unseen.ts'
 import { full, fullFiles } from './usage.ts'
 import { refusedVisit } from './meter.ts'
 import { sha256 } from './versions.ts'
@@ -1352,7 +1352,7 @@ let saved = async (
       let made = await connect(env, space, await dir.emailAt(who.person) ?? '')
       return redirect(made.url, 303)
     } catch (e) {
-      await broke(env, 'POST / (sell)', e)
+      await fault(env, 'POST / (sell)', e)
       return index(req, env, dir, space, {
         say: "we couldn't reach Stripe just now — try again in a minute",
         no: true,

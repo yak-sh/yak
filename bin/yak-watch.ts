@@ -171,7 +171,7 @@ export let report = async (
     ...state.faults,
     '',
     'bin/yak-watch checks every five minutes. This outage is paged once;',
-    'a healthy pass re-arms the next page. Check the yak deployment and incidents.',
+    'a healthy pass re-arms the next page. Check the yak deployment and Sentry.',
   ].join('\n'))
   return { ...state, paged: true }
 }

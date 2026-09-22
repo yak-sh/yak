@@ -105,9 +105,6 @@ Deno.test('platform entrypoints cover every standalone config and the tail Worke
         }
       }
     }
-    if (platform === 'workers') {
-      expected.push(new URL('workers/yak-tail/conform.ts', root).href)
-    }
     assertEquals(entries, expected.sort())
     for (let entry of entries) await Deno.stat(new URL(entry))
     assertEquals(config.compilerOptions.strict, true)

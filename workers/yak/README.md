@@ -52,15 +52,24 @@ deploy gate judges the rows already recorded (`bench/deploys.md`).
 
 Everything the build actually does is in `bin/build-yak`, so the dashboard holds
 one line: install Deno (not on the Ubuntu 24.04 image), `deno task check` from
-the repo root, `deno task test:workers` (kernel and tail). A red build deploys
-nothing.
+the repo root, `deno task test:workers`. A red build deploys nothing.
 
-`yak-tail` pages on kernel exceptions and Store/default console errors. Its
-incident KV is also the source for `yak errors`; `bin/yak-watch` probes the live
-doors and named apps every five minutes from the box. See
-[incident paging](../yak-tail/README.md) for the schema, cooldown, cron, and the
-separate `deno task deploy:yak-tail` deployment. The tail must exist before the
-kernel deploy attaches it through `tail_consumers`.
+Defects go to Sentry (org `yaks`, project `yaks-app`; sentry.ts): an exception
+nothing caught, a break the router or a job files, a Store's own, a connector
+tool's, and any `console.error`. Each carries its tags (`tool`, `space`, `app`,
+`client`, `store`, `request`) and the person's eid as the user with `account`
+set to `person` or `test` (a test account, src/bots.ts). The release is the
+Workers version id and the environment is `SENTRY_ENVIRONMENT` (`production`,
+`staging`). A refusal is never sent. With no `SENTRY_DSN` secret nothing is
+sent, which is what keeps the tests and `wrangler dev` silent. Source maps are
+not uploaded; the bundle is not minified, so a stack names our functions. To
+prove a deploy's defects arrive, a test account POSTs `/api/defect` at the apex:
+that is a defect tagged `tool:canary`, `account:test` (mcp.ts `canary`).
+
+`bin/yak-watch` probes the live doors and the apps in `watch.json` every five
+minutes from the box (`etc/yak-watch.cron`, `bin/yak-watch --probe` for a
+read-only pass) and mails the owner once per outage, registered with
+`holdco-deadman` at 15 minutes.
 
 **Update the dashboard Deploy command to `../../bin/build-yak deploy`.** The
 previous `npx wrangler deploy` bypasses the repo's deploy wrapper; changing the
@@ -128,6 +137,7 @@ it. Values never appear here or in the repo.
 | `STRIPE_KEY`                                                                                   | billing  | restricted Stripe API key (checkout, portal, one subscription read)           | billing doors say the paid tier is not switched on                |
 | `STRIPE_WEBHOOK_SECRET`                                                                        | billing  | `whsec_…` of the **Your account** destination (see the billing section)       | events go unread and are filed where the owner sees them          |
 | `STRIPE_CONNECT_WEBHOOK_SECRET`                                                                | selling  | `whsec_…` of the **Connected accounts** destination (see the Connect section) | `POST /stripe/connect` answers 503; selling otherwise works       |
+| `SENTRY_DSN`                                                                                   | yes      | the `yaks-app` project's DSN (Sentry → Settings → Client Keys)                | no defect reaches Sentry                                          |
 | `MAIL_SINK`                                                                                    | staging  | the owner's address                                                           | staging letters go to their intended recipients                   |
 | `OPENAI_APPS_CHALLENGE`                                                                        | optional | the token OpenAI's apps directory issues                                      | `/.well-known/openai-apps-challenge` 404s                         |
 | `CIMD`                                                                                         | optional | `on` (default when unset) or `off`                                            | nothing; `off` stops claiming Client ID Metadata Documents        |
@@ -150,7 +160,6 @@ already hold them (staging: the `[env.staging]` copies, `yak-*-staging` names).
 | DNS `AAAA @ → 100::`, `AAAA * → 100::`, proxied                            | Cloudflare DNS on the zone                                                               | the routes have nothing to attach to                             |
 | Custom domains fallback origin + `*/*` route                               | Cloudflare for SaaS on the zone                                                          | a customer's own hostname never reaches the Worker               |
 | Workers Builds                                                             | dashboard settings table above                                                           | nothing deploys on push                                          |
-| `yak-tail` worker                                                          | `deno task deploy:yak-tail` before the kernel's first deploy                             | the kernel deploy fails attaching `tail_consumers`               |
 | Containers                                                                 | Workers Paid with Containers enabled; the deploy builds the image                        | the builder's sandbox tools say so and do not run                |
 
 **Stripe dashboard**, sandbox first, then live:

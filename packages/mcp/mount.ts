@@ -31,7 +31,7 @@ import {
 import { type Authenticate, type Handler, json, refuse } from '@yaks/api'
 import { namedTool } from '@yaks/graph'
 import { runner } from '@yaks/tools'
-import { listing, type Options, server } from './server.ts'
+import { listing, logged, type Options, server } from './server.ts'
 
 /** How the HTTP handler is built: everything {@link Options} takes except the
  * actor, which is decided per HTTP request. */
@@ -90,7 +90,7 @@ export let mcp = (opts: MountOptions): Handler => {
   let runs = opts.runner ?? runner(opts.calls ?? opts.graph, {
     tools: listing(opts).map(namedTool),
     host: opts.graph,
-    report: (err: unknown) => console.error('tool failed —', err),
+    report: opts.report ?? logged,
   })
   return async (request) => {
     if (request.method != 'POST') {

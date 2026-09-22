@@ -8,10 +8,10 @@
 // object (stream.ts), which holds a person's open agent stream, and the
 // Builder (build.ts), which holds a space's build conversation. Every route
 // runs inside one catch: a throw becomes an exception entity in the META
-// store — our code fell over, whatever app the URL named (T-33234, `report`
-// below) — and a soft page, so no failure goes unseen (D-32318 §Errors,
-// V-32361). A door's deliberate no is not a failure and files nothing
-// (unseen.ts `refusal`).
+// store and in Sentry — our code fell over, whatever app the URL named
+// (T-33234, unseen.ts `fault`) — and a soft page, so no failure goes unseen
+// (D-32318 §Errors, V-32361). A door's deliberate no is not a failure and
+// files nothing (unseen.ts `refusal`).
 //
 // One thing beyond routing happens here, and it is here because nowhere else
 // still knows it: a request at a graph door whose `Origin` names another
@@ -75,6 +75,15 @@
 //                             segment, the front page answers what is left
 //                             (T-33040)
 import { WorkerEntrypoint } from 'cloudflare:workers'
+// @ts-types="./sentry.d.ts"
+import {
+  instrumentDurableObjectWithSentry,
+  withSentry,
+} from '@sentry/cloudflare'
+import { Builder as Built } from './build.ts'
+import { Store as Stored } from './graph.ts'
+import { options } from './sentry.ts'
+import { Wire as Wired } from './stream.ts'
 import * as apps from './apps.ts'
 import { sealed } from './cache.ts'
 import * as filePart from './files.ts'
@@ -108,15 +117,18 @@ import {
 } from './route.ts'
 import * as sell from './sell.ts'
 import { slid } from './session.ts'
-import { metaBreaks, noted, refusal } from './unseen.ts'
+import { fault, refusal } from './unseen.ts'
 
 // The Store, at every address the binding names — the directory at
 // `yak/platform` and every app's own beside it (T-33815). It carries the DO's
 // own name, so wrangler's migration list never moves — the name is the one the
 // fleet-shaped object it replaced wore, and that object is gone (T-33807).
-export { Store } from './graph.ts'
-export { Wire } from './stream.ts'
-export { Builder } from './build.ts'
+//
+// Each object is wrapped for Sentry (sentry.ts): what one throws past its own
+// catch, and what it reports itself, is a defect we hear about.
+export let Store = instrumentDurableObjectWithSentry(options, Stored)
+export let Wire = instrumentDurableObjectWithSentry(options, Wired)
+export let Builder = instrumentDurableObjectWithSentry(options, Built)
 
 // The builder's workbench (sandbox.ts, T-34264): Cloudflare's own Sandbox
 // Durable Object, whose container the deploy builds from
@@ -454,20 +466,9 @@ let unmounted = (req: Request) => {
 //
 // So the line carries the host, which is what names the space and the app the
 // request was on its way to, and no version: the code that broke is ours, and
-// the meta store has no version to name.
-let report = async (env: Env, what: string, e: unknown) => {
-  // The break, something our code hit unexpectedly — the self-healing
-  // trigger (kernel.rs; `error` is a known failure state, kept for what the
-  // platform reports deliberately). unseen.ts owns the entity's shape,
-  // because a page reporting its own break writes the same one. No space is
-  // told: the meta store is the platform's own, and this is nobody's news but
-  // ours.
-  await noted(metaBreaks(env), {
-    request: what,
-    message: e instanceof Error ? e.message : String(e),
-    stack: e instanceof Error ? e.stack ?? '' : '',
-  })
-}
+// the meta store has no version to name. No space is told: the meta store is
+// the platform's own, and this is nobody's news but ours. Sentry hears it too,
+// tagged with the space and app the route named (unseen.ts `fault`).
 
 let router = {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -550,10 +551,10 @@ let router = {
       // `aimed` it is the address the platform derived rather than the
       // customer's own domain.
       let where = `${hostOf(req)}${new URL(req.url).pathname}`
-      // A failure to report is telemetry, never a second failure to serve.
-      await report(env, `${req.method} ${where}`, e).catch((why) =>
-        console.error('yak: could not report', why, 'after', e)
-      )
+      await fault(env, `${req.method} ${where}`, e, {
+        space: r.space,
+        app: r.app,
+      })
       return oops(env)
     }
   },
@@ -579,10 +580,7 @@ let router = {
       await arrived(message, env)
     } catch (e) {
       if (!(e instanceof Refused)) {
-        await report(env, `EMAIL ${message.to.split('@').pop()}`, e)
-          .catch((why) =>
-            console.error('yak: could not report', why, 'after', e)
-          )
+        await fault(env, `EMAIL ${message.to.split('@').pop()}`, e)
         throw e
       }
       console.log(`yak: mail refused for ${message.to.split('@').pop()}`)
@@ -598,8 +596,11 @@ let router = {
 // router rather than written into a route, because every door has to slide
 // and the request is the same one at all of them — `fetch` below reads the
 // cookie the browser sent, whatever the router made of the request inside.
-export default {
+//
+// Wrapped for Sentry (sentry.ts), so an exception that escapes the router's
+// catch, or the letter door's, is a defect we hear about.
+export default withSentry(options, {
   ...router,
   fetch: async (req: Request, env: Env): Promise<Response> =>
     slid(req, env, await router.fetch(req, env)),
-}
+})

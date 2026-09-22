@@ -10,6 +10,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import {
   callDoc,
+  CallError,
   faulted,
   runner,
   toolDoc,
@@ -203,6 +204,32 @@ Deno.test('a throw is an error entity, a result, and a failed execution', async 
   assertEquals(body(fault), 'Error: no')
   assertEquals(answer.find((b) => b.result)!.result !== undefined, true)
   assertEquals((await g.read('.execution'))[0].execution, { state: 'failed' })
+})
+
+Deno.test('a defect is reported with its tool; a refusal is not', async () => {
+  let said: [unknown, string | undefined][] = []
+  let vocab = words()
+  let g = graph({ vocab, storage: ram(vocab) })
+  let throwing = (verb: string, e: Error): Tool => ({
+    ...echo,
+    verb,
+    run: () => {
+      throw e
+    },
+  })
+  let broke = new TypeError('x is undefined')
+  let r = runner(g, {
+    tools: [
+      throwing('broke', broke),
+      throwing('refuse', new CallError('member', 'not a member')),
+    ],
+    report: (err, _call, tool) => said.push([err, tool]),
+  })
+  await r.ensure()
+  await r.call(called('example_refuse', '{"value":"x"}'))
+  assertEquals(said, [])
+  await r.call(called('example_broke', '{"value":"x"}'))
+  assertEquals(said, [[broke, 'example_broke']])
 })
 
 Deno.test('a batch the graph refuses is the call failing, not a call left claimed', async () => {

@@ -105,10 +105,6 @@ export async function platformConfig(root: URL, platform: string) {
       }
     }
   }
-  // The tail Worker shares the Store's runtime config, not the Deno root's.
-  if (platform === 'workers') {
-    entries.push(new URL('workers/yak-tail/conform.ts', root).href)
-  }
   configs.sort((a, b) => a.url.href.localeCompare(b.url.href))
   return { config: mergeConfigs(configs), entries: entries.sort() }
 }

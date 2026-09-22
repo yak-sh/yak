@@ -124,9 +124,11 @@ export type Opts = {
   /** the graph the tools read and write, when that is not the graph the calls
    * are recorded in (a server that keeps its call records separately) */
   host?: Graph
-  /** where unexpected defects are reported; they are not thrown, because the
-   * transaction has already committed */
-  report?: (err: unknown, call: Bundle) => void
+  /** where unexpected defects are reported, with the call and the name of the
+   * tool it asked for; they are not thrown, because the transaction has
+   * already committed. A refusal (`CallError`) is never reported. A report
+   * that answers a promise is awaited before the call's answer is. */
+  report?: (err: unknown, call: Bundle, tool?: string) => unknown
   /** the clock `result.ms` is measured with (default: `performance.now`) */
   now?: () => number
   /** which entity this runner runs as: its claims record it in
@@ -383,8 +385,10 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     // What a thrown error becomes: the fault as its own entity, recording
     // which call it came from. An expected refusal gets `error{code}`;
     // anything else is a defect, passed to `report` as well as recorded.
-    let faulted = (error: unknown): Bundle[] => {
-      if (!(error instanceof CallError)) opts.report?.(error, call)
+    let faulted = async (error: unknown): Promise<Bundle[]> => {
+      if (!(error instanceof CallError)) {
+        await opts.report?.(error, call, tool.name)
+      }
       return [{
         entity: { eid: '$fault' },
         content: { body: String(error) },
@@ -431,7 +435,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       // This catches both the tool's own throw and a rejection of what it
       // returned: a transaction the graph refuses is this call's failure,
       // rather than a call left claimed with nothing recorded about it.
-      return await land(faulted(error), 'failed')
+      return await land(await faulted(error), 'failed')
     }
   }
 
@@ -471,7 +475,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       try {
         out.push(...await run(id, { redrive }))
       } catch (error) {
-        opts.report?.(error, call)
+        let to = String((call.call as Comp | undefined)?.to)
+        await opts.report?.(error, call, by.get(to)?.name)
       }
     }
     return out
