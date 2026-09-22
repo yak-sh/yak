@@ -179,10 +179,14 @@ Successful calls return the same answer in two forms:
   when they do not contain text.
 - `structuredContent: { result: Bundle[] }`: the result bundles themselves.
 
-There is no separate `{ bundles: … }` wrapper for `graph_show`. No tool output
-schema is advertised. Values that are not existing entities, such as
-`graph_schema`'s answer, are represented by a bundle with JSON text in
-`content.body` and the originating call ID in `output.source`.
+There is no separate `{ bundles: … }` wrapper for `graph_show`. Every tool
+advertises the same `outputSchema` for that answer (`answerSchema`): an object
+with `result`, an array of bundles, each carrying `entity.eid` and any component
+beside it. It is generic rather than derived from the vocabulary, because a
+typed bundle repeated per tool would be most of a `tools/list`. Values that are
+not existing entities, such as `graph_schema`'s answer, are represented by a
+bundle with JSON text in `content.body` and the originating call ID in
+`output.source`.
 
 A recorded failure carries an `error` or `exception` component and sets
 `isError`. Errors caught before a recorded answer is available can return only

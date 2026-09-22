@@ -27,9 +27,11 @@
  * format can write anything the vocabulary declares. Every tool here accepts
  * and returns bundles, and a reply carries the answer twice: the text its
  * bundles hold as `content`, and the bundles themselves as
- * `structuredContent`. No tool declares an output schema, because the
- * vocabulary already describes what a bundle is; the one schema published is
- * `graph_apply`'s input, derived from that same vocabulary
+ * `structuredContent`. Every tool declares the same output schema for those
+ * bundles ({@link answerSchema}) — the generic bundle answer, not a shape
+ * derived from the vocabulary, since a typed bundle per tool would send the
+ * whole vocabulary over and over in one `tools/list`. The schema that is
+ * derived from the vocabulary is `graph_apply`'s input
  * ({@link bundleSchema}).
  *
  * ## A call is an entity
@@ -80,6 +82,7 @@
 export { mcp, type MountOptions } from './mount.ts'
 export {
   annotated,
+  answerSchema,
   COMMAND,
   inputSchemaOf,
   listing,

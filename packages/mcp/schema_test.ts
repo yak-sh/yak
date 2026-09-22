@@ -1,13 +1,16 @@
 /// <reference lib="deno.ns" />
-// The write door's schema, as a client receives it. A tool's answer has no
-// schema any more — it is bundles, and what a bundle is the vocabulary
-// already says — so what is published is the one schema a client writes
-// against, and it is the vocabulary: every component, every writable column
-// and every type, before an agent guesses at one (T-34153).
+// The two schemas a client receives. The write door's input is the
+// vocabulary: every component, every writable column and every type, before an
+// agent guesses at one (T-34153). Every tool's answer is the one bundle shape
+// (server.ts `answerSchema`), listed on all of them, and a host holds us to it
+// — it compiles the schema off `tools/list` and refuses a reply that does not
+// match — so the answers are checked here against the schema as published.
 
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
 import { z } from 'zod'
-import { connect } from './harness.ts'
+import { CallError } from '@yaks/tools'
+import { connect, shopGraph } from './harness.ts'
 
 // graph_apply's published input schema — the write door as a client reads it.
 let writing = async () => {
@@ -29,13 +32,66 @@ let at = (o: unknown, ...keys: string[]): unknown =>
     o,
   )
 
-Deno.test('no tool publishes an output schema: an answer is bundles', async () => {
-  let client = await connect({ search: () => [] })
+Deno.test('every tool publishes the bundle answer, and its answers fit it', async () => {
+  let client = await connect({
+    graph: shopGraph(),
+    search: () => [{ entity: { eid: 'b1' }, doc: { title: 'Spring' } }],
+    // A tool that refuses, for the other half of the contract.
+    tools: [{
+      name: 'shelve',
+      description: 'Shelve a book',
+      input: { where: z.string() },
+      run: () => {
+        throw new CallError('shelf', 'no such shelf')
+      },
+    }],
+  })
   let { tools } = await client.listTools()
-  assertEquals(
-    tools.map((t: { outputSchema?: unknown }) => t.outputSchema),
-    tools.map(() => undefined),
+  let schemas = tools.map((t: { outputSchema?: unknown }) => t.outputSchema)
+  // One shape on every tool, whichever tier it came from.
+  assert(tools.length > 1)
+  assertEquals(schemas, schemas.map(() => schemas[0]))
+  // Compiled the way a host compiles it, off the listing and nothing else.
+  let fits = new AjvJsonSchemaValidator().getValidator(
+    schemas[0] as Parameters<AjvJsonSchemaValidator['getValidator']>[0],
   )
+  let held = (out: { structuredContent?: unknown }, what: string) =>
+    assertEquals(fits(out.structuredContent).errorMessage, undefined, what)
+
+  // The success path: a write, echoed back as the transaction it applied —
+  // its components, and the `$alias` the minted entity was asked for by.
+  let made = await client.callTool({
+    name: 'graph_apply',
+    arguments: {
+      change: [{
+        entity: { eid: '$b' },
+        doc: { title: 'Dune' },
+        book: { price: 9 },
+      }],
+    },
+  })
+  held(made, 'graph_apply')
+  let eid = String(
+    at(made.structuredContent, 'result', '0', 'entity', 'eid') ?? '',
+  )
+  for (
+    let [name, args] of [
+      ['graph_query', { q: 'book' }],
+      ['graph_show', { ids: [eid] }],
+      ['graph_schema', {}],
+      ['search', { words: 'spring' }],
+    ] as [string, Record<string, unknown>][]
+  ) held(await client.callTool({ name, arguments: args }), name)
+
+  // The refusal path, which a client does not check for us: a refusal is
+  // bundles too — the fault the runner recorded — and it is held to the same
+  // schema.
+  let no = await client.callTool({
+    name: 'shelve',
+    arguments: { where: 'nowhere' },
+  })
+  assertEquals(no.isError, true)
+  held(no, 'a refused call')
   await client.close()
 })
 

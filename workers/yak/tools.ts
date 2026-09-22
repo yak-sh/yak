@@ -4422,14 +4422,6 @@ let OURS: Row[] = [
         ),
       },
     },
-    output: {
-      type: 'object',
-      properties: {
-        page: str('the page returned: a slug, or `guide` for the overview'),
-        markdown: str('the page text as Markdown'),
-      },
-      required: ['page', 'markdown'],
-    },
     run: async (ctx, args) => {
       // A page asked for as `mail.md`, or `Mail`, is the mail page.
       let asked = typeof args.page == 'string'

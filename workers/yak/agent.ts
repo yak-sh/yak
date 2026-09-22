@@ -110,9 +110,10 @@ export let inputOf = (
  * rows it worked on live in a directory nobody's reach holds — so the bundle
  * is `content{body}` with `output{source}` beside it, which is exactly what
  * the vocabulary has for an answer somebody's words. The structured `data` a
- * tool used to answer beside its text is gone with the output schemas: every
- * one of them said a second time what the text already says, and a reply's
- * structure is its bundles now.
+ * tool used to answer beside its text is gone: every one of them said a second
+ * time what the text already says, and a reply's structure is its bundles now
+ * — which is the one output schema every tool declares (@yaks/mcp
+ * `answerSchema`).
  *
  * What is unseen in the space it worked in (unseen.ts) rides on the sentence —
  * every break not yet served, once, then the month's ceiling. It rode on the

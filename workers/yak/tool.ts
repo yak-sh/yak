@@ -103,10 +103,6 @@ export type Tool = {
   destructive?: boolean
   idempotent?: boolean
   openWorld?: boolean
-  // What its `data` is shaped like, when it answers a value beside its words.
-  // JSON Schema, like `input` — agent.ts turns both into the Zod the MCP SDK
-  // wants, so nothing here depends on a validation library.
-  output?: Shape
   // What it declares about signing in (`_meta.securitySchemes`), where that is
   // not what the door declares for everything it lists: a tool anybody may
   // call says `noauth` (preauth.ts NOAUTH, mcp.ts signin).

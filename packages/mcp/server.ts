@@ -148,11 +148,61 @@ export type Options = {
   extend?: (server: McpServer) => void | Promise<void>
 }
 
+/**
+ * What a tool on this server answers, as JSON Schema: the bundles it returned,
+ * under `result` — which is what {@link said} sends as `structuredContent`,
+ * and MCP wants an object there rather than an array.
+ *
+ * Every tool answers this one shape, so it is written once and listed on all
+ * of them, a plugin's tool included without declaring anything. It says what a
+ * bundle is and not what any component holds: a fully typed bundle is tens of
+ * kilobytes of vocabulary, and `tools/list` would carry a copy per tool before
+ * the agent has asked its first question. What a component holds is
+ * `graph_schema`'s answer, asked for when it is wanted.
+ */
+export let answerSchema: { type: 'object'; [key: string]: unknown } = {
+  type: 'object',
+  properties: {
+    result: {
+      type: 'array',
+      description: 'one bundle per entity this tool answered about',
+      items: {
+        type: 'object',
+        description:
+          'an entity and the components it carries: `entity` says which ' +
+          'entity, and every other key is a component of it',
+        properties: {
+          entity: {
+            type: 'object',
+            description: 'which entity this bundle is about',
+            properties: {
+              eid: { type: 'string', description: "the entity's id" },
+            },
+            required: ['eid'],
+          },
+        },
+        required: ['entity'],
+        // The `$` sugars a bundle may wear beside its components — `$alias`,
+        // the name a minted entity was asked for by, and the rest of
+        // @yaks/graph's — are not components and are not objects, so they are
+        // matched first and left open.
+        patternProperties: { '^\\$': {} },
+        additionalProperties: {
+          type: ['object', 'null'],
+          description:
+            "one component's columns, or null where the transaction removed it",
+        },
+      },
+    },
+  },
+  required: ['result'],
+}
+
 // The reply, built twice over from the bundles the tool returned: the text
 // they carry (or the bundles themselves, as JSON) for a client that reads
 // text, and the bundles as `structuredContent` for one that reads structure.
 // MCP requires structured content to be an object, so the array is nested
-// under `result`.
+// under `result` — the shape {@link answerSchema} publishes.
 //
 // Bundles carrying an `error` or an `exception` component are the tool's
 // refusal, and come back as an error rather than a success that reads like an
@@ -403,22 +453,21 @@ export let server = (opts: Options): McpServer => {
     }
     mcp.registerTool(t.name, config, call)
   }
-  // Send JSON Schema declarations to the client unchanged. The SDK's own
-  // argument parsing is passthrough for these tools; the runner validates the
-  // arguments before the handler runs.
-  if (tools.some((t) => t.inputSchema)) {
-    mcp.server.setRequestHandler(ListToolsRequestSchema, () => ({
-      tools: tools.map((t) => ({
-        name: t.name,
-        ...(t.title ? { title: t.title } : {}),
-        description: t.description,
-        inputSchema: inputSchemaOf(t),
-        annotations: annotated(t),
-        ...(metaOf(t, opts.security)
-          ? { _meta: metaOf(t, opts.security) }
-          : {}),
-      })),
-    }))
-  }
+  // The listing is this server's own, not the SDK's: a tool that declared its
+  // input as JSON Schema is sent that declaration unchanged (the SDK's
+  // argument parsing is passthrough for those; the runner validates the
+  // arguments before the handler runs), and every tool is listed with the one
+  // answer schema, since every tool answers bundles.
+  mcp.server.setRequestHandler(ListToolsRequestSchema, () => ({
+    tools: tools.map((t) => ({
+      name: t.name,
+      ...(t.title ? { title: t.title } : {}),
+      description: t.description,
+      inputSchema: inputSchemaOf(t),
+      outputSchema: answerSchema,
+      annotations: annotated(t),
+      ...(metaOf(t, opts.security) ? { _meta: metaOf(t, opts.security) } : {}),
+    })),
+  }))
   return mcp
 }

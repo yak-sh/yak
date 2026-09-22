@@ -6,6 +6,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
+import { answerSchema } from '@yaks/mcp'
 import { slow } from '../../src/testing.ts'
 
 import {
@@ -214,21 +215,12 @@ slow(
         openWorldHint: false,
       })
       assertEquals(hints('mail_send')?.openWorldHint, true)
-      // And none of them promises the shape of its answer (T-37596): an answer
-      // is bundles, in the vocabulary the caller already reads, so there is no
-      // second schema to declare or to drift from what a tool really says.
-      for (
-        let name of [
-          'graph_apply',
-          'graph_query',
-          'graph_show',
-          'search',
-          'mail_list',
-          'mail_send',
-        ]
-      ) {
-        let one = tools.find((t: { name: string }) => t.name == name)
-        assertEquals(one.outputSchema, undefined, `${name} promises no shape`)
+      // And every one of them promises the same answer (T-37852): bundles,
+      // under `result`, which is what each tool returns as structured content.
+      // The shape is the generic one (@yaks/mcp `answerSchema`) and not the
+      // vocabulary typed out per tool, which would be megabytes of listing.
+      for (let t of tools as { name: string; outputSchema?: unknown }[]) {
+        assertEquals(t.outputSchema, answerSchema, `${t.name}'s answer`)
       }
 
       // What a model reads before anything else: the address, the four
