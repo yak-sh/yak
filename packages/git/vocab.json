@@ -215,37 +215,81 @@
       },
       "description": "a commit that landed, attached to the work it is about; the commit sha is the entity id, so recording the same commit twice gives one entity"
     },
-    "anchor": {
+    "file": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "the path from the repository root, as Git spells it"
+        },
+        "repository": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the repository entity the path is read in"
+        }
+      },
+      "description": "a file in a repository, as an entity, so anything in the graph can refer to one"
+    },
+    "cites": {
+      "component": true,
+      "type": "object",
+      "edge": true,
+      "properties": {},
+      "description": "edge tag: this entity refers to a place in that one, and can fall out of date when that place changes"
+    },
+    "revision": {
       "component": true,
       "type": "object",
       "properties": {
-        "paths": {
+        "commit": {
           "type": "string",
-          "description": "the paths it refers to"
-        },
-        "sha": {
+          "ref": "entity",
+          "death": "detach",
+          "description": "the commit entity, whose id is the commit sha"
+        }
+      },
+      "description": "the commit a citation was last checked against; the verify step moves it to the commit checked out then"
+    },
+    "symbol": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "name": {
           "type": "string",
-          "description": "the commit sha it was true at"
-        },
-        "symbol": {
-          "type": "string",
-          "description": "the symbol it names, when it names one"
-        },
-        "hunk": {
-          "type": "string",
-          "store": "blob",
-          "description": "the text it quoted"
-        },
+          "description": "the name of a function, type or other definition in the cited file"
+        }
+      },
+      "description": "the definition a citation names, which narrows staleness to the commits that changed that definition rather than the whole file"
+    },
+    "lines": {
+      "component": true,
+      "type": "object",
+      "properties": {
         "start": {
           "type": "number",
-          "description": "first line"
+          "description": "first line, counting from 1"
         },
         "end": {
           "type": "number",
-          "description": "last line"
+          "description": "last line, inclusive"
         }
       },
-      "description": "what a document promised about source code: the paths and commit sha it was written against, so whether it is still current is re-read from Git rather than stored"
+      "description": "the line range a citation names, when no definition fits"
+    },
+    "quote": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "store": "blob",
+          "description": "the quoted text, stored by content address"
+        }
+      },
+      "description": "what the citing side quoted, so a reader sees what it saw without opening the file"
     },
     "land": {
       "tool": true,

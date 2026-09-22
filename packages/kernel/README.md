@@ -33,9 +33,13 @@ comment-creation tool.
   maintained by @yaks/archetype's plugin, and the component is declared
   `wire: false` (excluded from the ordinary component input schema).
 - the marks recording what happened to something and who did it — `created`,
-  `updated`, `opened`, `archived` — each with `at`, `by` and `via` columns that
-  @yaks/graph stamps rather than a caller. `by` is the entity that wrote it and
-  `via` is what it was written through (a session, a client).
+  `updated`, `opened`, `archived`, `verified` — each with `at`, `by` and `via`
+  columns that @yaks/graph stamps rather than a caller. `by` is the entity that
+  wrote it and `via` is what it was written through (a session, a client).
+  `verified` says somebody checked the entity against what it claims and found
+  it holds; it is generic, so anything checkable carries it — a citation
+  ([@yaks/git](../git)) is one thing that does — and only the act of checking
+  writes it, never an edit to the entity.
 - the marks recording what was decided about something — `proposed`, `decided`
   (with a verdict of `approved` or `declined`), `quarantined` (an annotation for
   applications to exclude a readable record from guidance), and `redaction`,

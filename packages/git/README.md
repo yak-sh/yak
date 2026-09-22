@@ -101,14 +101,39 @@ Components for source code, as the rest of a graph refers to it:
 repository{common, origin}             a local object database, and its remote
 worktree{repository, path, branch,…}   a checkout: where it is, what it is on
 commit{target, repo, message}          a landed commit, attached to its work
-anchor{paths, sha, symbol, hunk, …}    a document's reference to source
+file{path, repository}                 a file in a repository, as an entity
 ```
 
 A `commit` stores the whole commit message, not just its first line, and its
 entity id is the commit sha — so recording the same commit twice produces one
-entity, and it carries no `sha` column that could disagree with its own id. An
-`anchor` stores the source reference without derived status. Consumers compare
-the stored `sha` with Git to determine whether the reference is current.
+entity, and it carries no `sha` column that could disagree with its own id.
+
+## Citations
+
+A document that quotes code goes out of date when the code moves, and nothing
+says so. A **citation** is that reference written down: an edge `A cites B`,
+where `B` is a `file` entity for a place in code and any entity at all
+otherwise.
+
+```
+cites                      @yaks/edge relation: A refers to a place in B
+revision{commit}           the commit it was last checked against
+symbol{name}               the definition it names, when it names one
+lines{start, end}          the line range it names, when no definition fits
+quote{text}                what the citing side quoted
+verified{at, by, via}      @yaks/kernel's mark: somebody checked and it holds
+```
+
+Each fact is a component of its own because each is independent: a citation may
+name a definition, a line range or neither, and the commit moves under all of
+them. Writing the same citation twice writes one entity, because an edge's id is
+derived from `from | cites | to` ([@yaks/edge](../edge)).
+
+Whether a citation is still current is never stored: it is derived from Git, by
+asking which commits after `revision.commit` touched the place the citation
+names. `verified` is the one thing that is stored, and only the act of checking
+writes it — editing either end of a citation leaves the mark where it was, so a
+typo fixed in a document cannot pass for a citation somebody checked.
 
 Load the components beside the two packages whose mechanisms they use:
 

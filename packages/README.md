@@ -161,10 +161,12 @@ grouped approximately by function, **not** by dependency order.
   plus the builders that turn a `path → sha256` manifest into trees and a
   commit. It also models the working copy: the `repository` and `worktree` a
   checkout consists of, the landed `commit` attached to the work it is about,
-  and the `anchor` that ties a document to source. Its `land` tool operates on
-  the checkout at `ctx.cwd` (the CLI working directory), fast-forwarding its
-  branch into the base in the primary worktree. If the base moved, it rebases
-  and returns without landing; rerun tests and land again.
+  the `file` a path in a repository is, and the `cites` edge that ties a
+  document to a place in one — with `revision`, `symbol`, `lines` and `quote`
+  beside it, and staleness re-derived from Git. Its `land` tool operates on the
+  checkout at `ctx.cwd` (the CLI working directory), fast-forwarding its branch
+  into the base in the primary worktree. If the base moved, it rebases and
+  returns without landing; rerun tests and land again.
 - **[@yaks/effects](./effects)** — Run registered handlers after committed
   component changes or newly matching query patterns, isolating handler failures
   from the original transaction. An optional durable attempt log supports

@@ -311,6 +311,30 @@
       },
       "description": "who last changed it, when, and through what"
     },
+    "verified": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      },
+      "description": "somebody checked this entity against what it claims and found it holds; only the act of checking writes it, never an edit to the entity"
+    },
     "wants": {
       "component": true,
       "type": "object",

@@ -184,8 +184,8 @@ missing archives, and invalid entity ids return 404.
 
 Load [@yaks/doc](../doc/README.md) alongside this package for
 `doc{title, body}`; it is not redeclared here. [@yaks/blob](../blob/README.md)
-supplies byte storage. Source-code references with paths and a Git commit id use
-`anchor` from [@yaks/git](../git/README.md).
+supplies byte storage. A reference to a place in source code is a `cites` edge
+from [@yaks/git](../git/README.md).
 
 ## Compatibility
 
