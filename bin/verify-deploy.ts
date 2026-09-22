@@ -28,13 +28,15 @@
 
 export let SITE = 'https://yaks.app'
 
-// The doors a visitor actually walks through: the four nav links, the CTA,
-// help, and the guide the connector serves as its one resource. Spelled
-// without `.html` — the assets binding answers a spelled-out page with a 307.
+// The pages a visitor reaches from the site itself: the nav links, the CTA,
+// help, the documentation and its technical page, and the guide the connector
+// serves as its one resource. Written without `.html`: the assets binding
+// answers a page named with its extension with a 307.
 export let DOORS = [
   '/',
   '/pricing',
-  '/technical',
+  '/docs',
+  '/docs/technical',
   '/help',
   '/login',
   '/connect',
