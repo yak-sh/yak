@@ -58,10 +58,8 @@ Deno.test('the notes are refused over the cap, with the number', () => {
   assert(no.includes(String(CAP)), no)
   // The same file named the other way is the same file.
   assertEquals(tooLong('/NOTES.md', CAP + 1), no)
-  // And the name it was written under before T-34632 keeps its ceiling, since
-  // an app that still carries one is still read (standing.ts names).
-  assert(tooLong('AGENTS.md', CAP + 1).includes('AGENTS.md'), 'old name')
-  assertEquals(tooLong('AGENTS.md', CAP), '')
+  // And the name the file had before T-34632 is only a file now.
+  assertEquals(tooLong('AGENTS.md', CAP + 1), '')
 })
 
 Deno.test('the roster names every app and what it holds', () => {

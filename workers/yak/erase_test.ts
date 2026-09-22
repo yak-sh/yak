@@ -488,8 +488,21 @@ slow(
     await make('live')
     await make('fresh', ago(29))
     await make('old', ago(31))
+    // Notes under the name they had before T-34632 (T-37888).
+    await r2Blobs(env.BLOBS).put(
+      'ada/live/AGENTS.md',
+      new TextEncoder().encode('grams'),
+    )
 
     assertEquals(await collected(env), 1)
+    // The notes are under the one name read now, and the old one is gone.
+    assertEquals(
+      new TextDecoder().decode(
+        (await r2Blobs(env.BLOBS).read('ada/live/NOTES.md'))!,
+      ),
+      'grams',
+    )
+    assertEquals(await r2Blobs(env.BLOBS).has('ada/live/AGENTS.md'), false)
     assertEquals((await dir.apps(space)).map((a) => a.slug), ['live', 'fresh'])
     // The bytes went with the row, and only that app's.
     let keys = await r2Blobs(env.BLOBS).list('ada/')

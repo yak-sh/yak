@@ -369,11 +369,10 @@ let MANIFEST = new Set([
   '/vocab.yml',
   '/tools.json',
   '/tools.yml',
-  // Both spellings of the notes file (standing.ts names). Written out rather
-  // than imported: standing.ts reaches this module through declared.ts, and a
-  // set built at module top time cannot wait on a cycle.
+  // The notes file (standing.ts `NOTES`). Written out rather than imported:
+  // standing.ts reaches this module through declared.ts, and a set built at
+  // module top time cannot wait on a cycle.
   '/NOTES.md',
-  '/AGENTS.md',
 ])
 
 let inside = (path: string) => MANIFEST.has(path) || seedy(path.slice(1))

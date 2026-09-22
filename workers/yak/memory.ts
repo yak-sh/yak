@@ -199,8 +199,8 @@ let MEMORY: Row[] = [
   // 2026-09-06: "any user instruction about *how* they like their apps built
   // (etc) could be saved. And we could incorporate our 'grapevine' problem
   // learnings by prompting the agent to save what the user said verbatim
-  // along with only the required context to understand it." An AGENTS.md is
-  // the rules for one app, written by an agent; these are the person's own
+  // along with only the required context to understand it." An app's NOTES.md
+  // is the rules for one app, written by an agent; these are the person's own
   // sentences, space-wide, and every agent who can reach the space is handed
   // the newest few at connect (standing.ts).
   {

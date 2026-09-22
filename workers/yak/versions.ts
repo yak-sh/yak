@@ -559,3 +559,72 @@ export let moved = async (blobs: Blobs, prefix: string, dry = false) => {
   }
   return carried
 }
+
+/**
+ * One path of an app's files renamed where it is stored: the bytes, the path's
+ * history, and every deploy manifest that names it, so a rollback puts the file
+ * back under the new name too (T-37888). It rides the daily sweep (erase.ts
+ * `collected`) the way `moved` does, and for the same reasons it is idempotent
+ * and resumable: each of the three is its own step, and a run over an app with
+ * nothing under `from` costs two reads and the manifest list.
+ *
+ * Where both paths hold bytes the newer name wins, which is what a reader that
+ * tried `to` first already served, and the old bytes stay in `to`'s history so
+ * nothing is lost. Answers whether anything moved.
+ */
+export let renamed = async (
+  blobs: Blobs,
+  dir: Directory,
+  { prefix, app }: Pinner,
+  from: string,
+  to: string,
+) => {
+  let bytes = await blobs.read(prefix + from)
+  let old = await history(blobs, prefix, from)
+  let moves = !!bytes || old.length > 0
+  if (bytes && await blobs.has(prefix + to)) {
+    old = [...await pinnedAs(blobs, prefix, from, bytes), ...old]
+  } else if (bytes) await blobs.put(prefix + to, bytes)
+  if (old.length) {
+    let all = [
+      ...old.map((w) => ({ ...w, path: to })),
+      ...await history(blobs, prefix, to),
+    ].sort((a, b) => b.at.localeCompare(a.at))
+    await blobs.put(
+      logKey(prefix, to),
+      new TextEncoder().encode(JSON.stringify(all)),
+    )
+    await blobs.delete(logKey(prefix, from))
+  }
+  if (bytes) await blobs.delete(prefix + from)
+  let entities = (await versions(dir, app))
+    .filter((v) => from in v.files)
+    .map((v) => {
+      let { [from]: sha, ...files } = v.files
+      return {
+        entity: { eid: v.eid },
+        deploy: { files: JSON.stringify({ [to]: sha, ...files }) },
+      }
+    })
+  if (entities.length) await dir.apply({ entities })
+  return moves || entities.length > 0
+}
+
+// The bytes about to be dropped from `from`, pinned and said as an entry, so
+// the newer file winning never loses the older one.
+let pinnedAs = async (
+  blobs: Blobs,
+  prefix: string,
+  path: string,
+  bytes: Uint8Array<ArrayBuffer>,
+): Promise<Wrote[]> => {
+  let sha = await sha256(bytes)
+  await pins(blobs, prefix).put(sha, bytes)
+  return [{
+    path,
+    sha,
+    size: bytes.byteLength,
+    at: new Date().toISOString(),
+    by: '',
+  }]
+}

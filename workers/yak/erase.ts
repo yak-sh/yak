@@ -83,7 +83,8 @@ import { apex, type Host as HostEnv } from './host.ts'
 import { destroyed } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
-import { moved, own, type Pinner, pruned } from './versions.ts'
+import { NOTES } from './standing.ts'
+import { moved, own, type Pinner, pruned, renamed } from './versions.ts'
 import { refuse } from './tool.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
@@ -623,9 +624,17 @@ export let collected = async (env: Env, now = new Date()) => {
   // a key space the sweep does not read.
   let carried = 0
   for (let { prefix } of standing) carried += await moved(blobs, prefix)
+  // And the notes file under the one name it has now (standing.ts `NOTES`,
+  // T-37888): what an app wrote as `AGENTS.md` before T-34632, carried across
+  // with its history and every manifest that names it.
+  let notes = 0
+  for (let one of standing) {
+    if (await renamed(blobs, dir, one, 'AGENTS.md', NOTES)) notes++
+  }
   let unpinned = await pruned(dir, blobs, standing, now.getTime())
   if (gone) console.log(`yak-trash: ${gone} erased at ${now.toISOString()}`)
   if (carried) console.log(`yak-trash: ${carried} pins carried to sha/`)
+  if (notes) console.log(`yak-trash: ${notes} AGENTS.md renamed to ${NOTES}`)
   if (unpinned) console.log(`yak-trash: ${unpinned} pinned blobs let go`)
   return gone
 }

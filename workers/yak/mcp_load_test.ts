@@ -449,13 +449,6 @@ slow('an app says what it holds, and keeps notes about itself', async () => {
       (await k.at(`${space}.yaks.app`, '/recipes/%4EOTES.md')).status,
       404,
     )
-    // And the name it was written under before T-34632 is inside too, since
-    // an app that still carries one is still read.
-    assertEquals(
-      (await k.at(`${space}.yaks.app`, '/recipes/AGENTS.md')).status,
-      404,
-    )
-
     // Too long is refused at the write, with the number, rather than
     // truncated at the read: half of what somebody wrote is worse than a
     // pointer to all of it.
@@ -472,17 +465,6 @@ slow('an app says what it holds, and keeps notes about itself', async () => {
       )).message,
       '4097 bytes — 4096 at most',
     )
-
-    // An app written before the rename keeps its notes: the old name is read
-    // where there is no new one, and nothing migrates (standing.ts names).
-    await agent.tool('app_new', { slug: 'garden', title: 'Garden' })
-    await agent.tool('app_files', {
-      space,
-      app: 'garden',
-      files: [{ path: 'AGENTS.md', content: 'Water on Tuesdays.' }],
-    })
-    await agent.tool('app_deploy', { space, app: 'garden' })
-    assertStringIncludes(await agent.tool('about'), 'Water on Tuesdays.')
 
     // A member of another space is told nothing about any of it: reach is
     // membership, the same question the tool list asks (declared.ts).

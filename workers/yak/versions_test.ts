@@ -28,6 +28,7 @@ import {
   pins,
   pruned,
   record,
+  renamed,
   replaced,
   restore,
   restored,
@@ -109,7 +110,12 @@ let read = async (blobs: Blobs, path: string) =>
 // directory — write a bundle, read the app's versions back.
 type Entity = {
   entity?: { eid: string }
-  deploy?: { app: string; version: number; files: string; worker: string }
+  deploy?: {
+    app?: string
+    version?: number
+    files: string
+    worker?: string
+  }
   tombstone?: unknown
 }
 
@@ -125,14 +131,16 @@ let directory = () => {
       ),
     apply: (m: { entities: Entity[] }) => {
       for (let e of m.entities) {
-        if (e.deploy) {
+        let had = rows.find((r) => r.eid == e.entity?.eid)
+        if (e.deploy && had) had.files = JSON.parse(e.deploy.files)
+        else if (e.deploy) {
           rows.push({
-            app: e.deploy.app,
+            app: e.deploy.app!,
             eid: `d${e.deploy.app}-${e.deploy.version}`,
-            version: e.deploy.version,
+            version: e.deploy.version!,
             at: '',
             files: JSON.parse(e.deploy.files),
-            worker: e.deploy.worker,
+            worker: e.deploy.worker!,
           })
         }
         if (e.tombstone) rows = rows.filter((r) => r.eid != e.entity!.eid)
@@ -584,4 +592,35 @@ Deno.test('the migration carries the old key across, once', async () => {
   await blobs.put(pinned(PREFIX, liar), bytes('not what the key says'))
   assertEquals(await moved(blobs, PREFIX), 1)
   assertEquals(await blobs.list(`${PREFIX}versions/`), [pinned(PREFIX, liar)])
+})
+
+// T-37888: the notes were `AGENTS.md` before T-34632. The sweep carries the
+// file, what it held before, and every release that names it to the one name.
+Deno.test('a renamed path carries its bytes, history and releases', async () => {
+  let { blobs } = memory()
+  let { dir, rows } = directory()
+  await blobs.put(PREFIX + 'AGENTS.md', bytes('grams'))
+  await record(dir, WHO, APP, 1, await snapshot(blobs, PREFIX), '')
+  await replaced(blobs, PREFIX, 'AGENTS.md', 'p1')
+  await blobs.put(PREFIX + 'AGENTS.md', bytes('grams, always'))
+  let one = ONE[0]
+
+  assertEquals(await renamed(blobs, dir, one, 'AGENTS.md', 'NOTES.md'), true)
+  assertEquals(await read(blobs, 'NOTES.md'), 'grams, always')
+  assertEquals(await blobs.has(PREFIX + 'AGENTS.md'), false)
+  assertEquals((await history(blobs, PREFIX, 'AGENTS.md')).length, 0)
+  let was = await history(blobs, PREFIX, 'NOTES.md')
+  assertEquals(was.map((w) => w.path), ['NOTES.md'])
+  assertEquals(Object.keys(rows()[0].files), ['NOTES.md'])
+  // Idempotent: the next day's sweep finds nothing to carry.
+  assertEquals(await renamed(blobs, dir, one, 'AGENTS.md', 'NOTES.md'), false)
+
+  // Both names at once: the newer one wins, and the older bytes are kept in
+  // its history rather than lost.
+  await blobs.put(PREFIX + 'AGENTS.md', bytes('cups'))
+  assertEquals(await renamed(blobs, dir, one, 'AGENTS.md', 'NOTES.md'), true)
+  assertEquals(await read(blobs, 'NOTES.md'), 'grams, always')
+  let kept = (await history(blobs, PREFIX, 'NOTES.md'))[0]
+  assertEquals(kept.sha, await sha256(bytes('cups')))
+  assert(await pins(blobs, PREFIX).has(kept.sha), 'pinned')
 })

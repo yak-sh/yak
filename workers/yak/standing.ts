@@ -22,7 +22,8 @@
 // the web. An install copies it with the rest of the app's files (tools.ts
 // `copied`), so a published app carries its notes to everyone who takes one.
 //
-// The file was `AGENTS.md` until T-34632 and is still read under that name.
+// The file was `AGENTS.md` until T-34632, and the daily sweep renamed every
+// stored one (erase.ts `collected`, T-37888), so there is one name to read.
 // ChatGPT runs a classifier over a connector's tool text and its `initialize`
 // instructions: a passage that named that file and said how a model was to
 // treat what it found there reads as prompt injection, and the person got a
@@ -48,12 +49,6 @@ import { meant } from './vocab.ts'
 /** The file, at the app's root. */
 export let NOTES = 'NOTES.md'
 
-/** What it was called before T-34632, still read where an app has one. */
-export let AGENTS = 'AGENTS.md'
-
-/** Both spellings, newest first — the order `notesOf` reads them in. */
-export let NAMES = [NOTES, AGENTS]
-
 /**
  * The most an app's notes may be. Every agent that can reach the app is handed
  * them, so they are the notes themselves and not the reasoning behind them;
@@ -73,7 +68,7 @@ let root = (path: string) => path.replace(/^\/+/, '')
  * ```
  */
 export let tooLong = (path: string, n: number): string =>
-  NAMES.includes(root(path)) && n > CAP
+  root(path) == NOTES && n > CAP
     ? `${root(path)} is ${n} bytes — ${CAP} at most. Every agent that can ` +
       "reach the app is handed it, so keep it to the app's own notes, not " +
       'the reasoning behind them.'
@@ -91,26 +86,18 @@ export type Entry = {
   commands: string[]
 }
 
-/**
- * One app's notes, or '' where it has none — `NOTES.md`, falling back to the
- * `AGENTS.md` an app written before T-34632 still carries. Nothing migrates:
- * the old file goes on working where it sits, and an app that has both is the
- * newer name.
- */
+/** One app's notes, or '' where it has none. */
 export let notesOf = async (
   env: Env,
   space: Space,
   app: App,
 ): Promise<string> => {
-  let blobs = r2Blobs(env.BLOBS)
-  // Both names at once, not one and then the other: this runs per app on
-  // every call at the door, and most apps have notes under neither name — so
-  // asking in turn would put a second round trip on the common case. `read`
-  // rather than has-then-get for the same reason.
-  let both = await Promise.all(
-    NAMES.map((name) => blobs.read(`${space.slug}/${app.slug}/${name}`)),
+  // `read` rather than has-then-get: this runs per app on every call at the
+  // door, and most apps have no notes, so a second round trip would land on
+  // the common case.
+  let bytes = await r2Blobs(env.BLOBS).read(
+    `${space.slug}/${app.slug}/${NOTES}`,
   )
-  let bytes = both.find(Boolean)
   if (!bytes) return ''
   // The write refuses anything over CAP, so this slice only ever catches a
   // file written before the ceiling existed.
