@@ -14,6 +14,7 @@ import type { R2 } from '../../src/r2.ts'
 import type { Binding } from './post.ts'
 import type { Dispatch, Fetcher, Namespace } from './door.ts'
 import type { Meta } from './meta.ts'
+import type { Limiter } from './rate.ts'
 import type { Sandboxes } from './sandbox.ts'
 
 // The door's own word, said again here: every part of this kernel names its
@@ -123,7 +124,17 @@ export type Env = {
   // How often a visitor may write to an `open` app (apps.ts `visiting`,
   // wrangler.toml `ratelimits`). Absent only in the in-memory harness; under
   // `wrangler dev` it counts like the deployed one.
-  VISITS?: { limit(o: { key: string }): Promise<{ success: boolean }> }
+  VISITS?: Limiter
+  // The per-source ceilings on the doors a stranger can knock on (rate.ts,
+  // wrangler.toml `[[ratelimits]]`): sign-in code requests, OAuth client
+  // registration, anonymous connector calls, anonymous feedback, and anonymous
+  // requests for an app's data (its `/api/` doors). Absent in the in-process
+  // harness, where nothing is limited.
+  SIGNIN_RATE?: Limiter
+  REGISTER_RATE?: Limiter
+  TOOL_RATE?: Limiter
+  FEEDBACK_RATE?: Limiter
+  API_RATE?: Limiter
   // An app's own code (dispatch.ts): the Workers for Platforms namespace its
   // worker.js is uploaded into, and the token the upload speaks to the
   // Workers API with — the account tag above is the same one. The namespace

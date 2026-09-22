@@ -284,9 +284,8 @@ export let refusedVisit = (
       ? null
       : `This space has reached its ${count(limit.requests)} monthly visits. ` +
         `Its apps will be available again on the 1st (UTC). ` +
-        `The owner can still manage the space. Plan settings: ${
-          planSettings(space.slug, env)
-        }`,
+        `Its own people, signed in, can still use them and manage the ` +
+        `space. Plan settings: ${planSettings(space.slug, env)}`,
     {
       status: 429,
       headers: {
@@ -375,7 +374,8 @@ export let standing = (
   }
   let refused =
     `App serving pauses at ${count(free.requests)} monthly visits ` +
-    `(HTTP 429, checked hourly; resets on the 1st UTC); ${
+    `(HTTP 429 to everyone but the space's own people signed in, checked ` +
+    `hourly; resets on the 1st UTC); ${
       free.apps == null ? '' : `an app past ${free.apps}, `
     }a build past ${count(builds(space.tier))}, data past ${
       size(free.bytes)

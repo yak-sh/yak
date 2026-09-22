@@ -152,10 +152,11 @@ person owns up to five free spaces, and their emails, builds, builder tokens and
 sandbox time are shared by all of them; a space somebody invited you into, or
 one on the Plus plan, does not count toward yours. Plus allows unlimited apps,
 10 GB of app data, 50 GB of photos and files, and 2,500 emails a month. Visits
-are reported against 50,000 a month on Free and 1,000,000 on Plus, but are not
-refused. Operations that exceed a limit are refused, but existing apps and data
-are not deleted. Your assistant receives a notice when usage reaches 80% of a
-limit.
+are allowed 50,000 a month on Free and 1,000,000 on Plus; past that an app
+answers visitors 429 until the 1st, while the space's own people, signed in, are
+still served. Operations that exceed a limit are refused, but existing apps and
+data are not deleted. Your assistant receives a notice when usage reaches 80% of
+a limit.
 
 The email limit counts incoming and outgoing messages, and only sending stops
 when the limit is reached. Incoming messages are still delivered. The count
@@ -180,9 +181,7 @@ plan, and one person has one container awake at a time on Free, two on the Plus
 plan. The container is destroyed when the build ends, and everything in it with
 it.
 
-Visits are counted but not refused. Apps remain available after the plan's
-monthly visit amount is exceeded. [The pricing page](/pricing) has both plans in
-full.
+[The pricing page](/pricing) has both plans in full.
 
 These limits apply to both plans:
 
@@ -192,6 +191,11 @@ These limits apply to both plans:
   per request. Waiting for an external API does not count toward CPU time.
 - A sign-in code lasts **ten minutes**, allows **five guesses**, and yaks.app
   sends at most **three an hour** to one address.
+- Without signing in, one place (one IP address) may ask for **5 sign-in
+  codes**, register **10 connector clients**, make **60 connector tool calls**
+  and send **1 piece of feedback** a minute, and make **300 requests a minute**
+  for an app's data. Past that the answer is HTTP 429 with `Retry-After: 60`.
+  Signed-in people are not counted.
 
 ## Current limitations
 

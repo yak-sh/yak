@@ -77,6 +77,13 @@ let leased = async (body: unknown) => {
 
 export type Kernel = Awaited<ReturnType<typeof kernel>>
 
+// Every probe request arrives from a place of its own, since the kernel holds
+// strangers to a rate per source (rate.ts) and a suite's dozen sign-ins are
+// not one loop. A test about a rate names its source in the headers, which
+// win, and an anonymous `client` keeps one for its life.
+let byte = () => crypto.getRandomValues(new Uint8Array(1))[0]
+let somewhere = () => ({ 'cf-connecting-ip': `198.18.${byte()}.${byte()}` })
+
 export let kernel = async (vars: Record<string, string> = {}) => {
   if (Deno.env.get('YAK_PROBE_HOST')) {
     let lease = await leased({ vars })
@@ -84,6 +91,7 @@ export let kernel = async (vars: Record<string, string> = {}) => {
       fetch(`${lease.base}${path}`, {
         ...init,
         headers: {
+          ...somewhere(),
           ...(init.headers as Record<string, string>),
           'x-yak-host': host,
         },
@@ -152,6 +160,7 @@ export let kernel = async (vars: Record<string, string> = {}) => {
     fetch(`${base}${path}`, {
       ...init,
       headers: {
+        ...somewhere(),
         ...(init.headers as Record<string, string>),
         'x-yak-host': host,
       },
@@ -399,7 +408,8 @@ export let client = (
   app: string,
   cookie?: string,
 ) => {
-  let headers: Record<string, string> = cookie ? { cookie } : {}
+  // One client is one visitor: a stranger keeps one address for its life.
+  let headers: Record<string, string> = cookie ? { cookie } : somewhere()
   let get = async (q: string) =>
     (await (await k.at(host, `/${app}/api/query?${q}`, { headers }))
       .json()) as Row[]

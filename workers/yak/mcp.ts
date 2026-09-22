@@ -105,6 +105,8 @@ import { type Clock, clock, timed } from './timing.ts'
 import { reporter } from './sentry.ts'
 import { isTestAddress } from '../../src/bots.ts'
 import { refuse } from './tool.ts'
+import { url as hostUrl } from './host.ts'
+import { source, within } from './rate.ts'
 
 type Rpc = {
   jsonrpc: '2.0'
@@ -477,6 +479,7 @@ let stranger = async (
     // mailbox rather than as a person whose eid happens to be empty
     // (directory.ts `member`, agent.ts `platform`).
     person: '',
+    source: source(req),
   }
   // The app a read answers for, resolved before anything is built — so a call
   // that named none, or named one nobody may read, is refused with a message
@@ -659,6 +662,22 @@ let answered = async (
   // it does not answer goes to the anonymous server (`stranger`), which serves
   // the tools a stranger may call and challenges everything else.
   if (!auth) {
+    // Per source (rate.ts): a stranger's calls cost us store reads and, for
+    // feedback, a letter, and there is no person to hold to an allowance.
+    // Listing the tools and the handshake are not counted, only calls.
+    if (
+      rpc.method == 'tools/call' &&
+      !await within(env.TOOL_RATE, source(req))
+    ) {
+      return erred(
+        rpc.id,
+        refuse(
+          'limit',
+          'Too many calls from one place without signing in. Try again in a ' +
+            `minute, or sign in at ${hostUrl(env, '/login')}.`,
+        ),
+      )
+    }
     let open = await answer(String(rpc.method), rpc.params ?? {}, env)
     return open ? result(rpc.id, open) : await stranger(req, rpc, env, said)
   }

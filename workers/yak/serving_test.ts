@@ -774,6 +774,13 @@ Deno.test('monthly visit quota stops all app serving before dispatch or files', 
       await res.body?.cancel()
     }
     assertEquals(calls, 1, 'over-quota traffic invoked app code')
+    // Strangers spent the visits; the space's own people still get their app.
+    let mine = await apps.fetch(
+      visit('/', { headers: { cookie: await as(ADA) } }),
+      k.env,
+    )
+    assertEquals(await mine.text(), 'the router')
+    calls--
     let manage = await k.at('/_yaks')
     assertEquals(manage.status, 303)
     assertStringIncludes(manage.headers.get('location')!, '/login')
@@ -791,6 +798,31 @@ Deno.test('monthly visit quota stops all app serving before dispatch or files', 
     )
     assertEquals(await comped.text(), 'the router')
   }
+})
+
+Deno.test("a stranger's reads are held to a rate per source, a member's are not", async () => {
+  using k = await router()
+  let spent = 0
+  k.env.API_RATE = { limit: () => Promise.resolve({ success: ++spent <= 2 }) }
+  let from = (cookie?: string) =>
+    apps.fetch(
+      visit('/garden/api/query', {
+        headers: {
+          'cf-connecting-ip': '203.0.113.9',
+          ...(cookie ? { cookie } : {}),
+        },
+      }),
+      k.env,
+    )
+  for (let want of [200, 200, 429]) {
+    let res = await from()
+    assertEquals(res.status, want)
+    await res.body?.cancel()
+  }
+  let member = await from(await as(ADA))
+  assertEquals(member.status, 200)
+  await member.body?.cancel()
+  assertEquals(spent, 3, 'a member spent the stranger allowance')
 })
 
 Deno.test('rung 1: a platform path never reaches an app', async () => {

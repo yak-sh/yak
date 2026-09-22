@@ -44,6 +44,16 @@ Deno.test('staging repeats the kernel bindings without production resources', ()
       )
     }
   }
+  // Same doors and numbers, their own counters.
+  let rates = (rows: unknown) =>
+    (rows as { name: string; simple: unknown }[]).map((r) => [r.name, r.simple])
+  assertEquals(rates(staging.ratelimits), rates(config.ratelimits))
+  for (let row of staging.ratelimits as { namespace_id: string }[]) {
+    assert(
+      !(config.ratelimits as { namespace_id: string }[])
+        .some((r) => r.namespace_id == row.namespace_id),
+    )
+  }
   assertEquals(staging.name, 'yak-staging')
   let vars = staging.vars as Record<string, string>
   assertEquals(vars.APEX, 'yaks.fyi')

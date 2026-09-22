@@ -97,6 +97,7 @@ import { DAYS, NOT_ON, type Stats, statsOf } from './views.ts'
 import { answered, watched } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { refuse } from './tool.ts'
+import { source, tooMany, within } from './rate.ts'
 
 // The runtime's streaming HTML rewriter, the slice this file asks for, so
 // `deno check` reads the Worker without @cloudflare/workers-types (env.ts).
@@ -559,12 +560,9 @@ export let VISIT_BATCH = 16 * 1024
 export let VISIT_UPLOAD = 2 * 1024 * 1024
 
 let visiting = async (req: Request, env: Env, app: App, who: Who) => {
-  if (writes(who.role) || !env.VISITS) return null
-  let key = `${app.eid} ${
-    who.person ?? req.headers.get('cf-connecting-ip') ?? ''
-  }`
-  let { success } = await env.VISITS.limit({ key })
-  return success ? null : json(429, 'too_many_writes')
+  if (writes(who.role)) return null
+  let key = `${app.eid} ${who.person ?? source(req)}`
+  return await within(env.VISITS, key) ? null : json(429, 'too_many_writes')
 }
 
 let pathOf = (url: unknown) => {
@@ -1578,8 +1576,17 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   }
   // Before home routing, speculative file reads, dispatch and app APIs alike.
   // A forged worker grant must not bypass the space's monthly quota.
+  //
+  // Strangers can spend a free space's visits (T-37884), and what they must
+  // not do by it is lock the space's own people out of their apps: someone
+  // signed in with a seat here is still served. Their session cookie is the
+  // only thing asked, never a grant, and only once the space is over.
   let quota = refusedVisit(space, req, env)
-  if (quota) return quota
+  if (quota) {
+    let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p))
+    if (!who.role) return quota
+    await quota.body?.cancel()
+  }
   let app = r.app ? await c.time('app', () => dir.app(space!, r.app!)) : null
   // In the trash (erase.ts, T-34430): the address is held for it and answers
   // nothing while it waits. Not a 410 and not a redirect — to the web this is
@@ -1699,6 +1706,13 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // The `/api/` doors stay the kernel's, always, and keep their own refusals,
   // which speak.
   if (path.startsWith('/api/')) {
+    // A stranger's reads are held to a rate per source (rate.ts), here and
+    // before the store, so a refused one is never a store request the space's
+    // meter counts. Not the space's people, and not the app's own worker,
+    // which is already somebody's request.
+    if (!itself && !who.person && !await within(env.API_RATE, source(req))) {
+      return reporting(tooMany(), req, at)
+    }
     return reporting(
       await c.time(
         'api',

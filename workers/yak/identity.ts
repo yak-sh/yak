@@ -121,6 +121,10 @@ export let NO_MAIL = 'Sign-in mail is not switched on here yet: this deploy ' +
   'has no MAIL_TOKEN (README, Configuration).'
 export let NO_SEND = 'We could not send your code just now. Try again in a ' +
   'minute.'
+// Too many codes asked for from one place (rate.ts): about the source, never
+// the address, so saying it tells nobody anything about an inbox.
+export let TOO_MANY = 'Too many codes have been asked for from here just ' +
+  'now. Try again in a minute.'
 import { KERNEL, meta } from './meta.ts'
 import {
   askAllow,
@@ -133,6 +137,7 @@ import {
 } from './pages.ts'
 import { hostOf, MANAGE, OAUTH, onZone, RESERVED, says, SLUG } from './route.ts'
 import { canon, mint, nameOf, personOf, spend } from './signin.ts'
+import { RETRY, source, within } from './rate.ts'
 import { type Caller, minted } from './session.ts'
 
 // What a grant carries and a token gives back: the person, nothing else.
@@ -814,6 +819,12 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     if (!mailable(env)) {
       return askEmail(field('q') || null, back, undefined, NO_MAIL, 503, env)
     }
+    // Per source, before `mint`, so a loop spends none of any address's
+    // letters: the address cap above protects an inbox, this one the
+    // platform's mail from somebody asking for a code at every address.
+    if (!await within(env.SIGNIN_RATE, source(req))) {
+      return askEmail(field('q') || null, back, undefined, TOO_MANY, 429, env)
+    }
     let code = await mint(meta(env), secret(env), email)
     if (code) {
       // The letter carries the code and the one click that spends it
@@ -1107,6 +1118,19 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (env.APEX && hostOf(req) == apex(env)) {
     let at = new URL(req.url)
     req = new Request(hostUrl(env, at.pathname + at.search), req)
+  }
+  // Registering a client is the one provider door that writes on a stranger's
+  // say-so (a KV row per client), so it is the one held to a rate (rate.ts).
+  // The refusal is the RFC 6749 error shape a client already parses.
+  if (
+    req.method == 'POST' && new URL(req.url).pathname == OAUTH.register &&
+    !await within(env.REGISTER_RATE, source(req))
+  ) {
+    return Response.json({
+      error: 'too_many_requests',
+      error_description: 'Too many registrations from one place. ' +
+        'Try again in a minute.',
+    }, { status: 429, headers: { 'retry-after': String(RETRY) } })
   }
   return new OAuthProvider<Env>(opts(env))
     .fetch(await plain(req, env), env, context() as never)

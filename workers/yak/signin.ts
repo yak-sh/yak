@@ -32,10 +32,10 @@ export let TRIES = 5
 // the address, so the count only ever reaches three for someone who asked and
 // never arrived — whose mail is broken, which a fourth code does not fix —
 // while a loop pointed at a stranger gets three letters an hour instead of as
-// many as it can ask for. A per-source ceiling is deliberately not here: the
-// address is what an email bomb is aimed at, and an IP is both meaningless
-// behind a shared egress and the zone's rate-limiting rules to bound, not this
-// worker's.
+// many as it can ask for. The per-source ceiling is the door's, not this
+// file's (identity.ts, rate.ts `SIGNIN_RATE`): the address is what an email
+// bomb is aimed at, and where the asking comes from is a fact about the
+// request, which `mint` never sees.
 export let SENDS = 3
 export let WINDOW = 60 * 60_000
 

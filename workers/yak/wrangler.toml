@@ -270,6 +270,44 @@ name = "VISITS"
 namespace_id = "37896"
 simple = { limit = 30, period = 60 }
 
+# Per-source ceilings on the doors a stranger can knock on (rate.ts,
+# T-37884), keyed by the address Cloudflare saw the request come from. A
+# namespace_id is any integer unique on the account; staging has its own so
+# its counters are not production's. The period is 10 or 60 seconds and
+# nothing longer, so each is a per-minute brake, not an hourly allowance.
+# `wrangler dev` and the workerd probes enforce these locally (miniflare
+# counts a fixed window in memory).
+#
+#   SIGNIN_RATE     5 code requests a minute (signin.ts caps each address too)
+#   REGISTER_RATE   10 OAuth client registrations a minute
+#   TOOL_RATE       60 connector tool calls a minute, signed out
+#   FEEDBACK_RATE   1 piece of feedback a minute, signed out
+#   API_RATE        300 requests a minute to an app's data, signed out
+[[ratelimits]]
+name = "SIGNIN_RATE"
+namespace_id = "1001"
+simple = { limit = 5, period = 60 }
+
+[[ratelimits]]
+name = "REGISTER_RATE"
+namespace_id = "1002"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "TOOL_RATE"
+namespace_id = "1003"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "FEEDBACK_RATE"
+namespace_id = "1004"
+simple = { limit = 1, period = 60 }
+
+[[ratelimits]]
+name = "API_RATE"
+namespace_id = "1005"
+simple = { limit = 300, period = 60 }
+
 # An app's files. `wrangler dev` simulates the bucket.
 [[r2_buckets]]
 binding = "BLOBS"
@@ -551,6 +589,31 @@ dataset = "yak_views_staging"
 name = "VISITS"
 namespace_id = "37897"
 simple = { limit = 30, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "SIGNIN_RATE"
+namespace_id = "2001"
+simple = { limit = 5, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "REGISTER_RATE"
+namespace_id = "2002"
+simple = { limit = 10, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "TOOL_RATE"
+namespace_id = "2003"
+simple = { limit = 60, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "FEEDBACK_RATE"
+namespace_id = "2004"
+simple = { limit = 1, period = 60 }
+
+[[env.staging.ratelimits]]
+name = "API_RATE"
+namespace_id = "2005"
+simple = { limit = 300, period = 60 }
 
 [[env.staging.r2_buckets]]
 binding = "BLOBS"

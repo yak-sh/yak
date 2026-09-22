@@ -224,6 +224,7 @@ import {
 // The pass that moves a short type map to the document it means, over the
 // bytes an app deployed (`declaring`).
 import { documented } from './migrate.ts'
+import { within } from './rate.ts'
 // The one ceiling on bytes going into an app's store, wherever they arrive
 // from: an upload, a drop, or `app_files` fetch.
 import { MAX } from './apps.ts'
@@ -1620,20 +1621,15 @@ let quoted = (said: string) =>
 // far likelier to be an agent in a loop than a fourth thing wrong.
 let HOURLY = 3
 
-// And how many a caller who has not signed in gets: one, shared by every such
-// caller, because there is no identity to hand an allowance to. Harder on
-// purpose — a stranger's report is wanted, a loop's is a mailbox full — and
-// still a pause rather than a no, since the refusal says where to write.
-let STRANGERS = 1
+// A caller who has not signed in has no identity to hand an allowance to, so
+// theirs is per source instead (rate.ts `FEEDBACK_RATE`, one a minute): a
+// stranger's report is wanted, a loop's is a mailbox full, and one stranger's
+// loop must not silence every other stranger, which a shared count did.
 
 // What this person has already said this hour, out of the meta store itself
 // rather than a counter in some isolate — three per hour only means anything
 // if it holds across the isolate a call lands in. A store that cannot answer
 // counts nothing: a rate limit is never the reason feedback is lost.
-//
-// Nobody signed in spells `.created.by=` on the line, which the filter grammar
-// reads as absent — so the bucket for a stranger is every report nobody
-// signed, which is exactly the anonymous ones.
 let recently = async (ctx: Ctx) => {
   try {
     return (await meta(ctx.env).query(
@@ -4487,20 +4483,26 @@ let OURS: Row[] = [
       let app = space && args.app != null
         ? await ctx.dir.app(space, text(args.app, 'app'))
         : null
-      let held = await recently(ctx)
-      let cap = ctx.person ? HOURLY : STRANGERS
-      if (held >= cap) {
-        throw refuse(
-          'limit',
-          `That is ${held} already this hour, and every one of them is kept ` +
-            'and will be read — so this is a pause, not a no. Save the rest ' +
-            `for later, or write to ${
-              replyTo(ctx.env)
-            } directly if it cannot wait.` +
-            (ctx.person
-              ? ''
-              : ` Signing in at ${hostUrl(ctx.env, '/login')} raises it.`),
-        )
+      let pause = `every one of them is kept and will be read — so this is ` +
+        `a pause, not a no. Save the rest for later, or write to ${
+          replyTo(ctx.env)
+        } directly if it cannot wait.`
+      if (!ctx.person) {
+        if (!await within(ctx.env.FEEDBACK_RATE, ctx.source ?? '')) {
+          throw refuse(
+            'limit',
+            `That is one already this minute from here, and ${pause} ` +
+              `Signing in at ${hostUrl(ctx.env, '/login')} raises it.`,
+          )
+        }
+      } else {
+        let held = await recently(ctx)
+        if (held >= HOURLY) {
+          throw refuse(
+            'limit',
+            `That is ${held} already this hour, and ${pause}`,
+          )
+        }
       }
       let at = new Date().toISOString()
       // The whole thing is the body; the title is its opening, so a listing
