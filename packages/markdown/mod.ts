@@ -6,8 +6,14 @@ import { type ComponentChildren, h, type VNode } from 'preact'
 import type { Child, H } from '@yaks/render'
 
 export { type Token } from 'marked'
-export let parse = (source: string): Token[] =>
-  Lexer.lex(source, { gfm: true, breaks: true })
+
+/** Parse GFM. `breaks` turns a single newline into a line break, which is what
+ * a chat message or a terminal line wants and what a document does not: prose
+ * wrapped at 80 columns would keep every one of those wraps. */
+export let parse = (
+  source: string,
+  { breaks = true }: { breaks?: boolean } = {},
+): Token[] => Lexer.lex(source, { gfm: true, breaks })
 
 /** Only navigable links: no scripting, data, or control-byte URL schemes. */
 export let safeHref = (href: string): string | undefined => {
