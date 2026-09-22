@@ -34,6 +34,13 @@ Deno.test('ollama: /api/embed, and the vector out of `embeddings`', async () => 
   assert(!seen[0].init?.headers?.authorization)
 })
 
+Deno.test('a text longer than the model reads is sent as its opening', async () => {
+  let { go, seen } = answered({ embeddings: [[1]] })
+  let e = remote({ via: 'ollama', model: 'm', base: 'b', chars: 3, fetch: go })
+  await e.embed('abcdef')
+  assertEquals(JSON.parse(seen[0].init!.body!).input, 'abc')
+})
+
 Deno.test('openai: /v1/embeddings, the vector out of `data`, and the key as a bearer', async () => {
   let { go, seen } = answered({ data: [{ embedding: [1, 0] }] })
   let e = remote({

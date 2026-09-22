@@ -119,10 +119,11 @@ that default predicate; combine it with `textual(column)` to narrow the default
 safely.
 
 Each entity gets one vector from its nonblank selected fields joined with
-newlines. The source query reads component columns directly. It does not apply
-`@yaks/sql` derived read overrides: a blob-backed body column is read as its
-stored hash. Choose inline text fields, or supply an application integration
-that resolves text before embedding when using `@yaks/blob` bodies.
+newlines. The source query reads component columns directly, except a column the
+host reads through an expression: `resolved(fields, host.derived)` gives such a
+field its `text` expression, so a `@yaks/blob` body is embedded as its prose
+rather than its stored hash. The plugin's sweep does this; a caller running
+`sweep()` itself passes resolved fields.
 
 ## The embedder is yours
 
@@ -142,8 +143,10 @@ normalizes the resulting vector. `remote({ via, model, base, key?, dim? })`
 sends one POST per vector to Ollama's `/api/embed` or an OpenAI-compatible
 `/v1/embeddings` endpoint. Credentials are arguments; `remote()` itself reads no
 environment variables. Optional `dim` truncates and renormalizes vectors; use it
-with a model that supports that operation. Remote errors reject the embedding
-request.
+with a model that supports that operation. `chars` (default 30,000) bounds the
+text sent for one vector: a server refuses input past its model's context rather
+than truncating it, which would stop every sweep at the same document. Remote
+errors reject the embedding request.
 
 ## The sweep
 

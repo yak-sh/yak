@@ -31,7 +31,7 @@
 import type { Watch } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
 import type { Driver } from './driver.ts'
-import type { Field } from './fields.ts'
+import { type Field, resolved } from './fields.ts'
 import { type Options, ready } from './options.ts'
 import { sweep } from './sweep.ts'
 
@@ -106,7 +106,12 @@ let watched = (text: Field[]): Map<string, string[]> => {
  * reason to reconcile. A server with no embedder yet still registers them:
  * what it is missing is the model, not the notifications. */
 export let effects = (
-  host: { vocab: Vocab; sql: Driver; stopping?: AbortSignal },
+  host: {
+    vocab: Vocab
+    sql: Driver
+    stopping?: AbortSignal
+    derived?: Record<string, { text?: (stored: string) => string }>
+  },
   options: Options = {},
 ): Watch[] => {
   // Which components to watch follows from the `text` option, and that is a
@@ -126,7 +131,10 @@ export let effects = (
       // Look again after the next delay: the config may be one export away.
       return true
     }
-    await sweep(host.sql, now.text, now.embedder, options.batch)
+    // A body @yaks/blob stores by address is read as its text, the way the
+    // store reads it (the host's derived columns).
+    let text = resolved(now.text, host.derived)
+    await sweep(host.sql, text, now.embedder, options.batch)
     return false
   }
   let soon = nudge(

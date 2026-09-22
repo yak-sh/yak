@@ -14,8 +14,25 @@
 
 import type { Column, Vocab } from '@yaks/vocab'
 
-/** A `comp.prop` pair naming one embedded text property. */
-export type Field = { comp: string; prop: string }
+/** A `comp.prop` pair naming one embedded text property, and — for a column
+ * that does not hold its own text, like a @yaks/blob body holding an address —
+ * the SQL that reads the text a stored value stands for. */
+export type Field = {
+  comp: string
+  prop: string
+  text?: (stored: string) => string
+}
+
+/** Fields read through a host's derived columns (@yaks/sql `Derived`), so a
+ * content-addressed body is embedded as its prose, never as its hash. */
+export let resolved = (
+  fields: Field[],
+  derived: Record<string, { text?: (stored: string) => string }> = {},
+): Field[] =>
+  fields.map((f) => {
+    let text = derived[`${f.comp}.${f.prop}`]?.text
+    return text ? { ...f, text } : f
+  })
 
 /**
  * Decides whether a column is embedded. An application passes its own to embed
@@ -62,7 +79,8 @@ export let pieces = (fields: Field[]): Stmt | null =>
   fields.length
     ? {
       sql: fields.map((f, i) => {
-        let col = `${q(f.comp)}.${q(f.prop)}`
+        let stored = `${q(f.comp)}.${q(f.prop)}`
+        let col = f.text ? f.text(stored) : stored
         return `select ${q(f.comp)}."entity" as owner, ${i} as ord,` +
           ` ${col} as t from ${q(f.comp)}` +
           ` where trim(coalesce(${col}, ''), ?) != ''`

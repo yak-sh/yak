@@ -121,6 +121,10 @@ export type Host = {
   vocab: Vocab
   storage: Store
   sql: Driver
+  /** every column the store reads through an expression rather than as
+   * stored, keyed `comp.prop` — a @yaks/blob body resolves its address to its
+   * text — so a plugin reading SQL directly reads what the store reads */
+  derived: Derived
   graph: Graph
   /** every route of this host as one request handler — built by the listed
    * plugin that hosts routes ({@link RoutesFacet.handler}, @yaks/api), and
@@ -545,6 +549,7 @@ export let compose = async (
       config,
       vocab,
       sql,
+      derived,
       me: selfEid(),
       who: (request) => authenticate(request),
       stopping: stopping.signal,

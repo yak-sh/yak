@@ -2,7 +2,7 @@
 // nothing that is not prose.
 
 import { assert, assertEquals } from '@std/assert'
-import { fields, pieces } from './fields.ts'
+import { fields, pieces, resolved } from './fields.ts'
 import { shop } from './harness.ts'
 
 Deno.test('every text property is embedded, across components', () => {
@@ -29,4 +29,11 @@ Deno.test('the pieces statement drops blank text and orders the join', () => {
 
 Deno.test('a vocabulary with no prose has no statement to write', () => {
   assertEquals(pieces([]), null)
+})
+
+Deno.test('a column stored by address is read as the text it stands for', () => {
+  let read = { 'book.blurb': { text: (s: string) => `(lookup ${s})` } }
+  let text = resolved(fields(shop), read)
+  assertEquals(text.map((f) => !!f.text), [false, true, false])
+  assert(pieces(text)!.sql.includes('(lookup "book"."blurb") as t'))
 })

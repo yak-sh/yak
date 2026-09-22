@@ -42,6 +42,8 @@ export type Remote = {
   dim?: number
   /** how long to wait for one vector (default 30s) */
   timeout?: number
+  /** the most characters sent for one vector (default {@link CHARS}) */
+  chars?: number
   /** the fetch to call through (default: the global one) */
   fetch?: Fetch
 }
@@ -50,6 +52,15 @@ export type Remote = {
 // One input in, one vector out: this package embeds an entity at a time
 // because the sweep already bounds how many it asks for.
 let PATH = { ollama: '/api/embed', openai: '/v1/embeddings' }
+
+/**
+ * How much of a text is sent by default. A model embeds a bounded context, and
+ * a server asked for more refuses the request rather than truncating it — which
+ * would stop a sweep at the same long document on every pass. So a long text
+ * is cut to its opening, which is what the model would have read of it anyway.
+ * qwen3-embedding refuses somewhere past 35,000 characters of markdown.
+ */
+export let CHARS = 30_000
 
 let vectorOf = (via: Remote['via'], body: unknown): number[] | undefined => {
   let said = body as {
@@ -89,7 +100,10 @@ export let remote = (said: Remote): Embedder => {
       let res = await go(`${root}${PATH[said.via]}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ model: said.model, input: text }),
+        body: JSON.stringify({
+          model: said.model,
+          input: text.slice(0, said.chars ?? CHARS),
+        }),
         signal: AbortSignal.timeout(said.timeout ?? 30_000),
       })
       let raw = await res.text()
