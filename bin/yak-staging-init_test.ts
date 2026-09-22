@@ -60,10 +60,9 @@ Deno.test('yak-staging-init reports existing resources without creating them', a
   let lines: string[] = []
   assertEquals(await initialize(run, (line) => lines.push(line)), 'kv-id')
   assertEquals(calls.some((args) => args.includes('create')), false)
-  assertEquals(lines.slice(0, 5), [
+  assertEquals(lines.slice(0, 4), [
     `exists: dispatch namespace ${DISPATCH}`,
     `exists: R2 bucket ${BUCKETS[0]}`,
-    `exists: R2 bucket ${BUCKETS[1]}`,
     `exists: Vectorize index ${VECTORIZE}`,
     `exists: KV namespace ${OAUTH_KV}`,
   ])
@@ -82,7 +81,6 @@ Deno.test('yak-staging-init creates every missing resource once', async () => {
     [
       ['dispatch-namespace', 'create', DISPATCH],
       ['r2', 'bucket', 'create', BUCKETS[0]],
-      ['r2', 'bucket', 'create', BUCKETS[1]],
       [
         'vectorize',
         'create',
@@ -94,7 +92,7 @@ Deno.test('yak-staging-init creates every missing resource once', async () => {
     ],
   )
   assertEquals(
-    lines.slice(0, 5).every((line) => line.startsWith('created:')),
+    lines.slice(0, 4).every((line) => line.startsWith('created:')),
     true,
   )
 })

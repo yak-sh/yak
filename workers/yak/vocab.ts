@@ -590,8 +590,8 @@ export let platformDoc: VocabDoc = {
         space: ref('cascade'),
         version: num,
         access: { enum: ['public', 'open', 'private'] },
-        // The app's handle: what its Durable Object, its dispatch script, its
-        // R2 export path and its analytics rows are named by (directory.ts
+        // The app's handle: what its Durable Object, its dispatch script and
+        // its analytics rows are named by (directory.ts
         // `storeName`). Written once at birth and never read as an address —
         // `<space>/<app>.<6 hex of the eid>`, so the Cloudflare dashboard still
         // sorts it under its space and reads as the app it is, and so two apps

@@ -6,21 +6,20 @@
 // Jeff, 2026-09-05: "there are a few users! can't just drop" — so this is a data
 // migration, and the rows a deployed object holds are the whole subject.
 //
-// Three things happen, in this order, and the order is the safety:
+// Two things happen, in this order, and the order is the safety:
 //
-//   1. Export   {@link taken} reads every old table as it stands and
-//               {@link lines} writes it out as JSON lines. The caller puts that
-//               in R2 before a row moves, so a migration that is wrong is still
-//               a migration nothing was lost to. This is the restore path.
-//   2. Carry    {@link carry} runs the whole pass inside one `transactionSync`:
+//   1. Carry    {@link carry} runs the whole pass inside one `transactionSync`:
 //               the derived objects go, the base tables are renamed aside, the
 //               new schema is planted, the rows are copied across, and the
 //               counts are read back. A throw anywhere unwinds all of it and
 //               the object is bit-for-bit what it was.
-//   3. Reconcile per table, old count against new, with every expected delta
+//   2. Reconcile per table, old count against new, with every expected delta
 //               named ({@link Moved.note}). One that does not reconcile throws
 //               {@link Refused}, which is the rollback — the caller then serves
 //               the old rows read-only and says so.
+//
+// The restore path is the Durable Object's own point-in-time recovery, which
+// keeps every object's storage for 30 days; the passes write no second copy.
 //
 // ## What is not a straight copy
 // The layouts agree almost everywhere: both spell the spine `entity(id, eid,
@@ -57,17 +56,16 @@
 // numbered ({@link MARKS}): {@link homed} is version 2, `space.home` becoming
 // `home{}` on the app (T-34227); {@link addressed} is version 3, the
 // directory's app addresses moving out of the table the core word `alias` now
-// owns and into `former` (T-34390). Same three steps, same order — export, one
-// transaction, reconcile — over the new schema rather than the old one.
+// owns and into `former` (T-34390). Same two steps, same order — one
+// transaction, then reconcile — over the new schema rather than the old one.
 //
 // ## What cannot be carried
 // The fleet's other ~100 words (`card`, `pin`, `mail`, `session`, the journal…)
 // are not in any store's vocabulary now, so there is no table for their rows to
-// go to. They are in the export, they are named in the report with their row
-// counts, and the tables are dropped — which is step 4 of T-33809. The journal
-// is one of them: nothing in workers/yak installs @yaks/journal, so an app store
-// keeps no `journal_tx`/`journal_change`/`journal_field` of its own. They are
-// archived to R2 with the rest and said so.
+// go to. They are named in the report with their row counts, and the tables are
+// dropped — which is step 4 of T-33809. The journal is one of them: nothing in
+// workers/yak installs @yaks/journal, so an app store keeps no
+// `journal_tx`/`journal_change`/`journal_field` of its own.
 import { fields, schema as ftsSchema } from '@yaks/fts'
 import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
 import { edgeEid } from '@yaks/edge'
@@ -84,11 +82,6 @@ import {
 import type { Vocab } from '@yaks/vocab'
 import { handle } from './directory.ts'
 
-/** The slice of an R2 bucket an export needs. */
-export type Bucket = {
-  put(key: string, value: string | ArrayBuffer | Uint8Array): Promise<unknown>
-}
-
 /** The object's own key-value slots beside its SQL — where the old store kept
  * everything it remembered (its name, the app's `vocab.json`, the words it
  * borrows, its tools). `ctx.storage.kv`, which graph.ts's Store does not use. */
@@ -96,16 +89,6 @@ export type Slots = {
   get(key: string): unknown
   put(key: string, value: unknown): void
 }
-
-/** The words the old store kept in {@link Slots}, in the order they are read. */
-export let SLOTS = [
-  'name',
-  'vocab',
-  'uses',
-  'tools',
-  'schema',
-  'schema_version',
-]
 
 /** The five type words the short manifest spelled, and the JSON Schema each
  * meant. Frozen here rather than read off vocab.ts: what a stored slot meant is
@@ -198,7 +181,7 @@ export let FORMER = 'yak/store/former/3'
 export let SERVES = 'yak/store/serves/4'
 
 /** The fifth pass (T-34657): an app's handle — the string its Durable Object,
- * its script, its export path and its analytics rows are named by — becomes a
+ * its script and its analytics rows are named by — becomes a
  * column of its own, `app.store`, instead of being read back off the address it
  * was born at. The directory's alone; no other object has an app row. */
 export let HANDLED = 'yak/store/handle/5'
@@ -233,8 +216,6 @@ let ASIDE = 'yak_old_'
  * ({@link addressed}). */
 let FORMERLY = 'alias'
 
-type Row = Record<string, unknown>
-
 /** A Durable Object's SQLite as @yaks/sqlite drives it. */
 export type Drive = ReturnType<typeof driver>
 
@@ -256,7 +237,7 @@ export class Refused extends Error {
  * are not the same number — why. */
 export type Moved = { table: string; from: number; to: number; note?: string }
 
-/** What the pass did, written beside the export. */
+/** What the pass did. */
 export type Report = {
   store: string
   app: string | null
@@ -266,21 +247,9 @@ export type Report = {
   mark: string
   /** the tables that moved, old count against new */
   moved: Moved[]
-  /** the fleet's other words: no vocabulary names them, so the rows live in the
-   * export and nowhere else */
+  /** the fleet's other words: no vocabulary names them, so their tables are
+   * dropped with the row counts said here */
   dropped: { table: string; rows: number }[]
-  /** where the rows this report is about were written */
-  export: string
-}
-
-// ---- the export ------------------------------------------------------------
-
-/** Every old table, as it stands. */
-export type Taken = {
-  store: string
-  at: string
-  slots: Record<string, string>
-  tables: { name: string; rows: Row[] }[]
 }
 
 /**
@@ -297,8 +266,7 @@ export let stale = (storage: DurableStorage): boolean =>
 
 /**
  * Every definition of one type that is this object's — the single place the
- * pass learns what tables there are, so both halves of it, the export and the
- * carry, enumerate the same list.
+ * pass learns what tables there are.
  *
  * `reserved` (@yaks/durable-object) is what it is not: SQLite's catalogue and
  * Cloudflare's own tables. The runtime lists `_cf_KV` here like any other and
@@ -406,89 +374,6 @@ let shadowed = (d: Drive): string[] =>
     t.name
   )
 
-/**
- * Everything the object holds, read out of the old schema: its key-value slots
- * and every base table's rows. Synchronous, and it writes nothing — this runs
- * before the pass, so that what it hands back can reach R2 first.
- */
-export let taken = (
-  storage: DurableStorage,
-  slots?: Pick<Slots, 'get'>,
-): Taken => {
-  let d = driver(storage)
-  let held: Record<string, string> = {}
-  for (let k of SLOTS) {
-    let v = slots?.get(k)
-    if (v != null) held[k] = String(v)
-  }
-  let fts = shadowed(d)
-  let skip = (name: string) =>
-    name == 'yak_kv' || fts.some((f) => name == f || name.startsWith(`${f}_`))
-  return {
-    store: held.name ?? '',
-    at: new Date().toISOString(),
-    slots: held,
-    tables: named(d, 'table').filter((t) => !skip(t.name)).map((t) => ({
-      name: t.name,
-      rows: d.query(`select * from ${q(t.name)}`, []),
-    })),
-  }
-}
-
-let B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-
-// Bytes as text, so a column holding an embedding or an image survives a JSON
-// line. Hand-rolled because the export must not depend on a runtime global that
-// the workerd stand-in and the deploy might spell differently.
-let base64 = (bytes: Uint8Array): string => {
-  let out = ''
-  for (let i = 0; i < bytes.length; i += 3) {
-    let n = (bytes[i] << 16) | ((bytes[i + 1] ?? 0) << 8) | (bytes[i + 2] ?? 0)
-    let has = bytes.length - i
-    out += B64[(n >> 18) & 63] + B64[(n >> 12) & 63] +
-      (has > 1 ? B64[(n >> 6) & 63] : '=') + (has > 2 ? B64[n & 63] : '=')
-  }
-  return out
-}
-
-let plain = (v: unknown): unknown =>
-  v instanceof ArrayBuffer
-    ? { $bytes: base64(new Uint8Array(v)) }
-    : v instanceof Uint8Array
-    ? { $bytes: base64(v) }
-    : v
-
-/**
- * The export as bytes: one JSON object per line — a header, the object's slots,
- * then one line per table carrying its columns and its rows. Line-oriented so a
- * restore reads it a table at a time, and so a diff between two exports of the
- * same object is readable.
- */
-export let lines = (t: Taken): string =>
-  [
-    JSON.stringify({
-      kind: 'store',
-      store: t.store,
-      at: t.at,
-      tables: t.tables.map((x) => x.name),
-    }),
-    JSON.stringify({ kind: 'slots', slots: t.slots }),
-    ...t.tables.map((x) =>
-      JSON.stringify({
-        kind: 'rows',
-        table: x.name,
-        rows: x.rows.map((r) =>
-          Object.fromEntries(Object.entries(r).map(([k, v]) => [k, plain(v)]))
-        ),
-      })
-    ),
-  ].join('\n') + '\n'
-
-/** Where one object's export is written: its own name, then the moment. Kept
- * after the pass — it is the restore path, not a scratch file. */
-export let keyOf = (store: string, at: string): string =>
-  `store/${store || 'unnamed'}/${at.replaceAll(':', '-')}`
-
 // ---- the pass --------------------------------------------------------------
 
 /** What the pass needs to know that the storage cannot tell it. */
@@ -505,8 +390,6 @@ export type Carry = {
   plant: () => void
   /** the id a mirrored grant is filed under (graph.ts `grantEid`) */
   grantEid: (app: string, person: string) => string
-  /** where the export went, for the report */
-  export: string
 }
 
 // The one relation the fleet spelled in the present tense. Everything else wears
@@ -539,19 +422,6 @@ export let unfiled = (storage: DurableStorage): boolean => {
   let d = driver(storage)
   return stands(d, 'task') && stands(d, 'filed') &&
     filingCols(d, 'task').length > 0
-}
-
-export let filings = (storage: DurableStorage): Taken => {
-  let d = driver(storage)
-  return {
-    store: '',
-    at: new Date().toISOString(),
-    slots: {},
-    tables: ['task', 'filed'].map((name) => ({
-      name,
-      rows: d.query(`select * from ${q(name)}`, []),
-    })),
-  }
 }
 
 // Refuse conflicting facts rather than pick a winner. Reconcile values, not
@@ -596,10 +466,10 @@ let fileward = (d: Drive, from: string): number => {
   return rows.length
 }
 
-/** Run inside transactionSync, after the export, like every numbered pass. */
+/** Run inside transactionSync, like every numbered pass. */
 export let filed = (
   storage: DurableStorage,
-  o: { store: string; app: string | null; export: string },
+  o: { store: string; app: string | null },
 ): Report => {
   let d = driver(storage)
   let moved = fileward(d, 'task')
@@ -670,25 +540,6 @@ export let mistooled = (storage: DurableStorage): boolean => {
     (rows.length > 0 && !named(d, 'index').some((i) => i.name == TOOL_NAME))
 }
 
-/** Which rows the pass is about, read out before one moves. */
-export let tools = (storage: DurableStorage): Taken => {
-  let d = driver(storage)
-  return {
-    store: '',
-    at: new Date().toISOString(),
-    slots: {},
-    tables: [{
-      name: 'tool',
-      rows: d.query(
-        `select e.eid, t.* from ${
-          q('tool')
-        } t join entity e on e.id = t.entity`,
-        [],
-      ),
-    }],
-  }
-}
-
 /**
  * Each tool onto the id its name derives, synchronously, inside
  * `transactionSync` like every numbered pass, and then the identity's unique
@@ -702,7 +553,7 @@ export let tools = (storage: DurableStorage): Taken => {
  */
 export let tooled = (
   storage: DurableStorage,
-  o: { store: string; app: string | null; export: string; vocab: Vocab },
+  o: { store: string; app: string | null; vocab: Vocab },
 ): Report => {
   let d = driver(storage)
   let rows = toolIds(d)
@@ -714,7 +565,6 @@ export let tooled = (
   ): Report => ({
     store: o.store,
     app: o.app,
-    export: o.export,
     at: new Date().toISOString(),
     ok,
     message,
@@ -820,18 +670,6 @@ export let housed = (storage: DurableStorage): boolean => {
     columns(d, 'space').includes('home')
 }
 
-/** Which rows the pass is about, read out before one moves — the restore path,
- * the way {@link taken} is for the first pass. */
-export let homes = (storage: DurableStorage): Taken => {
-  let d = driver(storage)
-  return {
-    store: '',
-    at: new Date().toISOString(),
-    slots: {},
-    tables: [{ name: 'space', rows: d.query('select * from space', []) }],
-  }
-}
-
 /**
  * `space.home` → `home{}` on the app it named (T-34227), synchronously — run it
  * inside `transactionSync` for the same reason {@link carry} is: a throw is how
@@ -840,11 +678,11 @@ export let homes = (storage: DurableStorage): Taken => {
  * The rule: one `home` row per space that named an app, and not one more. A
  * count that does not match is two spaces naming one app, or a row the insert
  * would not take, and neither is a directory to go on serving from — so it
- * refuses, the column keeps the fact, and the rows are in the export.
+ * refuses, and the column keeps the fact.
  */
 export let homed = (
   storage: DurableStorage,
-  o: { store: string; app: string | null; export: string },
+  o: { store: string; app: string | null },
 ): Report => {
   let d = driver(storage)
   let at = new Date().toISOString()
@@ -858,7 +696,6 @@ export let homed = (
     mark: HOMED,
     moved,
     dropped: [],
-    export: o.export,
   })
   let spaces = count(d, 'space')
   let { named, stamped } = homeward(d, 'space')
@@ -960,21 +797,6 @@ export let slugged = (storage: DurableStorage): boolean => {
   return stands(d, 'former') && addressing(d, FORMERLY)
 }
 
-/** Which rows the pass is about, read out before one moves — the restore path,
- * the way {@link taken} is for the first pass. */
-export let addresses = (storage: DurableStorage): Taken => {
-  let d = driver(storage)
-  return {
-    store: '',
-    at: new Date().toISOString(),
-    slots: {},
-    tables: [{
-      name: FORMERLY,
-      rows: d.query(`select * from ${q(FORMERLY)}`, []),
-    }],
-  }
-}
-
 /**
  * The app addresses out of `alias` and into `former` (T-34390), synchronously —
  * run it inside `transactionSync` for the same reason {@link carry} is: a throw
@@ -982,12 +804,11 @@ export let addresses = (storage: DurableStorage): Taken => {
  *
  * The rule: every address carries across. One that does not is an address an
  * app answers at and the directory can no longer find, which is a rename that
- * strands every open page — so it refuses, the rows stay where they are, and
- * they are in the export.
+ * strands every open page — so it refuses, and the rows stay where they are.
  */
 export let addressed = (
   storage: DurableStorage,
-  o: { store: string; app: string | null; export: string },
+  o: { store: string; app: string | null },
 ): Report => {
   let d = driver(storage)
   let at = new Date().toISOString()
@@ -1001,7 +822,6 @@ export let addressed = (
     mark: FORMER,
     moved,
     dropped: [],
-    export: o.export,
   })
   let { rows, moved: landed } = formerly(d, FORMERLY)
   moved.push({
@@ -1059,21 +879,6 @@ export let aimedOld = (storage: DurableStorage): boolean => {
   return stands(d, 'hostname') && columns(d, 'hostname').includes('app')
 }
 
-/** Which rows the pass is about, read out before one moves — the restore path,
- * the way {@link taken} is for the first pass. */
-export let aims = (storage: DurableStorage): Taken => {
-  let d = driver(storage)
-  return {
-    store: '',
-    at: new Date().toISOString(),
-    slots: {},
-    tables: [{
-      name: 'hostname',
-      rows: d.query(`select * from ${q('hostname')}`, []),
-    }],
-  }
-}
-
 /**
  * The target out of `app` and into `serves` (T-34596), synchronously — run it
  * inside `transactionSync` for the same reason {@link carry} is: a throw is how
@@ -1081,12 +886,12 @@ export let aims = (storage: DurableStorage): Taken => {
  *
  * The rule: every hostname keeps a target. One left without is a domain the
  * platform serves nothing at — a customer's own address answering the branded
- * "still connecting" page for good — so it refuses, the eids stay where they
- * are, and they are in the export.
+ * "still connecting" page for good — so it refuses, and the eids stay where
+ * they are.
  */
 export let served = (
   storage: DurableStorage,
-  o: { store: string; app: string | null; export: string },
+  o: { store: string; app: string | null },
 ): Report => {
   let d = driver(storage)
   let at = new Date().toISOString()
@@ -1100,7 +905,6 @@ export let served = (
     mark: SERVES,
     moved,
     dropped: [],
-    export: o.export,
   })
   let rows = count(d, 'hostname')
   d.exec(
@@ -1148,7 +952,7 @@ export let served = (
 
 // ---- an app's handle: `former.slug` → `app.store` (T-34657) -----------------
 //
-// An app's store, script, export path and analytics rows were named by the
+// An app's store, script and analytics rows were named by the
 // address it was born at, kept in `former.slug`. That made the platform's own
 // object names a projection of a string a person picks — so an address could
 // never be freed and reused, and renaming the space was not a thing that could
@@ -1174,21 +978,6 @@ export let unhandled = (storage: DurableStorage): boolean => {
       ) > 0
 }
 
-/** Which rows the pass is about, read out before one moves — the restore path,
- * the way {@link taken} is for the first pass. */
-export let handles = (storage: DurableStorage): Taken => {
-  let d = driver(storage)
-  return {
-    store: '',
-    at: new Date().toISOString(),
-    slots: {},
-    tables: ['app', 'former'].filter((t) => stands(d, t)).map((name) => ({
-      name,
-      rows: d.query(`select * from ${q(name)}`, []),
-    })),
-  }
-}
-
 /** One address with the space prefix taken off it: `ada/cookbook` is
  * `cookbook`, and a bare `cookbook` is already itself. A slug holds no slash
  * (route.ts slug), so the seam is never in doubt. */
@@ -1201,8 +990,8 @@ let bare = (address: string) => address.slice(address.indexOf('/') + 1)
  *
  * The rule: every app ends with a handle, and no two share one. An app left
  * without is an app whose store nothing can open — every recipe in it gone from
- * the platform's point of view — so it refuses, the rows stay where they are,
- * and they are in the export.
+ * the platform's point of view — so it refuses, and the rows stay where they
+ * are.
  *
  * An app with no `former` row at all (one born before addresses were kept) gets
  * the name it is already answering to, `<space>/<app>` as the rows stand, which
@@ -1216,7 +1005,7 @@ let bare = (address: string) => address.slice(address.indexOf('/') + 1)
  */
 export let handled = (
   storage: DurableStorage,
-  o: { store: string; app: string | null; export: string },
+  o: { store: string; app: string | null },
 ): Report => {
   let d = driver(storage)
   let at = new Date().toISOString()
@@ -1230,7 +1019,6 @@ export let handled = (
     mark: HANDLED,
     moved,
     dropped: [],
-    export: o.export,
   })
   try {
     let former = stands(d, 'former')
@@ -1379,7 +1167,6 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
     mark: MARK,
     moved,
     dropped,
-    export: o.export,
   })
 
   // Every definition goes first: leaving one standing would make renaming the
@@ -1723,7 +1510,7 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   })
 
   // The fleet's other words. No vocabulary names them, so their rows have
-  // nowhere to go: the export is where they live now, and the report says so.
+  // nowhere to go: the report names them and their tables are dropped.
   for (let name of old) {
     if (carried.has(name) || RENAMED[name] || name == 'blob_text') continue
     let rows = count(d, aside(name))

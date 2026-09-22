@@ -25,7 +25,7 @@ import { slow } from '../../src/testing.ts'
 import { blobSchema } from '@yaks/blob'
 import { type Bundle, derivedEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { reserved, type Wire } from '@yaks/durable-object'
+import { type Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/harness.ts'
 import { edgeEid } from '@yaks/edge'
 import { schema } from '@yaks/sqlite'
@@ -38,7 +38,6 @@ import {
   HANDLED,
   handled,
   HOMED,
-  keyOf,
   MARK,
   Refused as Unreconciled,
   type Report,
@@ -83,23 +82,6 @@ let state = () => {
 
 type State = ReturnType<typeof state>
 
-// The bucket a pass exports to, as the slice migrate.ts asks for.
-let bucket = () => {
-  let held = new Map<string, string>()
-  return {
-    held,
-    r2: {
-      put: (k: string, v: string | ArrayBuffer | Uint8Array) =>
-        Promise.resolve(
-          void held.set(
-            k,
-            typeof v == 'string' ? v : new TextDecoder().decode(v as never),
-          ),
-        ),
-    },
-  }
-}
-
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let BEN = 'b0000000-0000-4000-8000-0000000000be'
 let SPACE = 'c0000000-0000-4000-8000-0000000000c5'
@@ -141,10 +123,10 @@ let older = (ctx: State, name: string) => {
 }
 
 // The new store over the same object, driven through its own doors.
-let newer = (ctx: State, name: string, bind: { EXPORTS?: unknown } = {}) => {
+let newer = (ctx: State, name: string) => {
   let store = new Store(
     ctx as unknown as ConstructorParameters<typeof Store>[0],
-    bind as never,
+    {} as never,
   )
   let door = (path: string, init: RequestInit = {}, app?: string) => {
     let req = new Request(`http://store${path}`, init)
@@ -169,21 +151,11 @@ let count = (ctx: State, table: string): number =>
       .toArray()[0] as { n: number }).n,
   )
 
-let reportIn = (held: Map<string, string>): Report => {
-  let key = [...held.keys()].find((k) => k.endsWith('/report.json'))
-  assert(key, `no report among ${[...held.keys()]}`)
-  return JSON.parse(held.get(key)!) as Report
-}
-
-let rowsIn = (held: Map<string, string>): Record<string, unknown[]> => {
-  let key = [...held.keys()].find((k) => k.endsWith('/rows.jsonl'))
-  assert(key, `no export among ${[...held.keys()]}`)
-  let out: Record<string, unknown[]> = {}
-  for (let line of held.get(key)!.trim().split('\n')) {
-    let said = JSON.parse(line) as { kind: string; table?: string; rows?: [] }
-    if (said.kind == 'rows') out[said.table!] = said.rows!
-  }
-  return out
+// Why a store refused its pass, in the words its door says to every caller.
+let why = async (now: ReturnType<typeof newer>, app?: string) => {
+  let r = await now.door('/query?q=.doc!', {}, app)
+  assertEquals(r.status, 503)
+  return (await r.json() as { message: string }).message
 }
 
 // ---- an app's store --------------------------------------------------------
@@ -224,14 +196,9 @@ let seedApp = async (ctx: State) => {
 slow('an app store carries every row across, and reconciles', async () => {
   let ctx = state()
   let said = await seedApp(ctx)
-  let files = bucket()
 
-  let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+  let now = newer(ctx, 'ada/cookbook')
   let docs = await now.query(`.doc.title="Lemon cake"&.doc?`, APP)
-
-  let report = reportIn(files.held)
-  assert(report.ok, report.message)
-  assertEquals(report.store, 'ada/cookbook')
   assertEquals(docs.length, 1)
 
   // The prose came across the blob move: the column holds the address now, and
@@ -266,22 +233,16 @@ slow('an app store carries every row across, and reconciles', async () => {
   assertEquals(moved[0].entity.eid, edgeEid(TWO, 'referenced', ADA))
   assert(moved[0].entity.eid != said.refs, 'the address moved with the word')
 
-  // The dead stay dead, and the spine did not move at all.
-  let counts = Object.fromEntries(report.moved.map((m) => [m.table, m]))
-  assertEquals(counts.tombstone.from, 1)
-  assertEquals(counts.tombstone.to, 1)
-  assertEquals(counts.entity.from, counts.entity.to)
-  for (let m of report.moved) {
-    if (m.table == 'grant' || m.table == 'blob_text') continue
-    assertEquals(m.from, m.to, `${m.table}: ${m.from} → ${m.to}`)
-  }
+  // The dead stay dead, and every pass is done.
+  assertEquals(count(ctx, 'tombstone'), 1)
+  assertEquals(marker(ctx), TOOLED)
 
-  // The fleet's other words are named with their counts, and their rows are in
-  // the export and nowhere else — including the journal, which no store on the
-  // packages has a table for.
-  let rows = rowsIn(files.held)
-  assert(rows.journal_tx.length > 0, 'the journal is archived')
-  assert(rows.doc.length > 0, 'the old doc rows are archived')
+  // The fleet's other words have no table on the packages, the journal among
+  // them.
+  let tables = ctx.storage.sql
+    .exec("select name from sqlite_master where type = 'table'").toArray()
+    .map((r) => (r as { name: string }).name)
+  assert(!tables.some((t) => t.startsWith('journal_')), tables.join(', '))
 })
 
 slow("the runtime's own table is not the object's to move", async () => {
@@ -303,20 +264,9 @@ slow("the runtime's own table is not the object's to move", async () => {
     'SQLITE_AUTH',
   )
 
-  let files = bucket()
-  let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+  let now = newer(ctx, 'ada/cookbook')
   assertEquals((await now.query('.doc!', APP)).length, 3)
-  let report = reportIn(files.held)
-  assert(report.ok, report.message)
-
-  // Never enumerated: not exported, not carried, not even named as dropped.
-  // It was never this object's row to have an opinion about.
-  for (let table of Object.keys(rowsIn(files.held))) {
-    assert(!reserved(table), `${table} reached the export`)
-  }
-  for (let m of [...report.moved, ...report.dropped]) {
-    assert(!reserved(m.table), `${m.table} reached the report`)
-  }
+  assertEquals(marker(ctx), TOOLED)
 
   // And it is standing where the runtime left it, with its row — proof the pass
   // neither dropped it nor renamed it aside.
@@ -339,7 +289,7 @@ slow(
       ctx.slots.get('vocab'),
       '{"recipe":{"title":"text","serves":"number"}}',
     )
-    let now = newer(ctx, 'ada/cookbook', { EXPORTS: bucket().r2 })
+    let now = newer(ctx, 'ada/cookbook')
     // The door answers the document, and the app's word still reads.
     let said = await (await now.door('/vocab')).json()
     assertEquals(said.$defs.recipe.properties, {
@@ -402,16 +352,14 @@ Deno.test('the short type map, as the document it means', () => {
 slow('the second boot is a no-op', async () => {
   let ctx = state()
   await seedApp(ctx)
-  let files = bucket()
-  let first = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+  let first = newer(ctx, 'ada/cookbook')
   assertEquals((await first.query('.doc!', APP)).length, 3)
-  let after = [...files.held.keys()].length
+  assertEquals(marker(ctx), TOOLED)
 
   // A fresh incarnation over the same storage: the marker is written, the
-  // journal is gone, so nothing runs and nothing is exported a second time.
-  let again = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+  // journal is gone, so nothing runs a second time.
+  let again = newer(ctx, 'ada/cookbook')
   assertEquals((await again.query('.doc!', APP)).length, 3)
-  assertEquals([...files.held.keys()].length, after)
 
   // And a write still lands, which is the proof the schema the second boot
   // raised is the one the rows are in.
@@ -448,14 +396,11 @@ slow('the directory keeps its three seats', async () => {
       comp: { space: SPACE, person: BEN, role: 'editor' },
     },
   ])
-  let files = bucket()
-  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  let now = newer(ctx, PLATFORM_STORE)
 
   // Three seats, unsplit: the platform's own `member` declares them, so an
   // editor is still an editor.
   let seats = await now.query('.member!')
-  let report = reportIn(files.held)
-  assert(report.ok, report.message)
   assertEquals(seats.length, 2)
   assertEquals(
     seats.map((s) => (s.member as { role: string }).role).sort(),
@@ -465,7 +410,6 @@ slow('the directory keeps its three seats', async () => {
   // the other rung of its ladder, one app rather than a space (T-37615) — but
   // it is written by an invitation that names an app and never minted out of a
   // roster, so the table crosses empty.
-  assertEquals(report.moved.find((m) => m.table == 'grant')?.to ?? 0, 0)
   assertEquals((await now.query('.grant!')).length, 0)
   assertEquals((await now.query('.space.slug=ada')).length, 1)
   assertEquals((await now.query('.app.slug=cookbook')).length, 1)
@@ -489,8 +433,7 @@ slow('an app store splits the seat from the level', async () => {
       comp: { space: SPACE, person: BEN, role: 'editor' },
     },
   ])
-  let files = bucket()
-  let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+  let now = newer(ctx, 'ada/cookbook')
   // The app is named on the request, which is what a grant is on.
   let seats = await now.query('.member!', APP)
   assertEquals(seats.length, 2)
@@ -503,9 +446,6 @@ slow('an app store splits the seat from the level', async () => {
   assertEquals((grants[0].grant as { access: string }).access, 'editor')
   assertEquals((grants[0].grant as { person: string }).person, BEN)
   assertEquals((grants[0].grant as { app: string }).app, APP)
-  let report = reportIn(files.held)
-  assert(report.ok, report.message)
-  assertEquals(report.moved.find((m) => m.table == 'grant')?.to, 1)
 })
 
 // ---- `space.home` → `home{}` (T-34227) -------------------------------------
@@ -579,21 +519,10 @@ slow(
   async () => {
     let ctx = state()
     await seedHomes(ctx)
-    let files = bucket()
-    let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
-    assertEquals(await wearing(now), ['cookbook'])
-    let report = reportIn(files.held)
-    assert(report.ok, report.message)
+    let now = newer(ctx, PLATFORM_STORE)
     // One row per space that named one — `ben` named none and gets none.
-    assertEquals(
-      report.moved.find((m) => m.table == 'home'),
-      {
-        table: 'home',
-        from: 0,
-        to: 1,
-        note: '1 spaces named a front page in space.home',
-      },
-    )
+    assertEquals(await wearing(now), ['cookbook'])
+    assertEquals(count(ctx, 'home'), 1)
     // Every pass in the same breath, so none of them has anything to do.
     assertEquals(marker(ctx), TOOLED)
   },
@@ -607,24 +536,17 @@ slow(
 
     // A fresh incarnation over the same object — a deploy, in other words — and
     // the first request carries it the rest of the way.
-    let files = bucket()
-    let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+    let now = newer(ctx, PLATFORM_STORE)
     assertEquals(await wearing(now), ['cookbook'])
-    let report = reportIn(files.held)
-    assert(report.ok, report.message)
-    assertEquals(report.mark, HOMED)
-    assertEquals(report.moved.find((m) => m.table == 'home')?.to, 1)
+    assertEquals(count(ctx, 'home'), 1)
     // The old place is gone, so nothing can read the fact from two spellings.
     assertEquals(
       ctx.storage.sql.exec('pragma table_info(space)').toArray()
         .some((c) => (c as { name: string }).name == 'home'),
       false,
     )
-    // And it does not run again: the marker is written, and a third incarnation
-    // exports nothing.
-    let third = bucket()
-    newer(ctx, PLATFORM_STORE, { EXPORTS: third.r2 })
-    assertEquals(third.held.size, 0)
+    // And it does not run again: the marker is written.
+    assertEquals(marker(ctx), TOOLED)
   },
 )
 
@@ -634,16 +556,9 @@ slow(
     let ctx = state()
     let old = await seedHomes(ctx)
     await old.apply([{ eid: TWO, name: 'space', comp: { home: APP } }])
-    let files = bucket()
-    let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
-    let read = await now.door('/query?q=.app!')
-    assertEquals(read.status, 503)
-    let report = reportIn(files.held)
-    assertEquals(report.ok, false)
-    assert(
-      report.message?.includes('2 spaces named a front page'),
-      report.message,
-    )
+    let now = newer(ctx, PLATFORM_STORE)
+    let said = await why(now)
+    assert(said.includes('2 spaces named a front page'), said)
   },
 )
 
@@ -724,23 +639,11 @@ let carriedTwo = async (ctx: State) => {
 slow('a store carrying now arrives with the addresses moved', async () => {
   let ctx = state()
   await seedFormer(ctx)
-  let files = bucket()
-  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  let now = newer(ctx, PLATFORM_STORE)
   assertEquals(await answering(now), [
     ['cookbook', 'cookbook', ''],
     ['orchard', 'garden', 'plot'],
   ])
-  let report = reportIn(files.held)
-  assert(report.ok, report.message)
-  assertEquals(
-    report.moved.find((m) => m.table == 'former'),
-    {
-      table: 'former',
-      from: 0,
-      to: 2,
-      note: '2 apps had an address of their own, spelled "alias"',
-    },
-  )
   // The core word's table is planted and empty: an address is not a name tag,
   // so nothing was copied into it on the way past.
   assertEquals(count(ctx, 'alias'), 0)
@@ -754,16 +657,11 @@ slow('a directory that already carried moves them on next touch', async () => {
 
   // A fresh incarnation over the same object — a deploy, in other words — and
   // the first request carries it the rest of the way.
-  let files = bucket()
-  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  let now = newer(ctx, PLATFORM_STORE)
   assertEquals(await answering(now), [
     ['cookbook', 'cookbook', ''],
     ['orchard', 'garden', 'plot'],
   ])
-  let report = reportIn(files.held)
-  assert(report.ok, report.message)
-  assertEquals(report.mark, FORMER)
-  assertEquals(report.moved.find((m) => m.table == 'former')?.to, 2)
 
   // The old place is gone — the columns and the unique index the old word
   // declared — so the core word has the table to itself.
@@ -772,14 +670,8 @@ slow('a directory that already carried moves them on next touch', async () => {
   assertEquals(cols, ['entity'])
   assertEquals(count(ctx, 'alias'), 0)
 
-  // The rows reached R2 before one moved, which is the restore path.
-  assertEquals(rowsIn(files.held).alias.length, 2)
-
-  // And it does not run again: the marker is written, and a third incarnation
-  // exports nothing.
-  let third = bucket()
-  newer(ctx, PLATFORM_STORE, { EXPORTS: third.r2 })
-  assertEquals(third.held.size, 0)
+  // And it does not run again: the marker is written.
+  assertEquals(marker(ctx), TOOLED)
 })
 
 // ---- a domain's target: `hostname.app` → `hostname.serves` (T-34596) --------
@@ -821,8 +713,7 @@ slow('a domain aimed by the old column is aimed by the new one', async () => {
 
   // A fresh incarnation over the same object — a deploy — and the first
   // request carries it the rest of the way.
-  let files = bucket()
-  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  let now = newer(ctx, PLATFORM_STORE)
   let [row] = await now.query('.hostname!')
   assertEquals(
     (row.hostname as { name: string; serves: { eid: string } }).name,
@@ -830,21 +721,15 @@ slow('a domain aimed by the old column is aimed by the new one', async () => {
   )
   let aimed = (row.hostname as { serves: { eid: string } | string }).serves
   assertEquals(typeof aimed == 'string' ? aimed : aimed.eid, APP)
-  let report = reportIn(files.held)
-  assert(report.ok, report.message)
-  assertEquals(report.mark, SERVES)
 
   // The old column is gone with its values, so nothing can aim a domain two
-  // ways, and the rows reached R2 before one moved.
+  // ways.
   let cols = ctx.storage.sql.exec('pragma table_info(hostname)').toArray()
     .map((c) => (c as { name: string }).name)
   assert(!cols.includes('app'), cols.join(', '))
-  assertEquals(rowsIn(files.held).hostname.length, 1)
 
   // And it does not run again.
-  let third = bucket()
-  newer(ctx, PLATFORM_STORE, { EXPORTS: third.r2 })
-  assertEquals(third.held.size, 0)
+  assertEquals(marker(ctx), TOOLED)
 })
 
 // ---- an app's handle: `former.slug` → `app.store` (T-34657) -----------------
@@ -900,8 +785,7 @@ slow('an app named by its birth address is named by a handle', async () => {
 
   // A fresh incarnation over the same object — a deploy — and the first
   // request carries it the rest of the way.
-  let files = bucket()
-  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  let now = newer(ctx, PLATFORM_STORE)
   // Each app holds the exact string it was already stored under, so no object
   // is renamed and no byte moves; the addresses are the app's own history now,
   // read in the space's namespace rather than through the space's name.
@@ -910,10 +794,6 @@ slow('an app named by its birth address is named by a handle', async () => {
     ['orchard', 'ada/garden', 'garden plot'],
     ['shed', 'ada/shed', ''],
   ])
-  let report = reportIn(files.held)
-  assert(report.ok, report.message)
-  assertEquals(report.mark, HANDLED)
-  assertEquals(report.moved.find((m) => m.table == 'app')?.to, 3)
 
   // The unique index the birth address was decided by is down, which is what
   // lets one address be held by two apps a year apart (T-34659).
@@ -923,20 +803,14 @@ slow('an app named by its birth address is named by a handle', async () => {
   assert(!indexes.includes('former_slug'), indexes.join(', '))
   assert(indexes.includes('app_store'), indexes.join(', '))
 
-  // The rows reached R2 before one moved, which is the restore path.
-  assertEquals(rowsIn(files.held).app.length, 3)
-
   // And it does not run again.
-  let third = bucket()
-  newer(ctx, PLATFORM_STORE, { EXPORTS: third.r2 })
-  assertEquals(third.held.size, 0)
   assertEquals(marker(ctx), TOOLED)
 })
 
 slow('two apps may hold one address, and be two stores', async () => {
   let ctx = state()
   await carriedFour(ctx)
-  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: bucket().r2 })
+  let now = newer(ctx, PLATFORM_STORE)
   // `garden` is an address `orchard` left behind. A new app born there is a
   // write the index used to refuse; what keeps the two apart is the handle,
   // and the handle is not the address.
@@ -1008,25 +882,15 @@ for (let source of ['former', 'fallback']) {
     async () => {
       let ctx = state()
       await collision(ctx, source)
-      let files = bucket()
-      let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+      let now = newer(ctx, PLATFORM_STORE)
       let rows = [
         ['cookbook', 'ada/cookbook', 'cookbook'],
         ['orchard', 'ada/shed', 'shed plot'],
         ['shed', 'ada/shed.000002', source == 'former' ? 'shed' : ''],
       ]
       assertEquals(await handling(now), rows)
-      let report = reportIn(files.held)
-      assert(report.ok, report.message)
-      disambiguated(report)
       assertEquals(marker(ctx), TOOLED)
-      assertEquals(rowsIn(files.held).app.length, 3)
-      let next = bucket()
-      assertEquals(
-        await handling(newer(ctx, PLATFORM_STORE, { EXPORTS: next.r2 })),
-        rows,
-      )
-      assertEquals(next.held.size, 0)
+      assertEquals(await handling(newer(ctx, PLATFORM_STORE)), rows)
     },
   )
 }
@@ -1039,14 +903,13 @@ slow('a handle already assigned stays with its app', async () => {
     'ada/shed',
     TWO,
   )
-  let files = bucket()
-  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  let now = newer(ctx, PLATFORM_STORE)
   assertEquals(await handling(now), [
     ['cookbook', 'ada/cookbook', 'cookbook'],
     ['orchard', 'ada/orchard.000001', 'shed plot'],
     ['shed', 'ada/shed', ''],
   ])
-  assert(reportIn(files.held).ok)
+  assertEquals(marker(ctx), TOOLED)
 })
 
 slow('a directory grows the handle column before indexing it', async () => {
@@ -1057,14 +920,13 @@ slow('a directory grows the handle column before indexing it', async () => {
   sql.exec('drop index app_store')
   sql.exec('alter table app drop column store')
   sql.exec("update yak_kv set v = 'before handles' where k = 'schema'")
-  let files = bucket()
-  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  let now = newer(ctx, PLATFORM_STORE)
   assertEquals(await handling(now), [
     ['cookbook', 'ada/cookbook', 'cookbook'],
     ['orchard', 'ada/shed', 'shed plot'],
     ['shed', 'ada/shed.000002', ''],
   ])
-  disambiguated(reportIn(files.held))
+  assertEquals(marker(ctx), TOOLED)
   assertEquals(
     sql.exec('pragma index_info(app_store)').toArray()[0].name,
     'store',
@@ -1096,11 +958,7 @@ for (let conflict of ['suffix', 'index']) {
       let no = assertThrows(
         () =>
           ctx.storage.transactionSync(() =>
-            handled(ctx.storage, {
-              store: PLATFORM_STORE,
-              app: null,
-              export: 'store/probe/rows.jsonl',
-            })
+            handled(ctx.storage, { store: PLATFORM_STORE, app: null })
           ),
         Unreconciled,
       )
@@ -1109,16 +967,11 @@ for (let conflict of ['suffix', 'index']) {
         assert(/unique/i.test(no.message), no.message)
       }
 
-      let files = bucket()
-      let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+      let now = newer(ctx, PLATFORM_STORE)
       let read = await now.door('/query?q=.app!')
       assertEquals(read.status, 503)
       assertEquals(read.headers.get('x-yak-migration'), 'refused')
       assertEquals((await read.json()).error, 'Refused')
-      let report = reportIn(files.held)
-      assertEquals(report.ok, false)
-      disambiguated(report)
-      assertEquals(rowsIn(files.held).app, before)
       assertEquals(sql.exec('select * from app').toArray(), before)
       assertEquals(sql.exec('select * from former').toArray(), history)
       assertEquals(marker(ctx), SERVES)
@@ -1160,38 +1013,27 @@ Deno.test('a raw constraint failure in a pass refuses once and rolls back', asyn
   let sql = ctx.storage.sql
   sql.exec(`create trigger refuse_home before insert on home begin
     select raise(abort, 'UNIQUE constraint failed: home.entity'); end`)
-  let files = bucket()
-  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  let now = newer(ctx, PLATFORM_STORE)
   await refused(now, 'UNIQUE constraint failed')
-  let report = reportIn(files.held)
-  assertEquals(report.ok, false)
-  assertEquals(report.mark, HOMED)
   assertEquals(marker(ctx), MARK)
   assertEquals(count(ctx, 'home'), 0)
-  assertEquals(rowsIn(files.held).space.length, 2)
-  assert(files.held.has(report.export.replace('rows.jsonl', 'report.json')))
-  assertEquals(files.held.size, 2)
   await refused(
-    newer(ctx, PLATFORM_STORE, { EXPORTS: bucket().r2 }),
+    newer(ctx, PLATFORM_STORE),
     'UNIQUE constraint failed',
   )
   assertEquals(marker(ctx), MARK)
 })
 
-Deno.test('a declared index failure refuses constructor boot with an export', async () => {
+Deno.test('a declared index failure refuses constructor boot', async () => {
   let ctx = state()
   await carriedOne(ctx)
   let sql = ctx.storage.sql
   sql.exec('drop index space_slug')
   sql.exec("update space set slug = 'same'")
   sql.exec("update yak_kv set v = 'older schema' where k = 'schema'")
-  let files = bucket()
-  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  let now = newer(ctx, PLATFORM_STORE)
   await refused(now, 'skipped unique index space_slug')
   assertEquals(marker(ctx), MARK)
-  assertEquals(reportIn(files.held).ok, false)
-  assertEquals(rowsIn(files.held).space.length, 2)
-  assertEquals(files.held.size, 2)
   assertEquals(sql.exec("select v from yak_kv where k = 'schema'").toArray(), [{
     v: 'older schema',
   }])
@@ -1214,8 +1056,7 @@ Deno.test('boot leaves a populated table constraint for its preparing pass', asy
     }
     return exec(query, ...params)
   }
-  let files = bucket()
-  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  let now = newer(ctx, PLATFORM_STORE)
   assertEquals(created, false)
   assertEquals((await now.door('/query?q=.app!')).status, 200)
   assertEquals(created, true)
@@ -1232,12 +1073,9 @@ Deno.test('a raw index creation failure still refuses an empty store', async () 
     }
     return exec(query, ...params)
   }
-  let files = bucket()
-  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  let now = newer(ctx, PLATFORM_STORE)
   await refused(now, 'index creation failed')
   assertEquals(marker(ctx), null)
-  assertEquals(reportIn(files.held).ok, false)
-  assertEquals(files.held.size, 2)
 })
 
 Deno.test('a marker write failure rolls back its pass, even for a thrown value', async () => {
@@ -1250,19 +1088,16 @@ Deno.test('a marker write failure rolls back its pass, even for a thrown value',
     }
     return exec(query, ...params)
   }
-  let files = bucket()
-  let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+  let now = newer(ctx, PLATFORM_STORE)
   await refused(now, 'marker unavailable')
   assertEquals(marker(ctx), MARK)
   assertEquals(count(ctx, 'home'), 0)
-  assertEquals(reportIn(files.held).mark, HOMED)
 })
 
 for (let door of ['constructor', 'vocab']) {
-  Deno.test(`a ${door} schema failure preserves vocabulary and exports current metadata`, async () => {
+  Deno.test(`a ${door} schema failure preserves vocabulary and metadata`, async () => {
     let ctx = state()
-    let files = bucket()
-    let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+    let now = newer(ctx, 'ada/cookbook')
     assertEquals(
       (await now.door('/vocab', {
         method: 'POST',
@@ -1299,7 +1134,7 @@ for (let door of ['constructor', 'vocab']) {
       return exec(query, ...params)
     }
     if (door == 'constructor') {
-      now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+      now = newer(ctx, 'ada/cookbook')
     } else {
       let response = await now.door('/vocab', {
         method: 'POST',
@@ -1324,23 +1159,14 @@ for (let door of ['constructor', 'vocab']) {
       sql.exec("select name from sqlite_master where name = 'menu'").toArray(),
       [],
     )
-    let report = reportIn(files.held)
-    let dump = files.held.get(report.export)!
-    let slots = dump.trim().split('\n').map((line) =>
-      JSON.parse(line)
-    ).find((r) => r.kind == 'slots').slots
-    assertEquals(slots.name, 'ada/cookbook')
     // The slot keeps the document the manifest means (graph.ts `#vocabDoor`),
     // whichever spelling the deploy was written in.
-    assertEquals(JSON.parse(slots.vocab).$defs.recipe.properties, {
+    let slot = (k: string) =>
+      (before as { k: string; v: string }[]).find((r) => r.k == k)!.v
+    assertEquals(slot('name'), 'ada/cookbook')
+    assertEquals(JSON.parse(slot('vocab')).$defs.recipe.properties, {
       title: { type: 'string' },
     })
-    assertEquals(
-      slots.schema,
-      (before as { k: string; v: string }[]).find((r) =>
-        r.k == 'schema'
-      )!.v,
-    )
   })
 }
 
@@ -1353,8 +1179,7 @@ for (
 ) {
   Deno.test(`an identity write throwing an ${label} is a persistent refusal`, async () => {
     let ctx = state()
-    let files = bucket()
-    let now = newer(ctx, PLATFORM_STORE, { EXPORTS: files.r2 })
+    let now = newer(ctx, PLATFORM_STORE)
     let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
     ctx.storage.sql.exec = (query, ...params) => {
       if (query.startsWith('insert into yak_kv') && params[0] == 'name') {
@@ -1364,38 +1189,8 @@ for (
     }
     await refused(now, message)
     assertEquals(marker(ctx), null)
-    assertEquals(reportIn(files.held).ok, false)
   })
 }
-
-slow('no bucket, no migration', async () => {
-  let ctx = state()
-  await seedApp(ctx)
-  let now = newer(ctx, 'ada/cookbook')
-  let write = await now.door('/apply', {
-    method: 'POST',
-    body: JSON.stringify([{ entity: { eid: BEN }, person: {} }]),
-  }, APP)
-  assertEquals(write.status, 503)
-  assert((await write.text()).includes('EXPORTS'))
-
-  // A read is refused in the same words, and the rows are untouched: the pass
-  // did not start, so the old tables are standing exactly as they were.
-  let read = await now.door('/query?q=.doc!', {}, APP)
-  assertEquals(read.status, 503)
-  assertEquals(read.headers.get('x-yak-migration'), 'refused')
-  assertEquals(count(ctx, 'doc'), 3)
-  assertEquals(count(ctx, 'journal_tx') > 0, true)
-
-  // The meter still reads: how much an object weighs is a question about its
-  // storage, not about its graph, and an object in this state still has one.
-  let weighed = await now.door('/graph', {}, APP)
-  assertEquals(weighed.status, 200)
-  assertEquals(
-    (await weighed.json() as { migration: string }).migration,
-    'refused',
-  )
-})
 
 slow('a re-addressing that collides rolls the whole pass back', async () => {
   let ctx = state()
@@ -1412,8 +1207,7 @@ slow('a re-addressing that collides rolls the whole pass back', async () => {
     { eid: refs, name: 'edge', comp: { from: TWO, to: ADA } },
     { eid: refs, name: 'references', comp: {} },
   ])
-  let files = bucket()
-  let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+  let now = newer(ctx, 'ada/cookbook')
 
   // The rows are exactly what they were: the pass ran in one transaction and it
   // unwound. The object says so rather than serving half a graph.
@@ -1421,16 +1215,13 @@ slow('a re-addressing that collides rolls the whole pass back', async () => {
   assertEquals(read.status, 503)
   assertEquals(count(ctx, 'doc'), 3)
   assertEquals(count(ctx, 'references'), 1)
-  let report = reportIn(files.held)
-  assertEquals(report.ok, false)
-  assert(/unique/i.test(report.message ?? ''), report.message)
+  let said = await why(now, APP)
+  assert(/unique/i.test(said), said)
   let write = await now.door('/apply', {
     method: 'POST',
     body: JSON.stringify([{ entity: { eid: BEN }, person: {} }]),
   }, APP)
   assertEquals(write.status, 503)
-  assert((await write.text()).includes('rows.jsonl'))
-  assertEquals(rowsIn(files.held).references.length, 1)
 })
 
 slow('counts that do not reconcile refuse the pass', async () => {
@@ -1466,7 +1257,6 @@ slow('counts that do not reconcile refuse the pass', async () => {
           )
         },
         grantEid: (app, person) => `${app}:${person}`,
-        export: 'store/probe/rows.jsonl',
       })
     )
   } catch (e) {
@@ -1489,22 +1279,15 @@ slow('a body nothing holds refuses the pass', async () => {
       '(select body from doc where entity = (select id from entity where eid = ' +
       `'${ONE}'))`,
   )
-  let files = bucket()
-  let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+  let now = newer(ctx, 'ada/cookbook')
   let write = await now.door('/apply', {
     method: 'POST',
     body: JSON.stringify([{ entity: { eid: BEN }, person: {} }]),
   }, APP)
   assertEquals(write.status, 503)
-  let report = reportIn(files.held)
-  assertEquals(report.ok, false)
-  assert(/address a body/.test(report.message ?? ''), report.message)
+  let said = await why(now, APP)
+  assert(/address a body/.test(said), said)
   assertEquals(count(ctx, 'doc'), 3)
-})
-
-Deno.test('the export key names the object and the moment', () => {
-  let key = keyOf('ada/cookbook', '2026-09-05T10:11:12.000Z')
-  assertEquals(key, 'store/ada/cookbook/2026-09-05T10-11-12.000Z')
 })
 
 // ---- the definitions, when the schema moves under them ---------------------
@@ -1640,11 +1423,10 @@ let beforeFiling = async (ctx: State) => {
   )
 }
 
-Deno.test('app filing exports, preserves every value and never resurrects a cleared filing', async () => {
+Deno.test('app filing preserves every value and never resurrects a cleared filing', async () => {
   let ctx = state()
   await beforeFiling(ctx)
-  let files = bucket()
-  let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+  let now = newer(ctx, 'ada/cookbook')
   let [row] = await now.query('.task!&.filed?')
   assertEquals(row.task, { status: 'open' })
   let filing = row.filed as Record<string, unknown>
@@ -1653,8 +1435,6 @@ Deno.test('app filing exports, preserves every value and never resurrects a clea
   // The Store returns canonical reference identities (the app decorates them).
   assertEquals(filing.project, SPACE)
   assertEquals(filing.assignee, ADA)
-  assertEquals(rowsIn(files.held).task.length, 1)
-  assertEquals(reportIn(files.held).mark, FILED)
   assertEquals(marker(ctx), TOOLED)
   let r = await now.door('/apply', {
     method: 'POST',
@@ -1662,20 +1442,12 @@ Deno.test('app filing exports, preserves every value and never resurrects a clea
     body: JSON.stringify([{ entity: { eid: ONE }, filed: null }]),
   })
   assert(r.ok, await r.text())
-  let again = bucket()
-  assertEquals(
-    await newer(ctx, 'ada/cookbook', { EXPORTS: again.r2 }).query('.filed!'),
-    [],
-  )
-  assertEquals(again.held.size, 0)
+  assertEquals(await newer(ctx, 'ada/cookbook').query('.filed!'), [])
 })
 
-Deno.test('app filing refuses without export and rolls back a conflicting destination', async () => {
+Deno.test('app filing rolls back a conflicting destination', async () => {
   let ctx = state()
   await beforeFiling(ctx)
-  await refused(newer(ctx, 'ada/cookbook'), 'no export bucket')
-  assertEquals(marker(ctx), HANDLED)
-  assertEquals(count(ctx, 'filed'), 0)
   // The first row is copied before the second conflicts; both changes must
   // roll back, not just the offending row.
   ctx.storage.sql.exec('insert into entity(eid, num) values (?, 99)', TWO)
@@ -1687,11 +1459,7 @@ Deno.test('app filing refuses without export and rolls back a conflicting destin
     'insert into filed(entity, priority) select id, 9 from entity where eid = ?',
     TWO,
   )
-  let files = bucket()
-  await refused(
-    newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 }),
-    'conflicts with filed.priority',
-  )
+  await refused(newer(ctx, 'ada/cookbook'), 'conflicts with filed.priority')
   assertEquals(marker(ctx), HANDLED)
   assertEquals(ctx.storage.sql.exec('select priority from task').toArray(), [{
     priority: 2,
@@ -1699,7 +1467,6 @@ Deno.test('app filing refuses without export and rolls back a conflicting destin
   assertEquals(ctx.storage.sql.exec('select priority from filed').toArray(), [{
     priority: 9,
   }])
-  assertEquals(rowsIn(files.held).task.length, 2)
 })
 
 slow(
@@ -1716,12 +1483,10 @@ slow(
     ctx.storage.sql.exec('alter table task add column priority real')
     ctx.storage.sql.exec('alter table task add column domain text')
     ctx.storage.sql.exec("update task set priority = 2, domain = 'Garden'")
-    let files = bucket()
-    let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+    let now = newer(ctx, 'ada/cookbook')
     let [row] = await now.query('.task!&.filed?')
     assertEquals((row.filed as { priority: number }).priority, 2)
     assertEquals((row.filed as { domain: string }).domain, 'Garden')
-    assertEquals(rowsIn(files.held).task.length, 1)
     assertEquals(marker(ctx), TOOLED)
   },
 )
@@ -1765,8 +1530,7 @@ let tooling = (ctx: State) =>
 Deno.test('a store with tools at old ids and twins boots, merges and indexes', async () => {
   let ctx = state()
   await toolsOld(ctx, ['add_chore', 'find_chore'], ['add_chore'])
-  let files = bucket()
-  let now = newer(ctx, 'ada/cookbook', { EXPORTS: files.r2 })
+  let now = newer(ctx, 'ada/cookbook')
   let calls = await now.query('.call!')
   assertEquals(calls.length, 3)
   assertEquals(
@@ -1777,10 +1541,6 @@ Deno.test('a store with tools at old ids and twins boots, merges and indexes', a
     { eid: toolEid('add_chore'), name: 'add_chore' },
     { eid: toolEid('find_chore'), name: 'find_chore' },
   ])
-  assertEquals(rowsIn(files.held).tool.length, 3)
-  let report = reportIn(files.held)
-  assertEquals([report.mark, report.ok], [TOOLED, true])
-  assertEquals(report.moved[0].to, 2)
   assertEquals(marker(ctx), TOOLED)
   assertThrows(
     () => ctx.storage.sql.exec("update tool set name = 'add_chore'").toArray(),
@@ -1812,7 +1572,7 @@ Deno.test('a refused migration reaches Sentry, tagged with its store', async () 
     'insert into edge (entity, "from", "to") select l.id, t.entity, t.entity' +
       " from entity l, tool t where l.eid = 'link'",
   )
-  let now = newer(ctx, 'ada/cookbook', { EXPORTS: bucket().r2 })
+  let now = newer(ctx, 'ada/cookbook')
   await refused(now, 'links touch a tool')
   await client.flush(1000)
   assertEquals(seen.length, 1)

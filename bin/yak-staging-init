@@ -5,7 +5,7 @@
 
 import { fileURLToPath } from 'node:url'
 export let DISPATCH = 'yak-apps-staging'
-export let BUCKETS = ['yak-blobs-staging', 'yak-store-exports-staging']
+export let BUCKETS = ['yak-blobs-staging']
 export let VECTORIZE = 'yak-memories-staging'
 export let OAUTH_KV = 'yak-oauth-staging'
 

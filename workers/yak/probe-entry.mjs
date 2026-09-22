@@ -41,7 +41,7 @@ function scoped(env, scope) {
       }),
     }
   }
-  for (const name of ['OAUTH_KV', 'BLOBS', 'EXPORTS']) {
+  for (const name of ['OAUTH_KV', 'BLOBS']) {
     const binding = env[name]
     if (!binding) continue
     result[name] = new Proxy(binding, {

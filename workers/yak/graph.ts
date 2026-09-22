@@ -150,26 +150,18 @@ import { caught, defect } from './sentry.ts'
 import { apex, url } from './host.ts'
 import {
   addressed,
-  addresses,
   aimedOld,
-  aims,
-  type Bucket,
   carry,
   documented,
   FILED,
   filed,
-  filings,
   FORMER,
   HANDLED,
   handled,
-  handles,
   HOMED,
   homed,
-  homes,
   housed,
   install,
-  keyOf,
-  lines,
   MARK,
   MARKS,
   mistooled,
@@ -182,11 +174,8 @@ import {
   type Slots,
   slugged,
   stale,
-  type Taken,
-  taken,
   TOOLED,
   tooled,
-  tools as toolRows,
   unfiled,
   unhandled,
 } from './migrate.ts'
@@ -269,12 +258,11 @@ export type State = Hibernation & {
   abort?(reason?: string): void
 }
 
-/** The Worker's bindings: migration exports and outgoing mail for every
- * store, and `#Env` for the directory's platform rules. The rules in app
+/** The Worker's bindings: outgoing mail for every store, and `#Env` for the
+ * directory's platform rules. The rules in app
  * stores receive no platform bindings, even if an app declares matching tags.
  * A stand-in may supply only the bindings its operations need. */
-export type Bindings = Omit<Partial<Env>, 'EXPORTS'> & {
-  EXPORTS?: Bucket
+export type Bindings = Partial<Env> & {
   MAIL?: Binding
   STORE?: Namespace
 }
@@ -470,8 +458,6 @@ export class Store {
   #passing: Promise<void> | null = null
   // Why the pass refused, when it did. The rows are the old ones, untouched.
   #refused: string | null = null
-  #failure: Unreconciled | null = null
-  #reporting: Promise<void> | null = null
   // This object's one alarm (D-37562), or null where the runtime under it has
   // none. One adapter for the incarnation: `arm` serializes its read-compare-
   // write per storage object, so two wakes arriving together cannot leave the
@@ -1251,12 +1237,16 @@ export class Store {
    * promise is kept so a second caller inside this incarnation waits on the
    * first rather than starting a second pass. */
   #pass(request: Request): Promise<void> {
-    // Keep the settled promise: retries would export the same refusal on every
+    // Keep the settled promise: retries would report the same refusal on every
     // request, and a rejected runtime gate would restart the object.
-    let go = () =>
-      this.#passes(request).catch((e) => {
+    let go = () => {
+      try {
+        this.#passes(request)
+      } catch (e) {
         this.#failed(e, this.#pending ? MARK : 'schema')
-      })
+      }
+      return Promise.resolve()
+    }
     return this.#passing ??= this.#ctx.blockConcurrencyWhile
       ? this.#ctx.blockConcurrencyWhile(go)
       : go()
@@ -1265,39 +1255,38 @@ export class Store {
   /** Every pass this object is behind, oldest first: the move off the
    * fleet-shaped store, then each one after it. A refusal stops the line —
    * a later pass reads what an earlier one wrote. */
-  async #passes(request: Request) {
-    if (this.#pending) await this.#carrying(request)
+  #passes(request: Request) {
+    if (this.#pending) this.#carrying(request)
     // The second (T-34227): `space.home` becomes `home{}` on the app it named.
     if (!this.#refused) {
-      await this.#after(request, HOMED, housed, homes, homed)
+      this.#after(request, HOMED, housed, homed)
     }
     // The third (T-34390): the app addresses move out of the table the core
     // word `alias` now owns and into `former`.
     if (!this.#refused) {
-      await this.#after(request, FORMER, slugged, addresses, addressed)
+      this.#after(request, FORMER, slugged, addressed)
     }
     // The fourth (T-34596): a domain's target moves out of `app`, which named
     // the one app it opened, and into `serves`, which names the app or the
     // whole space. Only the directory has a hostname to move.
     if (!this.#refused) {
-      await this.#after(request, SERVES, aimedOld, aims, served)
+      this.#after(request, SERVES, aimedOld, served)
     }
-    // The fifth (T-34657): an app's handle — what its store, its script and its
-    // export path are named by — becomes a column of its own instead of the
-    // address it was born at. Only the directory has an app row to name.
+    // The fifth (T-34657): an app's handle — what its store and its script are
+    // named by — becomes a column of its own instead of the address it was born
+    // at. Only the directory has an app row to name.
     if (!this.#refused) {
-      await this.#after(request, HANDLED, unhandled, handles, handled)
+      this.#after(request, HANDLED, unhandled, handled)
     }
     if (!this.#refused) {
-      await this.#after(request, FILED, unfiled, filings, filed)
+      this.#after(request, FILED, unfiled, filed)
     }
     // The seventh (D-37943): a tool takes the id its name derives.
     if (!this.#refused) {
-      await this.#after(
+      this.#after(
         request,
         TOOLED,
         mistooled,
-        toolRows,
         (storage, o) => tooled(storage, { ...o, vocab: this.#graph.vocab }),
       )
     }
@@ -1305,51 +1294,36 @@ export class Store {
   }
 
   /**
-   * One pass after the first, whichever it is (migrate.ts `MARKS`): the rows it
-   * is about reach R2 before one moves, the move is one transaction, the report
-   * is written beside them, and the marker is written only when it reconciles.
-   * An object with nothing to move writes the marker and nothing else, so it is
-   * never asked again — which is every app store for every one of these.
+   * One pass after the first, whichever it is (migrate.ts `MARKS`): the move is
+   * one transaction, and the marker is written only when it reconciles. An
+   * object with nothing to move writes the marker and nothing else, so it is
+   * never asked again — which is every app store for every one of these. The
+   * restore path is the Durable Object's point-in-time recovery.
    *
-   * The three differ in four words each, so they are four arguments and not
-   * three copies of this: what the object still holds, the rows to read out,
-   * the move, and the marker it earns.
+   * The passes differ in three words each, so they are three arguments and not
+   * copies of this: what the object still holds, the move, and the marker it
+   * earns.
    */
-  async #after(
+  #after(
     request: Request,
     mark: string,
     holds: (storage: State['storage']) => boolean,
-    rows: (storage: State['storage']) => Taken,
     move: (
       storage: State['storage'],
-      o: { store: string; app: string | null; export: string },
+      o: { store: string; app: string | null },
     ) => Report,
   ) {
     let ctx = this.#ctx
     let name = request.headers.get('x-store') ?? ''
     let app = request.headers.get('x-yak-app')
-    let wrote = ''
     try {
       name ||= this.#get('name') ?? ''
       if (MARKS.indexOf(this.#get('migrated') ?? '') >= MARKS.indexOf(mark)) {
         return
       }
       if (!holds(ctx.storage)) return void this.#put('migrated', mark)
-      let bucket = this.#bind.EXPORTS
-      if (!bucket) {
-        throw new Error(
-          'no export bucket is bound (EXPORTS): this store will ' +
-            'not move a row without a restore path',
-        )
-      }
-      let dump = rows(ctx.storage)
-      dump.store = name
-      let key = keyOf(name, dump.at)
-      let path = `${key}/rows.jsonl`
-      await bucket.put(path, lines(dump))
-      wrote = path
-      let report = ctx.storage.transactionSync(() => {
-        let report = move(ctx.storage, { store: name, app, export: wrote })
+      ctx.storage.transactionSync(() => {
+        let report = move(ctx.storage, { store: name, app })
         // Legacy passes write physical tables directly, outside graph tracking.
         // Reclassify their rows before any presence-based reads can observe them.
         if (this.#graph.vocab.comp('archetype')) {
@@ -1360,21 +1334,18 @@ export class Store {
         if (!report.ok) throw new Unreconciled(report)
         // A marker and its rows must commit together, including on write failure.
         this.#put('migrated', mark)
-        return report
       })
-      await this.#report(report)
     } catch (e) {
-      this.#failed(e, mark, name, app, wrote)
+      this.#failed(e, mark, name)
     }
   }
 
   /**
-   * Export, carry, reconcile — in that order, because the order is the safety.
-   * The export reaches R2 before a row moves, the carry is one transaction that
-   * either lands whole or leaves the object exactly as it was, and the report
-   * is written either way, beside the rows it is about.
+   * Carry, then reconcile — in that order, because the order is the safety.
+   * The carry is one transaction that either lands whole or leaves the object
+   * exactly as it was.
    */
-  async #carrying(request: Request) {
+  #carrying(request: Request) {
     let ctx = this.#ctx
     let slots = ctx.storage.kv
     // What the object is: the kernel says so on every request, and the store it
@@ -1390,11 +1361,10 @@ export class Store {
     // short type map (migrate.ts `documented`): the carry raises the new schema
     // out of it, so it is the document before anything reads it.
     this.#documenting()
-    await this.#after(
+    this.#after(
       request,
       MARK,
       () => true,
-      () => taken(ctx.storage, slots),
       (storage, o) =>
         carry(storage, {
           ...o,
@@ -1407,36 +1377,16 @@ export class Store {
     this.#pending = false
   }
 
-  #failed(
-    e: unknown,
-    mark: string,
-    store = '',
-    app: string | null = null,
-    exported = '',
-  ) {
+  #failed(e: unknown, mark: string, store = '') {
     let message = 'the migration refused'
     try {
       message = (e instanceof Error ? e.message : String(e)) || message
     } catch { /* a thrown value need not be printable */ }
-    let no = e instanceof Unreconciled ? e : new Unreconciled({
-      store,
-      app,
-      at: new Date().toISOString(),
-      ok: false,
-      message,
-      mark,
-      moved: [],
-      dropped: [],
-      export: exported,
-    })
-    no.report.message ||= message
-    this.#failure = no
-    this.#refused = no.report.message
+    this.#refused = message
     this.#pending = false
     this.#behind = false
     // A refused store answers nothing, so it is a defect, not an answer:
-    // Sentry hears it named by the store and the pass, even when the export
-    // binding is unavailable.
+    // Sentry hears it named by the store and the pass.
     let named = store
     try {
       named ||= this.#get('name') ?? ''
@@ -1445,70 +1395,23 @@ export class Store {
     console.warn('store: migration refused', this.#refused)
   }
 
-  async #report(report: Report) {
-    try {
-      await this.#bind.EXPORTS?.put(
-        `${
-          report.export
-            ? report.export.slice(0, -'/rows.jsonl'.length)
-            : keyOf(report.store, report.at)
-        }/report.json`,
-        JSON.stringify(report, null, 2),
-      )
-    } catch (e) {
-      caught(e, { request: 'migration report', store: report.store })
-    }
-  }
-
-  async #record(request: Request) {
-    let report = this.#failure!.report
-    report.store ||= request.headers.get('x-store') ?? ''
-    report.app ??= request.headers.get('x-yak-app')
-    let bucket = this.#bind.EXPORTS
-    if (!bucket) return
-    if (!report.export) {
-      try {
-        let storage = this.#ctx.storage
-        let dump = taken(
-          storage,
-          stale(storage) ? storage.kv : {
-            get: (k) => this.#get(k as Word),
-          },
-        )
-        dump.store = report.store
-        dump.at = report.at
-        let wrote = `${keyOf(report.store, report.at)}/rows.jsonl`
-        await bucket.put(wrote, lines(dump))
-        report.export = wrote
-      } catch (e) {
-        caught(e, { request: 'migration export', store: report.store })
-      }
-    }
-    await this.#report(report)
-    if (report.export) {
-      this.#refused = `${report.message} — the rows are unchanged and ` +
-        `exported to ${report.export}`
-    }
-  }
-
   /**
    * The object after a refusal. The rows are the old ones, exactly as they were
    * — the pass ran in one transaction and it unwound — and this object cannot
    * read them: they are in the fleet's shape, and everything above the storage
    * here is raised from a vocabulary that has no tables for it. So it says so,
-   * with the export key, and answers nothing else.
+   * and answers nothing else.
    *
    * There is no half-open door to hold here. What a page asks a store is
    * `/query?q=`, which the fleet's own door does not parse at all (it reads the
    * whole query string as the filter line), so an app that could still be read
    * "in the old grammar" is an app no client of it could read. A refusal that
-   * says what happened and where the rows are is the whole of what is useful,
-   * and every byte is in R2. `/graph` is the exception, and only because it
-   * answers off the storage rather than off the graph: the meter reads an
-   * object's size, and an object in this state still has one.
+   * says what happened is the whole of what is useful. `/graph` is the
+   * exception, and only because it answers off the storage rather than off the
+   * graph: the meter reads an object's size, and an object in this state still
+   * has one.
    */
-  async #stalled(request: Request): Promise<Response> {
-    await (this.#reporting ??= this.#record(request))
+  #stalled(request: Request): Response {
     let why = this.#refused ?? 'this store has not migrated'
     if (new URL(request.url).pathname == '/graph') {
       return Response.json({
