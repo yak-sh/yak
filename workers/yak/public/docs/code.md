@@ -441,7 +441,7 @@ and nothing is swallowed here:
   passed through does not fill the person's error list.
 
 Either way `app_errors` lists what is open and the person's agent hears about it
-once, on its next reply.
+once, on its next reply from a tool that changes something.
 
 The one thing worth catching is an outside call, so you can answer the page
 something better than a stack: catch it, and return a 4xx with a message.

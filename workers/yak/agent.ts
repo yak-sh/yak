@@ -120,15 +120,21 @@ export let inputOf = (
  * every break not yet served, once, then the month's ceiling. It rode on the
  * door before (mcp.ts `call`) and rides on the tool now, because the door no
  * longer knows what a space is.
+ *
+ * Only a tool that writes carries it. Serving the block marks each break
+ * `notified` and the space told, and a tool that says `readOnly` promises the
+ * host it changes nothing a person would notice — so a look-up leaves the
+ * news where it is, for the next write or `app_errors` to say.
  */
 export let answered = async (
   ctx: Ctx,
   out: Out,
   call?: Eid,
+  readOnly = false,
 ): Promise<Bundle[]> => {
   // Nobody signed in has no space to be told what is unseen in (anon.ts): the
   // breaks in an app are its members', and a stranger is not one.
-  let text = !out.space || !ctx.person ? out.text : out.text +
+  let text = !out.space || !ctx.person || readOnly ? out.text : out.text +
     unseenBlock(
       await serve(ctx.env, out.space, {
         person: ctx.person,
@@ -154,7 +160,7 @@ export let answered = async (
  */
 export let running =
   (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>, call?: Eid) =>
-    t.run(ctx, args).then((out) => answered(ctx, out, call))
+    t.run(ctx, args).then((out) => answered(ctx, out, call, t.readOnly))
 
 // What the transport says about a tool beside its schemas: what it declares
 // about signing in where that is not the door's own (preauth.ts NOAUTH — every

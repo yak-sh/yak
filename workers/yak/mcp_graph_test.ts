@@ -502,12 +502,17 @@ slow('the free tier: a warning once, then the refusals', async () => {
     // empties the directory's read cache; a directory write is.
     await agent.tool('space_new', { slug: 'brim-too', title: 'Too' })
 
-    // The line rides the unseen channel, once — the reply after is quiet.
-    let said = await agent.tool('app_list', { space: 'brim' })
+    // The line rides the unseen channel, once — the reply after is quiet. A
+    // look-up leaves it unsaid: only a tool that writes carries the channel.
+    assert(
+      !(await agent.tool('app_list', { space: 'brim' })).includes('## ceiling'),
+    )
+    let files = { space: 'brim', app: 'one', op: 'list' }
+    let said = await agent.tool('app_files', files)
     assertStringIncludes(said, '## ceiling')
     assertStringIncludes(said, '40,500 of 50,000 requests')
     assertStringIncludes(said, 'App serving pauses at')
-    let again = await agent.tool('app_list', { space: 'brim' })
+    let again = await agent.tool('app_files', files)
     assert(!again.includes('## ceiling'), 'the ceiling line is said once')
 
     // Four more apps make five, which is the tier. The fifth is fine.

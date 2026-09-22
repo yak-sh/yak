@@ -402,6 +402,8 @@ let STATS: Row[] = [
   {
     name: 'app_stats',
     readOnly: true,
+    // The numbers come from Cloudflare's analytics, past yaks.app.
+    openWorld: true,
     input: {
       type: 'object',
       properties: {

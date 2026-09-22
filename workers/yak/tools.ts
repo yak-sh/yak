@@ -1955,6 +1955,8 @@ let OURS: Row[] = [
   {
     name: 'space_sell',
     destructive: false,
+    // Asked again, it converges on the same connected account (sell.ts).
+    idempotent: true,
     openWorld: true,
     input: {
       type: 'object',
@@ -2551,7 +2553,8 @@ let OURS: Row[] = [
   // for on purpose, whenever a dataset needs to go in.
   {
     name: 'store_load',
-    destructive: false,
+    // It patches rows already there in place, as store_restore does.
+    destructive: true,
     input: {
       type: 'object',
       properties: {
@@ -3019,7 +3022,8 @@ let OURS: Row[] = [
   },
   {
     name: 'app_secret_set',
-    destructive: false,
+    // The value it replaces can never be read back.
+    destructive: true,
     idempotent: true,
     input: {
       type: 'object',
@@ -3432,8 +3436,10 @@ let OURS: Row[] = [
     // Which command it is deciding what it does, and this side cannot know
     // which: half of them read and half write, and a template carrying nulls
     // can drop a component. So it says the safe thing for all of them rather
-    // than a promise that would be wrong for the other half.
+    // than a promise that would be wrong for the other half. An app's command
+    // runs in the app's own worker, which may reach anywhere.
     destructive: true,
+    openWorld: true,
     input: {
       type: 'object',
       properties: {

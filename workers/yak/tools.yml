@@ -262,7 +262,8 @@ store_load:
     the entity already holding that name, so a file loaded twice is a patch
     and not a second copy. Returns the number of entities written and the
     source filenames (or a file count when more than six files were loaded).
-    Documentation: https://yaks.app/docs/store.
+    To undo: store_restore, to a moment just before the load. Documentation:
+    https://yaks.app/docs/store.
 app_versions:
   title: List app versions
   description: >-
@@ -346,8 +347,10 @@ app_secret_set:
     whatever the outside service issued; this tool stores it and does not
     check it. Setting a name that already exists replaces its value. The app
     needs a worker.js (uploaded by app_deploy) for the secret to reach any
-    code. Returns the secret name and a confirmation, never the value.
-    Documentation: https://yaks.app/docs/code.
+    code. Returns the secret name and a confirmation, never the value. There
+    is no undo for a replaced value: set it again from the outside service,
+    or app_secret_remove a name set by mistake. Documentation:
+    https://yaks.app/docs/code.
 app_secret_list:
   title: List worker secrets
   description: >-
@@ -393,7 +396,8 @@ app_errors:
     List unarchived error reports for the named app: what a page threw in
     someone's browser, what a request threw on the server, and what the
     platform reported. Each is a stored record with its own id in the app's
-    data store. New ones are also appended to the next tool reply, once.
+    data store. New ones are also appended, once, to the next reply from a
+    tool that changes something; a read-only tool leaves them unseen.
     `fixed` archives the ids it names, which removes them from this list and
     from replies; `seen` archives without listing every id: `all`, `v3` for
     everything up to and including that deploy, or a date. Returns any

@@ -1077,6 +1077,9 @@ slow(
           }),
         })
       assertEquals((await dies('sift is not a function')).status, 204)
+      // A look-up leaves it unseen: a tool that says readOnly marks nothing,
+      // so it neither carries the block nor spends it.
+      assert(!(await agent.tool('app_versions', app)).includes('unseen'))
       // It rides on a platform tool's answer, which is prose a person's agent
       // reads; the generic tier answers a described value, and a section of
       // words appended to it would be something else (T-33812).

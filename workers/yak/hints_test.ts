@@ -60,6 +60,10 @@ let DESTROYS = [
   // still destructive: it throws away everything written since the moment
   // asked for, and a host should stop and ask before it does that.
   'store_restore',
+  // Rows already there are patched in place, deletes included.
+  'store_load',
+  // The value it replaces can never be read back.
+  'app_secret_set',
 ]
 
 // It reaches past yaks.app: a letter to somebody's inbox, a page the whole web
@@ -80,6 +84,9 @@ let OUTSIDE = [
   // It mints an account at Stripe and hands back a link onto Stripe's own
   // hosted form.
   'space_sell',
+  // Cloudflare's analytics, and an app's own worker.
+  'app_stats',
+  'command',
 ]
 
 let sorted = (names: string[]) => [...names].sort()
