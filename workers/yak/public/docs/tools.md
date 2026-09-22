@@ -115,7 +115,7 @@ tool list that cannot change.
 
 The deploy reports the command names it registered:
 
-    deployed jeff/runs v3: https://jeff.yaks.app/runs/
+    deployed yourname/runs v3: https://yourname.yaks.app/runs/
     commands: log_run, leaderboard, since
 
 **Who sees them is who can reach the app**: every app in every space the caller
@@ -125,12 +125,12 @@ is no space to resolve that slug against. Two apps in two of their spaces can
 have a command of the same name; both are listed, and a call that names neither
 app is refused, listing the candidates:
 
-    log_run is a command of club/runs and jeff/runs — say which app
+    log_run is a command of club/runs and yourname/runs — say which app
 
 A name nobody has is refused with a list of the commands that do exist, since a
 command list is a person's own and no model can have memorized it:
 
-    no command add_run — the apps here offer jeff/runs: log_run, leaderboard,
+    no command add_run — the apps here offer yourname/runs: log_run, leaderboard,
     since. commands lists them with their arguments.
 
 `commands` groups them by app and lists each one's arguments the way `command`
@@ -138,13 +138,13 @@ accepts them, with a `?` on an optional argument. Its `app` argument — a slug,
 or `<space>/<app>` where two spaces both have an app of that name — narrows it
 to a single app; leave it out for everything you can reach:
 
-    ## jeff/runs
+    ## yourname/runs
     log_run(who, miles) — Log a run for the club leaderboard — Run club, an
-      app at jeff.yaks.app/runs/
+      app at yourname.yaks.app/runs/
 
-    ## jeff/recipes
-    add_recipe(title, body?, alias?, serves?) — Add a recipe to jeff/recipes
-      — Recipes, an app at jeff.yaks.app/recipes/
+    ## yourname/recipes
+    add_recipe(title, body?, alias?, serves?) — Add a recipe to yourname/recipes
+      — Recipes, an app at yourname.yaks.app/recipes/
 
 The listing carries the app's title, because a slug is not what the person
 called it and a model chooses by words. Its `structuredContent` is
@@ -284,7 +284,7 @@ The answer names what was written and carries the ids as `structuredContent`, so
 the agent's next call — or a view's redraw — reads the row back by the eid this
 one created:
 
-    log_run: wrote 1 entity in jeff/runs: $run=4f3c…
+    log_run: wrote 1 entity in yourname/runs: $run=4f3c…
     { "entities": ["4f3c…"], "aliases": { "$run": "4f3c…" } }
 
 ## The query action
@@ -311,7 +311,7 @@ beside it. `.created!` is how the board gets its bylines: a reference to
 somebody the store knows returns `{eid, name}`, so the answer names who ran
 rather than "someone". The answer counts the rows and returns them:
 
-    leaderboard: 12 rows in jeff/runs
+    leaderboard: 12 rows in yourname/runs
     { "rows": [ { "kind": "jog", "entity": { "eid": "4f3c…", "num": 12 },
                   "jog": { "who": "Ada", "miles": 5 },
                   "created": { "at": "2026-09-01T…",

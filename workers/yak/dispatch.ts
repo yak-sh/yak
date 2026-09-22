@@ -101,9 +101,9 @@ type Grant = {
 // out of — the slash between space and app, the dot before the key — are
 // neither, so both fold. A slug holds neither of them and neither an
 // underscore (route.ts slug) and the key is hex, so the fold is still one
-// script per app: `jeff/recipes.1f7c9a` is `jeff_recipes_1f7c9a`, and the
-// bare `jeff/recipes` an older app is named by is `jeff_recipes` as it always
-// was.
+// script per app: `yourname/recipes.1f7c9a` is `yourname_recipes_1f7c9a`,
+// and the bare `yourname/recipes` an older app is named by is
+// `yourname_recipes` as it always was.
 export let scriptName = (store: string) =>
   store.replaceAll(/[^a-zA-Z0-9-]/g, '_')
 

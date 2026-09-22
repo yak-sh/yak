@@ -227,7 +227,7 @@ break the new files still produce is written again the next time it happens.
 Every deploy, newest first, with when it went out and what changed in it. An app
 keeps its last **20**.
 
-    jeff/recipes: 3 versions
+    yourname/recipes: 3 versions
     - v3 (live) 2026-08-14T10:01:00.000Z — changed index.html
     - v2 2026-08-13T18:40:12.000Z — restored v1, changed index.html, style.css
     - v1 2026-08-13T09:12:44.000Z — 4 files
@@ -262,8 +262,8 @@ learned. Only the files.
 A rollback goes out as a **new version**, so nothing is lost and a rollback can
 itself be rolled back. The reply names both numbers:
 
-    put jeff/recipes back to v2, live now as v4:
-    https://jeff.yaks.app/recipes/ — changed index.html
+    put yourname/recipes back to v2, live now as v4:
+    https://yourname.yaks.app/recipes/ — changed index.html
 
 Two refusals: an app with one deploy or none has nothing earlier to go back to,
 and a version number the app no longer keeps is refused, with the ones it does
@@ -291,7 +291,7 @@ can restore one from their space's own page without an assistant at all. After
 30 days the platform erases it, and then there is nothing to restore.
 
     app_delete(app: 'scratch')
-    → jeff/scratch is in the trash. https://jeff.yaks.app/scratch/ stops
+    → yourname/scratch is in the trash. https://yourname.yaks.app/scratch/ stops
       answering and its commands have gone with it; nothing it saved was
       touched.
 

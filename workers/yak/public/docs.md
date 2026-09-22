@@ -493,7 +493,7 @@ returns one bundle per entity, assembled from whichever stores hold part of it:
     graph_query { filter: '.book!&.loan?' }
     → [ { kind: 'book', entity: { eid: '...', num: 3 },
           book: { pages: 245 }, loan: { to: 'Maya' },
-          _stores: { book: 'jeff/reading', loan: 'jeff/lending' } } ]
+          _stores: { book: 'yourname/reading', loan: 'yourname/lending' } } ]
 
 `.book!` selects which entities the answer is about; `.loan?` asks for the loan
 beside them, where there is one. Name both with `!` (`.book!&.loan!`) and the
@@ -530,7 +530,7 @@ without a page open. They go in a `tools.json` at the app's root, beside
         "input": { "since": "time" },
         "query": ".jog!&.created.at>=$since" } }
 
-After the deploy those are commands of `jeff/runs` — `log_run` and
+After the deploy those are commands of `yourname/runs` — `log_run` and
 `leaderboard`, under their own names, listed for the person and for everyone
 else in the space with the app's title in the description. They are not tools of
 this connector and never join its list, which is the same for everybody: two
@@ -942,8 +942,8 @@ state means.
 
 A space, or one app of it, can also answer at a domain the person already owns,
 with the `.yaks.app` address still working. `ourbookclub.com` on the space
-serves it exactly as `jeff.yaks.app` does — the front page at `/`, every app at
-`/<app>/`. `herbusiness.com` on a single app serves that app at the root, and
+serves it exactly as `yourname.yaks.app` does — the front page at `/`, every app at
+`/<app>/`. `example.com` on a single app serves that app at the root, and
 nothing else is there. Both can be in place at once. Three tools, all the space
 owner's:
 
@@ -966,10 +966,10 @@ their registrar's panel better than they do, so walk them through it in their
 own words — or do it for them, if you can reach it.
 
 **The apex is where people give up.** DNS does not allow a CNAME at a bare
-domain (`herbusiness.com`, with no `www.` in front). Moving their DNS to
+domain (`example.com`, with no `www.` in front). Moving their DNS to
 Cloudflare is the answer to lead with: it is free, its CNAME flattening makes
 the apex work, and it leaves the domain registered where it is. Failing that,
-attach `www.herbusiness.com` and forward the apex to it.
+attach `www.example.com` and forward the apex to it.
 
 Nothing serves until the record resolves — usually minutes, sometimes a day.
 `domain_status` splits the wait into the record arriving, Cloudflare accepting

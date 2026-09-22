@@ -161,7 +161,7 @@ again. Refused if the app was not published.
 
 **`app_published()`** — what is on offer, newest first. One line each:
 
-    - tally v1 — Tally: Count the votes (from jeff/tally, installs as
+    - tally v1 — Tally: Count the votes (from yourname/tally, installs as
       tally, published 2026-08-14)
 
 Read it before you build something somebody may already have made.
@@ -241,7 +241,7 @@ result carries the `app_install` line that gives the person their own copy. Read
 it before building something from scratch.
 
     - Tally — Count the votes
-      https://jeff.yaks.app/tally/
+      https://yourname.yaks.app/tally/
       app_install(name: 'tally')
 
 ## What a copy shares: the code, and nothing else

@@ -46,7 +46,7 @@ import { r2Blobs } from '../../src/blobs_r2.ts'
 import { storeOf } from './door.ts'
 import { told } from './stream.ts'
 
-/** One app, as a command names it: `recipes`, or `jeff/recipes` where two
+/** One app, as a command names it: `recipes`, or `yourname/recipes` where two
  * spaces spell one slug. */
 export let at = (space: Space, app: App) => `${space.slug}/${app.slug}`
 
@@ -134,7 +134,7 @@ let whoIn = async (ctx: Ctx, space: Space): Promise<Who> => ({
 })
 
 // The apps a call means: all the caller can reach, or the one it named —
-// `recipes`, or `jeff/recipes` where two spaces spell one slug.
+// `recipes`, or `yourname/recipes` where two spaces spell one slug.
 let picked = (all: { space: Space; app: App }[], said: string) => {
   if (!said) return all
   let [one, two] = said.split('/')
@@ -250,7 +250,7 @@ let ran = async (
 
 /** One command, as `commands` says it. */
 export type Command = {
-  /** where it is, as `command` takes it: `jeff/recipes` */
+  /** where it is, as `command` takes it: `yourname/recipes` */
   at: string
   name: string
   title: string

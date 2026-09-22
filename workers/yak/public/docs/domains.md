@@ -15,15 +15,15 @@ guide:
 
 A space here answers at `<space>.yaks.app` and each of its apps at
 `<space>.yaks.app/<app>/`. Either can also answer at a domain the person already
-owns — `herbusiness.com`, or `www.herbusiness.com` — with the `.yaks.app`
+owns — `example.com`, or `www.example.com` — with the `.yaks.app`
 address still working.
 
 Two forms, and the difference is what you name:
 
-- **The space.** `ourbookclub.com` serves the space exactly as `jeff.yaks.app`
+- **The space.** `ourbookclub.com` serves the space exactly as `yourname.yaks.app`
   does: the front page at `/`, every app at `/<app>/`. The apps are directories
   of their own domain.
-- **One app.** `herbusiness.com` serves that app at the root of it, and nothing
+- **One app.** `example.com` serves that app at the root of it, and nothing
   else is there.
 
 A space can have both at once, and an app of it can still have a domain of its
@@ -71,14 +71,14 @@ existing `.yaks.app` address in the meantime.
   untouched: same data, same files, same `<space>.yaks.app` address.
 
 A domain points at one place, and a hostname belongs to one place across the
-whole platform. `www.herbusiness.com` and `herbusiness.com` are two hostnames,
+whole platform. `www.example.com` and `example.com` are two hostnames,
 so attach both if they want both.
 
 ## The record
 
 Always the same shape, whatever the registrar calls the fields:
 
-    CNAME   herbusiness.com   →   origin.saas.yaks.app
+    CNAME   example.com   →   origin.saas.yaks.app
 
 `domain_attach` returns exactly that, as data. Read it out of `records` rather
 than out of the message — the value is the one thing that must be typed
@@ -91,7 +91,7 @@ serves whatever it served before.
 
 The trap that catches people at half of these registrars: **the Name/Host field
 is a prefix, and the panel adds the domain itself.** Typing
-`www.herbusiness.com` there produces `www.herbusiness.com.herbusiness.com`. When
+`www.example.com` there produces `www.example.com.example.com`. When
 in doubt, type `www`, and check the record's full name after saving.
 
 **GoDaddy** — Domain Portfolio → the domain → **DNS** → **Add New Record**.
@@ -100,7 +100,7 @@ hostname. GoDaddy has no apex option at all: see below.
 
 **Namecheap** — Domain List → **Manage** → **Advanced DNS** → Host Records →
 **Add New Record**. Fields are Type, Host, Value, TTL. Host is a prefix and
-Namecheap appends the domain, so `www`, never `www.herbusiness.com`. Namecheap
+Namecheap appends the domain, so `www`, never `www.example.com`. Namecheap
 refuses a CNAME at `@` — it offers a URL Redirect record instead, which is the
 `www` approach below.
 
@@ -135,16 +135,16 @@ and the request never reaches us.
 
 ## The apex
 
-DNS does not allow a CNAME at a domain's apex — the bare `herbusiness.com`, with
+DNS does not allow a CNAME at a domain's apex — the bare `example.com`, with
 nothing in front of it. This is where a non-technical person gives up, so have
 the answer ready before they hit it. Three ways through:
 
 **Move their DNS to Cloudflare.** The best option, and the one to lead with.
 Cloudflare's DNS flattens a CNAME at the apex — it resolves the target and
-serves the addresses — so `herbusiness.com` simply works. It is free, it does
+serves the addresses — so `example.com` simply works. It is free, it does
 not move the domain's registration, and it takes about ten minutes:
 
-1. dash.cloudflare.com → **Add a domain** → type `herbusiness.com`.
+1. dash.cloudflare.com → **Add a domain** → type `example.com`.
 2. Choose the **Free** plan. Cloudflare scans the existing records; check that
    their mail records came across before continuing, because a missing MX is how
    this goes wrong.
@@ -162,9 +162,9 @@ chain and the domain goes dark. Cloudflare can turn it back on afterwards.
 allowed at the apex. Porkbun has one. GoDaddy, Namecheap, Squarespace, Hover and
 Shopify do not.
 
-**Attach `www` instead.** `domain_attach(app, hostname: 'www.herbusiness.com')`,
-a CNAME at `www`, and a forwarding rule at the apex sending `herbusiness.com` to
-`www.herbusiness.com`. Every registrar above has domain forwarding under some
+**Attach `www` instead.** `domain_attach(app, hostname: 'www.example.com')`,
+a CNAME at `www`, and a forwarding rule at the apex sending `example.com` to
+`www.example.com`. Every registrar above has domain forwarding under some
 name. It works and people accept it, but the address they give out is still the
 bare one, so offer Cloudflare first.
 
@@ -213,7 +213,7 @@ doing in between — check again in five minutes rather than changing anything.
   another site builder, the hostname may still be registered there and will keep
   winning. They have to remove it at the old platform.
 - **The record went in with the domain doubled** —
-  `www.herbusiness.com.herbusiness.com`. See the panels above. This is the most
+  `www.example.com.example.com`. See the panels above. This is the most
   common one by a distance.
 
 ## Detaching

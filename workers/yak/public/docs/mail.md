@@ -166,7 +166,7 @@ A letter to the app's address lands in the app's store as one entity:
       entity: { eid: '…' },
       doc:  { title: 'Bring a dish', body: 'Potluck Friday…' },
       mail: { from: 'ana@books.example',
-              to: 'jeff.recipes@yaks.app',
+              to: 'yourname.recipes@yaks.app',
               at: '2024-08-27T15:49:44.000Z',
               message_id: '…',
               verified: 1 } }

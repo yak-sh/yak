@@ -22,7 +22,7 @@ a `content`, or a list of them as `files: [{path, content}, …]`.
 **Every write reports what was stored**, so a file transcribed by hand is
 checked in the call that made it rather than once the app serves broken:
 
-    wrote index.html → https://jeff.yaks.app/recipes/index.html
+    wrote index.html → https://yourname.yaks.app/recipes/index.html
       — 4213 bytes, sha256 9f2a…
 
 A `.json` file is parsed as well, and the reply reports `parsed` — or reports
@@ -44,7 +44,7 @@ the app rather than transcribed:
 
     app_files(app, op: 'fetch', path: 'chess.js',
               url: 'https://cdnjs.cloudflare.com/…/chess.min.js')
-    → fetched … → https://jeff.yaks.app/chess/chess.js — 15234 bytes,
+    → fetched … → https://yourname.yaks.app/chess/chess.js — 15234 bytes,
       sha256 3c1f…, text/javascript, integrity sha256-PB8…=
 
 The `integrity` is the same digest written the way a `<script integrity>`
@@ -61,7 +61,7 @@ noted in that path's history. So the file you just overwrote is one call away,
 and you never have to remember what it used to contain.
 
     app_files(app, op: 'history', path: 'index.html')
-    → index.html in jeff/recipes:
+    → index.html in yourname/recipes:
       now — 4213 bytes, sha256 9f2a…
       - until 2026-09-06T14:20:11Z — 3980 bytes, sha256 c41d…, by Jeff
       - until 2026-09-04T09:02:47Z — 1204 bytes, sha256 7b19…, by Jeff

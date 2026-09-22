@@ -179,7 +179,7 @@ every space they belong to — and answered as one bundle per entity.
     graph_query { filter: '.book!&.loan?' }
     → [ { kind: 'book', entity: { eid: '…', num: 3 },
           book: { pages: 245 }, loan: { to: 'Maya' },
-          _stores: { book: 'jeff/reading-list', loan: 'jeff/lending' } } ]
+          _stores: { book: 'yourname/reading-list', loan: 'yourname/lending' } } ]
 
 - `!` names which entities the answer is ABOUT; `?` asks for a component beside
   them without filtering on it. So `.book!&.loan?` is every book, with its loan
