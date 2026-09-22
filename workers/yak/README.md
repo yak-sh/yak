@@ -66,10 +66,9 @@ not uploaded; the bundle is not minified, so a stack names our functions. To
 prove a deploy's defects arrive, a test account POSTs `/api/defect` at the apex:
 that is a defect tagged `tool:canary`, `account:test` (mcp.ts `canary`).
 
-`bin/yak-watch` probes the live doors and the apps in `watch.json` every five
-minutes from the box (`etc/yak-watch.cron`, `bin/yak-watch --probe` for a
-read-only pass) and mails the owner once per outage, registered with
-`holdco-deadman` at 15 minutes.
+Sentry's uptime monitor (https://yaks.sentry.io/monitors/10414356/) POSTs
+`tools/list` to https://yaks.app/mcp every minute and is the one alarm for an
+outage.
 
 **Update the dashboard Deploy command to `../../bin/build-yak deploy`.** The
 previous `npx wrangler deploy` bypasses the repo's deploy wrapper; changing the
@@ -202,8 +201,7 @@ The zone needs proxied `AAAA @ → 100::` and `AAAA * → 100::` records. Onboar
 records; route its catch-all to `yak-staging`. Custom domains stay off until
 `CF_ZONE` names the `yaks.fyi` zone and its hostname token is set; enabling them
 also needs a SaaS fallback origin and a `*/*` route on that zone. Observability
-is on; staging has no tail consumer. `yak-watch` reports its apex probe with
-`page: false`, excluding its failures from incident paging.
+is on; staging has no tail consumer.
 
 ## Migration passes: expand, then contract
 

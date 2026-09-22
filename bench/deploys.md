@@ -36,11 +36,9 @@ T-35336 the file was the only source, so one unlucky Workers Builds row (39–71
 run to run, Cloudflare-side) stayed "the latest deploy" and failed every later
 commit.
 
-`bin/yak-watch` runs every five minutes. Using it would add up to five minutes
-of observation delay to a sub-minute metric, so timing remains a separate box
-command. An unattended caller must start it on each push; this change does not
-install a new cron or change the box's configuration. Late observations include
-that delay. Use `deno task deploy:time --backfill 3` for historical uploads.
+Timing is a box command. An unattended caller must start it on each push; late
+observations include that delay. Use `deno task deploy:time --backfill 3` for
+historical uploads.
 
 The record's `pushed` comes from the matching main PushEvent (`pushed_at`, or
 the event's `created_at`), then the earliest main check-suite creation, then the
