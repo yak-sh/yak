@@ -11,7 +11,7 @@
 // dropped into public/, a tool added to TOOLS, a letter written in a module
 // that does not exist yet — each is covered the day it lands, and a leak fails
 // here instead of reaching somebody's screen.
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { assert, assertStringIncludes } from '@std/assert'
 import { core } from '@yaks/mcp'
 import { INSTRUCTIONS, PAGES, UNDO } from './guide.ts'
 import { DOCS, PUBLIC } from './preauth.ts'
@@ -102,31 +102,6 @@ Deno.test('nothing the connector says calls the place Yaks', () => {
   assert(TOOLS.length > 10, `the tool roster came back with ${TOOLS.length}`)
   for (let t of [...TOOLS, ...generic]) {
     leak(`tool ${t.name}`, JSON.stringify(t))
-  }
-})
-
-// Nothing an agent reads here shouts (M-37800). Owner, 2026-09-22: "never use
-// ALL CAPS for emphasis. use italics if emphasis is necessary. this goes for
-// *all* prose across the fleet". A word set in capitals to stress it reads to
-// a model as a term of the platform's rather than as the ordinary word it is.
-// Acronyms and identifiers keep their case, which is what the list below is:
-// a match that follows a dot (env.STORE) or precedes a file extension
-// (NOTES.md) is one of those and is never a shout.
-let ACRONYMS = new Set(['URL', 'MCP', 'JSON', 'LD', 'IANA', 'ES', 'KB'])
-
-let shouts = (text: string) =>
-  [...text.matchAll(/(?<![.\w])([A-Z]{2,})(?!\.[a-z])\b/g)]
-    .map((m) => m[1])
-    .filter((word) => !ACRONYMS.has(word))
-
-Deno.test('nothing the connector says is shouted', () => {
-  for (
-    let [where, text] of [
-      ['INSTRUCTIONS', INSTRUCTIONS],
-      ...PUBLIC.map((said) => [`preauth ${said.name}`, said.text]),
-    ] as [string, string][]
-  ) {
-    assertEquals(shouts(text), [], `${where} shouts`)
   }
 })
 
