@@ -10,6 +10,7 @@ import {
   kindOrder,
   loadVocab,
   metaSchema,
+  Unknown,
 } from './mod.ts'
 import type { PropSchema, VocabDoc } from './types.ts'
 import slice from './fleet/slice.schema.json' with { type: 'json' }
@@ -97,9 +98,10 @@ Deno.test('dotted paths aim to hops', () => {
     { comp: 'task', prop: 'assignee' },
     { comp: 'doc', prop: 'title' },
   ])
+  // the caller's own mistake, so a door answers it as a refusal (a 400)
   assertThrows(
     () => v.aim('doc.nope'),
-    Error,
+    Unknown,
     'doc has title (text), body (text)',
   )
 })

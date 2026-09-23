@@ -28,15 +28,16 @@ import type { Keywords } from './keywords.ts'
 import { kept, said, type Sync } from './lifetime.ts'
 import { kindOrder as deriveKindOrder } from './order.ts'
 
-/** A name this vocabulary does not know. One error message for every caller,
- * raised here because the vocabulary is what decides: `route()` raises it when
- * nothing claims the bare name, and the storage binder (@yaks/sql) raises it
- * when a presence test names a component it has no table for. `prop` is the
- * name, unadorned. */
+/** A name this vocabulary does not know. One error for every caller, raised
+ * here because the vocabulary is what decides: `route()` raises it when
+ * nothing claims the bare name, `aim()` when a component is named with a
+ * property it does not declare (saying which ones it does), and the storage
+ * binder (@yaks/sql) when a presence test names a component it has no table
+ * for. `prop` is the name, unadorned. */
 export class Unknown extends Error {
   prop: string
-  constructor(prop: string) {
-    super(`unknown prop: .${prop}`)
+  constructor(prop: string, message = `unknown prop: .${prop}`) {
+    super(message)
     this.prop = prop
     this.name = 'Unknown'
   }
@@ -640,7 +641,10 @@ export let loadVocab = (
         if (own && i + 1 < segs.length) {
           let [a, b] = [segs[i], segs[i + 1]]
           if (!own.includes(b) && !(a == SPINE && b == EID)) {
-            throw new Error(`no such prop: .${a}.${b} — ${shapeOf(v, a)}`)
+            throw new Unknown(
+              `${a}.${b}`,
+              `no such prop: .${a}.${b} — ${shapeOf(v, a)}`,
+            )
           }
           out.push({ comp: a, prop: b })
           i += 2

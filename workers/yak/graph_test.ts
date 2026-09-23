@@ -138,17 +138,24 @@ for (let aggregate of [false, true]) {
   })
 }
 
-// A line that does not parse is the caller's mistake: a 400 in the parser's
-// words, and nothing logged as the store's failure.
+// A line that does not parse, or names a property its component does not
+// declare, is the caller's mistake: a 400 in the store's own words, and
+// nothing logged as the store's failure.
 Deno.test('a malformed query is a 400 to the caller, not a failure', async () => {
   let store = await cookbook()
   using logged = stub(console, 'error')
-  for (let q of ['.recipe!"&.doc?"', '.recipe!"&.doc?"&.count!']) {
+  for (
+    let [q, error, said] of [
+      ['.recipe!"&.doc?"', 'SyntaxError', 'presence filters end at !'],
+      ['.recipe!"&.doc?"&.count!', 'SyntaxError', 'presence filters end at !'],
+      ['.recipe.nope=1', 'Unknown', 'no such prop: .recipe.nope — recipe has'],
+    ]
+  ) {
     let response = await get(store, `/query?q=${encodeURIComponent(q)}`, owner)
     assertEquals(response.status, 400, q)
     let body = await response.json()
-    assertEquals(body.error, 'SyntaxError')
-    assertStringIncludes(body.message, 'presence filters end at !')
+    assertEquals(body.error, error)
+    assertStringIncludes(body.message, said)
   }
   assertEquals(logged.calls.length, 0)
 })
