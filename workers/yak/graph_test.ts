@@ -195,6 +195,27 @@ Deno.test('a manifest the vocabulary refuses leaves the store as it was', async 
   assertEquals(await words(store), was)
 })
 
+Deno.test('a column says its type, and a JSON value waits a release', async () => {
+  let store = await cookbook()
+  let was = await words(store)
+  let said = async (col: string) => {
+    let no = await post(
+      store,
+      '/vocab',
+      `{"$defs": {"dish": {"properties": {"c": ${col}}}}}`,
+      owner,
+    )
+    assertEquals(no.status, 400)
+    return (await no.json()).message as string
+  }
+  assertStringIncludes(await said('{"enum": ["a"]}'), 'dish.c declares no type')
+  assertStringIncludes(
+    await said('{"type": "array"}'),
+    'dish.c holds a JSON value',
+  )
+  assertEquals(await words(store), was)
+})
+
 {
   Deno.test('a bundle applies and queries back', async () => {
     let store = await cookbook()

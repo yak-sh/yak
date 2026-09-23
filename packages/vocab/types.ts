@@ -25,6 +25,10 @@ export type Death = 'cascade' | 'detach' | 'release' | 'keep'
 //   time   string, format:date-time   priority number, format:priority
 //   url    string, format:uri         bool    boolean
 //   query  string, format:query       json    string, format:json
+//   jsonb  object, array, or a union of types: a JSON value, kept as one
+//
+// `json` is JSON text in a string; `jsonb` is the value itself, written and
+// read back as JSON and stored in SQLite's binary JSON.
 //
 // Where a string column keeps its value is a separate question, and not this
 // format's: @yaks/blob owns the `store` keyword and answers it.
@@ -35,6 +39,7 @@ export type Scalar =
   | 'bool'
   | 'query'
   | 'json'
+  | 'jsonb'
   | 'time'
   | 'url'
 
@@ -52,6 +57,9 @@ export type Column = {
   category: 'scalar' | 'enum' | 'ref'
   scalar?: Scalar
   values?: string[] // enum members
+  /** the JSON types a `jsonb` column holds, as declared (`['object']`,
+   * `['string', 'array']`) */
+  types?: string[]
   aliases?: Record<string, string> // input forms → a member
   ref?: string // the entity kind a reference names ('entity' = any)
   death?: Death
@@ -66,7 +74,7 @@ export type Column = {
   /** this column is what the entity's own id is derived from — see the
    * `identity` keyword and `Vocab.identity` */
   identity: boolean
-  affinity: 'text' | 'real' | 'integer' // the SQLite column affinity it stores as
+  affinity: 'text' | 'real' | 'integer' | 'blob' // the SQLite column affinity it stores as
   fk: boolean // a reference carrying a foreign key to entity(id)
   /** the component's `required` list names it: a row may not hold it null */
   required: boolean
@@ -144,8 +152,11 @@ export type VocabDoc = {
 // One component's schema (a `$defs` entry): an object schema whose `properties`
 // are the columns, plus the yaks comp-level keywords.
 export type PropSchema = {
-  type?: string
+  // One JSON type, or a union of them. Every column declares one.
+  type?: string | string[]
   properties?: Record<string, PropSchema>
+  // The shape of an array column's elements. Declared, not yet validated.
+  items?: unknown
   // What a $defs entry IS. An entry carries one of these markers or it is an
   // ordinary reusable subschema — the loader creates neither a table nor a
   // tool for it.

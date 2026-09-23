@@ -28,6 +28,7 @@ import type { Doom, Gone } from '@yaks/graph'
 import { tombstoned } from '@yaks/graph'
 import { catalog, descriptor } from './catalog.ts'
 import { unit } from './unit.ts'
+import { decoded, jsonOut } from './jsonb.ts'
 
 // A query, as text or as an already-built AST. Text is parsed; an AST passes
 // through, so a caller may hand-build one with @yaks/query's builders.
@@ -68,8 +69,9 @@ let read1 = (v: Vocab, comp: string, derived: Derived): Column[] =>
     .filter((c) => !c.computed || derived[`${comp}.${c.prop}`])
 
 // The projected read for one component: each scalar straight off the row, each
-// reference joined back to its target's eid, keyed by the owner eid. A
-// component with no columns reads a bare presence flag.
+// reference joined back to its target's eid, each JSON value as its JSON text
+// (./jsonb.ts, parsed by `decoded` once the row is back), keyed by the owner
+// eid. A component with no columns reads a bare presence flag.
 //
 // A column whose read differs from its storage is read through its registered
 // expression instead — the same `derived` registry @yaks/sql consults when it
@@ -100,6 +102,8 @@ let project = (
       let a = `r_${c.prop.replaceAll(/[^A-Za-z0-9]/g, '_')}`
       joins.push(`left join entity "${a}" on "${a}".id = ${self}."${c.prop}"`)
       sel.push(`"${a}".eid as "${c.prop}"`)
+    } else if (c.scalar == 'jsonb') {
+      sel.push(`${jsonOut(`${self}."${c.prop}"`)} as "${c.prop}"`)
     } else {
       sel.push(`${self}."${c.prop}" as "${c.prop}"`)
     }
@@ -298,7 +302,7 @@ export let get = (
         let { '@id': owner, ...value } = row
         let b = byId.get(Number(owner))!
         if ('tombstone' in b) continue
-        b[comp] = value as Comp
+        b[comp] = decoded(vocab, comp, value) as Comp
       }
     }
   }

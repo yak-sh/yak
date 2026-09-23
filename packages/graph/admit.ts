@@ -16,13 +16,17 @@
 //                                       and sending it again is a normal thing
 //                                       to do)
 //
+// A string column's value is cast to a string first (@yaks/vocab `cast`): the
+// schema is what a reader gets back, so a number sent to a text column is
+// stored, returned and broadcast as its text.
+//
 // Column values are validated against the vocabulary too — an enum member, a
 // number where a number belongs, a scalar rather than a nested object. That is
 // the vocabulary's own `check`, not a JSON Schema validator: this package
 // depends on no validator, and a graph that wants full JSON Schema validation
 // registers one as an `admit` hook.
 
-import type { Vocab } from '@yaks/vocab'
+import { cast, type Vocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
 import { comps, dead, RESERVED } from './bundle.ts'
 
@@ -69,8 +73,10 @@ let admitComp = (
     )
   }
   let keep = allowed(v, name, trusted)
-  let kept = Object.fromEntries(
-    Object.entries(patch).filter(([c]) => keep.has(c)),
+  let kept = cast(
+    v,
+    name,
+    Object.fromEntries(Object.entries(patch).filter(([c]) => keep.has(c))),
   )
   if (Object.keys(patch).length && !Object.keys(kept).length) return undefined
   let errs = v.check(name, kept, { stamped: trusted })

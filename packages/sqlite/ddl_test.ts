@@ -258,7 +258,11 @@ let strict = loadVocab({
         base: { type: 'string', default: 'main' },
         push: { type: 'boolean', default: false },
         seq: { type: 'integer' },
-        state: { enum: ['stopped', 'running'], aliases: { on: 'running' } },
+        state: {
+          type: 'string',
+          enum: ['stopped', 'running'],
+          aliases: { on: 'running' },
+        },
       },
     },
     output: {

@@ -27,6 +27,7 @@
           "description": "the component that changed"
         },
         "kind": {
+          "type": "string",
           "enum": [
             "created",
             "changed",
@@ -37,6 +38,7 @@
           "description": "what happened to it, or `matched` where a query matched it"
         },
         "state": {
+          "type": "string",
           "enum": [
             "pending",
             "done",

@@ -38,7 +38,7 @@ let doc: VocabDoc = {
         price: { type: 'number' },
         released: { type: 'string', format: 'date-time' },
         available: { type: 'boolean' },
-        status: { enum: ['draft', 'shelved', 'sold'] },
+        status: { type: 'string', enum: ['draft', 'shelved', 'sold'] },
         author: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },

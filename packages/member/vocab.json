@@ -21,6 +21,7 @@
           "description": "the person the membership is for"
         },
         "role": {
+          "type": "string",
           "enum": [
             "owner",
             "member"
@@ -54,6 +55,7 @@
           "description": "an unguessable secret standing in for a person: whoever opens the link acts as this grant"
         },
         "access": {
+          "type": "string",
           "enum": [
             "owner",
             "editor",
@@ -71,6 +73,7 @@
       "description": "what an app allows everyone who has no grant on it",
       "properties": {
         "mode": {
+          "type": "string",
           "enum": [
             "public",
             "open",

@@ -30,7 +30,7 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
-      properties: { name: {} },
+      properties: { name: { type: 'string' } },
     },
     // A lease, so that a test can add the `wip` rung the way an application
     // would.

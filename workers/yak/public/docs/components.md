@@ -233,6 +233,10 @@ is the day before for everyone west of Greenwich, so a diary written at
 `T00:00:00Z` renders a day early in California, and the page has to correct for
 a zone it should never have had to think about.
 
+Every column says its `type`; `app_deploy` refuses one that does not. A string
+column keeps what it is sent as a string: a number written to a `text` column
+comes back as `"5"`.
+
 The first five are the ones a `vocab.json` may declare. References, closed sets
 and content-addressed bodies each need machinery a store cannot plant from a
 name alone — a foreign key, a set to enforce, a hash.

@@ -58,7 +58,7 @@ let doc: VocabDoc = {
         sku: { type: 'string', unique: true },
         price: { type: 'number' },
         available: { type: 'boolean' },
-        status: { enum: ['draft', 'live', 'sold'] },
+        status: { type: 'string', enum: ['draft', 'live', 'sold'] },
         maker: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },
@@ -118,6 +118,32 @@ let doc: VocabDoc = {
 }
 
 export let shop: Vocab = loadVocab(doc)
+
+// A recipe whose columns hold JSON values beside a plain one: an object, an
+// array, and a union that may be a string — the case a driver parsing JSON
+// itself would get wrong (./jsonb.ts). Every SQLite-shaped adapter's tests
+// write the same {@link RECIPE} through it.
+export let kitchen: Vocab = loadVocab({
+  $defs: {
+    recipe: {
+      component: true,
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        meta: { type: 'object', properties: { oven: { type: 'number' } } },
+        tags: { type: 'array', items: { type: 'string' } },
+        any: { type: ['string', 'number', 'object'] },
+      },
+    },
+  },
+})
+
+export let RECIPE = {
+  title: 'Cake',
+  meta: { oven: 180, steps: [{ mix: true }] },
+  tags: ['sweet', 'baked'],
+  any: '"quoted"',
+}
 
 // A ready store over a fresh in-memory database with the schema installed.
 // The shop numbers its entities: they are things a person refers to by number,

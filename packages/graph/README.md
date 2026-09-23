@@ -151,7 +151,9 @@ writes themselves, and the observers that run after the commit. In particular:
 
 - `normalize` can rewrite incoming data.
 - Admission and preconditions validate it against the vocabulary and the current
-  state before any write is accepted.
+  state before any write is accepted. Admission first casts a string column's
+  value to a string, so a number written to one is stored and returned as its
+  text.
 - Reference handling, writing, and journaling all run inside the storage
   transaction.
 - `effect` observers run after the commit. One failing cannot undo a committed

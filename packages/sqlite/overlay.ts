@@ -51,6 +51,7 @@
 import type { Vocab } from '@yaks/vocab'
 import { type Bundle, comps, dead, type Eid } from '@yaks/graph'
 import type { Driver, Param } from './driver.ts'
+import { isJsonb, jsonIn, jsonOut } from './jsonb.ts'
 
 /** What an overlaid component's CTE is called. */
 export let OVER = '_over_'
@@ -97,7 +98,9 @@ let stored = (v: Vocab, comp: string): string[] =>
 let SPINE = ['id', 'eid', 'num', 'archetype']
 
 // What a column stores, the way ./write.ts lowers it: a boolean is 0/1, a
-// reference is its target's integer id, everything else passes through.
+// reference is its target's integer id, a JSON value is its JSON text (which
+// `json()` reads the way it reads the stored binary form), everything else
+// passes through.
 let lower = (
   v: Vocab,
   comp: string,
@@ -109,6 +112,7 @@ let lower = (
   if (v.column(comp, prop)?.category == 'ref') {
     return ids.get(String(value)) ?? null
   }
+  if (isJsonb(v, comp, prop)) return jsonIn(value)
   return typeof value == 'boolean' ? Number(value) : value as Param
 }
 
@@ -231,9 +235,13 @@ export let overlay = (
     // The committed row a patch folds into, read once per component.
     let held = new Map<number, Record<string, unknown>>()
     if (owners.length) {
+      // A JSON value is read as its text, to ride in the rows' JSON array.
+      let read = cols.map((c) =>
+        isJsonb(vocab, comp, c) ? `${jsonOut(q(c))} as ${q(c)}` : q(c)
+      )
       for (
         let row of driver.query(
-          `select entity, ${cols.map(q).join(', ')} from ${q(comp)} ` +
+          `select entity, ${read.join(', ')} from ${q(comp)} ` +
             `where entity in ${EACH}`,
           [JSON.stringify(owners)],
         )

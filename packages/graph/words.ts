@@ -65,9 +65,16 @@ let DEATH: Record<string, string> = {
 }
 
 // A column's type in one word: `enum` for a closed set of values, `ref` for a
-// reference, otherwise the scalar type the vocabulary declares.
+// reference, the JSON types a JSON value may be (`object`, `string|array`),
+// otherwise the scalar type the vocabulary declares.
 let typeOf = (col: Column): string =>
-  col.category == 'enum' ? 'enum' : col.category == 'ref' ? 'ref' : col.scalar!
+  col.category == 'enum'
+    ? 'enum'
+    : col.category == 'ref'
+    ? 'ref'
+    : col.scalar == 'jsonb'
+    ? col.types!.join('|')
+    : col.scalar!
 
 // What is true of a column beyond its type: who may write it, whether it is
 // stored at all, whether its value must be unique, and what deleting the
@@ -107,6 +114,12 @@ let sample = (col: Column): unknown =>
     ? 'https://example.com'
     : col.scalar == 'json'
     ? '{}'
+    : col.scalar == 'jsonb'
+    ? (col.types!.includes('object')
+      ? {}
+      : col.types!.includes('array')
+      ? []
+      : 'text')
     : 'text'
 
 /** One component as the index lists it: the one-line summary an agent reads

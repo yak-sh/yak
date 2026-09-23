@@ -32,7 +32,7 @@ let doc: VocabDoc = {
       before: ['doc'],
       properties: {
         price: { type: 'number' },
-        status: { enum: ['draft', 'shelved', 'sold'] },
+        status: { type: 'string', enum: ['draft', 'shelved', 'sold'] },
       },
     },
     created: {

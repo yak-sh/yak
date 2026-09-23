@@ -5,6 +5,7 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import {
   Ambiguous,
+  cast,
   extendMeta,
   kindOrder,
   loadVocab,
@@ -30,6 +31,7 @@ Deno.test('columns interrogate to their whole shape', () => {
     category: 'scalar',
     scalar: 'priority',
     values: undefined,
+    types: undefined,
     aliases: undefined,
     ref: undefined,
     death: undefined,
@@ -277,6 +279,80 @@ Deno.test('JSON columns store validated JSON text', () => {
   }
 })
 
+Deno.test('object, array and union columns hold a JSON value', () => {
+  let w = loadVocab({
+    $defs: {
+      recipe: {
+        component: true,
+        properties: {
+          meta: { type: 'object', properties: { a: { type: 'number' } } },
+          tags: { type: 'array', items: { type: 'string' } },
+          any: { type: ['string', 'number', 'object'] },
+        },
+      },
+    },
+  })
+  let c = w.column('recipe', 'meta')!
+  assertEquals(
+    [c.category, c.scalar, c.affinity, c.types],
+    ['scalar', 'jsonb', 'blob', ['object']],
+  )
+  assertEquals(w.column('recipe', 'any')!.types, ['string', 'number', 'object'])
+  let ok = { meta: { a: 1 }, tags: ['x'], any: 'text' }
+  assertEquals(w.check('recipe', ok), [])
+  assertEquals(w.check('recipe', { any: 2.5 }), [])
+  assertEquals(w.check('recipe', { meta: [1], tags: {}, any: true }), [
+    'recipe.meta is an object',
+    'recipe.tags is an array',
+    'recipe.any is a string or a number or an object',
+  ])
+})
+
+Deno.test('a column with no type is refused, never read as text', () => {
+  let load = (s: PropSchema) =>
+    loadVocab({ $defs: { x: { component: true, properties: { c: s } } } })
+  for (let s of [{}, { enum: ['a'] }, { format: 'date-time' }]) {
+    assertThrows(() => load(s), Error, 'x.c declares no type')
+  }
+})
+
+Deno.test('a string column casts what it is sent to a string', () => {
+  let w = loadVocab({
+    $defs: {
+      note: {
+        component: true,
+        properties: {
+          text: { type: 'string' },
+          state: { type: 'string', enum: ['1', 'true'] },
+          raw: { type: 'string', format: 'json' },
+          n: { type: 'number' },
+          meta: { type: 'object' },
+          about: { type: 'string', ref: 'entity', death: 'keep' },
+        },
+      },
+    },
+  })
+  assertEquals(
+    cast(w, 'note', {
+      text: 5,
+      state: true,
+      raw: { a: [1] },
+      n: 5,
+      meta: { a: 1 },
+      about: 7,
+    }),
+    {
+      text: '5',
+      state: 'true',
+      raw: '{"a":[1]}',
+      n: 5,
+      meta: { a: 1 },
+      about: 7,
+    },
+  )
+  assertEquals(cast(w, 'note', { text: null }), { text: null })
+})
+
 Deno.test('number and priority columns refuse non-finite values', () => {
   for (let format of [undefined, 'priority']) {
     let w = loadVocab({
@@ -305,7 +381,7 @@ Deno.test('a computed column reads but never writes', () => {
         kind: true,
         properties: {
           priority: { type: 'number' },
-          status: { enum: ['open', 'done'], computed: true },
+          status: { type: 'string', enum: ['open', 'done'], computed: true },
         },
       },
     },
@@ -364,7 +440,7 @@ Deno.test('indexes merge the column flag with the composite lists', () => {
       space: {
         component: true,
         type: 'object',
-        properties: { slug: { unique: true } },
+        properties: { slug: { type: 'string', unique: true } },
       },
       app: {
         component: true,

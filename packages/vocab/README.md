@@ -169,11 +169,23 @@ column or a component.
 `meta/vocab.schema.json` is the meta-schema a vocabulary document validates
 against.
 
-A JSON column is `{ "type": "string", "format": "json" }`. The runtime reports
-scalar `json` with text affinity and accepts a string containing any valid JSON
-value. Objects and arrays are encoded in that string; a column never holds a
-nested object or array directly. A null clears the column, while the string
-`"null"` stores the JSON null value.
+Every column declares its `type`. An enum column says `"type": "string"`, and so
+does a reference; a column without a type is refused, never read as text.
+
+A column whose type is `object` or `array`, or a union of types
+(`["string", "object"]`), holds a JSON value. The runtime reports scalar `jsonb`
+with blob affinity: SQLite stores it as binary JSON, a write takes the value and
+a read returns it. Such a column may declare its structure with `properties` or
+`items`; the structure is accepted as written and not validated yet, while
+`check` does hold the value to the declared type. A query filter on one is
+refused for now.
+
+`{ "type": "string", "format": "json" }` is JSON text in a string: scalar
+`json`, text affinity, and a string containing any valid JSON value. A null
+clears the column, while the string `"null"` stores the JSON null value.
+
+A string column's value is cast to a string on the way in (`cast`): a number or
+a boolean becomes its text, an object or an array its JSON text.
 
 ## One word, one home — and one exception
 
@@ -270,10 +282,12 @@ v.check('task', { priority: 1 }) // [] when supplied columns and values are vali
 
 The root export provides these document checks:
 
-- `storable(doc)` checks scalar, reference and enum columns, rejects nesting,
-  arrays and column `$ref`, and checks indexes, defaults, identities and state
-  lifetimes. A component declaring all of `at`, `by` and `via` must mark each
-  column `stamped: true` so clients cannot supply that provenance.
+- `storable(doc)` checks that every column declares its type, checks scalar,
+  reference, enum and JSON columns, rejects column `$ref` and structure on a
+  column that is not an object or array, and checks indexes, defaults,
+  identities and state lifetimes. A component declaring all of `at`, `by` and
+  `via` must mark each column `stamped: true` so clients cannot supply that
+  provenance.
 - `reserved(doc, names)` rejects entries that reuse a reserved name.
 - `grow(was, next)` reports added columns and rejects removed columns or changes
   to their category, scalar type or reference target. Enum members can be added.

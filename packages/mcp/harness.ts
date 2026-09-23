@@ -39,7 +39,7 @@ let doc: VocabDoc = {
       description: 'a book on sale here',
       properties: {
         price: { type: 'number', description: 'what it costs, in pounds' },
-        status: { enum: ['draft', 'shelved', 'sold'] },
+        status: { type: 'string', enum: ['draft', 'shelved', 'sold'] },
         author: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },

@@ -47,7 +47,7 @@ let vocab = loadVocab([toolsDoc, {
       properties: {
         title: { type: 'string' },
         price: { type: 'number' },
-        status: { enum: ['shelved', 'sold'] },
+        status: { type: 'string', enum: ['shelved', 'sold'] },
       },
     },
   },

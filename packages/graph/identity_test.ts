@@ -23,7 +23,7 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
-      properties: { title: {} },
+      properties: { title: { type: 'string' } },
     },
     // A page is its slug: two files with one slug are one page.
     guide: {

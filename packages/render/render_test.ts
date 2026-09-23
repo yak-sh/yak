@@ -26,7 +26,7 @@ let vocab = loadVocab([{
       properties: {
         rank: { type: 'number' },
         done: { type: 'boolean' },
-        status: { enum: ['open', 'done'] },
+        status: { type: 'string', enum: ['open', 'done'] },
         at: { type: 'string', format: 'date-time' },
         owner: { type: 'string', ref: 'entity', death: 'keep' },
       },

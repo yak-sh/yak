@@ -49,7 +49,7 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
-      properties: { name: {} },
+      properties: { name: { type: 'string' } },
     },
     // a component with no body column at all, to prove the substitution is
     // made per column

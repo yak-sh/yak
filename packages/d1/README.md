@@ -50,7 +50,7 @@ let vocab = loadVocab({
       before: ['doc'],
       properties: {
         price: { type: 'number' },
-        status: { enum: ['draft', 'listed', 'sold'] },
+        status: { type: 'string', enum: ['draft', 'listed', 'sold'] },
       },
     },
     review: {

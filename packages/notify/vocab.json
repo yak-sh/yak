@@ -64,6 +64,7 @@
           "death": "cascade"
         },
         "mode": {
+          "type": "string",
           "enum": [
             "watch",
             "mute"

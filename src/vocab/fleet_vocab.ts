@@ -94,7 +94,11 @@ let propOf = (t: ManifestType): PropSchema => {
   if (typeof t == 'string') return { ...SCALARS[t] }
   if ('enum' in t) {
     let values = typeof t.enum == 'string' ? enums[t.enum] : t.enum
-    return { enum: values, ...(t.aliases ? { aliases: t.aliases } : {}) }
+    return {
+      type: 'string',
+      enum: values,
+      ...(t.aliases ? { aliases: t.aliases } : {}),
+    }
   }
   if ('eid' in t) return { type: 'string', ref: t.eid, death: t.death }
   // a well ({well} in a manifest, {text} in types.ts) dissolves: completion

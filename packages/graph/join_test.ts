@@ -15,7 +15,11 @@ let vocab = loadVocab([{
       component: true,
       properties: { call: { type: 'string', ref: 'call' } },
     },
-    doc: { component: true, kind: true, properties: { title: {} } },
+    doc: {
+      component: true,
+      kind: true,
+      properties: { title: { type: 'string' } },
+    },
   },
 }])
 

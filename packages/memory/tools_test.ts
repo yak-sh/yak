@@ -40,7 +40,7 @@ let around: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
-      properties: { name: {} },
+      properties: { name: { type: 'string' } },
     },
   },
 }

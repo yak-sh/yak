@@ -320,6 +320,7 @@ export let appsDoc: VocabDoc = {
         // set to a word. `computed: true` says there is no column at all;
         // {@link appDerived} is the expression that reads it.
         status: {
+          type: 'string',
           enum: ['open', 'wip', 'done', 'cancelled'],
           computed: true,
         },
@@ -419,6 +420,7 @@ export let appsDoc: VocabDoc = {
         fee_cents: owned(num),
         email: owned(text),
         status: owned({
+          type: 'string',
           enum: ['paid', 'partially_refunded', 'refunded', 'disputed', 'lost'],
         }),
       },
@@ -589,7 +591,7 @@ export let platformDoc: VocabDoc = {
         slug: text,
         space: ref('cascade'),
         version: num,
-        access: { enum: ['public', 'open', 'private'] },
+        access: { type: 'string', enum: ['public', 'open', 'private'] },
         // The app's handle: what its Durable Object, its dispatch script and
         // its analytics rows are named by (directory.ts
         // `storeName`). Written once at birth and never read as an address —
@@ -610,7 +612,7 @@ export let platformDoc: VocabDoc = {
       properties: {
         app: owned(ref('cascade')),
         name: owned(text),
-        type: owned({ enum: ['d1', 'r2_bucket', 'vectorize'] }),
+        type: owned({ type: 'string', enum: ['d1', 'r2_bucket', 'vectorize'] }),
         id: owned(text),
         resource: owned(text),
       },
@@ -668,7 +670,7 @@ export let platformDoc: VocabDoc = {
       properties: {
         space: ref('cascade'),
         person: ref('cascade', false),
-        role: { enum: ['owner', 'editor', 'viewer'] },
+        role: { type: 'string', enum: ['owner', 'editor', 'viewer'] },
       },
     },
     // A seat reaches every app in its space; this reaches one (T-37615). It is
@@ -687,7 +689,7 @@ export let platformDoc: VocabDoc = {
       properties: {
         app: ref('cascade'),
         person: ref('cascade', false),
-        access: { enum: ['owner', 'editor', 'viewer'] },
+        access: { type: 'string', enum: ['owner', 'editor', 'viewer'] },
       },
     },
     // A seat or a grant offered and not yet taken (invite.ts, T-37880). `to`
@@ -706,7 +708,7 @@ export let platformDoc: VocabDoc = {
       properties: {
         to: ref('cascade'),
         person: ref('cascade', false),
-        role: { enum: ['owner', 'editor', 'viewer'] },
+        role: { type: 'string', enum: ['owner', 'editor', 'viewer'] },
       },
     },
     // How many invitations this person has sent in the hour it names
@@ -737,7 +739,7 @@ export let platformDoc: VocabDoc = {
       properties: {
         name: unique(text),
         serves: ref('cascade'),
-        stage: { enum: ['pending', 'active', 'error'] },
+        stage: { type: 'string', enum: ['pending', 'active', 'error'] },
         at: time,
       },
     },
@@ -896,7 +898,7 @@ export let platformDoc: VocabDoc = {
       component: true,
       type: 'object',
       properties: {
-        tier: owned({ enum: ['free', 'plus'] }),
+        tier: owned({ type: 'string', enum: ['free', 'plus'] }),
         customer: owned(text),
         subscription: owned(text),
         status: owned(text),
@@ -950,7 +952,7 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: {
         at: owned(time),
-        via: owned({ enum: ['code', 'link'] }),
+        via: owned({ type: 'string', enum: ['code', 'link'] }),
       },
     },
     report: {

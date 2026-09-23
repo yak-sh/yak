@@ -21,6 +21,7 @@
           "description": "what the provider is called; the entity id is derived from it"
         },
         "transport": {
+          "type": "string",
           "enum": [
             "process",
             "http"
@@ -54,6 +55,7 @@
           "type": "string"
         },
         "grade": {
+          "type": "string",
           "enum": [
             "frontier",
             "mid",

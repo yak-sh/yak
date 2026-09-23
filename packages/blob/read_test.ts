@@ -23,7 +23,7 @@ Deno.test('doc predicates, paths, projections and bundles resolve the same blob'
       },
       note: {
         component: true,
-        properties: { target: { ref: 'doc', death: 'detach' } },
+        properties: { target: { type: 'string', ref: 'doc', death: 'detach' } },
       },
     },
   }, [blobKeywords])

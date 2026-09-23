@@ -7,6 +7,7 @@ import { type Bundle, tombstoned } from '@yaks/graph'
 import type { Driver } from './driver.ts'
 import { compSql, get } from './read.ts'
 import { descriptor } from './catalog.ts'
+import { decoded } from './jsonb.ts'
 
 export let keyed = (driver: Driver, vocab: Vocab, opts: BindOpts) => {
   let names = vocab.all.filter((c) => c != 'entity')
@@ -72,7 +73,7 @@ export let keyed = (driver: Driver, vocab: Vocab, opts: BindOpts) => {
         if (present?.computed !== false && !opts.derived?.[`${comp}.present`]) {
           delete held.present
         }
-        b[comp] = held
+        b[comp] = decoded(vocab, comp, held)
       }
     }
     return [b]

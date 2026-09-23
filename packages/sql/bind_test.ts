@@ -36,7 +36,11 @@ let doc: VocabDoc = {
       before: ['doc'],
       properties: {
         priority: { type: 'number', format: 'priority' },
-        status: { enum: ['open', 'wip', 'done'], computed: true },
+        status: {
+          type: 'string',
+          enum: ['open', 'wip', 'done'],
+          computed: true,
+        },
       },
     },
     note: {

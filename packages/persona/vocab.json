@@ -56,6 +56,7 @@
       "by_name": true,
       "properties": {
         "state": {
+          "type": "string",
           "enum": [
             "running",
             "stopped",
@@ -67,6 +68,7 @@
           "description": "running, stopped, paused, disabled, retired, or held"
         },
         "surface": {
+          "type": "string",
           "enum": [
             "native",
             "managed"

@@ -14,7 +14,7 @@ let controls = [
   { types: 'ref', tag: 'input', type: 'text' },
   { types: 'time', tag: 'input', type: 'text' },
   { types: 'boolean', tag: 'input', type: 'checkbox' },
-  { types: 'json', tag: 'textarea' },
+  { types: 'json,jsonb', tag: 'textarea' },
 ]
 
 /** Register these alongside entity views; column overlays use ordinary queries. */
@@ -26,7 +26,12 @@ export let editors = (vocab: Vocab, options: EditOptions = {}): Renderer[] =>
       let c = declared(vocab, ctx)
       let row = bundle[c.comp] as Record<string, unknown> | undefined
       let value = row?.[c.prop]
-      let text = value == null ? '' : String(value)
+      // A JSON value shows as its JSON text, the text its editor parses back.
+      let text = value == null
+        ? ''
+        : c.scalar == 'jsonb'
+        ? JSON.stringify(value)
+        : String(value)
       if (ctx.readOnly || !writable(vocab, c)) {
         let shown = value == null
           ? '—'

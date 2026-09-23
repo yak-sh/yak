@@ -146,6 +146,7 @@
       "durable": "connection",
       "properties": {
         "mode": {
+          "type": "string",
           "enum": [
             "message",
             "task"

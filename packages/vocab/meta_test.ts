@@ -57,3 +57,18 @@ Deno.test('a tool declaration is checked as a tool', () => {
   // And an entry cannot be both: one $defs entry is one thing.
   assert(ok({ ...TOOL, component: true }).length)
 })
+
+Deno.test('a column declares its type, and a JSON one may declare its shape', () => {
+  let col = (s: PropSchema) =>
+    ok({ component: true, type: 'object', properties: { c: s } })
+  assertEquals(col({ type: 'string', enum: ['a'] }), [])
+  assertEquals(col({ type: 'string', format: 'json' }), [])
+  assertEquals(
+    col({ type: 'object', properties: { a: { type: 'number' } } }),
+    [],
+  )
+  assertEquals(col({ type: 'array', items: { type: 'string' } }), [])
+  assertEquals(col({ type: ['string', 'object', 'null'] }), [])
+  assert(col({ enum: ['a'] }).length)
+  assert(col({ type: 'null' }).length)
+})

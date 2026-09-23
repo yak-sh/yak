@@ -8,6 +8,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { durable, shop, store } from './harness.ts'
 import { storage } from './store.ts'
+import { kitchen, RECIPE } from '../sqlite/harness.ts'
 
 let comp = (b: Bundle, name: string) => b[name] as Record<string, unknown>
 
@@ -26,6 +27,14 @@ Deno.test('install is idempotent, and a bundle survives the round trip', () => {
   assertEquals(comp(p, 'doc').title, 'Kettle')
   // A boolean would bind as the text 'true'; it lands as the 1 the column holds.
   assertEquals(comp(p, 'product').available, 1)
+})
+
+Deno.test('an object and an array come back as the values written', () => {
+  let s = store(kitchen)
+  s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
+  let [read] = s.read('.recipe!') as Bundle[]
+  let [got] = s.tx((tx) => tx.get(['r1']))
+  assertEquals([read.recipe, got.recipe], [RECIPE, RECIPE])
 })
 
 Deno.test('bytes go in as an ArrayBuffer and come back as bytes', () => {

@@ -27,6 +27,7 @@
           "type": "number"
         },
         "access": {
+          "type": "string",
           "enum": [
             "public",
             "open",
@@ -84,6 +85,7 @@
           "death": "cascade"
         },
         "stage": {
+          "type": "string",
           "enum": [
             "pending",
             "active",
@@ -166,6 +168,7 @@
       "kind": true,
       "properties": {
         "tier": {
+          "type": "string",
           "enum": [
             "free",
             "plus"

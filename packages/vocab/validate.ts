@@ -2,8 +2,8 @@
 // store runs over a hand-written app manifest, expressed over JSON Schema.
 // Three kinds of error, each naming the offending entry and the fix, because
 // the agent reading it has no other source:
-//   storable  the shape a table can lower — a top-level object of scalar / ref /
-//             enum columns, no nesting, no arrays, no recursive $ref
+//   storable  the shape a table can lower — a top-level object of typed
+//             scalar / ref / enum / JSON columns, no recursive $ref
 //   reserved  a name the base vocabulary already owns is rejected
 //   grow      evolution is additive forever — never drop or retype a column,
 //             the rows are already written under the old type
@@ -13,7 +13,7 @@
 // when a deploy is rejected.
 
 import type { Composite, PropSchema, VocabDoc } from './types.ts'
-import { composite, type Vocab } from './vocab.ts'
+import { composite, jsonb, TYPES, typesOf, type Vocab } from './vocab.ts'
 import { lives, SYNC, type Sync } from './lifetime.ts'
 
 let NAME = /^[a-z][a-z0-9_]{0,39}$/
@@ -21,8 +21,11 @@ let NAME = /^[a-z][a-z0-9_]{0,39}$/
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 
-// One property schema is storable when it names a scalar, a reference, or a
-// closed set — nothing a table cannot hold in one column.
+// One property schema is storable when it names a scalar, a reference, a
+// closed set, or a JSON value — an object, an array, or a union of types,
+// which a table holds in one column as binary JSON. Every column says its
+// type. A JSON column may declare its structure (`properties`, `items`);
+// nothing validates that structure yet.
 let storableProp = (
   comp: string,
   prop: string,
@@ -34,11 +37,31 @@ let storableProp = (
       `${comp}.${prop} uses $ref — a column cannot lower a recursive reference`,
     ]
   }
-  if (s.properties) {
-    return [`${comp}.${prop} is nested — a column is a scalar, not an object`]
+  let said = typesOf(s)
+  if (!said.length) {
+    return [
+      `${comp}.${prop} declares no type — say "type": "string" (or ${
+        TYPES.slice(1).join(', ')
+      })`,
+    ]
   }
-  if (s.type == 'array' || s.type == 'object') {
-    return [`${comp}.${prop} is ${s.type} — a column is a scalar`]
+  let known = Array.isArray(s.type) ? [...TYPES, 'null'] : TYPES
+  let odd = said.filter((t) => !known.includes(t))
+  if (odd.length) {
+    return [`${comp}.${prop} has type '${odd[0]}' — one of ${TYPES.join(', ')}`]
+  }
+  if (s.properties && !said.includes('object')) {
+    return [`${comp}.${prop} has properties — say "type": "object"`]
+  }
+  if (s.items !== undefined && !said.includes('array')) {
+    return [`${comp}.${prop} has items — say "type": "array"`]
+  }
+  if ((s.ref != null || s.enum != null) && s.type != 'string') {
+    return [
+      `${comp}.${prop} is ${
+        s.ref != null ? 'a reference' : 'a closed set'
+      } — its type is "string"`,
+    ]
   }
   if (s.ref != null) {
     let words = ['cascade', 'detach', 'release', 'keep']
@@ -48,11 +71,7 @@ let storableProp = (
       })`,
     ]
   }
-  if (s.enum != null) return []
-  let ok = ['string', 'number', 'integer', 'boolean']
-  return s.type == null || ok.includes(s.type)
-    ? []
-    : [`${comp}.${prop} has type '${s.type}' — one of ${ok.join(', ')}`]
+  return []
 }
 
 // The composite index lists a component declares, both keywords together. An
@@ -67,6 +86,7 @@ let composites = (s: PropSchema): { cols: string[]; present?: string[] }[] =>
 let storableDefault = (comp: string, prop: string, s: PropSchema): string[] => {
   let d = s.default
   if (d === undefined) return []
+  if (jsonb(s)) return [`${comp}.${prop} holds JSON and takes no default`]
   if (typeof d == 'string' || typeof d == 'number' || typeof d == 'boolean') {
     return []
   }
@@ -90,7 +110,7 @@ let WORDLESS = ['date-time', 'uri', 'query', 'json']
 let searched = (comp: string, prop: string, s: PropSchema): string[] =>
   s.search !== true ||
     (s.computed !== true && s.ref == null && s.enum == null &&
-      (s.type == null || s.type == 'string') &&
+      s.type == 'string' &&
       !WORDLESS.includes(s.format ?? ''))
     ? []
     : [

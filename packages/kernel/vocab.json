@@ -92,6 +92,7 @@
           "stamped": true
         },
         "verdict": {
+          "type": "string",
           "enum": [
             "approved",
             "declined"
@@ -244,6 +245,7 @@
           "stamped": true
         },
         "column": {
+          "type": "string",
           "enum": [
             "title",
             "body"

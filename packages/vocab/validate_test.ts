@@ -18,20 +18,33 @@ Deno.test('the slice is storable', () => {
   assertEquals(storable(slice), [])
 })
 
-Deno.test('JSON text is storable and nested JSON is refused', () => {
-  let schema = (type: string) =>
-    doc({
-      config: {
-        type: 'object',
-        properties: { value: { type, format: 'json' } },
-      },
-    })
-  assertEquals(storable(schema('string')), [])
-  for (let type of ['object', 'array']) {
-    assertEquals(storable(schema(type)), [
-      `config.value is ${type} — a column is a scalar`,
-    ])
-  }
+Deno.test('JSON text and JSON values are storable', () => {
+  let schema = (value: PropSchema) =>
+    doc({ config: { type: 'object', properties: { value } } })
+  let ok: PropSchema[] = [
+    { type: 'string', format: 'json' },
+    { type: 'object', properties: { a: { type: 'number' } } },
+    { type: 'array', items: { type: 'string' } },
+    { type: ['string', 'object', 'null'] },
+  ]
+  for (let s of ok) assertEquals(storable(schema(s)), [])
+  let said = (s: PropSchema) => storable(schema(s)).join('; ')
+  assertEquals(
+    said({ type: 'object', default: 1 }),
+    'config.value holds JSON and takes no default',
+  )
+  assertEquals(
+    said({ type: 'string', properties: {} }),
+    'config.value has properties — say "type": "object"',
+  )
+  assertEquals(
+    said({ type: 'object', items: {} }),
+    'config.value has items — say "type": "array"',
+  )
+  assertEquals(
+    said({ type: 'null' }),
+    "config.value has type 'null' — one of string, number, integer, boolean, object, array",
+  )
 })
 
 Deno.test('storable refuses what a table cannot lower', () => {
@@ -40,25 +53,29 @@ Deno.test('storable refuses what a table cannot lower', () => {
     recipe: {
       type: 'object',
       properties: {
-        steps: { type: 'array' },
-        author: { type: 'object' },
+        untyped: { enum: ['a', 'b'] },
         nested: { properties: { deep: { type: 'string' } } },
         linked: { $ref: '#/$defs/recipe' },
         eid: { type: 'string' },
         aim: { type: 'string', ref: 'entity' },
         dead: { type: 'string', ref: 'entity', death: 'explode' },
+        numbered: { type: 'number', enum: ['1'] },
       },
     },
   }))
   let said = errs.join('\n')
   assert(said.includes('"Bad Name" is not a component name'))
-  assert(said.includes('recipe.steps is array'))
-  assert(said.includes('recipe.author is object'))
-  assert(said.includes('recipe.nested is nested'))
+  assert(
+    said.includes('recipe.untyped declares no type — say "type": "string"'),
+  )
+  assert(said.includes('recipe.nested declares no type'))
   assert(said.includes('recipe.linked uses $ref'))
   assert(said.includes('recipe."eid" is not a column name'))
   assert(said.includes('recipe.aim is a reference without a death word'))
   assert(said.includes('recipe.dead is a reference without a death word'))
+  assert(
+    said.includes('recipe.numbered is a closed set — its type is "string"'),
+  )
 })
 
 Deno.test('storable refuses an index over a column that is not there', () => {
@@ -135,7 +152,7 @@ Deno.test('storable refuses search on anything but stored prose', () => {
         note: { type: 'string', search: true },
         serves: { type: 'number', search: true },
         cook: { type: 'string', ref: 'entity', death: 'detach', search: true },
-        course: { enum: ['starter', 'main'], search: true },
+        course: { type: 'string', enum: ['starter', 'main'], search: true },
         made: { type: 'string', format: 'date-time', search: true },
         rank: { type: 'number', computed: true, search: true },
       },
@@ -169,7 +186,7 @@ Deno.test('evolution is additive forever', () => {
       properties: {
         title: { type: 'string' },
         serves: { type: 'number' },
-        state: { enum: ['draft'] },
+        state: { type: 'string', enum: ['draft'] },
       },
     },
   }))
@@ -180,7 +197,7 @@ Deno.test('evolution is additive forever', () => {
       properties: {
         title: { type: 'string' },
         serves: { type: 'number' },
-        state: { enum: ['draft', 'published'] },
+        state: { type: 'string', enum: ['draft', 'published'] },
         mins: { type: 'number' },
       },
     },
@@ -193,7 +210,7 @@ Deno.test('evolution is additive forever', () => {
       properties: {
         title: { type: 'string' },
         serves: { type: 'string' },
-        state: { enum: ['draft'] },
+        state: { type: 'string', enum: ['draft'] },
       },
     },
   }))

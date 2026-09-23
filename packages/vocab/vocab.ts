@@ -113,10 +113,32 @@ let carried = (
   return out
 }
 
+// The JSON types a column declares: one name, or the members of a union.
+export let typesOf = (s: PropSchema): string[] =>
+  Array.isArray(s.type) ? [...s.type] : s.type == null ? [] : [s.type]
+
+// A column whose value is a JSON value rather than a scalar: an object, an
+// array, or a union of types. It is stored as SQLite's binary JSON.
+export let jsonb = (s: PropSchema): boolean =>
+  Array.isArray(s.type) || s.type == 'object' || s.type == 'array'
+
+// Every column says what it holds. A column with no `type` is refused rather
+// than read as text: the schema is what a reader expects back, and a guess is
+// not a promise.
+export let TYPES = ['string', 'number', 'integer', 'boolean', 'object', 'array']
+let typed = (comp: string, prop: string, s: PropSchema): void => {
+  if (typesOf(s).length) return
+  throw new Error(
+    `${comp}.${prop} declares no type — a column says "type": ` +
+      `${TYPES.map((t) => `"${t}"`).join(', ')}, or a union of them`,
+  )
+}
+
 // One property schema → the column it describes. The scalar type name is
 // reconstructed from native JSON Schema (`type` + `format`), so a vocabulary
 // authored in plain JSON Schema round-trips to this compact type set.
 let scalarOf = (s: PropSchema): Scalar => {
+  if (jsonb(s)) return 'jsonb'
   if (s.type == 'boolean') return 'bool'
   if (s.type == 'number' || s.type == 'integer') {
     return s.format == 'priority' ? 'priority' : 'number'
@@ -127,6 +149,22 @@ let scalarOf = (s: PropSchema): Scalar => {
   if (s.format == 'json') return 'json'
   return 'text'
 }
+
+// Whether a value is one of the JSON types a column declares. An integer is a
+// number too, as JSON Schema reads it.
+let holds = (types: string[], v: unknown): boolean => {
+  let t = Array.isArray(v)
+    ? 'array'
+    : v === null
+    ? 'null'
+    : typeof v == 'number'
+    ? (Number.isFinite(v) ? (Number.isInteger(v) ? 'integer' : 'number') : '')
+    : typeof v
+  return types.includes(t) || (t == 'integer' && types.includes('number'))
+}
+
+// A type's name with its article, for a sentence: `an object or an array`.
+let a = (t: string) => `${/^[aeiou]/.test(t) ? 'an' : 'a'} ${t}`
 
 let jsonText = (value: unknown): boolean => {
   if (typeof value != 'string') return false
@@ -140,13 +178,15 @@ let jsonText = (value: unknown): boolean => {
 
 // A number stores as real unless the schema declared `integer`, which is
 // native JSON Schema's way of stating the value has no fractional part — so
-// the store keeps it as one.
+// the store keeps it as one. A JSON value is SQLite's binary JSON, a blob.
 let affinityOf = (
   category: Column['category'],
   scalar: Scalar | undefined,
-  type: string | undefined,
+  type: PropSchema['type'],
 ): Column['affinity'] =>
-  category == 'ref' || scalar == 'bool' || type == 'integer'
+  scalar == 'jsonb'
+    ? 'blob'
+    : category == 'ref' || scalar == 'bool' || type == 'integer'
     ? 'integer'
     : scalar == 'number' || scalar == 'priority'
     ? 'real'
@@ -176,6 +216,7 @@ let columnOf = (
   extra: Set<string>,
   required: boolean,
 ): Column => {
+  typed(comp, prop, s)
   let category: Column['category'] = s.ref != null
     ? 'ref'
     : s.enum != null
@@ -190,6 +231,7 @@ let columnOf = (
     category,
     scalar,
     values: s.enum ? [...s.enum] : undefined,
+    types: scalar == 'jsonb' ? typesOf(s) : undefined,
     aliases: s.aliases,
     ref: s.ref,
     death,
@@ -339,6 +381,8 @@ let shapeOf = (v: Vocab, comp: string): string => {
       ? c.values!.join('|')
       : c.category == 'ref'
       ? 'eid'
+      : c.scalar == 'jsonb'
+      ? c.types!.join('|')
       : c.scalar
     return `${p} (${t})`
   })
@@ -353,6 +397,40 @@ let shapeOf = (v: Vocab, comp: string): string => {
  */
 export let syncOf = (v: Vocab, comp: string): Sync =>
   v.comp(comp)?.sync ?? 'server'
+
+// The scalars declared `"type": "string"`.
+let STRINGS: (Scalar | undefined)[] = ['text', 'time', 'url', 'query', 'json']
+
+/**
+ * A patch with each string column's value cast to a string: a number or a
+ * boolean becomes its text, an object or an array its JSON text, and a null
+ * still clears the column. The schema says what a reader gets back, and
+ * casting on the way in is what keeps that promise — the stored row, the
+ * transaction a write returns and what every other client is told all carry
+ * the same string. A reference names an entity rather than holding a value,
+ * so it is left as sent.
+ */
+export let cast = (
+  v: Vocab,
+  comp: string,
+  patch: Record<string, unknown>,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(patch).map(([k, val]) => {
+      let c = v.column(comp, k)
+      let text = c &&
+        (c.category == 'enum' ||
+          (c.category == 'scalar' && STRINGS.includes(c.scalar)))
+      return [
+        k,
+        !text || val == null || typeof val == 'string'
+          ? val
+          : typeof val == 'object'
+          ? JSON.stringify(val)
+          : String(val),
+      ]
+    }),
+  )
 
 /** How long one of a component's values lives — `forever` for an unknown
  * component. */
@@ -600,8 +678,9 @@ export let loadVocab = (
       ),
     // Ordinary well-formedness of an instance: a known component, an object of
     // known columns (client-writable unless stamped columns are allowed), each
-    // value a scalar the column can hold — no nesting or arrays a table cannot
-    // lower.
+    // value one the column can hold — a scalar, or for a `jsonb` column a JSON
+    // value of a type it declares. The structure inside an object or array
+    // (`properties`, `items`) is not validated yet.
     check: (comp, value, opts) => {
       let errs: string[] = []
       let info = infoOf(comp)
@@ -617,6 +696,12 @@ export let loadVocab = (
         }
         if (val == null) continue // a null clears the column
         let c = colFor(comp, k)!
+        if (c.scalar == 'jsonb') {
+          if (!holds(c.types!, val)) {
+            errs.push(`${comp}.${k} is ${c.types!.map(a).join(' or ')}`)
+          }
+          continue
+        }
         if (typeof val == 'object') {
           errs.push(
             `${comp}.${k} is a scalar, not ${

@@ -12,19 +12,23 @@ import { meaning } from './meant.ts'
 let vocab = loadVocab([{
   $defs: {
     entity: { component: true, wire: false, properties: {} },
-    doc: { component: true, kind: true, properties: { title: {} } },
+    doc: {
+      component: true,
+      kind: true,
+      properties: { title: { type: 'string' } },
+    },
     task: {
       component: true,
       kind: true,
       properties: {
-        status: { enum: ['open', 'done'] },
+        status: { type: 'string', enum: ['open', 'done'] },
         domain: { type: 'string' },
       },
     },
     session: {
       component: true,
       kind: true,
-      properties: { status: { enum: ['running', 'settled'] } },
+      properties: { status: { type: 'string', enum: ['running', 'settled'] } },
     },
   },
 }])

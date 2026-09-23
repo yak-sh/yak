@@ -41,7 +41,7 @@ let doc: VocabDoc = {
       before: ['doc'],
       properties: {
         serves: { type: 'number' },
-        course: { enum: ['starter', 'dinner', 'pudding'] },
+        course: { type: 'string', enum: ['starter', 'dinner', 'pudding'] },
         cook: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },

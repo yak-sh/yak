@@ -28,13 +28,13 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
-      properties: { name: {} },
+      properties: { name: { type: 'string' } },
     },
     person: {
       component: true,
       type: 'object',
       kind: true,
-      properties: { name: {} },
+      properties: { name: { type: 'string' } },
     },
     // The roster row @yaks/member ships, declared here so the invitation
     // example has something to be triggered by.
@@ -50,7 +50,7 @@ let doc: VocabDoc = {
           death: 'cascade',
           bare: false,
         },
-        role: { enum: ['owner', 'member'], default: 'member' },
+        role: { type: 'string', enum: ['owner', 'member'], default: 'member' },
       },
     },
     // The two components ./tools.ts writes and does not declare —

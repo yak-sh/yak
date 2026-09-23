@@ -89,6 +89,16 @@ let scalar = (ctx: Ctx, hop: Hop, p: Pred): (b?: Bundle) => boolean => {
       BY,
     )
   }
+  // A JSON value is compared by nothing yet: presence is the one question
+  // asked of it, as @yaks/sql answers it.
+  if (read.tag == 'jsonb' && opOf(p) != EXISTS) {
+    throw new Unsupported(
+      'a filter on it',
+      `.${hop.comp}.${hop.prop} holds a JSON value — only its presence ` +
+        `(.${hop.comp}.${hop.prop}!) can be asked of it yet`,
+      BY,
+    )
+  }
   let hit = check(opOf(p), flat(p.value), read.tag, ctx.now)
   if (!hit) {
     throw new Unsupported(

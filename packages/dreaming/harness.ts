@@ -33,7 +33,7 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
-      properties: { name: {} },
+      properties: { name: { type: 'string' } },
     },
     // The persona a desk uses is @yaks/persona's; declared here, along with
     // `references`, so these tests need no dependency on that package.
@@ -41,7 +41,7 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
-      properties: { name: {} },
+      properties: { name: { type: 'string' } },
     },
     references: { component: true, type: 'object', relation: 'referenced' },
     created: {

@@ -57,6 +57,22 @@ export type BundleOpts = {
   column?: (col: Column, opts: BundleOpts) => z.ZodTypeAny | undefined
 }
 
+// A JSON value of the types a column declares. What an object or array holds
+// is not described yet: the vocabulary does not validate it either.
+let JSON_TYPES: Record<string, z.ZodTypeAny> = {
+  object: z.record(z.unknown()),
+  array: z.array(z.unknown()),
+  string: z.string(),
+  number: z.number(),
+  integer: z.number().int(),
+  boolean: z.boolean(),
+  null: z.null(),
+}
+let json = (types: string[]): z.ZodTypeAny => {
+  let [one, two, ...rest] = types.map((t) => JSON_TYPES[t] ?? z.unknown())
+  return two ? z.union([one, two, ...rest]) : one
+}
+
 // A column's value as it reads back. Every column is nullable (a cleared
 // column reads back null) and optional (a patch only touches the columns it
 // names), and an enum reads back as one of its members. `.catch` is
@@ -65,6 +81,8 @@ export type BundleOpts = {
 let typed = (col: Column): z.ZodTypeAny =>
   col.category == 'enum' && col.values?.length
     ? z.enum(col.values as [string, ...string[]])
+    : col.scalar == 'jsonb'
+    ? json(col.types!)
     : col.scalar == 'bool'
     ? z.boolean()
     : col.scalar == 'number' || col.scalar == 'priority'

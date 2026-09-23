@@ -56,7 +56,7 @@ let doc: VocabDoc = {
       before: ['doc'],
       properties: {
         price: { type: 'number' },
-        status: { enum: ['shelved', 'sold'] },
+        status: { type: 'string', enum: ['shelved', 'sold'] },
         author: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },

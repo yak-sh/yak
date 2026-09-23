@@ -133,7 +133,7 @@ import {
   reads,
 } from '@yaks/member'
 import { parse } from '@yaks/query'
-import type { Vocab } from '@yaks/vocab'
+import { jsonb, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { reconcile, type Runner, runner } from '@yaks/tools'
 import { commands, modern, type Tools } from '../../src/store/tools.ts'
 import { soonest, tick, type Ticked, wakes } from '@yaks/wake'
@@ -211,6 +211,26 @@ import {
   platformVocab,
   teach,
 } from './vocab.ts'
+
+/**
+ * The columns of a manifest that hold a JSON value (type object, array or a
+ * union), which a deploy may not plant yet.
+ *
+ * TODO(T-37988): delete once this build is the one before. It reads such a
+ * column, but the build before it refuses the whole vocabulary at load, so a
+ * store that planted one would stop serving if production rolled back
+ * (D-37972).
+ */
+let unplantable = (doc: VocabDoc): string[] =>
+  Object.entries(doc.$defs ?? {}).flatMap(([name, s]) =>
+    Object.entries(s?.properties ?? {})
+      .filter(([, c]) => jsonb(c))
+      .map(([col]) =>
+        `vocab.json: ${name}.${col} holds a JSON value (type object, array ` +
+        'or a union), which an app cannot declare yet — keep it as JSON ' +
+        'text for now: "type": "string", "format": "json"'
+      )
+  )
 
 /**
  * Which words an object wakes with, from the one thing that decides it: which
@@ -2182,9 +2202,12 @@ export class Store {
     }
     return request.text().then((body) => {
       try {
+        let next = appDoc(body)
+        let held = unplantable(next)
+        if (held.length) throw new Error(held.join('; '))
         let { doc, dropped, added, kept } = grew(
           appDoc(this.#get('vocab') ?? '{}'),
-          appDoc(body),
+          next,
           (name) => this.#rows(name),
         )
         appVocab(doc)

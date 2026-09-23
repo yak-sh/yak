@@ -282,6 +282,7 @@
           "description": "a long-running session: recorded here rather than ended when its work is done"
         },
         "status": {
+          "type": "string",
           "enum": [
             "empty",
             "pending",

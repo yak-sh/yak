@@ -28,13 +28,13 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
-      properties: { name: {} },
+      properties: { name: { type: 'string' } },
     },
     person: {
       component: true,
       type: 'object',
       kind: true,
-      properties: { name: {} },
+      properties: { name: { type: 'string' } },
     },
     // An app the club runs — the reading list, the notes page.
     app: {
@@ -42,7 +42,7 @@ let doc: VocabDoc = {
       type: 'object',
       kind: true,
       properties: {
-        name: {},
+        name: { type: 'string' },
         space: { type: 'string', ref: 'space', death: 'cascade' },
       },
     },
@@ -52,7 +52,7 @@ let doc: VocabDoc = {
       type: 'object',
       kind: true,
       properties: {
-        title: {},
+        title: { type: 'string' },
         by: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },

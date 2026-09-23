@@ -26,7 +26,7 @@
 import { type And, parse } from '@yaks/query'
 import type { BindOpts } from '@yaks/sql'
 import { compile } from '@yaks/sql'
-import { compSql, OWNER, setSql } from '@yaks/sqlite'
+import { compSql, decoded, OWNER, setSql } from '@yaks/sqlite'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { tombstoned } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
@@ -86,7 +86,7 @@ let bundleOf = (
     let row = answers[i + 1][0]
     if (!row) return
     delete row.present
-    out[comp] = row as Comp
+    out[comp] = decoded(v, comp, row) as Comp
   })
   return out
 }
@@ -151,7 +151,7 @@ export let whole = (v: Vocab, answers: Row[][]): Bundle[] => {
       let b = out.get(String(row[OWNER]))
       delete row[OWNER]
       delete row.present
-      if (b && b.tombstone == null) b[comp] = row as Comp
+      if (b && b.tombstone == null) b[comp] = decoded(v, comp, row) as Comp
     }
   })
   return hits.flatMap((r) => {

@@ -101,6 +101,39 @@ let WAS: Record<string, Record<string, unknown>> = {
   url: { type: 'string', format: 'uri' },
 }
 
+let record = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v == 'object' && !Array.isArray(v)
+
+/**
+ * A document with every column saying its type (T-37986). A column once could
+ * say none, and was stored and read as text, so `"type": "string"` is what it
+ * always meant; the loader now refuses a column that says none. `null` where
+ * every column already says one.
+ *
+ * The build before this one still accepts a column with no type, so a
+ * manifest it planted during a rollback arrives here too, which is why this
+ * runs at every wake and every read rather than once.
+ */
+let typed = (doc: Record<string, unknown>): string | null => {
+  if (!record(doc.$defs)) return null
+  let moved = false
+  let defs = Object.fromEntries(
+    Object.entries(doc.$defs).map(([name, s]) => {
+      if (!record(s) || s.tool === true || s.rule === true) return [name, s]
+      if (!record(s.properties)) return [name, s]
+      let props = Object.fromEntries(
+        Object.entries(s.properties).map(([col, c]) => {
+          if (!record(c) || 'type' in c) return [col, c]
+          moved = true
+          return [col, { type: 'string', ...c }]
+        }),
+      )
+      return [name, { ...s, properties: props }]
+    }),
+  )
+  return moved ? JSON.stringify({ ...doc, $defs: defs }) : null
+}
+
 /**
  * A short type map, as the document it means. An app's `vocab.json` could be
  * written as one — `{"recipe": {"serves": "number"}}` — and that spelling is
@@ -114,12 +147,15 @@ let WAS: Record<string, Record<string, unknown>> = {
  * published before it refused to install (T-37809) — and is rewritten the
  * next time anything reads it (tools.ts `declaring`).
  *
- * `null` where there is nothing to do — nothing held, something that is
- * already a document, or something no reader could parse — which is every
- * store after one wake and every file after one read.
+ * `null` where there is nothing to do — nothing held, a document whose
+ * columns all say their type, or something no reader could parse — which is
+ * every store after one wake and every file after one read.
  *
  * `"tools": false` is the manifest's one word about itself, so it rides across
  * as the document's own; every other key is a component.
+ *
+ * A document is rewritten too when one of its columns says no type
+ * ({@link typed}), through the same two doors and for the same reason.
  */
 export let documented = (held: string): string | null => {
   let said: unknown
@@ -131,7 +167,8 @@ export let documented = (held: string): string | null => {
   if (!said || typeof said != 'object' || Array.isArray(said)) return null
   let body = said as Record<string, unknown>
   let keys = Object.keys(body)
-  if (!keys.length || keys.some((k) => k.startsWith('$'))) return null
+  if (keys.some((k) => k.startsWith('$'))) return typed(body)
+  if (!keys.length) return null
   let defs: Record<string, unknown> = {}
   let tools: boolean | undefined
   for (let [name, cols] of Object.entries(body)) {

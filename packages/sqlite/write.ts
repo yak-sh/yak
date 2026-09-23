@@ -46,6 +46,7 @@ import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps } from '@yaks/graph'
 import { type Driver, effect, type Param, type Row } from './driver.ts'
 import { componentTables } from './physical.ts'
+import { isJsonb, jsonIn } from './jsonb.ts'
 
 /** One statement of a write: the SQL, and the parameters it binds. This file
  * builds them; an adapter runs them — one at a time over an embedded engine,
@@ -69,6 +70,21 @@ let scalar = (value: unknown): Param =>
 // column's category.
 let isRef = (v: Vocab, comp: string, prop: string): boolean =>
   v.column(comp, prop)?.category == 'ref'
+
+// One column's value as the SQL that writes it and the parameter it binds: a
+// reference names its target's eid and the statement looks up the id, a JSON
+// value goes in through `jsonb()` (./jsonb.ts), and a scalar is bound as it is.
+let slot = (
+  v: Vocab,
+  comp: string,
+  prop: string,
+  raw: unknown,
+): { sql: string; param: Param } =>
+  raw != null && isRef(v, comp, prop)
+    ? { sql: OWNER, param: String(raw) }
+    : isJsonb(v, comp, prop)
+    ? { sql: 'jsonb(?)', param: jsonIn(raw) }
+    : { sql: '?', param: scalar(raw) }
 
 /** What the store already knows about an eid: whether that identity is
  * tombstoned. An eid with no entry has no entity yet. */
@@ -184,13 +200,9 @@ export let upsertSql = (
   // reference is another subquery, a scalar is a bound parameter.
   let params: Param[] = []
   let items = cols.map((c) => {
-    let raw = patch[c]
-    if (raw != null && isRef(v, comp, c)) {
-      params.push(String(raw))
-      return OWNER
-    }
-    params.push(scalar(raw))
-    return '?'
+    let s = slot(v, comp, c, patch[c])
+    params.push(s.param)
+    return s.sql
   })
   let names = cols.map((c) => `"${c}"`).join(', ')
   let sets = cols.map((c) => `"${c}" = excluded."${c}"`).join(', ')
@@ -252,9 +264,9 @@ let patchOne = (
   )
   let params: Param[] = []
   let sets = cols.map((c) => {
-    let ref = comp[c] != null && isRef(v, name, c)
-    params.push(ref ? String(comp[c]) : scalar(comp[c]))
-    return `"${c}" = ${ref ? OWNER : '?'}`
+    let s = slot(v, name, c, comp[c])
+    params.push(s.param)
+    return `"${c}" = ${s.sql}`
   })
   let fallback = () => upsertSql(v, eid, name, comp, true)
   return cols.length

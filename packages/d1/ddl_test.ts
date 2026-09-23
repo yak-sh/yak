@@ -22,7 +22,7 @@ let strict = loadVocab({
       required: ['base'],
       properties: {
         base: { type: 'string', default: 'main' },
-        state: { enum: ['stopped', 'running'] },
+        state: { type: 'string', enum: ['stopped', 'running'] },
         seq: { type: 'integer' },
       },
     },

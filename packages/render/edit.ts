@@ -48,6 +48,16 @@ let parse = (input: unknown, c: Column): unknown => {
     }
     return fail(c, 'a boolean')
   }
+  // A JSON value is edited as its JSON text, and a value already parsed
+  // passes as it is; `check` holds it to the declared types.
+  if (type == 'jsonb') {
+    if (typeof input != 'string') return input
+    try {
+      return JSON.parse(input)
+    } catch {
+      return fail(c, 'JSON')
+    }
+  }
   if (typeof input != 'string') return fail(c, 'text')
   if (type == 'enum') {
     if (c.values!.includes(input)) return input

@@ -58,7 +58,7 @@ const vocab = loadVocab({
       type: 'object',
       properties: {
         price: { type: 'number' },
-        status: { enum: ['draft', 'shelved', 'sold'] },
+        status: { type: 'string', enum: ['draft', 'shelved', 'sold'] },
         author: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },

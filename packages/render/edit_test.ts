@@ -22,7 +22,11 @@ let vocab = loadVocab({
         title: { type: 'string' },
         count: { type: 'number' },
         priority: { type: 'number', format: 'priority' },
-        state: { enum: ['open', 'done'], aliases: { finished: 'done' } },
+        state: {
+          type: 'string',
+          enum: ['open', 'done'],
+          aliases: { finished: 'done' },
+        },
         owner: { type: 'string', ref: 'entity', death: 'detach' },
         at: { type: 'string', format: 'date-time' },
         enabled: { type: 'boolean' },
@@ -171,7 +175,7 @@ Deno.test('empty and case-distinct enum members keep their declared values', () 
     $defs: {
       doc: {
         component: true,
-        properties: { state: { enum: ['', '_', 'A', 'a'] } },
+        properties: { state: { type: 'string', enum: ['', '_', 'A', 'a'] } },
       },
     },
   })

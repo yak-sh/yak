@@ -254,6 +254,18 @@ let readCol = (ctx: Ctx, comp: string, prop: string, owner: string): Read => {
   }
 }
 
+// A column holding a JSON value (type object, array or a union) is read whole
+// by a gather, and nothing here compares, orders or projects one yet: its
+// presence (`.path!`) is the one question a query may ask of it.
+let opaque = (tag: Tag, what: string, path: string): void => {
+  if (tag != 'jsonb') return
+  throw new Unsupported(
+    what,
+    `.${path} holds a JSON value — only its presence (.${path}!) can be ` +
+      'asked of it yet',
+  )
+}
+
 // A scalar predicate over an already-resolved column expression, lowered branch
 // by branch. Returns a fragment, or null when it cannot be expressed with
 // exactly the semantics the JavaScript matcher has.
@@ -372,6 +384,9 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
       false,
     ))
   }
+  if (op != EXISTS) {
+    opaque(read.tag, 'a filter on it', `${hop.comp}.${hop.prop}`)
+  }
   let frag = lowerScalar(ctx, read.expr, op, flat(p.value), read.tag)
   if (!frag) {
     throw new Unsupported('this predicate', `.${hop.comp}.${hop.prop} ${p.op}`)
@@ -475,6 +490,9 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   let read = leafRead(ctx, leaf, target)
   if (!read) {
     throw new Unsupported('a computed path leaf', `.${leaf.comp}.${leaf.prop}`)
+  }
+  if (op != EXISTS) {
+    opaque(read.tag, 'a filter on it', `${leaf.comp}.${leaf.prop}`)
   }
   let frag = lowerScalar(ctx, read.expr, op, flat(p.value), read.tag)
   if (!frag) {
@@ -923,6 +941,7 @@ let resolveField = (
   ctx.tables.add(h.comp)
   let read = readCol(ctx, h.comp, h.prop, `"${h.comp}"."entity"`)
   if (!read) throw new Unsupported('a computed column here', pathStr)
+  opaque(read.tag, 'ordering or projecting by it', `${h.comp}.${h.prop}`)
   return { expr: read.expr, comp: h.comp }
 }
 

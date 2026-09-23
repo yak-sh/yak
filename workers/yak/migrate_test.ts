@@ -344,8 +344,33 @@ Deno.test('the short type map, as the document it means', () => {
     JSON.parse(documented('{"t": {}, "tools": false}')!).tools,
     false,
   )
-  // Nothing to do: a document, an empty slot, or bytes nothing can read.
+  // A document whose column says no type says the text it was stored as.
+  assertEquals(
+    JSON.parse(
+      documented(
+        '{"$defs": {"r": {"properties": {"a": {"enum": ["x"]}, ' +
+          '"b": {"type": "number"}}}, "t": {"tool": true}}, "tools": false}',
+      )!,
+    ),
+    {
+      $defs: {
+        r: {
+          properties: {
+            a: { type: 'string', enum: ['x'] },
+            b: { type: 'number' },
+          },
+        },
+        t: { tool: true },
+      },
+      tools: false,
+    },
+  )
+  // Nothing to do: a typed document, an empty slot, or bytes nothing can read.
   assertEquals(documented('{"$defs": {"recipe": {}}}'), null)
+  assertEquals(
+    documented('{"$defs": {"r": {"properties": {"a": {"type": "string"}}}}}'),
+    null,
+  )
   assertEquals(documented('{}'), null)
   assertEquals(documented('not json'), null)
 })

@@ -27,15 +27,15 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
-      properties: { name: {} },
+      properties: { name: { type: 'string' } },
     },
     page: {
       component: true,
       type: 'object',
       kind: true,
       properties: {
-        title: {},
-        text: {},
+        title: { type: 'string' },
+        text: { type: 'string' },
         by: { type: 'string', ref: 'entity', death: 'detach' },
       },
     },

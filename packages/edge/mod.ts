@@ -14,7 +14,7 @@
  *
  * let blog = {
  *   $defs: {
- *     post: { type: 'object', kind: true, properties: { title: {} } },
+ *     post: { type: 'object', kind: true, properties: { title: { type: 'string' } } },
  *     // one component, declared as a relation
  *     cites: { type: 'object', relation: true },
  *   },

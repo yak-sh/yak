@@ -148,7 +148,10 @@
       "before": ["doc"],
       "properties": {
         "target": { "type": "string", "ref": "entity", "death": "cascade" },
-        "event": { "enum": ["lapse", "sweep", "scene", "wake"] }
+        "event": {
+          "type": "string",
+          "enum": ["lapse", "sweep", "scene", "wake"]
+        }
       }
     },
     "role": {
@@ -159,6 +162,7 @@
       "by_name": true,
       "properties": {
         "state": {
+          "type": "string",
           "enum": [
             "running",
             "stopped",
@@ -168,11 +172,12 @@
             "held"
           ]
         },
-        "surface": { "enum": ["native", "managed"] },
+        "surface": { "type": "string", "enum": ["native", "managed"] },
         "scope": { "type": "string", "ref": "entity", "death": "detach" },
         "checkout": { "type": "string", "ref": "entity", "death": "detach" },
         "schedule": { "type": "string" },
         "wake_policy": {
+          "type": "string",
           "enum": ["always", "attention", "scheduled", "manual"]
         },
         "wake_target": { "type": "string", "ref": "entity", "death": "detach" },

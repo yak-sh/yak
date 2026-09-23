@@ -33,7 +33,11 @@ export const vocab = loadVocab([edgeDoc, {
       component: true,
       type: 'object',
       properties: {
-        status: { enum: ['open', 'wip', 'done', 'cancelled'], computed: true },
+        status: {
+          type: 'string',
+          enum: ['open', 'wip', 'done', 'cancelled'],
+          computed: true,
+        },
       },
     },
     session: {

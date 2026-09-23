@@ -40,7 +40,7 @@ let doc: VocabDoc = {
       properties: {
         pages: { type: 'number' },
         shelved: { type: 'boolean' },
-        status: { enum: ['draft', 'stocked', 'sold'] },
+        status: { type: 'string', enum: ['draft', 'stocked', 'sold'] },
         // deleting a publisher leaves the book, publisher-less
         publisher: { type: 'string', ref: 'entity', death: 'detach' },
       },
