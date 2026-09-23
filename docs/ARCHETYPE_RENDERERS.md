@@ -23,10 +23,10 @@ archetype subscription before mounting.
   after unmount), rather than gating or hanging the whole application's boot.
 
 The package caches presence-query answers per query, vocabulary and table set.
-Value predicates and column controls retain ordinary matching; value predicates
-now decline the shortcut **before** consulting a potentially lazy descriptor
-lookup. Registration ordering, top-level clause scores, catch-all 0.5,
-qualified-view traversal and `extend()` overlays are unchanged. Tests cover
+Value predicates and property controls retain ordinary matching; value
+predicates now decline the shortcut **before** consulting a potentially lazy
+descriptor lookup. Registration ordering, top-level clause scores, catch-all
+0.5, qualified-view traversal and `extend()` overlays are unchanged. Tests cover
 bodyless projected bundles, hash-checked local sets, batched arrivals, unmount,
 eviction, retirement, retry and malformed replies, plus every view over the
 432-set fixture for web and TUI. See the fixture README for sampling provenance.

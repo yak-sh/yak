@@ -10,7 +10,7 @@ query.
 
 Everything is an **entity** — a client-minted uuid plus a server-minted number —
 that carries **components**, one row per component table under the same id.
-There is no `kind` column: an entity _is_ what its components make it, and
+There is no stored `kind`: an entity _is_ what its components make it, and
 `kindOf()` derives a display name with a typed short id (`T-123` task, `P-19`
 project, `S-31` session, `M-40` memory, `E-9` mail…).
 
@@ -31,8 +31,8 @@ project, `S-31` session, `M-40` memory, `E-9` mail…).
 marked).
 
 A write is a batch of bundles, applied atomically. A bundle is one entity,
-`{entity: {eid}, <comp>: {<cols>}}`, and each component in it is a patch:
-omitted columns are untouched, `prop: null` clears a column, `comp: null`
+`{entity: {eid}, <comp>: {<props>}}`, and each component in it is a patch:
+omitted properties are untouched, `prop: null` clears a property, `comp: null`
 removes the component, and `tombstone: {}` deletes the entity. Browser tabs sync
 over `/ws`; headless clients POST `/apply`; both broadcast to everyone else.
 
@@ -61,11 +61,11 @@ existing entity or, as a `$alias`, one the batch mints (the result's `aliases`
 maps `$alias → eid`) — as does an eid the client minted itself, a uuid or a
 content hash naming nothing yet, on an entry carrying components; components
 ride flat beside it as patches; edges ride `edges`, `{type, child}` or a list of
-them. Wherever an eid goes — `entity.eid`, a ref column, an edge's child — a
-`$alias`, a human id, or a nested bundle stands in. `was` beside the components
-guards per column. `kind`, `num`, `refs`, `backrefs`, `comments`, and stamped or
-derived columns are ignored, so a read edited and sent back writes just the
-edit:
+them. Wherever an eid goes — `entity.eid`, a reference property, an edge's child
+— a `$alias`, a human id, or a nested bundle stands in. `was` beside the
+components guards per property. `kind`, `num`, `refs`, `backrefs`, `comments`,
+and stamped or derived properties are ignored, so a read edited and sent back
+writes just the edit:
 
 ```json
 [{

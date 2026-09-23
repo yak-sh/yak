@@ -45,7 +45,7 @@ are not truncated by that limit. Exact-key answer metadata has a separate
 Tasks opts into `retainUnownedProps`: a one-shot body can remain in the **same
 RAM row** after that read closes while a bodyless list still holds the entity.
 Without this policy the body's successful response was immediately unloaded and
-cards reverted to placeholders. The package default remains strict column
+cards reverted to placeholders. The package default remains strict property
 unloading. This option creates neither a permanent subscription nor a second
 payload store. Explicit null, covered omission, tombstone, changed epoch and row
 LRU eviction still reconcile/remove values. `cache.loaded()` still consults
@@ -68,7 +68,7 @@ cannot become a successful empty answer. Tally/refusal frames need not carry
 | Ranked search     | Search's existing `client.ts` → HTTP `/query` (`.order=search`) path remains app-side, including `rank` snippets, score and open target; `ranked_read_test.ts`, `content_fts_test.ts` and Search tests cover it. Ordinary WS text membership is not represented as a ranked search-result object.                                                                                                                                                                                                    |
 | `.near`           | Query serialization preserves the semantic source. The existing Similar view still uses async HTTP `/query` → `askRows`/ranker with score/order metadata. This is **not a new live semantic WS service**. `evalSub` now explicitly refuses similarity ranking before its index/capped paths can silently answer ordinary rows; the adapter preserves the addressed failure. Native KNN/provider behavior is tested through the injected ranking seam, not claimed from CDP with embeddings disabled. |
 | Projection        | Declared `Sub.fields` become per-row coverage. Unasked bodies are never full coverage. Covered snapshots merge through RAM; projection metadata is repeated on order resets. One-shot paint retention is distinct from active coverage as above.                                                                                                                                                                                                                                                     |
-| Windows/order     | Delivered membership and order are authoritative, even if the sort/filter columns are unloaded. Bounds/totals stay app signals. When append-style deltas cannot express a recomputed window's order, `subserve` sends a replacement and its complete bounded rider; the SQLite test reorders the same two projected members and checks peer coverage.                                                                                                                                                |
+| Windows/order     | Delivered membership and order are authoritative, even if the sort/filter properties are unloaded. Bounds/totals stay app signals. When append-style deltas cannot express a recomputed window's order, `subserve` sends a replacement and its complete bounded rider; the SQLite test reorders the same two projected members and checks peer coverage.                                                                                                                                             |
 | Tallies           | `Sub.agg` stays a value map outside graph. Replacement and zero-count deletion/delta semantics are preserved. Value-only frames make the watch ready without inventing entities.                                                                                                                                                                                                                                                                                                                     |
 | Walks             | Relation and reference `->`/`<-` walks serialize to the server; no browser partial-cache traversal can decide the query's answer. Real SQLite relation/reference walks cross the adapter test.                                                                                                                                                                                                                                                                                                       |
 | Edge riders       | Peers have independent coverage/ownership and never become result members. Shared release, projected peer payloads, replacements and `edgeWindow` metadata preserve the existing contract.                                                                                                                                                                                                                                                                                                           |
@@ -156,8 +156,8 @@ changed for this migration.
 The follow-up keeps the package-owned cache and server-owned membership above
 unchanged. `inbox_queries.ts` now builds canonical, projected candidate reads:
 
-- Badges ask only for unread policy columns; the inbox list also asks for title
-  and creation time. Neither pulls letter bodies or delivery job payloads.
+- Badges ask only for unread policy properties; the inbox list also asks for
+  title and creation time. Neither pulls letter bodies or delivery job payloads.
 - `deliver.to` requires a knock, excluding wake jobs and outbound delivery work
   that the shared `inboxItem` policy would discard anyway.
 - Direct project mail requires an inbound message ID. Address delivery excludes
