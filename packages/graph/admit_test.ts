@@ -3,6 +3,7 @@
 
 import { assertEquals, assertThrows } from '@std/assert'
 import { admit, Refused } from './admit.ts'
+import { loadVocab } from '@yaks/vocab'
 import { books } from './harness.ts'
 
 let one = (b: Record<string, unknown>, trusted = false) =>
@@ -39,6 +40,24 @@ Deno.test('a server-owned column is dropped, and admitted when trusted', () => {
 
 Deno.test('a bundle of nothing but server-owned columns leaves the batch', () => {
   assertEquals(one({ entity: { eid: 'b1' }, created: { at: 'now' } }), [])
+})
+
+Deno.test('a component sent with only computed columns is still there', () => {
+  let tasks = loadVocab({
+    $defs: {
+      task: {
+        component: true,
+        type: 'object',
+        properties: { status: { type: 'string', computed: true } },
+      },
+    },
+  })
+  let sent = { entity: { eid: 't1' }, task: { status: 'open' } }
+  assertEquals(admit([sent], tasks, true), [{
+    entity: { eid: 't1' },
+    task: {},
+  }])
+  assertEquals(admit([sent], tasks), [{ entity: { eid: 't1' }, task: {} }])
 })
 
 Deno.test('a bare touch names an entity and asks for nothing', () => {
