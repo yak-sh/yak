@@ -233,6 +233,16 @@ Deno.test('a write arms the object for the wake it just heard, and the alarm fir
   let p = platform('wake alarm')
   await directory(p)
   let storage = p.states.get(PLATFORM_STORE)!.storage
+  // The directory seeds schedules of its own, the hourly meter among them, and
+  // near the top of an hour one falls due inside the minute looked ahead here.
+  // Paused, with their alarm gone, they leave the one alarm to the wakes this
+  // test writes, whatever the clock says.
+  let seeded = await meta(p.env).query('.wake') as Wake[]
+  await meta(p.env).apply(
+    seeded.filter((w) => w.wake.at != null)
+      .map((w) => ({ entity: { eid: w.entity.eid }, wake: { at: null } })),
+  )
+  await storage.deleteAlarm()
   let soon = Date.now() + 60_000
   await meta(p.env).apply([{
     entity: { eid: '$w' },
