@@ -236,7 +236,10 @@ before that hook runs.
 
 Use [@yaks/edge](../edge) for dependency relations, [@yaks/project](../project)
 for filing and boards, and [@yaks/sql](../sql) or [@yaks/match](../match) for
-status filtering. The task package supplies no database, transport or UI.
+status filtering. The task package supplies no database or transport. Its one
+piece of UI is a portable [@yaks/render](../render) `Status` view in
+`@yaks/task/views`, which draws the status its marks give in a browser or a
+terminal alike.
 
 ## Compatibility
 
@@ -251,3 +254,4 @@ and Cloudflare Workers with suitable storage and package resolution.
 | `@yaks/task/vocab` | `taskDoc`, `docs`, and the default SQL `derived()` definitions.                                                                                                                                                                                                     |
 | `@yaks/task/rules` | `rules()`, returning the task graph plugin in an array.                                                                                                                                                                                                             |
 | `@yaks/task/tools` | `runs()`, status patches in `marked`, and the query-building helper `listing()`.                                                                                                                                                                                    |
+| `@yaks/task/views` | `views`: the `Status` renderer, `open`, `done` or `cancelled` computed with `statusOf`.                                                                                                                                                                             |

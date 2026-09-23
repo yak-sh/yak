@@ -5,7 +5,8 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./rules": "./rules.ts",
-    "./tools": "./tools.ts"
+    "./tools": "./tools.ts",
+    "./views": "./views.ts"
   },
   "license": "Apache-2.0",
   "description": "Task components for a graph: a status computed from marks instead of stored, dependency counts, and completion attribution.",

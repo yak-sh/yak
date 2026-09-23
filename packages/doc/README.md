@@ -81,8 +81,11 @@ can be enabled without changing the vocabulary declaration.
 
 The root import provides `docDoc`, `docs()`, the `DOC`, `TITLE`, and `BODY`
 constants. `./vocab` exports the schema document and a `docs` array; `./rules`
-exports the plugin factory expected by the CLI loader. Note that root `docs()`
-is a function, unlike the array in `./vocab`.
+exports the plugin factory expected by the CLI loader. `./views` exports
+`views`, the portable [@yaks/render](../render) `Title` and `Body` of any entity
+with a non-empty title or body, the body drawn from its Markdown by
+[@yaks/markdown](../markdown). Note that root `docs()` is a function, unlike the
+array in `./vocab`.
 
 ## Kind order
 

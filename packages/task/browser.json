@@ -1,7 +1,10 @@
 {
   "_": "@yaks/task must type-check with only the web platform in scope — no Deno namespace, no Node types — so that a browser can import it. The check is `deno check --config packages/task/browser.json packages/task/mod.ts`, and it runs as part of `deno task check`.",
   "compilerOptions": {
-    "lib": ["dom", "esnext"],
+    "lib": [
+      "dom",
+      "esnext"
+    ],
     "strict": true
   },
   "imports": {
@@ -10,6 +13,8 @@
     "@yaks/vocab": "../vocab/mod.ts",
     "@yaks/graph": "../graph/mod.ts",
     "@yaks/sql": "../sql/mod.ts",
-    "@yaks/edge": "../edge/mod.ts"
+    "@yaks/edge": "../edge/mod.ts",
+    "@yaks/render": "../render/mod.ts",
+    "@yaks/match": "../match/mod.ts"
   }
 }

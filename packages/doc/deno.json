@@ -4,7 +4,8 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./rules": "./rules.ts"
+    "./rules": "./rules.ts",
+    "./views": "./views.ts"
   },
   "license": "Apache-2.0",
   "description": "Defines a shared graph component for an entity's title and Markdown body.",
