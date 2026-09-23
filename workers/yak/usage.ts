@@ -6,19 +6,21 @@
 // may hold the same app handle without mixing their bills.
 //
 // The sweep is the meter plugin's effect rule (meter.ts), matching `fired`
-// on its hourly directory wake: one GraphQL call for the month so far, one `/graph`
-// read per app for the bytes it holds, and one write into the meta store —
-// `meter` on each app, `meter` on each space (its apps summed, its letters
-// left where the mail doors count them), and `plan{free}` on a space that has
-// none yet. The write carries the kernel flag, because a person never states
-// their own bill.
+// on its hourly directory wake: one GraphQL call for the month so far and one
+// write into the meta store — `meter` on each app, `meter` on each space (its
+// apps summed, its letters left where the mail doors count them), and
+// `plan{free}` on a space that has none yet. The write carries the kernel
+// flag, because a person never states their own bill. It asks no store
+// anything: a request to one would be a request the next reading counts.
 //
 // Two datasets, because one does not carry both numbers:
 // `durableObjectsInvocationsAdaptiveGroups` has `sum.requests`,
 // `durableObjectsPeriodicGroups` has `sum.rowsRead`/`sum.rowsWritten`, and
 // both carry `dimensions.objectId`. Stored bytes are not from analytics:
 // `durableObjectsStorageGroups` is account-wide, with no per-object dimension,
-// so an app's size is what its own store reports (graph.ts `/graph`).
+// so an app's size is what its own store told the directory when a write last
+// moved it (meter.ts `weighed`). The sweep leaves that figure where it is and
+// adds a space's up from it.
 // The datasets are documented at
 // https://developers.cloudflare.com/durable-objects/observability/metrics-and-analytics/
 // which describes namespace and object metrics. Object ids identify the
@@ -39,7 +41,6 @@ import {
   stamp,
   storeName,
 } from './directory.ts'
-import { storeOf } from './door.ts'
 import { bound, type Env } from './env.ts'
 import {
   atCeiling,
@@ -154,13 +155,10 @@ export let ask = async (
   return await r.json() as Answer
 }
 
-// What a store weighs right now, off its own door. A store that has never
-// been touched answers zero rather than failing the whole sweep.
-export let bytesOf = async (env: Env, name: string) => {
-  let r = await storeOf(env.STORE, name)('/graph')
-  if (!r.ok) return 0
-  return Number((await r.json() as { bytes?: number }).bytes ?? 0)
-}
+// What an app holds, as its store last told the directory. Not read through
+// `thisMonth`: bytes held are not a month's spending, so a new month keeps the
+// figure until a write moves it.
+let held = (app: App) => app.meter?.bytes ?? 0
 
 // The hourly reading. Returns how many rows it wrote, so a caller (and the
 // log) can say whether it found anything at all.
@@ -199,16 +197,16 @@ export let sweep = async (env: Env, now = new Date()) => {
     let apps = await dir.apps(space)
     for (let app of apps) {
       let name = storeName(space, app)
-      let bytes = await bytesOf(env, name)
       let got = counts.get(String(env.STORE.idFromName(name))) ?? none()
+      // No `bytes`: the store's own figure stands, and a patch leaves it.
       entities.push({
         entity: { eid: app.eid },
-        meter: { month, ...got, bytes, at },
+        meter: { month, ...got, at },
       })
       total.requests += got.requests
       total.rows_read += got.rows_read
       total.rows_written += got.rows_written
-      total.bytes += bytes
+      total.bytes += held(app)
     }
     // The space's own reading: its apps summed, and the figures counted where
     // they happen left alone — the mail doors count the letters and the
@@ -252,30 +250,26 @@ export let metered = async (env: Env, now = new Date()) => {
   return n
 }
 
-// The byte ceiling, at the two doors that add data (apps.ts): the space's
-// last reading, with this app's share swapped for what its store weighs now
-// and the bytes on their way in added. The live read only happens near the
-// ceiling — under it an hour-old figure is close enough, and asking would
-// double the Durable Object requests we are metering in the first place.
+// The byte ceiling, at the door that adds data (apps.ts): the space's last
+// reading, and near the ceiling what its apps' stores have told the directory
+// since, with the bytes on their way in added. Under the ceiling an hour-old
+// figure is close enough; near it the directory is asked, never the stores —
+// a store says its own size after every write that moves it.
 //
 // App data only; photos and files have their own R2 ceiling below.
 export let full = async (
   env: Env,
   space: Space,
-  app: App,
   extra = 0,
   now = new Date(),
 ) => {
   let free = ceilings(space.tier, space.slug)
   if (!free) return ''
-  let month = monthOf(now)
-  let held = thisMonth(space.meter, month)?.bytes ?? 0
-  if (held + extra < free.bytes * WARN) return ''
-  let mine = thisMonth(app.meter, month)?.bytes ?? 0
-  let live = await bytesOf(env, storeName(space, app))
-  return held - mine + live + extra > free.bytes
-    ? atCeiling(space, 'bytes', env)
-    : ''
+  let read = thisMonth(space.meter, monthOf(now))?.bytes ?? 0
+  if (read + extra < free.bytes * WARN) return ''
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  let holding = (await dir.apps(space)).reduce((n, app) => n + held(app), 0)
+  return holding + extra > free.bytes ? atCeiling(space, 'bytes', env) : ''
 }
 
 // Space-owned R2 objects: live files, uploaded blobs, trash and local history.

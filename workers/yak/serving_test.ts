@@ -440,6 +440,26 @@ Deno.test('the page wire: apply, query and search round-trip', async () => {
   assertEquals((await page.query('.person!')).length, 1)
 })
 
+Deno.test('a store tells the directory what it holds once a write moves it', async () => {
+  using scenario = platform()
+  let { env, states } = scenario
+  let { dir, space, app } = await seeded(env)
+  assertEquals(app.meter, null)
+  let page = client(env, await as(ADA))
+  await page.apply([{
+    entity: { eid: CAKE },
+    doc: { title: 'Lemon cake', body: 'lemons '.repeat(4_000) },
+  }])
+  // Nobody asked the store: it said so itself, after the write committed
+  // (graph.ts `#tell`), and what it said is what it weighs.
+  let held = () => states.get(storeName(space, app))!.storage.sql.databaseSize
+  let told = await until(async () =>
+    (await dir.app(space, 'cookbook'))!.meter?.bytes
+  )
+  assertEquals(told, held())
+  assert(held() > 0)
+})
+
 Deno.test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () => {
   using scenario = platform()
   let { env } = scenario

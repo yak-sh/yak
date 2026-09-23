@@ -511,6 +511,22 @@ export let counted = async (
   })
 }
 
+// ---- the bytes --------------------------------------------------------------
+//
+// What an app's store holds is its own to say: Cloudflare's storage analytics
+// have no per-object figure, and the store is the one place the number exists.
+// It says it when a committed write moved it (graph.ts `#tell`), so a store
+// nobody writes to is never asked and never tells. Not a month's figure: the
+// sweep leaves it where the store put it and adds up a space's from it.
+
+/** An app's stored bytes, as its own store just measured them. */
+export let weighed = async (
+  env: { STORE: Namespace },
+  app: string,
+  bytes: number,
+) =>
+  await stamp(env, { entities: [{ entity: { eid: app }, meter: { bytes } }] })
+
 // ---- the builds (T-34241) ---------------------------------------------------
 //
 // A build is counted where it happens, like a letter and for the same reason:

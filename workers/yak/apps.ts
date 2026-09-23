@@ -1119,7 +1119,7 @@ let api = async (
     // The free tier's byte ceiling (T-32758). Data costs money to hold, so
     // this is a refusal — one the page shows in the platform's own sentence,
     // the way it shows every other.
-    let stopped = await full(env, space, app, body.length)
+    let stopped = await full(env, space, body.length)
     if (stopped) return json(413, 'space_full', stopped)
     // A bulk load says so in its content-type: one bundle per line, applied in
     // chunks of 50 and answered a line at a time (@yaks/api `pour`). It is

@@ -147,6 +147,7 @@ import { ledger } from './ledger.ts'
 import { doorOf, GIT_STORE, type Namespace, PLATFORM_STORE } from './door.ts'
 import { type Meta, metaOf } from './meta.ts'
 import { caught, defect } from './sentry.ts'
+import { weighed } from './meter.ts'
 import {
   constrained,
   dead,
@@ -260,8 +261,8 @@ export let vocabOfStore = (name: string, declared: unknown = {}): Vocab =>
  * Two things beyond @yaks/durable-object's own slice, because the platform asks
  * this object for them and no app ever does. `databaseSize` is how many bytes
  * it holds — the only per-app storage figure that exists, since Cloudflare's
- * storage dataset has no per-object dimension (usage.ts reads it through
- * `/graph`). `deleteAll` is the one way to empty an object: dropping the tables
+ * storage dataset has no per-object dimension (the store tells the directory,
+ * `#tell`). `deleteAll` is the one way to empty an object: dropping the tables
  * leaves metadata behind, and an object whose storage is empty ceases to exist.
  */
 export type State = Hibernation & {
@@ -326,6 +327,8 @@ type Word =
   | 'migrated'
   | 'wakes'
   | 'planted'
+  // The bytes it last told the directory it holds (`#tell`).
+  | 'weighed'
   // One person's localStorage in a sandboxed app (installed.ts): their keys
   // as one JSON object, kept here rather than as rows, which the app's other
   // readers could query.
@@ -749,6 +752,10 @@ export class Store {
             Env: () => meta ? { ...this.#bind, META: this.#meta } : undefined,
           },
         },
+        // What an app holds, told to the directory once a write has committed
+        // (`#tell`). The platform's own two stores are not apps and are not
+        // metered.
+        ...(own ? [] : [{ name: 'yak/weigh', hooks: { effect: this.#weigh } }]),
       ],
     })
     // What every domain of this Worker does about data this store committed
@@ -1286,6 +1293,42 @@ export class Store {
     }
   }
 
+  // ---- the bytes it holds (meter.ts `weighed`) -----------------------------
+  //
+  // Nothing outside this object can see how much it holds, so it says so
+  // itself, to the directory, whenever a committed write moved the figure.
+  // One report is in flight at a time: a burst of writes tells the size it came
+  // to, not one size per write. A report that fails waits for the next write
+  // rather than retrying on its own, so a directory that is down is not called
+  // in a loop.
+  #weighing: Promise<void> | null = null
+
+  #weigh = (bundles: Bundle[]): Bundle[] => {
+    this.#tell()
+    return bundles
+  }
+
+  #tell() {
+    this.#weighing ??= this.#telling().finally(() => (this.#weighing = null))
+  }
+
+  // Until what it last told is what it holds: a write that lands while a
+  // report is on its way is told on the next turn.
+  async #telling(): Promise<void> {
+    try {
+      for (;;) {
+        let app = this.#get('app')
+        let ns = this.#bind.STORE
+        let bytes = this.#ctx.storage.sql.databaseSize
+        if (!app || !ns || String(bytes) == this.#get('weighed')) return
+        await weighed({ STORE: ns }, app, bytes)
+        this.#put('weighed', String(bytes))
+      }
+    } catch (e) {
+      defect(e, { request: 'meter bytes', store: this.#name() })
+    }
+  }
+
   // A break this object noted about itself, written where it notes an app's
   // (unseen.ts `noted`): server-owned properties, through the kernel's own
   // door. Sentry hears it too, named by the store it happened in (sentry.ts).
@@ -1492,20 +1535,10 @@ export class Store {
    * `/query?q=`, which the fleet's own door does not parse at all (it reads the
    * whole query string as the filter line), so an app that could still be read
    * "in the old grammar" is an app no client of it could read. A refusal that
-   * says what happened is the whole of what is useful. `/graph` is the
-   * exception, and only because it answers off the storage rather than off the
-   * graph: the meter reads an object's size, and an object in this state still
-   * has one.
+   * says what happened is the whole of what is useful.
    */
-  #stalled(request: Request): Response {
+  #stalled(): Response {
     let why = this.#refused ?? 'this store has not migrated'
-    if (new URL(request.url).pathname == '/graph') {
-      return Response.json({
-        db: `do:${this.#get('name') ?? ''}`,
-        bytes: this.#ctx.storage.sql.databaseSize,
-        migration: 'refused',
-      })
-    }
     return Response.json({ error: 'Refused', message: why }, {
       status: 503,
       headers: { 'x-yak-migration': 'refused' },
@@ -1536,9 +1569,9 @@ export class Store {
     // than racing it, and it runs from a request rather than the constructor
     // because the kernel's vouch is what names this object and the app it holds.
     if (this.#behind) await this.#pass(request)
-    if (this.#refused) return this.#stalled(request)
+    if (this.#refused) return this.#stalled()
     this.#learn(request)
-    if (this.#refused) return this.#stalled(request)
+    if (this.#refused) return this.#stalled()
     this.#live.wake()
     // The clock, started. A wake row is owed at an instant and the runtime's
     // alarm is how this object comes back for it — but an object that has
@@ -1768,7 +1801,7 @@ export class Store {
     // write — a client's request never carries the flag.
     if (path == '/' && request.method == 'DELETE') {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
-      return this.#erase(request)
+      return this.#erase()
     }
     // Where this object's storage stands, and putting it back (recover.ts,
     // T-34507). Kernel only, like the erase: a whole store going backwards is
@@ -2114,7 +2147,7 @@ export class Store {
   // than one with no tables at all. `deleteAll` takes the object's own memory
   // with it, so the name it answers to is written back before it boots — that
   // word is what says which vocabulary it speaks.
-  async #erase(request: Request): Promise<Response> {
+  async #erase(): Promise<Response> {
     let name = this.#get('name') ?? ''
     // The pages watching this app are watching nothing now. `close` is the
     // runtime's own on a server-side socket; @yaks/durable-object's `Wire` names
@@ -2130,7 +2163,7 @@ export class Store {
     this.#ctx.storage.sql.exec(WRITES)
     if (name) this.#put('name', name)
     this.#boot()
-    if (this.#refused) return this.#stalled(request)
+    if (this.#refused) return this.#stalled()
     return Response.json({ ok: true })
   }
 
@@ -2227,7 +2260,7 @@ export class Store {
             )
           }
         })
-        if (this.#refused) return this.#stalled(request)
+        if (this.#refused) return this.#stalled()
         return Response.json({
           ok: true,
           // The app's own words, not the whole vocabulary it speaks: a store's

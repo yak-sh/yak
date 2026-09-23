@@ -1020,6 +1020,7 @@ let refused = async (now: ReturnType<typeof newer>, message: string) => {
       '/tools',
       '/restore',
       '/tick',
+      '/graph',
       '/',
     ]
   ) {
@@ -1030,9 +1031,6 @@ let refused = async (now: ReturnType<typeof newer>, message: string) => {
     assertEquals(body.error, 'Refused')
     assert(body.message.includes(message), body.message)
   }
-  let response = await now.door('/graph')
-  assertEquals(response.status, 200)
-  assertEquals((await response.json()).migration, 'refused')
 }
 
 Deno.test('a raw constraint failure in a pass refuses once and rolls back', async () => {

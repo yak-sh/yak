@@ -6,7 +6,7 @@ import {
   assertStringIncludes,
   assertThrows,
 } from '@std/assert'
-import type { App, Meter, Space, Tier } from './directory.ts'
+import type { Meter, Space, Tier } from './directory.ts'
 import { filesOf, full, fullFiles, read, sweep } from './usage.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -32,6 +32,7 @@ import {
   standing,
   TOKENS,
   usedBuilds,
+  weighed,
 } from './meter.ts'
 
 let ANSWER = {
@@ -75,9 +76,13 @@ Deno.test('meter queries distinguish the same handle in two deployments', async 
   })
   await env.BLOBS.put('ada/recipes/blobs/photo', new Uint8Array(17))
   let stores = env.STORE
+  let asked: string[] = []
   env.STORE = {
     idFromName: (name) => `staging:${name}`,
-    get: (id) => stores.get(String(id).slice('staging:'.length)),
+    get: (id) => {
+      asked.push(String(id))
+      return stores.get(String(id).slice('staging:'.length))
+    },
   }
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
   await dir.apply({
@@ -94,6 +99,10 @@ Deno.test('meter queries distinguish the same handle in two deployments', async 
       },
     ],
   }, { 'x-yak-role': 'owner' })
+  // What the app's own store told the directory after a write (graph.ts
+  // `#tell`): the sweep keeps it and adds the space's up from it.
+  let recipes = (await dir.app((await dir.space('ada'))!, 'recipes'))!
+  await weighed(env, recipes.eid, 4096)
   let was = globalThis.fetch
   globalThis.fetch = ((_to: string | Request, init?: RequestInit) => {
     let { query } = JSON.parse(String(init?.body))
@@ -117,13 +126,18 @@ Deno.test('meter queries distinguish the same handle in two deployments', async 
     }))
   }) as typeof fetch
   try {
+    asked.length = 0
     await sweep(env, new Date('2026-09-07T00:00:00Z'))
     let space = (await dir.space('ada'))!
     let app = (await dir.app(space, 'recipes'))!
     assertEquals(app.meter?.requests, 7)
     assertEquals(app.meter?.rows_read, 7)
+    assertEquals(app.meter?.bytes, 4096)
     assertEquals(space.meter?.requests, 7)
+    assertEquals(space.meter?.bytes, 4096)
     assertEquals(space.meter?.files, 17)
+    // The reading asked the app's store nothing: only the directory's own.
+    assertEquals(asked.filter((id) => id.includes('ada/')), [])
   } finally {
     globalThis.fetch = was
   }
@@ -484,43 +498,43 @@ Deno.test('the build line warns at 80%, and the line says both numbers', () => {
   )
 })
 
-Deno.test('Plus byte writes use the live 10 GB ceiling; comped spaces bypass it', async () => {
-  let calls = 0
-  let live = 0
-  let { env } = platform('plus-bytes', {
-    STORE: {
-      idFromName: (name) => name,
-      get: () => ({
-        fetch: () => {
-          calls++
-          return Promise.resolve(Response.json({ bytes: live }))
-        },
-      }),
-    },
+Deno.test('Plus byte writes use the 10 GB ceiling as the stores last told it; comped spaces bypass it', async () => {
+  let { env } = platform('plus-bytes')
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  await dir.apply({
+    entities: [
+      { entity: { eid: '$space' }, space: { slug: 'jeff' } },
+      {
+        entity: { eid: '$app' },
+        app: { space: '$space', slug: 'notes', store: 'jeff/notes' },
+      },
+    ],
+  }, { 'x-yak-role': 'owner' })
+  let jeff = (await dir.space('jeff'))!
+  let notes = (await dir.app(jeff, 'notes'))!
+  // The space as the last hourly reading left it, on the Plus plan.
+  let plus = (bytes: number) => ({
+    ...jeff,
+    tier: 'plus' as Tier,
+    meter: space({ bytes }).meter,
   })
-  let app = { slug: 'notes', store: 'jeff/notes', meter: null } as App
-  let plus = space({ bytes: PLUS.bytes }, 'plus')
-  assertEquals(
-    await full(env, space({ bytes: FREE.bytes }, 'plus'), app, 1, NOW),
-    '',
-  )
-  assertEquals(calls, 0)
-  assertEquals(await full(env, plus, app, 0, NOW), '')
+  await weighed(env, notes.eid, PLUS.bytes)
+  assertEquals(await full(env, plus(FREE.bytes), 1, NOW), '')
+  assertEquals(await full(env, plus(PLUS.bytes), 0, NOW), '')
   assertStringIncludes(
-    await full(env, plus, app, 1, NOW),
+    await full(env, plus(PLUS.bytes), 1, NOW),
     'plus tier, which is 10 GB',
   )
-  live = 1
+  // Near the ceiling, what the store told since the reading is what counts.
+  await weighed(env, notes.eid, PLUS.bytes + 1)
   assertStringIncludes(
-    await full(env, plus, app, 0, NOW),
+    await full(env, plus(PLUS.bytes * 0.9), 0, NOW),
     'plus tier, which is 10 GB',
   )
-  let before = calls
   assertEquals(
-    await full(env, { ...plus, slug: 'yourname' }, app, PLUS.bytes, NOW),
+    await full(env, { ...plus(PLUS.bytes), slug: 'yourname' }, PLUS.bytes, NOW),
     '',
   )
-  assertEquals(calls, before)
 })
 
 Deno.test('R2 files use every page of the space prefix, not a sibling or shared pins', async () => {
