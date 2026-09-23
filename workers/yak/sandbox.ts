@@ -25,7 +25,7 @@
 // appears as a value is index.ts, where the deploy needs the Durable Object
 // class and no test ever looks. What that costs is the two lines of
 // `getSandbox` we actually use — the object per name and the idle timeout —
-// spelled below beside the SDK function each mirrors.
+// written out below beside the SDK function each mirrors.
 //
 // What it costs, and who says so. A container bills for the wall time it is
 // awake, so the seconds counted here are the seconds from the first sandbox
@@ -114,7 +114,7 @@ export let seconds = (s: Spend, now = Date.now()) =>
  * it costs anything anybody would notice. */
 export let BUDGET = 600
 
-/** How long an idle sandbox stays awake, in seconds and in the spelling the
+/** How long an idle sandbox stays awake, in seconds and in the form the
  * SDK takes. The build normally destroys its own; this is what catches the
  * build that never got to say so. */
 export let NAP = 300

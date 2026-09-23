@@ -168,7 +168,7 @@ Deno.test('`yak <app> <command>` is the same call, the app named by the word', a
   )
   assertEquals(asked, [{
     name: 'command',
-    // @path is that file, the same spelling every value here takes.
+    // @path is that file, the same syntax every value here takes.
     arguments: { name: 'add_recipe', app: 'recipes', args: { title: 'FILE' } },
   }])
 })

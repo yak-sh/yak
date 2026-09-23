@@ -12,8 +12,8 @@ import { line } from './recall.ts'
 import { runs, unread, witnessed } from './tools.ts'
 
 // What a memory points at: the portfolio it is scoped to, and the person whose
-// correction it records. Spelled here rather than composed, so the test says
-// its whole world in one place.
+// correction it records. Written out here rather than composed, so the test
+// says its whole world in one place.
 let around: VocabDoc = {
   $defs: {
     entity: {

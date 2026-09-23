@@ -534,8 +534,8 @@ let sent = (env: Env, path: string, init: RequestInit) =>
 // app's own path for the file — and its bytes.
 export type Module = { name: string; bytes: Uint8Array<ArrayBuffer> }
 
-// What Cloudflare calls each kind of module, by the extension the app spelled
-// it with (wrangler's own `moduleTypeMimeType`). The type is what decides how
+// What Cloudflare calls each kind of module, by the extension the app gave
+// it (wrangler's own `moduleTypeMimeType`). The type is what decides how
 // the runtime treats the part: an ES module is linked, a `.wasm` arrives as a
 // `WebAssembly.Module` the worker instantiates
 // (https://developers.cloudflare.com/workers/runtime-apis/webassembly/javascript/),
@@ -646,7 +646,7 @@ export let carried = async (
 //
 // What it answers is Cloudflare's own name for this release of the script,
 // which a deploy keeps beside its file manifest (versions.ts). The account
-// API has spelled that several ways — a version id on the versioned upload
+// API has returned that in several forms — a version id on the versioned upload
 // door, a deployment id and an etag on this one — so whichever it hands back
 // is read, and none of them is what a rollback restores FROM: putting an app
 // back re-uploads the worker.js its version pinned, so it never depends on

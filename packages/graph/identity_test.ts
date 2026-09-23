@@ -35,7 +35,7 @@ let doc: VocabDoc = {
         brief: { type: 'string' },
       },
     },
-    // The composite spelling: an app's release is its app and its version.
+    // The composite form: an app's release is its app and its version.
     release: {
       component: true,
       type: 'object',

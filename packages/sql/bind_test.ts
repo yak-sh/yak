@@ -320,7 +320,7 @@ Deno.test('an explicit .order survives a window', () => {
 
 Deno.test('.after pages within the asked order, keyed on the anchor', () => {
   let { sql, params } = compile(parse('.order=title&.limit=2&.after=7'), v)
-  // the cursor names an entity by its num — the same spelling whatever the
+  // the cursor names an entity by its num — the same form whatever the
   // order — and the anchor's own value is read back to page past it
   assert(sql.includes('where "__cur"."num" = 7'), sql)
   assert(sql.includes('"doc"."title" > (select'), sql)
@@ -332,7 +332,7 @@ Deno.test('.after pages within the asked order, keyed on the anchor', () => {
 
 Deno.test('.after over a derived order reads the anchor through the hook', () => {
   let { sql } = compile(parse('.order=status&.after=7'), v, { derived: status })
-  // the derived expression is spelled twice: once over the row, once over the
+  // the derived expression is written twice: once over the row, once over the
   // anchor's own owner id
   assert(sql.includes(`(case when "task"."entity" is null`), sql)
   assert(
@@ -348,7 +348,7 @@ Deno.test('.eid names entities as one set lookup on the spine', () => {
   let many = compile(parse('.eid=a3f1,b7c2'), v)
   assert(many.sql.includes('"entity"."eid" in (?, ?)'), many.sql)
   assertEquals(many.params, ['a3f1', 'b7c2'])
-  // the explicit spelling routes to the same place
+  // the explicit form routes to the same place
   assert(compile(parse('.entity.eid=a3f1'), v).sql.includes(one.sql.slice(-40)))
 })
 
@@ -575,7 +575,7 @@ Deno.test('a builder can preserve a terminal component facet across name collisi
 Deno.test('a shared reference equality unions its owners, other shapes decline', () => {
   // Two components hold a reference property of the same name: the bare word
   // routes to neither (vocab route(): comp ''), and its equality is one indexed
-  // question per owner, spelled the way `.refs=` is.
+  // question per owner, compiled the way `.refs=` is.
   let shared = loadVocab({
     $defs: {
       entity: {

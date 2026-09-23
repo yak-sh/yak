@@ -30,7 +30,7 @@ export type { Search }
 export type CoreOpts = {
   /** the vocabulary the tools describe their results with */
   vocab: Vocab
-  /** how much of each property a bundle schema spells out. `graph_apply`'s
+  /** how much of each property a bundle schema describes. `graph_apply`'s
    * input schema is always `full` and no tool here declares an output schema,
    * so this is carried for callers that pass one and changes nothing yet. */
   depth?: Depth

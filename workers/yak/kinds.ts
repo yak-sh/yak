@@ -12,7 +12,7 @@
 //
 // The two ways out, in the order they are asked:
 //   "tools": false   at the top of vocab.json — this app wants none of them
-//   a tools.json entry spelling `add_recipe` or `find_recipe` — that one wins,
+//   a tools.json entry naming `add_recipe` or `find_recipe` — that one wins,
 //                    whole, since a hand-written template says what the app
 //                    means and a generated one only says what it holds
 // A redeploy regenerates them from the manifest as it then reads, so a property
@@ -57,7 +57,7 @@ let bound = (props: Record<string, PropType>) =>
 // property nobody named is dropped from the bundle rather than written as the
 // word `undefined` (store/tools.ts `filled`).
 //
-// A kind spelling a property `title` or `body` of its own shares the variable
+// A kind declaring a property `title` or `body` of its own shares the variable
 // with `doc`: one argument, written both places, which is what a person asking
 // for "the title" means either way.
 let add = (kind: string, at: string, schema: PropSchema): ToolDef => {
@@ -107,7 +107,8 @@ let find = (kind: string, at: string, schema: PropSchema): ToolDef => {
 /**
  * An app's declared tools with the ones its kinds are worth beside them: what a
  * deploy hands the store. The app's own entries come first and keep their
- * names — a tools.json spelling `add_recipe` is the `add_recipe` this app has.
+ * names — a tools.json entry naming `add_recipe` is the `add_recipe` this app
+ * has.
  */
 export let withKinds = (tools: Tools, doc: VocabDoc, at: string): Tools => {
   if (doc.tools === false) return tools

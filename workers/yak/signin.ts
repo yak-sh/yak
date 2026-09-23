@@ -73,7 +73,7 @@ let digits = () =>
 let apply = (store: Meta, bundles: Bundle[]) => store.apply(bundles, KERNEL)
 
 // The whole entity goes, not just the component: a sign-in leaves nothing
-// behind. `tombstone` is the bundle's spelling of death (T-32429), so this
+// behind. `tombstone` is the bundle's word for death (T-32429), so this
 // is one more bundle like every other write here.
 let forget = (store: Meta, eids: string[]) =>
   eids.length

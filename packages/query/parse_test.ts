@@ -59,7 +59,7 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.priority=1..5', and(eq('priority', range('1', '5')))],
   ['.priority=1...5', and(eq('priority', range('1', '5', true)))],
   ['.created.at=2026-07-25', and(eq('created.at', scalar('2026-07-25')))],
-  // presence and absence: the sigil spellings, and the older ones they replace
+  // presence and absence: the sigil forms, and the older ones they replace
   ['.assignee', and(present('assignee'))],
   ['!assignee', and(absent('assignee'))],
   ['.assignee!', and(present('assignee'))],
@@ -272,7 +272,7 @@ Deno.test('a list has no spaces and no empty member', () => {
 })
 
 // A bare word is one thing wherever it stands: a search term. The component it
-// might name is the dot-marked spelling.
+// might name is the dot-marked form.
 Deno.test('a comma between clauses means nothing', () => {
   assertEquals(
     parse('!foo, bar hello there'),
@@ -346,7 +346,7 @@ Deno.test('refusals', () => {
     parse('.comments!.status=done'),
     and({ ...eq('comments.status', 'done'), not: true }),
   )
-  // the removed spelling of the walk: its bracket is an unknown qualifier
+  // the removed syntax of the walk: its bracket is an unknown qualifier
   assertThrows(
     () => parse('.reaches[requires,<=3]=T-42'),
     Error,

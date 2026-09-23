@@ -244,7 +244,7 @@ export let challenge = (url: URL, env: Host = {}) =>
 // refusal is read by a person's agent, so it says a sentence beside its code
 // and names where signing in happens — the treatment every other door already
 // had, and the one this one missed (C-32607 item 1, apps.ts says). The address
-// itself lives in route.ts, with the platform's other spellings of itself, and
+// itself lives in route.ts, with the platform's other addresses, and
 // is re-exported here because this is where the doors read it.
 export { SAYS, SIGN_IN } from './route.ts'
 
@@ -277,7 +277,7 @@ let redirect = (to: string, set?: string, status = 302) =>
 // with `return=https://<space>.yaks.app/` (apps.ts `signInAt`), and that
 // address is on our zone, so it is followed. `mine` is what is left when
 // nobody was aiming them anywhere, and `own()` names it: the space their own
-// address spells, else the first they own.
+// address names, else the first they own.
 let backTo = (mine: string, back: string, env: Host) =>
   (back && onZone(back, env)) || `https://${mine}.${apex(env)}${MANAGE}`
 
@@ -1037,7 +1037,7 @@ let opts = (env: Env): OAuthProviderOptions<Env> => ({
   clientIdMetadataDocumentEnabled: cimd(env),
   // The owner, 2026-09-05: "the oauth should never expire". A connector is a
   // door a person opened, and it closes when they close it and not before —
-  // so the refresh token has no expiry (the library's own spelling for never
+  // so the refresh token has no expiry (the library's own way of saying never
   // is an explicit `undefined`, which leaves the grant's KV row with no
   // expiration at all) and the access token lives a year, which is as near to
   // never as an integer TTL gets: the library will not take a value under a

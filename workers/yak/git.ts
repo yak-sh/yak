@@ -6,7 +6,7 @@
 //
 // The two words the directory gains are `commit` and `ref`, and only one of
 // them is declared here. `commit` is the fleet's own component
-// (src/vocab/manifests/kernel.json), spelled here at the same meaning —
+// (src/vocab/manifests/kernel.json), declared here with the same meaning —
 // `target` is what the commit is about, which for a yaks.app commit is the
 // deploy it was minted from, so a history joins to the releases people already
 // look at. `ref` is @yaks/git's own word (`refDoc`), loaded here rather than in
@@ -45,8 +45,8 @@ export let gitDirectoryDoc: VocabDoc = {
       properties: {
         // The entity's own eid is this value too — it is the object id, which
         // is what makes writing the same commit twice one row. The property is
-        // spelled anyway because the fleet's `commit` spells it, and one word
-        // means one thing in both graphs.
+        // declared anyway because the fleet's `commit` declares it, and one
+        // word means one thing in both graphs.
         sha: { type: 'string' },
         repo: { type: 'string' },
         message: { type: 'string' },

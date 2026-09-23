@@ -702,10 +702,10 @@ slow('a word the space already has is used where it lives', async () => {
     })
     assertStringIncludes(shelf.content[0].text, 'shelf: 2 rows')
 
-    // The spelling before this one is refused at the door, in the sentence
+    // The syntax before this one is refused at the door, in the sentence
     // that says what to write instead. What is already in a store is upgraded
     // on the way out (store/tools.ts `modern`), so an app deployed then goes
-    // on working; nothing new arrives in two spellings.
+    // on working; nothing new arrives in two forms.
     await agent.tool('app_files', {
       app: 'lending',
       op: 'write',
@@ -767,7 +767,7 @@ slow('a word the space already has is used where it lives', async () => {
 
 // Which prose is worth finding is the vocabulary's sentence (T-37546):
 // @yaks/doc says `"search": true` of its title and body, and an app says it of
-// its own properties, beside the type, in the one JSON Schema spelling the
+// its own properties, beside the type, in the one JSON Schema form the
 // guide teaches.
 slow('an app declares which of its own properties are searched', async () => {
   let k = await kernel()

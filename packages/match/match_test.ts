@@ -58,7 +58,7 @@ Deno.test('presence reads plugin components without a declared schema', () => {
 Deno.test('a bare bang names the component, not the property beside it', () => {
   // `book` is both a component and review's reference property. The bang
   // completes the component sentence; every other form keeps the property, and
-  // the property's qualified spelling still reaches it.
+  // the property's qualified form still reaches it.
   assertEquals(sel('.book!'), ['b1', 'b2', 'b3', 'b4'])
   assertEquals(sel('.book=b1'), ['r1', 'r2'])
   assertEquals(sel('.review.book!'), ['r1', 'r2', 'r3'])

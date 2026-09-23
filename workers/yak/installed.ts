@@ -37,7 +37,7 @@ import { SESSION } from './session.ts'
 export let sandboxed = (app: App) => !!app.installed?.sandboxed
 
 /** What a copy's pin is written with to put it in the sandbox or let it
- * out. `trusted` is the build before this one's spelling of the reverse,
+ * out. `trusted` is the build before this one's name for the reverse,
  * kept in step so that build serves every copy as this one does, until a
  * later release drops it (D-37972, expand then contract). */
 export let sandboxing = (on: boolean, at = new Date().toISOString()) => ({

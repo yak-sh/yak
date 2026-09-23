@@ -41,7 +41,7 @@ import { refuse } from './tool.ts'
 //
 // Where there is no status — a kernel part that relayed a door's no by
 // throwing what it was answered (index.ts's catch-all) — the answer's own
-// shape stands in for it: every door here spells a no one way, a body
+// shape stands in for it: every door here says a no one way, a body
 // carrying `{"error":{"code":…}}`, and what fell over never wears it.
 //
 // The shape alone was the whole rule until C-32869 item 5, where a weather
@@ -285,7 +285,7 @@ let graphAt = (env: Env, space: Space, app: App, who: Who) => {
 }
 
 // The open items of one app: both facets, unseen only unless `all`. A hit wears
-// the facet as its `kind`, which is what an id is spelled from (`line`).
+// the facet as its `kind`, which is what an id is built from (`line`).
 //
 // Two reads because they are two tables and the filter grammar has no
 // alternation — but one round trip, since the second never needed the first's

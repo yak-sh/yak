@@ -21,7 +21,7 @@ Deno.test('one address, canonically spelled', () => {
   same('https://a.com/x?b=2&a=1', 'https://a.com/x?b=2&a=1')
 })
 
-Deno.test('a spelling this package does not decide is left alone', () => {
+Deno.test('an address this package does not canonicalize is left alone', () => {
   same('file:///tmp/note.html', 'file:///tmp/note.html')
   same('git@host:owner/repo.git', 'git@host:owner/repo.git')
   same('  https://a.com/x  ', 'https://a.com/x')

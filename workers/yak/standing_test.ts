@@ -120,14 +120,14 @@ Deno.test('a prompt is named after the app, and never over something taken', () 
   assertEquals(one[0].description, 'The notes kept beside the Recipes app.')
   assert(!one[0].description.includes('Grams'), one[0].description)
   assertEquals(one[0].text, rules)
-  // An app spelling a door's own prompt takes the `__` seam instead.
+  // An app named like a door's own prompt takes the `__` seam instead.
   assertEquals(
     prompted([entry('make', { said: rules })], ['make']).map((p) => p.name),
     ['make__notes'],
   )
   // And an app with nothing written beside it is offered no prompt at all.
   assertEquals(prompted([entry('recipes')], []), [])
-  // Two apps in two spaces spelling one slug: the first answers, the second
+  // Two apps in two spaces sharing one slug: the first answers, the second
   // takes the seam, and a third is left off rather than shadowing either.
   let three = [
     entry('recipes', { said: rules }),

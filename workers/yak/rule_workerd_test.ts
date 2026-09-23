@@ -20,7 +20,7 @@ import { assert, assertEquals } from '@std/assert'
 import { slow, until } from '../../src/testing.ts'
 import { client, connector, kernel, seed, txt, when } from './probe.ts'
 
-// An app vocabulary with a rule in it. `vocabFile` in probe.ts only spells
+// An app vocabulary with a rule in it. `vocabFile` in probe.ts only writes
 // components; a rule is an entry of its own shape, so this one is written out.
 let withRule = JSON.stringify({
   $defs: {

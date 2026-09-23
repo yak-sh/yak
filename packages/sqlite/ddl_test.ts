@@ -231,7 +231,7 @@ Deno.test('reference indexes are installed on new and existing member stores', (
 
 // What the vocabulary can say about a table beyond its columns' types, with
 // native JSON Schema where it has a word: `required` is NOT NULL, `default` is
-// the row's fallback (the clock spelled `{now: true}`), `enum` is a check,
+// the row's fallback (the clock written `{now: true}`), `enum` is a check,
 // `integer` keeps its affinity, and a composite may be partial.
 let strict = loadVocab({
   $defs: {

@@ -15,7 +15,7 @@
 // the authorization — and OpenAI through the AI Gateway is the other. Neither
 // shape is pretended to be the other: Workers AI takes `messages` and answers
 // a flat `tool_calls`, OpenAI's Responses API takes `input` items and answers
-// `function_call` items, and each provider spells {@link Line} in its own
+// `function_call` items, and each provider shapes {@link Line} in its own
 // words. The id says which: a Workers AI model is always `@cf/…`.
 //
 // Both tiers run on the binding today. Owner, 2026-09-05: "can't we use
@@ -70,7 +70,7 @@ export type Usage = {
 export type Call = { id: string; name: string; args: string }
 
 /**
- * One line of the conversation, in neither provider's spelling: what the
+ * One line of the conversation, in neither provider's format: what the
  * person said, what the builder said (and asked for), and what a tool
  * answered. A provider translates these into its own wire and back.
  */
@@ -285,7 +285,7 @@ export let prompt = async (env: Env, ctx?: Ctx): Promise<string> => {
 
 // ---- the providers ---------------------------------------------------------
 
-// The tool calls off a response, however the provider spelled them. Workers AI
+// The tool calls off a response, however the provider shaped them. Workers AI
 // answers a flat `{name, arguments}` with no id of its own, and an
 // OpenAI-compatible model answers `{id, function: {name, arguments}}` — both
 // read here, and an id is minted where there is none, because the loop
@@ -376,7 +376,7 @@ export let workersAi = (env: Env, id: string): Model => ({
 // Where OpenAI is reached: the gateway, so every call is logged, cached and
 // rate-limited by the account rather than by us. `OPENAI_API` is the probe's
 // door to somewhere else; the binding knows its own URL; and the URL can be
-// spelled from the account tag and the gateway's name where it does not.
+// built from the account tag and the gateway's name where it does not.
 let gateway = async (env: Env): Promise<string | null> => {
   if (env.OPENAI_API) return env.OPENAI_API.replace(/\/+$/, '')
   let id = env.AI_GATEWAY

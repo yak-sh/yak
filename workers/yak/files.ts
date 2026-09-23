@@ -91,7 +91,7 @@ let missing = (keep: Record<string, string>) =>
   })
 
 // The app-relative path of its server source: `main` out of either wrangler
-// spelling, `worker.js` where it names none. Both spellings are asked for at
+// file, `worker.js` where it names none. Both files are asked for at
 // once — an app carries at most one, so the miss is unavoidable and paying for
 // it twice over is not.
 let mainOf = async (blobs: Blobs, prefix: string) => {

@@ -28,7 +28,7 @@ Deno.test('status is readable and routable, and nobody can write it', () => {
   assertEquals(status.computed, true)
   assertEquals(status.values, ['cancelled', 'done', 'open'])
   // The vocabulary is a file now, so the ladder and the enum are two
-  // spellings of one list — this is what keeps them the same list.
+  // copies of one list — this is what keeps them the same list.
   assertEquals(status.values, statuses())
   assert(!team.comp('task')!.writable.includes('status'))
   // still routable, so a board can filter on it

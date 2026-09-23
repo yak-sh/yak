@@ -159,7 +159,7 @@ let why = async (now: ReturnType<typeof newer>, app?: string) => {
 
 // Everything an app's store can be holding, written the old way: a person, a
 // document with prose in the old blob backend, a task, a comment aimed at it,
-// two edges (one under each spelling of the relation), a dead entity, and a
+// two edges (one under each name of the relation), a dead entity, and a
 // component the app declared in its own vocab.json.
 let seedApp = async (ctx: State) => {
   let old = older(ctx, 'ada/cookbook')
@@ -223,8 +223,8 @@ slow('an app store carries every row across, and reconciles', async () => {
   assertEquals((await now.query('.comment.target=' + ONE, APP)).length, 1)
   assertEquals((await now.query('.person!', APP)).length, 1)
 
-  // The edge said under the old spelling wears the new tag and the address that
-  // spelling derives; the one whose word never moved kept its own.
+  // The edge said under the old name wears the new tag and the address that
+  // name derives; the one whose word never moved kept its own.
   let kept = await now.query('.requires!&.edge?', APP)
   assertEquals(kept.length, 1)
   assertEquals(kept[0].entity.eid, said.requires)
@@ -560,7 +560,7 @@ slow(
     let now = newer(ctx, PLATFORM_STORE)
     assertEquals(await wearing(now), ['cookbook'])
     assertEquals(count(ctx, 'home'), 1)
-    // The old place is gone, so nothing can read the fact from two spellings.
+    // The old place is gone, so nothing can read the fact from two places.
     assertEquals(
       ctx.storage.sql.exec('pragma table_info(space)').toArray()
         .some((c) => (c as { name: string }).name == 'home'),
@@ -1183,7 +1183,7 @@ for (let door of ['constructor', 'vocab']) {
       [],
     )
     // The slot keeps the document the manifest means (graph.ts `#vocabDoor`),
-    // whichever spelling the deploy was written in.
+    // whichever format the deploy was written in.
     let slot = (k: string) =>
       (before as { k: string; v: string }[]).find((r) => r.k == k)!.v
     assertEquals(slot('name'), 'ada/cookbook')
@@ -1219,7 +1219,7 @@ slow('a re-addressing that collides rolls the whole pass back', async () => {
   let ctx = state()
   let old = older(ctx, 'ada/cookbook')
   let refs = edgeEid(TWO, 'references', ADA)
-  // The address that edge takes under the relation's new spelling — already
+  // The address that edge takes under the relation's new name — already
   // spoken for here, so re-addressing it cannot land. This is the one condition
   // in a customer's own rows that can make the pass refuse.
   let taken = edgeEid(TWO, 'referenced', ADA)

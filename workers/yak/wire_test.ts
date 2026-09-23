@@ -1,12 +1,12 @@
 /// <reference lib="deno.ns" />
 // The translation between the page's wire and the Store's (wire.ts). The
 // end-to-end proof is serving_test.ts; this is the grammar's own edges, where
-// a value carries the character the other wire spells structure with.
+// a value carries the character the other wire writes structure with.
 import { assertEquals, assertThrows } from '@std/assert'
 import { batched, lined, receipt } from './wire.ts'
 
 let cases: [string, string][] = [
-  // The riders the page spells bare
+  // The riders the page writes bare
   ['id=abc', '.eid=abc'],
   ['.doc!&limit=10&after=3', '.doc!&.limit=10&.after=3'],
   // Everything else is already the same grammar
@@ -31,7 +31,7 @@ let cases: [string, string][] = [
   ['', ''],
 ]
 
-Deno.test('a page line, as the store spells it', () => {
+Deno.test('a page line, as the store writes it', () => {
   for (let [page, store] of cases) assertEquals(lined(page), store, page)
 })
 

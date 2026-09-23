@@ -21,7 +21,7 @@ let req: Request = {
   anchor: 'r0',
 }
 
-Deno.test('a request is spelled the way the API wants', () => {
+Deno.test('a request is shaped the way the API wants', () => {
   let b = body(req, true)
   assertEquals(b.input, [
     { role: 'user', content: [{ type: 'input_text', text: 'hi' }] },

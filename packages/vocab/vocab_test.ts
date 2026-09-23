@@ -93,7 +93,7 @@ Deno.test('dotted paths aim to hops', () => {
     { comp: 'comment', prop: 'target' },
     { comp: 'doc', prop: 'title' },
   ])
-  // the bare spelling of the same traversal
+  // the bare form of the same traversal
   assertEquals(v.aim('assignee.title'), [
     { comp: 'task', prop: 'assignee' },
     { comp: 'doc', prop: 'title' },
@@ -111,7 +111,7 @@ Deno.test('a bare bang aims at the component a property shadows', () => {
   // the bare bang keeps the property — `.project=P-3` must not change meaning.
   assertEquals(v.aim('project'), [{ comp: 'task', prop: 'project' }])
   // `.project!` completes the component sentence: the facet has no other
-  // spelling, while the property keeps its qualified one.
+  // form, while the property keeps its qualified one.
   assertEquals(v.aim('project', true), [{ comp: 'project', prop: '' }])
   assertEquals(v.aim('task.project', true), [{ comp: 'task', prop: 'project' }])
   // a name no component wears is routed as ever
@@ -143,7 +143,7 @@ Deno.test('reverse associations derive from the reference properties', () => {
   // several reference properties: the property disambiguates the plural
   assertEquals(v.assoc('claims'), { comp: 'claim', prop: 'session' })
   assertEquals(v.assoc('nothings'), undefined)
-  // a forward spelling is never shadowed
+  // a forward name is never shadowed
   assertEquals(v.assoc('task'), undefined)
 })
 

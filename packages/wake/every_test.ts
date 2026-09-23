@@ -5,7 +5,7 @@ let T = Date.parse('2026-01-01T09:17:00Z')
 let iso = (t: number | null) => t == null ? null : new Date(t).toISOString()
 let at = (every: string, from = T, now = T) => iso(after(every, from, now))
 
-Deno.test('a duration is read in every spelling', () => {
+Deno.test('a duration is read in every form', () => {
   for (
     let [every, ms] of [
       ['30s', 30_000],

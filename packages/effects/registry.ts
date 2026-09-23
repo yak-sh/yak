@@ -175,7 +175,7 @@ export type Effects = Plugin & {
    * check before claiming or settling durable work. Unknown ids return false. */
   owns: (id: string) => boolean
   /**
-   * Register a handler. Two spellings, because there are two questions:
+   * Register a handler. Two forms, because there are two questions:
    *
    *   fx.on('post', { created, changed: { published }, removed })
    *   fx.on('$call .call, !results', (e) => run(e.entity.eid))

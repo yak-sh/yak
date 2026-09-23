@@ -85,8 +85,8 @@ Deno.test('transition: every package vocabulary loads beside every other', () =>
     nameKeywords,
   ])
   // No filter, no held-back list: a word declared twice makes loadVocab throw,
-  // and that is the invariant — the fleet's duplicate spellings are resolved in
-  // the table, not hidden here.
+  // and that is the invariant — the fleet's duplicate declarations are resolved
+  // in the table, not hidden here.
   for (let d of docs) {
     for (let name of compsOf(d)) assert(v.comp(name), `${name} did not load`)
   }

@@ -39,7 +39,7 @@ Deno.test('.order=similar puts the neighbourhood in order', async () => {
 // The cursor is the ordinary `.after=<num>`: a caller pages a neighbourhood the
 // way it pages a board, and never learns that the sort key is a similarity. The
 // binder asks this extension's `order` hook a second time with the anchor's
-// owner id, so a rank position is derived rather than spelled.
+// owner id, so a rank position is derived rather than written out.
 Deno.test('a window pages within the neighbourhood, nearest first', async () => {
   let db = await stocked()
   let near = semantic(db, embedder)

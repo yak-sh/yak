@@ -333,7 +333,7 @@ Deno.test('signing in asks the directory a bounded number of questions', async (
 
   // What a later person's first sign-in costs: who they are (asked twice —
   // once by `spaces()` to know the person exists at all, once here for the
-  // address their slug is spelled from; the read cache answers the second on
+  // address their slug is derived from; the read cache answers the second on
   // the deploy), what they own, whether that slug is free, the write, and the
   // space read back afterwards.
   let them = crypto.randomUUID()

@@ -114,7 +114,7 @@ Deno.test('find is a filter line, one clause per argument given', () => {
   assertEquals(filled(find, {}).query, '.recipe!&.doc?')
 })
 
-Deno.test('an app declines them, or spells one itself', () => {
+Deno.test('an app declines them, or declares one itself', () => {
   // The manifest says so.
   assertEquals(withKinds({}, appDoc({ ...box, tools: false }), 'a/b'), {})
   assertEquals(
@@ -125,7 +125,7 @@ Deno.test('an app declines them, or spells one itself', () => {
     ),
     {},
   )
-  // Or a tools.json spells the name, and that one is whole: the app's own
+  // Or a tools.json declares the name, and that one is whole: the app's own
   // template, its own sentence, its own arguments.
   let own = {
     add_recipe: {

@@ -60,7 +60,7 @@ import { caught } from './sentry.ts'
  * An app's own door, as the request reaches a plugin: everything apps.ts had
  * in hand where the branch used to sit, including its two ways of answering
  * no — `refuse` for a caller who may not, `json` for anything else — so a
- * plugin's refusal is spelled the way every other refusal at that door is.
+ * plugin's refusal is shaped the way every other refusal at that door is.
  */
 export type Asked = {
   env: Env

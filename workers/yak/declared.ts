@@ -61,9 +61,9 @@ export let toolsOf = async (
     await r.body?.cancel()
     return {}
   }
-  // What is stored may have been written when `{{arg}}` was the spelling
+  // What is stored may have been written when `{{arg}}` was the syntax
   // (store/tools.ts `modern`): an app deployed then goes on working, and its
-  // next deploy writes the manifest in the one spelling there is.
+  // next deploy writes the manifest in the one syntax there is.
   return modern(await r.json() as Tools)
 }
 
@@ -158,7 +158,7 @@ let offered = async (ctx: Ctx, mine: { space: Space; app: App }[]) => {
 
 /**
  * One command, run. `said` names the app where the caller named one, and is ''
- * where they left it out — which works whenever one app of theirs spells the
+ * where they left it out — which works whenever one app of theirs declares the
  * command, and says which apps do where several are.
  *
  * A name nobody has is a sentence saying what there IS, never an empty answer:

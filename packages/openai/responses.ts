@@ -46,7 +46,7 @@ let record = (value: unknown): value is Frame =>
 let str = (value: unknown, fallback = '') =>
   typeof value == 'string' ? value : fallback
 
-// The neutral items in the API's four spellings.
+// The neutral items in the API's four shapes.
 let shape: Record<Item['kind'], (item: Item) => unknown> = {
   image: (i) => {
     let image = i as Extract<Item, { kind: 'image' }>

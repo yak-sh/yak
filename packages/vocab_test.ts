@@ -103,7 +103,7 @@ Deno.test('packages: every vocab.json is plain JSON that loads', () => {
         assert(d, `${pkg}/vocab.json names '${k}', which no package declares`)
         return d
       })
-    // A `$vocabulary` URI is now spelled in the file rather than imported as a
+    // A `$vocabulary` URI is now written in the file rather than imported as a
     // constant, so a typo would silently un-register a keyword: every URI a
     // file names is one the repo knows.
     let named = Object.keys(doc.$vocabulary ?? {}).map((uri) => {

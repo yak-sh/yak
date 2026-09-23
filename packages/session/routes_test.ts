@@ -41,7 +41,7 @@ let asking = (said?: string) =>
 
 Deno.test('the run a request names is who its writes are by, and through', async () => {
   assertEquals(await asking('abc'), { by: 'p1', via: 's1' })
-  // However the caller spells it — the harness's name, the id a person says,
+  // However the caller names it — the harness's name, the id a person says,
   // the eid — it is one run.
   assertEquals(await asking('S-1'), { by: 'p1', via: 's1' })
   assertEquals(await asking('s1'), { by: 'p1', via: 's1' })

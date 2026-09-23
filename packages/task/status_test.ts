@@ -56,7 +56,7 @@ Deno.test('an added rung reaches every reader at once', () => {
   assertEquals(statusOf(task({ claim: {}, completed: {} }), marks), 'done')
 })
 
-Deno.test('derived spells the ladder as SQL, guarded by the owner null', () => {
+Deno.test('derived writes the ladder as SQL, guarded by the owner null', () => {
   let prop = derived()['task.status']
   assertEquals(prop.tag, 'enum')
   assertEquals(prop.values, ['cancelled', 'done', OPEN])

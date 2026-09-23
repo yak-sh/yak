@@ -17,15 +17,15 @@
 //
 // Only the envelope is translated. The bundles are the same bundles either way
 // — `{entity: {eid}, ...components}`, a `$alias` wherever an eid goes — and the
-// filter grammar is the same grammar; what differs is that a page spells its
+// filter grammar is the same grammar; what differs is that a page writes its
 // line as the query string itself and the Store takes it as one parameter, and
 // three of the page's riders lost their leading dot on the way over.
 import type { Bundle } from '@yaks/graph'
 import { minted } from './meta.ts'
 import { refuse } from './tool.ts'
 
-// The riders the page's grammar spells bare and the Store's spells dotted. They
-// are the same three words meaning the same three things; only the spelling
+// The riders the page's grammar writes bare and the Store's writes dotted. They
+// are the same three words meaning the same three things; only the syntax
 // moved (@yaks/query: `.limit=`, `.after=`, and `.eid=` for an address).
 let RIDERS: Record<string, string> = {
   id: '.eid',
@@ -34,7 +34,7 @@ let RIDERS: Record<string, string> = {
 }
 
 // Where a segment's name ends and its value begins: the operators the grammar
-// spells, longest first, so `!=` is not read as `!`.
+// knows, longest first, so `!=` is not read as `!`.
 let OPERATOR = /^([A-Za-z_.\-[\]][A-Za-z0-9_.\-[\]]*)(!=|~=|<=|>=|<|>|=|!|\?)/
 
 // One value, as the page wrote it. A page builds its own line, so a value may
@@ -63,7 +63,7 @@ let glued = (value: string, term = false) =>
 
 /**
  * A page's filter line, off the search string it arrived as: the riders
- * re-spelled and every value decoded, so the whole line can be escaped once
+ * rewritten and every value decoded, so the whole line can be escaped once
  * into the Store's `?q=` (meta.ts `metaOf`).
  *
  * A bare token is a full-text term and carries no operator, so it is decoded

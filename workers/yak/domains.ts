@@ -196,7 +196,7 @@ let CERT: Record<string, [State, string]> = {
 
 // A word neither table knows: `waiting`, carrying the word itself. A timeout
 // is the one shape worth recognising by pattern, because every one of them
-// spells the same thing and the list of them grows.
+// says the same thing and the list of them grows.
 let read = (
   table: Record<string, [State, string]>,
   status: string | undefined,

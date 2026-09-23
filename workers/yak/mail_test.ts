@@ -126,7 +126,7 @@ Deno.test('mail: the Worker account carries the send when MAIL_ACCOUNT is unset'
   assertEquals(urls, ['https://api.test/accounts/acct/email/sending/send'])
 })
 
-// The graph inbox is an address in the fleet's mail namespace, not a spelling
+// The graph inbox is an address in the fleet's mail namespace, not one
 // of its own: src/mailaddr.ts is what the tasks server's sweep routes by, and
 // the two must name the same mailbox or the report lands nowhere.
 //

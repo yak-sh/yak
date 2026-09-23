@@ -4,7 +4,7 @@
 //
 // @yaks/mcp brings the generic tier — graph_apply, graph_query, graph_show,
 // graph_schema and search — derived from the loaded vocabulary, with a schema
-// per tool, so nothing here spells a bundle by hand. What it cannot bring is
+// per tool, so nothing here writes a bundle by hand. What it cannot bring is
 // the platform: space_new, the app_* family, domain_*, member_*, feedback and
 // about are this place's own verbs, and a plugin is how a graph grows verbs.
 // mail_list and mail_send are a second such plugin (letters.ts) — an app's own
@@ -57,7 +57,7 @@ import { lined } from './wire.ts'
 import { type Host, hosted } from './host.ts'
 import { refuse } from './tool.ts'
 
-// One JSON Schema property as Zod. The tool table spells plain shapes — a
+// One JSON Schema property as Zod. The tool table declares plain shapes — a
 // string, a number, a flag, a list, an object — and the MCP SDK takes Zod, so
 // this is the whole translation. An unknown shape stays unknown rather than
 // being guessed at: the tool's own `run` checks its arguments anyway (tools.ts
@@ -156,7 +156,7 @@ export let answered = async (
  *
  * It is its own export because two doors run these tools — the connector
  * ({@link sugared}) and the builder we run ourselves (builder.ts) — and a
- * second spelling of these two lines is a second `app_new`.
+ * second copy of these two lines is a second `app_new`.
  */
 export let running =
   (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>, call?: Eid) =>
@@ -297,7 +297,7 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
     let { said, line } = scope(String(q))
     let where = said ? [await named(ctx, said)] : reach
     // An agent's grammar is the page's (guide.md): `id=`, `limit=` and `after=`
-    // where the store spells `.eid=`, `.limit=` and `.after=`, and a value
+    // where the store writes `.eid=`, `.limit=` and `.after=`, and a value
     // written as it reads rather than as a store would parse it. One
     // translation for every door a person's own line arrives at (wire.ts).
     return await read(ctx.env, where, await byName(self, lined(line))) as Row[]
@@ -335,7 +335,7 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
 // documents. One of them — `member.role` — both sides spell and mean
 // differently: the platform's roster is its access ladder
 // (`owner|editor|viewer`, read space-wide by apps.ts), while @yaks/member
-// keeps belonging (`owner|member`) apart from access, which it spells as a
+// keeps belonging (`owner|member`) apart from access, which it expresses as a
 // grant or the app's mode. Typed as the package's, the door refused a seat the
 // directory itself takes (T-34273).
 //

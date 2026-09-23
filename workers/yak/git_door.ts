@@ -189,7 +189,7 @@ export let answer = async (at: Arrived): Promise<Response | null> => {
       // bytes asks for `ada/recipesversions/<sha>`, finds nothing, and the
       // pack breaks mid-stream — which is a clone that fails after the
       // commits are already minted. gitobj.ts `placed` mints with this same
-      // spelling, so the door reads what the commit was written from.
+      // prefix, so the door reads what the commit was written from.
       bodies(r2Blobs(env.BLOBS), `${prefixOf(space, app)}/`),
     ),
   )

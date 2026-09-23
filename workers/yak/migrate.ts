@@ -38,7 +38,7 @@
 //   references    the fleet wrote the tag for `referenced` under its present
 //                 tense, and an edge's eid is derived from `from|tag|to` — so
 //                 the tag is rewritten and the entity re-addressed under the new
-//                 spelling (`update entity set eid`, which keeps the integer id
+//                 name (`update entity set eid`, which keeps the integer id
 //                 and so keeps every row that points at it).
 //   recalled      wore `source` and `at`; the relation is a bare tag now, so
 //                 both columns are dropped and said so in the report.
@@ -90,7 +90,7 @@ export type Slots = {
   put(key: string, value: unknown): void
 }
 
-/** The five type words the short manifest spelled, and the JSON Schema each
+/** The five type words the short manifest used, and the JSON Schema each
  * meant. Frozen here rather than read off vocab.ts: what a stored slot meant is
  * history, and history does not move when the platform's words do. */
 let WAS: Record<string, Record<string, unknown>> = {
@@ -136,11 +136,11 @@ let typed = (doc: Record<string, unknown>): string | null => {
 
 /**
  * A short type map, as the document it means. An app's `vocab.json` could be
- * written as one — `{"recipe": {"serves": "number"}}` — and that spelling is
+ * written as one — `{"recipe": {"serves": "number"}}` — and that form is
  * gone: a manifest is a JSON Schema document and nothing converts one at the
  * door any more (vocab.ts `appDoc`).
  *
- * Two places kept the old spelling and both are rewritten by this pass. A
+ * Two places kept the old form and both are rewritten by this pass. A
  * store that last accepted one remembers it in its vocabulary slot, and is
  * rewritten at its next open (graph.ts `#documenting`). The file the app
  * deployed keeps it too — which T-37546 left behind, so every release
@@ -208,7 +208,7 @@ export let MARK = 'yak/store/packages/1'
 export let HOMED = 'yak/store/home/2'
 
 /** The third pass (T-34390): the directory's app addresses — `{slug, slugs}`,
- * spelled `alias` until that word became every store's (@yaks/alias) — move to
+ * named `alias` until that word became every store's (@yaks/alias) — move to
  * `former`. The directory's alone; no other object has a row of them. */
 export let FORMER = 'yak/store/former/3'
 
@@ -268,7 +268,7 @@ let KEEP = [...SPINE, 'yak_kv', 'yak_writes']
 /** A table renamed aside for the length of the pass. */
 let ASIDE = 'yak_old_'
 
-/** What the directory's app addresses were spelled before T-34390 — and what
+/** What the directory's app addresses were called before T-34390 — and what
  * the core word is called now, which is why their rows have to move out of it
  * ({@link addressed}). */
 let FORMERLY = 'alias'
@@ -449,7 +449,7 @@ export type Carry = {
   grantEid: (app: string, person: string) => string
 }
 
-// The one relation the fleet spelled in the present tense. Everything else wears
+// The one relation the fleet named in the present tense. Everything else wears
 // the same word in both stores, so this is the whole rename table.
 let RENAMED: Record<string, string> = { references: 'referenced' }
 
@@ -854,7 +854,7 @@ export let homed = (
 // ---- the app's addresses → `former` (T-34390) ------------------------------
 //
 // The directory's record of every address an app has answered at — its birth
-// address in `slug`, each one a rename left behind in `slugs` — was spelled
+// address in `slug`, each one a rename left behind in `slugs` — was named
 // `alias`. That word is now every store's (@yaks/alias: a name any entity may
 // wear, a kind tag on `key{of, value}`), and two things cannot share one word,
 // so the record is `former` (vocab.ts `platformDoc`).
@@ -1295,7 +1295,7 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   }
 
   // The base tables, moved aside. The spine is NOT one of them: `entity` and
-  // `tombstone` are spelled identically in both layouts, so every integer id,
+  // `tombstone` are identical in both layouts, so every integer id,
   // every `num` and every death survives by not being touched. A store that
   // was numbered before numbers became @yaks/id's keeps the numbers it was
   // given, in a column its vocabulary no longer names (T-37831): nothing reads
@@ -1324,7 +1324,7 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   // home and is left behind (named below); a column the vocabulary declares and
   // the old store never had is simply null.
   // A word another word is renamed into is filled by that rename below, never
-  // here — otherwise a store that held both spellings would write the same
+  // here — otherwise a store that held both names would write the same
   // entity twice.
   // The table the core word took over is never a straight copy either: its old
   // rows are addresses and its new ones are name tags, so copying `entity`
@@ -1468,7 +1468,7 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
       table: 'former',
       from: 0,
       to: landed,
-      note: `${rows} apps had an address of their own, spelled "${FORMERLY}"`,
+      note: `${rows} apps had an address of their own, named "${FORMERLY}"`,
     })
     if (landed != rows) {
       throw new Refused(report(
@@ -1523,7 +1523,7 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
   }
 
   // `references` → `referenced`, and the edge re-addressed with it: an edge's
-  // eid is derived from `from|tag|to`, so the tag's new spelling is a new
+  // eid is derived from `from|tag|to`, so the tag's new name is a new
   // address. The integer id does not move, so every row that points at this
   // edge still points at it.
   for (let [was, now] of Object.entries(RENAMED)) {
@@ -1553,7 +1553,7 @@ export let carry = (storage: DurableStorage, o: Carry): Report => {
       from: from(was),
       to: count(d, now),
       note: `was "${was}"; ${ends.length} edges re-addressed under the new ` +
-        `spelling (the other ${from(was) - ends.length} carry no edge row)`,
+        `name (the other ${from(was) - ends.length} carry no edge row)`,
     })
   }
 

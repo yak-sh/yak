@@ -225,7 +225,7 @@ slow('the served client: a page saves, lists and watches', async () => {
     // what it was based on. Two readers of one value — two tabs, a tab and an
     // agent — each write it back, and the second one loses instead of winning
     // by being last. This is the duplicate reward the guide's store page
-    // spells out.
+    // describes.
     let claimed = await store.apply({
       entity: { eid: '$claim' },
       doc: { title: 'day 1' },

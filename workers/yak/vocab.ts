@@ -41,7 +41,7 @@ import { refuse } from './tool.ts'
 // And the app's own `vocab.json` — or `vocab.yml`, read through the same door
 // (@yaks/yaml, M-34605). It is a JSON Schema 2020-12 document with `$defs`
 // (D-33490 gate 3), the same shape every `packages/*/vocab.json` is written in,
-// and it is the one spelling: a keyword belongs to the property — `search`,
+// and it is the one form: a keyword belongs to the property — `search`,
 // `stamped`, a reference's `death` — and a manifest flattened to bare type
 // words could not carry one (T-37546).
 import { type Host, url } from './host.ts'
@@ -136,7 +136,7 @@ export let coreDoc: VocabDoc = {
 }
 
 /**
- * The verbs an edge may wear, in the wire's own spelling — the list the guide
+ * The verbs an edge may wear, under the wire's own names — the list the guide
  * teaches, and the only types a store makes an edge for. Note `referenced`,
  * never `references`.
  */
@@ -296,7 +296,7 @@ export let EXAMPLE =
 /** Where the whole of it is written, and what an app's store says when it is
  * asked for a word nobody declared — the same sentence at the write door and
  * the read door, because it is the same missing act. The fleet's own store
- * says it too (src/store/vocab.ts `TEACH`); it is spelled again here because
+ * says it too (src/store/vocab.ts `TEACH`); it is written again here because
  * the Store carries the packages' vocabulary and never the fleet's. */
 export let GUIDE = url({}, '/docs.md')
 export let teach = (env: Host = {}) =>
@@ -405,7 +405,7 @@ export let appsDoc: VocabDoc = {
     // checkout, written into the app's own store by the Connect webhook, as
     // the app. Platform's rather than each app's for the reason `product` is:
     // the platform writes it, and a word the platform writes is a word the
-    // platform declares — an app that spelled its own `order` would have the
+    // platform declares — an app that declared its own `order` would have the
     // platform writing into a shape it does not know.
     //
     // It is the whole record of a sale on this side. The money itself is
@@ -565,8 +565,8 @@ export let coreDocs: VocabDoc[] = storeDocs([
 // instead of an app's `vocab.json`.
 //
 // It does not load @yaks/member's document. That package's `member.role` is
-// `owner|member` — belonging, with access spelled as a grant or the app's mode
-// — and the platform's roster is its access ladder, three seats
+// `owner|member` — belonging, with access expressed as a grant or the app's
+// mode — and the platform's roster is its access ladder, three seats
 // (`owner|editor|viewer`) read space-wide by apps.ts, so the word is declared
 // here at the platform's own meaning. A door that can address both stores
 // therefore types that property nowhere ({@link PLATFORM_APART}). Nothing
@@ -647,7 +647,7 @@ export let platformDoc: VocabDoc = {
     // in the space's own namespace, so a space rename leaves every app's
     // history standing.
     //
-    // It was spelled `alias` until T-34390, when that word became the
+    // It was named `alias` until T-34390, when that word became the
     // platform's own (@yaks/alias, in {@link coreDocs}): a name any entity may
     // wear in any store. Two things cannot share one word, and the one every
     // store speaks wins — so the app's addresses are `former`, which is what
@@ -665,9 +665,9 @@ export let platformDoc: VocabDoc = {
     },
     // Which app is the space's front page, and the paths its worker sees first
     // before the app whose slug owns them (D-34197, T-34227). One fact, one
-    // spelling: the app wearing `home` is the home app, and its globs are
+    // place: the app wearing `home` is the home app, and its globs are
     // properties of the same word — a `space.home` beside it would be a second
-    // place to say the same thing, and two spellings of one fact drift.
+    // place to say the same thing, and two copies of one fact drift.
     //
     // At most one app per space wears it. The vocabulary cannot say so —
     // `unique` covers one component's own properties and `home` has no space of
@@ -677,7 +677,7 @@ export let platformDoc: VocabDoc = {
     // A property is a scalar (@yaks/vocab `storable`), so the list is JSON in
     // one text property — ordered, and read back by router.ts `firstOf`. The
     // `former.slugs` above splits on whitespace instead, which is the older
-    // spelling of a list here; JSON is the one that round-trips exactly what an
+    // form of a list here; JSON is the one that round-trips exactly what an
     // agent passed.
     home: {
       component: true,
@@ -697,7 +697,7 @@ export let platformDoc: VocabDoc = {
       },
     },
     // A seat reaches every app in its space; this reaches one (T-37615). It is
-    // the word @yaks/member already spells for that — the same three levels,
+    // the word @yaks/member already uses for that — the same three levels,
     // the same meaning — said here because the ladder a page is read by is the
     // platform's roster and this is its other rung: somebody invited to one
     // app holds that app's data and its page as a member does, and holds no
@@ -837,7 +837,7 @@ export let platformDoc: VocabDoc = {
     //
     // One word on the row rather than a state property beside it, for the
     // reason `home` is one: what is in the trash is what wears this, and a
-    // second spelling of the same fact drifts from it. That is also why an
+    // second copy of the same fact drifts from it. That is also why an
     // app and a space share the word — it says one thing, thrown away and
     // since when, and every reader asks the row in front of it.
     trashed: {
@@ -1055,11 +1055,11 @@ let shapeOf = (s: PropSchema): string =>
   s.enum ? s.enum.join('|') : String(s.type ?? '?')
 
 /**
- * The properties the directory spells at the platform's own meaning while every
- * app store spells them at a package's — today `member.role` alone: three
- * seats here ({@link platformDoc}) against @yaks/member's two, because the
- * platform's roster is its access ladder and the package keeps belonging and
- * access apart.
+ * The properties the directory declares at the platform's own meaning while
+ * every app store declares them at a package's — today `member.role` alone:
+ * three seats here ({@link platformDoc}) against @yaks/member's two, because
+ * the platform's roster is its access ladder and the package keeps belonging
+ * and access apart.
  *
  * One name meaning two things is two words. A door whose reach holds the
  * directory and an app therefore types these nowhere and leaves the answer to
@@ -1109,7 +1109,7 @@ export let metaKeywords: Keywords[] = [idKeywords, ...appKeywords]
  * Two lists, because the platform is two things. An app's store plants the
  * core documents, so those names are taken there. And the FLEET's whole
  * vocabulary is taken too (store/vocab.ts `RESERVED`) — that is the list the
- * guide publishes under "Components of your own", and a word it spells is a
+ * guide publishes under "Components of your own", and a word it lists is a
  * word this platform means something by, whether or not an app's store raises
  * a table for it.
  *
@@ -1129,7 +1129,7 @@ export let RESERVED: string[] = [
   ]),
 ].sort()
 
-// The five words a property's type is spelled with, and the JSON Schema each
+// The five words that name a property's type, and the JSON Schema each
 // is. A manifest writes the schema; these are for reading one back in a
 // sentence — a refusal saying what a property already is, the arguments a
 // kind's tools take (kinds.ts), the types a CSV's cells are coerced to
@@ -1145,7 +1145,7 @@ let WORDS: Record<string, PropSchema> = {
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
 
-/** The word a declared property's type is spelled with. A property no word spells
+/** The word that names a declared property's type. A property no word names
  * reads as `text`, which is what it stores as. */
 export let wordOf = (s: PropSchema): string =>
   Object.entries(WORDS).find(([, one]) =>
@@ -1154,7 +1154,7 @@ export let wordOf = (s: PropSchema): string =>
 
 /**
  * A document as `{comp: {prop: word}}` — every component's properties as the
- * word each one's type is spelled with. That is how the kernel reads a
+ * word that names each one's type. That is how the kernel reads a
  * vocabulary where it needs the types and not the keywords (tools.ts `sheetOf`,
  * reach.ts `spoken`); the document itself is what a store keeps and answers.
  */
@@ -1317,7 +1317,7 @@ let mine = (schema: PropSchema): PropSchema => ({
 
 /**
  * An app's `vocab.json` as one document: a JSON Schema 2020-12 document with
- * `$defs`, which is the one spelling a manifest is written in. A manifest of
+ * `$defs`, which is the one form a manifest is written in. A manifest of
  * bare component names declares no `$` keyword, and is refused in a sentence
  * naming the shape.
  *

@@ -206,7 +206,7 @@ Deno.test('graph Tool is usable through the CLI adapter without any session runt
   try {
     const [tool] = await c.tools()
     const lines: string[] = []
-    // A CLI host may explicitly assign a local spelling; the remote name stays
+    // A CLI host may explicitly assign a local name; the remote name stays
     // opaque. The tool goes to `cli` as it is — the words, the schema and the
     // run are all the tool's own.
     const said = {

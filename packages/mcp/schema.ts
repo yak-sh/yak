@@ -21,7 +21,7 @@ import { z } from 'zod'
 import type { Prop, Vocab } from '@yaks/vocab'
 
 /**
- * How much of the vocabulary a bundle schema spells out.
+ * How much of the vocabulary a bundle schema describes.
  *
  * - `names` — every component and every property name, with values left
  *   untyped. Roughly a third the size, for a deployment that would rather

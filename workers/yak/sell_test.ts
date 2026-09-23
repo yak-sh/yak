@@ -79,7 +79,7 @@ Deno.test('the account is the charge-merchants-directly model, in full', () => {
 // required only for an account with no Stripe-hosted dashboard; ours have one,
 // so Stripe requests the payment capabilities itself — and `transfers` is a
 // destination charge's capability, which a direct charge never uses. `type` is
-// the deprecated spelling of the four properties above, and the two ways of
+// the deprecated form of the four properties above, and the two ways of
 // saying one thing are not both passed.
 Deno.test('the account asks for no capabilities and names no type', () => {
   let made = account(space(), '') as Record<string, unknown>
@@ -408,7 +408,7 @@ Deno.test('the fee rides payment_intent_data, and is absent when it is zero', ()
     false,
   )
   // What it looks like once the owner sets a number. There is no top-level
-  // spelling of this parameter on a Checkout Session, so under
+  // form of this parameter on a Checkout Session, so under
   // `payment_intent_data` is not a choice.
   let made = session({ ...asked, bps: 250 })
   assertEquals(made.payment_intent_data.application_fee_amount, 250)

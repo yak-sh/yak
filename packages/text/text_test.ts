@@ -1,6 +1,6 @@
 // The text boundary is tested at every path that can print content, while
 // formatting tests read Markdown back as HTML so punctuation and nesting are
-// checked for their meaning as well as their spelling.
+// checked for their meaning as well as their source.
 
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'

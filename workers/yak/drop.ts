@@ -13,7 +13,7 @@
 // `app_new` where the name is new, the write half of `app_files`, `app_deploy`
 // (tools.ts `call`, `wrote`). So a drop lands under the same ceilings, the same
 // member guard and the same version bump as everything else, and there is no
-// second spelling of a deploy to keep in step with the first.
+// second implementation of a deploy to keep in step with the first.
 //
 // The guard is `writes` (@yaks/member): a space's owner or editor deploys,
 // nobody else — the same rule as the file door in apps.ts, which is not the

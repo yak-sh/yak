@@ -118,7 +118,7 @@ Deno.test('a word Cloudflare has not shown us yet is said, not assumed', () => {
   let odd = steps({ ...LIVE, status: 'pending_migration' })
   assertEquals(odd[1].state, 'waiting')
   assertEquals(odd[1].said, 'Cloudflare says pending migration')
-  // Every timeout spells the same thing, and the list of them grows.
+  // Every timeout says the same thing, and the list of them grows.
   let out = steps({ ...LIVE, ssl: { status: 'issuance_timed_out' } })
   assertEquals(out[2].state, 'error')
   assertEquals(stageOf(out), 'error')

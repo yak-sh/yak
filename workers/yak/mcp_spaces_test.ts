@@ -128,7 +128,7 @@ slow('the front page moves, and only the owner moves it', async () => {
 // answers at its new subdomain, the old one redirects there with the path kept
 // and stays reserved, and what the platform keeps for the space — the store
 // each app is named by, the domain somebody else owns, the roster — never
-// spelled the slug and so never moves.
+// held the slug and so never moves.
 slow('a space moves, and the subdomain it leaves points at it', async () => {
   let k = await kernel()
   try {

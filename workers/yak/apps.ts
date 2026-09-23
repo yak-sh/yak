@@ -376,7 +376,7 @@ let MANIFEST = new Set([
   '/worker.js',
   '/wrangler.jsonc',
   '/wrangler.json',
-  // Either spelling of a declaration (tools.ts `spelled`, M-34605): a `.yml`
+  // Either format of a declaration (tools.ts `spelled`, M-34605): a `.yml`
   // is the app's inside exactly as much as the `.json` is.
   '/vocab.json',
   '/vocab.yml',
@@ -1074,7 +1074,7 @@ let api = async (
   }
   if (path == '/query') {
     if (!mayRead) return refused('not_a_reader')
-    // The page spells its filter as the query string itself and the Store takes
+    // The page writes its filter as the query string itself and the Store takes
     // the whole line as one parameter (wire.ts `lined`). The ask then carries
     // the listing's own screen (listing.ts `asking`), so what a count counts is
     // what a list lists.
@@ -1236,7 +1236,7 @@ let kernels = (space: Space, app: string | null) =>
 // The identity part, asked for at request time rather than imported at the
 // top: it carries the OAuth provider, whose `cloudflare:` modules exist only
 // inside workerd, and this part's own tests run outside it. The two are peers
-// in one Worker (index.ts binds each), so this is the in-process spelling of
+// in one Worker (index.ts binds each), so this is the in-process form of
 // the service binding a split would give them — a `bound` with no namespace to
 // call. Nothing above the owner block below asks for it, so nothing else pays.
 let identity = () => import('./identity.ts')
@@ -1697,7 +1697,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   //
   // A custom domain arrives already mounted at its own root (index.ts
   // `aimed` sets the header): the app is the domain's `/` however the
-  // platform's own address spells it, so it is not forwarded anywhere — the
+  // platform's own address writes it, so it is not forwarded anywhere — the
   // forward would land back on the address that arrived — and its pages
   // resolve from that root.
   let mount = req.headers.get(MOUNT)

@@ -838,7 +838,7 @@ slow('/login never draws the box for a browser already signed in', async () => {
 
     // Several spaces, and the one they came in on wins: a space's own index
     // sends them here carrying its address, which is on our zone and followed.
-    // Aimed at nothing, it is their first — the one their address spells —
+    // Aimed at nothing, it is their first — the one their address names —
     // and never the newest (T-34233).
     let other = `garden-${crypto.randomUUID().slice(0, 8)}`
     await connector(k, cookie).tool('space_new', {
@@ -1308,7 +1308,7 @@ slow('a cold sign-in stays well under the budget', async () => {
 
     // Where the 303 sends them: the flow is not over until that page is in
     // front of them, and it reads the directory the sign-in just wrote. That
-    // is their own space's hostname now, which the probe spells in a header.
+    // is their own space's hostname now, which the probe sets in a header.
     let to = new URL(inn.headers.get('location') ?? '/', 'https://yaks.app')
     let page = await span(() =>
       k.at(to.hostname, to.pathname + to.search, { headers: { cookie } })

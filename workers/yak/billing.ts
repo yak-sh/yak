@@ -214,7 +214,7 @@ let when = (unix?: number | null) =>
 // When the paid-for period runs out. The field moved off the subscription onto
 // each of its items in API version 2025-03-31.basil, and the account's default
 // version is well past that — but the webhook endpoint pins no version of its
-// own, so the version it sends can move under us. Read either spelling and the
+// own, so the version it sends can move under us. Read either shape and the
 // answer survives that: the latest item wins, since one subscription of ours
 // has exactly one item.
 export let periodEnd = (sub: Sub) => {
@@ -493,7 +493,7 @@ let subjectOf = async (
   // A checkout session names its subscription and carries the space we put on
   // it; an invoice names its subscription and nothing else. `parent` is where
   // the invoice's subscription moved in API 2025-03-31.basil, and the old
-  // spelling is read too for the same reason `periodEnd` reads both.
+  // field is read too for the same reason `periodEnd` reads both.
   let parent = (o.parent ?? {}) as {
     subscription_details?: { subscription?: string | { id?: string } }
   }

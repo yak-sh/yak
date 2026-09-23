@@ -329,7 +329,7 @@ export let browser = (k: Kernel, host: string, cookie?: string) => {
 
 // An origin that stands for `<space>.yaks.app` on a socket. `new WebSocket`
 // sends the URL's own Host and takes no headers, so `x-yak-host` — the header
-// a fetch-driven probe spells (route.ts) — has to go on the wire itself: this
+// a fetch-driven probe sets (route.ts) — has to go on the wire itself: this
 // relay inserts it (and a cookie) into the handshake it forwards, then copies
 // bytes both ways, so the socket a test holds is the kernel's own, framing
 // and all. HTTP through it works too, for one request per connection.
@@ -646,7 +646,7 @@ export type Listed = {
   /** `<space>/<app>`, off the header the app's commands sit under */
   at: string
   name: string
-  /** its arguments as the listing spells them: `who, miles, pace?` */
+  /** its arguments as the listing writes them: `who, miles, pace?` */
   args: string
   /** `writes` rather than `reads` */
   writes: boolean
@@ -687,9 +687,9 @@ export let rowsIn = <T>(said: string): T[] =>
   ) as T[]
 
 // An app's `vocab.json`, as a probe writes one: the document, without every
-// test spelling `$defs` and `properties` around two properties. A property is
-// its JSON Schema — {@link txt}, {@link num} and {@link when} are the three a
-// probe reaches for.
+// test writing out `$defs` and `properties` around two properties. A property
+// is its JSON Schema — {@link txt}, {@link num} and {@link when} are the three
+// a probe reaches for.
 export let vocabFile = (
   defs: Record<string, Record<string, unknown>>,
 ): string =>
@@ -1063,7 +1063,7 @@ export let stripeKey = () => {
 }
 
 /** One call to Stripe, in Stripe's own dialect: form-encoded in, JSON out,
- * with the bracketed keys its nested fields are spelled with. A refusal is
+ * with the bracketed keys its nested fields are written with. A refusal is
  * thrown carrying Stripe's own message, which is the whole of the failure. */
 export let charged = async (
   key: string,

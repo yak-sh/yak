@@ -26,7 +26,7 @@ let literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /// covers('/*/print', '/recipes/lemon/print') -> true
 /// covers('/recipes', '/recipes/lemon') -> false
 /** Does this glob answer that path? `*` is any run of characters, slashes
- * included — one wildcard, no second spelling to learn. */
+ * included — one wildcard, no second syntax to learn. */
 export let covers = (glob: string, path: string): boolean =>
   new RegExp(`^${glob.split('*').map(literal).join('.*')}$`).test(path)
 
@@ -34,7 +34,7 @@ export let covers = (glob: string, path: string): boolean =>
  * The paths the kernel answers itself, which no app routes (D-34197 rung 1).
  * `/api/*` is here beside `/<app>/api/*` because the home app is served at the
  * bare hostname, where its own store door is `/api/…` with no slug in front of
- * it (apps.ts `served`) — one door, two spellings of its address.
+ * it (apps.ts `served`) — one door, two addresses.
  */
 export let PLATFORM_PATHS = [
   '/login',

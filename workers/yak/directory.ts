@@ -45,7 +45,7 @@ import { nameOf } from './signin.ts'
 export let META = { space: 'yak', app: 'platform' }
 // The meta space's own store, named the way every app's is. Its slugs are
 // the platform's own and never move, so the name is a constant — door.ts
-// spells it, beside the rest of what addresses a store.
+// builds it, beside the rest of what addresses a store.
 export let META_STORE = PLATFORM_STORE
 
 // What a space or an app spent this calendar month (platform.rs `Meter`,
@@ -1163,7 +1163,7 @@ export let directory = (via: Fetcher, now = false) => {
         .filter((r) => r.space && r.space.slug != META.space)
         .map((r) => ({ space: spaceOf(r), role: held.get(r.entity.eid)! }))
     },
-    // The next free spelling of a derived name: the name itself, else
+    // The next free variant of a derived name: the name itself, else
     // numbered until nothing answers to it. What `own` mints, and what the
     // sign-in card offers a person before it does (T-32967).
     free: async (base: string) => {
@@ -1178,7 +1178,7 @@ export let directory = (via: Fetcher, now = false) => {
     // The person's own space, minted the moment they first need one — at
     // sign-in, or at the first tool call by someone who signed in before this
     // existed (T-32482). Theirs is a space they own — the one their address
-    // spells, if they own it, else the first they own — and being a member of
+    // names, if they own it, else the first they own — and being a member of
     // somebody else's is not having one, so an invited person is minted theirs
     // here rather than handed the inviter's (T-33142). A race that loses on
     // the unique slug re-reads and finds the winner.

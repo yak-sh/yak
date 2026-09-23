@@ -326,7 +326,7 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
 }
 
 /**
- * One platform: a Store per name the kernel spells, the bucket its files are
+ * One platform: a Store per name the kernel builds, the bucket its files are
  * in, and the platform's own assets off disk (the client an app imports, the
  * guide the builder reads).
  */

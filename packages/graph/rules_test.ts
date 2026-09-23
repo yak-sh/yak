@@ -176,7 +176,7 @@ Deno.test('a plugin provides a resource, capitalized', () => {
   let one = g([shop('Aisle')])
   sync(one.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }]))
   assertEquals(comp(held(one, 'b1'), 'book'), { pages: 3 })
-  // lowercase is a component's spelling, so it cannot be a resource's
+  // a lowercase name is a component's, so it cannot be a resource's
   assertThrows(
     () =>
       g([shop('aisle')]).apply([{ entity: { eid: 'b1' }, book: { pages: 1 } }]),

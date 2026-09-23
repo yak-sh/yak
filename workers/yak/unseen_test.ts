@@ -20,7 +20,7 @@ let broke = (
 // The words a caller may say, against a break on v2 at noon on the 14th.
 let hit = broke({ at: '2026-08-14T12:00:00.000Z', version: 2 })
 
-Deno.test('named: an id, either spelling', () => {
+Deno.test('named: an id, either form', () => {
   assert(named('E-84', hit))
   assert(named(E, hit))
   assert(!named('E-85', hit))

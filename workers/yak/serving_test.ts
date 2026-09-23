@@ -5,7 +5,7 @@
 //
 // The whole point is that two wires meet here and the door translates
 // (wire.ts): a page sends `{entities: […]}` and reads `{ok, aliases, bundles}`
-// back, spells its filter as the query string itself, and folds a socket's
+// back, writes its filter as the query string itself, and folds a socket's
 // frames — while the Store takes a bare array of bundles, answers the batch as
 // applied, reads its line off `?q=`, and pushes `{id, bundles, gone}`. So the
 // client is driven the way a page drives it, and what it gets back is what the
@@ -412,7 +412,7 @@ Deno.test('the page wire: apply, query and search round-trip', async () => {
   assertEquals((row.entity as { eid: string }).eid, eid)
   assertEquals((row.doc as { title: string }).title, 'Lemon drizzle')
 
-  // An address, in the page's own spelling.
+  // An address, in the page's own grammar.
   assertEquals((await page.query(`id=${eid}`)).length, 1)
 
   // Full text over the docs, and the platform's own rows stay out of the

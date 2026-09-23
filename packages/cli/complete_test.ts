@@ -65,7 +65,7 @@ Deno.test('a value is what its property says it may be', async () => {
   assertEquals(await said('list session --all '), ['false', 'true'])
   assertEquals(await said('session list '), ['fleet', 'root'])
   assertEquals(await said('session list r'), ['root'])
-  // `--name=` is the spelling that takes a word beginning with a dash.
+  // `--name=` is the form that takes a word beginning with a dash.
   assertEquals(await said('session list --status=o'), ['--status=open'])
 })
 

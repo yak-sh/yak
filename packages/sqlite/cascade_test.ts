@@ -130,7 +130,7 @@ Deno.test('a chain falls to the end, rung by rung', () => {
     { entity: { eid: 'z' }, node: { name: 'z' } },
   ], [{ entity: { eid: 'a' }, $delete: true }])
   // The named dead leads, then the rungs in order, and the bystander is
-  // untouched. Every death is spelled `tombstone` in the answer, the batch's
+  // untouched. Every death is a `tombstone` in the answer, the batch's
   // own included: `$delete` is the pipeline's word and stops there
   // (@yaks/graph `composed`).
   assertEquals(dead(out), ['a', 'b', 'c', 'd'])

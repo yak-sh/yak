@@ -117,7 +117,7 @@ Deno.test('graph_apply takes the vocabulary, typed and described', async () => {
 // A host whose door takes a property differently than the vocabulary declares
 // says so once, and the write schema is derived through it — yaks.app takes an
 // id for a reference (agent.ts `reading`).
-Deno.test('a host spells its own reading of a property on the write door', async () => {
+Deno.test('a host states its own reading of a property on the write door', async () => {
   let client = await connect({
     prop: (prop, o) =>
       prop.category == 'ref' && !o.write

@@ -95,7 +95,7 @@ let ADA = 'b0000000-0000-4000-8000-000000000002'
 let CAKE = 'c0000000-0000-4000-8000-000000000003'
 
 // The app every test here deploys: one component, one property, in the one
-// spelling a vocab.json is written in.
+// format a vocab.json is written in.
 let SCHEMA = JSON.stringify({
   $defs: {
     recipe: {
@@ -506,8 +506,8 @@ Deno.test('a visitor to an open app adds, and touches no price, order or row of 
 })
 
 // A name outlives the batch (T-34390): @yaks/key carries it, @yaks/alias
-// spells it, and both are composed into every store — so the same seed written
-// twice is one entity, and the name stands where an eid does.
+// resolves it, and both are composed into every store — so the same seed
+// written twice is one entity, and the name stands where an eid does.
 Deno.test('a named row written twice is one entity, and answers to its name', async () => {
   let store = await cookbook()
   let seed = async (title: string) => {

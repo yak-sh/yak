@@ -81,7 +81,7 @@ export let TECH = {
 // The markdown links its own pages by their `.md` addresses, which is what an
 // agent fetches. On a page of the site those links should land on the page
 // beside this one, so the `.md` comes off while it renders — the files are
-// untouched. Both spellings the pages use are covered: the angle-bracket form,
+// untouched. Both link forms the pages use are covered: the angle-bracket form,
 // which has to become a titled link because a relative address is no autolink,
 // and an ordinary link's target.
 let LABEL: Record<string, string> = Object.fromEntries(

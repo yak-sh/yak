@@ -140,7 +140,7 @@ type Deploy = {
 
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 
-// A reference property, in either spelling a store answers with: the bare eid a
+// A reference property, in either shape a store answers with: the bare eid a
 // read inside the transaction gives (the effect's own door), and the `{eid,
 // name}` a read over the store's HTTP door gives, which names what it points
 // at as it goes (listing.ts). One reader, so minting is the same act from the
@@ -201,7 +201,7 @@ let author = async (dir: Held, deploy: Deploy) => {
 /**
  * Where an app's branch stands: the commit its ref names, or `null` before its
  * first deploy. This is the whole of `ls-refs` on our side, so the serving
- * half reads a branch through this and not by spelling the row.
+ * half reads a branch through this and not by reading the row itself.
  */
 export let refAt = (dir: Held, app: Eid, name = MAIN): Promise<string | null> =>
   branchAt(writes(dir), app, name)

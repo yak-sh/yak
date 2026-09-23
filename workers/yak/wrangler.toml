@@ -34,7 +34,7 @@ upload_source_maps = true
 
 # The apex and every first-level space hostname, both on the yaks.app zone;
 # the zone's Universal certificate covers the wildcard. `*/*` is the third
-# because a customer's own hostname is not spelled `yaks.app` at all
+# because a customer's own hostname is not under `yaks.app` at all
 # (T-33035): traffic for a custom hostname enters this zone and only a
 # zone-wide pattern matches it, which is Cloudflare's own instruction for a
 # Worker as the fallback origin. The two above are the same Worker and are
@@ -416,12 +416,12 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 # packages by NAME (`@yaks/graph`), which deno resolves through the workspace
 # in the repo's one deno.json — wrangler's esbuild has no idea about that, and
 # a package resolves for `deno check` and then fails to bundle. So the same
-# names are spelled once here, as paths.
+# names are written once here, as paths.
 #
 # The npm ones are aliased too, and only because of WHERE they are imported
 # from: esbuild walks up from the importing file, and a `packages/mcp/*.ts`
 # has no `node_modules` above it. Each points into this directory's own, which
-# is what `npm ci` here fills (package.json), so an SDK subpath is spelled at
+# is what `npm ci` here fills (package.json), so an SDK subpath is aliased to
 # the file it actually is.
 [alias]
 "@yaks/alias" = "../../packages/alias/mod.ts"
@@ -465,7 +465,7 @@ id = "64fa009267934abe8bc0c9d23ae01b17"
 "@yaks/wake/cloudflare" = "../../packages/wake/cloudflare.ts"
 "@yaks/workerd" = "../../packages/workerd/mod.ts"
 "@yaks/yaml" = "../../packages/yaml/mod.ts"
-# @yaks/yaml's own dependency, spelled at the file it is. esbuild walks up from
+# @yaks/yaml's own dependency, aliased to the file it is. esbuild walks up from
 # packages/yaml/yaml.ts and finds no node_modules above it — the same reason
 # every npm name below is aliased — so the JSR package's npm build is named
 # here, out of this directory's own install (package.json).

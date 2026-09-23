@@ -24,7 +24,7 @@ import { configs } from './release.ts'
 export let API = 'https://api.jsr.io'
 export let TOKENS = 'https://jsr.io/account/tokens'
 
-// The one repository every @yaks/* package is cut from. Spelled out rather
+// The one repository every @yaks/* package is cut from. Written out here rather
 // than read from `git remote`, because a workspace is a repository and asking
 // git would buy a --allow-run for an answer that cannot differ per package.
 export let REPO = { owner: 'yak-sh', name: 'yak' }

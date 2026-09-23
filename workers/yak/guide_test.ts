@@ -4,7 +4,7 @@
 // What can rot is anything the pages print that the code also decides: the
 // reserved words a manifest is refused against (the code's list, never the
 // page's — C-32624 item 1), the components an app has, whose properties and
-// types are what a refusal now spells and what the seventh user test had to
+// types are what a refusal now names and what the seventh user test had to
 // guess five times over (C-32675 items 2 and 3), and the doors and limits an
 // app's own worker.js runs under (T-32780).
 import { assert, assertEquals } from '@std/assert'
@@ -164,7 +164,7 @@ let entries = () => {
 }
 
 // What an app's store loads (vocab.ts `appVocab`): every property of every core
-// component, spelled the way the page spells it, and whether the store owns it.
+// component, named the way the page names it, and whether the store owns it.
 let stored = () => {
   let all: Record<string, [string, string, boolean][]> = {}
   for (let doc of coreDocs) {
@@ -187,7 +187,7 @@ let stored = () => {
 // an app to break at the first request (T-32780).
 Deno.test('the code page names the doors a worker is actually given', () => {
   let section = pageText('code')
-  // Every `env.NAME` the section spells, minus the secrets, which are the
+  // Every `env.NAME` the section names, minus the secrets, which are the
   // app's own names and not the platform's.
   let named = new Set(
     [...section.matchAll(/env\.([A-Z_]+)/g)].map((m) => m[1]),

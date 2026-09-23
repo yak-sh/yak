@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run=npm,npx,git,pgrep,kill
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
 // `deno task dev:yak`, their `-staging` variants and the probe (probe.ts) all
-// come through here, so the pinned version is spelled once and `node_modules`
+// come through here, so the pinned version is written once and `node_modules`
 // is current before wrangler reads it.
 //
 // Why the install has to happen first: wrangler bundles with esbuild, which
@@ -96,7 +96,7 @@ export let ready = async (root = dir, timeout = 600_000) => {
   }
 }
 
-// Wrangler accepts --env on either side of the command. Both spellings need
+// Wrangler accepts --env on either side of the command. Both forms need
 // the same commit annotation, so production and staging identify one build.
 export let command = (args: string[]) => {
   for (let i = 0; i < args.length; i++) {

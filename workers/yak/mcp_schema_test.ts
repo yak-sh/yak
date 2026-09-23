@@ -93,7 +93,7 @@ slow('an app declares its own commands, and command runs them', async () => {
     // the person called it, and a model choosing reads the words.
     assertStringIncludes(log.description, 'Run club')
     assertStringIncludes(log.description, `${space}.yaks.app/runs/`)
-    // Its arguments as the listing spells them, required ones bare.
+    // Its arguments as the listing writes them, required ones bare.
     assertEquals(log.args, 'who, miles')
     assert(log.writes, 'logging a run is a write')
 
@@ -362,7 +362,7 @@ slow('a kind an app declares is two commands, with no tools.json', async () => {
       'Lemon cake',
     ])
 
-    // And a tools.json spelling one of the names takes it over, whole: the
+    // And a tools.json entry naming one of the names takes it over, whole: the
     // app's own sentence and the app's own template, beside the other half
     // still generated for it.
     await agent.tool('app_files', {

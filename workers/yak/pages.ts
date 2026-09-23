@@ -1395,7 +1395,7 @@ let request = copyable(
   'the sample app request',
 )
 
-// An address on this platform, spelled out for somebody to type or paste.
+// An address on this platform, written out for somebody to type or paste.
 let at = (path: string, env: Host) => `<code>${url(env, path)}</code>`
 
 // What to write in an OAuth box, for the forms that have boxes (T-34414).

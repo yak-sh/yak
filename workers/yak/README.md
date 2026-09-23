@@ -327,7 +327,7 @@ npx wrangler secret put STRIPE_CONNECT_WEBHOOK_SECRET   # paste the whsec_
 
 **v1 events, not v2.** There is a v2 Accounts API with thin `v2.core.account.*`
 events; this platform speaks v1 throughout (Jeff, 2026-09-06: "v1"), so the five
-names above are the ones the handler reads. Ticking a v2 spelling is a webhook
+names above are the ones the handler reads. Ticking a v2 event name is a webhook
 that delivers and does nothing.
 
 **No account-created event.** We create the account ourselves and write its id

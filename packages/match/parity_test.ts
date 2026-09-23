@@ -84,7 +84,7 @@ let QUERIES = [
   '.signed=',
   '.signed~=',
   // a bare bang completes a component sentence even where a property of the
-  // same name claims the bare spelling: `.book!` is the books, `.book=b1` is
+  // same name claims the bare name: `.book!` is the books, `.book=b1` is
   // still review.book, and `.review.book!` still reaches the property.
   '.book!',
   '.review.book!',

@@ -53,7 +53,7 @@ export type Namespace = {
 // The kernel's door to one store: a caller on the object named for the app
 // (directory.ts storeName — the address it was born at, which a rename never
 // moves), told its name on every call (the object keeps the first). The
-// kernel spells the name; a client never names a store. An incoming Request
+// kernel builds the name; a client never names a store. An incoming Request
 // may be the init: that is how a socket upgrade reaches the object with its
 // `Upgrade` header on it, since the header a route adds rides beside it.
 export type Door = (

@@ -4,7 +4,7 @@
 // model — and a model carried the one provider that served it. Now `name` is
 // each one's identity (the vocabulary's `identity` keyword), a model is the
 // model whoever serves it, and a provider's offering of a model is a `serves`
-// edge carrying the provider's own spelling of the name.
+// edge carrying the provider's own name for the model.
 //
 // Two passes, because an identity is also a unique index and `install()`
 // cannot create one over two rows sharing a name:

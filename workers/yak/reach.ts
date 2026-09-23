@@ -289,7 +289,7 @@ let kindFrom = (
   }
 }
 
-// One component's properties as its schema spells them: property → the type
+// One component's properties as its schema declares them: property → the type
 // word, which is all a disagreement is read out of.
 let propsOf = (schema: PropSchema): Record<string, string> =>
   Object.fromEntries(
@@ -327,7 +327,7 @@ let apartIn = (vocabs: { r: Reach; doc: VocabDoc }[]) => {
 }
 
 type Held = {
-  // The spine as the first store that answered spelled it: the eid is what the
+  // The spine as the first store that answered gave it: the eid is what the
   // entity is called everywhere, which is the whole of an app's address.
   entity: Entity
   comps: Record<string, unknown>

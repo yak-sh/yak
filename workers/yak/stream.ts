@@ -335,7 +335,7 @@ export class Wire {
   }
 }
 
-// The person's own object. The kernel spells the name and it is the person's
+// The person's own object. The kernel builds the name and it is the person's
 // eid, never anything a client says: who is asking was settled by identity.ts
 // before anything here is reached, and a session id only picks a stream
 // within the person it already belongs to.

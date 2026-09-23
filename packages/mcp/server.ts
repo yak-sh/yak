@@ -105,7 +105,7 @@ export type Options = {
   }[]
   /** what the agent should read before anything else */
   instructions?: string
-  /** how much of the vocabulary each tool's output schema spells out
+  /** how much of the vocabulary each tool's output schema describes
    * (default: `full` — see {@link Depth}; `graph_apply`'s input schema is
    * always `full`) */
   schema?: Depth

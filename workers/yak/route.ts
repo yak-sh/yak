@@ -57,7 +57,7 @@ export let planSettings = (slug: string, env: Host = {}) =>
   `https://${spaceHost(env, slug)}${managePath('billing')}`
 
 // The agent door, as an address a person types into a connector form: two
-// spellings of one resource (mcp.ts). `MCP` is lazy — it tells a stranger
+// addresses for one resource (mcp.ts). `MCP` is lazy — it tells a stranger
 // what this place is before anybody has signed in — and `MCP_ASK` never does,
 // so a host that decides whether a server needs OAuth by calling it with no
 // credential and reading the status gets the 401 and its challenge instead of

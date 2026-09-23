@@ -70,7 +70,7 @@ export const providerResolver = (
 async (using, model) => {
   const all = await offers(g, model.entity.eid, implementations)
   // One implementation for every provider (a test's, an embedder's) still
-  // asks by the provider's spelling, and still refuses a provider that does
+  // asks by the provider's name for it, and still refuses a provider that does
   // not serve the model; a model nobody serves is asked by its own name.
   const found = override && using?.provider == null
     ? {

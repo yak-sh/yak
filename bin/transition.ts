@@ -223,7 +223,7 @@ let MOVES: Record<string, Move | null> = {
       let sha = text(row.sha)
       // The commit an anchor promised against is an entity of its own, named
       // by its sha (@yaks/git `commit`), because `revision` points at one
-      // rather than spelling it a second time. The fleet kept no `commit`
+      // rather than writing it a second time. The fleet kept no `commit`
       // row for any sha an anchor named, so this is where they arrive.
       if (sha) {
         ctx.also({
@@ -277,7 +277,7 @@ let MOVES: Record<string, Move | null> = {
   commit: {
     says: 'commit',
     // The sha is the eid (see `reidentified`), so the column is gone, and
-    // `repo` names a repository entity rather than spelling a path.
+    // `repo` names a repository entity rather than holding a path.
     make: (row, ctx) => ({
       ...(row.target == null ? {} : { target: ctx.ref(row.target) }),
       ...(row.repo == null ? {} : { repo: ctx.repository(String(row.repo)) }),

@@ -562,7 +562,7 @@ slow('an installed app is the installer own copy, data and all', async () => {
     )
 
     // A conflict: her copy declared a property of its own, and the publisher's
-    // next version spells the same one differently. The update is refused
+    // next version declares the same one differently. The update is refused
     // with the deploy's own sentence, and not a byte of her app moves.
     await write(hers, 'tally')(
       'vocab.json',
@@ -611,7 +611,7 @@ slow('an installed app is the installer own copy, data and all', async () => {
 // files — so every install of one refused on it, and refused only after the
 // copy had been minted and its code written, leaving an app nobody asked for
 // in the installer's space and counted against its ceiling (T-37809). Both
-// halves are here: a stored file in the old spelling is migrated the first
+// halves are here: a stored file in the old format is migrated the first
 // time anything reads it, and a manifest that is refused for real is refused
 // before a byte is written.
 slow(

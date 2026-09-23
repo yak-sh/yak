@@ -56,7 +56,7 @@ let past = () => new Date(Date.now() - 1).toISOString()
 let SECRET = 'a probe secret'
 let ME = 'me@yaks.app'
 
-// A bundle that buries the entity: the tombstone spelling of death.
+// A bundle that buries the entity: a tombstone.
 let forgotten = (wrote: Bundle[]) => wrote.some((b) => b.tombstone)
 
 // The guess count each patched row was left holding.

@@ -93,7 +93,7 @@ Deno.test('site.join pulls a component table into the statement', () => {
   assert(sql.includes('"shelf"."entity" is not null'), sql)
 })
 
-Deno.test('an extension spells an order value that names no property', () => {
+Deno.test('an extension supplies an order value that names no property', () => {
   let ranks: Extension = {
     name: 'ranks',
     compile: {},
@@ -134,7 +134,7 @@ Deno.test('a cursor pages within an extension ranking', () => {
     extend: [ranks],
   })
   // the hook is asked a second time with the anchor's owner id, so the cursor
-  // is the anchor's own place in the ranking — no second seam, no new spelling
+  // is the anchor's own place in the ranking — no second seam, no new syntax
   assert(
     sql.includes(
       'case (select "__cur"."id" from "entity" as "__cur" ' +

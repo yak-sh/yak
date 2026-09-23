@@ -1766,7 +1766,7 @@ export class Store {
     // Where this object's storage stands, and putting it back (recover.ts,
     // T-34507). Kernel only, like the erase: a whole store going backwards is
     // the platform's act on behalf of a member who may write it, and a client
-    // never spells a store's path.
+    // never writes a store's path.
     if (path == '/restore') {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       return this.#recovery(request)
@@ -2176,7 +2176,7 @@ export class Store {
   // The app's own components (vocab.json): a GET reads back what this store
   // last accepted, a POST replaces it. The manifest is loaded — and refused —
   // before a byte of it is written down, so a refusal leaves the store exactly
-  // as it was. The kernel is the only caller; a client never spells a store's
+  // as it was. The kernel is the only caller; a client never writes a store's
   // path.
   //
   // The answer is what this app now says and what moved, which naming the

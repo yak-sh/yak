@@ -27,7 +27,7 @@ import {
 } from './vocab.ts'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 
-// A manifest in the one spelling, without every test saying `$defs` and
+// A manifest in the one form, without every test saying `$defs` and
 // `properties` around it. The properties are written as they are declared.
 let says = (defs: Record<string, Record<string, PropSchema>>): VocabDoc => ({
   $defs: Object.fromEntries(
@@ -126,7 +126,7 @@ Deno.test("an app's own word is a kind before doc", () => {
   )
 })
 
-// There is one spelling. A manifest of bare component names is not a shorter
+// There is one form. A manifest of bare component names is not a shorter
 // way to say a document — it is refused, in the shape that works.
 Deno.test('a manifest that is not a document is refused', () => {
   let why = assertThrows(
@@ -143,7 +143,7 @@ Deno.test('a manifest that is not a document is refused', () => {
 })
 
 // YAML is the warm path, and a vocab.json keeps working because YAML reads it
-// (@yaks/yaml, M-34605). The two spellings of the file are the same manifest;
+// (@yaks/yaml, M-34605). The two formats of the file are the same manifest;
 // which one an app wrote is what a refusal has to name.
 Deno.test('a manifest may be written as YAML', () => {
   let yml = appDoc(
@@ -280,7 +280,7 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
 Deno.test('the directory and an app spell one word apart: member.role', () => {
   // The platform's roster is its access ladder, read space-wide (apps.ts
   // `reads`/`edits`, tools.ts `inSpace`); @yaks/member keeps belonging apart
-  // from access, which it spells as a grant or the app's mode. So the two
+  // from access, which it expresses as a grant or the app's mode. So the two
   // stores mean two things by one property, and the MCP door types it nowhere
   // rather than as either (agent.ts `spoken`, T-34273).
   assertEquals(PLATFORM_APART, ['member.role'])
@@ -348,7 +348,7 @@ Deno.test('none of the fleet vocabulary comes with it', () => {
 
 // A property of an app's own says whether its words are searched, the same way
 // @yaks/doc says it of `title` and `body` — the keyword rides the JSON Schema
-// spelling into the loaded vocabulary, which is what @yaks/fts cuts its index
+// document into the loaded vocabulary, which is what @yaks/fts cuts its index
 // from (graph.ts `searchable`).
 Deno.test('a searched property of an app reaches the index fields', () => {
   let v = appVocab({

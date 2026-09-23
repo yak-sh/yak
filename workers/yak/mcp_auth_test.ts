@@ -257,7 +257,7 @@ slow('the door before anyone signs in', async () => {
       // is stuck (T-34349). It carries the `error` and `error_description`
       // that half wants, and the sentence says where signing in happens.
       // One builder makes both (identity.ts `challenge`); they are compared by
-      // shape and not spelling because wrangler's dev proxy puts its public
+      // shape and not text because wrangler's dev proxy puts its public
       // port into a header and never into a body, so only here do the two
       // origins read differently.
       assertEquals(body.result.isError, true)

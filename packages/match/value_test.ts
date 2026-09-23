@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-// The value rules, one operator at a time: what each spelling selects, and
+// The value rules, one operator at a time: what each form selects, and
 // where a question is refused rather than guessed at.
 
 import { assert, assertEquals, assertFalse } from '@std/assert'

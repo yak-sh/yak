@@ -113,7 +113,7 @@ one filter, where unquoted '.title~=two words' is the filter 'two' and the
 search word 'words'). Bare words are text terms (the document contains them;
 a trailing * matches a prefix).
 A DOTTED path walks a reference: '.author.title~=j' tests the target's title;
-a first segment naming a component is the explicit spelling ('.pin.x=12') and
+a first segment naming a component is the explicit form ('.pin.x=12') and
 never dereferences. A reverse association, named by the schema, walks the other
 way: '.comments.author=jeff' keeps what has ANY such child; '.comments!' has
 any, '.comments=' none, '.comments>=5' counts, and '!' on the association

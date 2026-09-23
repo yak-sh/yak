@@ -25,8 +25,8 @@ import type { Bundle } from '@yaks/graph'
 import type { Sown } from './seed.ts'
 import { refuse } from './tool.ts'
 
-/** A component's properties, as the type each takes: the word each property's type
- * is spelled with (vocab.ts `wordsOf`). */
+/** A component's properties, as the type each takes: the word that names each
+ * property's type (vocab.ts `wordsOf`). */
 export type Props = Record<string, string>
 
 /** What a CSV is read as: the component every row wears, that component's

@@ -23,7 +23,7 @@
 // never locks a person out.
 import { caught } from './sentry.ts'
 
-// The binding's shape (@cloudflare/workers-types `RateLimit`), spelled here so
+// The binding's shape (@cloudflare/workers-types `RateLimit`), declared here so
 // no Cloudflare type name leaks into env.ts.
 export type Limiter = {
   limit(options: { key: string }): Promise<{ success: boolean }>

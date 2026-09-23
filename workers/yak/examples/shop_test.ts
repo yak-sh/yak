@@ -77,7 +77,7 @@ Deno.test('what the checkout door is asked for carries no money', () => {
     product: LONG,
     qty: 1,
   }])
-  // Not `price`, not `amount`, not `cents`, under any spelling: the door
+  // Not `price`, not `amount`, not `cents`, under any name: the door
   // prices this out of the store.
   assertEquals(/price|amount|cent/.test(JSON.stringify(want)), false)
   // A sizeless product sends no empty `options` to be appended to its name.

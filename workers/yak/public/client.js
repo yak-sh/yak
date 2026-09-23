@@ -258,13 +258,13 @@ let fold = (rows, f) => {
   for (let eid of f.gone ?? []) rows.delete(eid)
 }
 
-// A page's filter as the store spells it. A fetch goes through the app's door,
+// A page's filter as the store writes it. A fetch goes through the app's door,
 // which does this on the way (workers/yak/wire.ts `lined`, listing.ts
 // `asking`); a socket goes straight to the store, so a subscription is
 // translated here — the same two rules, so `query(f)` and `subscribe(f)` ask
 // one question.
 //
-// Two rules, and no more. Three riders the page spells bare are dotted words
+// Two rules, and no more. Three riders the page writes bare are dotted words
 // there (`id=` is an address, so it is `.eid=`), and the platform's own rows —
 // the breaks it noted, the person row a store mints for each writer — are left
 // out of the question unless the filter names one.

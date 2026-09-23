@@ -101,7 +101,7 @@ export class TElement extends TNode {
   attr(k: string): string | undefined {
     return this.attrs.get(k)
   }
-  /** The class attribute, as Preact spells it. */
+  /** The class attribute, as Preact names it. */
   get className(): string {
     return this.attrs.get('class') ?? ''
   }

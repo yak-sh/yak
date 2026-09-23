@@ -552,7 +552,7 @@ slow(
         'css/site.css\nindex.html',
       )
       // A whole app in one call, and one answer naming every file it wrote
-      // (C-32624 item 5). Spelled out rather than spread, because the point
+      // (C-32624 item 5). Written out rather than spread, because the point
       // is what is absent: no `op` at all, the way `initialize` step 2
       // teaches it, since a `files` batch is the write (C-32730 item 1).
       assertEquals(
@@ -995,7 +995,7 @@ slow(
         1,
       )
 
-      // A renamed property is two properties: the new spelling arrives, the old
+      // A renamed property is two properties: the new name arrives, the old
       // one keeps every row already written under it, and the deploy says
       // both — the manifest reads as one word and the store answers two.
       await agent.tool('graph_apply', {
@@ -1011,7 +1011,7 @@ slow(
         renamed,
         'kept, not in vocab.json (the rows are there): note.text',
       )
-      // And says what to DO about it, since the two spellings are a rename
+      // And says what to DO about it, since the two names are a rename
       // half done and nobody else will finish it (C-32730 item 4).
       assertStringIncludes(renamed, 'name it in vocab.json again')
       assertStringIncludes(renamed, 'Nothing is migrated behind you.')
@@ -1027,7 +1027,7 @@ slow(
       ])
 
       // And the same manifest written the other way (M-34605): a `vocab.yml`
-      // beside index.html is the app's words in the warm spelling, read
+      // beside index.html is the app's words in the warm format, read
       // through the one loader (@yaks/yaml) and preferred over the `.json`
       // when an app has both, so the two files are never both in force.
       await agent.tool('app_files', {
@@ -1042,7 +1042,7 @@ slow(
       assertStringIncludes(inYaml, 'components: recipe, note, sticker')
       assertStringIncludes(inYaml, 'added: sticker.colour')
       // And every sentence about the manifest names the file the app wrote,
-      // not the spelling this platform happens to have started with.
+      // not the format this platform happens to have started with.
       assertStringIncludes(inYaml, 'kept, not in vocab.yml')
       await agent.tool('graph_apply', {
         change: [{ entity: { eid: '$s' }, sticker: { colour: 'red' } }],

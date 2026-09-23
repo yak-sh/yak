@@ -67,7 +67,7 @@ Deno.test('globs: refuses a glob that names a platform path', () => {
   for (let path of ['/_yaks', '/_yaks/*', '/_yaks/settings']) {
     assertThrows(() => globs([path], KERNELS), Error, 'platform answers itself')
   }
-  // The store doors, in both spellings: the home app's own at the bare
+  // The store doors, at both addresses: the home app's own at the bare
   // hostname, and every app's under its slug.
   assertEquals(refused('/api/*').startsWith('/api/* names /api/*'), true)
   assertEquals(

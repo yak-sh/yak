@@ -380,7 +380,7 @@ export let opOf = (args: Record<string, unknown>, batch: number) =>
 let list = (v: unknown, what: string) =>
   v == null ? [] : (Array.isArray(v) ? v : [v]).map((one) => text(one, what))
 
-// A file's bytes, from either spelling of them (T-34263): `content` is the
+// A file's bytes, from either encoding of them (T-34263): `content` is the
 // text an app is almost always made of, and `base64` is what a file that is
 // not text arrives as — the `.wasm` an app's worker imports, a picture. One
 // of the two; naming neither is the `content` refusal, since text is what a
@@ -488,8 +488,8 @@ let hostname = (v: unknown) => {
   return s
 }
 
-// The place a domain points at, spelled the way every other answer here
-// spells an address: the space alone, or the one app in it (T-34596).
+// The place a domain points at, written the way every other answer here
+// writes an address: the space alone, or the one app in it (T-34596).
 let place = (space: Space, app: App | null) =>
   app ? `${space.slug}/${app.slug}` : space.slug
 
@@ -541,7 +541,7 @@ let titled = (v: unknown) => {
   return s
 }
 
-// A secret's name is a binding, which the app's own code spells as
+// A secret's name is a binding, which the app's own code writes as
 // `env.NAME` — so it must be a JavaScript name (dispatch.ts).
 let secretName = (v: unknown) => {
   let s = text(v, 'name')
@@ -749,7 +749,7 @@ let mapping = (v: unknown): Record<string, string> | undefined => {
 
 // What a CSV is read as (csv.ts): the component a row becomes, and the type
 // each of its properties takes. The words are the platform's own plus this
-// app's, each property as the word its type is spelled with (vocab.ts
+// app's, each property as the word that names its type (vocab.ts
 // `wordsOf`) — an app declares scalars, and a core property that is a reference
 // or a closed set holds the text a cell has anyway.
 let sheetOf = async (
@@ -936,7 +936,7 @@ let released = async (
   // so an app that deleted its tools.json releases none.
   let toolsKey = await spelled(blobs, space, app, 'tools')
   let toolsFile = toolsKey?.split('/').pop() ?? 'tools.json'
-  // Read once, in whichever spelling it was written (@yaks/yaml): what the
+  // Read once, in whichever format it was written (@yaks/yaml): what the
   // checks below and the store both take is the value.
   let sent = toolsKey
     ? read(
@@ -1074,7 +1074,7 @@ let released = async (
       // What to DO about a property the manifest stopped naming, which the bare
       // list never said: the board that read "5.2 mi in null min" was a
       // rename nobody was told to finish (C-32730 item 4).
-      // …named in the file the app actually wrote, since either spelling of
+      // …named in the file the app actually wrote, since either format of
       // it is a manifest (`spelled` above, M-34605).
       (kept.length
         ? `\nkept, not in ${vocabFile} (the rows are there): ${
@@ -1269,7 +1269,7 @@ let born = (
   }
 }
 
-// A declaration file of the app's, whichever spelling it was written in: the
+// A declaration file of the app's, whichever format it was written in: the
 // `.yml` first — YAML is the warm path (M-34605), and every parser here reads
 // it through the same door as the JSON (@yaks/yaml `read`) — then the `.json`,
 // which every app that already has one keeps. Null where the app declares
@@ -1280,8 +1280,8 @@ let spelled = async (
   app: App,
   name: string,
 ): Promise<string | null> => {
-  for (let spelling of [`${name}.yml`, `${name}.json`]) {
-    let key = fileKey(space, app, spelling)
+  for (let file of [`${name}.yml`, `${name}.json`]) {
+    let key = fileKey(space, app, file)
     if (await blobs.has(key)) return key
   }
   return null
@@ -1295,14 +1295,14 @@ let spelled = async (
  * "number"}}`. T-37546 made a manifest a JSON Schema document and only that,
  * and moved every store's remembered vocabulary over (migrate.ts
  * `documented`), but not the files apps had deployed — so a release published
- * before that change still held the old spelling, and `app_install` refused
+ * before that change still held the old format, and `app_install` refused
  * every one of them on it (T-37809). The same pass runs here, over the bytes,
  * the first time anything reads them; after that read the file says what it
  * always meant and `appDoc` has one input.
  *
  * An install reads the source app's file through this door, so the app being
  * copied from is migrated too. Rewriting somebody else's file is the point: it
- * is the platform moving its own spelling, the way a store's slot moves when
+ * is the platform moving its own format, the way a store's slot moves when
  * the store wakes, and the document says exactly what the short map said.
  *
  * Only a file that parses as JSON is rewritten. A short map written as YAML
@@ -1311,7 +1311,7 @@ let spelled = async (
  * with the sentence that teaches (vocab.ts `appDoc`).
  *
  * `file` is what a refusal calls it, since the app may have written either
- * spelling (`spelled`), and `source` is null where the app declares no words.
+ * format (`spelled`), and `source` is null where the app declares no words.
  */
 let declaring = async (
   blobs: Blobs,
@@ -1507,7 +1507,7 @@ export let sri = (sha: string) =>
 /**
  * One of these tools, run as this caller. The drop door (drop.ts) is a page
  * doing what an agent does — make the app, write its files, release it — and
- * this is how it does exactly that rather than a second spelling of it:
+ * this is how it does exactly that rather than a second implementation of it:
  * every ceiling, guard and sentence is the tool's own.
  */
 export let call = (ctx: Ctx, name: string, args: Args): Promise<Out> => {
@@ -1871,7 +1871,7 @@ let OURS: Row[] = [
       // apps are whole at whichever address answers while the move is in
       // flight. Nothing else moves: the store handles are the apps' own
       // (directory.ts `handle`), a custom domain names an eid, and
-      // memberships, grants, gallery standing and analytics never spelled the
+      // memberships, grants, gallery standing and analytics never held the
       // slug at all.
       let apps = moving ? await ctx.dir.apps(space) : []
       let blobs = r2Blobs(ctx.env.BLOBS)
@@ -3529,7 +3529,7 @@ let OURS: Row[] = [
         }
       }
       // Grouped by app, because that is how a person thinks about them: the
-      // app, then its verbs, each with the arguments spelled the way `command`
+      // app, then its verbs, each with the arguments written the way `command`
       // takes them. The whole listing is the answer — an agent that reads it
       // needs no second call to know what to send.
       let lines: string[] = []
@@ -3574,7 +3574,7 @@ let OURS: Row[] = [
             'when only one app has the command',
         ),
         // Open on purpose: the arguments are the app's own, and a schema that
-        // spelled them would be this tool's shape moving every time somebody
+        // declared them would be this tool's shape moving every time somebody
         // deployed — which is the thing a snapshotted tool list cannot have.
         args: {
           type: 'object',

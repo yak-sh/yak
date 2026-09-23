@@ -28,7 +28,7 @@
 // v1 throughout, deliberately (Jeff, 2026-09-06, on the endpoint he was
 // creating: "v1"). `POST /v1/accounts` with controller properties, and the v1
 // event names. There is a v2 Accounts API with its own thin `v2.core.*`
-// events; mixing the two would mean a handler reading one spelling and a
+// events; mixing the two would mean a handler reading one set of names and a
 // dashboard ticking the other, which is a webhook that silently does nothing.
 //
 // Nothing here may fail quietly, the same rule billing.ts keeps: a break is an
@@ -136,7 +136,7 @@ export let quoted = (file: string, bps: number) => {
  *       money, on its own charge. Not us — we are not reselling payments.
  *   `controller[losses][payments] = stripe`
  *       Stripe, not this platform, carries the negative balance when a dispute
- *       is lost. There is no `account` value here and the spelling is not a
+ *       is lost. There is no `account` value here and the value is not a
  *       mistake: `stripe` is what "the platform is not liable" is called, and
  *       the merchant is still the one whose charge is reversed.
  *   `controller[stripe_dashboard][type] = full`
@@ -233,8 +233,8 @@ export type Account = {
 }
 
 /** The seller's row as the directory holds it, for billing.ts's `moved` to
- * compare against — the same three properties, in the vocabulary's own
- * spelling. */
+ * compare against — the same three properties, under the vocabulary's own
+ * names. */
 export let held = (space: Space) =>
   space.stripe
     ? {
@@ -383,7 +383,7 @@ export type Product = {
 export let META = 500
 
 /** The items as they ride to Stripe and come back on the event: the product,
- * how many, and the variant, at the shortest spelling that survives a round
+ * how many, and the variant, in the shortest form that survives a round
  * trip. Dashes come off the uuid to buy back four characters a line. */
 export let packed = (items: Item[]) =>
   JSON.stringify(
@@ -439,7 +439,7 @@ export let priced = (rows: Product[], items: Item[]) => {
 
 /**
  * Where Stripe sends the buyer, from what the caller asked for. Relative to the
- * app's own root, always — so nothing in a page spells the app's name and an
+ * app's own root, always — so nothing in a page writes the app's name and an
  * installed copy sends its buyers back to itself.
  *
  * And it may not leave that root. This door is callable by a guest on an open
@@ -481,9 +481,9 @@ export let backAt = (root: string, asked: unknown) => {
  *
  * `payment_intent_data[application_fee_amount]` is the platform's cut, and it
  * is the only place Stripe takes one for a Checkout Session — there is no
- * top-level spelling. It is left out entirely when it is zero: Stripe requires a
- * positive amount, so a fee of nothing has to be no fee rather than a fee of 0,
- * and with no rate set that is every sale.
+ * top-level parameter. It is left out entirely when it is zero: Stripe requires
+ * a positive amount, so a fee of nothing has to be no fee rather than a fee of
+ * 0, and with no rate set that is every sale.
  *
  * `metadata` says whose sale this is in the two words the webhook routes by,
  * plus the cart. It is copied onto `payment_intent_data[metadata]` as well, and
@@ -572,7 +572,7 @@ export let buying = async (
   try {
     items = cart(body)
     // One read, whatever the cart's length: the products it names, whole.
-    // `.eid=` and not `id=` — the bare spelling is the page's grammar and this
+    // `.eid=` and not `id=` — the bare form is the page's grammar and this
     // is a line built for the store (wire.ts `RIDERS` is the translation, and
     // this side of it never sees one).
     priceless = priced(

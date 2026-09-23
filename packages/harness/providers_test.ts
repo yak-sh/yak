@@ -163,7 +163,7 @@ Deno.test('worker authorization panel offers graph-configured OpenRouter without
   }
 })
 
-Deno.test('a model two providers serve is asked by the named one, in its spelling', async () => {
+Deno.test('a model two providers serve is asked by the named one, by its name for it', async () => {
   const h = open(':memory:')
   const seen: [string, string][] = []
   const fake = (provider: string): Model => (req) => {

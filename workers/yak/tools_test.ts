@@ -155,7 +155,7 @@ Deno.test('app_list says the caller’s role in each space it lists', async () =
       .map((l) => [l.split(' — ')[0], l.split(' — you are ')[1]])
   assertEquals(await seen(ada), [['ada', 'the owner']])
   // Hers is her own; his is the seat she gave him, said as the directory
-  // spells it — never guessed at from the fact that he can see it at all.
+  // says it — never guessed at from the fact that he can see it at all.
   assertEquals(await seen(bo), [['ada', 'a viewer'], ['bo', 'the owner']])
 })
 
@@ -207,7 +207,7 @@ Deno.test('a write answers what it stored, and json answers whether it parses', 
   )
   assertEquals(parses('data.json', bytes('[]')), 'parsed')
   // And a .yml is read in its own language (@yaks/yaml, M-34605), so the
-  // spelling an app writes its words in is checked where it is written.
+  // format an app writes its words in is checked where it is written.
   let yml = bytes('recipe:\n  serves: number\n')
   assertStringIncludes(stored('vocab.yml', yml, await sha256(yml)), ', parsed')
   assertStringIncludes(
@@ -247,7 +247,7 @@ Deno.test('a patch replaces exactly one match, or refuses saying how many', () =
 })
 
 Deno.test('an integrity hash is base64 of the same digest, not the hex', async () => {
-  // The empty string's sha256, in the spelling an <script integrity> wants.
+  // The empty string's sha256, in the encoding an <script integrity> wants.
   assertEquals(
     sri(await sha256(new Uint8Array())),
     '47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=',
@@ -372,7 +372,7 @@ Deno.test('view metadata leaves portable sandbox selection to the host', () => {
   assertEquals(its.ui.csp.resourceDomains, [site])
   assertEquals(its.ui.csp.baseUriDomains, [site])
   assertEquals(its['openai/widgetCSP'].resource_domains, [site])
-  // `base-uri` has no older spelling; the standard surface carries it alone.
+  // `base-uri` has no older name; the standard surface carries it alone.
   assertEquals(its['openai/widgetCSP'].connect_domains, [])
 })
 

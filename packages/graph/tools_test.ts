@@ -26,7 +26,7 @@ Deno.test('a declaration wears the run the module gives it', () => {
   assertEquals(t.noun, 'book')
   assertEquals(t.description, 'Put a book on a shelf.')
   assertEquals(t.inputSchema?.required, ['title'])
-  // The entry's name is the tool's; a module that spells its run by the two
+  // The entry's name is the tool's; a module that names its run by the two
   // words instead is the same tool.
   let named = { $defs: { shelve: { ...doc.$defs.book_shelve } } }
   assertEquals(loadTools(named, { book_shelve: () => ({}) })[0].name, 'shelve')

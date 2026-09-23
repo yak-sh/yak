@@ -181,7 +181,7 @@ dump_data() {
 
 # The schema, minus the FTS SHADOW TABLES only. `.schema` writes those out as
 # ordinary CREATE TABLEs, but creating the virtual table makes them itself, and
-# only one of the two spellings can stand. VACUUM decides which: it re-emits
+# only one of the two definitions can stand. VACUUM decides which: it re-emits
 # the shadows BEFORE the virtual table they belong to, so the plain CREATEs win
 # the race and `create virtual table mail_fts` then fails with 'table
 # mail_fts_data already exists' — leaving every INSERT behind it with no such

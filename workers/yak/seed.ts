@@ -7,7 +7,7 @@
 //
 // YAML or JSON, read through one door (@yaks/yaml, M-34605): every JSON file
 // is a YAML file, so a seed already written stays a seed and `.yml` is simply
-// the spelling that is also legible.
+// the format that is also legible.
 //
 // A folder as well as a file, because the data is the large thing here. Owner,
 // 2026-09-05: "i noticed the agent was struggling with the very large seed data
@@ -36,7 +36,7 @@ import { refuse } from './tool.ts'
  * JSON, which YAML reads anyway, and a spreadsheet (csv.ts). */
 let DATA = ['.yml', '.json', '.csv']
 
-/** The bundle spellings, for the file beside index.html. A `.csv` is not one:
+/** The bundle formats, for the file beside index.html. A `.csv` is not one:
  * a spreadsheet needs to be told which component a row is, which only a load
  * that names it can say. */
 let BUNDLES = ['.yml', '.json']

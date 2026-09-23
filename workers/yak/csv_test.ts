@@ -124,7 +124,7 @@ Deno.test('a CSV with no `as` says what it needs', () => {
 Deno.test('a header naming nothing is refused, naming the header', () => {
   assertStringIncludes(no('name,pop,mayor\nOslo,1,Anne\n'), '"mayor"')
   assertStringIncludes(no('name,pop,mayor\nOslo,1,Anne\n'), 'city takes name')
-  // A mapped one names both spellings, since neither is what the file says.
+  // A mapped one names both the header and the property it maps to.
   assertStringIncludes(
     no('Mayor\nAnne\n', { ...city, map: { Mayor: 'mayor' } }),
     '"Mayor" maps to "mayor", which is not a property of city',

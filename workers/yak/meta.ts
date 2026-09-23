@@ -3,7 +3,7 @@
 // directory part's door, sign-in, the platform's own crash reports, the
 // feedback tool, the invitation that mints a person — speaks this, and so does
 // every caller that writes the platform's own rows into an app's store
-// (unseen.ts). None of them spells a store path or a mutation envelope.
+// (unseen.ts). None of them writes a store path or a mutation envelope.
 //
 // A bundle is `{entity: {eid}, comp: {...}}`, the read shape written back: an
 // omitted property is untouched, a null property is cleared, a null component
