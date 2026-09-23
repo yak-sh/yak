@@ -5,7 +5,7 @@
 
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
-import { kitchen, mem, RECIPE } from './harness.ts'
+import { kitchen, mem, PROJECTED, PROJECTED_ROW, RECIPE } from './harness.ts'
 import { storage } from './mod.ts'
 import { overlay } from './overlay.ts'
 
@@ -36,6 +36,12 @@ Deno.test('an object and an array are written and read back as values', () => {
     tags: [],
     meta: null,
   })
+})
+
+Deno.test('a projected boolean reads back as true or false', () => {
+  let { s } = kitchenStore()
+  s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
+  assertEquals(s.rows(PROJECTED), [PROJECTED_ROW])
 })
 
 Deno.test('a string property holds what it was sent as a string', () => {

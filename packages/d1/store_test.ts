@@ -9,7 +9,7 @@ import { graph } from '@yaks/graph'
 import type { Bundle } from '@yaks/graph'
 import { counted, d1, shop, store } from './harness.ts'
 import { storage } from './store.ts'
-import { kitchen, RECIPE } from '../sqlite/harness.ts'
+import { kitchen, PROJECTED, PROJECTED_ROW, RECIPE } from '../sqlite/harness.ts'
 
 let titles = (bs: Bundle[]) =>
   bs.map((b) => (b.doc as { title?: string })?.title).sort()
@@ -33,6 +33,12 @@ Deno.test('an object and an array come back as the values written', async () => 
     RECIPE,
     RECIPE,
   ])
+})
+
+Deno.test('a projected boolean reads back as true or false', async () => {
+  let s = await store(kitchen)
+  await s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
+  assertEquals(await s.rows(PROJECTED), [PROJECTED_ROW])
 })
 
 Deno.test('a transaction that throws sends nothing', async () => {

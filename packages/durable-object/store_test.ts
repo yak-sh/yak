@@ -8,7 +8,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { durable, shop, store } from './harness.ts'
 import { storage } from './store.ts'
-import { kitchen, RECIPE } from '../sqlite/harness.ts'
+import { kitchen, PROJECTED, PROJECTED_ROW, RECIPE } from '../sqlite/harness.ts'
 
 let comp = (b: Bundle, name: string) => b[name] as Record<string, unknown>
 
@@ -36,6 +36,12 @@ Deno.test('an object and an array come back as the values written', () => {
   let [read] = s.read('.recipe!') as Bundle[]
   let [got] = s.tx((tx) => tx.get(['r1']))
   assertEquals([read.recipe, got.recipe], [RECIPE, RECIPE])
+})
+
+Deno.test('a projected boolean reads back as true or false', () => {
+  let s = store(kitchen)
+  s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
+  assertEquals(s.rows(PROJECTED), [PROJECTED_ROW])
 })
 
 Deno.test('bytes go in as an ArrayBuffer and come back as bytes', () => {

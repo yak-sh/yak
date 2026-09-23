@@ -28,7 +28,7 @@ import type { Doom, Gone } from '@yaks/graph'
 import { tombstoned } from '@yaks/graph'
 import { catalog, descriptor } from './catalog.ts'
 import { unit } from './unit.ts'
-import { decoded, jsonOut } from './jsonb.ts'
+import { decoded, jsonOut, projected } from './jsonb.ts'
 
 // A query, as text or as an already-built AST. Text is parsed; an AST passes
 // through, so a caller may hand-build one with @yaks/query's builders.
@@ -37,8 +37,9 @@ export type Query = string | And
 let ast = (q: Query): And => typeof q == 'string' ? parse(q) : q
 
 // The raw compiled rows for a query — a membership query returns `{ eid }` per
-// match, an aggregate returns its value/count shape. The values are bound as
-// parameters.
+// match, an aggregate returns its value/count shape, and a `.fields`
+// projection's columns come back as a component read would return them. The
+// values are bound as parameters.
 export let rows = (
   driver: Driver,
   vocab: Vocab,
@@ -52,6 +53,7 @@ export let rows = (
       archetypes: opts.archetypes ?? (indexed ? catalog(driver) : undefined),
     })
     return driver.query(sql, params as (string | number)[])
+      .map((r) => projected(vocab, r))
   }
   // The catalog and entity statement must see the same commit. Otherwise a
   // concurrent writer could introduce a new matching set between the two.

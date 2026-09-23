@@ -86,7 +86,7 @@ export {
   type Text,
 } from './ddl.ts'
 export { EPOCH, epoch, type Meta, meta } from './meta.ts'
-export { decoded, isJsonb, jsonIn, jsonOut } from './jsonb.ts'
+export { decoded, isJsonb, jsonIn, jsonOut, projected } from './jsonb.ts'
 export {
   compSql,
   doom,

@@ -72,6 +72,7 @@ import {
   minted,
   mintSql,
   patchSql,
+  projected,
   removeSql,
   schema,
   touched,
@@ -187,8 +188,9 @@ export let storage = <S extends Stmt<S>>(
       ? (await db.batch(stmts.map(prep))).map((r) => r.results.map(unbind))
       : []
 
-  let rows = (query: Query, opts: BindOpts = {}): Promise<Row[]> =>
-    one(sql(vocab, query, { ...base, ...opts }))
+  let rows = async (query: Query, opts: BindOpts = {}): Promise<Row[]> =>
+    (await one(sql(vocab, query, { ...base, ...opts })))
+      .map((r) => projected(vocab, r))
 
   // Every named entity, whole, in one batch: the gather asks each entity's
   // spine and each of its components as separate statements and reads the
