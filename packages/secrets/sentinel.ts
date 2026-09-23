@@ -1,29 +1,45 @@
-// The sentinel: what the graph keeps where a secret's value was written.
+// The two strings that stand for a secret's value, and why there are two.
 //
-// It is a salted hash of the value — an HMAC under a key only the vault holds —
-// so it is stable (writing the same value again changes nothing), it cannot be
-// walked back to the value, and it cannot be guessed from a guessed value
-// without the salt. That is what makes it safe to show anyone: an agent may
-// read it, a config may name it, a page may embed it, and none of them can do
-// anything with it but hand it to code trusted to swap it for the value.
+// The handle is what the graph keeps where a value was written: a random token,
+// minted the first time a secret is written and kept for as long as it lives.
+// Writing a new value — a rotation, a refreshed token — puts it behind the same
+// handle. It is 256 random bits and says nothing about the value, so two
+// secrets holding one value never share one. Anyone may read it: an agent, a
+// config, a backup.
 //
-// The prefix is how a reader tells a sentinel from a value. A write carrying a
-// sentinel is somebody writing back what they read, and changes nothing.
+// The sentinel is what code that calls out is handed, and the only string a
+// swap on the way out may ever replace with the value: the handle, hashed under
+// the vault's salt. The salt never leaves the vault, so nobody reading the
+// graph can compute a sentinel from a handle, and a bundle carrying handles
+// around — a sync, an answer, a request that happens to quote one — is never
+// swapped for a key by accident. It follows the handle, so it too survives a
+// rotation.
+//
+// Each has its own prefix: how a reader tells a handle from a written value (a
+// write carrying a handle is somebody writing back what they read, and changes
+// nothing), and how a swap finds a sentinel in a request.
 
-/** What every sentinel starts with. */
+/** What every handle starts with. */
 export let PREFIX = 'yak_secret_'
 
-/** Whether a string is a sentinel rather than a value. */
-export let isSentinel = (s: string): boolean => s.startsWith(PREFIX)
+/** What every sentinel starts with. */
+export let SENTINEL = 'yak_sentinel_'
+
+/** Whether a string is a handle rather than a value. */
+export let isHandle = (s: string): boolean => s.startsWith(PREFIX)
 
 let b64url = (bytes: Uint8Array): string =>
   btoa(String.fromCharCode(...bytes)).replaceAll('+', '-').replaceAll('/', '_')
     .replace(/=+$/, '')
 
-/** The sentinel for a value, under a vault's salt. */
+/** A new handle: the prefix and 256 random bits. */
+export let handle = (): string =>
+  PREFIX + b64url(crypto.getRandomValues(new Uint8Array(32)))
+
+/** The sentinel for a handle, under a vault's salt. */
 export let sentinel = async (
   salt: Uint8Array,
-  value: string,
+  handle: string,
 ): Promise<string> => {
   let key = await crypto.subtle.importKey(
     'raw',
@@ -35,7 +51,7 @@ export let sentinel = async (
   let mac = await crypto.subtle.sign(
     'HMAC',
     key,
-    new TextEncoder().encode(value),
+    new TextEncoder().encode(handle),
   )
-  return PREFIX + b64url(new Uint8Array(mac))
+  return SENTINEL + b64url(new Uint8Array(mac))
 }

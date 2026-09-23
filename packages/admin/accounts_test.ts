@@ -116,7 +116,7 @@ Deno.test('acting as the owner is marked, and no session is ever printed', () =>
 Deno.test('the vault’s sessions read back as accounts', () => {
   let vault = ramVault()
   let keep = (name: string, value?: string) =>
-    vault.seal(secretEid(name), { name, sentinel: 's', value })
+    vault.seal(secretEid(name), { name, handle: 'h', value })
   keep(sessionName('probe@bot.yak.sh'), 'fresh.token')
   keep(sessionName('jeff@yak.sh'), 'owner.token')
   keep('CLOUDFLARE_EMAIL_TOKEN', 'not.a.session')

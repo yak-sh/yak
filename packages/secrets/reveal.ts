@@ -1,7 +1,8 @@
 // What trusted code does with a secret: ask for it by name at the moment it is
 // used, and get the value — never through the graph, which only ever holds the
-// sentinel, and never through a tool, since a tool's answer is something a
-// caller reads.
+// handle, and never through a tool, since a tool's answer is something a
+// caller reads. Code that calls out without holding the value asks for the
+// sentinel instead (`sentinelOf`), which a swap on the way out replaces.
 //
 // A name resolves through three places, first match wins:
 //
@@ -23,6 +24,7 @@
 import type { Bundle, Eid } from '@yaks/graph'
 import { identityEid, then } from '@yaks/graph'
 import { deadline, type OpRead, opRead } from './op.ts'
+import { sentinel } from './sentinel.ts'
 import type { Local, Vault } from './vault.ts'
 
 /** The entity a secret is: its id is derived from its name, so one name is
@@ -30,7 +32,7 @@ import type { Local, Vault } from './vault.ts'
 export let secretEid = (name: string): Eid => identityEid('secret', [name])
 
 /** The bundle that writes a secret: its value, or an `op://` reference. The
- * graph keeps the sentinel; the vault keeps what it stands for. */
+ * graph keeps the handle; the vault keeps what it stands for. */
 export let sealed = (name: string, value: string): Bundle => ({
   entity: { eid: secretEid(name) },
   secret: { name, value },
@@ -95,6 +97,16 @@ export let reveal = (
         (kept?.op
           ? fromOp(kept.op, s.op ?? opRead())
           : (s.env ?? environment)(name)),
+  )
+
+/** The sentinel for a secret, by name: its handle hashed under the vault's
+ * salt (./sentinel.ts). A name nothing was written for has none. */
+export let sentinelOf = (
+  vault: Vault,
+  name: string,
+): Promise<string | undefined> =>
+  Promise.resolve(vault.read(secretEid(name))).then(async (kept) =>
+    kept ? sentinel(await vault.salt(), kept.handle) : undefined
   )
 
 /** The same, answered on the spot. */

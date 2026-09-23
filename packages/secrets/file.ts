@@ -2,7 +2,7 @@
 //
 // The directory sits beside the graph's database and never inside it
 // (./rules.ts `vaultFor`), so the database, its journal, its backups and the
-// text dump a backup commits hold only sentinels. The discipline is the one a
+// text dump a backup commits hold only handles. The discipline is the one a
 // credential file on a shared machine needs: the directory is 0700, every file
 // 0600, a write is a temporary file renamed over the old one so a reader never
 // sees half a secret, and a symlink anywhere is refused rather than followed —
@@ -72,7 +72,8 @@ let hex = (bytes: Uint8Array) =>
   [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
 
 /** The vault in a directory: `<dir>/<eid>.json` per secret, and `<dir>/salt`,
- * the key its sentinels are hashed under, made the first time one is. */
+ * the key its sentinels are hashed under, made the first time one is asked
+ * for. */
 export let fileVault = (dir: string): Local => {
   let file = (eid: Eid) => `${dir}/${eid}.json`
   let held = queue()

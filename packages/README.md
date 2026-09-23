@@ -220,10 +220,11 @@ grouped approximately by function, **not** by dependency order.
   permission.
 
 - **[@yaks/secrets](./secrets)** — Write a secret through the graph and keep it
-  elsewhere: `secret{name, value}` holds a salted-hash sentinel, and the value
-  is sealed into a vault (private files on a box, memory for a graph in memory)
-  as the write commits. Trusted code reads it back by name; a config names one
-  as `{"secret": "NAME"}`.
+  elsewhere: `secret{name, value}` holds a random handle, and the value is
+  sealed into a vault (private files on a box, memory for a graph in memory) as
+  the write commits. Trusted code reads it back by name; a config names one as
+  `{"secret": "NAME"}`; code that calls out gets its sentinel, the handle hashed
+  under the vault's salt.
 
 - **[@yaks/session](./session)** — Store agent transcripts as `entry` entities:
   content, model requests, tool calls/results and stops. Status is derived from

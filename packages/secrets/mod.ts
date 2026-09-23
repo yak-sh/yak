@@ -4,10 +4,12 @@
  *
  * A secret is an entity wearing `secret{name, value}`. It is written with its
  * value like anything else; the plugin takes the value out in the first phase
- * of the write, puts a sentinel — a salted hash of it — where it was, and
- * seals the value into a vault as the transaction commits. The graph, its
- * journal, its sync and its backups only ever hold the sentinel, which is safe
- * to show anyone.
+ * of the write, puts the secret's handle — a random token it keeps for as long
+ * as the secret lives — where it was, and seals the value into a vault as the
+ * transaction commits. The graph, its journal, its sync and its backups only
+ * ever hold the handle, which is safe to show anyone. Code that calls out is
+ * handed the sentinel instead: the handle hashed under the vault's salt, the
+ * one string a swap on the way out replaces with the value.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
@@ -19,7 +21,7 @@
  * let vault = ramVault()
  * let g = graph({ storage: ram(vocab), vocab, plugins: [secrets(vault)] })
  * await g.apply([sealed('MAIL_TOKEN', 'cf-token')])
- * // g.read('.secret') → value: 'yak_secret_…'
+ * // g.read('.secret') → value: 'yak_secret_…', the handle
  * // await reveal(vault, 'MAIL_TOKEN') → 'cf-token'
  * ```
  *
@@ -33,7 +35,7 @@
 
 export { secretsDoc } from './vocab.ts'
 export { secrets } from './plugin.ts'
-export { isSentinel, PREFIX, sentinel } from './sentinel.ts'
+export { handle, isHandle, PREFIX, SENTINEL, sentinel } from './sentinel.ts'
 export {
   type Local,
   queue,
@@ -49,6 +51,7 @@ export {
   reveal,
   sealed,
   secretEid,
+  sentinelOf,
   type Sources,
   unsealed,
   warm,

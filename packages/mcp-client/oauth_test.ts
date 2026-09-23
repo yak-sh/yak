@@ -132,7 +132,7 @@ Deno.test('paste OAuth uses SDK discovery/DCR/PKCE, validates callbacks and pers
   time += 60000
   assertEquals(await reopened.token(), 'refreshed-secret')
   assertEquals(f.counts(), { exchanges: 1, refreshes: 1 })
-  // The graph holds a sentinel; the vault holds tokens and nothing of the
+  // The graph holds a handle; the vault holds tokens and nothing of the
   // exchange that minted them.
   const graphed = JSON.stringify(await held.g.read('.secret'))
   assert(!graphed.includes('refreshed-secret'))

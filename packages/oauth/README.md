@@ -18,7 +18,7 @@ Import paths:
 The implementation is [@yaks/secrets](../secrets)'
 `records(graph, vault,
 prefix, check?)`: each record is a secret, so the graph
-holds its name and a sentinel and the vault holds its contents.
+holds its name and a handle and the vault holds its contents.
 
 ## Example
 

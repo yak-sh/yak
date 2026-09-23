@@ -1,6 +1,6 @@
 // Where a secret's value is kept: a vault. The graph holds the name and the
-// sentinel; the vault holds what the sentinel stands for, keyed by the
-// secret's entity id.
+// handle; the vault holds what the handle stands for, keyed by the secret's
+// entity id, and the salt a handle is hashed under to make its sentinel.
 //
 // A vault is the one thing that differs between the places a graph runs. On a
 // box it is a directory of private files (./file.ts); in a test, or a graph
@@ -12,13 +12,13 @@
 
 import type { Eid } from '@yaks/graph'
 
-/** What a vault keeps for one secret: the sentinel the graph holds for it, and
+/** What a vault keeps for one secret: the handle the graph holds for it, and
  * the value — or, for a value that lives in 1Password, the `op://` reference
  * it is read from at the moment it is used. */
 export type Sealed = {
   /** the secret's name, where the write carried it */
   name?: string
-  sentinel: string
+  handle: string
   value?: string
   op?: string
 }
@@ -27,7 +27,8 @@ type Maybe<T> = T | Promise<T>
 
 /** A place to keep secrets. */
 export type Vault = {
-  /** the key every sentinel this vault issues is hashed under */
+  /** the key every sentinel this vault hands out is hashed under
+   * (./sentinel.ts) */
   salt: () => Maybe<Uint8Array>
   read: (eid: Eid) => Maybe<Sealed | undefined>
   seal: (eid: Eid, sealed: Sealed) => Maybe<void>

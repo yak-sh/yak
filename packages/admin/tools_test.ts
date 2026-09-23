@@ -133,7 +133,7 @@ let kept = (dir: string, address: string, value: string) => {
   let name = sessionName(address)
   fileVault(`${dir}/secrets`).seal(secretEid(name), {
     name,
-    sentinel: 's',
+    handle: 'h',
     value,
   })
 }

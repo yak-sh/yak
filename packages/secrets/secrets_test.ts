@@ -1,5 +1,5 @@
 // A secret through the graph: the value goes to the vault, the graph keeps the
-// sentinel, and nothing that rolls back leaves anything behind.
+// handle, and nothing that rolls back leaves anything behind.
 
 import {
   assert,
@@ -12,7 +12,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import {
   fileVault,
-  isSentinel,
+  isHandle,
   type Local,
   peek,
   ramVault,
@@ -22,6 +22,9 @@ import {
   secretEid,
   secrets,
   secretsDoc,
+  SENTINEL,
+  sentinel,
+  sentinelOf,
   unsealed,
   warm,
 } from './mod.ts'
@@ -51,35 +54,45 @@ let row = async (g: Graph, name: string) =>
 
 let none = { env: () => undefined }
 
-Deno.test('a written value is kept in the vault and read back as its sentinel', async () => {
+Deno.test('a written value is kept in the vault and read back as its handle', async () => {
   let { g, vault } = setup()
   let out = await g.apply([sealed('MAIL_TOKEN', 'cf-token')])
   let held = await row(g, 'MAIL_TOKEN')
-  assert(isSentinel(held!.value))
+  assert(isHandle(held!.value))
   assertEquals((out[0].secret as Record<string, string>).value, held!.value)
   assertEquals(out[0].entity.eid, secretEid('MAIL_TOKEN'))
   assertEquals(await reveal(vault, 'MAIL_TOKEN'), 'cf-token')
-  assertEquals(vault.read(secretEid('MAIL_TOKEN'))!.sentinel, held!.value)
+  assertEquals(vault.read(secretEid('MAIL_TOKEN'))!.handle, held!.value)
 })
 
-Deno.test('the same value is the same sentinel, and writing it back changes nothing', async () => {
+Deno.test('a secret keeps its handle when its value changes, and writing the handle back changes nothing', async () => {
   let { g, vault } = setup()
   await g.apply([sealed('A', 'one')])
   let first = (await row(g, 'A'))!.value
-  await g.apply([sealed('A', 'one')])
-  assertEquals((await row(g, 'A'))!.value, first)
   await g.apply([sealed('A', first)])
   assertEquals(await reveal(vault, 'A'), 'one')
   await g.apply([sealed('A', 'two')])
-  assertNotEquals((await row(g, 'A'))!.value, first)
+  assertEquals((await row(g, 'A'))!.value, first)
   assertEquals(await reveal(vault, 'A'), 'two')
 })
 
-Deno.test('another vault salts the same value into another sentinel', async () => {
-  let a = setup(), b = setup()
-  await a.g.apply([sealed('A', 'one')])
-  await b.g.apply([sealed('A', 'one')])
-  assertNotEquals((await row(a.g, 'A'))!.value, (await row(b.g, 'A'))!.value)
+Deno.test('one value under two names is two handles', async () => {
+  let { g } = setup()
+  await g.apply([sealed('A', 'one'), sealed('B', 'one')])
+  assertNotEquals((await row(g, 'A'))!.value, (await row(g, 'B'))!.value)
+})
+
+Deno.test('the sentinel is the handle hashed under the vault salt, and survives a rotation', async () => {
+  let { g, vault } = setup()
+  assertEquals(await sentinelOf(vault, 'A'), undefined)
+  await g.apply([sealed('A', 'one')])
+  let handle = (await row(g, 'A'))!.value
+  let said = (await sentinelOf(vault, 'A'))!
+  assert(said.startsWith(SENTINEL))
+  assertEquals(said, await sentinel(await vault.salt(), handle))
+  assertNotEquals(await sentinel(await ramVault().salt(), handle), said)
+  await g.apply([sealed('A', 'two')])
+  assertEquals(await sentinelOf(vault, 'A'), said)
 })
 
 Deno.test('deleting a secret, or its component, drops it from the vault', async () => {
@@ -108,7 +121,7 @@ Deno.test('a dry run seals nothing, and a refused change puts the vault back', a
   assertEquals(await reveal(vault, 'A'), 'one')
 })
 
-Deno.test('a secret inside a call is its sentinel there too, and sealed when the call applies it', async () => {
+Deno.test('a secret inside a call is its handle there too, and sealed when the call applies it', async () => {
   let { g, vault } = setup()
   let [call] = await g.apply([{
     entity: { eid: 'c1' },
@@ -119,6 +132,10 @@ Deno.test('a secret inside a call is its sentinel there too, and sealed when the
   let [change] = JSON.parse(args).change as Bundle[]
   await g.apply([change])
   assertEquals(await reveal(vault, 'A'), 'hidden')
+  assertEquals(
+    (await row(g, 'A'))!.value,
+    (change.secret as Record<string, string>).value,
+  )
 })
 
 Deno.test('a name resolves through the vault, then 1Password, then the environment', async () => {
@@ -162,7 +179,7 @@ Deno.test('records change under the lock and are written back through the graph'
     ),
   )
   assertEquals(await store.read('a'), { n: 3 })
-  assert(isSentinel((await row(g, 'count a'))!.value))
+  assert(isHandle((await row(g, 'count a'))!.value))
 })
 
 Deno.test('the file vault is private files, one per secret, and follows no symlink', async () => {

@@ -866,7 +866,7 @@ redirect. Browser and provider policies can restrict this copy-address-bar
 workflow.
 
 Tokens and client registrations are secrets ([@yaks/secrets](../secrets)): the
-graph holds each one's name and sentinel, and the vault beside the database
+graph holds each one's name and handle, and the vault beside the database
 (`~/.yak/secrets`, private files) holds the tokens. They do not overwrite the
 existing yak bearer store. Pending logins do not survive restart. Existing
 `credential` bearer configuration remains a fallback. Successful OAuth connects

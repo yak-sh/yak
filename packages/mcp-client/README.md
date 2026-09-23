@@ -144,10 +144,10 @@ produce an error, and mutations are not retried with another credential.
 
 `AuthorizationStore` defines `read` and serialized `update` operations.
 [@yaks/secrets](../secrets)' `records` implements it: each record is a secret,
-so the graph holds its name and a sentinel, the vault holds the tokens and
-expiry, and an update holds the secret against every other writer while it
-refreshes. `checkRecord` refuses a kept record that is not a token set. Access
-tokens belong only in trusted request code.
+so the graph holds its name and a handle, the vault holds the tokens and expiry,
+and an update holds the secret against every other writer while it refreshes.
+`checkRecord` refuses a kept record that is not a token set. Access tokens
+belong only in trusted request code.
 
 Configure only trusted MCP servers. OAuth discovery and token requests use
 bounded deadlines, refuse redirects, and require HTTPS except on loopback

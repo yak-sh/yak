@@ -1,25 +1,28 @@
 // The graph plugin: a secret's value comes out of a write in the first phase
 // and goes into the vault in the last one inside the transaction, so nothing
 // between them — storage, the journal, a broadcast, an effect, a backup —
-// ever holds more than the sentinel.
+// ever holds more than the handle.
 //
-// `normalize` is the first thing `apply()` does. It takes each written value,
-// hashes it into the sentinel, and puts the sentinel where the value was. The
-// value itself waits in this plugin's memory, keyed by the sentinel, and never
-// on the bundle: a `$` key would ride the bundle through every phase, and the
-// point is that no phase but this one sees it. The same hook reaches into a
-// tool call's arguments, because `graph_apply` records what it was asked in the
-// `call` row before it applies it — without this the value would land in the
-// graph as the text of a call.
+// `normalize` is the first thing `apply()` does. It takes each written value
+// and puts the secret's handle where the value was (./sentinel.ts): the handle
+// the vault already keeps for that secret, so a new value is a rotation behind
+// the same handle, or a new one for a secret written the first time. The value
+// itself waits in this plugin's memory, keyed by the handle, and never on the
+// bundle: a `$` key would ride the bundle through every phase, and the point is
+// that no phase but this one sees it. The same hook reaches into a tool call's
+// arguments, because `graph_apply` records what it was asked in the `call` row
+// before it applies it — without this the value would land in the graph as the
+// text of a call. A handle minted there is remembered for its secret, so the
+// write the call goes on to make gets the same one.
 //
-// `commit` seals: every bundle arriving with a sentinel this plugin is holding
-// the value for writes it to the vault under the bundle's entity id, and every
+// `commit` seals: every bundle arriving with a handle this plugin is holding a
+// value for writes it to the vault under the bundle's entity id, and every
 // deleted secret is dropped from it. It runs inside the transaction on
 // purpose — a vault that refuses the write refuses the change, rather than
 // leaving a row naming a value nobody kept — and what the vault held before is
-// remembered until the change is settled: `effect` forgets it once the change
-// has committed, and `audit`, which runs after every rollback including a dry
-// run's, puts it back.
+// remembered until the change is settled: `effect` forgets it, and the value
+// it sealed, once the change has committed, and `audit`, which runs after every
+// rollback including a dry run's, puts it back.
 //
 // A value that `normalize` took but no `commit` sealed — the change was
 // refused, or the call it rode in on never ran — is let go after a while
@@ -28,7 +31,8 @@
 import type { Bundle, Eid, Plugin } from '@yaks/graph'
 import { each, then } from '@yaks/graph'
 import { isOpRef } from './op.ts'
-import { isSentinel, sentinel } from './sentinel.ts'
+import { secretEid } from './reveal.ts'
+import { handle, isHandle } from './sentinel.ts'
 import type { Sealed, Vault } from './vault.ts'
 
 let SECRET = 'secret'
@@ -40,36 +44,38 @@ let obj = (v: unknown): Record<string, unknown> | undefined =>
     : undefined
 
 // A written value: a `secret` patch carrying a string that is not already a
-// sentinel.
+// handle.
 let plain = (v: unknown): string | undefined => {
   let value = obj(v)?.value
-  return typeof value == 'string' && !isSentinel(value) ? value : undefined
+  return typeof value == 'string' && !isHandle(value) ? value : undefined
 }
 
-// Every written value inside a JSON value, wherever a `secret` patch sits in
-// it — a tool call's arguments carry whole bundles.
-let found = (v: unknown, out: string[] = []): string[] => {
-  if (Array.isArray(v)) v.forEach((x) => found(x, out))
-  else if (obj(v)) {
-    let value = plain(obj(v)![SECRET])
-    if (value != null) out.push(value)
-    Object.values(obj(v)!).forEach((x) => found(x, out))
-  }
-  return out
+// Which secret a bundle writes: the entity it names, or, for an alias not yet
+// minted, the one its name derives. A bundle with neither gets a handle of its
+// own.
+let whose = (o: Record<string, unknown>): Eid | undefined => {
+  let eid = obj(o.entity)?.eid
+  if (typeof eid == 'string' && !eid.startsWith('$')) return eid
+  let name = obj(o[SECRET])?.name
+  return typeof name == 'string' ? secretEid(name) : undefined
 }
 
-// The same value with every written secret swapped for its sentinel.
-let swapped = (v: unknown, as: Map<string, string>): unknown => {
-  if (Array.isArray(v)) return v.map((x) => swapped(x, as))
+// Every written secret inside a JSON value — a tool call's arguments carry
+// whole bundles — replaced by whatever `to` answers for it, always in the same
+// order, so one pass can find them and a second can swap them.
+let walk = (
+  v: unknown,
+  to: (value: string, eid?: Eid) => string | undefined,
+): unknown => {
+  if (Array.isArray(v)) return v.map((x) => walk(x, to))
   let o = obj(v)
   if (!o) return v
-  let out = Object.fromEntries(
-    Object.entries(o).map(([k, x]) => [k, swapped(x, as)]),
-  )
   let value = plain(o[SECRET])
-  if (value != null) {
-    out[SECRET] = { ...obj(o[SECRET]), value: as.get(value) }
-  }
+  let now = value == null ? undefined : to(value, whose(o))
+  let out = Object.fromEntries(
+    Object.entries(o).map(([k, x]) => [k, k == SECRET ? x : walk(x, to)]),
+  )
+  if (now != null) out[SECRET] = { ...obj(o[SECRET]), value: now }
   return out
 }
 
@@ -83,40 +89,60 @@ let args = (b: Bundle): unknown => {
   }
 }
 
+// The secrets inside a call's arguments, in the order `walk` visits them.
+let inside = (called: unknown): [string, Eid | undefined][] => {
+  let out: [string, Eid | undefined][] = []
+  if (called != null) walk(called, (value, eid) => void out.push([value, eid]))
+  return out
+}
+
+let writes = (b: Bundle): boolean =>
+  plain(b[SECRET]) != null || inside(args(b)).length > 0
+
 /** The plugin, over the vault its secrets are kept in. */
 export let secrets = (vault: Vault): Plugin => {
-  let waiting = new Map<string, { value: string; until: number }>()
+  let waiting = new Map<string, { value: string; eid?: Eid; until: number }>()
+  let minted = new Map<Eid, { handle: string; until: number }>()
   let before = new Map<Eid, Sealed | null>()
 
-  let hold = (salt: Uint8Array, values: string[]) =>
-    Promise.all(values.map(async (value) => {
-      let s = await sentinel(salt, value)
-      waiting.set(s, { value, until: Date.now() + HOLD_MS })
-      return [value, s] as const
-    })).then((pairs) => new Map(pairs))
+  // The handle for a secret being written: the one the vault keeps for it, the
+  // one this process gave it moments ago, or a new one.
+  let handleOf = (eid?: Eid): string | Promise<string> =>
+    !eid ? handle() : then(vault.read(eid), (kept) => {
+      let h = kept?.handle ?? minted.get(eid)?.handle ?? handle()
+      if (!kept) minted.set(eid, { handle: h, until: Date.now() + HOLD_MS })
+      return h
+    })
 
-  // One bundle's written values: its own `secret` patch, and any inside the
-  // arguments of the call it records.
-  let written = (b: Bundle): string[] => {
-    let own = plain(b[SECRET])
-    let called = args(b)
-    return [...own == null ? [] : [own], ...called == null ? [] : found(called)]
+  let hold = async (value: string, eid?: Eid): Promise<string> => {
+    let h = await handleOf(eid)
+    waiting.set(h, { value, eid, until: Date.now() + HOLD_MS })
+    return h
   }
 
-  let hide = (salt: Uint8Array, b: Bundle): Bundle | Promise<Bundle> => {
-    let values = written(b)
-    if (!values.length) return b
+  let hide = (b: Bundle): Bundle | Promise<Bundle> => {
     let own = plain(b[SECRET])
     let called = args(b)
-    return hold(salt, values).then((as) => ({
-      ...b,
-      ...own == null
-        ? {}
-        : { [SECRET]: { ...obj(b[SECRET]), value: as.get(own) } },
-      ...called == null || !found(called).length ? {} : {
-        call: { ...obj(b.call), args: JSON.stringify(swapped(called, as)) },
+    let found = inside(called)
+    if (own == null && !found.length) return b
+    let asked = own == null ? found : [[own, whose(b)] as const, ...found]
+    return Promise.all(asked.map(([value, eid]) => hold(value, eid))).then(
+      (hs) => {
+        let i = own == null ? 0 : 1
+        return {
+          ...b,
+          ...own == null
+            ? {}
+            : { [SECRET]: { ...obj(b[SECRET]), value: hs[0] } },
+          ...!found.length ? {} : {
+            call: {
+              ...obj(b.call),
+              args: JSON.stringify(walk(called, () => hs[i++])),
+            },
+          },
+        }
       },
-    }))
+    )
   }
 
   // Remember what the vault held for an entity, the first time this change
@@ -136,17 +162,22 @@ export let secrets = (vault: Vault): Plugin => {
         (was) => was && then(keep(eid), () => vault.drop(eid)),
       )
     }
-    let s = obj(comp)?.value
-    let held = typeof s == 'string' ? waiting.get(s) : undefined
-    if (!held) return
+    let h = obj(comp)?.value
+    let held = typeof h == 'string' ? waiting.get(h) : undefined
+    if (!held || held.eid && held.eid != eid) return
+    let kept = isOpRef(held.value) ? { op: held.value } : { value: held.value }
     return then(vault.read(eid), (was) => {
-      if (was?.sentinel == s) return
+      if (
+        was && was.handle == h && was.value == kept.value && was.op == kept.op
+      ) {
+        return
+      }
       let name = obj(comp)!.name ?? was?.name
       return then(keep(eid), () =>
         vault.seal(eid, {
           ...typeof name == 'string' ? { name } : {},
-          sentinel: s as string,
-          ...isOpRef(held.value) ? { op: held.value } : { value: held.value },
+          handle: h as string,
+          ...kept,
         }))
     })
   }
@@ -156,19 +187,27 @@ export let secrets = (vault: Vault): Plugin => {
     hooks: {
       normalize: (bundles) => {
         let now = Date.now()
-        for (let [s, w] of waiting) if (w.until < now) waiting.delete(s)
-        if (!bundles.some((b) => written(b).length)) return bundles
-        return then(vault.salt(), (salt) =>
-          each(
-            bundles,
-            [] as Bundle[],
-            (out, b) => then(hide(salt, b), (one) => [...out, one]),
-          ))
+        for (let [h, w] of waiting) if (w.until < now) waiting.delete(h)
+        for (let [e, m] of minted) if (m.until < now) minted.delete(e)
+        if (!bundles.some(writes)) return bundles
+        return each(
+          bundles,
+          [] as Bundle[],
+          (out, b) => then(hide(b), (one) => [...out, one]),
+        )
       },
       commit: (bundles) =>
         each(bundles, bundles, (out, b) => then(seal(b), () => out)),
       effect: (bundles) => {
-        for (let b of bundles) before.delete(b.entity.eid)
+        for (let b of bundles) {
+          let eid = b.entity.eid
+          before.delete(eid)
+          minted.delete(eid)
+          let h = obj(b[SECRET])?.value
+          if (typeof h == 'string' && waiting.get(h)?.eid == eid) {
+            waiting.delete(h)
+          }
+        }
         return bundles
       },
       audit: (bundles) =>

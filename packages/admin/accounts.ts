@@ -1,7 +1,7 @@
 // The yaks.app accounts this box is signed in as, and the rule that keeps an
 // agent out of the owner's. A session is a secret (@yaks/secrets) named for
 // the address it signed in as, `yaks.app session <address>`, written through
-// the graph this box's `yak` opens: the graph holds the name and a sentinel,
+// the graph this box's `yak` opens: the graph holds the name and a handle,
 // and the vault beside its database holds the session — never a checkout,
 // and never the data repo a backup pushes.
 //
