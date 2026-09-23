@@ -38,7 +38,7 @@ export type BundleOpts = {
   /** how much of each column to describe (default: `names`) */
   depth?: Depth
   /** allow a null component — the shape of an applied transaction, which
-   * echoes `comp: null` for a component the transaction removed. A read never
+   * echoes a component the transaction removed as `null`. A read never
    * returns one, so a read tool leaves this off (default: `false`) */
   nulls?: boolean
   /** `graph_apply`'s input schema: the writable components and their writable

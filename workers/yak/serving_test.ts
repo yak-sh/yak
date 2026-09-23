@@ -4,7 +4,7 @@
 // stand-in, with nothing stubbed between the request and the rows.
 //
 // The whole point is that two wires meet here and the door translates
-// (wire.ts): a page sends `{entities: […]}` and reads `{ok, changes, aliases}`
+// (wire.ts): a page sends `{entities: […]}` and reads `{ok, aliases, bundles}`
 // back, spells its filter as the query string itself, and folds a socket's
 // frames — while the Store takes a bare array of bundles, answers the batch as
 // applied, reads its line off `?q=`, and pushes `{id, bundles, gone}`. So the
@@ -121,8 +121,8 @@ let client = (env: Env, cookie?: string) => {
         body: JSON.stringify({ entities: bundles }),
       }) as Promise<{
         ok: boolean
-        changes: { eid: string; name: string }[]
         aliases: Record<string, string>
+        bundles: Record<string, unknown>[]
       }>,
     query: (filter = '') =>
       door(`query?${filter}`) as Promise<Record<string, unknown>[]>,
@@ -399,7 +399,11 @@ Deno.test('the page wire: apply, query and search round-trip', async () => {
   assertEquals(wrote.ok, true)
   let eid = wrote.aliases.$cake
   assert(eid, 'the alias said what it minted')
-  assert(wrote.changes.some((c) => c.eid == eid && c.name == 'doc'))
+  let [cake] = wrote.bundles.filter((b) =>
+    (b.entity as { eid: string }).eid == eid
+  )
+  assertEquals(cake.$alias, '$cake')
+  assertEquals((cake.doc as { title: string }).title, 'Lemon drizzle')
 
   // The filter grammar is the page's: the query string itself, and a row
   // carries the components the filter names, under the word it is called by.

@@ -18,7 +18,7 @@
 // dropped and booleans as the number a column stores.
 
 import { assertEquals } from '@std/assert'
-import type { Bundle, Change, Graph, Plugin, Storage } from '@yaks/graph'
+import type { Bundle, Graph, Plugin, Storage } from '@yaks/graph'
 import { each, graph, then, token } from '@yaks/graph'
 import { shop } from './harness.ts'
 
@@ -64,7 +64,7 @@ export let rig = (storage: Storage): Graph =>
   })
 
 /** One step of the script: a batch, and the clock it is applied under. */
-export type Step = { name: string; batch: Change; now?: string }
+export type Step = { name: string; batch: Bundle[]; now?: string }
 
 let AT = '2026-03-01T00:00:00.000Z'
 
@@ -221,7 +221,11 @@ let refused = (e: unknown): Said => ({
   err: `${(e as Error).name}: ${(e as Error).message}`,
 })
 
-let say = (g: Graph, batch: Change, now: string): Said | Promise<Said> => {
+let say = (
+  g: Graph,
+  batch: Bundle[],
+  now: string,
+): Said | Promise<Said> => {
   try {
     let out = g.apply(batch, { now })
     return out instanceof Promise

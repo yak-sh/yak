@@ -71,7 +71,7 @@
  * let g = graph({ storage, vocab, plugins: [fx, docs(), mailbox({ domain: 'books.example', sender: post, effects: fx })] })
  *
  * fx.created('member', invited({
- *   apply: (change) => g.apply(change),
+ *   apply: (bundles) => g.apply(bundles),
  *   welcome: () => ({
  *     from: 'hello@books.example',
  *     subject: 'You are in the book club',

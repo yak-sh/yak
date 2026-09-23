@@ -275,7 +275,7 @@ Every app has a mailbox, at ${mailFrom('<space>', '<app>', env)} — ${
     mailFrom('<space>', null, env)
   } for the
 space's front page. Mail in both directions lives in the store. Sending is one
-apply call — a list of changes written in one transaction: the recipient as an
+apply call — a list of bundles written in one transaction: the recipient as an
 entity with email {address}, the letter as doc {title, body}
 (markdown) and mail {}, and the request to send it, deliver {to}, naming that
 recipient. The from address is the app's own, stamped over whatever you wrote;

@@ -1164,8 +1164,6 @@ let answer = async (r: Response) => {
   return body
 }
 
-type Change = { eid: string; name: string; comp: unknown }
-
 // A file's key: the app's slugs, then its path from the slash (apps.ts keyOf).
 let fileKey = (space: Space, app: App, path: string) =>
   `${space.slug}/${app.slug}/${path.replace(/^\/+/, '')}`

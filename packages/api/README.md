@@ -45,14 +45,14 @@ curl -G http://localhost:8000/query \
   --data-urlencode 'q=.status=shelved&.price<20'
 ```
 
-| Endpoint         | Request                    | Response                                             |
-| ---------------- | -------------------------- | ---------------------------------------------------- |
-| `POST /apply`    | JSON array of changes      | Applied changes, combined into one bundle per entity |
-| `GET /query?q=…` | URL-encoded query          | Selected bundles, or an aggregate value              |
-| `POST /query`    | JSON string or `{"q":"…"}` | Same as GET                                          |
-| `/ws`            | WebSocket upgrade          | Subscription messages                                |
+| Endpoint         | Request                    | Response                                |
+| ---------------- | -------------------------- | --------------------------------------- |
+| `POST /apply`    | JSON array of bundles      | The bundles as applied, one per entity  |
+| `GET /query?q=…` | URL-encoded query          | Selected bundles, or an aggregate value |
+| `POST /query`    | JSON string or `{"q":"…"}` | Same as GET                             |
+| `/ws`            | WebSocket upgrade          | Subscription messages                   |
 
-The `/apply` result contains patches and graph-generated changes, including
+The `/apply` result contains the patches and what the graph generated, including
 assigned entity numbers, timestamps, and cascading deletions where the graph is
 configured to produce them. It is not a read of every component on each entity.
 Add `?check=1` to validate and roll back the transaction before commit; effects

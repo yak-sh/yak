@@ -37,7 +37,7 @@ That is one entity, two components, one call. `kind` on the row you read back is
 derived from the components it has — your own component wins, being the most
 specific thing on the row — and nothing in the store branches on it. Every
 component is a _patch_: send the columns you are changing and the rest are left
-alone; `column: null` clears one; `comp: null` takes the whole component off;
+alone; `column: null` clears one; `recipe: null` takes the whole component off;
 `{entity: {eid}, tombstone: {}}` kills the entity.
 
     await apply({ entity: { eid }, recipe: { minutes: 45 } })   // one column

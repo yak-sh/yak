@@ -22,11 +22,10 @@ These terms describe the data passed between the packages.
   identity:
   `{ entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { pages: 412 } }`.
   Bundles are what reads return and what writes are expressed in.
-- A **change** (`Change`) is a flat array of bundle patches. It forms a
-  **batch**: a list of changes applied in one transaction. In each patch, an
-  omitted column is left alone, a `null` column is cleared, and a `null`
-  component is removed.
-- A **transaction** is what `apply(change)` runs the whole array in. Either all
+- A **batch** is an array of bundles applied in one transaction. Each bundle is
+  a patch: an omitted column is left alone, a `null` column is cleared, and a
+  `null` component is removed.
+- A **transaction** is what `apply(bundles)` runs the whole array in. Either all
   of it is written or none of it is.
 
 A vocabulary declares the component names, column types, references, and other
@@ -181,8 +180,8 @@ tools, and transient text. `@yaks/graph/vocab` exports tool declarations as
 `tier` to attach implementations to tool declarations. These are sub-module
 exports.
 
-This package exports the `Bundle`/`Change`, `Storage`/`Tx`, plugin, rule, and
-tool interfaces plus the graph implementation. It does not choose a database or
+This package exports the `Bundle`, `Storage`/`Tx`, plugin, rule, and tool
+interfaces plus the graph implementation. It does not choose a database or
 install domain components for you.
 
 - [@yaks/vocab](../vocab/README.md) loads component schemas.

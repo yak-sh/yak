@@ -17,10 +17,10 @@
 // table stood, an unqualified INSERT would have landed in it.
 //
 // A patch is a PATCH, so a touched row is the committed row with the patch
-// folded in — merged here, once, rather than by every rule. A `comp: null`
-// drops the component: the row is excluded from the committed arm and carries
-// no row of its own. A deleted entity leaves the spine the same way, so every
-// membership loses it.
+// folded in — merged here, once, rather than by every rule. A `null` component
+// drops it: the row is excluded from the committed arm and carries no row of
+// its own. A deleted entity leaves the spine the same way, so every membership
+// loses it.
 //
 // What the batch dropped is a second reading of the same batch, and it needs
 // its own table: once a row is out of the overlay, "it is not there" and "the

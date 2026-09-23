@@ -46,13 +46,7 @@
 // there.
 
 import { rulesIn, type Vocab } from '@yaks/vocab'
-import {
-  type Actor,
-  type Bundle,
-  type Change,
-  comps,
-  type Eid,
-} from './bundle.ts'
+import { type Actor, type Bundle, comps, type Eid } from './bundle.ts'
 import type { Row, Storage, Tx } from './storage.ts'
 import { detached, type Query, type ReadOpts } from './storage.ts'
 import type { Hook, Phase, Plugin, Tracker, WriteHook } from './plugin.ts'
@@ -176,9 +170,9 @@ export type Graph = {
    * are in the returned map, so a caller reads it as `at.get(id) ?? id`; with
    * no plugin resolving names, every id is itself and this costs nothing. */
   address: (ids: string[]) => Map<string, Eid> | Promise<Map<string, Eid>>
-  /** apply a change in one transaction → the change as applied, one bundle per
+  /** apply bundles in one transaction → the bundles as applied, one per
    * entity, plus everything the pipeline generated */
-  apply: (change: Change, opts?: ApplyOpts) => Bundle[] | Promise<Bundle[]>
+  apply: (bundles: Bundle[], opts?: ApplyOpts) => Bundle[] | Promise<Bundle[]>
 }
 
 // One step of the pipeline: the bundles in, the bundles the next step sees
@@ -290,12 +284,12 @@ export let graph = (opts: Options): Graph => {
   // program rather than to nobody, so every write has an author and the
   // journal has a name to record. A server that authenticated somebody
   // overrides this (`signed`) before the change gets here.
-  let owned = (change: Change): Change =>
-    opts.actor && !change.some((b) => b.$actor)
-      ? signed(change, opts.actor)
-      : change
+  let owned = (bundles: Bundle[]): Bundle[] =>
+    opts.actor && !bundles.some((b) => b.$actor)
+      ? signed(bundles, opts.actor)
+      : bundles
 
-  let apply = (change: Change, o: ApplyOpts = {}):
+  let apply = (bundles: Bundle[], o: ApplyOpts = {}):
     | Bundle[]
     | Promise<
       Bundle[]
@@ -588,7 +582,7 @@ export let graph = (opts: Options): Graph => {
         inside,
         composed,
       ],
-      owned(change),
+      owned(bundles),
       (b, step) => step(b),
     )
   }

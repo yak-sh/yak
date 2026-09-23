@@ -3,7 +3,7 @@
 // end-to-end proof is serving_test.ts; this is the grammar's own edges, where
 // a value carries the character the other wire spells structure with.
 import { assertEquals, assertThrows } from '@std/assert'
-import { batched, lined, lowered } from './wire.ts'
+import { batched, lined, receipt } from './wire.ts'
 
 let cases: [string, string][] = [
   // The riders the page spells bare
@@ -43,28 +43,23 @@ Deno.test('a batch arrives in either envelope, and never as junk', () => {
   assertThrows(() => batched(null), Error, 'entities')
 })
 
-Deno.test('the batch as applied, in the page own words', () => {
-  assertEquals(
-    lowered([
-      {
-        entity: { eid: 'e1', num: 4 },
-        kind: 'doc',
-        $alias: '$cake',
-        doc: { title: 'Lemon drizzle' },
-        created: { at: 'now' },
-      },
-      { entity: { eid: 'e2' }, tombstone: {} },
-    ]),
-    {
-      ok: true,
-      changes: [
-        { eid: 'e1', name: 'doc', comp: { title: 'Lemon drizzle' } },
-        { eid: 'e1', name: 'created', comp: { at: 'now' } },
-        // A death is a change like any other: a page folding an answer has to
-        // hear it.
-        { eid: 'e2', name: 'tombstone', comp: {} },
-      ],
-      aliases: { $cake: 'e1' },
-    },
-  )
+Deno.test('a bundle that names no entity is given one', () => {
+  assertEquals(batched([{ doc: { title: 'x' } }]), [
+    { doc: { title: 'x' }, entity: { eid: '$new0' } },
+  ])
+})
+
+Deno.test('the answer: the bundles as applied, and the aliases the page wrote', () => {
+  let cake = {
+    entity: { eid: 'e1', num: 4 },
+    $alias: '$cake',
+    doc: { title: 'Lemon drizzle' },
+  }
+  let unnamed = { entity: { eid: 'e2' }, $alias: '$new1', doc: { title: 'y' } }
+  let gone = { entity: { eid: 'e3' }, tombstone: {} }
+  assertEquals(receipt([cake, unnamed, gone]), {
+    ok: true,
+    aliases: { $cake: 'e1' },
+    bundles: [cake, { entity: { eid: 'e2' }, doc: { title: 'y' } }, gone],
+  })
 })

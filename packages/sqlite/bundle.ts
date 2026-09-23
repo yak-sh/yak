@@ -11,7 +11,7 @@
 // the `entity`
 // component (`entity.eid` is the id, never a bare root `eid`); every other key is
 // a component name mapping to its columns, or `null` to drop it. A bundle is also
-// the write unit (`Change = Bundle[]`): `$delete: true` deletes the whole entity
+// the write unit: `$delete: true` deletes the whole entity
 // (tombstoned, death cascades), and `$was` carries per-column preconditions —
 // fields this adapter carries but does not enforce (that check is a phase of
 // @yaks/graph's apply(), not of a storage adapter).
@@ -19,4 +19,4 @@
 // On the way out a bundle holds only the components the entity actually has, each
 // a plain object of column values — references already resolved back to eids.
 
-export type { Bundle, Change, Comp, Entity, Was } from '@yaks/graph'
+export type { Bundle, Comp, Entity, Was } from '@yaks/graph'

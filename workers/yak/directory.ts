@@ -25,7 +25,7 @@
 // its own store.
 import { type Host as HostEnv, spaceHost } from './host.ts'
 import type { Bundle } from '@yaks/graph'
-import type { EntityLiteral, Mutation } from '../../src/mutation.ts'
+import type { EntityLiteral, LiteralMutation } from '../../src/mutation.ts'
 import { slugsOf } from '../../src/types.ts'
 import {
   type Door,
@@ -495,9 +495,10 @@ let forwarded = (req: Request) =>
 
 // This part's own door is the fleet's mutation envelope — a bundle list under
 // `entities`, which is what its typed client and every tool writes — and the
-// store below it is a graph, so the envelope is opened here and the bundles go
-// on as they are (meta.ts). `over` names the store the door speaks to, which is
-// the seam a test drives a whole directory against.
+// store below it is a graph, so the envelope is opened here, the bundles go on
+// as they are, and the batch as applied comes back (meta.ts). `over` names the
+// store the door speaks to, which is the seam a test drives a whole directory
+// against.
 export let over = (store: Meta) => async (req: Request): Promise<Response> => {
   let cache = cached(store)
   let url = new URL(req.url)
@@ -510,7 +511,7 @@ export let over = (store: Meta) => async (req: Request): Promise<Response> => {
       let applied = await store.apply(sent.entities ?? [], forwarded(req))
       // The directory just moved; nothing read before it is still true.
       cache.clear()
-      return Response.json({ ok: true, ...resulted(applied) })
+      return Response.json(applied)
     } catch (e) {
       caught(e, { request: 'directory /apply' })
       return new Response(e instanceof Error ? e.message : String(e), {
@@ -547,22 +548,6 @@ export let fetch = (
   req: Request,
   env: { STORE: Namespace },
 ): Promise<Response> => over(metaStore(env))(req)
-
-// The applied batch in the shape this part's callers read: the flat changes a
-// tool inspects for the eid it just wrote, and the aliases a mint is looked up
-// by. Both are projections of the bundles the graph answered with.
-let resulted = (applied: Bundle[]) => ({
-  changes: applied.flatMap((b) =>
-    Object.entries(b)
-      .filter(([k]) => k != 'entity' && !k.startsWith('$'))
-      .map(([name, comp]) => ({ eid: b.entity.eid, name, comp }))
-  ),
-  aliases: Object.fromEntries(
-    applied.flatMap((b) =>
-      typeof b.$alias == 'string' ? [[b.$alias, b.entity.eid]] : []
-    ),
-  ),
-})
 
 // A write the kernel makes ABOUT the directory rather than for a person: the
 // hourly meter (usage.ts), a letter counted as it goes or arrives (meter.ts
@@ -874,13 +859,12 @@ export let directory = (via: Fetcher, now = false) => {
   // Named, because two of the questions below are asked in terms of the
   // others: a person's own space is read, minted, and read back.
   let self = {
-    // A write that changes the directory: the whole wire, either shape — a
-    // bundle (which mints at an eid its author chose, T-32455) or a flat
-    // Change batch.
+    // A write that changes the directory: a batch of bundles, each minting at
+    // an eid its author chose (T-32455), answered as applied.
     apply: async (
-      mutation: Mutation,
+      mutation: LiteralMutation,
       headers: Record<string, string> = {},
-    ): Promise<{ changes: unknown[]; aliases?: Record<string, string> }> => {
+    ): Promise<Bundle[]> => {
       let r = await via.fetch(
         new Request('http://directory/apply', {
           method: 'POST',

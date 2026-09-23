@@ -218,7 +218,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     // address, so the person comes back to it (T-32593).
     assertMatch(said.signIn, /^https:\/\/yaks\.app\/login\?return=/)
     await owner.applied([
-      { eid: cake, name: 'doc', comp: { title: "Grandma's lemon cake" } },
+      { entity: { eid: cake }, doc: { title: "Grandma's lemon cake" } },
     ])
     let [hit] = await owner.get(`id=${cake}`)
     assertEquals((hit.doc as { title: string }).title, "Grandma's lemon cake")
@@ -231,11 +231,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     // string contains ''.
     let pie = crypto.randomUUID()
     await owner.applied([
-      {
-        eid: pie,
-        name: 'doc',
-        comp: { title: 'Rhubarb pie', body: 'rhubarb' },
-      },
+      { entity: { eid: pie }, doc: { title: 'Rhubarb pie', body: 'rhubarb' } },
     ])
     let listing = await owner.get('.doc.title~=')
     assertEquals(
@@ -259,7 +255,7 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
     )
     let maya = crypto.randomUUID()
     await owner.applied([
-      { eid: maya, name: 'person', comp: {} },
+      { entity: { eid: maya }, person: {} },
     ])
     // The directory is written through the graph tier, by the owner of `yak`
     // — the only door into the meta store there is.
@@ -366,9 +362,8 @@ slow('the kernel routes, vouches, serves, and surfaces', async () => {
       method: 'POST',
       headers: { cookie, 'x-yak-kernel': '1' },
       body: JSON.stringify([{
-        eid: crypto.randomUUID(),
-        name: 'exception',
-        comp: { message: 'forged' },
+        entity: { eid: crypto.randomUUID() },
+        exception: { message: 'forged' },
       }]),
     })
     assertEquals(forgedFlag.status, 200)
@@ -416,9 +411,8 @@ slow('an app says who may read it and who may write it', async () => {
     let owner = (app: string) => client(k, 'club.yaks.app', app, cookie)
     let anyone = (app: string) => client(k, 'club.yaks.app', app)
     let line = (title: string) => [{
-      eid: crypto.randomUUID(),
-      name: 'doc',
-      comp: { title },
+      entity: { eid: crypto.randomUUID() },
+      doc: { title },
     }]
     for (let app of ['list', 'vote', 'diary']) {
       await owner(app).applied(line(`the ${app}`))

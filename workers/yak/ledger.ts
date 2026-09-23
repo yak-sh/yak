@@ -32,7 +32,7 @@
 // the UNION of both meanings, so a refusal's `code` and a break row's
 // `message` both land instead of one of them refusing the other.
 
-import { type Bundle, type Change, comps, type Graph, graph } from '@yaks/graph'
+import { type Bundle, comps, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import {
   loadVocab,
@@ -139,8 +139,8 @@ export let ledger = (host: Graph): Graph => {
     // `execution{done}` has been written, which is what lets the runner
     // record the refusal as this call's failure. The other way round, a
     // refusal was already a success by the time it was raised.
-    apply: async (change: Change) => {
-      let batch = (Array.isArray(change) ? change : [change]) as Bundle[]
+    apply: async (bundles: Bundle[]) => {
+      let batch = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
       let here = batch.filter(mine)
       let there = batch.filter((b) => !mine(b))
       let sent = there.length ? await host.apply(there) : []

@@ -15,7 +15,7 @@ let rig = async (refuse?: string) => {
   house.fx.created(
     'member',
     invited({
-      apply: (change) => house.g.apply(change),
+      apply: (bundles) => house.g.apply(bundles),
       eid: () => 'e-invite',
       now: noon,
       welcome: ({ role }) => ({

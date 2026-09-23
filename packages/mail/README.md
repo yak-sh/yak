@@ -301,7 +301,7 @@ import { invited } from '@yaks/mail'
 fx.created(
   'member',
   invited({
-    apply: (change) => g.apply(change),
+    apply: (bundles) => g.apply(bundles),
     welcome: ({ role }) => ({
       from: 'hello@books.example',
       subject: role == 'owner'

@@ -1,8 +1,8 @@
 // The app store's contract in workerd itself: the kernel Worker boots under
 // wrangler dev, and a headless client drives its HTTP and live doors. The
 // T-33810 package store takes bundles and subscriptions. The public HTTP
-// door still wraps its replies as {ok, changes, aliases}, but fleet claim
-// leases and cursor/epoch catchup no longer belong to this app store.
+// door wraps its replies as {ok, aliases, bundles}, and fleet claim leases and
+// cursor/epoch catchup do not belong to this app store.
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import type { Frame } from '@yaks/api'
 import { edgeEid, link } from '@yaks/edge'
@@ -38,7 +38,7 @@ slow('the store on Durable Object SQLite serves the wire', async () => {
       },
     ])
     assert(batch.ok)
-    assert(batch.changes.some((c) => c.eid == task && c.name == 'doc'))
+    assert(batch.bundles.some((b) => b.entity.eid == task && b.doc))
 
     // Fresh HTTP reads recover the committed rows, blob body, references,
     // derived status, and full-text index from the object's SQLite.
@@ -81,7 +81,7 @@ slow('the store on Durable Object SQLite serves the wire', async () => {
     // reply carries the casualties for caches, and the other task survives.
     let death = await applied([{ entity: { eid: task }, tombstone: {} }])
     for (let eid of [task, note, edge]) {
-      assert(death.changes.some((c) => c.eid == eid && c.name == 'tombstone'))
+      assert(death.bundles.some((b) => b.entity.eid == eid && b.tombstone))
     }
     assertEquals(await get(`.eid=${task},${note},${edge}`), [])
     assertEquals((await get('.task!')).map((r) => r.entity.eid), [dep])

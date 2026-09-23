@@ -14,7 +14,6 @@
 
 import type {
   Bundle,
-  Change,
   Eid,
   Graph,
   Plugin,
@@ -134,8 +133,8 @@ export type Client = {
   /** one entity, whole, by id — `undefined` if this client has never held
    * it. A deleted entity comes back with a `tombstone` component. */
   ent: (eid: Eid) => Bundle | undefined
-  /** apply changes: to the local graph at once, then POSTed to the server */
-  mutate: (change: Change) => Bundle[] | Promise<Bundle[]>
+  /** apply bundles: to the local graph at once, then POSTed to the server */
+  mutate: (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
   /** close the WebSocket and every watch */
   close: () => void
 }
@@ -402,7 +401,7 @@ export let client = (
       cache.touch([eid])
       return store.tx((tx) => tx.get([eid]))[0]
     },
-    mutate: (change) => g.apply(change),
+    mutate: (bundles) => g.apply(bundles),
     close: () => {
       closed = true
       for (let close of handles) close()

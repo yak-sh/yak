@@ -107,7 +107,6 @@ import {
 import {
   type ApplyOpts,
   type Bundle,
-  type Change,
   type Comp,
   comps,
   detached,
@@ -1127,10 +1126,10 @@ export class Store {
   // wrote it; the claim and the result beside it are the server's own
   // bookkeeping, and a tool's answer is the caller's own write, already signed
   // as them.
-  #asIs(change: Change, opts: ApplyOpts = {}) {
+  #asIs(bundles: Bundle[], opts: ApplyOpts = {}) {
     this.#kernelling = true
     try {
-      return this.#graph.apply(change, { ...opts, trusted: true })
+      return this.#graph.apply(bundles, { ...opts, trusted: true })
     } finally {
       this.#kernelling = false
     }

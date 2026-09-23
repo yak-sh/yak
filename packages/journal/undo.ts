@@ -13,7 +13,7 @@
 // is tombstoned, never erased, and its id can never be reused — so an undo that
 // would resurrect one is refused rather than half-applied.
 
-import type { Actor, Bundle, Change, Comp, Eid, Graph, Was } from '@yaks/graph'
+import type { Actor, Bundle, Comp, Eid, Graph, Was } from '@yaks/graph'
 import { token, TOMBSTONE } from '@yaks/graph'
 import type { Batch } from './batch.ts'
 import type { Log } from './log.ts'
@@ -31,11 +31,15 @@ export class Final extends Error {
   }
 }
 
-// One side of a recorded transaction, as a change. The deltas are replayed in
+// One side of a recorded transaction, as bundles. The deltas are replayed in
 // order onto a per-entity table of components, which is what makes a
 // transaction that touched the same component twice come out as one bundle
 // holding where that component ended up.
-let side = (batch: Batch, want: 'before' | 'after', guard = false): Change => {
+let side = (
+  batch: Batch,
+  want: 'before' | 'after',
+  guard = false,
+): Bundle[] => {
   let order: Eid[] = []
   let held = new Map<Eid, Map<string, Comp | null>>()
   let died = new Set<Eid>()
@@ -119,7 +123,7 @@ let side = (batch: Batch, want: 'before' | 'after', guard = false): Change => {
  * all. They carry what moved, so who wrote it and when, which the `journal_tx`
  * row already holds, are not repeated in them.
  */
-export let applied = (batch: Batch): Change => side(batch, 'after')
+export let applied = (batch: Batch): Bundle[] => side(batch, 'after')
 
 /** How an undo is built. */
 export type UndoneOpts = {
@@ -130,12 +134,12 @@ export type UndoneOpts = {
 }
 
 /**
- * The change that reverses a transaction: every column back to the value it
+ * The bundles that reverse a transaction: every column back to the value it
  * held, every component that went restored with the columns it had, every
  * component that appeared removed. Throws {@link Final} if the transaction
  * deleted an entity.
  */
-export let undone = (batch: Batch, opts: UndoneOpts = {}): Change =>
+export let undone = (batch: Batch, opts: UndoneOpts = {}): Bundle[] =>
   side(batch, 'before', opts.guard)
 
 /**

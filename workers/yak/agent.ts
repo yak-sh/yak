@@ -503,8 +503,8 @@ export let reaching = async (
     // store: `get` fans across the reach, and a name held in whichever store
     // this caller can see answers.
     address: (ids) => addressed(detached(storage), ids),
-    apply: async (change) => {
-      let asked = (Array.isArray(change) ? change : [change]) as Bundle[]
+    apply: async (bundles) => {
+      let asked = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
       let { batch, where } = await aimed(ctx, asked)
       // The same `Reach` the fan-out is holding, where it holds one: reach.ts
       // routes by identity — a word's declarers are picked out of this very

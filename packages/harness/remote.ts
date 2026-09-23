@@ -130,7 +130,7 @@ export let remote = async (
   // The TUI paints this terminal, so its defects must not be spoken to it: the
   // backend owns the graph, and it takes them.
   let detachDiagnostics = diagnostics().attach({
-    apply: (change) => request('exception', [change]) as Promise<Bundle[]>,
+    apply: (bundles) => request('exception', [bundles]) as Promise<Bundle[]>,
   })
   let rows = (id: string) =>
     (members.get(id) ?? []).flatMap((id) => {

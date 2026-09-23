@@ -98,9 +98,6 @@ export type Bundle =
       | undefined
   }
 
-/** A flat list of bundles, applied in one transaction: `Change = Bundle[]`. */
-export type Change = Bundle[]
-
 /** The component name a deleted entity carries. Reading one back means the
  * entity is deleted; writing one is the long form of `$delete: true`. */
 export let TOMBSTONE = 'tombstone'

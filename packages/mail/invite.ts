@@ -15,7 +15,7 @@
 // It refers to the `member` component by name, so this file imports nothing
 // from @yaks/member — the two packages meet at a component name.
 
-import type { Change, Comp, Eid } from '@yaks/graph'
+import type { Bundle, Comp, Eid } from '@yaks/graph'
 import type { Handler } from '@yaks/effects'
 import { DOC } from '@yaks/doc'
 import { DELIVER, MAIL } from './comp.ts'
@@ -49,7 +49,7 @@ export type Invite = {
   /** compose the letter (or decline to) */
   welcome: Welcome
   /** the graph's own `apply` — the letter goes through the full pipeline */
-  apply: (change: Change) => unknown
+  apply: (bundles: Bundle[]) => unknown
   /** the id for the new letter (default: a fresh uuid) */
   eid?: () => Eid
   /** the clock, passed in so a test can hold it still (default: now) */
@@ -68,7 +68,7 @@ let str = (c: Comp, k: string): string => c[k] == null ? '' : String(c[k])
  * let fx = effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })
  * fx.created('mail', sending({ sender: stash() }))
  * fx.created('member', invited({
- *   apply: (change) => club.apply(change),
+ *   apply: (bundles) => club.apply(bundles),
  *   welcome: ({ person }) => ({
  *     from: 'hello@books.example',
  *     subject: 'You are in the book club',

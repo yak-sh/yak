@@ -13,8 +13,8 @@
  * ## The write format
  * A {@link Bundle} is one entity plus its components. The identity is part of
  * the bundle, under the `entity` key. A write is a PATCH — an omitted column is
- * left alone, a `null` column is cleared, a `null` component is removed — and a
- * {@link Change} is a flat array of bundles applied in one transaction.
+ * left alone, a `null` column is cleared, a `null` component is removed — and
+ * `apply` takes an array of bundles and applies it in one transaction.
  *
  * ```ts
  * import { graph } from '@yaks/graph'

@@ -101,7 +101,7 @@ export let held = (m: Meta): Held => ({
 // package asks for {@link Writes} and not a `Graph`.
 let writes = (dir: Held): Writes => ({
   read: (query) => dir.read(String(query)),
-  apply: (change) => dir.write(change as Bundle[]),
+  apply: (bundles) => dir.write(bundles),
 })
 
 /** The git object store, as one of those, over its own door. */

@@ -53,6 +53,7 @@ import {
   schemaStamp,
 } from '../../src/db.ts'
 import { fed } from '../../src/effects.ts'
+import type { EntityLiteral } from '../../src/mutation.ts'
 import { DoSql, type DoStorage } from '../../src/store/do.ts'
 import { parseVocab } from '../../src/store/vocab.ts'
 import ops from '../../src/store/schema.json' with { type: 'json' }
@@ -93,12 +94,6 @@ let THREE = '33000000-0000-4000-8000-000000000033'
 let FOUR = '44000000-0000-4000-8000-000000000044'
 let GONE = '30000000-0000-4000-8000-000000000003'
 
-type Change = {
-  eid: string
-  name: string
-  comp: Record<string, unknown> | null
-}
-
 // The old store's birth and its writes, over one object's storage: the fleet's
 // whole schema planted from src/store/schema.json, the slots the object
 // remembered its name and its schema stamp in, and apply() in server-writer
@@ -110,7 +105,8 @@ let older = (ctx: State, name: string) => {
   ctx.slots.set('schema', schemaStamp(ops as SchemaOp[]))
   return {
     db,
-    apply: (changes: Change[]) => mutate(db, changes, fed(), null, true),
+    apply: (entities: EntityLiteral[]) =>
+      mutate(db, { entities }, fed(), null, true),
     // The app's own vocab.json, as the `/vocab` door planted it: the tables and
     // columns it names, then the manifest itself in the slot the object woke
     // with. A fresh store has nothing to grow from, so this is the whole of it.
@@ -169,15 +165,20 @@ let seedApp = async (ctx: State) => {
   let old = older(ctx, 'ada/cookbook')
   await old.vocab({ recipe: { title: 'text', serves: 'number' } })
   await old.apply([
-    { eid: ADA, name: 'person', comp: {} },
-    { eid: ADA, name: 'doc', comp: { title: 'Ada' } },
-    { eid: ONE, name: 'doc', comp: { title: 'Lemon cake', body: '3 lemons' } },
-    { eid: ONE, name: 'task', comp: {} },
-    { eid: ONE, name: 'filed', comp: { priority: 2 } },
-    { eid: ONE, name: 'recipe', comp: { title: 'Lemon cake', serves: 8 } },
-    { eid: TWO, name: 'doc', comp: { title: 'Notes', body: 'nice' } },
-    { eid: TWO, name: 'comment', comp: { target: ONE } },
-    { eid: GONE, name: 'doc', comp: { title: 'Scratch' } },
+    { entity: { eid: ADA }, person: {}, doc: { title: 'Ada' } },
+    {
+      entity: { eid: ONE },
+      doc: { title: 'Lemon cake', body: '3 lemons' },
+      task: {},
+      filed: { priority: 2 },
+      recipe: { title: 'Lemon cake', serves: 8 },
+    },
+    {
+      entity: { eid: TWO },
+      doc: { title: 'Notes', body: 'nice' },
+      comment: { target: ONE },
+    },
+    { entity: { eid: GONE }, doc: { title: 'Scratch' } },
   ])
   // Two edges, said the way the fleet says one: the entity is the sentence's
   // own address, and the tag is the nature — `references` in the present tense,
@@ -185,12 +186,10 @@ let seedApp = async (ctx: State) => {
   let requires = edgeEid(TWO, 'requires', ONE)
   let refs = edgeEid(TWO, 'references', ADA)
   await old.apply([
-    { eid: requires, name: 'edge', comp: { from: TWO, to: ONE } },
-    { eid: requires, name: 'requires', comp: {} },
-    { eid: refs, name: 'edge', comp: { from: TWO, to: ADA } },
-    { eid: refs, name: 'references', comp: {} },
+    { entity: { eid: requires }, edge: { from: TWO, to: ONE }, requires: {} },
+    { entity: { eid: refs }, edge: { from: TWO, to: ADA }, references: {} },
   ])
-  await old.apply([{ eid: GONE, name: 'entity', comp: null }])
+  await old.apply([{ entity: { eid: GONE }, tombstone: {} }])
   return { requires, refs }
 }
 
@@ -406,20 +405,17 @@ slow('the directory keeps its three seats', async () => {
   let ctx = state()
   let old = older(ctx, PLATFORM_STORE)
   await old.apply([
-    { eid: SPACE, name: 'space', comp: { slug: 'ada' } },
-    { eid: SPACE, name: 'doc', comp: { title: 'Ada' } },
-    { eid: ADA, name: 'person', comp: {} },
-    { eid: BEN, name: 'person', comp: {} },
-    { eid: APP, name: 'app', comp: { slug: 'cookbook', space: SPACE } },
+    { entity: { eid: SPACE }, space: { slug: 'ada' }, doc: { title: 'Ada' } },
+    { entity: { eid: ADA }, person: {} },
+    { entity: { eid: BEN }, person: {} },
+    { entity: { eid: APP }, app: { slug: 'cookbook', space: SPACE } },
     {
-      eid: ONE,
-      name: 'member',
-      comp: { space: SPACE, person: ADA, role: 'owner' },
+      entity: { eid: ONE },
+      member: { space: SPACE, person: ADA, role: 'owner' },
     },
     {
-      eid: TWO,
-      name: 'member',
-      comp: { space: SPACE, person: BEN, role: 'editor' },
+      entity: { eid: TWO },
+      member: { space: SPACE, person: BEN, role: 'editor' },
     },
   ])
   let now = newer(ctx, PLATFORM_STORE)
@@ -445,18 +441,16 @@ slow('an app store splits the seat from the level', async () => {
   let ctx = state()
   let old = older(ctx, 'ada/cookbook')
   await old.apply([
-    { eid: ADA, name: 'person', comp: {} },
-    { eid: BEN, name: 'person', comp: {} },
-    { eid: SPACE, name: 'space', comp: { slug: 'ada' } },
+    { entity: { eid: ADA }, person: {} },
+    { entity: { eid: BEN }, person: {} },
+    { entity: { eid: SPACE }, space: { slug: 'ada' } },
     {
-      eid: ONE,
-      name: 'member',
-      comp: { space: SPACE, person: ADA, role: 'owner' },
+      entity: { eid: ONE },
+      member: { space: SPACE, person: ADA, role: 'owner' },
     },
     {
-      eid: TWO,
-      name: 'member',
-      comp: { space: SPACE, person: BEN, role: 'editor' },
+      entity: { eid: TWO },
+      member: { space: SPACE, person: BEN, role: 'editor' },
     },
   ])
   let now = newer(ctx, 'ada/cookbook')
@@ -484,13 +478,14 @@ slow('an app store splits the seat from the level', async () => {
 let seedHomes = async (ctx: State) => {
   let old = older(ctx, PLATFORM_STORE)
   await old.apply([
-    { eid: ADA, name: 'person', comp: {} },
-    { eid: SPACE, name: 'space', comp: { slug: 'ada', home: APP } },
-    { eid: SPACE, name: 'doc', comp: { title: 'Ada' } },
-    { eid: APP, name: 'app', comp: { slug: 'cookbook', space: SPACE } },
-    { eid: ONE, name: 'app', comp: { slug: 'garden', space: SPACE } },
-    { eid: TWO, name: 'space', comp: { slug: 'ben' } },
+    { entity: { eid: ADA }, person: {} },
+    { entity: { eid: SPACE }, space: { slug: 'ada' }, doc: { title: 'Ada' } },
+    { entity: { eid: APP }, app: { slug: 'cookbook', space: SPACE } },
+    { entity: { eid: ONE }, app: { slug: 'garden', space: SPACE } },
+    { entity: { eid: TWO }, space: { slug: 'ben' } },
   ])
+  // The space names its front page once the app it names exists.
+  await old.apply([{ entity: { eid: SPACE }, space: { home: APP } }])
   return old
 }
 
@@ -581,7 +576,7 @@ slow(
   async () => {
     let ctx = state()
     let old = await seedHomes(ctx)
-    await old.apply([{ eid: TWO, name: 'space', comp: { home: APP } }])
+    await old.apply([{ entity: { eid: TWO }, space: { home: APP } }])
     let now = newer(ctx, PLATFORM_STORE)
     let said = await why(now)
     assert(said.includes('2 spaces named a front page'), said)
@@ -597,18 +592,20 @@ slow(
 let seedFormer = async (ctx: State) => {
   let old = older(ctx, PLATFORM_STORE)
   await old.apply([
-    { eid: SPACE, name: 'space', comp: { slug: 'ada' } },
-    { eid: APP, name: 'app', comp: { slug: 'cookbook', space: SPACE } },
-    { eid: APP, name: 'alias', comp: { slug: 'ada/cookbook' } },
-    { eid: ONE, name: 'app', comp: { slug: 'orchard', space: SPACE } },
+    { entity: { eid: SPACE }, space: { slug: 'ada' } },
+    {
+      entity: { eid: APP },
+      app: { slug: 'cookbook', space: SPACE },
+      alias: { slug: 'ada/cookbook' },
+    },
     // The app that has been renamed: born at `garden`, answering there still.
     {
-      eid: ONE,
-      name: 'alias',
-      comp: { slug: 'ada/garden', slugs: 'ada/plot' },
+      entity: { eid: ONE },
+      app: { slug: 'orchard', space: SPACE },
+      alias: { slug: 'ada/garden', slugs: 'ada/plot' },
     },
     // A space wears no address of its own, which is the row that must not move.
-    { eid: TWO, name: 'space', comp: { slug: 'ben' } },
+    { entity: { eid: TWO }, space: { slug: 'ben' } },
   ])
   return old
 }
@@ -1227,11 +1224,10 @@ slow('a re-addressing that collides rolls the whole pass back', async () => {
   // in a customer's own rows that can make the pass refuse.
   let taken = edgeEid(TWO, 'referenced', ADA)
   await old.apply([
-    { eid: ADA, name: 'doc', comp: { title: 'Ada' } },
-    { eid: TWO, name: 'doc', comp: { title: 'Notes' } },
-    { eid: taken, name: 'doc', comp: { title: 'in the way' } },
-    { eid: refs, name: 'edge', comp: { from: TWO, to: ADA } },
-    { eid: refs, name: 'references', comp: {} },
+    { entity: { eid: ADA }, doc: { title: 'Ada' } },
+    { entity: { eid: TWO }, doc: { title: 'Notes' } },
+    { entity: { eid: taken }, doc: { title: 'in the way' } },
+    { entity: { eid: refs }, edge: { from: TWO, to: ADA }, references: {} },
   ])
   let now = newer(ctx, 'ada/cookbook')
 
@@ -1503,8 +1499,7 @@ slow(
     let ctx = state()
     let was = older(ctx, 'ada/cookbook')
     was.apply([
-      { eid: ONE, name: 'doc', comp: { title: 'Old chore' } },
-      { eid: ONE, name: 'task', comp: {} },
+      { entity: { eid: ONE }, doc: { title: 'Old chore' }, task: {} },
     ])
     // Restore the layout that deployed before the fleet split; no filed row
     // exists. The carry must read these values before dropping the old table.

@@ -47,7 +47,6 @@ import {
   type Actor,
   asked,
   type Bundle,
-  type Change,
   type Comp,
   type Declared,
   type Eid,
@@ -159,7 +158,7 @@ export type Runner = {
    * every request */
   ensure: () => Promise<Bundle[]>
   /** invoke a tool: the call's bundles in, the answer's bundles out */
-  call: (change: Change) => Promise<Bundle[]>
+  call: (bundles: Bundle[]) => Promise<Bundle[]>
   /** run one call that is already in the graph */
   run: (call: Eid, opts?: { redrive?: boolean }) => Promise<Bundle[]>
   /** run every call the rules select: one sweep, which is what a boot pass
@@ -499,12 +498,12 @@ export let runner = (g: Graph, opts: Opts): Runner => {
           tool: { name: t.name, description: t.description },
         })),
       )),
-    call: async (change) => {
+    call: async (bundles) => {
       // The call is written first, because it is the record: what was asked
       // stands whether or not an answer ever does. Then the tool runs — here,
       // in this process, for this caller — unless an effect on the same commit
       // got there first, in which case its answer is this caller's answer.
-      let applied = await g.apply(change)
+      let applied = await g.apply(bundles)
       let made = applied.find((b) => b.call)
       if (!made) throw new CallError('call', 'a call batch needs a call')
       let id = made.entity.eid

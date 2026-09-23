@@ -72,7 +72,7 @@
 //                             rounds.
 
 import { assert, assertEquals } from '@std/assert'
-import { type Change, graph, token } from '@yaks/graph'
+import { type Bundle, graph, token } from '@yaks/graph'
 import { members } from '@yaks/member'
 import { club, ids } from '../member/harness.ts'
 import { counted, type Hops, shop } from './harness.ts'
@@ -108,8 +108,8 @@ let holds = (name: string, h: Hops) => {
 // A shop graph over a counting store, with `arrange` applied before the tally
 // is zeroed and `measured` applied after it.
 let shopHops = async (
-  arrange: Change,
-  measured: Change,
+  arrange: Bundle[],
+  measured: Bundle[],
 ): Promise<Hops> => {
   let { store, hops, reset } = await counted()
   let g = graph({ storage: store, vocab: shop })

@@ -59,17 +59,18 @@ one bundle or an array of them (`apply(b)` or `apply([b1, b2])`) and POSTs them
 to `./api/apply` as `{entities: [...]}`. It returns:
 
     { ok: true,
-      changes: [ {eid, name, comp}, ... ],
-      aliases: { $cake: '4f3c…' } }
+      aliases: { $cake: '4f3c…' },
+      bundles: [ {entity: {eid: '4f3c…'}, $alias: '$cake', doc: {…}}, ... ] }
 
-`changes` is the flat JSON form of what landed, one entry per component written.
-`aliases` maps each `$alias` you sent to the eid it minted. The whole array is
-one batch — every bundle in one `apply` call, applied in one transaction — so if
-any bundle is refused, nothing in that call is written.
+`aliases` maps each `$alias` you sent to the eid it minted. `bundles` is what
+landed, one bundle per entity written, each carrying the `$alias` you named it
+by, with the columns the store stamped on it. The whole array is one batch —
+every bundle in one `apply` call, applied in one transaction — so if any bundle
+is refused, nothing in that call is written.
 
 If the app's store cannot apply a write right now (yaks.app itself is failing,
 not your data), the write is kept and applied later, in the order it was sent.
-`apply` then returns `{ ok: true, pending: true, changes: [], aliases: {} }`.
+`apply` then returns `{ ok: true, pending: true, aliases: {}, bundles: [] }`.
 Don't send the write again.
 
 ### query(filter)
@@ -482,7 +483,7 @@ directly from `curl`, from another page, or from your own `worker.js` through
     POST ./api/apply
     content-type: application/json
     {"entities": [ {"entity": {"eid": "$r"}, "doc": {"title": "Lemon cake"}} ]}
-    → {"ok": true, "changes": [...], "aliases": {"$r": "4f3c…"}}
+    → {"ok": true, "aliases": {"$r": "4f3c…"}, "bundles": [...]}
 
     POST ./api/apply
     content-type: application/x-ndjson

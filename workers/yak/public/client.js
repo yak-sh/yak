@@ -122,8 +122,9 @@ export let was = async (value) => {
 export let store = (base) => {
   base = based(base)
   let ask = door(base)
-  // One bundle or many, in; `{ok, changes, aliases}` back, where `aliases`
-  // maps each `$alias` to the eid it minted.
+  // One bundle or many, in; `{ok, aliases, bundles}` back, where `aliases`
+  // maps each `$alias` to the eid it minted and `bundles` is the batch as
+  // applied.
   let apply = (bundles) =>
     ask('apply', {
       method: 'POST',

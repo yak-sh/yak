@@ -145,7 +145,7 @@ let directory = () => {
         }
         if (e.tombstone) rows = rows.filter((r) => r.eid != e.entity!.eid)
       }
-      return Promise.resolve({ changes: [] })
+      return Promise.resolve([])
     },
   } as unknown as Directory
   return { dir, rows: () => rows }

@@ -20,7 +20,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { ARMS, doomSql, looseSql, narrow } from '@yaks/sql'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { type Bundle, type Change, type Graph, graph } from '@yaks/graph'
+import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { mem } from './harness.ts'
 import { storage, type Store } from './mod.ts'
@@ -108,7 +108,7 @@ let db = (v: Vocab = words): Store => {
 // The same batches through a graph over SQLite and a graph over a Map: what
 // the last one answered, asserted equal. The compiled closure and the walk are
 // the same rule or one of them is wrong.
-let both = (seed: Change, kill: Change, v: Vocab = words): Bundle[] => {
+let both = (seed: Bundle[], kill: Bundle[], v: Vocab = words): Bundle[] => {
   let run = (g: Graph): Bundle[] => {
     g.apply(seed, { now: AT })
     return g.apply(kill, { now: AT }) as Bundle[]

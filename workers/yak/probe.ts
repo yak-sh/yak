@@ -24,6 +24,7 @@ import { until } from '../../src/testing.ts'
 import { COOKIE, sign, verify } from '../../src/token.ts'
 import { ready, WRANGLER } from './wrangler.ts'
 import type { Custom } from './domains.ts'
+import type { Bundle } from '@yaks/graph'
 
 let root = fileURLToPath(new URL('./', import.meta.url))
 let wrangler = (Deno.env.get('WRANGLER') ?? WRANGLER.join(' ')).split(' ')
@@ -424,7 +425,8 @@ export let client = (
     if (r.status != 200) throw new Error(`apply ${r.status}: ${await r.text()}`)
     return (await r.json()) as {
       ok: boolean
-      changes: { eid: string; name: string; comp: unknown }[]
+      aliases: Record<string, string>
+      bundles: Bundle[]
     }
   }
   let put = (path: string, body: string, type?: string) =>

@@ -59,7 +59,7 @@ import { served as fenced, type Size, sizeOf } from '@yaks/blob'
 import { asking, listed, type Row } from './listing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import { Pending } from './writes.ts'
-import { batched, lined, lowered } from './wire.ts'
+import { batched, lined, receipt } from './wire.ts'
 import {
   binned,
   nothingHere,
@@ -1134,11 +1134,11 @@ let api = async (
       }, { ...headers, ...(await named(env, who, app)) })
     }
     // The page's envelope in, the page's answer out (wire.ts): the Store takes
-    // a bare array of bundles and answers the batch as applied, and every app
-    // already deployed reads `{ok, changes, aliases}` off its own client.
+    // a bare array of bundles and answers the batch as applied, and the page
+    // reads `{ok, aliases, bundles}` off its own client.
     try {
       return Response.json(
-        lowered(
+        receipt(
           await metaOf(store).apply(batched(JSON.parse(body)), {
             ...headers,
             ...(await named(env, who, app)),
@@ -1153,8 +1153,8 @@ let api = async (
           ok: true,
           pending: true,
           message: e.message,
-          changes: [],
           aliases: {},
+          bundles: [],
         }, { status: 202 })
       }
       caught(e, {

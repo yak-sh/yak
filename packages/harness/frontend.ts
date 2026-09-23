@@ -30,8 +30,8 @@ export let frontend = (vault: Vault | false = false): Frontend => {
   }
   let c = client(frontendVocab, [], { vault: kept, signal })
   const writes = new Set<Promise<unknown>>()
-  const mutate: Client['mutate'] = (change) => {
-    const result = c.mutate(change)
+  const mutate: Client['mutate'] = (bundles) => {
+    const result = c.mutate(bundles)
     if (result instanceof Promise) {
       const done = result.catch((error) => {
         failure = error

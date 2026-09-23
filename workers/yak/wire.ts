@@ -4,16 +4,16 @@
 //
 //   the page      GET  ./api/query?.doc.title~=cake&limit=10
 //                 POST ./api/apply  {"entities": [ …bundles… ]}
-//                                → {"ok": true, "changes": […], "aliases": {…}}
+//                                → {"ok": true, "aliases": {…}, "bundles": […]}
 //   the Store     GET  /query?q=<the whole line, escaped once>
 //                 POST /apply       [ …bundles… ]
 //                                → [ …the batch as applied… ]
 //
 // The page's half is fixed, and that is the whole reason this file exists: it
-// is documented (public/docs.md), it is what `public/client.js` wraps, and
-// every app already deployed imports that client and reads `aliases` off an
-// answer. So the store moved and the door translates, rather than every page
-// in the world being asked to move with it.
+// is documented (public/docs/store.md), it is what `public/client.js` wraps,
+// and every app already deployed imports that client and reads `aliases` off
+// an answer. So the store moved and the door translates, rather than every
+// page in the world being asked to move with it.
 //
 // Only the envelope is translated. The bundles are the same bundles either way
 // — `{entity: {eid}, ...components}`, a `$alias` wherever an eid goes — and the
@@ -21,6 +21,7 @@
 // line as the query string itself and the Store takes it as one parameter, and
 // three of the page's riders lost their leading dot on the way over.
 import type { Bundle } from '@yaks/graph'
+import { minted } from './meta.ts'
 import { refuse } from './tool.ts'
 
 // The riders the page's grammar spells bare and the Store's spells dotted. They
@@ -79,34 +80,17 @@ export let lined = (search: string): string =>
     }`
   }).join('&')
 
-// One entry of a batch, in whichever spelling reached the door.
-//
-// A bundle that names no entity is a page saving something new — the shape the
-// guide shows first, `apply({doc: {title}})` — and the Store takes an alias
-// wherever an eid goes, so it gets one. An alias rather than a fresh uuid,
-// because a content-addressed component names its own entity (@yaks/blob) and
-// only an alias leaves that decision to the graph.
-//
-// A flat change — `{eid, name, comp}` — is the older spelling of one component
-// on one entity, and pages and headless clients deployed against it before the
-// bundle was the wire. It says exactly what a bundle says, so it is lowered
-// here rather than refused: this is the door whose job is that both spellings
-// mean one thing at the store.
-//
-// It stays, after the store that spoke it natively was deleted (T-33807).
-// `public/client.js` is ours and moved with the store, but this door is a
-// public one: a page or a headless client written against the flat spelling is
-// somebody else's code, on somebody else's machine, and nothing here can know
-// whether one exists. Lowering it costs six lines; refusing it would break a
-// caller we cannot see and cannot warn.
+// The alias this door gives a bundle that names no entity: its own
+// bookkeeping, never part of the answer.
+let NEW = /^\$new\d+$/
+
+// One entry of a batch. A bundle that names no entity is a page saving
+// something new — the shape the guide shows first, `apply({doc: {title}})` —
+// and the Store takes an alias wherever an eid goes, so it gets one. An alias
+// rather than a fresh uuid, because a content-addressed component names its own
+// entity (@yaks/blob) and only an alias leaves that decision to the graph.
 let bundled = (one: unknown, n: number): Bundle => {
   let held = one as Record<string, unknown>
-  if (typeof held?.name == 'string' && 'comp' in held) {
-    return {
-      entity: { eid: (held.eid as string) ?? `$flat${n}` },
-      [held.name]: held.comp,
-    } as Bundle
-  }
   return (held?.entity
     ? held
     : { ...held, entity: { eid: `$new${n}` } }) as Bundle
@@ -127,35 +111,14 @@ export let batched = (body: unknown): Bundle[] => {
   return held.map(bundled)
 }
 
-// The keys of a bundle that are not a component: its address, and the wire's
-// own sugar. `tombstone` Is one — a death is a change like any other, and a
-// page folding an answer needs to hear it.
-let SPINE = ['entity', 'kind', '$alias', '$was', '$actor', '$delete']
-
 /**
- * The batch as applied, in the page's own words: one `change` per component
- * written, and the eid each `$alias` in the batch became.
- *
- * A page reads `aliases` to find what it just minted (guide §Saving) and
- * `changes` to know what moved, including the casualties a death took with it —
- * both are what the answer has always said, so a page written a year ago still
- * reads this one.
+ * The batch as applied, as the page reads it: the Store's bundles, and the eid
+ * each `$alias` the page wrote became (guide §Saving). An alias this door
+ * invented for a bundle that named no entity (`bundled`) is left out of both.
  */
-export let lowered = (applied: Bundle[]) => ({
-  ok: true,
-  changes: applied.flatMap((b) =>
-    Object.entries(b)
-      .filter(([name]) => !SPINE.includes(name))
-      .map(([name, comp]) => ({ eid: b.entity.eid, name, comp }))
-  ),
-  // The aliases the page wrote. The ones this door invented for a bundle that
-  // named no entity (`bundled`) are its own bookkeeping, and a page that never
-  // spelled one has no use for the answer.
-  aliases: Object.fromEntries(
-    applied.flatMap((b) =>
-      typeof b.$alias == 'string' && !/^\$(new|flat)\d+$/.test(b.$alias)
-        ? [[b.$alias, b.entity.eid]]
-        : []
-    ),
-  ),
-})
+export let receipt = (applied: Bundle[]) => {
+  let bundles = applied.map(({ $alias, ...b }) =>
+    typeof $alias == 'string' && !NEW.test($alias) ? { ...b, $alias } : b
+  )
+  return { ok: true, aliases: minted(bundles), bundles }
+}

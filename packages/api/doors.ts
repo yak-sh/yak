@@ -10,7 +10,7 @@
 // changes is that neither the request body nor the response body is ever
 // whole in memory.
 
-import { type Bundle, type Change, type Graph, Refused } from '@yaks/graph'
+import { type Bundle, type Graph, Refused } from '@yaks/graph'
 import type { Actor, Row } from '@yaks/graph'
 import { parse, type Query } from '@yaks/query'
 import { signed } from './actor.ts'
@@ -62,7 +62,7 @@ let lines = async function* (
 // through is the offender. Nothing is re-applied until something has already
 // gone wrong, and when no single bundle is responsible — two bad lines, or a
 // chunk refused as a whole — the chunk's first line is reported.
-let culprit = async (graph: Graph, chunk: Change): Promise<number> => {
+let culprit = async (graph: Graph, chunk: Bundle[]): Promise<number> => {
   for (let i = 0; i < chunk.length; i++) {
     let rest = chunk.filter((_, j) => j != i)
     if (!rest.length) return i
@@ -172,9 +172,8 @@ export let pour = (
 
 /**
  * `POST /apply` — a JSON array of bundles in, that array as applied out. The
- * request body is a `Change`; the response body is the array `apply()`
- * returned, including server-written stamps and any entity a cascading delete
- * took with it.
+ * response body is the array `apply()` returned, including server-written
+ * stamps and any entity a cascading delete took with it.
  *
  * `?check=1` asks only whether the array would be accepted: every phase runs
  * and the transaction is rolled back, so nothing is written and no effect
