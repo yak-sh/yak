@@ -42,8 +42,8 @@ tracks in the checkout the command runs in. Each module records the Git blob id
 of the text it was read from, and a sync reads a file again only when that blob
 moved. Nothing is deleted: a file or export that is gone has its components
 cleared, because a tombstoned id can never be written again and a path or name
-often comes back. `task land` runs an incremental sync of the checkout it landed
-into, when the yak config lists `@yaks/code`.
+often comes back. `yak land` does not run it; a sync after landing is its own
+call.
 
 A citation of code (`cites`, [@yaks/git](../git)) points at a `symbol`, and
 `cites check` asks Git which commits touched that definition since the citation

@@ -444,7 +444,7 @@ Deno.test('an order is written at an eid derived from its session', () => {
   assert(orderEid('cs_test_1') != orderEid('cs_test_2'))
   // Shaped as a uuid, because that is what a store's eids are — version 8,
   // the one reserved for an id derived from a name rather than drawn at
-  // random, which is exactly what this is (src/edge.ts `edgeEid` again).
+  // random, which is exactly what this is (@yaks/edge `edgeEid` again).
   assertMatch(
     orderEid('cs_test_1'),
     /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,

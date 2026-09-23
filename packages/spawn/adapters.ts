@@ -17,8 +17,8 @@
 // any call naming a tool it has, running them a second time. No component yet
 // means "another process already ran this", so tool calls stay in the log file.
 //
-// The event shapes are the fleet's, copied from live runs of both CLIs rather
-// than from their docs (src/adapters.ts).
+// The event shapes are copied from live runs of both CLIs rather than from
+// their docs.
 
 /** One parsed line of a provider's stream. */
 export type Event = Record<string, unknown>

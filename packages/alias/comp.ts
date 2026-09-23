@@ -19,10 +19,8 @@
 // ever asked about it.
 //
 // No prefix character. `recipe:lemon-cakes` is a name that happens to contain a
-// colon, not a namespace the vocabulary knows about — the fleet's own store has
-// resolved bare names this way for as long as it has had them (src/db.ts
-// `resolveId`), and a caller who wants namespaced names writes whatever prefix
-// they like. A leading `$` would mean the opposite of what this component
+// colon, not a namespace the vocabulary knows about, and a caller who wants
+// namespaced names writes whatever prefix they like. A leading `$` would mean the opposite of what this component
 // means: `$cake` is an alias local to one list of changes, which @yaks/graph
 // assigns an id and then forgets, whereas this name is stored and outlives the
 // write.

@@ -59,7 +59,7 @@ nothing caught, a break the router or a job files, a Store's own, a connector
 tool's, any `console.error`, and a Workers Build that failed (builds.ts, fed by
 the `yak-builds` queue's event subscription). Each carries its tags (`tool`,
 `space`, `app`, `client`, `store`, `request`) and the person's eid as the user
-with `account` set to `person` or `test` (a test account, src/bots.ts). The
+with `account` set to `person` or `test` (a test account, lib/bots.ts). The
 release is the Workers version id and the environment is `SENTRY_ENVIRONMENT`
 (`production`, `staging`). A refusal is never sent. With no `SENTRY_DSN` secret
 nothing is sent, which is what keeps the tests and `wrangler dev` silent. Source
@@ -108,7 +108,7 @@ requested duration, rather than claiming historical coverage. Live tails use the
 box’s GNU `timeout` to stop Wrangler and its launcher together.
 
 `revert` requires main to match its remote, gates a fresh worktree, and uses the
-same primitive as `task land` to publish. It re-gates after a rebase, checks the
+same primitive as `yak land` to publish. It re-gates after a rebase, checks the
 push independently, and waits up to 20 minutes for an annotated version
 containing the revert to serve all traffic. A failed worktree is kept for
 inspection. Neither a rollback nor a revert undoes migrated data.

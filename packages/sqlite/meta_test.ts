@@ -75,7 +75,7 @@ Deno.test('epoch: mints on a store whose row was stripped', () => {
 
 Deno.test('install adopts a server_meta the host already raised', () => {
   let d = mem()
-  // The fleet's live table, as src/db.ts writes it.
+  // The table as a host raised it before this package.
   d.exec(`create table if not exists server_meta (
     k text primary key,
     v text not null

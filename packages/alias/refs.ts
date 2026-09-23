@@ -2,11 +2,8 @@
 //
 // Once an entity has the name `lemon-cake`, that name is accepted anywhere its
 // id is — in a reference property (`comment: {target: 'lemon-cake'}`), as a
-// bundle's own `entity.eid`, and by any caller that reads entities by id. The
-// fleet's own store has resolved bare names alongside eids for as long as it
-// has had them (src/db.ts `resolveId`); this is the same lookup without the
-// ambiguity, since a name is unique in the store, so exactly one entity has it
-// or none does.
+// bundle's own `entity.eid`, and by any caller that reads entities by id. A
+// name is unique in the store, so exactly one entity has it or none does.
 //
 // EIDS are checked first. An id that is an entity here means that entity, even
 // if some other entity has the same string as a name. A caller who wrote an id

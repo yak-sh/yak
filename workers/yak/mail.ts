@@ -3,11 +3,8 @@
 // asks for `mail(env, store)` and calls it.
 //
 // `sending` is the hosted adapter: Cloudflare Email Sending, the same payload
-// shape src/mailer.ts `payload`/`send` post from the Deno server (from/name,
-// to, reply_to, subject, text, html). It is written out rather than imported
-// because that module reads `Deno.env` and renders its html through md.ts's
-// markdown door — a whole vendored parser for a six-digit code that has no
-// markup in it. A change to the API's shape is a change to both.
+// shape @yaks/mail's cloudflare.ts `payload` posts (from/name, to, reply_to,
+// subject, text, html). A change to the API's shape is a change to both.
 //
 // `printed` is the local adapter: the letter on the Worker's own log, where
 // whoever is running `wrangler dev` reads it (and a probe reads it out of the

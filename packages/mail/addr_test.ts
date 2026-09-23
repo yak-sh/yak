@@ -19,8 +19,7 @@ Deno.test('local: the domain is case-blind, the local part is kept as written', 
   assertEquals(address('ana', 'books.example'), 'ana@books.example')
 })
 
-// The corpus src/mail_test.ts holds the fleet's canon() to, transposed to a
-// domain of this package's own: same five cases, same five answers.
+// canon() on a domain of this package's own: five cases, five answers.
 Deno.test('canon: my domain sheds underscores and case; every other passes', () => {
   assertEquals(mine('book_club@books.example'), 'bookclub@books.example')
   assertEquals(mine('Ops@Books.Example'), 'ops@books.example')

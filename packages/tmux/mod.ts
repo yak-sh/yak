@@ -31,10 +31,8 @@
  * ## Declarations only, for now
  * This package declares a vocabulary and nothing else. Sending keys to a pane,
  * finding the pane a session is running in, and attaching to one are things an
- * application does with `tmux` on its path; the one caller that does them today
- * (the fleet's `src/tmux.ts`) drives tmux through a child process, and every
- * check it needs is about its own terminal rather than about a graph. When a
- * second caller needs the same operations they become this package's `./tools`
+ * application does with `tmux` on its path. When two callers need the same
+ * operations they become this package's `./tools`
  * — until then, a declared tool nobody calls would be an interface guessed at
  * rather than one found by use.
  *

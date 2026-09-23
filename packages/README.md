@@ -569,10 +569,9 @@ distinguish implemented behavior from remaining proposals.
   alongside every other), so only one of them can have it — and a program may
   well want both a canvas and a terminal. Resolved by nesting one: `@yaks/tmux`
   declares `tmux{of, pane}`, where the component is named after the package and
-  `pane` is just a property naming what tmux addresses. That is also what the
-  fleet's own note in `src/sessions.ts` proposed. The alternative, renaming the
-  canvas's `pane` to `region`, is a better name for a layout split but belongs
-  with the canvas's own redesign rather than with this split.
+  `pane` is just a property naming what tmux addresses. The alternative,
+  renaming the canvas's `pane` to `region`, is a better name for a layout split
+  but belongs with the canvas's own redesign rather than with this split.
 - **The list of statuses depends on loaded schemas.** `task.status` is computed
   from marks. `@yaks/session/vocab` contributes computed-property rules
   including `claim` as `wip`; load it after `@yaks/task/vocab` to select that

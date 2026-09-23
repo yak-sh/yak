@@ -654,7 +654,7 @@ export type Event = {
  * and moves nothing — the same rule `moved` keeps for a seller's row, one level
  * up.
  *
- * Shaped as a uuid because that is what a store's eids are (src/edge.ts
+ * Shaped as a uuid because that is what a store's eids are (@yaks/edge
  * `edgeEid` derives one the same way, off a sentence rather than a session).
  */
 export let orderEid = (session: string): string => {

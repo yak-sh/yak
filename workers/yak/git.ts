@@ -5,8 +5,8 @@
 // gitobj.ts is the adapter that tells it what a yaks.app deploy is.
 //
 // The two words the directory gains are `commit` and `ref`, and only one of
-// them is declared here. `commit` is the fleet's own component
-// (src/vocab/manifests/kernel.json), declared here with the same meaning —
+// them is declared here. `commit` is the fleet's own component, declared here
+// with the same meaning —
 // `target` is what the commit is about, which for a yaks.app commit is the
 // deploy it was minted from, so a history joins to the releases people already
 // look at. `ref` is @yaks/git's own word (`refDoc`), loaded here rather than in

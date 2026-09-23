@@ -14,8 +14,7 @@
 //
 // The child outlives US, through two layers, because the process supervising
 // another process must be restartable without taking that process with it. The
-// technique is the fleet's (src/sessions.ts, T-7127/T-9261), reused rather than
-// reinvented: our direct child is a launcher that backgrounds the rest and
+// technique (T-7127/T-9261): our direct child is a launcher that backgrounds the rest and
 // exits immediately, so a supervisor that kills the pids it tracks finds
 // nothing to kill; `setsid` moves the wrapper into a session and process group
 // of its own; and `systemd-run --user --scope` lifts the whole thing out of
@@ -617,7 +616,7 @@ let mine = () => {
 /**
  * Keep the wanted programs running. What is wanted is a `service` row; this is
  * the pass that makes the machine match it, returned as a function for the
- * caller's own timer to drive (the fleet's `tick()` in src/doing.ts).
+ * caller's own timer to drive.
  *
  * ```ts
  * import { store, supervise } from '@yaks/process'

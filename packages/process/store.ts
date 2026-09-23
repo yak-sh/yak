@@ -4,7 +4,7 @@
 //
 // It is a named interface rather than a whole `Graph` because those two reads
 // are the only ones this package makes, and a caller that keeps its processes
-// in a database of its own (the fleet's src/processes.ts does) can implement
+// in a database of its own can implement
 // them with one statement each instead of standing up a query engine. Over a
 // @yaks/graph, {@link store} is that adapter and each read is one ordinary
 // query.

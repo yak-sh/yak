@@ -195,9 +195,8 @@ export let react = async (
   if (!newest || status == 'settled' || status == 'stopped') return nothing
   if (status == 'failed') return nothing
   let mint = deps.mint ?? (() => crypto.randomUUID() as Eid)
-  // Who a line of this turn is written by. The pair is the one the fleet
-  // resolves for an agent's write (src/db.ts actorFor/writerVia): the
-  // instrument is the transcript it came in on, and the actor is the model
+  // Who a line of this turn is written by: the instrument is the transcript
+  // it came in on, and the actor is the model
   // answering there — nobody else is at this keyboard. Which model is in force
   // is read off the transcript below, so the signature is taken when a line is
   // minted rather than when this closure is made.

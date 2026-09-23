@@ -2,8 +2,7 @@
 // works. This is the only module that imports it: `import { Database } from
 // '@yaks/sqlite/db'`, never from '@db/sqlite' directly, so ./sqlitepath.ts has
 // already named the system library by the time the FFI initializes. Importing
-// @db/sqlite directly segfaults on Linux with nothing on stderr
-// (src/store/sqlitepath_test.ts enforces that for the whole repo).
+// @db/sqlite directly segfaults on Linux with nothing on stderr.
 //
 // ./mod.ts stays free of it on purpose: the adapter there works against any
 // `Driver`, and only an application that wants an in-process database needs

@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
-// The `///` doctests in router.ts, run — this repo has no doctest runner
-// (src/fp_test.ts, same shape) — plus the refusals a person actually reads,
+// The `///` doctests in router.ts, run — this repo has no doctest runner —
+// plus the refusals a person actually reads,
 // asserted whole rather than by their first clause.
 //
 // The rule under test is D-34197's rung 1: the home app opts in to routing with

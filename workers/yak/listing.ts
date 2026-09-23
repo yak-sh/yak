@@ -22,8 +22,7 @@ export let STAMPS = ['created', 'updated', 'notified', 'opened', 'quarantined']
 // The kernel's own rows about the app, which nobody saved: a break the
 // platform wrote down (unseen.ts `noted`) and a failure it expected. They are
 // read through `app_errors`, not through a listing, so a listing leaves them
-// out unless the filter names one — the deliberate opt-in src/query.ts
-// `selected()` asks for the store's blob rows. Asking for the stamps is not
+// out unless the filter names one. Asking for the stamps is not
 // asking for these: `.created!` alone dragged every exception into a person's
 // list of their own rows (C-32607 item 4).
 export let KERNEL = ['exception', 'error']

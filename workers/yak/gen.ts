@@ -8,8 +8,7 @@
 // Why A step at all. A Worker has no filesystem: a page, a prompt and a tool's
 // description have to be in the bundle by the time the isolate starts, and the
 // roster is assembled at module load. So the files are read here, where there
-// is a Deno, and what the runtime sees is a projection of them — the same deal
-// src/vocab/gen.ts makes with the fleet's vocabulary, and the reason
+// is a Deno, and what the runtime sees is a projection of them — the reason
 // `deno task check` refuses a stale one.
 //
 // The guide pages are the exception that proves it: their bytes already ship,
