@@ -1486,7 +1486,7 @@ let codeSync = async (root: string) => {
     plugins = graph ? yakRead(graph).plugins ?? [] : []
   } catch { /* a config yak cannot read is one that lists nothing */ }
   if (!plugins.some((p) => yakUsed(p) == '@yaks/code')) return
-  let yak = fileURLToPath(new URL('./yak.ts', import.meta.url))
+  let yak = fileURLToPath(new URL('../packages/cli/yak.ts', import.meta.url))
   let deno = fileURLToPath(new URL('../deno.json', import.meta.url))
   let out = await new Deno.Command(Deno.execPath(), {
     args: [
