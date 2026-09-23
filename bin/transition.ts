@@ -355,7 +355,7 @@ let MOVES: Record<string, Move | null> = {
     says: 'redaction',
     make: (row, ctx) => ({
       target: ctx.ref(row.target),
-      column: text(row.column),
+      prop: text(row.column),
       hash: text(row.hash),
     }),
   },

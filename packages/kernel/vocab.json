@@ -244,14 +244,14 @@
           "death": "keep",
           "stamped": true
         },
-        "column": {
+        "prop": {
           "type": "string",
           "enum": [
             "title",
             "body"
           ],
           "stamped": true,
-          "description": "which column was replaced"
+          "description": "which property was replaced"
         },
         "hash": {
           "type": "string",
@@ -259,7 +259,7 @@
           "description": "the digest of what was there, so a claim about it can still be checked"
         }
       },
-      "description": "one column of one entity, replaced — the hash proves what was there without keeping it"
+      "description": "one property of one entity, replaced — the hash proves what was there without keeping it"
     },
     "references": {
       "component": true,
