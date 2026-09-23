@@ -32,7 +32,7 @@ let verb = (name: string) => verbs.find((v) => v.name == name)!
 
 let ctx = (_args: string[]): Ctx => ({
   host: 'yaks.test',
-  jobs: true,
+  duties: true,
   json: false,
   help: false,
   ask: () => Promise.resolve({}),

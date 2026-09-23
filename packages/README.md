@@ -191,10 +191,10 @@ grouped approximately by function, **not** by dependency order.
   component changes or newly matching query patterns, isolating handler failures
   from the original transaction. An optional durable attempt log supports
   retries; it does not guarantee exactly-once external effects.
-  `lease{name, holder, until}` records named background-job ownership using
-  deterministic ids and transactional preconditions. Coordination requires
-  suitable storage isolation and lease configuration. This package provides
-  mechanisms, not domain-specific actions.
+  `lease{name, holder, until}` records named duty ownership using deterministic
+  ids and transactional preconditions. Coordination requires suitable storage
+  isolation and lease configuration. This package provides mechanisms, not
+  domain-specific actions.
 
 - **[@yaks/journal](./journal)** — Record committed transactions as after-images
   in three append-oriented tables on the same database transaction/connection.
@@ -498,21 +498,21 @@ in about.
 It is given an `AbortSignal`, is expected to make an initial pass when it
 acquires the lease, and then keeps going until that signal aborts — which is
 what lets the same function work in both a long-running process and a one-shot
-command. A service, and the sweep that retries failed effects, are background
-jobs (`@yaks/cli` `Served.duties`). Each is held under a `lease` named after the
+command. A service, and the sweep that retries failed effects, are duties
+(`@yaks/cli` `Served.duties`). Each is held under a `lease` named after the
 package that owns it (`@yaks/effects` `holding`): a server or a TUI claims the
-job and holds it for as long as it is running, renewing periodically. A one-shot
-`yak` command passes its jobs a signal that has already aborted, so a service
-that acquires its lease makes one pass and then releases it — clearing anything
-overdue on the way through, and leaving alone whatever another process is
-already holding. A second long-running process waits for the job and takes it
-over when a killed holder's lease expires.
+duty and holds it for as long as it is running, renewing periodically. A
+one-shot `yak` command passes its duties a signal that has already aborted, so a
+service that acquires its lease makes one pass and then releases it — clearing
+anything overdue on the way through, and leaving alone whatever another process
+is already holding. A second long-running process waits for the duty and takes
+it over when a killed holder's lease expires.
 
 None of this assumes a separate process exists. A machine where the only thing
 anybody runs is `yak tui` still fires its wakes, and one that splits the HTTP
 server, the clock and the sweep across three processes can coordinate ownership
-of those jobs. Leases do not guarantee exactly-once external side effects after
-a crash.
+of those duties. Leases do not guarantee exactly-once external side effects
+after a crash.
 
 A subpath a package does not export is a contribution it does not make, and the
 program skips it. A subpath that exists but fails to import is an error, never a

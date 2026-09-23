@@ -176,10 +176,10 @@ Deno.test('the timing flag is the program’s, and off unless asked', () => {
   assert(globals(['app_list', '--timing']).timing)
 })
 
-Deno.test('background jobs run unless the command line turns them off', () => {
-  assert(globals(['serve']).jobs)
-  assertEquals(globals(['--no-background-jobs', 'serve']).jobs, false)
-  assertEquals(globals(['serve', '--no-background-jobs']).rest, ['serve'])
+Deno.test('duties run unless the command line turns them off', () => {
+  assert(globals(['serve']).duties)
+  assertEquals(globals(['--no-duties', 'serve']).duties, false)
+  assertEquals(globals(['serve', '--no-duties']).rest, ['serve'])
 })
 
 Deno.test('YAKS_TIMING enables timing only when set to 1', () => {

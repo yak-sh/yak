@@ -91,11 +91,11 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "a background job held by one process at a time — its eid is derived from `name`, so two processes reaching for the same job address one row and the winner is settled by the graph's own precondition",
+      "description": "a duty held by one process at a time — its eid is derived from `name`, so two processes reaching for the same duty address one row and the winner is settled by the graph's own precondition",
       "properties": {
         "name": {
           "type": "string",
-          "description": "the job being held — a sweep, a clock, a start-up pass; the eid is derived from it, so the same job is the same row in every graph"
+          "description": "the duty being held — a sweep, a clock, a start-up pass; the eid is derived from it, so the same duty is the same row in every graph"
         },
         "holder": {
           "type": "string",

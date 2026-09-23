@@ -20,7 +20,7 @@ Who proposed it and who decided are [@yaks/kernel](../kernel)'s `proposed` and
 The root import exports `designDoc`, the JSON Schema document.
 `@yaks/design/vocab` exports that document and `docs: [designDoc]`.
 `@yaks/design/tools` exports `runs()`, the tool implementation factory. There is
-no database or background job in this package.
+no database or duty in this package.
 
 For the commands below, use a [yak configuration](../cli/README.md) that loads
 `@yaks/design`, `@yaks/doc`, `@yaks/kernel`, and `@yaks/alias`; load

@@ -10,8 +10,8 @@ of changes applied in one transaction, such as the array passed to
 write phases.
 
 The default registry is in memory and stores no graph data. Optional `effect`
-and `lease` components support retry records and coordination of background
-jobs. Applications supply the handlers and their domain components.
+and `lease` components support retry records and coordination of duties.
+Applications supply the handlers and their domain components.
 
 ## Install
 
@@ -222,10 +222,10 @@ claims belonging to other owners. Retry records do not preserve the original
 property patch: reconciliation rebuilds the event using current target state.
 Handlers needing historical values must store or obtain those values separately.
 
-## Background jobs, and the one process running each
+## Duties, and the one process running each
 
 The optional `lease` component records `{ name, holder, until }`. Its ID is
-derived from the job name, so contenders address the same entity. `take()` uses
+derived from the duty name, so contenders address the same entity. `take()` uses
 `$was` preconditions on holder and expiry to decide ownership atomically. The
 holder is an entity reference and must name an existing entity.
 
@@ -242,8 +242,8 @@ await holding(g, 'refresh-index', { holder: me, signal }, async (stopping) => {
 `holding()` waits for a lease, renews it while work runs, and releases it when
 the callback finishes. The callback should honor its signal. With no signal, or
 an already aborted signal, it makes one attempt and returns if another process
-owns the job. `until(signal)` lets completed startup work retain the lease until
-shutdown. A terminated holder's lease eventually expires.
+owns the duty. `until(signal)` lets completed startup work retain the lease
+until shutdown. A terminated holder's lease eventually expires.
 
 `take`, `drop`, `held`, `released` and `leaseEid` expose the individual
 operations. The default hold duration is 30 seconds. Without a `lease`

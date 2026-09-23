@@ -32,7 +32,7 @@ let held = new Map<string, Promise<Served>>()
 // On the way in, a command does whatever is overdue and nobody else is doing:
 // the effect sweep a crash interrupted, the scheduled wakes that came due
 // while nothing was listening (`Host.duties` in host.ts). It is handed a
-// signal that has already aborted, so each background job runs exactly one
+// signal that has already aborted, so each duty runs exactly one
 // pass and then releases its lease — a one-shot command is not a lesser kind
 // of process, it is the only one there is on a machine where nobody runs a
 // server, and a graph must not require one.
@@ -43,16 +43,16 @@ let drained = async (composing: Promise<Served>): Promise<Served> => {
 }
 
 /** The graph a config names, open — and whatever was overdue on it, done,
- * unless `jobs` is false (`--no-background-jobs`), which leaves every
- * background job to another process. Assembled once per config path;
+ * unless `duties` is false (`--no-duties`), which leaves every duty to
+ * another process. Assembled once per config path;
  * {@link close} closes it when the command is done. */
-export let opened = (path: string, jobs = true): Promise<Served> => {
+export let opened = (path: string, duties = true): Promise<Served> => {
   let host = held.get(path)
   if (!host) {
     let config = read(path)
     held.set(
       path,
-      host = drained(compose(jobs ? config : { ...config, jobs: false })),
+      host = drained(compose(duties ? config : { ...config, duties: false })),
     )
   }
   return host
@@ -70,7 +70,7 @@ export let close = async (code?: number): Promise<void> => {
 /** The tools of the graph a config names, as subcommands a person types — the
  * list `cli` gathers when the command named a config (run.ts `more`). */
 export let commands = async (c: Ctx): Promise<Command[]> => {
-  let host = await opened(c.config!, c.jobs)
+  let host = await opened(c.config!, c.duties)
   return host.tools.map((declared) => ({
     ...declared,
     // A tool arrives declaring its arguments as JSON Schema — the same

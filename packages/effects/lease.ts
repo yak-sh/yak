@@ -1,15 +1,15 @@
-// A background job, and the one process running it.
+// A duty, and the one process running it.
 //
 // Some work is not about a batch at all: picking back up the agents a restart
 // left running, freeing the locks a dead session held, firing the wakes that
 // came due while nobody was looking. Every process that opens the graph could
 // do it, and if they all did, an agent would be tailed twice and a wake fired
-// twice. So each such job is a row, and taking it is a contest:
+// twice. So each such duty is a row, and taking it is a contest:
 //
 //   lease{name, holder, until}
 //
 // The eid is derived from the name, the way an edge's eid is derived from its
-// endpoints and relation, so one job is one row in every graph and two
+// endpoints and relation, so one duty is one row in every graph and two
 // processes reaching for it address the same row. Taking it is a write with a
 // `$was` precondition — the holder and the expiry as the taker read them — so
 // the loser is refused inside the transaction rather than overwriting the
@@ -19,7 +19,7 @@
 // `until` is what makes a lease a lease. A holder that is still doing the work
 // takes it again on a timer and pushes the expiry out; one that was killed
 // leaves a row that expires, and the next process to ask gets it. Nothing has
-// to clean up after it, which is the whole reason the job is held under a
+// to clean up after it, which is the whole reason the duty is held under a
 // lease rather than a claim.
 //
 // A graph whose vocabulary does not declare `lease` has no other process to
@@ -44,7 +44,7 @@ export let HOLD = 30_000
 
 /** A lease row, as it is held. */
 export type Lease = {
-  /** the job being held — the eid is derived from it */
+  /** the duty being held — the eid is derived from it */
   name?: string | null
   /** the process holding it */
   holder?: Eid | null
@@ -78,7 +78,7 @@ let leaseOf = (g: Graph, eid: Eid): Promise<Lease | undefined> =>
 
 /** Whether this graph contends at all: a component its vocabulary does not
  * declare cannot be stored on anything in it, so there is one process and the
- * job is its own. */
+ * duty is its own. */
 let contested = (g: Graph): boolean => !!g.vocab.comp(LEASE)
 
 /**
@@ -131,7 +131,7 @@ export let take = async (
 }
 
 /**
- * Release a lease, if we are the one holding it. The row stays — the job
+ * Release a lease, if we are the one holding it. The row stays — the duty
  * outlives whoever was doing it — and the next process to ask gets it without
  * waiting for the expiry.
  */
@@ -207,7 +207,7 @@ export type HoldingOpts = HoldOpts & {
 }
 
 /**
- * Run a background job for as long as this process is up: take the lease,
+ * Run a duty for as long as this process is up: take the lease,
  * renew it while the work runs, and release it at the end.
  *
  * The same call serves a process of either shape, which is the point — nothing

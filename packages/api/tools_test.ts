@@ -15,7 +15,7 @@ let free = (): number => {
   return port
 }
 
-// The tool reconciles and takes the background jobs before it binds, so the
+// The tool reconciles and takes the duties before it binds, so the
 // port is not up on the first tick. Retry rather than count the ticks.
 let said = async (url: string, ms = 2000): Promise<string> => {
   let end = Date.now() + ms
@@ -34,7 +34,7 @@ let ctx = (args: Record<string, unknown> = {}): ToolCtx =>
 
 // What the tool is handed, and a tally of what it asked for.
 let fake = (port?: number) => {
-  let told = { driven: 0, jobs: 0 }
+  let told = { driven: 0, duties: 0 }
   let stopping = new AbortController()
   let host: Serving = {
     config: { db: 'graph.db', ...(port == null ? {} : { port }) },
@@ -46,7 +46,7 @@ let fake = (port?: number) => {
       },
     } as unknown as Runner,
     duties: (signal?: AbortSignal) => {
-      told.jobs += signal ? 0 : 1
+      told.duties += signal ? 0 : 1
       return Promise.resolve()
     },
     stopping: stopping.signal,
@@ -60,9 +60,9 @@ Deno.test('serve answers with the host handler until the host stops', async () =
   let call = runs(host).serve([], ctx()) as Promise<Bundle[]>
   assertEquals(await said(`http://localhost:${port}`), 'ok')
   // A process that is about to stay up finishes what a crash left claimed,
-  // and takes the background jobs in their long-running form.
+  // and takes the duties in their long-running form.
   assertEquals(told.driven, 1)
-  assertEquals(told.jobs, 1)
+  assertEquals(told.duties, 1)
   stopping.abort()
   let [answer] = await call
   let body = (answer.content as { body: string }).body

@@ -850,11 +850,11 @@ Deno.test('a duty that throws is reported, and the host still serves', async () 
   }
 })
 
-Deno.test('a host that runs no background jobs holds no lease and does no pass', async () => {
+Deno.test('a host that runs no duties holds no lease and does no pass', async () => {
   let passes = 0
   // What is held once a line has passed through: the start-up passes keep
-  // theirs, and a job that finished its one pass has let its own go.
-  let held = async (jobs: boolean) => {
+  // theirs, and a duty that finished its one pass has let its own go.
+  let held = async (duties: boolean) => {
     let host = await compose(
       {
         db: ':memory:',
@@ -865,7 +865,7 @@ Deno.test('a host that runs no background jobs holds no lease and does no pass',
           '@yaks/spawn',
           'once',
         ],
-        jobs,
+        duties,
       },
       only({
         once: { service: { service: () => Promise.resolve(void passes++) } },
@@ -874,7 +874,7 @@ Deno.test('a host that runs no background jobs holds no lease and does no pass',
     try {
       await host.duties(AbortSignal.abort())
       // With nothing to hold, the long-running form has nothing to wait for.
-      if (!jobs) await host.duties()
+      if (!duties) await host.duties()
       let rows = await host.graph.read('.lease')
       return rows.map((b) => b.lease as Comp).filter((l) => l.holder)
         .map((l) => l.name).sort()
