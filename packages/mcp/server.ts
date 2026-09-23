@@ -109,12 +109,12 @@ export type Options = {
    * (default: `full` — see {@link Depth}; `graph_apply`'s input schema is
    * always `full`) */
   schema?: Depth
-  /** a column the calling program returns or accepts differently than the
+  /** a property the calling program returns or accepts differently than the
    * vocabulary declares — a reference that reads back as a named object, or a
-   * column two of its stores name differently (see {@link BundleOpts}) */
-  column?: BundleOpts['column']
+   * property two of its stores name differently (see {@link BundleOpts}) */
+  prop?: BundleOpts['prop']
   /** where a component is documented at length, when the calling program has
-   * such a page — `graph_schema` returns it beside the columns */
+   * such a page — `graph_schema` returns it beside the properties */
   guide?: Guide
   /** ranked full-text search; without it there is no `search` tool */
   search?: Search
@@ -199,7 +199,8 @@ export let answerSchema: { type: 'object'; [key: string]: unknown } = {
         additionalProperties: {
           type: ['object', 'null'],
           description:
-            "one component's columns, or null where the transaction removed it",
+            "one component's properties, or null where the transaction " +
+            'removed it',
         },
       },
     },
@@ -219,7 +220,7 @@ export let answerSchema: { type: 'object'; [key: string]: unknown } = {
 let said = (answer: Bundle[], failed: boolean): CallToolResult => {
   return {
     // A refusal points at the tool that has the current answer: a client
-    // holding a tool list from before a column was added or removed finds out
+    // holding a tool list from before a property was added or removed finds out
     // here and nowhere else.
     content: [{
       type: 'text',
@@ -350,7 +351,7 @@ export let listing = (opts: Options): Tool[] => [
   ...(opts.core === false ? [] : core({
     vocab: opts.graph.vocab,
     depth: opts.schema,
-    column: opts.column,
+    prop: opts.prop,
     guide: opts.guide,
     search: opts.search,
     readOnly: opts.readOnly,

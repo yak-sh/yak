@@ -9,7 +9,7 @@
 // `updated{at, by, via}`, a component this package neither declares nor
 // imports: a tool returns data, so naming another package's component costs
 // nothing, and a server whose vocabulary does not declare `updated` has those
-// columns dropped when the bundles are admitted.
+// properties dropped when the bundles are admitted.
 //
 // There is no `undo` tool here and no feed. Undo is `undo(g, j)` in ./undo.ts —
 // a write, and one a server has to decide it offers — and a feed is a cursor a

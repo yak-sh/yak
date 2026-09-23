@@ -33,7 +33,7 @@ unless it was imported into the journal.
 | ---------------- | ------------------------------------------------------------------- |
 | `journal_tx`     | Transaction sequence, timestamp, actor references and optional note |
 | `journal_change` | Ordered component upserts/removals, or an entity deletion           |
-| `journal_field`  | Ordered column values after each change                             |
+| `journal_field`  | Ordered property values after each change                           |
 
 An empty component still has a change row. Component removal records null values
 for the fields known to the journal, keeping their history continuous across
@@ -118,8 +118,8 @@ let entries = j.since(0) // Entry[], oldest first
 ```
 
 `Batch` carries `seq`, `at`, `by`, `via` and `deltas`. Each `Delta` identifies a
-`target` eid, `comp`, optional `column`, and `before`/`after` values. A null
-`column` describes a whole component's addition or removal.
+`target` eid, `comp`, optional `prop`, and `before`/`after` values. A null
+`prop` describes a whole component's addition or removal.
 
 `Entry` is the recorded operation format: `seq`, attribution, `note` and
 `patches`. Each `Patch` contains `target`, `comp` and `value`, with null meaning
@@ -137,7 +137,7 @@ batches with before/after deltas.
 | `j.before(eid, seq)`                                   | Components just before a transaction                         |
 | `j.latest(eid)`, `j.tip()`                             | Latest sequence for an entity or the whole log               |
 | `j.touchedSince(eid, seq)`                             | Whether the entity changed after a sequence                  |
-| `j.wrote(comp, column)`                                | Recorded values for a column across entities                 |
+| `j.wrote(comp, prop)`                                  | Recorded values for a property across entities               |
 | `j.seek(text)`                                         | Recorded values containing text                              |
 | `j.scrubValue(field, value)`, `j.scrubRef(field, ref)` | Explicit history redaction                                   |
 | `j.holds(ref)`                                         | Whether history still references stored content              |
@@ -154,16 +154,16 @@ journal alone does not guarantee exactly-once external effects.
 ## Undo
 
 `undo(g, j)(seq, actor?)` reconstructs an inverse and applies it through the
-graph, with trusted access to server-owned columns. It restores previous column
-values and removed components, and removes components created by the original
-transaction. The undo is validated, stamped and journaled as another write;
-undoing that write provides redo.
+graph, with trusted access to server-owned properties. It restores previous
+property values and removed components, and removes components created by the
+original transaction. The undo is validated, stamped and journaled as another
+write; undoing that write provides redo.
 
-Column deltas restored by `undo()` carry `$was` preconditions hashed from the
-original transaction's after-values. If those columns changed in the meantime,
-the graph rejects the reversal. Whole-component operations do not have the same
-per-column guard, so this is not a general conflict check for every possible
-intervening edit.
+Property deltas restored by `undo()` carry `$was` preconditions hashed from the
+original transaction's after-values. If those properties changed in the
+meantime, the graph rejects the reversal. Whole-component operations do not have
+the same per-property guard, so this is not a general conflict check for every
+possible intervening edit.
 
 `undone(batch, { guard? })` builds the inverse without applying it; guards are
 off by default there. `applied(batch)` reconstructs the forward change.

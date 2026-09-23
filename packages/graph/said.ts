@@ -3,17 +3,17 @@
 // A person types the id they can remember — `T-37584`, `jeff` — while the
 // store keys rows by eid, and every entry point owes them that translation:
 // `addressed()` (tool.ts) does it for a tool's arguments, and @yaks/alias's
-// normalize hook does it for a change's reference columns. Reads did not, so
+// normalize hook does it for a change's reference properties. Reads did not, so
 // `.decided.by=jeff` matched nothing while `.decided.by=<eid>` matched.
 //
-// A query names an entity in exactly four places: a reference column's value
+// A query names an entity in exactly four places: a reference property's value
 // (`.decided.by=jeff`), the reverse-reference filter `.refs=`, a walk's target
 // (`.requires->T-42`) and the neighbour filter `.near=`. Nowhere else —
 // `.status=done` is an enum, and a value that happens to be somebody's name
-// must not be turned into their eid just because it sat on a scalar column.
+// must not be turned into their eid just because it sat on a scalar property.
 //
-// Which columns are references is the vocabulary's to say, so this takes one;
-// which entity a name belongs to is a plugin's, so `addressing` takes an
+// Which properties are references is the vocabulary's to say, so this takes
+// one; which entity a name belongs to is a plugin's, so `addressing` takes an
 // `address` function between its two halves.
 
 import { type Clause, parse, type Query as Ast, type Value } from '@yaks/query'
@@ -26,9 +26,9 @@ import { then } from './pipe.ts'
  * traversal with two different functions of this type. */
 type Says = (id: string) => string
 
-/** Whether a predicate's leaf is a reference column — the only kind of
+/** Whether a predicate's leaf is a reference property — the only kind of
  * predicate whose value is an entity. A path's earlier segments dereference
- * through columns; its leaf is what the value is compared against. */
+ * through properties; its leaf is what the value is compared against. */
 let refs = (vocab: Vocab, c: Clause & { kind: 'pred' }): boolean => {
   // Only the two equality forms compare a whole id. `~=` is a substring of
   // whatever is stored, and a range of eids means nothing.
@@ -45,7 +45,8 @@ let refs = (vocab: Vocab, c: Clause & { kind: 'pred' }): boolean => {
 
 /** A value's id-shaped leaves, mapped. A list means any-of, so each item names
  * an entity; a range and a relative time expression name none. An empty scalar
- * is the "column is absent" form (`.decided.by=`) and names nothing either. */
+ * is the "property is absent" form (`.decided.by=`) and names nothing either.
+ */
 let value = (v: Value, f: Says): Value =>
   v.kind == 'scalar'
     ? (v.raw ? { ...v, raw: f(v.raw) } : v)

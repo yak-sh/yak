@@ -864,10 +864,10 @@ slow('an app declares which of its own columns are searched', async () => {
     // names the borrowed column too, where the home's own manifest alone would
     // have left an app unable to discover a column it deployed itself.
     let schema = JSON.parse(await agent.tool('graph_schema', {})) as {
-      comps: { name: string; columns: string[] }[]
+      comps: { name: string; props: string[] }[]
     }
     assertEquals(
-      schema.comps.find((c) => c.name == 'recipe')?.columns.sort(),
+      schema.comps.find((c) => c.name == 'recipe')?.props.sort(),
       ['blurb', 'note', 'serves'],
     )
     await agent.tool('graph_apply', {

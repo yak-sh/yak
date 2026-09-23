@@ -66,7 +66,7 @@ export let metaOf = (store: Door): Meta => ({
     // tell "read again" from a failure.
     if (r.status == 409) {
       let s = await r.json() as Stale
-      throw new Stale(s.eid, s.comp, s.column, s.current)
+      throw new Stale(s.eid, s.comp, s.prop, s.current)
     }
     // Kept by the store's write log and applied later (writes.ts): the
     // batch as applied does not exist yet, so there is nothing to return.

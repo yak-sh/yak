@@ -3,18 +3,18 @@
  * package shares, the write format that carries changes, and the phased,
  * pluggable `apply()` that commits them.
  *
- * ## The model
- * Everything is an entity, identified by an {@link Entity} — an `eid` the
- * client generates. An entity has components: a named object of columns, one
- * per component. An entity has no type of its own; it is whatever components it
- * has. A book is a `doc` plus a `book`; a review is a `doc` plus a `review`.
- * Adding a component adds an aspect to the entity, not a subtype.
+ * ## The model Everything is an entity, identified by an {@link Entity} — an
+ * `eid` the client generates. An entity has components: a named object of
+ * properties, one per component. An entity has no type of its own; it is
+ * whatever components it has. A book is a `doc` plus a `book`; a review is a
+ * `doc` plus a `review`. Adding a component adds an aspect to the entity, not a
+ * subtype.
  *
- * ## The write format
- * A {@link Bundle} is one entity plus its components. The identity is part of
- * the bundle, under the `entity` key. A write is a PATCH — an omitted column is
- * left alone, a `null` column is cleared, a `null` component is removed — and
- * `apply` takes an array of bundles and applies it in one transaction.
+ * ## The write format A {@link Bundle} is one entity plus its components. The
+ * identity is part of the bundle, under the `entity` key. A write is a PATCH —
+ * an omitted property is left alone, a `null` property is cleared, a `null`
+ * component is removed — and `apply` takes an array of bundles and applies it
+ * in one transaction.
  *
  * ```ts
  * import { graph } from '@yaks/graph'
@@ -26,14 +26,14 @@
  * ```
  *
  * A few reserved keys sit beside the components and look like components, but
- * `apply()` acts on them rather than storing them as columns: `$delete` (delete
- * the entity, which can also be written as a `tombstone` component), `$was` (a
- * per-column precondition — see {@link Was}), and `$actor` (who is writing —
- * see {@link Actor}). A plugin declares requests of its own the same way it
- * declares components, and a `$` key nothing declared is refused (see
+ * `apply()` acts on them rather than storing them as properties: `$delete`
+ * (delete the entity, which can also be written as a `tombstone` component),
+ * `$was` (a per-property precondition — see {@link Was}), and `$actor` (who is
+ * writing — see {@link Actor}). A plugin declares requests of its own the same
+ * way it declares components, and a `$` key nothing declared is refused (see
  * {@link requested}). They belong to the write pipeline and stop there: what
  * `apply()` returns is the transaction as applied, {@link composed} into one
- * bundle per entity, carrying the components, the columns the server set and
+ * bundle per entity, carrying the components, the properties the server set and
  * the `$alias` the caller referred to it by — and no other `$` key.
  *
  * ## Apply is pluggable, in fixed phases

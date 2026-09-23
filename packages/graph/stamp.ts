@@ -5,8 +5,8 @@
 //
 // A mark is the third form, and records an event rather than the entity's
 // lifecycle: `completed`, `archived`, `notified` — a component a client writes
-// empty and the server fills in with the same `{at, by, via}` columns. There is
-// no list of marks here either; any component whose vocabulary declares that
+// empty and the server fills in with the same `{at, by, via}` properties. There
+// is no list of marks here either; any component whose vocabulary declares that
 // trio server-owned is a mark, and gets filled in.
 //
 // The actor travels in the change, as the `$actor` key. That is deliberate:
@@ -15,7 +15,7 @@
 // the only thing that can know who is writing, and it is that code's job to
 // trust or replace what a client claimed. `apply()` stamps whatever reaches it.
 //
-// The columns come from the vocabulary, not from this file: a graph whose
+// The properties come from the vocabulary, not from this file: a graph whose
 // `created` declares only `at` gets only `at`, and a graph with no `created`
 // component at all is not stamped. Nothing here assumes a particular shape.
 
@@ -52,7 +52,7 @@ export let signed = (change: Bundle[], who: Actor | null): Bundle[] =>
 export let actorOf = (bundles: Bundle[]): Actor =>
   bundles.find((b) => b.$actor)?.$actor ?? {}
 
-// The stamp for one entity, narrowed to the columns this vocabulary declares
+// The stamp for one entity, narrowed to the properties this vocabulary declares
 // on that component — `at`, and whichever of `by`/`via` the change's actor
 // supplied. An empty result means there is nothing to write.
 type Attribution = { by?: string | null; via?: string | null }
@@ -68,22 +68,22 @@ let mark = (
   let info = vocab.comp(comp)
   if (!info) return undefined
   let has = new Set(vocab.props(comp))
-  // A column something else already filled is left as it was found: a hook
+  // A property something else already filled is left as it was found: a hook
   // that set the mark's author (@yaks/task keeps a completion's author across
   // edits) and a graph whose policy supplied the writer both run before this.
-  let said = (col: string) => held?.[col] != null
+  let said = (prop: string) => held?.[prop] != null
   let out: Comp = {}
   if (has.has('at') && !said('at')) out.at = now
-  for (let col of ['by', 'via'] as const) {
-    if (!has.has(col) || said(col)) continue
-    if (overrides && col in overrides) out[col] = overrides[col]
-    else if (actor[col]) out[col] = actor[col]
+  for (let prop of ['by', 'via'] as const) {
+    if (!has.has(prop) || said(prop)) continue
+    if (overrides && prop in overrides) out[prop] = overrides[prop]
+    else if (actor[prop]) out[prop] = actor[prop]
   }
   return Object.keys(out).length ? out : undefined
 }
 
 /** An application's policy may classify a written entity and supply its
- * per-entity attribution. The generic rules still decide which columns exist
+ * per-entity attribution. The generic rules still decide which properties exist
  * and what the timestamp is. Returning null writes no provenance at all — for
  * a write that turned out to change nothing, say. */
 export type StampPolicy = (bundle: Bound) =>
@@ -95,7 +95,7 @@ export type StampPolicy = (bundle: Bound) =>
 /** Default provenance is two rules evaluated against one frozen state: a newly
  * created entity gets `created`, a later write gets `updated`. A policy may
  * choose the component or write none at all, but both paths use the same
- * timestamp, attribution and column narrowing. `#Now`, `#Actor` and `#Vocab`
+ * timestamp, attribution and property narrowing. `#Now`, `#Actor` and `#Vocab`
  * are rule resources; no application vocabulary is assumed. */
 export let provenance = (policy?: StampPolicy): Rule[] =>
   policy
@@ -131,8 +131,8 @@ export let stamps: Rule[] = provenance()
 
 /** Whether a component is a mark: one a client writes empty and the server
  * fills in — `completed`, `archived`, `notified` — recognized by its declared
- * columns, so a new one is picked up with no edit here. `created` and
- * `updated` declare the same columns but fire when the entity is created or
+ * properties, so a new one is picked up with no edit here. `created` and
+ * `updated` declare the same properties but fire when the entity is created or
  * written rather than when the component itself is written, so they keep their
  * own rules and are excluded by name. */
 export let marked = (vocab: Vocab, comp: string): boolean => {
@@ -151,8 +151,8 @@ export let marked = (vocab: Vocab, comp: string): boolean => {
  * That is the whole difference from `updated`, which is meant to change.
  *
  * The rules are derived from the vocabulary, not from a list of component
- * names: a graph that declares those three columns server-owned gets the rule,
- * and one that does not gets no rule at all.
+ * names: a graph that declares those three properties server-owned gets the
+ * rule, and one that does not gets no rule at all.
  */
 export let marks = (vocab: Vocab): Rule[] =>
   vocab.all.filter((c) => marked(vocab, c)).map((comp) => ({
@@ -163,7 +163,7 @@ export let marks = (vocab: Vocab): Rule[] =>
       wear(comp, b.Vocab, b.Now.at, b.Actor, undefined, b[comp] as Comp),
   }))
 
-// One rule's patch: the component, narrowed to the columns this vocabulary
+// One rule's patch: the component, narrowed to the properties this vocabulary
 // declares. Nothing to write means no patch — the match's `+` clause has
 // already added the component itself.
 let wear = (

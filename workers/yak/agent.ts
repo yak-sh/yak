@@ -387,7 +387,7 @@ let spoken = async (
 
 /**
  * How this door's columns read and write, where that is not what the
- * vocabulary declares (@yaks/mcp `BundleOpts.column`):
+ * vocabulary declares (@yaks/mcp `BundleOpts.prop`):
  *
  * - a reference reads back as the eid or as `{eid, name}`, because outputs
  *   speak human (graph.ts `#speak`); a write takes the id;
@@ -480,7 +480,7 @@ export let searching =
 export let reaching = async (
   ctx: Ctx,
   reach: Reach[],
-): Promise<{ graph: Graph; column: ReturnType<typeof reading> }> => {
+): Promise<{ graph: Graph; prop: ReturnType<typeof reading> }> => {
   let { vocab, clashes } = await spoken(ctx, reach)
   let storage = held(ctx, reach)
   // The post room is a person's own mailbox work (letters.ts), and it is
@@ -521,5 +521,5 @@ export let reaching = async (
       return aliased(out)
     },
   }
-  return { graph: self, column: reading(clashes) }
+  return { graph: self, prop: reading(clashes) }
 }

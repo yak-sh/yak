@@ -2,7 +2,7 @@
 // thrown error the same way: the error's own name, its message, and whatever
 // fields it carries, as JSON — so a client reads the same shape `apply()`
 // threw, not a prose translation of it. A stale precondition still reports
-// which column moved and what the graph holds now; a refused column still
+// which property moved and what the graph holds now; a refused property still
 // names itself.
 //
 // The HTTP status is derived from the error's `name` alone. That keeps this
@@ -11,7 +11,7 @@
 
 /** A refusal, as a client reads it: the error's name, its message, and any
  * fields the error carried (a {@link https://jsr.io/@yaks/graph | Stale}
- * precondition's `eid`, `comp`, `column` and `current`, say). */
+ * precondition's `eid`, `comp`, `prop` and `current`, say). */
 export type Refusal = {
   /** the error's name — `Refused`, `Stale`, `Unsupported`, `Unknown`,
    * `Ambiguous`, `Unauthorized`, `Denied` */
@@ -40,9 +40,9 @@ export let STATUS: Record<string, number> = {
   Refused: 400,
   Unsupported: 400,
   SyntaxError: 400,
-  // @yaks/vocab's `Unknown`: a component or column name the vocabulary does
+  // @yaks/vocab's `Unknown`: a component or property name the vocabulary does
   // not define. The query named it, so the fault is the request's — and so is
-  // its `Ambiguous`, a column name several components define where the query
+  // its `Ambiguous`, a property name several components define where the query
   // did not say which one it meant. Both carry the name, and the ambiguous
   // one also carries the candidates.
   Unknown: 400,

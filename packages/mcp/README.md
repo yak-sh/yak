@@ -130,7 +130,7 @@ tools are listed by default; `search` requires a callback.
 | `graph_apply`  | Apply changes and return their applied bundles                  |
 | `graph_query`  | Read entities selected by a query                               |
 | `graph_show`   | Read named entities and, by default, entities referencing them  |
-| `graph_schema` | Describe components, columns, and kinds                         |
+| `graph_schema` | Describe components, properties, and kinds                      |
 | `search`       | Return ranked text matches using the supplied `search` callback |
 
 For the vocabulary in the in-memory example:
@@ -160,13 +160,13 @@ succeeded.
 
 `graph_query` accepts a query defined by [@yaks/query](../query/README.md),
 optional `filters` joined with `&`, and a `limit`. `graph_show` returns entity
-bundles; references remain in their component columns, and edge entities are
+bundles; references remain in their component properties, and edge entities are
 ordinary bundles. `backrefs: false` omits entities that reference the requested
 ones.
 
 With no arguments, `graph_schema` returns the component index with descriptions
-and column names. `component` selects one or more full component descriptions,
-including column types, server-owned fields, uniqueness, byte storage,
+and property names. `component` selects one or more full component descriptions,
+including property types, server-owned fields, uniqueness, byte storage,
 references, and example bundles. `kind` describes a declared kind and its
 components. An application-supplied `guide` callback can add documentation
 links.
@@ -203,11 +203,11 @@ let schema = bundleSchema(vocab, { depth: 'full' })
 
 ## The schema describes, the server decides
 
-Bundle input schemas describe declared components and columns but allow unknown
-properties through to the graph. This lets a client with a cached tool schema
-submit a column added since it connected. The graph remains responsible for
-rejecting undeclared columns. Such errors point callers to `graph_schema`, which
-reads the current vocabulary.
+Bundle input schemas describe declared components and properties but allow
+unknown properties through to the graph. This lets a client with a cached tool
+schema submit a property added since it connected. The graph remains responsible
+for rejecting undeclared properties. Such errors point callers to
+`graph_schema`, which reads the current vocabulary.
 
 ## A tool list goes stale
 

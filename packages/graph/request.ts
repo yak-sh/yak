@@ -7,8 +7,8 @@
 // says which ones it answers (`Plugin.requests`).
 //
 // `$alias` and `$quiet` are the core's own bookkeeping rather than a caller's
-// ask, and they are admitted for the same reason a stamped column is: a caller
-// that read a bundle back and sent it again is doing a normal thing.
+// ask, and they are admitted for the same reason a stamped property is: a
+// caller that read a bundle back and sent it again is doing a normal thing.
 
 import type { Bundle } from './bundle.ts'
 import { Refused } from './admit.ts'

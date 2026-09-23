@@ -575,7 +575,7 @@ slow('graph_schema answers the index, a word whole, and a kind', async () => {
       name: string
       description?: string
       kind: boolean
-      columns: (string | { prop: string; type: string; description?: string })[]
+      props: (string | { prop: string; type: string; description?: string })[]
       worn_with?: string[]
       references?: { out: unknown[]; in: { comp: string; prop: string }[] }
       example?: Record<string, Record<string, unknown>>
@@ -595,7 +595,7 @@ slow('graph_schema answers the index, a word whole, and a kind', async () => {
     assert(names.includes('recipe'), 'the app own word is in the index')
     assert(names.includes('mail'))
     assertEquals(
-      index.comps.find((c) => c.name == 'doc')!.columns,
+      index.comps.find((c) => c.name == 'doc')!.props,
       ['title', 'body'],
     )
     assert(index.kinds!.includes('recipe'))
@@ -605,7 +605,7 @@ slow('graph_schema answers the index, a word whole, and a kind', async () => {
     // that covers it.
     let [mail] = (await said({ component: 'mail' })).comps
     assertStringIncludes(mail.description!, 'envelope')
-    let verified = mail.columns.find((c) =>
+    let verified = mail.props.find((c) =>
       typeof c != 'string' && c.prop == 'verified'
     ) as { type: string; description: string }
     assertEquals(verified.type, 'bool')
@@ -700,7 +700,7 @@ slow(
         () => agent.tool('graph_apply', { change: misspelt }),
         Error,
       )).message
-      assertStringIncludes(refused, 'unknown column: email.adress')
+      assertStringIncludes(refused, 'unknown property: email.adress')
       assertStringIncludes(refused, 'email declares address')
       assertStringIncludes(refused, 'graph_schema')
       // And the type is there to be read: `mail.verified` is a boolean, and the

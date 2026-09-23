@@ -2573,7 +2573,7 @@ export let fleetGraphOf = (db: Sql): FleetGraph => {
           ? new Stale(
             err.eid,
             err.comp,
-            err.column,
+            err.prop,
             err.current,
             human(db, err.eid),
           )
@@ -4453,13 +4453,13 @@ type RedactionHit = {
 }
 let redactionHits = (db: Sql, value: string): RedactionHit[] =>
   jrnOf(db).seek(value).flatMap((h: JournalHit) =>
-    scrubbable(h.comp, h.column) && typeof h.value == 'string' &&
+    scrubbable(h.comp, h.prop) && typeof h.value == 'string' &&
       h.value.includes(value)
       ? [{
         id: h.field,
         eid: h.target,
         component: h.comp,
-        field: h.column,
+        field: h.prop,
         tx: h.seq,
         ts: h.at,
         decoded: h.value,

@@ -41,7 +41,7 @@ let asked = (q: string) => {
   return seen
 }
 
-Deno.test('a reference column takes the name it is told', () => {
+Deno.test('a reference property takes the name it is told', () => {
   assertEquals(said('.decided.by=jeff'), parse(`.decided.by=${JEFF}`))
   assertEquals(said('.decided.by!=jeff'), parse(`.decided.by!=${JEFF}`))
 })

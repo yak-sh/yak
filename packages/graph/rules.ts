@@ -35,13 +35,13 @@
 // the two is impossible rather than something to check for. A resource
 // registered under a lowercase name is refused when the registry is built.
 //
-// A resource has the same shape as a component: an object of columns
+// A resource has the same shape as a component: an object of properties
 // (`Now.at`, `Actor.by`) rather than a bare value. And like an entity written
-// into a reference column, it converts to one value when a rule writes it into
-// a column: `{ at: Now, by: Actor }` writes the timestamp and the actor's eid.
-// That is not special-cased per resource — each resource declares what it
-// converts to (see {@link stands}), a rule's patch resolves what it wrote, and
-// a resource that converts to nothing writes nothing at all.
+// into a reference property, it converts to one value when a rule writes it
+// into a property: `{ at: Now, by: Actor }` writes the timestamp and the
+// actor's eid. That is not special-cased per resource — each resource declares
+// what it converts to (see {@link stands}), a rule's patch resolves what it
+// wrote, and a resource that converts to nothing writes nothing at all.
 //
 // What a resource is NOT is a value the match side can read:
 // `expires.at<Now.at` would need a reference on the value side of a
@@ -100,8 +100,8 @@ export type Tick = {
 export type Resource = (tick: Tick) => unknown
 
 /**
- * A resource's value: its columns, plus the one value it converts to when a
- * rule writes it into a column — the timestamp for `#Now`, the eid for
+ * A resource's value: its properties, plus the one value it converts to when a
+ * rule writes it into a property — the timestamp for `#Now`, the eid for
  * `#Actor`. It declares that the way any JavaScript value declares its
  * primitive conversion, so `${Now}` and a written `at: Now` agree by
  * construction.
@@ -114,9 +114,9 @@ export type Resource = (tick: Tick) => unknown
  * `${Now}` // '2026-09-07T00:00:00.000Z'
  * ```
  *
- * The default is the component's first column, which is what a one-column
+ * The default is the component's first property, which is what a one-property
  * resource means and what both `{at}` and `{by, via}` want; a resource whose
- * first column is not the value it converts to passes that value explicitly.
+ * first property is not the value it converts to passes that value explicitly.
  */
 export let stands = <T extends Comp>(comp: T, value?: unknown): T =>
   Object.assign(comp, {
@@ -124,7 +124,7 @@ export let stands = <T extends Comp>(comp: T, value?: unknown): T =>
       value === undefined ? Object.values(comp)[0] : value,
   })
 
-// What a resource written into a column converts to. Anything else is itself.
+// What a resource written into a property converts to. Anything else is itself.
 let worth = (v: unknown): unknown =>
   v && typeof v == 'object' && Symbol.toPrimitive in v
     ? (v as { [Symbol.toPrimitive]: () => unknown })[Symbol.toPrimitive]()
@@ -170,9 +170,9 @@ export type Bound = Bundle & {
   /** `#Vocab` — the component vocabulary this graph uses */
   Vocab: Vocab
   /** `#Now` — the timestamp this transaction stamps with; `Now.at` reads it,
-   * and a column written `at: Now` is given it */
+   * and a property written `at: Now` is given it */
   Now: { at: string }
-  /** `#Actor` — who is writing this change; a column written `by: Actor` is
+  /** `#Actor` — who is writing this change; a property written `by: Actor` is
    * given the eid, and nothing at all when no actor is named */
   Actor: Actor
 }
@@ -320,12 +320,12 @@ let compile = (r: Rule, v: Vocab): Ready => {
 // well enough.
 let named = (r: Rule): string => r.name ?? String(r.match)
 
-// A resource written into a column becomes the value it converts to — `at:
+// A resource written into a property becomes the value it converts to — `at:
 // Now` the timestamp, `by: Actor` the eid — and a resource that converts to
 // nothing writes nothing, so a rule needs no `actor.by ? … : {}` around the
-// column it wanted to write. A component containing one is rebuilt rather than
-// edited in place, because a `produce` template is the rule's own object and a
-// rule fires more than once.
+// property it wanted to write. A component containing one is rebuilt rather
+// than edited in place, because a `produce` template is the rule's own object
+// and a rule fires more than once.
 let resolved = (p: Patch): Patch => {
   let out: Patch = {}
   for (let [name, comp] of Object.entries(p)) {
@@ -335,10 +335,10 @@ let resolved = (p: Patch): Patch => {
     }
     let made: Comp = {}
     let moved = false
-    for (let [col, v] of Object.entries(comp)) {
+    for (let [prop, v] of Object.entries(comp)) {
       let stood = worth(v)
       if (stood !== v) moved = true
-      if (stood !== undefined) made[col] = stood
+      if (stood !== undefined) made[prop] = stood
     }
     out[name] = moved ? made : comp
   }

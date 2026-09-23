@@ -1,10 +1,10 @@
 // The registry: which handlers are registered, and what running them means.
 //
 // A registration is a slot — a component name, one of the things that can
-// happen to it, and (for a change) the column that has to have moved.
+// happen to it, and (for a change) the property that has to have moved.
 // Handlers are matched by slot rather than by a filter function, so what a
 // graph will do about a write can be listed, and so a handler watching one
-// column is never run for a batch that moved a different one.
+// property is never run for a batch that moved a different one.
 //
 // A slot is made one of two ways, and they meet in the middle. `created` and
 // `changed` describe what moved, which no reading of the committed rows
@@ -88,8 +88,9 @@ export type Slot = Policy & {
   comp: string
   /** what has to happen to that component */
   kind: Kind
-  /** the column that has to have moved, for a `changed` slot that names one */
-  column?: string
+  /** the property that has to have moved, for a `changed` slot that names
+   * one */
+  prop?: string
   /** a `matched` slot's pattern: the parsed query it was registered with */
   plan?: Match
   /** the components that pattern reads — a batch that moved none of them
@@ -159,10 +160,10 @@ export type Opts = {
 export type Effects = Plugin & {
   /** run when an entity gains this component */
   created: (comp: string, run: Handler, policy?: Policy) => Effects
-  /** run when this component is patched — for one column, or for any */
+  /** run when this component is patched — for one property, or for any */
   changed: (
     comp: string,
-    column: string | Handler,
+    prop: string | Handler,
     run?: Handler,
     policy?: Policy,
   ) => Effects
@@ -212,7 +213,7 @@ let warn: Report = (err, { handler }) =>
 // event: its query is run against the graph instead (see `hits`).
 let watching = (s: Slot, e: Event): boolean =>
   s.kind != 'matched' && s.comp == e.name && s.kind == e.kind &&
-  (s.kind != 'changed' || !s.column || (!!e.comp && s.column in e.comp))
+  (s.kind != 'changed' || !s.prop || (!!e.comp && s.prop in e.comp))
 
 // What a pattern is about, in one component name: the first component it
 // requires. It names the slot and rides on the event, so a pattern effect
@@ -318,8 +319,8 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     return opts.write(marked(bundles, gen + 1))
   }
 
-  let name = (comp: string, kind: Kind, column?: string) => {
-    let base = column ? `${comp}.${kind}.${column}` : `${comp}.${kind}`
+  let name = (comp: string, kind: Kind, prop?: string) => {
+    let base = prop ? `${comp}.${kind}.${prop}` : `${comp}.${kind}`
     let taken = slots.filter((s) => s.id == base || s.id.startsWith(`${base}#`))
     return taken.length ? `${base}#${taken.length + 1}` : base
   }
@@ -328,17 +329,17 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     comp: string,
     kind: Kind,
     run: Handler,
-    column?: string,
+    prop?: string,
     policy: Policy = {},
     group?: string,
   ) => {
     slots.push({
       ...policy,
       group,
-      id: name(comp, kind, column),
+      id: name(comp, kind, prop),
       comp,
       kind,
-      column,
+      prop,
       run,
     })
     return fx
@@ -539,10 +540,10 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     ],
     created: (comp, run, policy) =>
       add(comp, 'created', run, undefined, policy),
-    changed: (comp, column, run, policy) =>
-      typeof column == 'string'
-        ? add(comp, 'changed', run as Handler, column, policy)
-        : add(comp, 'changed', column, undefined, policy),
+    changed: (comp, prop, run, policy) =>
+      typeof prop == 'string'
+        ? add(comp, 'changed', run as Handler, prop, policy)
+        : add(comp, 'changed', prop, undefined, policy),
     removed: (comp, run, policy = {}) => pattern(`-${comp}`, run, policy),
     slots: () => [...slots],
     owns: (id) => slots.some((s) => s.id == id && selected(s)),
@@ -556,8 +557,8 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       let comp = what as string
       let group = `on:${slots.length}`
       if (created) add(comp, 'created', created, undefined, rest, group)
-      for (let [col, run] of Object.entries(changed ?? {})) {
-        add(comp, 'changed', run, col, rest, group)
+      for (let [prop, run] of Object.entries(changed ?? {})) {
+        add(comp, 'changed', run, prop, rest, group)
       }
       if (removed) pattern(`-${comp}`, removed, rest, group)
       return fx

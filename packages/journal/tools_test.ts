@@ -86,7 +86,7 @@ Deno.test('a death answers as the death it was', async () => {
   f.apply([{ entity: { eid: 'p1' }, $delete: true }])
   let [said] = await history(f.tools, { entity: 'p1' })
   assertEquals(said.$delete, true)
-  assert(!said.page, 'a death carries no columns forward')
+  assert(!said.page, 'a death carries no properties forward')
 })
 
 Deno.test('an id is whatever the graph says it addresses', async () => {

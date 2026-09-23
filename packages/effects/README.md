@@ -98,13 +98,13 @@ rows cannot show which removed components were present before the write.
 
 ## Three things happen to a component
 
-| Registration                 | Trigger                                                  |
-| ---------------------------- | -------------------------------------------------------- |
-| `created(comp, run)`         | An entity gains the component                            |
-| `changed(comp, column, run)` | An applied patch includes that column                    |
-| `changed(comp, run)`         | An applied patch updates that component                  |
-| `removed(comp, run)`         | The component is removed, directly or by entity deletion |
-| `on(pattern, run)`           | A query matches an entity touched by the batch           |
+| Registration               | Trigger                                                  |
+| -------------------------- | -------------------------------------------------------- |
+| `created(comp, run)`       | An entity gains the component                            |
+| `changed(comp, prop, run)` | An applied patch includes that property                  |
+| `changed(comp, run)`       | An applied patch updates that component                  |
+| `removed(comp, run)`       | The component is removed, directly or by entity deletion |
+| `on(pattern, run)`         | A query matches an entity touched by the batch           |
 
 The plugin reads component presence before applying changes, including
 components on entities about to be deleted by a cascade. After commit it
@@ -121,9 +121,9 @@ let event = {
 }
 ```
 
-`comp` holds the new component on creation, the applied columns on change, and
-is absent on removal. Pattern events have `kind: 'matched'` and can carry `vars`
-with query variable bindings.
+`comp` holds the new component on creation, the applied properties on change,
+and is absent on removal. Pattern events have `kind: 'matched'` and can carry
+`vars` with query variable bindings.
 
 ## The four promises
 
@@ -163,7 +163,7 @@ fx.created(
 ```
 
 Use `{ trusted: true }` in the configured `g.apply()` call if a handler must
-write server-owned columns. Return the callback's result when callers should
+write server-owned properties. Return the callback's result when callers should
 await the write. It receives the usual graph validation, stamps, journal and
 notifications configured on that graph. Direct transaction patches do not run
 that pipeline.
@@ -219,7 +219,7 @@ failures, and throwing does not prove an external operation had no effect.
 
 Reconciliation claims pending rows with expiring leases and skips unexpired
 claims belonging to other owners. Retry records do not preserve the original
-column patch: reconciliation rebuilds the event using current target state.
+property patch: reconciliation rebuilds the event using current target state.
 Handlers needing historical values must store or obtain those values separately.
 
 ## Background jobs, and the one process running each

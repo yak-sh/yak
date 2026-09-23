@@ -11,7 +11,7 @@
  * - **`graph_show`** — whole entities, plus everything that references them, as
  *   bundles;
  * - **`graph_schema`** — the index of every component, or one component in
- *   full: each column's type and description, what references it, and an
+ *   full: each property's type and description, what references it, and an
  *   example bundle that writes it;
  * - **`search`** — ranked text results, when a {@link Search} is passed.
  *
@@ -21,18 +21,16 @@
  * // Deno.serve((request) => handler(request))
  * ```
  *
- * ## Bundles, in and out
- * A bundle already carries everything a hand-written tool would take — which
- * entity, which components, which columns — so an agent that knows the bundle
- * format can write anything the vocabulary declares. Every tool here accepts
- * and returns bundles, and a reply carries the answer twice: the text its
- * bundles hold as `content`, and the bundles themselves as
- * `structuredContent`. Every tool declares the same output schema for those
- * bundles ({@link answerSchema}) — the generic bundle answer, not a shape
- * derived from the vocabulary, since a typed bundle per tool would send the
- * whole vocabulary over and over in one `tools/list`. The schema that is
- * derived from the vocabulary is `graph_apply`'s input
- * ({@link bundleSchema}).
+ * ## Bundles, in and out A bundle already carries everything a hand-written
+ * tool would take — which entity, which components, which properties — so an
+ * agent that knows the bundle format can write anything the vocabulary
+ * declares. Every tool here accepts and returns bundles, and a reply carries
+ * the answer twice: the text its bundles hold as `content`, and the bundles
+ * themselves as `structuredContent`. Every tool declares the same output schema
+ * for those bundles ({@link answerSchema}) — the generic bundle answer, not a
+ * shape derived from the vocabulary, since a typed bundle per tool would send
+ * the whole vocabulary over and over in one `tools/list`. The schema that is
+ * derived from the vocabulary is `graph_apply`'s input ({@link bundleSchema}).
  *
  * ## A call is an entity
  * An MCP `tools/call` does not call a function directly. It writes a

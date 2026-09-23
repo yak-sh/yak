@@ -5,15 +5,15 @@
 //
 // The bundle schema is not hand-written: it is derived from the vocabulary.
 // `bundleSchema()` reads a loaded @yaks/vocab and emits the `entity` component
-// plus one object per declared component, each carrying its readable columns.
-// Add a component to the vocabulary and it appears here with nobody editing
-// this file.
+// plus one object per declared component, each carrying its readable
+// properties. Add a component to the vocabulary and it appears here with nobody
+// editing this file.
 //
 // The depth is a choice with a price. The tool list is sent to the agent
 // before it asks anything, so every byte of schema is context spent up front:
 // over a ninety-component vocabulary the fully typed bundle is ~30 KB per tool
 // and the names-only one ~11 KB. `graph_apply` always uses `full`, because the
-// alternative is an agent guessing at a column's type (T-34153) — and a guess
+// alternative is an agent guessing at a property's type (T-34153) — and a guess
 // costs a refused transaction, a re-read and a second attempt, which is more
 // context than the schema ever was.
 
@@ -23,41 +23,41 @@ import type { Prop, Vocab } from '@yaks/vocab'
 /**
  * How much of the vocabulary a bundle schema spells out.
  *
- * - `names` — every component and every column name, with values left
+ * - `names` — every component and every property name, with values left
  *   untyped. Roughly a third the size, for a deployment that would rather
  *   spend the agent's context elsewhere.
- * - `full` — each column at its declared type, with an enum's members listed
+ * - `full` — each property at its declared type, with an enum's members listed
  *   and the description the vocabulary gives it. The default.
  */
 export type Depth = 'names' | 'full'
 
 /** How a bundle schema is derived: how much detail, whether a component may be
- * null, whether it is `graph_apply`'s input schema, and any column you type
+ * null, whether it is `graph_apply`'s input schema, and any property you type
  * yourself. */
 export type BundleOpts = {
-  /** how much of each column to describe (default: `names`) */
+  /** how much of each property to describe (default: `names`) */
   depth?: Depth
   /** allow a null component — the shape of an applied transaction, which
    * echoes a component the transaction removed as `null`. A read never
    * returns one, so a read tool leaves this off (default: `false`) */
   nulls?: boolean
   /** `graph_apply`'s input schema: the writable components and their writable
-   * columns, each typed and described. It is open, like a read schema: a
+   * properties, each typed and described. It is open, like a read schema: a
    * client caches this schema when it connects and the vocabulary grows
-   * afterwards, so a schema that refused an undeclared column would refuse a
-   * column that now exists. The schema describes; the server decides (default:
-   * `false`) */
+   * afterwards, so a schema that refused an undeclared property would refuse a
+   * property that now exists. The schema describes; the server decides
+   * (default: `false`) */
   write?: boolean
-  /** a column your deployment returns (or accepts) differently than the
+  /** a property your deployment returns (or accepts) differently than the
    * vocabulary declares — a reference that reads back as a named object, or a
-   * column two of your stores name differently. It is handed the options the
-   * schema is being derived under, so you can type a column one way for a read
-   * and another for a write; return `undefined` to use the vocabulary's own
-   * type */
-  column?: (col: Prop, opts: BundleOpts) => z.ZodTypeAny | undefined
+   * property two of your stores name differently. It is handed the options the
+   * schema is being derived under, so you can type a property one way for a
+   * read and another for a write; return `undefined` to use the vocabulary's
+   * own type */
+  prop?: (prop: Prop, opts: BundleOpts) => z.ZodTypeAny | undefined
 }
 
-// A JSON value of the types a column declares. What an object or array holds
+// A JSON value of the types a property declares. What an object or array holds
 // is not described yet: the vocabulary does not validate it either.
 let JSON_TYPES: Record<string, z.ZodTypeAny> = {
   object: z.record(z.unknown()),
@@ -73,23 +73,23 @@ let json = (types: string[]): z.ZodTypeAny => {
   return two ? z.union([one, two, ...rest]) : one
 }
 
-// A column's value as it reads back. Every column is nullable (a cleared
-// column reads back null) and optional (a patch only touches the columns it
-// names), and an enum reads back as one of its members. `.catch` is
+// A property's value as it reads back. Every property is nullable (a cleared
+// property reads back null) and optional (a patch only touches the properties
+// it names), and an enum reads back as one of its members. `.catch` is
 // deliberately absent: this schema describes the reply, and a reply that does
 // not match is a bug to see, not to coerce.
-let typed = (col: Prop): z.ZodTypeAny =>
-  col.category == 'enum' && col.values?.length
-    ? z.enum(col.values as [string, ...string[]])
-    : col.scalar == 'jsonb'
-    ? json(col.types!)
-    : col.scalar == 'bool'
+let typed = (prop: Prop): z.ZodTypeAny =>
+  prop.category == 'enum' && prop.values?.length
+    ? z.enum(prop.values as [string, ...string[]])
+    : prop.scalar == 'jsonb'
+    ? json(prop.types!)
+    : prop.scalar == 'bool'
     ? z.boolean()
-    : col.scalar == 'number' || col.scalar == 'priority'
+    : prop.scalar == 'number' || prop.scalar == 'priority'
     ? z.number()
     : z.string()
 
-// Attach the vocabulary's description of a component or column, when it has
+// Attach the vocabulary's description of a component or property, when it has
 // one. Only at `full`: a description is the other half of a type, and `names`
 // is the depth that spends context on neither. It is attached to the outermost
 // wrapper a value has, because a description set inside a nullable is emitted
@@ -100,16 +100,16 @@ let saying = <T extends z.ZodTypeAny>(
   o: BundleOpts,
 ): T => said && o.depth == 'full' ? s.describe(said) : s
 
-// One component as it appears in a bundle: a flat object of its columns, each
-// carrying the vocabulary's type and description for it. Both the read and the
-// write schema are passthrough, never strict. A reader must not break on a
-// column the server started sending after this client was written — and a
+// One component as it appears in a bundle: a flat object of its properties,
+// each carrying the vocabulary's type and description for it. Both the read and
+// the write schema are passthrough, never strict. A reader must not break on a
+// property the server started sending after this client was written — and a
 // writer keeps this schema for the whole conversation, cached along with the
 // tool list it arrived in, while the vocabulary grows (roster.ts). A closed
-// write schema would make that stale copy refuse a column that exists, inside
+// write schema would make that stale copy refuse a property that exists, inside
 // the client, where no server can explain it. So the schema describes — every
-// declared column typed, named and described — and the server decides:
-// @yaks/graph's `admit` refuses a column nobody declared and lists the ones
+// declared property typed, named and described — and the server decides:
+// @yaks/graph's `admit` refuses a property nobody declared and lists the ones
 // that are declared.
 //
 // The component itself is optional, since a bundle carries only the components
@@ -123,25 +123,25 @@ let compSchema = (
   let info = vocab.comp(name)
   let shape = Object.fromEntries(
     vocab.props(name).map((prop) => {
-      let col = vocab.prop(name, prop)!
-      // A server-owned column is named in the write schema but left untyped: a
-      // caller that reads a bundle and sends it back will include one, and
+      let def = vocab.prop(name, prop)!
+      // A server-owned property is named in the write schema but left untyped:
+      // a caller that reads a bundle and sends it back will include one, and
       // @yaks/graph's `admit` drops it rather than refusing the transaction.
-      // The caller's own `column` function is consulted only where a type is
+      // The caller's own `prop` function is consulted only where a type is
       // being emitted at all: `names` costs a third of `full` by leaving every
-      // value untyped, and typing some columns in the middle of that would be
-      // neither.
+      // value untyped, and typing some properties in the middle of that would
+      // be neither.
       let owned = o.write && !info?.writable.includes(prop)
       let said = owned || o.depth != 'full'
         ? null
-        : o.column?.(col, o) ?? typed(col)
-      // An untyped column is `unknown`, which already allows the null a
-      // cleared column reads back as — declaring that separately would double
+        : o.prop?.(def, o) ?? typed(def)
+      // An untyped property is `unknown`, which already allows the null a
+      // cleared property reads back as — declaring that separately would double
       // what the schema costs in the agent's context for nothing.
       return [
         prop,
         said
-          ? saying(said.nullable().optional(), col.description, o)
+          ? saying(said.nullable().optional(), def.description, o)
           : z.unknown(),
       ]
     }),
@@ -159,21 +159,21 @@ let sugar = {
       'the eid',
   ),
   $was: z.record(z.record(z.string().nullable())).optional().describe(
-    'a precondition, by component then column: the SHA-256 of the value you ' +
-      'read (or null for "I read none"). The transaction is refused if the ' +
-      'value changed.',
+    'a precondition, by component then property: the SHA-256 of the value ' +
+      'you read (or null for "I read none"). The transaction is refused if ' +
+      'the value changed.',
   ),
 }
 
 /**
  * The bundle, derived whole from a vocabulary: `{entity: {eid, num}, <comp>:
- * {<columns>}}` — the shape every interface in this family speaks, for reads
+ * {<properties>}}` — the shape every interface in this family speaks, for reads
  * and for writes.
  *
  * ```ts
- * let bundle = bundleSchema(shop) // names only, the cheap default
- * let typed = bundleSchema(shop, { depth: 'full' }) // every column's type
- * let write = bundleSchema(shop, { depth: 'full', nulls: true, write: true })
+ * let bundle = bundleSchema(shop) // names only, the cheap default let typed =
+ * bundleSchema(shop, { depth: 'full' }) // every property's type let write =
+ * bundleSchema(shop, { depth: 'full', nulls: true, write: true })
  * ```
  */
 export let bundleSchema = (
@@ -189,9 +189,8 @@ export let bundleSchema = (
       }),
     ),
     // `entity` and `kind` are declared after the vocabulary and override it:
-    // `entity` is a declared component too, but its `eid` is the row key
-    // rather than a column, and a read returns the derived display kind beside
-    // it.
+    // `entity` is a declared component too, but its `eid` is the row key rather
+    // than a property, and a read returns the derived display kind beside it.
     ...(opts.write ? sugar : {
       kind: z.string().optional().describe(
         'the derived display kind — what the components make this entity',
@@ -235,7 +234,7 @@ export let schemaSchema: z.ZodTypeAny = z.object({
       name: z.string(),
       description: z.string().optional(),
       kind: z.boolean().describe('whether this component names a display kind'),
-      columns: z.union([
+      props: z.union([
         z.array(z.string()),
         z.array(
           z.object({

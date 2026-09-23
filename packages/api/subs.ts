@@ -118,7 +118,7 @@ type Sub = {
   test: Filter | null
 }
 
-// Whether a clause can be decided against one entity on its own: a column of
+// Whether a clause can be decided against one entity on its own: a property of
 // the entity itself, a term in its own text, nothing at all. A path that hops
 // through a reference or a backlink, an ordering, a limit or an aggregate is
 // a question about the set, and answering it means running the query again.
@@ -383,7 +383,7 @@ export let subscriptions = (graph: Graph, opts: {
     },
     commit,
     relay: (sink, bundles) => {
-      // Admitted like any other write — an unknown column is refused, a
+      // Admitted like any other write — an unknown property is refused, a
       // server-owned or computed one is dropped, every value is checked
       // against the vocabulary — and then stripped of the `$` keys a stored
       // write carries. A relayed value has no precondition to check, no

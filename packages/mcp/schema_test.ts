@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
-// The two schemas a client receives. The write door's input is the
-// vocabulary: every component, every writable column and every type, before an
-// agent guesses at one (T-34153). Every tool's answer is the one bundle shape
+// The two schemas a client receives. The write door's input is the vocabulary:
+// every component, every writable property and every type, before an agent
+// guesses at one (T-34153). Every tool's answer is the one bundle shape
 // (server.ts `answerSchema`), listed on all of them, and a host holds us to it
 // — it compiles the schema off `tools/list` and refuses a reply that does not
 // match — so the answers are checked here against the schema as published.
@@ -114,13 +114,13 @@ Deno.test('graph_apply takes the vocabulary, typed and described', async () => {
   assertEquals(at(items, 'entity', 'required'), ['eid'])
 })
 
-// A host whose door takes a column differently than the vocabulary declares
+// A host whose door takes a property differently than the vocabulary declares
 // says so once, and the write schema is derived through it — yaks.app takes an
 // id for a reference (agent.ts `reading`).
-Deno.test('a host spells its own reading of a column on the write door', async () => {
+Deno.test('a host spells its own reading of a property on the write door', async () => {
   let client = await connect({
-    column: (col, o) =>
-      col.category == 'ref' && !o.write
+    prop: (prop, o) =>
+      prop.category == 'ref' && !o.write
         ? z.object({ eid: z.string() }).passthrough()
         : undefined,
   })
@@ -162,8 +162,8 @@ Deno.test('the write door names its own words, and stays open to newer ones', as
   assertEquals(at(comp('created'), 'properties'), { at: {}, by: {} })
   // And each component is open (T-34277): a client caches this schema with the
   // tool list it came in and the vocabulary grows under it, so a closed one
-  // would have that stale copy refuse a column that now exists. The schema
-  // describes; the server decides, and says which columns are declared.
+  // would have that stale copy refuse a property that now exists. The schema
+  // describes; the server decides, and says which properties are declared.
   assertEquals(at(comp('book'), 'additionalProperties'), true)
 })
 

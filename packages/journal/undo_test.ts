@@ -22,7 +22,7 @@ let fixture = () => {
   }
 }
 
-Deno.test('undo of a patch restores the column it moved', () => {
+Deno.test('undo of a patch restores the property it moved', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Retro' } }])
@@ -59,13 +59,13 @@ Deno.test('undo of a create drops the component it brought', () => {
   assertEquals(f.page('p1'), null)
 })
 
-Deno.test('an undo guards every column it restores', () => {
+Deno.test('an undo guards every property it restores', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'One' } }])
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Two' } }])
   let [back] = undone(f.j.at(2)!, { guard: true })
   assertEquals(back.page, { title: 'One' })
-  // The guard names the value the batch left, so a column somebody else has
+  // The guard names the value the batch left, so a property somebody else has
   // moved since refuses the reversal instead of clobbering it.
   assert(back.$was?.page?.title)
 })

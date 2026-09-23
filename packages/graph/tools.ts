@@ -82,7 +82,7 @@ export type Seams = {
    * `core`) */
   search?: Search
   /** where a component is documented at length, when this program has such a
-   * page — `graph_schema` returns the address beside the columns */
+   * page — `graph_schema` returns the address beside the properties */
   guide?: Guide
 }
 
@@ -102,11 +102,11 @@ let num = (v: unknown): number | undefined =>
 let strings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x) => typeof x == 'string') : []
 
-// The bundles `graph_apply` was handed, checked before anything is applied.
-// The input schema is the vocabulary itself
-// (@yaks/mcp `bundleSchema` at `write`), so a client knows every component,
-// every writable column and every type before it writes one — this is the
-// check the schema cannot make, the identity every bundle must carry.
+// The bundles `graph_apply` was handed, checked before anything is applied. The
+// input schema is the vocabulary itself (@yaks/mcp `bundleSchema` at `write`),
+// so a client knows every component, every writable property and every type
+// before it writes one — this is the check the schema cannot make, the identity
+// every bundle must carry.
 let batch = (v: unknown): Bundle[] => {
   if (!Array.isArray(v)) throw new Refused('change must be an array of bundles')
   return v.map((b, i) => {
@@ -123,7 +123,7 @@ let batch = (v: unknown): Bundle[] => {
 
 // The entities, then everything pointing at them, each one whole and each one
 // once. `.refs=<id>` is the query grammar's backlink union, so the incoming
-// references cost one query, not one per reference column.
+// references cost one query, not one per reference property.
 let gather = async (
   ctx: ToolCtx,
   said: string[],

@@ -101,7 +101,8 @@ let asked = (held: Bundle[], applied: Bundle[]): Bundle[] => {
  * two numbers:
  *
  * ```json
- * {"error":"Refused","message":"unknown column: book.colour","line":137,"committed":100}
+ * {"error":"Refused","message":"unknown property:
+ * book.colour","line":137,"committed":100}
  * ```
  *
  * `line` is the 1-based line the offending bundle was on, and `committed` how
@@ -234,8 +235,8 @@ let reduced = (op: Agg, rows: Row[]): unknown => {
  * `GET /query?q=…` or `POST /query` — a query string in, the bundles it
  * selects out.
  *
- * Unless the query asks for a reduction. `.count!`, `.distinct=col` and
- * `.tally=col` are questions about the selection rather than about its
+ * Unless the query asks for a reduction. `.count!`, `.distinct=prop` and
+ * `.tally=prop` are questions about the selection rather than about its
  * members, and the store answers each with one SQL statement (`rows()` rather
  * than `read()`); the response body is then `{"count":n}`, `{"distinct":[…]}`
  * or `{"tally":{…}}`.

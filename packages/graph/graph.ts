@@ -10,7 +10,7 @@
 // One run, in order:
 //
 //   normalize   hooks    pure, before the transaction opens
-//   admit       core     drop undeclared columns, refuse invalid ones, check
+//   admit       core     drop undeclared properties, refuse invalid ones, check
 //                        the values
 //   mint        core     assign an id to every $alias, and rewrite the
 //                        references to it
@@ -78,7 +78,7 @@ import { meaning } from './meant.ts'
 
 /** The options one `apply()` call can pass. */
 export type ApplyOpts = {
-  /** the caller is trusted server code: server-owned columns are accepted */
+  /** the caller is trusted server code: server-owned properties are accepted */
   trusted?: boolean
   /** the timestamp every stamp in this change uses, ISO-8601 (default: now) */
   now?: string
@@ -202,7 +202,7 @@ export let graph = (opts: Options): Graph => {
   // name. Read once per apply, so a plugin registered later is included. A
   // plugin's own `derive` takes precedence: @yaks/edge and @yaks/key derive an
   // entity's id from the relation component it carries, which a list of
-  // columns cannot express.
+  // properties cannot express.
   let derives = (): Record<string, Derive> =>
     Object.assign({}, declared, ...plugins.map((p) => p.derive ?? {}))
 
@@ -592,10 +592,11 @@ export let graph = (opts: Options): Graph => {
   // type is resolved to the eid the store keys rows by (said.ts).
   let aim = addressing(vocab)
 
-  // The other half of reading a query the way it was meant: a bare column name
-  // the vocabulary cannot place on its own is resolved to the component the
-  // query already selects (meant.ts). Both run before storage sees the query,
-  // so every caller reading through this graph gets the same interpretation.
+  // The other half of reading a query the way it was meant: a bare property
+  // name the vocabulary cannot place on its own is resolved to the component
+  // the query already selects (meant.ts). Both run before storage sees the
+  // query, so every caller reading through this graph gets the same
+  // interpretation.
   let mean = meaning(vocab)
 
   // What a caller asks before reading by id: every plugin that knows how a

@@ -908,7 +908,7 @@ slow(
           }),
         Error,
       )).message
-      assertStringIncludes(typo, 'unknown column: recipe.calories')
+      assertStringIncludes(typo, 'unknown property: recipe.calories')
       assertStringIncludes(typo, 'recipe declares title, serves')
       assertStringIncludes(typo, 'graph_schema')
 

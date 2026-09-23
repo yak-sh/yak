@@ -96,7 +96,7 @@ export let connect = async (
   return client
 }
 
-/** One component off a bundle, for a test that wants a column out of it. */
+/** One component off a bundle, for a test that wants a property out of it. */
 export let comp = (b: Bundle, name: string): Record<string, unknown> => {
   let c = b[name]
   return c && typeof c == 'object' ? { ...c } : {}

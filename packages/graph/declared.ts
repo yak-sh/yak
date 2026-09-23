@@ -6,7 +6,7 @@
 //
 // What a rule emits is deliberately small. Each of its patterns writes exactly
 // what its `+` and `*` clauses declared: a `+comp` or `+!comp` component
-// arrives as an empty component, and `+result.call=$call` fills a column with
+// arrives as an empty component, and `+result.call=$call` fills a property with
 // whatever the variable was bound to. A pattern that only writes creates its
 // entity, and that entity's id is derived from the rule's name and the
 // entities it matched (./identity.ts `derivedEid`) — so the same rule on the
@@ -90,11 +90,11 @@ let ordered = (rules: Declared[]): Declared[] => {
 
 // What a written value resolves to: a `$name` is whatever the match bound, a
 // `#Name` is the value that resource converts to, and a literal is the raw
-// token the grammar kept — parsed as the column's own type, because a query's
-// values are text and a column's are not.
+// token the grammar kept — parsed as the property's own type, because a query's
+// values are text and a property's are not.
 let worth = (
   value: Value,
-  col: Prop | undefined,
+  prop: Prop | undefined,
   row: Binding,
   made: Record<string, Eid>,
   resource: (name: string) => unknown,
@@ -111,8 +111,8 @@ let worth = (
       ? (held as { [Symbol.toPrimitive]: () => unknown })[Symbol.toPrimitive]()
       : held
   }
-  if (col?.scalar == 'number' || col?.scalar == 'priority') return Number(raw)
-  if (col?.scalar == 'bool') return raw == 'true' || raw == '1'
+  if (prop?.scalar == 'number' || prop?.scalar == 'priority') return Number(raw)
+  if (prop?.scalar == 'bool') return raw == 'true' || raw == '1'
   return raw
 }
 
@@ -134,7 +134,7 @@ export let emitted = (
 ): Bundle[] => {
   let key = firing(rule, row)
   // The entity each pattern is about. The ids of created entities are derived
-  // first, so a `$name` written into a column can reference one.
+  // first, so a `$name` written into a property can reference one.
   let at: Eid[] = plan.patterns.map((p, i) =>
     p.makes ? derivedEid(`${key}#${i}`) : row.entities[i]!
   )
@@ -156,9 +156,9 @@ export let emitted = (
         resource,
       )
       // A resource that converts to nothing writes nothing —
-      // `+created.by=#Actor` on a change nobody signed leaves the column alone
-      // rather than clearing it, so a rule needs no conditional around the
-      // column it wanted to write.
+      // `+created.by=#Actor` on a change nobody signed leaves the property
+      // alone rather than clearing it, so a rule needs no conditional around
+      // the property it wanted to write.
       if (v !== undefined) patch[s.comp][s.prop] = v
     }
     if (Object.keys(patch).length) {
@@ -177,7 +177,7 @@ export let emitted = (
  * cannot evaluate one can say nothing about it.
  *
  * `admit` is the graph's own admission function, passed in so this file need
- * not know what a column is: whatever a rule wrote goes through it before it
+ * not know what a property is: whatever a rule wrote goes through it before it
  * joins the change.
  */
 export let settle = (
@@ -211,10 +211,10 @@ export let settle = (
           }
         })
         if (!made.length) return batch
-        // Admitted like anything else that reaches the graph: a column this
+        // Admitted like anything else that reaches the graph: a property this
         // vocabulary does not declare is dropped, and a value it rejects
         // refuses the whole change. A rule is server code, so it is allowed to
-        // write server-owned columns.
+        // write server-owned properties.
         return round([...batch, ...admit(made)])
       },
     )

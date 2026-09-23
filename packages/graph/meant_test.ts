@@ -1,4 +1,4 @@
-// A bare column, read off the line it sits on. The graph-wide effect (a
+// A bare property, read off the line it sits on. The graph-wide effect (a
 // `/query` line saying `.task&.status=open`) rides on `graph.read`; this is
 // the pure half.
 
@@ -36,7 +36,7 @@ let vocab = loadVocab([{
 let mean = meaning(vocab)
 let said = (q: string) => mean(q)
 
-Deno.test('the comp the line selects resolves the bare column', () => {
+Deno.test('the comp the line selects resolves the bare property', () => {
   assertEquals(said('.task&.status=open'), parse('.task&.task.status=open'))
   assertEquals(
     said('.session&.status=running'),
@@ -64,7 +64,7 @@ Deno.test('a line naming both candidates is still ambiguous', () => {
   )
 })
 
-Deno.test('a line naming no bare column comes back whole', () => {
+Deno.test('a line naming no bare property comes back whole', () => {
   assertEquals(said('.task.status=open&.limit=3'), '.task.status=open&.limit=3')
   assertEquals(said('.doc.title=Dune'), '.doc.title=Dune')
   assertEquals(said('.task&.domain=Ops'), '.task&.domain=Ops')
@@ -82,7 +82,7 @@ Deno.test('an alternative reads its own arm, never its neighbour', () => {
   )
 })
 
-Deno.test('an aggregate, a projection and an ordering name columns too', () => {
+Deno.test('an aggregate, a projection and an ordering name properties too', () => {
   assertEquals(said('.task&.tally=status'), parse('.task&.tally=task.status'))
   assertEquals(
     said('.task&.distinct=status'),

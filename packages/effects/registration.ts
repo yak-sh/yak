@@ -30,7 +30,7 @@ export type Policy = {
 export type Registration = Policy & {
   /** The component appeared. */
   created?: Handler
-  /** A patch carried one of these columns. */
+  /** A patch carried one of these properties. */
   changed?: Record<string, Handler>
   /** The component went away. */
   removed?: Handler
@@ -75,7 +75,7 @@ export let describe = (slots: Slot[]): Description[] => {
       d = { comp: s.comp, hooks: [], sweep: s.sweep?.pending, doc: s.doc }
       groups.set(key, d)
     }
-    d.hooks.push(s.column ? `changed(${s.column})` : s.kind)
+    d.hooks.push(s.prop ? `changed(${s.prop})` : s.kind)
   }
   return [...groups.values()]
 }

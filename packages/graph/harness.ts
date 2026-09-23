@@ -64,7 +64,7 @@ let doc: VocabDoc = {
       },
     },
     // A mark: a component a client writes empty and the graph fills in, once.
-    // Declaring these three columns server-owned is what makes it a mark
+    // Declaring these three properties server-owned is what makes it a mark
     // (@yaks/graph stamp.ts).
     sold: {
       component: true,
@@ -234,7 +234,7 @@ export let slow = (base: Storage): Storage => ({
     ),
 })
 
-/** A bundle's component, for a test that wants one column out of it. */
+/** A bundle's component, for a test that wants one property out of it. */
 export let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
 

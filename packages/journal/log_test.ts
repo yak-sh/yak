@@ -1,9 +1,10 @@
 /// <reference lib="deno.ns" />
 // What the log holds: a create, a patch and a death, in the order they
 // happened, each with the actor that wrote it — and nothing about the batches
-// that were refused, or rehearsed. Plus the two things only an after-image log has to prove:
-// that the before-side comes back right although it was never stored, and that
-// a content-addressed column is recorded by its address rather than its bytes.
+// that were refused, or rehearsed. Plus the two things only an after-image log
+// has to prove: that the before-side comes back right although it was never
+// stored, and that a content-addressed property is recorded by its address
+// rather than its bytes.
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
@@ -29,13 +30,13 @@ let lines = (f: { j: { history: (e: string) => unknown } }, eid: string) =>
     by: string | null
     deltas: {
       comp: string
-      column: string | null
+      prop: string | null
       before: unknown
       after: unknown
     }[]
   }[]).flatMap((b) =>
     b.deltas.map((d) =>
-      `${b.seq} ${b.by} ${d.comp}${d.column ? '.' + d.column : ''} ` +
+      `${b.seq} ${b.by} ${d.comp}${d.prop ? '.' + d.prop : ''} ` +
       `${JSON.stringify(d.before ?? null)}→${JSON.stringify(d.after ?? null)}`
     )
   )
@@ -90,14 +91,14 @@ Deno.test('a cascade casualty is recorded, whole, under its own entity', () => {
   ])
 })
 
-Deno.test('a component dropped is recorded whole, and a column cleared is not', () => {
+Deno.test('a component dropped is recorded whole, and a property cleared is not', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'One', text: 'body' } }])
   f.apply([{ entity: { eid: 'p1' }, page: { text: null } }])
   f.apply([{ entity: { eid: 'p1' }, page: null }])
-  // The cleared column is still a column the component held — the log records
-  // its after-image as null rather than forgetting it, so the state it hands
-  // back names it too.
+  // The cleared property is still a property the component held — the log
+  // records its after-image as null rather than forgetting it, so the state it
+  // hands back names it too.
   assertEquals(lines(f, 'p1').slice(-2), [
     '2 null page.text "body"→null',
     '3 null page {"title":"One","text":null}→null',
@@ -162,7 +163,7 @@ Deno.test('the before-side is derived, and the state before a batch with it', ()
   assert(!f.j.touchedSince('p1', 2))
 })
 
-Deno.test('every write of one column, anywhere, oldest first', () => {
+Deno.test('every write of one property, anywhere, oldest first', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'One' } }])
   f.apply([{ entity: { eid: 'p2' }, page: { title: 'Two' } }])
@@ -176,7 +177,7 @@ Deno.test('a value can be sought and scrubbed in place', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'hunter2' } }])
   let [hit] = f.j.seek('hunter2')
-  assertEquals([hit.target, hit.comp, hit.column, hit.value], [
+  assertEquals([hit.target, hit.comp, hit.prop, hit.value], [
     'p1',
     'page',
     'title',
@@ -187,10 +188,10 @@ Deno.test('a value can be sought and scrubbed in place', () => {
   assertEquals(f.j.history('p1')[0].deltas.at(-1)?.after, '—')
 })
 
-// A column whose text the graph already keeps under a content address is
+// A property whose text the graph already keeps under a content address is
 // recorded by that address, so the log costs a row per revision and not a copy
 // of the document.
-Deno.test('a content-addressed column is recorded by its address', () => {
+Deno.test('a content-addressed property is recorded by its address', () => {
   let db = mem()
   let store = storage(db, wiki)
   store.install()
@@ -209,7 +210,7 @@ Deno.test('a content-addressed column is recorded by its address', () => {
     rows: (sql, params) =>
       db.query(sql, params as never[]) as Record<string, unknown>[],
     cas: {
-      at: (comp, column) => comp == 'page' && column == 'text',
+      at: (comp, prop) => comp == 'page' && prop == 'text',
       put,
       table: 'body',
       key: 'id',

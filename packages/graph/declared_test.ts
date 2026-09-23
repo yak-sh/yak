@@ -31,13 +31,13 @@ Deno.test('a gated rule writes the gate it fired on', () => {
   assertEquals(out, [{ entity: { eid: 'c1' }, result: {} }])
 })
 
-Deno.test('a written column takes the variable it named', () => {
+Deno.test('a written property takes the variable it named', () => {
   let out = emitted(
     one('$c .call; +result.call=$c, +result.ms=12'),
     { entities: ['c1', null], vars: { c: 'c1' } },
     vocab,
   )
-  // The matched pattern writes nothing; the making one writes both columns,
+  // The matched pattern writes nothing; the making one writes both properties,
   // the number read as a number.
   assertEquals(out.length, 1)
   assertEquals(out[0].result, { call: 'c1', ms: 12 })

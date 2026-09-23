@@ -28,7 +28,7 @@ export type ReadOpts = { now?: number; durable?: boolean }
  * are depth 1, and so on. This is also the order they are returned in. */
 export type Gone = { eid: Eid; depth: number }
 
-/** One reference to clear: a surviving entity's `detach` or `release` column
+/** One reference to clear: a surviving entity's `detach` or `release` property
  * pointing at one of the deleted entities. */
 export type Loose = { eid: Eid; comp: string; prop: string }
 
@@ -66,8 +66,8 @@ export type Tx = {
    * components than asked for; a caller that needs the whole entity still uses
    * `get`. An adapter with no cheaper way to read a subset leaves this out. */
   pick?: (eids: Eid[], names: string[]) => Bundle[] | Promise<Bundle[]>
-  /** the reverse direction: the entities whose reference columns point at one
-   * of these, narrowed to the components named. Present only on the
+  /** the reverse direction: the entities whose reference properties point at
+   * one of these, narrowed to the components named. Present only on the
    * transaction `apply()` hands its hooks, where the gather has already read
    * it (./gather.ts `holding`); read it through `about()` rather than calling
    * it directly, since `about()` falls back to a `read` when no gather ran. */

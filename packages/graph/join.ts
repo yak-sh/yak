@@ -23,7 +23,7 @@
 //
 // A variable is a slot, and what fills it depends on where it is written: a
 // bare `$name` is the pattern's entity, and a `$name` in a value position is
-// that column. Two slots sharing a name hold the same value, which is what
+// that property. Two slots sharing a name hold the same value, which is what
 // joins the patterns; a slot in a `+` clause supplies the value instead, which
 // is how a template's arguments work (T-37570). Deciding which is which is the
 // compiler's job, not the grammar's.
@@ -43,7 +43,7 @@ import type { Set as Sets } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import type { Eid } from './bundle.ts'
 
-/** A column tied to a variable: the raw path as written, and the name. */
+/** A property tied to a variable: the raw path as written, and the name. */
 export type Bind = { path: string[]; name: string }
 
 /** One result of a match: the entity each pattern bound, in the order the
@@ -69,9 +69,9 @@ export type Pattern = {
   writes: string[]
   /** `#Name` — the resources it reads */
   resources: string[]
-  /** the columns a variable binds this pattern to */
+  /** the properties a variable binds this pattern to */
   binds: Bind[]
-  /** `+comp.col=value` — the columns it writes */
+  /** `+comp.prop=value` — the properties it writes */
   sets: Sets[]
   /** nothing to match on: every clause writes, so this pattern creates an
    * entity, one per result of the patterns that do match */
@@ -98,7 +98,7 @@ let halves = (source: string): string[] =>
 
 // One pattern, parsed. `declared()` separates the sigil clauses from the
 // filter — the same reading every rule has always had — and then the variables
-// are removed from the filter, because comparing a column against the literal
+// are removed from the filter, because comparing a property against the literal
 // text `$session` would match nothing.
 let pattern = (text: string): Pattern => {
   let d = declared(parse(text, { text: false }))
@@ -125,7 +125,7 @@ let pattern = (text: string): Pattern => {
     binds,
     sets: d.sets,
     // A pattern with no conditions is not a pattern that matches everything:
-    // with no filter, no `+!` clause, no entity variable and no bound column,
+    // with no filter, no `+!` clause, no entity variable and no bound property,
     // the only thing it declares is what to write, so it creates the entity it
     // writes to.
     makes: !clauses.length && !d.gates.length && !d.vars.length &&
@@ -161,8 +161,9 @@ export let match = (source: string): Match => {
 /**
  * Every component a match reads — what storage's overlay of the pending change
  * has to cover for the compiled statement to see that change. `+!` clauses
- * count too: testing that a component is absent is still a read. A bare column
- * name is resolved through the vocabulary, since `.title` means `doc.title`.
+ * count too: testing that a component is absent is still a read. A bare
+ * property name is resolved through the vocabulary, since `.title` means
+ * `doc.title`.
  */
 export let reads = (m: Match, v: Vocab): string[] => {
   let out = new Set<string>()
@@ -208,8 +209,8 @@ export let reads = (m: Match, v: Vocab): string[] => {
  * rule; its arguments are `$x=5`, which is a query; merging them is the
  * conjunction of two clause lists. Where a bound variable sits decides what it
  * does, and that was already how variables worked: in a match clause it
- * constrains (the column must equal the argument), in a `+` clause it supplies
- * (the column is written with it), and in both it does both.
+ * constrains (the property must equal the argument), in a `+` clause it
+ * supplies (the property is written with it), and in both it does both.
  *
  * ```ts
  * import { filled, match } from '@yaks/graph'
@@ -227,7 +228,7 @@ export let filled = (
   let patterns = plan.patterns.map((p) => {
     let clauses = [...p.filter.clauses]
     // A bound variable in a match position is an ordinary predicate again:
-    // the column must equal what the argument said.
+    // the property must equal what the argument said.
     let binds = p.binds.filter((b) => {
       if (!(b.name in values)) return true
       clauses.push(eq(b.path.join('.'), String(values[b.name])))
@@ -301,7 +302,7 @@ export let asked = (m: Match, v: Vocab): Match | null => {
       return false
     }
   }
-  // Both `!comp` and `.col=`: the value-less `=` the grammar reads as "this is
+  // Both `!comp` and `.prop=`: the value-less `=` the grammar reads as "this is
   // absent".
   let absent = (c: Pred): boolean =>
     c.op == '=' && c.value?.kind == 'scalar' && c.value.raw === ''

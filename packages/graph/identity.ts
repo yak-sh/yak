@@ -21,12 +21,12 @@
 // is where the derivation comes from: the vocabulary, rather than a plugin
 // that owns the component. A plugin's own `derive` still takes precedence,
 // because @yaks/edge and @yaks/key derive their ids partly from the relation
-// component the bundle carries, which a list of columns cannot express.
+// component the bundle carries, which a list of properties cannot express.
 //
 // The other half is the refusal. A derived id is only meaningful while the id
 // and the value agree, so a bundle that writes an identity value onto some
 // other id is refused rather than quietly written: renaming creates a new
-// entity, it never patches a column.
+// entity, it never patches a property.
 
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Eid } from './bundle.ts'
@@ -73,17 +73,17 @@ export let identityEid = (comp: string, values: string[]): Eid =>
 // The values a bundle supplies for one identity, or nothing when it supplies
 // only some of them. A partial identity is not an identity: the entity is
 // given an ordinary generated id, and {@link identified} refuses it.
-let statedBy = (comp: Comp, cols: string[]): string[] | undefined => {
+let statedBy = (comp: Comp, props: string[]): string[] | undefined => {
   let out: string[] = []
-  for (let col of cols) {
-    let v = comp[col]
+  for (let prop of props) {
+    let v = comp[prop]
     if (v == null || v === '') return undefined
     out.push(String(v))
   }
   return out
 }
 
-// Every identity a bundle supplies values for, as [component, columns,
+// Every identity a bundle supplies values for, as [component, properties,
 // values].
 let stating = (
   b: Bundle,
@@ -91,9 +91,9 @@ let stating = (
 ): [string, string[], string[] | undefined][] =>
   comps(b).flatMap(([name, comp]) => {
     if (!comp) return []
-    let cols = vocab.identity(name)
-    return cols.length
-      ? [[name, cols, statedBy(comp as Comp, cols)] as [
+    let props = vocab.identity(name)
+    return props.length
+      ? [[name, props, statedBy(comp as Comp, props)] as [
         string,
         string[],
         string[] | undefined,
@@ -115,10 +115,10 @@ let stating = (
 export let identities = (vocab: Vocab): Record<string, Derive> => {
   let out: Record<string, Derive> = {}
   for (let name of vocab.all) {
-    let cols = vocab.identity(name)
-    if (!cols.length) continue
+    let props = vocab.identity(name)
+    if (!props.length) continue
     out[name] = (comp: Comp) => {
-      let values = statedBy(comp, cols)
+      let values = statedBy(comp, props)
       return values ? identityEid(name, values) : ''
     }
   }
@@ -135,13 +135,13 @@ export let identities = (vocab: Vocab): Record<string, Derive> => {
  * created that writes an identity component without the values that would have
  * identified it.
  *
- * An ordinary PATCH is untouched: a bundle naming a real eid and saying
- * nothing about its identity columns is the normal case, and contains nothing
- * that could disagree.
+ * An ordinary PATCH is untouched: a bundle naming a real eid and saying nothing
+ * about its identity properties is the normal case, and contains nothing that
+ * could disagree.
  */
 export let identified = (bundles: Bundle[], vocab: Vocab): Bundle[] => {
   for (let b of bundles) {
-    for (let [name, cols, values] of stating(b, vocab)) {
+    for (let [name, props, values] of stating(b, vocab)) {
       if (!values) {
         // Only for an entity this change created: an id the caller supplied
         // names an existing entity being patched, and a patch may write
@@ -149,14 +149,14 @@ export let identified = (bundles: Bundle[], vocab: Vocab): Bundle[] => {
         if (!b.$alias) continue
         throw new Refused(
           `${b.$alias} writes ${name} without ${
-            cols.join(', ')
+            props.join(', ')
           }, which is what identifies it`,
         )
       }
       let eid = identityEid(name, values)
       if (b.entity.eid != eid) {
         throw new Refused(
-          `${b.entity.eid} writes ${name}.${cols.join('+')} = ${
+          `${b.entity.eid} writes ${name}.${props.join('+')} = ${
             values.join('+')
           }, which identifies ${eid} — an identity names the entity, so a ` +
             'value is claimed by writing it, never moved onto another id',

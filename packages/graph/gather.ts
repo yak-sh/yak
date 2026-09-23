@@ -5,14 +5,14 @@
 // how much SQL it runs — it is how many times the caller has to wait. D1 has no
 // interactive transaction, so every question a hook asks is its own round trip,
 // and all those questions arrive before any row has changed. They are also all
-// knowable before any row has changed: the `$was` check names its columns, a
+// knowable before any row has changed: the `$was` check names its properties, a
 // membership check names the app and the actor, a delete names the entity whose
 // dependents have to be found. So a plugin declares what it is about to read —
 // `wants` in ./plugin.ts — and everything declared is read together.
 //
 // Two kinds of ask, because two are all a hook has ever needed. `eids` means
 // these entities, whole. `about` is the reverse direction: the entities whose
-// reference columns point at these — the delete cascade's question, and a
+// reference properties point at these — the delete cascade's question, and a
 // membership check's too, since a grant is an entity that references both an
 // app and a person, so "everything about this actor" is one read where "their
 // grant, and their seat" would be two. `comps` narrows which components an
@@ -56,16 +56,16 @@ export type Ask = {
    * entity or writes to it. Omit it to read the whole entity; an ask for the
    * whole entity always wins over an ask for a subset. */
   select?: string[]
-  /** the entities whose reference columns point at these */
+  /** the entities whose reference properties point at these */
   about?: Eid[]
   /** which components an `about` looks through (default: every component that
-   * declares a reference column) */
+   * declares a reference property) */
   comps?: string[]
 }
 
 /**
  * What one gather read. `got` holds the entities it was asked for by id, with
- * `null` for one the storage does not hold; `near` is keyed by column AND
+ * `null` for one the storage does not hold; `near` is keyed by property AND
  * target, so a later ask through a narrower set of components can tell what
  * was already covered from what was not, and a write can re-index what
  * changed.
@@ -73,9 +73,9 @@ export type Ask = {
 export type Snap = {
   /** the entities asked for by id, `null` for one that does not exist */
   got: Map<Eid, Bundle | null>
-  /** per `comp.prop <eid>`, the entities whose column points at that eid */
+  /** per `comp.prop <eid>`, the entities whose property points at that eid */
   near: Map<string, Bundle[]>
-  /** the (component, column, target) triples `near` is keyed by */
+  /** the (component, property, target) triples `near` is keyed by */
   pairs: [string, string, Eid][]
   /** for entities read with `select`, which components have been read so far */
   only?: Map<Eid, Set<string>>
@@ -85,27 +85,27 @@ export type Snap = {
 let key = (comp: string, prop: string, eid: Eid): string =>
   `${comp}.${prop} ${eid}`
 
-// The reference columns an ask looks through: the ones its components declare,
-// or every one in the vocabulary.
-let cols = (vocab: Vocab, names?: string[]): [string, string][] =>
+// The reference properties an ask looks through: the ones its components
+// declare, or every one in the vocabulary.
+let props = (vocab: Vocab, names?: string[]): [string, string][] =>
   names ? vocab.refProps().filter(([c]) => names.includes(c)) : vocab.refProps()
 
-// Every (column, target) triple an `about` over these entities covers.
+// Every (property, target) triple an `about` over these entities covers.
 let want = (
   vocab: Vocab,
   eids: Eid[],
   names?: string[],
 ): [string, string, Eid][] =>
   eids.length
-    ? cols(vocab, names).flatMap(([c, p]) =>
+    ? props(vocab, names).flatMap(([c, p]) =>
       eids.map((e) => [c, p, e] as [string, string, Eid])
     )
     : []
 
 /**
- * The query that finds everything whose reference columns point at one of
- * these targets: one disjunction over (column, target), so what would have
- * been one read per column per entity is a single read. `null` when there is
+ * The query that finds everything whose reference properties point at one of
+ * these targets: one disjunction over (property, target), so what would have
+ * been one read per property per entity is a single read. `null` when there is
  * nothing to ask.
  */
 export let pointing = (pairs: [string, string, Eid][]): Ast | null =>
@@ -119,7 +119,7 @@ export let pointing = (pairs: [string, string, Eid][]): Ast | null =>
 let seek = (tx: Tx, q: Ast): Bundle[] | Promise<Bundle[]> =>
   (tx.whole ?? tx.read)(q)
 
-// The value of one reference column, as an eid or nothing.
+// The value of one reference property, as an eid or nothing.
 let at = (b: Bundle, comp: string, prop: string): Eid | undefined => {
   let v = (b[comp] as Comp | undefined)?.[prop]
   return v == null ? undefined : String(v)
@@ -139,7 +139,7 @@ let file = (snap: Snap, pairs: [string, string, Eid][], rows: Bundle[]) => {
   }
 }
 
-// The same bundle found through two different columns is returned once.
+// The same bundle found through two different properties is returned once.
 let once = (rows: Bundle[]): Bundle[] => {
   let seen = new Set<Eid>()
   return rows.filter((b) => !seen.has(b.entity.eid) && !!seen.add(b.entity.eid))
@@ -147,12 +147,12 @@ let once = (rows: Bundle[]): Bundle[] => {
 
 /**
  * A patch folded into what the snapshot holds: a null component removes it,
- * anything else merges in, so an omitted column keeps its value and a null one
- * clears it. That is the same rule ./mutate.ts gives the storage, implemented
- * again here because a hook that writes in a gathered phase has to be visible
- * to the hook after it (yaks.app's vouch writes the grant its own membership
- * check then reads), and because a rule is evaluated against exactly this
- * merge (./rules.ts).
+ * anything else merges in, so an omitted property keeps its value and a null
+ * one clears it. That is the same rule ./mutate.ts gives the storage,
+ * implemented again here because a hook that writes in a gathered phase has to
+ * be visible to the hook after it (yaks.app's vouch writes the grant its own
+ * membership check then reads), and because a rule is evaluated against exactly
+ * this merge (./rules.ts).
  */
 export let merged = (held: Bundle | null, b: Bundle): Bundle => {
   let out: Bundle = { ...(held ?? { entity: b.entity }) }
@@ -340,7 +340,7 @@ export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
 })
 
 /**
- * The entities whose reference columns point at one of `eids` — from the
+ * The entities whose reference properties point at one of `eids` — from the
  * gather when some `wants` asked for them, and from the storage when none did.
  * This is the one function a phase or a hook reads references backwards
  * through.

@@ -30,13 +30,13 @@ export type { Search }
 export type CoreOpts = {
   /** the vocabulary the tools describe their results with */
   vocab: Vocab
-  /** how much of each column a bundle schema spells out. `graph_apply`'s
+  /** how much of each property a bundle schema spells out. `graph_apply`'s
    * input schema is always `full` and no tool here declares an output schema,
    * so this is carried for callers that pass one and changes nothing yet. */
   depth?: Depth
-  /** a column this server returns or accepts differently than the vocabulary
+  /** a property this server returns or accepts differently than the vocabulary
    * declares — see {@link BundleOpts} */
-  column?: BundleOpts['column']
+  prop?: BundleOpts['prop']
   /** where a component is documented at length, when this server has such a
    * page — see {@link Guide} */
   guide?: Guide
@@ -65,10 +65,10 @@ export type CoreOpts = {
 }
 
 /**
- * A refusal naming a column this graph does not declare, with a pointer to
+ * A refusal naming a property this graph does not declare, with a pointer to
  * `graph_schema` appended — the tool that reports what this graph declares
  * right now. The write tool's input schema is open (schema.ts) precisely so
- * that a client's cached copy cannot refuse a column declared since it
+ * that a client's cached copy cannot refuse a property declared since it
  * connected, which leaves the server the only authority on what a component
  * accepts and makes this the only place a caller learns its copy is out of
  * date.
@@ -79,7 +79,7 @@ export type CoreOpts = {
  * the far side of a network hop and only its message comes back.
  */
 export let pointing = (said: string): string =>
-  said.includes('unknown column')
+  /unknown propert(y|ies)\b/.test(said)
     ? `${said}. Your tool list may predate a change to this vocabulary — ` +
       'graph_schema reports what this graph declares right now.'
     : said
@@ -141,12 +141,12 @@ let zodInput = (
  * ```
  */
 export let core = (opts: CoreOpts): Tool[] => {
-  let { vocab, column } = opts
+  let { vocab, prop } = opts
   // What a write accepts: the same bundle, narrowed to what a client may
-  // write. Always `full` — a write tool that leaves a column's type to the
+  // write. Always `full` — a write tool that leaves a property's type to the
   // reader is a tool an agent guesses at (T-34153).
   let writes = z.array(
-    bundleSchema(vocab, { depth: 'full', nulls: true, write: true, column }),
+    bundleSchema(vocab, { depth: 'full', nulls: true, write: true, prop }),
   )
   return tier({ search: opts.search, guide: opts.guide })
     // What this server is, decided once for the whole tier: a server that only
@@ -162,7 +162,7 @@ export let core = (opts: CoreOpts): Tool[] => {
       if (t.name == 'graph_apply') {
         // The bundles a write accepts are this graph's, so the declaration
         // names only "an array of bundles" and the vocabulary fills in what
-        // one IS — every component, every writable column and every type
+        // one IS — every component, every writable property and every type
         // (T-34153). No fixed schema could state it: the shape comes from one
         // graph's vocabulary, and a declaration is written before there is a
         // graph.

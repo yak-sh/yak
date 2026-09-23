@@ -116,7 +116,7 @@ Deno.test('depth 0 lets an effect write without waking anything', () => {
   assertEquals(oops, [])
 })
 
-Deno.test('the generation marker never reaches the caller, or a column', () => {
+Deno.test('the generation marker never reaches the caller, or a property', () => {
   let { fx, g, apply } = fixture()
   fx.created(
     'post',
@@ -182,8 +182,8 @@ Deno.test("the journal carries an effect's own write", () => {
       write([{ entity: { eid: 's1' }, subscriber: { email: 'ana@blog' } }]),
   )
   sync(g.apply([post('p1')]))
-  let deltas = j.history('s1').flatMap((b) => b.deltas.map((d) => d.column))
-  // The component appearing, and the column it appeared with.
+  let deltas = j.history('s1').flatMap((b) => b.deltas.map((d) => d.prop))
+  // The component appearing, and the property it appeared with.
   assertEquals(deltas, [null, 'email'])
   // Its own batch row, not a line tacked onto the one that woke it.
   assertEquals(j.tip(), 2)

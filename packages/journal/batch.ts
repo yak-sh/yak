@@ -1,8 +1,8 @@
 // The types the journal returns. A transaction — one call to `graph.apply()`,
 // whose bundles all commit or none do — is the unit the log is kept in: one
 // committed write, who wrote it, and every movement it made. A delta is one of
-// those movements: a column that changed, or a whole component that appeared or
-// went.
+// those movements: a property that changed, or a whole component that appeared
+// or went.
 //
 // These are the shapes the log derives, not the shapes it stores: the tables
 // keep after-images only (`./log.ts`), and the before-side of every movement is
@@ -13,18 +13,19 @@
 import type { Comp, Eid } from '@yaks/graph'
 
 /**
- * One thing that moved. A delta with a `column` names the column that moved and
- * carries the value on each side of the write; a delta with no column is about
- * the component as a whole — `after` set means the component appeared, `before`
- * set means it went, and either way the set side holds the columns it had.
+ * One thing that moved. A delta with a `prop` names the property that moved and
+ * carries the value on each side of the write; a delta with no property is
+ * about the component as a whole — `after` set means the component appeared,
+ * `before` set means it went, and either way the set side holds the properties
+ * it had.
  */
 export type Delta = {
   /** the entity that changed */
   target: Eid
   /** the component that changed */
   comp: string
-  /** the column that moved, or `null` for the whole component */
-  column: string | null
+  /** the property that moved, or `null` for the whole component */
+  prop: string | null
   /** what it held before (`null` for nothing) */
   before: unknown
   /** what it holds after (`null` for nothing) */
@@ -57,7 +58,7 @@ export type Patch = {
   target: Eid
   /** the component it patched, or `entity` for the entity row itself */
   comp: string
-  /** the columns it wrote, or `null` for a removal */
+  /** the properties it wrote, or `null` for a removal */
   value: Comp | null
 }
 

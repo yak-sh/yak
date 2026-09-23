@@ -55,7 +55,7 @@ let fleetBundle: z.ZodTypeAny | undefined
 export let bundle = (): z.ZodTypeAny =>
   fleetBundle ??= bundleSchema(fleetVocab(), {
     depth: 'full',
-    column: (col) => col.prop == 'via' ? via : undefined,
+    prop: (col) => col.prop == 'via' ? via : undefined,
   })
 
 // task_show answers one bundle plus the edges and comments around it.

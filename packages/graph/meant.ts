@@ -1,25 +1,25 @@
-// Which component a bare column name means, decided from the rest of the
+// Which component a bare property name means, decided from the rest of the
 // query it appears in.
 //
-// A column name several components declare — `status`, on a graph holding both
-// tasks and transcripts — is ambiguous to the vocabulary, which sees one name
-// at a time and rightly refuses (@yaks/vocab's `Ambiguous`, whose message
+// A property name several components declare — `status`, on a graph holding
+// both tasks and transcripts — is ambiguous to the vocabulary, which sees one
+// name at a time and rightly refuses (@yaks/vocab's `Ambiguous`, whose message
 // lists the candidates). It is rarely ambiguous within the query:
 // `.task&.status=open` has already said what it is about, and so has
-// `.task.project=P-19 .status=open`. So the vocabulary lists the candidates
-// and this file chooses between them, using the only thing that knows: the
-// rest of the query.
+// `.task.project=P-19 .status=open`. So the vocabulary lists the candidates and
+// this file chooses between them, using the only thing that knows: the rest of
+// the query.
 //
-// The rule: a bare column resolves to the component the query already selects,
-// when exactly one of the candidates is selected. If nothing in the query
-// picks one, the column is left alone and the vocabulary's refusal reaches the
-// caller with its list of candidates — guessing between `task` and `session`
-// is worse than asking.
+// The rule: a bare property resolves to the component the query already
+// selects, when exactly one of the candidates is selected. If nothing in the
+// query picks one, the property is left alone and the vocabulary's refusal
+// reaches the caller with its list of candidates — guessing between `task` and
+// `session` is worse than asking.
 //
 // What selects a component is anything that names it outright: a bare
 // component (`.task`), or the head of a qualified path (`.task.project`,
-// `.tally=task.status`). A bare column never selects — it is the thing being
-// resolved — and neither does a dereference through a reference column, which
+// `.tally=task.status`). A bare property never selects — it is the thing being
+// resolved — and neither does a dereference through a reference property, which
 // is about the entity at the other end rather than this one.
 //
 // Scope follows the shape of the query. Conjoined clauses all describe one
@@ -37,7 +37,7 @@ import { Ambiguous, type Vocab } from '@yaks/vocab'
 import type { Query } from './storage.ts'
 
 /** Whether a predicate's single segment is the "component is present" form —
- * the one place a lone name means a component rather than a column. */
+ * the one place a lone name means a component rather than a property. */
 let facet = (c: Clause & { kind: 'pred' }): boolean =>
   !!c.facet || (c.op == '!' && c.path.length == 1 && !c.value)
 
@@ -71,7 +71,7 @@ let selects = (v: Vocab, c: Clause, out: Set<string>): void => {
   }
 }
 
-/** The components a whole clause list selects — the scope its bare columns
+/** The components a whole clause list selects — the scope its bare properties
  * resolve against. */
 let scope = (v: Vocab, clauses: Clause[]): Set<string> => {
   let out = new Set<string>()
@@ -79,7 +79,7 @@ let scope = (v: Vocab, clauses: Clause[]): Set<string> => {
   return out
 }
 
-/** One bare column, qualified by the scope, or left as it is. A column name
+/** One bare property, qualified by the scope, or left as it is. A property name
  * the vocabulary can resolve on its own never consults the scope at all. */
 let resolve = (
   v: Vocab,
@@ -103,9 +103,9 @@ let selected = (v: Vocab, f: FieldSel, within: Set<string>): FieldSel => {
   return path == f.path ? f : { ...f, path }
 }
 
-/** `.order=status` and `.order=-status` name a column the same way, so the
+/** `.order=status` and `.order=-status` name a property the same way, so the
  * leading `-` is stripped and put back. A ranking (`.order=similar`) names no
- * column and resolves to nothing, so it is left alone. */
+ * property and resolves to nothing, so it is left alone. */
 let ordered = (v: Vocab, value: string, within: Set<string>): string => {
   let desc = value.startsWith('-')
   let field = desc ? value.slice(1) : value
@@ -120,7 +120,7 @@ let all = (cs: Clause[], each: (c: Clause) => Clause): Clause[] => {
   return out.some((c, i) => c != cs[i]) ? out : cs
 }
 
-/** One clause with every bare column in it resolved against `within` — the
+/** One clause with every bare property in it resolved against `within` — the
  * scope it inherits, widened by whatever its own conjunction names. The
  * original clause is returned when nothing in it changed, so an unaffected
  * query stays the exact string the caller wrote. */
@@ -162,8 +162,8 @@ let read = (v: Vocab, c: Clause, within: Set<string>): Clause => {
 }
 
 /**
- * The read side of column resolution: a query in, the same query with every
- * bare column resolved to the component the query already selects.
+ * The read side of property resolution: a query in, the same query with every
+ * bare property resolved to the component the query already selects.
  *
  * The query comes back unchanged when nothing was resolved, so a query written
  * with qualified paths costs one traversal, and the exact text the caller

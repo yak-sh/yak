@@ -282,10 +282,10 @@ Deno.test('graph_show answers only bundles, including what points at the entity'
   await client.close()
 })
 
-// The backlinks are asked as `.refs=`, which is one term per reference column,
-// and workerd's SQLite takes five terms in a compound (@yaks/sql `ARMS`). So
-// the shape that broke — backrefs on, over a compiled store whose vocabulary
-// references more than five ways — is held here, through the tool.
+// The backlinks are asked as `.refs=`, which is one term per reference
+// property, and workerd's SQLite takes five terms in a compound (@yaks/sql
+// `ARMS`). So the shape that broke — backrefs on, over a compiled store whose
+// vocabulary references more than five ways — is held here, through the tool.
 let wideDoc: VocabDoc = {
   $defs: {
     entity: {
@@ -371,14 +371,19 @@ Deno.test('a refusal is the tool error the agent reads, not a broken call', asyn
     return String(out.content[0].text)
   }
   assert((await said([{ book: {} }])).includes('"entity"'))
-  // A column nobody declared is the server's refusal, not the schema's: the
+  // A property nobody declared is the server's refusal, not the schema's: the
   // schema is open so a client's cached copy cannot refuse a word this graph
-  // has since learned. It names the columns that do exist, and where to read
+  // has since learned. It names the properties that do exist, and where to read
   // them (T-34277).
   let colour = await said([{ entity: { eid: 'b1' }, book: { colour: 'red' } }])
-  assert(colour.includes('unknown column: book.colour'), colour)
+  assert(colour.includes('unknown property: book.colour'), colour)
   assert(colour.includes('book declares price, status, author'), colour)
   assert(colour.includes('graph_schema'), colour)
+  let two = await said([
+    { entity: { eid: 'b1' }, book: { colour: 'red', size: 'big' } },
+  ])
+  assert(two.includes('unknown properties: book.colour, book.size'), two)
+  assert(two.includes('graph_schema'), two)
   let price = await said([{ entity: { eid: 'b1' }, book: { price: 'lots' } }])
   assert(price.includes('Expected number'), price)
 

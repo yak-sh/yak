@@ -5,13 +5,13 @@
 //   { entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { pages: 412 } }
 //
 // The identity is inside the bundle, under the `entity` key; every other key
-// names a component. A write is a PATCH — an omitted column is left alone, a
-// `null` column is cleared, a `null` component is removed — so a bundle
+// names a component. A write is a PATCH — an omitted property is left alone, a
+// `null` property is cleared, a `null` component is removed — so a bundle
 // contains what changes and nothing else.
 //
-// A few reserved keys are never stored as columns. `$delete` and the
+// A few reserved keys are never stored as properties. `$delete` and the
 // `tombstone` component both mean "delete this entity"; `$was` carries a
-// per-column precondition; `$actor` names who is writing. They are components
+// per-property precondition; `$actor` names who is writing. They are components
 // in every sense that matters — data attached to an entity — they just exist
 // only in transit and inside `apply()` rather than in a table. A plugin adds
 // requests of its own by declaring them (./request.ts), and a `$` key nothing
@@ -21,7 +21,7 @@
 // `$name` became.
 
 /** An entity's id: a string the client generates (a uuid, or a content hash).
- * A reference column reads back as the target's `eid`, so this is also the
+ * A reference property reads back as the target's `eid`, so this is also the
  * type of a reference. */
 export type Eid = string
 
@@ -40,13 +40,13 @@ export type Entity = {
   archetype?: Eid
 }
 
-/** A component's columns — a flat object of scalar values, never nested. */
+/** A component's properties — a flat object of scalar values, never nested. */
 export type Comp = Record<string, unknown>
 
 /**
- * A per-column precondition, keyed by component name then column name: the
+ * A per-property precondition, keyed by component name then property name: the
  * SHA-256 of the value the caller read, or `null` for "I read no value".
- * `apply()` refuses the whole transaction if any named column has changed
+ * `apply()` refuses the whole transaction if any named property has changed
  * since. It is carried on a bundle as `$was`, and works like git's
  * `--ff-only`: the write applies only onto the state it was based on.
  */
@@ -62,9 +62,9 @@ export type Actor = { by?: Eid; via?: Eid }
 
 /**
  * A patch for one entity. Its identity is under the `entity` key; every other
- * key names a component and maps to its columns, or to `null` to remove that
+ * key names a component and maps to its properties, or to `null` to remove that
  * component. The reserved keys `$delete`, `$was` and `$actor` look like
- * components but `apply()` acts on them rather than writing them as columns,
+ * components but `apply()` acts on them rather than writing them as properties,
  * and a plugin may declare requests of its own.
  */
 export type Bundle =
@@ -73,7 +73,7 @@ export type Bundle =
     entity: Entity
     /** shorthand — delete the whole entity (it is tombstoned) */
     $delete?: boolean
-    /** a per-column precondition that must still hold */
+    /** a per-property precondition that must still hold */
     $was?: Was
     /** who is writing this transaction */
     $actor?: Actor

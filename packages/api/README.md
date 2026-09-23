@@ -60,8 +60,8 @@ do not run. This reserves nothing, and a later write can still fail. It does not
 provide a transaction across multiple graphs.
 
 Queries use [@yaks/query](../query/README.md). Aggregate queries return values
-instead of bundles: `.count!` returns `{"count":n}`, `.distinct=col` returns
-`{"distinct":[…]}`, and `.tally=col` returns `{"tally":{…}}`. The storage
+instead of bundles: `.count!` returns `{"count":n}`, `.distinct=prop` returns
+`{"distinct":[…]}`, and `.tally=prop` returns `{"tally":{…}}`. The storage
 adapter must support the requested query.
 
 ## Exports
@@ -105,7 +105,7 @@ fails. An error is the last response line:
 ```json
 {
   "error": "Refused",
-  "message": "unknown column: book.colour",
+  "message": "unknown property: book.colour",
   "line": 137,
   "committed": 100
 }
@@ -137,7 +137,7 @@ applying changes. `by` identifies the entity responsible for the write; optional
 
 Omitting authentication or returning `null` permits unattributed requests. Throw
 `Unauthorized` to return HTTP 401. Authentication alone does not define which
-entities or columns a caller may access; the application and graph plugins
+entities or properties a caller may access; the application and graph plugins
 supply the relevant authorization policy. The graph validates changes and
 preconditions.
 
@@ -201,7 +201,7 @@ automatically.
 
 Errors contain the thrown error's name as `error`, its `message`, and additional
 fields other than its stack. For example, a failed `$was` precondition reports
-the column and its current value:
+the property and its current value:
 
 ```json
 {
@@ -209,7 +209,7 @@ the column and its current value:
   "message": "book.price of b1 has moved since it was read",
   "eid": "b1",
   "comp": "book",
-  "column": "price",
+  "prop": "price",
   "current": 12
 }
 ```

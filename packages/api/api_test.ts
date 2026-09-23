@@ -145,7 +145,7 @@ Deno.test('an unattributed door leaves the actor off', async () => {
   assertEquals(comp(found[0], 'created').by, null)
 })
 
-Deno.test('a refused column answers 400 in the shape apply threw', async () => {
+Deno.test('a refused property answers 400 in the shape apply threw', async () => {
   let handler = shop()
   let r = await handler(post('/apply', [
     { entity: { eid: 'b1' }, book: { colour: 'red' } },
@@ -172,7 +172,7 @@ Deno.test('a moved precondition answers 409, naming what it holds now', async ()
     message: 'book.price of b1 has moved since it was read',
     eid: 'b1',
     comp: 'book',
-    column: 'price',
+    prop: 'price',
     current: 12,
   })
 })

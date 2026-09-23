@@ -30,11 +30,11 @@
  * ```
  *
  * Three things happen to a component: {@link Effects.created} when an entity
- * gains it, {@link Effects.changed} when it is patched (for one column, or for
- * any), {@link Effects.removed} when it goes — by its own deletion, or with an
- * entity that died, including every casualty a cascade took. The last of those
- * is `on('-comp', run)` written shortly; the first two describe what changed,
- * and what changed is not a query about what is now true.
+ * gains it, {@link Effects.changed} when it is patched (for one property, or
+ * for any), {@link Effects.removed} when it goes — by its own deletion, or with
+ * an entity that died, including every casualty a cascade took. The last of
+ * those is `on('-comp', run)` written shortly; the first two describe what
+ * changed, and what changed is not a query about what is now true.
  *
  * ## Or a pattern
  * Those three are the narrow question. The wide one is any query, run
@@ -46,7 +46,7 @@
  *
  * Nothing has to be derived into the graph to trigger that — "a call with no
  * result" is a query the storage can already answer, so the query itself is the
- * registration, with no flag column and no second write to record the first.
+ * registration, with no flag property and no second write to record the first.
  * Only a batch that moved a component the query reads is asked, and a result
  * row counts only where the batch touched the entity it bound.
  *
@@ -77,7 +77,7 @@
  * seen by the other effects — everything a write through `tx.patch` is not. It
  * is a new batch, applied after the commit that triggered the handler, never a
  * row inserted into the finished transaction. `trusted` is what lets an effect
- * write a server-owned column, which is most of what effects write.
+ * write a server-owned property, which is most of what effects write.
  *
  * A write from an effect could of course trigger an effect. That loop is
  * stopped in one place rather than by a rule in each handler: every batch

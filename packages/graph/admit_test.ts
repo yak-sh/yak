@@ -23,7 +23,7 @@ Deno.test('a bundle whose every component was unknown leaves the batch', () => {
   assertEquals(one({ entity: { eid: 'b1' }, audiobook: { minutes: 4 } }), [])
 })
 
-Deno.test('an unknown column on a known component refuses the batch', () => {
+Deno.test('an unknown property on a known component refuses the batch', () => {
   assertThrows(
     () => one({ entity: { eid: 'b1' }, book: { pagez: 3 } }),
     Refused,
@@ -31,14 +31,14 @@ Deno.test('an unknown column on a known component refuses the batch', () => {
   )
 })
 
-Deno.test('a server-owned column is dropped, and admitted when trusted', () => {
+Deno.test('a server-owned property is dropped, and admitted when trusted', () => {
   let [out] = one({ entity: { eid: 'b1' }, created: { at: 'now' }, doc: {} })
   assertEquals(out.created, undefined)
   let [ok] = one({ entity: { eid: 'b1' }, created: { at: 'now' } }, true)
   assertEquals(ok.created, { at: 'now' })
 })
 
-Deno.test('a bundle of nothing but server-owned columns leaves the batch', () => {
+Deno.test('a bundle of nothing but server-owned properties leaves the batch', () => {
   assertEquals(one({ entity: { eid: 'b1' }, created: { at: 'now' } }), [])
 })
 
@@ -77,7 +77,7 @@ Deno.test('a value the vocabulary cannot hold refuses the batch', () => {
   )
 })
 
-Deno.test('a null component, a null column and a bare tag all pass', () => {
+Deno.test('a null component, a null property and a bare tag all pass', () => {
   let [out] = one({
     entity: { eid: 'b1' },
     book: { publisher: null },

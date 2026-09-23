@@ -9,9 +9,9 @@
 // components each entity in the batch already carries, plus the same for
 // everything the batch is about to delete (@yaks/graph's own `doomed()` walk,
 // so the death rule is reused, never re-implemented). After the commit,
-// `events()` replays the applied batch against that reading: a component
-// absent before is a creation, one present before is a change carrying only
-// the columns that moved, and a component or an entity that went is a removal.
+// `events()` replays the applied batch against that reading: a component absent
+// before is a creation, one present before is a change carrying only the
+// properties that moved, and a component or an entity that went is a removal.
 //
 // The reading rides forward on the batch itself, under `$before`. A `$`-key is
 // not a component — `comps()` skips it, so no storage adapter ever sees it —
@@ -31,7 +31,8 @@ export type Kind = 'created' | 'changed' | 'removed' | 'matched'
  *
  * `comp` is the patch as applied, which is what makes a change readable: on a
  * `created` event it is the whole birth row, on a `changed` event only the
- * columns that moved, and on a `removed` event there is nothing left to carry.
+ * properties that moved, and on a `removed` event there is nothing left to
+ * carry.
  */
 export type Event = {
   /** what happened */
@@ -40,7 +41,7 @@ export type Event = {
   entity: Entity
   /** the component's name */
   name: string
-  /** the columns the change carried (absent on `removed`) */
+  /** the properties the change carried (absent on `removed`) */
   comp?: Comp
   /** what each variable bound, for a `matched` event whose pattern named some */
   vars?: Record<string, unknown>
@@ -50,7 +51,7 @@ export type Event = {
 export type Before = Record<Eid, string[]>
 
 /** The key the reading rides forward on. Not a component: `$`-prefixed keys
- * are `apply()`'s pipeline, never columns, so storage never sees it. */
+ * are `apply()`'s pipeline, never properties, so storage never sees it. */
 export let BEFORE = '$before'
 
 // The entities this batch deletes, written either way.

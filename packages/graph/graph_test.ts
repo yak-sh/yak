@@ -135,7 +135,7 @@ Deno.test('the answer is one bundle per entity, and no pipeline key', () => {
   assertEquals(died, [{ entity: { eid: 'b1' }, tombstone: {} }])
 })
 
-Deno.test('a patch touches only the columns it names; null clears one', () => {
+Deno.test('a patch touches only the properties it names; null clears one', () => {
   let one = g()
   sync(one.apply([{
     entity: { eid: 'b1' },
@@ -227,7 +227,7 @@ Deno.test('a mark is signed where it lands, and the first telling stands', () =>
   })
 })
 
-Deno.test('$was guards a column, and a moved value refuses the whole batch', () => {
+Deno.test('$was guards a property, and a moved value refuses the whole batch', () => {
   let one = g()
   sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]))
   // the value the caller read still holds
@@ -254,7 +254,7 @@ Deno.test('$was guards a column, and a moved value refuses the whole batch', () 
   assertEquals(one.storage.tx((tx) => tx.get(['b2'])), [])
 })
 
-Deno.test('a guard on an absent value is null, and on an unknown column refuses', () => {
+Deno.test('a guard on an absent value is null, and on an unknown property refuses', () => {
   let one = g()
   sync(one.apply([{
     entity: { eid: 'b1' },

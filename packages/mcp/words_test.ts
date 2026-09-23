@@ -11,7 +11,7 @@ type Word = {
   name: string
   description?: string
   kind: boolean
-  columns: unknown[]
+  props: unknown[]
   worn_with?: string[]
   references?: { out: unknown[]; in: unknown[] }
   example?: Record<string, unknown>
@@ -39,7 +39,7 @@ let asked = async (
   }
 }
 
-Deno.test('bare, it is the index: every word, its line, its columns', async () => {
+Deno.test('bare, it is the index: every word, its line, its properties', async () => {
   let { said } = await asked()
   // The shop's words, and the words a call is written in — a graph that
   // serves tools knows both (@yaks/tools `toolsDoc`).
@@ -63,7 +63,7 @@ Deno.test('bare, it is the index: every word, its line, its columns', async () =
   let book = said.comps.find((c) => c.name == 'book')!
   assertEquals(book.description, 'a book on sale here')
   // Names only — the index is the thing an agent can read whole.
-  assertEquals(book.columns, ['price', 'status', 'author'])
+  assertEquals(book.props, ['price', 'status', 'author'])
   assertEquals(book.example, undefined)
 })
 
@@ -72,7 +72,7 @@ Deno.test('named, it is the whole word: types, meaning, references, an example',
     guide: (comp) => comp == 'book' ? 'https://shop/guide/books.md' : undefined,
   })
   let [book] = said.comps
-  assertEquals(book.columns, [
+  assertEquals(book.props, [
     {
       prop: 'price',
       type: 'number',
@@ -83,7 +83,7 @@ Deno.test('named, it is the whole word: types, meaning, references, an example',
       prop: 'author',
       type: 'ref',
       ref: 'entity',
-      notes: ['when the entity it names dies, this column is cleared'],
+      notes: ['when the entity it names dies, this property is cleared'],
     },
   ])
   // What points at it, and what it points at.
@@ -97,10 +97,10 @@ Deno.test('named, it is the whole word: types, meaning, references, an example',
     book: { price: 1, status: 'draft', author: '$other' },
   })
   assertEquals(book.guide, 'https://shop/guide/books.md')
-  // A server-owned column is named and said to be the server's.
+  // A server-owned property is named and said to be the server's.
   let { said: stamps } = await asked({ component: ['created', 'doc'] })
   assertEquals(stamps.comps.map((c) => c.name), ['created', 'doc'])
-  let at = (stamps.comps[0].columns as { prop: string; notes?: string[] }[])[0]
+  let at = (stamps.comps[0].props as { prop: string; notes?: string[] }[])[0]
   assert(at.notes?.[0].includes('server-owned'), JSON.stringify(at))
 })
 
@@ -110,10 +110,10 @@ Deno.test('a kind is what an entity of it is made of', async () => {
   // The word itself whole, then a line for each word it is worn with.
   assertEquals(said.comps.map((c) => c.name), ['book', 'doc'])
   assertEquals(said.comps[0].worn_with, ['doc'])
-  assertEquals(said.comps[1].columns, ['title', 'body'])
+  assertEquals(said.comps[1].props, ['title', 'body'])
 })
 
-Deno.test('a JSON column example writes valid JSON text', () => {
+Deno.test('a JSON property example writes valid JSON text', () => {
   let vocab = loadVocab({
     $defs: {
       config: {
@@ -124,7 +124,7 @@ Deno.test('a JSON column example writes valid JSON text', () => {
     },
   })
   let word = detail(vocab, 'config')
-  assertEquals(word.columns, [{ prop: 'value', type: 'json' }])
+  assertEquals(word.props, [{ prop: 'value', type: 'json' }])
   let example = word.example!.config as Record<string, unknown>
   assertEquals(example, { value: '{}' })
   assertEquals(vocab.check('config', example), [])

@@ -111,9 +111,9 @@ export let take = async (
         holder: o.holder,
         until: new Date(now + (o.hold ?? HOLD)).toISOString(),
       },
-      // Both columns, because both move: a rival taking an expired lease moves
-      // `holder`, and the holder renewing it moves only `until`. Guarding one
-      // would let the other slip past.
+      // Both properties, because both move: a rival taking an expired lease
+      // moves `holder`, and the holder renewing it moves only `until`. Guarding
+      // one would let the other slip past.
       $was: {
         [LEASE]: {
           holder: token(held?.holder ?? null),

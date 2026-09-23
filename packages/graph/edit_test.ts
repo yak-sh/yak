@@ -11,7 +11,7 @@ let edit = (old: string, fresh: string) => ({ $edit: { old, new: fresh } })
 let host: EditHost = {
   component: () => ({ body: 'stored', title: 'title' }),
   known: (name) => name == 'doc',
-  text: (name, col) => name == 'doc' && ['body', 'title'].includes(col),
+  text: (name, prop) => name == 'doc' && ['body', 'title'].includes(prop),
   name: () => 'D-1',
 }
 let bundle = (doc: Bundle['doc']): Bundle => ({ entity: { eid: 'd' }, doc })
@@ -62,11 +62,11 @@ Deno.test('edits: explicit drops discard pending text; null is not absent', () =
 })
 
 Deno.test('edits: operators and hunk refusals retain addressed messages', () => {
-  for (let col of ['number', 'enum', 'ref', 'bool', 'unknown']) {
+  for (let prop of ['number', 'enum', 'ref', 'bool', 'unknown']) {
     assertThrows(
-      () => resolveEdits([bundle({ [col]: edit('x', 'y') })], host),
+      () => resolveEdits([bundle({ [prop]: edit('x', 'y') })], host),
       Error,
-      `$edit: D-1.doc.${col} is not a wire-writable text column`,
+      `$edit: D-1.doc.${prop} is not a wire-writable text property`,
     )
   }
   assertThrows(

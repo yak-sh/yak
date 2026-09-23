@@ -14,7 +14,7 @@ These terms describe the data passed between the packages.
 
 - An **entity** is a thing with a stable id, `entity.eid`. It has no type of its
   own.
-- A **component** is a named object of columns attached to an entity, such as
+- A **component** is a named object of properties attached to an entity, such as
   `book: { title: 'Dune' }`. An entity may carry several components; adding one
   does not create a new entity or change its identity. What an entity _is_ is
   decided by which components it carries.
@@ -23,12 +23,12 @@ These terms describe the data passed between the packages.
   `{ entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { pages: 412 } }`.
   Bundles are what reads return and what writes are expressed in.
 - A **batch** is an array of bundles applied in one transaction. Each bundle is
-  a patch: an omitted column is left alone, a `null` column is cleared, and a
-  `null` component is removed.
+  a patch: an omitted property is left alone, a `null` property is cleared, and
+  a `null` component is removed.
 - A **transaction** is what `apply(bundles)` runs the whole array in. Either all
   of it is written or none of it is.
 
-A vocabulary declares the component names, column types, references, and other
+A vocabulary declares the component names, property types, references, and other
 constraints. Graph edges are entities too: an application can declare an `edge`
 component with `from` and `to` references and add further components describing
 the relationship. The core does not require an application-specific class
@@ -36,7 +36,7 @@ hierarchy for entities.
 
 `entity.num`, when a store keeps one, is a short human-facing number, not an
 identity. Do not use it in place of an eid. Numbering is [@yaks/id](../id)'s:
-that package declares the column and ships the allocator behind `$num: true`,
+that package declares the property and ships the allocator behind `$num: true`,
 and a graph that registers neither has no numbers at all.
 
 `mint()` generates an eid — a v4 UUID from `crypto.getRandomValues`, so a page
@@ -150,7 +150,7 @@ writes themselves, and the observers that run after the commit. In particular:
 
 - `normalize` can rewrite incoming data.
 - Admission and preconditions validate it against the vocabulary and the current
-  state before any write is accepted. Admission first casts a string column's
+  state before any write is accepted. Admission first casts a string property's
   value to a string, so a number written to one is stored and returned as its
   text.
 - Reference handling, writing, and journaling all run inside the storage
@@ -269,10 +269,10 @@ g.use({
 ```
 
 This matches a product without a shelf, then adds `shelf: { aisle: 'Z' }`. Rules
-are evaluated during the `rules` phase. A `+` or `*` clause can specify a column
-and value, such as `+result.call=$call`. Literal values are parsed using the
-declared column type, `$name` reads a bound variable, and `#Name` reads a
-registered resource.
+are evaluated during the `rules` phase. A `+` or `*` clause can specify a
+property and value, such as `+result.call=$call`. Literal values are parsed
+using the declared property type, `$name` reads a bound variable, and `#Name`
+reads a registered resource.
 
 A pattern containing only write clauses creates an entity. Its id is derived
 from the rule name and matched entity ids, so repeated evaluation of the same
@@ -302,8 +302,8 @@ filled('+foo.bar=$x', { x: 5 }) // a plan that creates foo.bar = 5
 filled('$p .product, +!sale', { p: 'p1' }) // a plan restricted to product p1
 ```
 
-A bound variable in a match clause constrains that column. In a write clause it
-supplies the value to write. Arguments can also be a query string containing
+A bound variable in a match clause constrains that property. In a write clause
+it supplies the value to write. Arguments can also be a query string containing
 bindings.
 
 `invoked(tx, vocab, template, args)` evaluates the bound plan once, with no

@@ -1,11 +1,11 @@
-// What a delete takes with it. Each reference column declares in the
+// What a delete takes with it. Each reference property declares in the
 // vocabulary what should happen to it when the entity it points at is deleted,
 // and this phase implements all four possibilities:
 //
 //   cascade  the referencing entity is deleted too — a review of a deleted
 //            book has nothing left to be about
-//   detach   the column is set to null and the referencing entity survives — a
-//            book whose publisher is deleted is still a book
+//   detach   the property is set to null and the referencing entity survives
+//            — a book whose publisher is deleted is still a book
 //   release  the referencing component row is deleted, its entity survives — a
 //            bookmark whose whole reason to exist was to point at something
 //   keep     the reference stays as history — the tombstone is the record
@@ -45,22 +45,22 @@ let bearing = (vocab: Vocab, words: Death[]): string[] => [
 // entity, in the order their patches are built.
 let SOFT: Death[] = ['release', 'detach']
 
-// The value of one reference column on a bundle, or null.
+// The value of one reference property on a bundle, or null.
 let at = (b: Bundle, comp: string, prop: string): Eid | null => {
   let v = (b[comp] as Comp | undefined)?.[prop]
   return v == null ? null : String(v)
 }
 
-// Sort a reverse read's results in the order the entities were created, not
-// the order the read happened to return them in — which is per column, so an
-// entity referencing a deleted one through two columns would land wherever the
-// first column put it. The single-statement version returns that order too, so
-// a client applying the change cannot tell which path produced it.
+// Sort a reverse read's results in the order the entities were created, not the
+// order the read happened to return them in — which is per property, so an
+// entity referencing a deleted one through two properties would land wherever
+// the first property put it. The single-statement version returns that order
+// too, so a client applying the change cannot tell which path produced it.
 let born = (bundles: Bundle[]): Bundle[] =>
   [...bundles].sort((a, b) => (a.entity.num ?? 0) - (b.entity.num ?? 0))
 
 // The transitive closure, walked: breadth-first, one reverse read per level,
-// so a whole chain costs one read per level rather than one read per column
+// so a whole chain costs one read per level rather than one read per property
 // per link.
 let walk = (
   tx: Tx,
@@ -69,8 +69,8 @@ let walk = (
   look: string[],
 ): Gone[] | Promise<Gone[]> => {
   let list: Gone[] = killed.map((eid) => ({ eid, depth: 0 }))
-  let cols = vocab.deaths('cascade')
-  if (!cols.length) return list
+  let props = vocab.deaths('cascade')
+  if (!props.length) return list
   let rung = (front: Eid[], depth: number): Gone[] | Promise<Gone[]> => {
     if (!front.length) return list
     return then(about(tx, vocab, front, look), (found) => {
@@ -78,7 +78,7 @@ let walk = (
       for (let b of born(found)) {
         let eid = b.entity.eid
         if (list.some((g) => g.eid == eid)) continue
-        let dies = cols.some(([comp, prop]) => {
+        let dies = props.some(([comp, prop]) => {
           let to = at(b, comp, prop)
           return to != null && front.includes(to)
         })
@@ -109,7 +109,7 @@ export let doomed = (
   vocab: Vocab,
   killed: Eid[],
   // Which components the walk reads through. It only ever decides by the
-  // cascade columns; a caller that will also need the detach/release
+  // cascade properties; a caller that will also need the detach/release
   // references of the same entities passes a wider set, so one read serves
   // both.
   look: string[] = bearing(vocab, ['cascade']),
@@ -124,12 +124,12 @@ let letting = (
   owners: Bundle[],
   gone: Eid[],
 ): Loose[] => {
-  let cols = SOFT.flatMap((w) => vocab.deaths(w))
+  let props = SOFT.flatMap((w) => vocab.deaths(w))
   let out: Loose[] = []
   for (let b of owners) {
     let eid = b.entity.eid
     if (gone.includes(eid)) continue
-    for (let [comp, prop] of cols) {
+    for (let [comp, prop] of props) {
       let to = at(b, comp, prop)
       if (to != null && gone.includes(to)) out.push({ eid, comp, prop })
     }
@@ -140,8 +140,8 @@ let letting = (
 // What is deleted, and which references are cleared: storage's own answer when
 // it has one, and the walk when it does not. The walk does a gather of its own
 // — this phase runs after `mutate`, so it must see this change's own writes —
-// and reads the cascade columns together with the detach/release ones, so one
-// reverse read serves both.
+// and reads the cascade properties together with the detach/release ones, so
+// one reverse read serves both.
 let reckon = (
   tx: Tx,
   vocab: Vocab,
@@ -166,9 +166,9 @@ let reckon = (
   return tx.doom ? then(tx.doom(killed), (told) => told ?? walked()) : walked()
 }
 
-// Clearing a reference: `detach` sets the column to null, `release` removes
+// Clearing a reference: `detach` sets the property to null, `release` removes
 // the whole component row. One patch per row that has to be cleared, in the
-// vocabulary's column order — the same order however the answer was
+// vocabulary's property order — the same order however the answer was
 // obtained.
 let loosen = (
   tx: Tx,

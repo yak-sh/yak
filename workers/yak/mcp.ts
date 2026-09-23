@@ -357,7 +357,7 @@ let door = async (ctx: Ctx, session: string) => {
   // any more: the instructions name them from each app's declaration as it is
   // read, and `commands` returns them with their arguments when asked. This
   // runs on every call, so it is the floor under every write (T-34986).
-  let [apps, { graph, column }] = await Promise.all([
+  let [apps, { graph, prop }] = await Promise.all([
     c.time('standing', () => standing(ctx, reach)),
     c.time('reaching', () => reaching(ctx, reach)),
   ])
@@ -368,7 +368,7 @@ let door = async (ctx: Ctx, session: string) => {
     // in-memory graph, because the one above is a composition over other
     // people's stores and a question is not their data.
     calls: ledger(graph),
-    column,
+    prop,
     // A read's schema is left at column names here, while the write tools are
     // typed in full (@yaks/mcp, T-34153). Measured over a space of three apps:
     // the typed write tools cost 9 KB of tool list, and typing the four read
@@ -495,11 +495,11 @@ let stranger = async (
       return erred(rpc.id, err)
     }
   }
-  let { graph, column } = await reaching(ctx, reach)
+  let { graph, prop } = await reaching(ctx, reach)
   let opts = {
     graph,
     calls: ledger(graph),
-    column,
+    prop,
     schema: 'names' as const,
     guide: (comp: string) => pageFor(comp, env),
     search: searching(ctx, reach),

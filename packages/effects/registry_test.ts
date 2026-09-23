@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 // The promises the registry makes: a birth fires once, a change fires only for
-// the columns that moved, a death fires for the component and for every
+// the properties that moved, a death fires for the component and for every
 // casualty it took with it, a failing handler is reported and its neighbours
 // still run, a write-back lands, and a refused batch fires nothing.
 
@@ -59,7 +59,7 @@ Deno.test('a created handler sees the num storage minted', () => {
   assertEquals(seen, ['1'])
 })
 
-Deno.test('changed fires only for the columns that moved', () => {
+Deno.test('changed fires only for the properties that moved', () => {
   let { fx, seen, apply } = fixture()
   fx.changed('post', 'published', (e) => seen.push(`published ${e.entity.eid}`))
   fx.changed('post', 'title', () => seen.push('retitled'))
@@ -71,7 +71,7 @@ Deno.test('changed fires only for the columns that moved', () => {
   assertEquals(seen, ['published p1', 'retitled'])
 })
 
-Deno.test('a column-less changed handler fires for any patch', () => {
+Deno.test('a property-less changed handler fires for any patch', () => {
   let { fx, seen, apply } = fixture()
   fx.changed('post', (e) => seen.push(Object.keys(e.comp ?? {}).join(',')))
   apply([post('p1')])
@@ -244,7 +244,7 @@ Deno.test('a pattern fires where this batch made it hold', () => {
   assertEquals(seen, ['p1', 'p2'])
 })
 
-Deno.test('a pattern is a query, not a column subscription', () => {
+Deno.test('a pattern is a query, not a property subscription', () => {
   let { fx, seen, apply } = fixture()
   fx.on('.post.title=Ready', (e) => seen.push(e.entity.eid))
   apply([post('p1', { title: 'Draft' })])

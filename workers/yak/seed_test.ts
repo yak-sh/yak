@@ -201,7 +201,7 @@ Deno.test('a file that is not JSON, or not a list of bundles, names itself', () 
 })
 
 Deno.test('a refused bundle is named by its file and index', async () => {
-  let SAID = 'unknown column: recipe.serving — recipe declares serves'
+  let SAID = 'unknown property: recipe.serving — recipe declares serves'
   // The store refuses whatever batch carries the fifth bundle — the second of
   // the second file — and says the same thing every time, which is what the
   // narrowing reads.

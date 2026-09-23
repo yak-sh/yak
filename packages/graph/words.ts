@@ -1,9 +1,9 @@
 // The vocabulary, described as plain data. `graph_schema` returns what this
 // file builds: the index when the call named no component — every component,
-// its one-line description, its column names — and one component in full when
-// it named one: what each column is, the description the vocabulary gives it,
-// which columns are server-owned or unique or stored as bytes, what references
-// it and what it references, and an example bundle that writes it.
+// its one-line description, its property names — and one component in full when
+// it named one: what each property is, the description the vocabulary gives it,
+// which properties are server-owned or unique or stored as bytes, what
+// references it and what it references, and an example bundle that writes it.
 //
 // Jeff, 2026-09-05: "can we otherwise add some vocab tools? for getting
 // specific parts and also the full thing probably? should come with docs, i
@@ -13,7 +13,7 @@
 // and then the component asked for.
 //
 // Everything here is derived: nothing is written down twice. A description is
-// the one the vocab.json carries, and a column that has none is returned
+// the one the vocab.json carries, and a property that has none is returned
 // without one rather than with a sentence invented here.
 
 import type { Prop, Vocab } from '@yaks/vocab'
@@ -23,10 +23,10 @@ import type { Prop, Vocab } from '@yaks/vocab'
  * knows nothing about a guide, so that program supplies this function. */
 export type Guide = (comp: string) => string | undefined
 
-/** One column, described: its type in one word, whatever description the
+/** One property, described: its type in one word, whatever description the
  * vocabulary gives it, its allowed values or the component it references, and
  * what else is true of it. */
-export type Col = {
+export type Term = {
   prop: string
   type: string
   description?: string
@@ -36,12 +36,12 @@ export type Col = {
 }
 
 /** One component, described. The index fills in the first three fields;
- * asking for the component fills the rest in and describes each column. */
+ * asking for the component fills the rest in and describes each property. */
 export type Word = {
   name: string
   description?: string
   kind: boolean
-  columns: string[] | Col[]
+  props: string[] | Term[]
   worn_with?: string[]
   references?: {
     out: { prop: string; to: string }[]
@@ -59,65 +59,65 @@ export type Said = { comps: Word[]; kinds?: string[]; kind?: string }
 // when that one is deleted.
 let DEATH: Record<string, string> = {
   cascade: 'this entity dies with it',
-  detach: 'this column is cleared',
+  detach: 'this property is cleared',
   release: 'this row dies, the entity lives',
   keep: 'the reference stands as history',
 }
 
-// A column's type in one word: `enum` for a closed set of values, `ref` for a
+// A property's type in one word: `enum` for a closed set of values, `ref` for a
 // reference, the JSON types a JSON value may be (`object`, `string|array`),
 // otherwise the scalar type the vocabulary declares.
-let typeOf = (col: Prop): string =>
-  col.category == 'enum'
+let typeOf = (prop: Prop): string =>
+  prop.category == 'enum'
     ? 'enum'
-    : col.category == 'ref'
+    : prop.category == 'ref'
     ? 'ref'
-    : col.scalar == 'jsonb'
-    ? col.types!.join('|')
-    : col.scalar!
+    : prop.scalar == 'jsonb'
+    ? prop.types!.join('|')
+    : prop.scalar!
 
-// What is true of a column beyond its type: who may write it, whether it is
+// What is true of a property beyond its type: who may write it, whether it is
 // stored at all, whether its value must be unique, and what deleting the
 // entity it references does to this row.
-let notesOf = (vocab: Vocab, col: Prop): string[] => {
+let notesOf = (vocab: Vocab, prop: Prop): string[] => {
   let notes: string[] = []
-  if (col.stamped) notes.push('server-owned: readable, never written here')
-  if (col.computed) notes.push('computed: read, never stored')
+  if (prop.stamped) notes.push('server-owned: readable, never written here')
+  if (prop.computed) notes.push('computed: read, never stored')
   if (
-    vocab.indexes(col.comp).some((i) =>
-      i.unique && i.props.length == 1 && i.props[0] == col.prop
+    vocab.indexes(prop.comp).some((i) =>
+      i.unique && i.props.length == 1 && i.props[0] == prop.prop
     )
   ) notes.push('unique: no two rows share this value')
-  if (col.keywords.store == 'blob') {
+  if (prop.keywords.store == 'blob') {
     notes.push('kept as content-addressed bytes, read back as its text')
   }
-  if (col.category == 'ref' && col.death) {
-    notes.push(`when the entity it names dies, ${DEATH[col.death]}`)
+  if (prop.category == 'ref' && prop.death) {
+    notes.push(`when the entity it names dies, ${DEATH[prop.death]}`)
   }
   return notes
 }
 
 // A value of the right shape, for the example bundle: enough for a reader to
 // see what goes there, never a value anybody should keep.
-let sample = (col: Prop): unknown =>
-  col.category == 'enum'
-    ? col.values?.[0]
-    : col.category == 'ref'
+let sample = (prop: Prop): unknown =>
+  prop.category == 'enum'
+    ? prop.values?.[0]
+    : prop.category == 'ref'
     ? '$other'
-    : col.scalar == 'bool'
+    : prop.scalar == 'bool'
     ? true
-    : col.scalar == 'number' || col.scalar == 'priority'
+    : prop.scalar == 'number' || prop.scalar == 'priority'
     ? 1
-    : col.scalar == 'time'
+    : prop.scalar == 'time'
     ? '2026-09-05T12:00:00Z'
-    : col.scalar == 'url'
+    : prop.scalar == 'url'
     ? 'https://example.com'
-    : col.scalar == 'json'
+    : prop.scalar == 'json'
     ? '{}'
-    : col.scalar == 'jsonb'
-    ? (col.types!.includes('object')
+    : prop.scalar == 'jsonb'
+    ? (prop.types!.includes('object')
       ? {}
-      : col.types!.includes('array')
+      : prop.types!.includes('array')
       ? []
       : 'text')
     : 'text'
@@ -130,31 +130,31 @@ export let summary = (vocab: Vocab, name: string): Word => {
     name,
     ...(info.description ? { description: info.description } : {}),
     kind: info.kind,
-    columns: vocab.props(name),
+    props: vocab.props(name),
   }
 }
 
-/** One component in full: every column with its type, its description and
+/** One component in full: every property with its type, its description and
  * what is true of it, the references in both directions, an example bundle
  * that writes it, and the documentation page covering it where the program
  * that opened the graph supplies one. */
 export let detail = (vocab: Vocab, name: string, guide?: Guide): Word => {
   let info = vocab.comp(name)!
-  let cols = vocab.props(name).map((prop) => vocab.prop(name, prop)!)
-  let out = cols.filter((c) => c.category == 'ref')
+  let props = vocab.props(name).map((prop) => vocab.prop(name, prop)!)
+  let out = props.filter((c) => c.category == 'ref')
   let into = vocab.refProps()
     .map(([comp, prop]) => vocab.prop(comp, prop)!)
     .filter((c) => c.ref == name)
   let page = guide?.(name)
   return {
     ...summary(vocab, name),
-    columns: cols.map((col) => ({
-      prop: col.prop,
-      type: typeOf(col),
-      ...(col.description ? { description: col.description } : {}),
-      ...(col.values ? { values: col.values } : {}),
-      ...(col.ref ? { ref: col.ref } : {}),
-      ...(notesOf(vocab, col).length ? { notes: notesOf(vocab, col) } : {}),
+    props: props.map((prop) => ({
+      prop: prop.prop,
+      type: typeOf(prop),
+      ...(prop.description ? { description: prop.description } : {}),
+      ...(prop.values ? { values: prop.values } : {}),
+      ...(prop.ref ? { ref: prop.ref } : {}),
+      ...(notesOf(vocab, prop).length ? { notes: notesOf(vocab, prop) } : {}),
     })),
     // A kind sorts before the components it is usually stored with: an entity
     // carrying both `mail` and `doc` displays as mail, which is the same fact

@@ -43,15 +43,15 @@ let side = (
   let order: Eid[] = []
   let held = new Map<Eid, Map<string, Comp | null>>()
   let died = new Set<Eid>()
-  // What the transaction left in each column, hashed: the precondition an undo
-  // carries, so that a column somebody else has changed since refuses the whole
-  // reversal rather than quietly overwriting it. Only the backward side needs
-  // one — replaying forward is a push to subscribers, not a write.
+  // What the transaction left in each property, hashed: the precondition an
+  // undo carries, so that a property somebody else has changed since refuses
+  // the whole reversal rather than quietly overwriting it. Only the backward
+  // side needs one — replaying forward is a push to subscribers, not a write.
   let was = new Map<Eid, Was>()
-  let guarded = (eid: Eid, comp: string, column: string, after: unknown) => {
+  let guarded = (eid: Eid, comp: string, prop: string, after: unknown) => {
     let w = was.get(eid)
     if (!w) was.set(eid, w = {})
-    w[comp] = { ...w[comp], [column]: token(after) }
+    w[comp] = { ...w[comp], [prop]: token(after) }
   }
   let of = (eid: Eid): Map<string, Comp | null> => {
     let t = held.get(eid)
@@ -69,15 +69,15 @@ let side = (
       continue
     }
     let table = of(d.target)
-    if (d.column == null) {
+    if (d.prop == null) {
       let whole = d[want]
       table.set(d.comp, whole == null ? null : { ...(whole as Comp) })
       continue
     }
-    if (guard) guarded(d.target, d.comp, d.column, d.after)
+    if (guard) guarded(d.target, d.comp, d.prop, d.after)
     let cur = table.get(d.comp)
     if (cur === null) continue // the component is not there on this side
-    table.set(d.comp, { ...(cur ?? {}), [d.column]: d[want] ?? null })
+    table.set(d.comp, { ...(cur ?? {}), [d.prop]: d[want] ?? null })
   }
   let out: Bundle[] = []
   for (let eid of order) {
@@ -103,12 +103,12 @@ let side = (
     }
     if (!moved) continue
     let w = was.get(eid)
-    // A guard names only columns this bundle restores: a component the undo
-    // removes whole has no column to hold a token.
+    // A guard names only properties this bundle restores: a component the undo
+    // removes whole has no property to hold a token.
     if (w) {
       let mine: Was = {}
-      for (let [comp, cols] of Object.entries(w)) {
-        if (b[comp] != null) mine[comp] = cols
+      for (let [comp, props] of Object.entries(w)) {
+        if (b[comp] != null) mine[comp] = props
       }
       if (Object.keys(mine).length) b.$was = mine
     }
@@ -127,15 +127,15 @@ export let applied = (batch: Batch): Bundle[] => side(batch, 'after')
 
 /** How an undo is built. */
 export type UndoneOpts = {
-  /** carry a `$was` precondition on every restored column, hashed from the
-   * value the transaction left there, so that a column changed since refuses
+  /** carry a `$was` precondition on every restored property, hashed from the
+   * value the transaction left there, so that a property changed since refuses
    * the reversal */
   guard?: boolean
 }
 
 /**
- * The bundles that reverse a transaction: every column back to the value it
- * held, every component that went restored with the columns it had, every
+ * The bundles that reverse a transaction: every property back to the value it
+ * held, every component that went restored with the properties it had, every
  * component that appeared removed. Throws {@link Final} if the transaction
  * deleted an entity.
  */
@@ -153,9 +153,9 @@ export let undone = (batch: Batch, opts: UndoneOpts = {}): Bundle[] =>
  *
  * Throws {@link Final} if the transaction deleted an entity, and a plain
  * `Error` if no transaction has that seq. The inverse is applied as trusted,
- * since restoring a column the server owns is the graph's own reconstruction
- * rather than a client's write. Every restored column carries a `$was`
- * precondition, so a column somebody else has changed since refuses the whole
+ * since restoring a property the server owns is the graph's own reconstruction
+ * rather than a client's write. Every restored property carries a `$was`
+ * precondition, so a property somebody else has changed since refuses the whole
  * reversal instead of being overwritten.
  */
 export let undo =

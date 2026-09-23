@@ -5,15 +5,15 @@
 //   journal_tx     one row per committed transaction — its id is the total
 //                  order and the cursor
 //   journal_change one ordered operation per component patched or removed
-//   journal_field  one ordered after-image per column an operation wrote
+//   journal_field  one ordered after-image per property an operation wrote
 //
 // After-images only: what a write left, never both sides of it. The before-
 // value a history read needs is rebuilt from the entity's own rows in the log
 // (`before()`), a read bounded to one entity and never a table scan — which is
 // what keeps the log about a third of the size of one that stores both sides. A
-// column whose text the graph already keeps under a content address is recorded
-// by its address ({@link Cas}), so logging every revision of every document
-// costs a row rather than the document.
+// property whose text the graph already keeps under a content address is
+// recorded by its address ({@link Cas}), so logging every revision of every
+// document costs a row rather than the document.
 //
 // Nothing is read in order to write, so there is no precondition phase and
 // nothing is passed forward to a later phase: the log is derived entirely from
@@ -38,14 +38,14 @@ export type Rows = (
 ) => Record<string, unknown>[]
 
 /**
- * A column whose text the graph already stores once, under a content address.
+ * A property whose text the graph already stores once, under a content address.
  * The journal then records that address and points at the graph's bytes instead
  * of repeating them — the difference between a log that keeps every revision of
  * every document and one that keeps a row per revision.
  */
 export type Cas = {
-  /** is this column content-addressed? */
-  at: (comp: string, column: string) => boolean
+  /** is this property content-addressed? */
+  at: (comp: string, prop: string) => boolean
   /** store the text and return the id the journal records */
   put: (text: string) => number
   /** the table holding the content, and its key and value columns */
@@ -56,7 +56,7 @@ export type Cas = {
 
 /**
  * One recorded value a {@link Log.seek} found: where it sits in the log,
- * the value as stored, and the content address when the column is
+ * the value as stored, and the content address when the property is
  * content-addressed.
  */
 export type Hit = {
@@ -64,15 +64,15 @@ export type Hit = {
   field: number
   /** the entity the value was written about */
   target: Eid | null
-  /** the component and column it belongs to */
+  /** the component and property it belongs to */
   comp: string
-  column: string
+  prop: string
   /** the transaction it was written by, and when that committed */
   seq: number
   at: string
   /** the value as recorded, decoded */
   value: unknown
-  /** the content it refs, when the column is content-addressed */
+  /** the content it refs, when the property is content-addressed */
   content: Eid | null
 }
 
@@ -82,7 +82,7 @@ export type LogOpts = {
   rows: Rows
   /** the entity table: where an eid becomes the integer the tables store */
   spine?: { table?: string; id?: string; eid?: string }
-  /** content-addressed columns, if the graph has any */
+  /** content-addressed properties, if the graph has any */
   cas?: Cas
 }
 
@@ -100,9 +100,9 @@ export type LogOpts = {
 //
 // `field.present = 1` records a written value, JSON-encoded, so a value that is
 // null stays distinct from a tombstone; `present = 0` is the tombstone written
-// for each column a component still held when it was removed, which keeps
-// column history, before-value lookup and undo self-contained and stops a value
-// leaking across a removal and a later recreation. `ref` names content-
+// for each property a component still held when it was removed, which keeps
+// property history, before-value lookup and undo self-contained and stops a
+// value leaking across a removal and a later recreation. `ref` names content-
 // addressed bytes the graph already holds, and then `value` stays null.
 export let ddl = (spine = 'entity'): string => `
   create table if not exists journal_tx (
@@ -138,10 +138,10 @@ export let ddl = (spine = 'entity'): string => `
     on journal_field(ref) where ref is not null;
 `
 
-// The columns an after-image records: everything but `eid`, which is the row's
-// own identity and already the change's entity.
+// The properties an after-image records: everything but `eid`, which is the
+// row's own identity and already the change's entity.
 let written = (value: Comp): [string, unknown][] =>
-  Object.entries(value).filter(([column]) => column != 'eid')
+  Object.entries(value).filter(([prop]) => prop != 'eid')
 
 /** The log bound to one store: the writer, and the questions a journal is kept
  * in order to answer. */
@@ -169,10 +169,10 @@ export type Log = {
   before: (target: Eid, seq: number) => Record<string, Comp>
   /** the last transaction that touched one entity, or 0 */
   latest: (target: Eid) => number
-  /** every recorded write of one column, oldest first */
+  /** every recorded write of one property, oldest first */
   wrote: (
     comp: string,
-    column: string,
+    prop: string,
   ) => { target: Eid; value: unknown; seq: number }[]
   /** the highest seq the log holds, or 0 */
   tip: () => number
@@ -223,7 +223,7 @@ export let log = (opts: LogOpts): Log => {
       jc.component as component, jc.operation as operation
     from journal_change jc join ${table} e on e.${idCol} = jc.entity`
 
-  // A column recorded by address reads its text back through the content it
+  // A property recorded by address reads its text back through the content it
   // names.
   let fieldsSql = cas
     ? `select jf.field as field, jf.value as value, c.${cas.value} as text
@@ -285,10 +285,10 @@ export let log = (opts: LogOpts): Log => {
         [meta.at, meta.by ?? null, meta.via ?? null, meta.note ?? null],
       )?.id,
     )
-    // The columns a component still holds, newest after-image per column: the
-    // field id is monotonic, so the highest-id row per column is the latest in
-    // total order — and it reads this transaction's earlier upserts, which are
-    // uncommitted but visible on the same connection.
+    // The properties a component still holds, newest after-image per property:
+    // the field id is monotonic, so the highest-id row per property is the
+    // latest in total order — and it reads this transaction's earlier upserts,
+    // which are uncommitted but visible on the same connection.
     let held = `select field from (
         select jf.field as field, jf.present as present,
                row_number() over (
@@ -311,21 +311,21 @@ export let log = (opts: LogOpts): Log => {
           [change, i, name, v == null && ref == null ? 0 : 1, v, ref ?? null],
         )
       if (value == null) {
-        // A removal tombstones every column the component still had, so
-        // column history stays self-contained across a removal and a later
+        // A removal tombstones every property the component still had, so
+        // property history stays self-contained across a removal and a later
         // recreation.
         rows(held, [target, comp]).forEach((f, i) =>
           field(i, String(f.field), null, null)
         )
         return
       }
-      // An upsert records one present after-image per column, JSON-encoded so
+      // An upsert records one present after-image per property, JSON-encoded so
       // a present null stays distinct from a tombstone. An empty component
       // writes none — its change row alone marks its presence.
-      written(value).forEach(([column, v], i) =>
-        cas && cas.at(comp, column) && typeof v == 'string'
-          ? field(i, column, null, cas.put(v))
-          : field(i, column, JSON.stringify(v) ?? 'null', null)
+      written(value).forEach(([prop, v], i) =>
+        cas && cas.at(comp, prop) && typeof v == 'string'
+          ? field(i, prop, null, cas.put(v))
+          : field(i, prop, JSON.stringify(v) ?? 'null', null)
       )
     })
     return seq
@@ -333,7 +333,7 @@ export let log = (opts: LogOpts): Log => {
 
   /**
    * One entity's component state as of just before `seq`, rebuilt by merging,
-   * column by column, that entity's own rows in the log — bounded to one
+   * property by property, that entity's own rows in the log — bounded to one
    * entity, never a table scan. This is where the before-value an after-image
    * log does not store comes from.
    */
@@ -359,11 +359,11 @@ export let log = (opts: LogOpts): Log => {
   }
 
   // An entry's operations as deltas: a component that was not there is
-  // announced by a column-less delta before its columns follow, a component
-  // that went is a column-less delta carrying what it held, and a deletion is a
-  // tombstone. The before-side comes from `before()`, carried forward across
-  // the transaction so that a transaction touching one component twice reads as
-  // two movements.
+  // announced by a property-less delta before its properties follow, a
+  // component that went is a property-less delta carrying what it held, and a
+  // deletion is a tombstone. The before-side comes from `before()`, carried
+  // forward across the transaction so that a transaction touching one component
+  // twice reads as two movements.
   let deltasOf = (e: Entry): Delta[] => {
     let held = new Map<Eid, Record<string, Comp>>()
     let now = (eid: Eid) => {
@@ -379,7 +379,7 @@ export let log = (opts: LogOpts): Log => {
           out.push({
             target,
             comp: name,
-            column: null,
+            prop: null,
             before: was,
             after: null,
           })
@@ -388,7 +388,7 @@ export let log = (opts: LogOpts): Log => {
         out.push({
           target,
           comp: 'tombstone',
-          column: null,
+          prop: null,
           before: null,
           after: {},
         })
@@ -397,25 +397,25 @@ export let log = (opts: LogOpts): Log => {
       let was = st[comp]
       if (value == null) {
         if (!was) continue
-        out.push({ target, comp, column: null, before: was, after: null })
+        out.push({ target, comp, prop: null, before: was, after: null })
         delete st[comp]
         continue
       }
       if (!was) {
-        out.push({ target, comp, column: null, before: null, after: {} })
+        out.push({ target, comp, prop: null, before: null, after: {} })
         st[comp] = was = {}
       }
       let next: Comp = { ...was }
-      for (let [column, v] of written(value)) {
+      for (let [prop, v] of written(value)) {
         out.push({
           target,
           comp,
-          column,
-          before: was[column] ?? null,
+          prop,
+          before: was[prop] ?? null,
           after: v ?? null,
         })
-        if (v == null) delete next[column]
-        else next[column] = v
+        if (v == null) delete next[prop]
+        else next[prop] = v
       }
       st[comp] = next
     }
@@ -482,14 +482,14 @@ export let log = (opts: LogOpts): Log => {
     )
 
   /**
-   * Every recorded write of one column, oldest first: the entity it was about,
-   * what it wrote, and the transaction that wrote it. This is the question a
-   * backfill asks — what has this column ever held, on any entity — which no
-   * per-entity reader can answer.
+   * Every recorded write of one property, oldest first: the entity it was
+   * about, what it wrote, and the transaction that wrote it. This is the
+   * question a backfill asks — what has this property ever held, on any entity
+   * — which no per-entity reader can answer.
    */
   let wrote = (
     comp: string,
-    column: string,
+    prop: string,
   ): { target: Eid; value: unknown; seq: number }[] =>
     rows(
       `select ${eidOf('jc.entity')} as target, jf.value as value, jc.tx as seq
@@ -497,7 +497,7 @@ export let log = (opts: LogOpts): Log => {
         where jc.component = ? and jf.field = ? and jf.present = 1
           and jc.operation = 'upsert'
         order by jc.tx, jf.id`,
-      [comp, column],
+      [comp, prop],
     ).flatMap((r) =>
       r.target == null
         ? []
@@ -508,7 +508,7 @@ export let log = (opts: LogOpts): Log => {
   let tip = (): number => num(one(`select max(id) as m from journal_tx`)?.m)
 
   /** Has anything touched this entity since `seq`? The coarse "something
-   * changed" question an undo asks where there is no column to put a
+   * changed" question an undo asks where there is no property to put a
    * precondition on. */
   let touchedSince = (target: Eid, seq: number): boolean =>
     !!one(
@@ -520,8 +520,8 @@ export let log = (opts: LogOpts): Log => {
   /**
    * Every recorded value that contains this text, oldest first — the scan a
    * redaction starts from. `value` is the stored JSON and `ref` the content
-   * address when the column is content-addressed; the caller decodes and
-   * decides, because whether a column holds content or structure is the
+   * address when the property is content-addressed; the caller decodes and
+   * decides, because whether a property holds content or structure is the
    * caller's policy, not the log's.
    */
   let seek = (text: string): Hit[] => {
@@ -545,7 +545,7 @@ export let log = (opts: LogOpts): Log => {
       field: num(r.id),
       target: str(r.target),
       comp: String(r.comp),
-      column: String(r.field),
+      prop: String(r.field),
       seq: num(r.seq),
       at: String(r.at),
       value: r.text != null ? String(r.text) : dec(r.value),

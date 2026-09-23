@@ -34,12 +34,13 @@ export let isAlias = (eid: Eid): boolean => eid.startsWith('$')
 
 /**
  * How a content-addressed component derives its entity's id: the component's
- * columns (with any aliases in them already resolved) in, the entity's id out.
- * A blob hashes its bytes; an edge hashes its two endpoints and its relation.
+ * properties (with any aliases in them already resolved) in, the entity's id
+ * out. A blob hashes its bytes; an edge hashes its two endpoints and its
+ * relation.
  */
 export type Derive = (comp: Comp, bundle: Bundle) => Eid
 
-// The aliases a bundle references, through its reference columns.
+// The aliases a bundle references, through its reference properties.
 let pointsAt = (b: Bundle, vocab: Vocab): Eid[] =>
   comps(b).flatMap(([name, comp]) =>
     Object.entries(comp ?? {}).flatMap(([prop, val]) =>
@@ -63,7 +64,7 @@ let rewrite = (
   let out: Bundle = { ...b }
   for (let [name, comp] of comps(b)) {
     if (!comp) continue
-    let cols: Comp | undefined
+    let props: Comp | undefined
     for (let [prop, val] of Object.entries(comp)) {
       if (
         typeof val != 'string' || vocab.prop(name, prop)?.category != 'ref'
@@ -78,9 +79,9 @@ let rewrite = (
         }
         continue
       }
-      cols = { ...(cols ?? comp), [prop]: eid }
+      props = { ...(props ?? comp), [prop]: eid }
     }
-    if (cols) out[name] = cols
+    if (props) out[name] = props
   }
   return out
 }

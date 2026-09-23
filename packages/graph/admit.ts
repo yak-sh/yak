@@ -5,22 +5,22 @@
 //                                       may send a component this graph has
 //                                       never heard of, and the rest of its
 //                                       change must still be applied
-//   an undeclared column is refused     on a component the vocabulary does
-//                                       declare, an unrecognized column is a
+//   an undeclared property is refused     on a component the vocabulary does
+//                                       declare, an unrecognized property is a
 //                                       typo, and silently dropping a title is
 //                                       worse than refusing the change
-//   a server-owned column is dropped    `stamped` columns are readable but
+//   a server-owned property is dropped    `stamped` properties are readable but
 //                                       never writable by a client; a caller
 //                                       that sends one is ignored rather than
 //                                       refused (reading a whole bundle back
 //                                       and sending it again is a normal thing
 //                                       to do)
 //
-// A string column's value is cast to a string first (@yaks/vocab `cast`): the
-// schema is what a reader gets back, so a number sent to a text column is
+// A string property's value is cast to a string first (@yaks/vocab `cast`): the
+// schema is what a reader gets back, so a number sent to a text property is
 // stored, returned and broadcast as its text.
 //
-// Column values are validated against the vocabulary too — an enum member, a
+// Property values are validated against the vocabulary too — an enum member, a
 // number where a number belongs, a scalar rather than a nested object. That is
 // the vocabulary's own `check`, not a JSON Schema validator: this package
 // depends on no validator, and a graph that wants full JSON Schema validation
@@ -31,18 +31,18 @@ import type { Bundle, Comp } from './bundle.ts'
 import { comps, dead, RESERVED } from './bundle.ts'
 
 /** A change refused at admission: the message names the component and the
- * column, so the caller can see exactly what was wrong. */
+ * property, so the caller can see exactly what was wrong. */
 export class Refused extends Error {
-  /** @param message what was wrong, naming the component and column the caller
-   * sent */
+  /** @param message what was wrong, naming the component and property the
+   * caller sent */
   constructor(message: string) {
     super(message)
     this.name = 'Refused'
   }
 }
 
-// The columns a caller may write on a component: the client-writable ones,
-// plus the server-owned ones when the caller is trusted. A computed column
+// The properties a caller may write on a component: the client-writable ones,
+// plus the server-owned ones when the caller is trusted. A computed property
 // (`computed: true`) is in neither — it is derived, so there is nothing to
 // write — and is dropped like a stamped one.
 let allowed = (v: Vocab, comp: string, trusted: boolean): Set<string> => {
@@ -50,8 +50,8 @@ let allowed = (v: Vocab, comp: string, trusted: boolean): Set<string> => {
   return new Set(trusted ? [...info.writable, ...info.stamped] : info.writable)
 }
 
-// One component patch, admitted: undeclared columns refused, unwritable ones
-// dropped, values validated. Returns undefined when the caller sent columns
+// One component patch, admitted: undeclared properties refused, unwritable ones
+// dropped, values validated. Returns undefined when the caller sent properties
 // and every one of them was dropped — nothing is left to write.
 let admitComp = (
   v: Vocab,
@@ -59,17 +59,17 @@ let admitComp = (
   patch: Comp,
   trusted: boolean,
 ): Comp | undefined => {
-  let columns = v.props(name)
-  let declared = new Set(columns)
+  let props = v.props(name)
+  let declared = new Set(props)
   let alien = Object.keys(patch).filter((c) => !declared.has(c))
   if (alien.length) {
     // The refusal lists the vocabulary, not just the mistake: a caller writing
-    // a column that does not exist has the wrong idea of this component, and
-    // the columns it actually has are the shortest way to correct that.
+    // a property that does not exist has the wrong idea of this component, and
+    // the properties it actually has are the shortest way to correct that.
     throw new Refused(
-      `unknown column${alien.length > 1 ? 's' : ''}: ${
+      `unknown ${alien.length > 1 ? 'properties' : 'property'}: ${
         alien.map((c) => `${name}.${c}`).join(', ')
-      } — ${name} declares ${columns.join(', ')}`,
+      } — ${name} declares ${props.join(', ')}`,
     )
   }
   let keep = allowed(v, name, trusted)
@@ -91,7 +91,7 @@ let admitComp = (
  * The admit phase: every bundle in the change, reduced to what this graph's
  * vocabulary declares and this caller may write. A bundle whose components
  * were all dropped is removed from the change — it asked for nothing this
- * graph can do. `trusted` admits server-owned columns; it is the calling
+ * graph can do. `trusted` admits server-owned properties; it is the calling
  * program's decision, never a client's.
  */
 export let admit = (
@@ -114,7 +114,7 @@ export let admit = (
       // for one — is not writable by a client.
       if (!info.wire && !trusted) continue
       if (patch == null) {
-        out[name] = null // removing a component needs no columns
+        out[name] = null // removing a component needs no properties
         kept++
         continue
       }

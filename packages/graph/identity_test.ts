@@ -98,7 +98,7 @@ Deno.test('an id that disagrees with the value it names is refused', () => {
   )
 })
 
-Deno.test('a rename is refused: the slug is the entity, not a column', () => {
+Deno.test('a rename is refused: the slug is the entity, not a property', () => {
   let one = g()
   sync(one.apply([page('$a', 'store', 'one')]))
   assertThrows(

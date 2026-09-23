@@ -116,7 +116,7 @@ Deno.test('about answers backwards, narrowed to the components asked', () => {
   n.read = 0
   h.apply([{ entity: { eid: 'b1' }, book: { pages: 500 } }])
   assertEquals(found.narrow, ['r1'])
-  // The wide ask reaches columns nobody gathered (`book.publisher`,
+  // The wide ask reaches properties nobody gathered (`book.publisher`,
   // `created.by`) and pays one read for them — the answer is right either way.
   assertEquals(found.wide, ['m1', 'r1'])
   assertEquals(n.read, 2)
@@ -157,7 +157,7 @@ Deno.test('a hook reads what the hook before it wrote', () => {
   assertEquals(read, 'Emma')
 })
 
-Deno.test('a delete reads backwards once per rung, not once per column', () => {
+Deno.test('a delete reads backwards once per rung, not once per property', () => {
   let { n, storage } = tally(memory())
   let g = graph({ storage, vocab: books })
   g.apply(shelf)
@@ -169,8 +169,8 @@ Deno.test('a delete reads backwards once per rung, not once per column', () => {
   assert(out.some((b) => b.entity.eid == 'r1' && b.tombstone != null))
   assert(out.some((b) => b.entity.eid == 'm1' && b.bookmark === null))
   // One read for the batch's own casualties, one for the frontier the walk
-  // turned up. The vocabulary declares four reference columns; the old walk
-  // paid a read per column per casualty per death word.
+  // turned up. The vocabulary declares four reference properties; the old walk
+  // paid a read per property per casualty per death word.
   assertEquals(n.read, 2)
 })
 

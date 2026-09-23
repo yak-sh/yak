@@ -22,7 +22,7 @@
  *   transaction's `$actor`;
  * - `journal_change` — one ordered row per component that transaction patched
  *   or removed;
- * - `journal_field` — one ordered after-image per column that row wrote.
+ * - `journal_field` — one ordered after-image per property that row wrote.
  *
  * After-images only. The before-value a history read needs is rebuilt from the
  * entity's own rows in the log, a read bounded to one entity and never a table
