@@ -201,4 +201,7 @@ export let main = async (
   }
 }
 
-if (import.meta.main) Deno.exit(await main(Deno.args))
+// Not a top-level await: this module is also `@yaks/cli` itself (./mod.ts), so
+// a plugin the command loads that imports the package would wait on this
+// module finishing, while this module waits on the command.
+if (import.meta.main) main(Deno.args).then(Deno.exit)
